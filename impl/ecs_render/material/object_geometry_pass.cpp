@@ -48,7 +48,8 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(const Name& m
     if(!m_shaderSystem.loadShader<VertexShader>(resources.objectGeometryVertexShader, meshShaderName, variantName, "ECSRender_ObjectGeometryVS", &MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName))
         return false;
     if(!m_materialState.m_objectGeometryInputLayout){
-        Core::VertexAttributeDesc attributes[5];
+        constexpr usize s_ObjectGeometryVertexAttributeCount = 5u;
+        Core::VertexAttributeDesc attributes[s_ObjectGeometryVertexAttributeCount];
         const Core::Format::Enum formats[] = { Core::Format::RGBA32_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::RG32_FLOAT, Core::Format::RGBA16_FLOAT, };
         const u32 offsets[] = { NWB_MESH_OBJECT_VERTEX_POSITION_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_NORMAL_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_TANGENT_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_UV0_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_COLOR_BYTE_OFFSET, };
         constexpr NameText<char> s_Names[] = { "POSITION", "NORMAL", "TANGENT", "TEXCOORD", "COLOR" };

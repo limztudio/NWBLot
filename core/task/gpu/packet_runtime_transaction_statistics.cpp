@@ -36,7 +36,7 @@ GpuTaskGraphSubmissionStatistics GpuGraphSubmissionTransaction::submissionStatis
 
 GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubmissionStatistics(const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)const noexcept{
     NothrowScopedLock lock(m_mutex);
-    if(!validForLocked(planAccess) || !planAccess.validPacket(packetID) || packetID.index >= m_packets.size())
+    if(!validForLocked(planAccess) || packetID.index >= m_packets.size())
         return {};
 
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);

@@ -551,7 +551,7 @@ bool BuildFrameGraphPayloadImpl(
     for(const FrameGraphPacketSubmissionStatisticsRecord& statistics : orderedPacketSubmissionStatistics)
         AppendPOD(outPayload, FrameGraphStatisticsCodecDetail::EncodePacketSubmissionStatistics(statistics));
     if(!stringTable.empty())
-        BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, stringTable.data(), stringTable.size());
+        AppendBytesNoReserveUnchecked(outPayload, stringTable.data(), stringTable.size());
 
     return outPayload.size() == payloadBytes;
 }
@@ -656,7 +656,7 @@ Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc:
         if(!__hidden_telemetry_frame_graph::ValidateEncodedNode(encodedNode))
             return MakeUnexpected(Failure{});
 
-        const auto labelView = BinaryDetail::ReadStringTableTextView(encoded, stringTableOffset, header.stringTableBytes, encodedNode.labelOffset);
+        const auto labelView = ReadStringTableTextView(encoded, stringTableOffset, header.stringTableBytes, encodedNode.labelOffset);
         if(!labelView)
             return MakeUnexpected(Failure{});
 

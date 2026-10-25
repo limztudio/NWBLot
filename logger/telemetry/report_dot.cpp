@@ -242,7 +242,7 @@ void AppendFrameGraphQueueAssignmentDot(AString<TelemetryArena>& out, const Tele
     StringAppendFormat(out, ", queue_modifier_mask={}", static_cast<u32>(assignment.modifiers));
     out += ", queue_acceptance=";
     AppendDotQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
-    StringAppendFormat(out, ", queue_dedicated={}", assignment.dedicated ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText);
+    StringAppendFormat(out, ", queue_dedicated={}", assignment.dedicated ? s_TrueText : s_FalseText);
     StringAppendFormat(
         out,
         ", queue_score_overlap={}, queue_score_queue_load={}, queue_score_incoming_crossings={}, "

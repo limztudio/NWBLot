@@ -22,8 +22,8 @@
 
 // Sample the premultiplied linear UI layer over black, then apply the selected output transfer once.
 #define NWB_UI_OUTPUT_PUSH_CONSTANTS_FIELDS(UINT_FIELD) \
-    UINT_FIELD(textureSlot, 0xffffffffu) \
-    UINT_FIELD(samplerSlot, 0xffffffffu) \
+    UINT_FIELD(textureSlot, NWB_UI_INVALID_HEAP_SLOT) \
+    UINT_FIELD(samplerSlot, NWB_UI_INVALID_HEAP_SLOT) \
     UINT_FIELD(presentationMode, NWB_UI_PRESENTATION_SDR)
 
 

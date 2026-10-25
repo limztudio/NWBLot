@@ -200,10 +200,10 @@ TEST_F(UiEditSurroundingSelectionTests, OriginalCutsRejectBothUtf8SplitsAndScala
     constexpr AStringView s_Text = "ae\xCC\x81" "DEF\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x92\xBB" "z";
     ASSERT_TRUE(SeedHistoryAndPreedit(m_model, s_Text, 4u, 7u));
     const MultilineSnapshot before(m_arena, m_model);
-    EXPECT_FALSE(GraphemeSegmentation::IsScalarBoundary(s_Text, 3u));
-    EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary(s_Text, 2u));
-    EXPECT_FALSE(GraphemeSegmentation::IsScalarBoundary(s_Text, 8u));
-    EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary(s_Text, 11u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(s_Text, 3u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(s_Text, 2u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(s_Text, 8u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(s_Text, 11u));
     EXPECT_FALSE(m_model.eraseAroundSelection(1u, 0u));
     before.expectUnchanged(m_model);
     EXPECT_FALSE(m_model.eraseAroundSelection(2u, 0u));
@@ -235,7 +235,7 @@ TEST_F(UiEditSurroundingSelectionTests, CandidateSeamMergesRejectEitherEndpointW
         const MultilineSnapshot before(m_arena, model);
         EditModel merged(m_arena);
         ASSERT_TRUE(merged.setText(value.merged));
-        EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary(value.merged, value.lostBoundary));
+        EXPECT_TRUE(IsUtf8ScalarBoundary(value.merged, value.lostBoundary));
         EXPECT_FALSE(merged.setSelection(value.lostBoundary, value.lostBoundary));
         EXPECT_FALSE(model.eraseAroundSelection(value.before, value.after));
         before.expectUnchanged(model);

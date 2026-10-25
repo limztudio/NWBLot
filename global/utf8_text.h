@@ -14,8 +14,8 @@
 [[nodiscard]] inline bool IsValidUtf8TextWithoutNul(const AStringView text)noexcept{
     usize offset = 0u;
     while(offset < text.size()){
-        const auto decoded = DecodeUtf8CodePoint(text.substr(offset));
-        if(!decoded || decoded->codePoint == 0u || (decoded->codePoint >= BasicStringDetail::s_UnicodeHighSurrogateMin && decoded->codePoint <= BasicStringDetail::s_UnicodeLowSurrogateMax))
+        const auto decoded = DecodeUtf8Scalar(text.substr(offset));
+        if(!decoded || decoded->codePoint == 0u)
             return false;
         offset += static_cast<usize>(decoded->byteCount);
     }
@@ -30,8 +30,8 @@
         if(index == character){
             return position;
         }
-        const auto decoded = DecodeUtf8CodePoint(text.substr(position));
-        if(!decoded || decoded->codePoint == 0u || (decoded->codePoint >= BasicStringDetail::s_UnicodeHighSurrogateMin && decoded->codePoint <= BasicStringDetail::s_UnicodeLowSurrogateMax))
+        const auto decoded = DecodeUtf8Scalar(text.substr(position));
+        if(!decoded || decoded->codePoint == 0u)
             return MakeUnexpected(Failure{});
         position += static_cast<usize>(decoded->byteCount);
         ++index;

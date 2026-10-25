@@ -291,7 +291,7 @@ TEST(AssetPaths, StemAndExtensionPreserveTrailingSeparatorsDotsAndRoots){
 
 TEST(AssetPaths, ConvertedPathByteCountingRejectsOverflowWithoutWrapping){
     AssetPathsDetail::ConvertedPathByteCounter counter{ Limit<usize>::s_Max };
-    EXPECT_ANY_THROW(BasicStringDetail::WriteConvertedText<char>(counter, AStringView("x")));
+    EXPECT_ANY_THROW(WriteConvertedText<char>(counter, AStringView("x")));
     EXPECT_EQ(counter.byteCount, Limit<usize>::s_Max);
 }
 

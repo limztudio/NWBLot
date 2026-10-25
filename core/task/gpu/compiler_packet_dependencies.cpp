@@ -243,7 +243,6 @@ namespace GpuTaskGraphCompilerDetail{
     // Native recording only needs prior packets that export a state snapshot used by a prologue seed, so keep the longest such chain as ready-frontier depth.
     for(usize packetIndex = 0u; packetIndex < compiledPlan.packets.size(); ++packetIndex){
         GpuSubmissionPacket& packet = compiledPlan.packets[packetIndex];
-        const GpuSubmissionPacketId packetID{ .generation = compiledPlan.planGeneration, .index = static_cast<u32>(packetIndex), };
         for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
             const GpuPacketDependency& dependency = compiledPlan.packetDependencies[packet.dependencyOffset + dependencyIndex];
             if(dependency.consumer.index != packetIndex || dependency.consumer.generation != compiledPlan.planGeneration || dependency.producer.index >= packetIndex || dependency.producer.generation != compiledPlan.planGeneration)
@@ -262,7 +261,7 @@ namespace GpuTaskGraphCompilerDetail{
                 return false;
             for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledTask->prologueStateSeedCount; ++stateSeedIndex){
                 const GpuSubmissionPacketId sourcePacket = stateSeeds[stateSeedIndex].sourcePacket;
-                if(!sourcePacket.valid() || sourcePacket == packetID || sourcePacket.index >= packetIndex || sourcePacket.generation != compiledPlan.planGeneration)
+                if(!sourcePacket.valid() || sourcePacket.index >= packetIndex || sourcePacket.generation != compiledPlan.planGeneration)
                     return false;
 
                 const u32 producerFrontier = compiledPlan.packets[sourcePacket.index].recordingFrontier;

@@ -38,16 +38,16 @@ constexpr usize s_ErrnoMessageBufferBytes = 256u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<GlobalFilesystemDetail::StreamOffset> ToStreamOff(const u64 value)noexcept{
-    if(!::CanRepresentU64<GlobalFilesystemDetail::StreamOffset>(value))
+static Expected<StreamOffset> ToStreamOff(const u64 value)noexcept{
+    if(!::CanRepresentU64<StreamOffset>(value))
         return MakeUnexpected(Failure{});
-    return static_cast<GlobalFilesystemDetail::StreamOffset>(value);
+    return static_cast<StreamOffset>(value);
 }
 
-static Expected<GlobalFilesystemDetail::StreamSize> ToStreamSize(const u64 value)noexcept{
-    if(!::CanRepresentU64<GlobalFilesystemDetail::StreamSize>(value))
+static Expected<StreamSize> ToStreamSize(const u64 value)noexcept{
+    if(!::CanRepresentU64<StreamSize>(value))
         return MakeUnexpected(Failure{});
-    return static_cast<GlobalFilesystemDetail::StreamSize>(value);
+    return static_cast<StreamSize>(value);
 }
 
 ACompactString LastErrnoMessage()noexcept{
@@ -61,7 +61,7 @@ ACompactString LastErrnoMessage()noexcept{
 
     ACompactString output(errorText);
     output += " (";
-    char numberText[TextDetail::s_DecimalTextBufferBytes];
+    char numberText[s_DecimalTextBufferBytes];
     output += FormatDecimal(errorNumber, numberText);
     output += ")";
     return output;
@@ -82,16 +82,16 @@ void LogFailureWithFsError(AStringView volumeName, AStringView operation, const 
 Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(const AStringView volumeName, const Path& segmentPath){
     VolumeHeaderDisk header;
 
-    GlobalFilesystemDetail::InputFileStream stream(segmentPath, GlobalFilesystemDetail::InputFileStream::binary);
+    InputFileStream stream(segmentPath, InputFileStream::binary);
     if(!stream.is_open()){
         LogFailureWithPath(volumeName, FilesystemVolumeDetail::s_VolumeOpMountOpenHeader, segmentPath, LastErrnoMessage());
         return MakeUnexpected(Failure{});
     }
 
-    stream.read(reinterpret_cast<char*>(&header), static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(header)));
+    stream.read(reinterpret_cast<char*>(&header), static_cast<StreamSize>(sizeof(header)));
     if(stream.good())
         return header;
-    if(stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(header)))
+    if(stream.eof() && stream.gcount() == static_cast<StreamSize>(sizeof(header)))
         return header;
 
     LogFailureWithPath(volumeName, FilesystemVolumeDetail::s_VolumeOpMountReadHeader, segmentPath, LastErrnoMessage());
@@ -155,7 +155,7 @@ static bool TransferSegmentChunk(
     const AStringView volumeName,
     const SegmentPaths& segmentPaths,
     const usize segmentIndex,
-    const GlobalFilesystemDetail::StreamOffset streamOffset,
+    const StreamOffset streamOffset,
     const AStringView openOperation,
     const AStringView seekOperation,
     SeekStream&& seekStream,
@@ -185,7 +185,7 @@ static bool TransferVolumeBytes(const AStringView volumeName, const AStringView 
         segmentSize,
         offset,
         byteCount,
-        [&](const usize segmentIndex, const GlobalFilesystemDetail::StreamOffset streamOffset, const GlobalFilesystemDetail::StreamSize streamChunkSize, const u64 chunkBytes)noexcept(
+        [&](const usize segmentIndex, const StreamOffset streamOffset, const StreamSize streamChunkSize, const u64 chunkBytes)noexcept(
             noexcept(transferChunk(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, bytes))
             && (
                 !IsReference_V<decltype(transferChunk(volumeName, segmentPaths, segmentIndex, streamOffset, streamChunkSize, chunkBytes, bytes))>
@@ -205,12 +205,12 @@ static bool ReadSegmentBytes(
     const AStringView volumeName,
     const SegmentPaths& segmentPaths,
     const usize segmentIndex,
-    const GlobalFilesystemDetail::StreamOffset streamOffset,
-    const GlobalFilesystemDetail::StreamSize streamChunkSize,
+    const StreamOffset streamOffset,
+    const StreamSize streamChunkSize,
     const u64 chunkBytes,
     u8*& outputBytes
 ){
-    GlobalFilesystemDetail::InputFileStream stream(segmentPaths[segmentIndex], GlobalFilesystemDetail::InputFileStream::binary);
+    InputFileStream stream(segmentPaths[segmentIndex], InputFileStream::binary);
     return TransferSegmentChunk(
         volumeName,
         segmentPaths,
@@ -218,7 +218,7 @@ static bool ReadSegmentBytes(
         streamOffset,
         "readBytes:open",
         "readBytes:seek",
-        [](auto& stream, const GlobalFilesystemDetail::StreamOffset offset)noexcept(noexcept(stream.seekg(offset))){ stream.seekg(offset); },
+        [](auto& stream, const StreamOffset offset)noexcept(noexcept(stream.seekg(offset))){ stream.seekg(offset); },
         [&](auto& stream){
             stream.read(reinterpret_cast<char*>(outputBytes), streamChunkSize);
             if(stream.gcount() != streamChunkSize){
@@ -244,12 +244,12 @@ static bool WriteSegmentBytes(
     const AStringView volumeName,
     const SegmentPaths& segmentPaths,
     const usize segmentIndex,
-    const GlobalFilesystemDetail::StreamOffset streamOffset,
-    const GlobalFilesystemDetail::StreamSize streamChunkSize,
+    const StreamOffset streamOffset,
+    const StreamSize streamChunkSize,
     const u64 chunkBytes,
     const u8*& inputBytes
 ){
-    GlobalFilesystemDetail::FileStream stream(segmentPaths[segmentIndex], GlobalFilesystemDetail::FileStream::binary | GlobalFilesystemDetail::FileStream::in | GlobalFilesystemDetail::FileStream::out);
+    FileStream stream(segmentPaths[segmentIndex], FileStream::binary | FileStream::in | FileStream::out);
     return TransferSegmentChunk(
         volumeName,
         segmentPaths,
@@ -257,7 +257,7 @@ static bool WriteSegmentBytes(
         streamOffset,
         "writeBytes:open",
         "writeBytes:seek",
-        [](auto& stream, const GlobalFilesystemDetail::StreamOffset offset)noexcept(noexcept(stream.seekp(offset))){ stream.seekp(offset); },
+        [](auto& stream, const StreamOffset offset)noexcept(noexcept(stream.seekp(offset))){ stream.seekp(offset); },
         [&](auto& stream){
             stream.write(reinterpret_cast<const char*>(inputBytes), streamChunkSize);
             if(!stream.good()){
@@ -289,8 +289,8 @@ struct ReadSegmentBytesOp{
         const AStringView volumeName,
         const SegmentPaths& segmentPaths,
         const usize segmentIndex,
-        const GlobalFilesystemDetail::StreamOffset streamOffset,
-        const GlobalFilesystemDetail::StreamSize streamChunkSize,
+        const StreamOffset streamOffset,
+        const StreamSize streamChunkSize,
         const u64 chunkBytes,
         u8*& outputBytes
     )const{
@@ -304,8 +304,8 @@ struct WriteSegmentBytesOp{
         const AStringView volumeName,
         const SegmentPaths& segmentPaths,
         const usize segmentIndex,
-        const GlobalFilesystemDetail::StreamOffset streamOffset,
-        const GlobalFilesystemDetail::StreamSize streamChunkSize,
+        const StreamOffset streamOffset,
+        const StreamSize streamChunkSize,
         const u64 chunkBytes,
         const u8*& inputBytes
     )const{
@@ -340,7 +340,7 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     }
 
     const Path path = segmentPath(segmentIndex);
-    GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc);
+    OutputFileStream stream(path, OutputFileStream::binary | OutputFileStream::trunc);
     if(!stream.is_open()){
         FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegmentOpen, path, FilesystemVolumeDetail::LastErrnoMessage());
         return false;

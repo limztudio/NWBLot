@@ -3,10 +3,18 @@
 
 
 // Actual geometry rendered with ordinary AVBOIT, without optical interfaces. Shading exposes curved/flat faces.
+static const half NWB_SMOKE_REFRACTION_PREVIEW_AMBIENT_SHADE = 0.3h;
+static const half NWB_SMOKE_REFRACTION_PREVIEW_DIFFUSE_SHADE = 0.7h;
+static const float3 NWB_SMOKE_REFRACTION_PREVIEW_LIGHT_DIRECTION = float3(-0.45, 0.65, -0.60);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
-    const half shade = 0.3h + 0.7h * half(abs(dot(inNormal, normalize(float3(-0.45, 0.65, -0.60)))));
+    const half shade = NWB_SMOKE_REFRACTION_PREVIEW_AMBIENT_SHADE + NWB_SMOKE_REFRACTION_PREVIEW_DIFFUSE_SHADE * half(abs(dot(inNormal, normalize(NWB_SMOKE_REFRACTION_PREVIEW_LIGHT_DIRECTION))));
     NwbMeshSurface result = nwbMakeMeshSurface(runtime.color_tint.rgb * shade, inNormal);
     result.renderCoverage = runtime.color_tint.a;
     return result;

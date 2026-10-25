@@ -61,7 +61,7 @@ uint nwbSwTransparentSamplingBudget(const bool geometryAccepted, const half3 pre
     const bool settled = geometryAccepted && all(isfinite(previousMoments))
         && previousMoments.x >= half(0.0h) && previousMoments.x <= half(1.0h)
         && previousMoments.y >= half(0.0h) && previousMoments.y <= half(1.0h)
-        && float(previousMoments.z) >= NWB_SW_TRANSPARENT_STABLE_HISTORY && float(previousMoments.z) <= NWB_SHADOW_TEMPORAL_MAX_HISTORY
+        && previousMoments.z >= half(NWB_SW_TRANSPARENT_STABLE_HISTORY) && previousMoments.z <= half(NWB_SHADOW_TEMPORAL_MAX_HISTORY)
         && variance >= half(-NWB_SW_TRANSPARENT_VARIANCE_ROUNDING_SLACK) && variance <= half(NWB_SW_TRANSPARENT_STABLE_VARIANCE)
     ;
     return settled ? 1u : maximumSamples;

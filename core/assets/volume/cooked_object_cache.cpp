@@ -158,7 +158,7 @@ static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileH
     objectBytes.clear();
     objectBytes.reserve(sizeof(AssetVolumeObjectFileHeader) + payload.size());
     AppendPOD(objectBytes, header);
-    BinaryDetail::AppendBytesNoReserveUnchecked(objectBytes, payload.data(), payload.size());
+    AppendBytesNoReserveUnchecked(objectBytes, payload.data(), payload.size());
 
     const auto directories = EnsureDirectories(objectPath.parentPath());
     if(!directories){

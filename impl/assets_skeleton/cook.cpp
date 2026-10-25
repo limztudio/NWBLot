@@ -42,7 +42,7 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         return false;
 
     usize reserveBytes = sizeof(SkeletonBinaryPayload::HeaderBinary);
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, skeleton.joints().size(), sizeof(SkeletonBinaryPayload::JointBinary)) || !BinaryDetail::CanStoreValueCount(outBinary, reserveBytes)){
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, skeleton.joints().size(), sizeof(SkeletonBinaryPayload::JointBinary)) || !CanStoreValueCount(outBinary, reserveBytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkeletonAssetCodec::serialize failed: cooked payload size overflows"));
         return false;
     }

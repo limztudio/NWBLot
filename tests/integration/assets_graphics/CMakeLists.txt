@@ -35,4 +35,6 @@ nwb_target_link_libraries_whole_archive(nwb_assets_graphics_tests nwb_assets_vol
 target_link_libraries(nwb_assets_graphics_tests PRIVATE nwb_pipeline_asset_builder nwb_pipeline_asset_gatherer nwb_ecs_csg nwb_assets_cook nwb_assets_texture_loader nwb_shader_archive nwb_graphics nwb_common nwb_alloc)
 # This suite deliberately performs many isolated shader-volume cooks.
 # Keep its serial fixture/cache contract and give the complete integration binary enough time on hosts where Slang compilation is slower than CTest's default.
-set_tests_properties(nwb_assets_graphics_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 3600)
+set(_nwb_assets_graphics_tests_timeout_seconds 3600)
+set_tests_properties(nwb_assets_graphics_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT ${_nwb_assets_graphics_tests_timeout_seconds})
+unset(_nwb_assets_graphics_tests_timeout_seconds)

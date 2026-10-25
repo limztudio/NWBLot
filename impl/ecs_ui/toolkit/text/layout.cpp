@@ -30,10 +30,6 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ByteBoundary(StringView text, u32 offset)noexcept{
-    return offset <= text.size() && (offset == text.size() || (static_cast<u8>(text[offset]) & s_Utf8ContinuationMask) != s_Utf8ContinuationMarker);
-}
-
 [[nodiscard]] static bool FitsCoordinate(f64 value)noexcept{
     return IsFinite(value) && value >= -static_cast<f64>(Limit<f32>::s_Max) && value <= static_cast<f64>(Limit<f32>::s_Max);
 }
@@ -66,7 +62,7 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
     u32 previous = direction == TextDirection::LeftToRight ? 0u : static_cast<u32>(text.size());
     for(const ShapedGlyph& glyph : run.glyphs){
         if(
-            glyph.byteBegin >= glyph.byteEnd || !ByteBoundary(text, glyph.byteBegin) || !ByteBoundary(text, glyph.byteEnd)
+            glyph.byteBegin >= glyph.byteEnd || !IsUtf8ScalarBoundary(text, glyph.byteBegin) || !IsUtf8ScalarBoundary(text, glyph.byteEnd)
             || !IsFinite(glyph.advance.x) || !IsFinite(glyph.advance.y) || glyph.advance.x < 0.0f || glyph.advance.y != 0.0f
             || !IsFinite(glyph.offset.x) || !IsFinite(glyph.offset.y) || !IsFinite(glyph.ink.x) || !IsFinite(glyph.ink.y)
             || !IsFinite(glyph.ink.width) || !IsFinite(glyph.ink.height) || glyph.ink.width < 0.0f || glyph.ink.height < 0.0f

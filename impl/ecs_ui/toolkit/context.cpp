@@ -52,7 +52,7 @@ Context::Context(Core::Alloc::GlobalArena& arena)
 }
 
 bool Context::beginFrame(const u64 generation)noexcept{
-    if(generation == 0u || generation <= m_lastFrameGeneration || m_frameGeneration != 0u || ready())
+    if(generation <= m_lastFrameGeneration || m_frameGeneration != 0u || ready())
         return false;
     m_lastFrameGeneration = generation;
     m_frameGeneration = generation;

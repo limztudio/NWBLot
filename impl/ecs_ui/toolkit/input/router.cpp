@@ -131,7 +131,7 @@ InputRoutingResult InputRouter::process(){
 }
 
 bool InputRouter::commitTargets(const HitTarget* targets, const usize count, const u64 layoutGeneration, const PopupScope* popups, const usize popupCount, const u64 expectedFocusLossGeneration){
-    if(count > s_InputMaxTargets || (count != 0u && targets == nullptr) || layoutGeneration == 0u || layoutGeneration <= m_layoutGeneration)
+    if(count > s_InputMaxTargets || (count != 0u && targets == nullptr) || layoutGeneration <= m_layoutGeneration)
         return false;
     if(!stagePopups(popups, popupCount))
         return false;

@@ -207,7 +207,7 @@ bool MeshCookMetadata::FillMetadataIndexRecursive(const Path& nwbFilePath, const
             if(labelBytes > maxLabelBytes)
                 throw LengthException("mesh index diagnostic label exceeds string capacity");
             for(const IndexBreadcrumb* component = path; component; component = component->parent){
-                char digits[TextDetail::s_DecimalTextBufferBytes];
+                char digits[s_DecimalTextBufferBytes];
                 const usize indexBytes = FormatDecimal(component->index, digits).size();
                 if(indexBytes > maxLabelBytes - labelBytes || s_IndexedLabelBracketReserve > maxLabelBytes - labelBytes - indexBytes)
                     throw LengthException("mesh index diagnostic label exceeds string capacity");
@@ -220,7 +220,7 @@ bool MeshCookMetadata::FillMetadataIndexRecursive(const Path& nwbFilePath, const
                 const IndexBreadcrumb* component = path;
                 for(usize parentCount = 1u; parentCount < remainingDepth; ++parentCount)
                     component = component->parent;
-                char digits[TextDetail::s_DecimalTextBufferBytes];
+                char digits[s_DecimalTextBufferBytes];
                 const AStringView indexText = FormatDecimal(component->index, digits);
                 failureLabel += '[';
                 failureLabel.append(indexText.data(), indexText.size());

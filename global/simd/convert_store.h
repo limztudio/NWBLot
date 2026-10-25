@@ -407,7 +407,8 @@ NWB_INLINE void StreamDoubleFence()noexcept{
 #if defined(NWB_HAS_SSE2)
     _mm_sfence();
 #elif defined(NWB_HAS_NEON)
-    __builtin_arm_dmb(0xB);
+    constexpr unsigned int s_ArmDmbInnerShareableFullBarrier = 0xBu;
+    __builtin_arm_dmb(s_ArmDmbInnerShareableFullBarrier);
 #endif
 }
 

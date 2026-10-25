@@ -303,8 +303,8 @@ TEST(WaylandTextInputState, LongSurroundingClipsWithoutSplittingUnicode){
     EXPECT_EQ(ValidateTextInputUtf8(slice.text, 4000u), TextInputAdmission::Accepted);
     EXPECT_EQ(slice.offsetByte + slice.anchorByte, 4500u);
     EXPECT_EQ(slice.offsetByte + slice.caretByte, 4503u);
-    EXPECT_TRUE(IsTextInputUtf8Boundary(slice.text, slice.anchorByte));
-    EXPECT_TRUE(IsTextInputUtf8Boundary(slice.text, slice.caretByte));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(slice.text, slice.anchorByte));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(slice.text, slice.caretByte));
 }
 
 TEST(WaylandTextInputState, SelectionMustFitNativeMessageAndContainByteBoundaries){

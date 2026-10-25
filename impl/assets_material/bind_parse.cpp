@@ -38,34 +38,6 @@ Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool IsMaterialBindIdentifier(const AStringView text)noexcept{
-    if(text.empty())
-        return false;
-
-    const auto isAlpha = [](const char ch)noexcept{
-        return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
-    };
-    const auto isDigit = [](const char ch)noexcept{
-        return ch >= '0' && ch <= '9';
-    };
-    const auto isIdentifierChar = [&](const char ch)noexcept{
-        return isAlpha(ch) || isDigit(ch) || ch == '_';
-    };
-
-    if(!isAlpha(text[0]) && text[0] != '_')
-        return false;
-
-    for(usize i = 1u; i < text.size(); ++i){
-        if(!isIdentifierChar(text[i]))
-            return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<MaterialParameterType> ParseMaterialParameterTypeText(const AStringView typeText)noexcept{
     static constexpr ::NamedEnumCase<MaterialParameterValueType::Enum> s_Types[] = {
         { "bool", MaterialParameterValueType::Bool },
@@ -145,7 +117,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
         if(!parsedName)
             return MakeUnexpected(Failure{});
         attribute.name = *parsedName;
-        if(!IsMaterialBindIdentifier(attribute.name)){
+        if(!IsAsciiIdentifier(attribute.name)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid attribute name '{}' in {}"), PathToString<tchar>(bindFilePath), StringConvert(attribute.name), StringConvert(contextLabel));
             return MakeUnexpected(Failure{});
         }
@@ -261,7 +233,7 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
         return MakeUnexpected(Failure{});
     field.name = *parsedName;
     const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value();
-    if(!IsMaterialBindIdentifier(field.type) || (!isResourceField && !ParseMaterialParameterTypeText(AStringView(field.type)))){
+    if(!IsAsciiIdentifier(field.type) || (!isResourceField && !ParseMaterialParameterTypeText(AStringView(field.type)))){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name), StringConvert(field.type));
         return MakeUnexpected(Failure{});
     }
@@ -269,7 +241,7 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': resource field '{}.{}' must use material_constant storage"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name));
         return MakeUnexpected(Failure{});
     }
-    if(!IsMaterialBindIdentifier(field.name)){
+    if(!IsAsciiIdentifier(field.name)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has invalid name"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name));
         return MakeUnexpected(Failure{});
     }
@@ -295,7 +267,7 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
     }
 
     bindStruct.name.assign(structName.data(), structName.size());
-    if(!IsMaterialBindIdentifier(bindStruct.name)){
+    if(!IsAsciiIdentifier(bindStruct.name)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid struct name '{}'"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
@@ -385,11 +357,11 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
         MaterialBindInstance instance(arena);
         instance.type = typeName;
         instance.name = instanceName;
-        if(!IsMaterialBindIdentifier(instance.type) || !outEntry.findStruct(AStringView(instance.type))){
+        if(!IsAsciiIdentifier(instance.type) || !outEntry.findStruct(AStringView(instance.type))){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' references unknown struct type '{}'"), PathToString<tchar>(bindFilePath), StringConvert(instance.name), StringConvert(instance.type));
             return false;
         }
-        if(!IsMaterialBindIdentifier(instance.name)){
+        if(!IsAsciiIdentifier(instance.name)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid instance name '{}'"), PathToString<tchar>(bindFilePath), StringConvert(instance.name));
             return false;
         }

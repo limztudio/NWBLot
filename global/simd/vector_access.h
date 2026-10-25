@@ -169,7 +169,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetY(SIMDVectorSingle value, f32
 #elif defined(NWB_HAS_NEON)
     return vsetq_lane_f32(y, value, 1);
 #elif defined(NWB_HAS_SSE4)
-    return _mm_insert_ps(value, _mm_set_ss(y), 0x10);
+    return _mm_insert_ps(value, _mm_set_ss(y), s_SIMDSse4InsertLaneYMask);
 #else
     return SIMDVectorDetail::SetLane<1u>(value, y);
 #endif
@@ -194,7 +194,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetZ(SIMDVectorSingle value, f32
 #elif defined(NWB_HAS_NEON)
     return vsetq_lane_f32(z, value, 2);
 #elif defined(NWB_HAS_SSE4)
-    return _mm_insert_ps(value, _mm_set_ss(z), 0x20);
+    return _mm_insert_ps(value, _mm_set_ss(z), s_SIMDSse4InsertLaneZMask);
 #else
     return SIMDVectorDetail::SetLane<2u>(value, z);
 #endif
@@ -219,7 +219,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSetW(SIMDVectorSingle value, f32
 #elif defined(NWB_HAS_NEON)
     return vsetq_lane_f32(w, value, 3);
 #elif defined(NWB_HAS_SSE4)
-    return _mm_insert_ps(value, _mm_set_ss(w), 0x30);
+    return _mm_insert_ps(value, _mm_set_ss(w), s_SIMDSse4InsertLaneWMask);
 #else
     return SIMDVectorDetail::SetLane<3u>(value, w);
 #endif

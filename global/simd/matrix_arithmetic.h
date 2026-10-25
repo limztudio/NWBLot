@@ -19,6 +19,7 @@ namespace SIMDMatrixDetail{
 
 static const SIMDVectorConstF s_SIMDMatrixSign = { { { 1.0f, -1.0f, 1.0f, -1.0f } } };
 inline constexpr f32 s_MatrixHalf = 0.5f;
+inline constexpr usize s_MatrixRowCount = 4;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,25 +81,25 @@ NWB_INLINE void NWB_SIMD_CALL MatrixMultiplyPackedRowsFMA(const SIMDMatrix& m0, 
 
     __m256 a0 = _mm256_shuffle_ps(t0, t0, _MM_SHUFFLE(0, 0, 0, 0));
     __m256 a1 = _mm256_shuffle_ps(t1, t1, _MM_SHUFFLE(0, 0, 0, 0));
-    __m256 b0 = _mm256_permute2f128_ps(u0, u0, 0x00);
+    __m256 b0 = _mm256_permute2f128_ps(u0, u0, s_SIMDAvxPermute2F128LowLow);
     __m256 c0 = _mm256_mul_ps(a0, b0);
     __m256 c1 = _mm256_mul_ps(a1, b0);
 
     a0 = _mm256_shuffle_ps(t0, t0, _MM_SHUFFLE(1, 1, 1, 1));
     a1 = _mm256_shuffle_ps(t1, t1, _MM_SHUFFLE(1, 1, 1, 1));
-    b0 = _mm256_permute2f128_ps(u0, u0, 0x11);
+    b0 = _mm256_permute2f128_ps(u0, u0, s_SIMDAvxPermute2F128HighHigh);
     __m256 c2 = _mm256_fmadd_ps(a0, b0, c0);
     __m256 c3 = _mm256_fmadd_ps(a1, b0, c1);
 
     a0 = _mm256_shuffle_ps(t0, t0, _MM_SHUFFLE(2, 2, 2, 2));
     a1 = _mm256_shuffle_ps(t1, t1, _MM_SHUFFLE(2, 2, 2, 2));
-    __m256 b1 = _mm256_permute2f128_ps(u1, u1, 0x00);
+    __m256 b1 = _mm256_permute2f128_ps(u1, u1, s_SIMDAvxPermute2F128LowLow);
     __m256 c4 = _mm256_mul_ps(a0, b1);
     __m256 c5 = _mm256_mul_ps(a1, b1);
 
     a0 = _mm256_shuffle_ps(t0, t0, _MM_SHUFFLE(3, 3, 3, 3));
     a1 = _mm256_shuffle_ps(t1, t1, _MM_SHUFFLE(3, 3, 3, 3));
-    b1 = _mm256_permute2f128_ps(u1, u1, 0x11);
+    b1 = _mm256_permute2f128_ps(u1, u1, s_SIMDAvxPermute2F128HighHigh);
     __m256 c6 = _mm256_fmadd_ps(a0, b1, c4);
     __m256 c7 = _mm256_fmadd_ps(a1, b1, c5);
 
@@ -359,8 +360,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL MatrixDoubleDeterminant(const SIMDMatr
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixInverse(SIMDVectorSingle* outDeterminant, const SIMDMatrix& matrix)noexcept{
     const SIMDMatrix mt = MatrixTranspose(matrix);
 
-    SIMDVectorSingle v0[4]{};
-    SIMDVectorSingle v1[4]{};
+    SIMDVectorSingle v0[SIMDMatrixDetail::s_MatrixRowCount]{};
+    SIMDVectorSingle v1[SIMDMatrixDetail::s_MatrixRowCount]{};
     v0[0] = VectorSwizzle<0, 0, 1, 1>(mt.v[2]);
     v1[0] = VectorSwizzle<2, 3, 2, 3>(mt.v[3]);
     v0[1] = VectorSwizzle<0, 0, 1, 1>(mt.v[0]);
@@ -451,8 +452,8 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixInverse(SIMDVectorSingle* outDetermina
 NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleInverse(SIMDVectorDouble* outDeterminant, const SIMDMatrixDouble& matrix)noexcept{
     const SIMDMatrixDouble mt = MatrixDoubleTranspose(matrix);
 
-    SIMDVectorDouble v0[4]{};
-    SIMDVectorDouble v1[4]{};
+    SIMDVectorDouble v0[SIMDMatrixDetail::s_MatrixRowCount]{};
+    SIMDVectorDouble v1[SIMDMatrixDetail::s_MatrixRowCount]{};
     v0[0] = VectorDoubleSwizzle<0, 0, 1, 1>(mt.v[2]);
     v1[0] = VectorDoubleSwizzle<2, 3, 2, 3>(mt.v[3]);
     v0[1] = VectorDoubleSwizzle<0, 0, 1, 1>(mt.v[0]);

@@ -37,8 +37,6 @@ inline constexpr long s_CrashUploadConnectTimeoutMilliseconds = 1000L;
 inline constexpr long s_CrashUploadTimeoutMilliseconds = 5000L;
 inline constexpr long s_HttpSuccessStatusBegin = 200L;
 inline constexpr long s_HttpSuccessStatusEnd = 300L;
-inline constexpr char s_SafeNameDigitFirst = '0';
-inline constexpr char s_SafeNameDigitLast = '9';
 inline constexpr StringView s_UploadCategory = "crash_package_upload";
 inline constexpr StringView s_SpoolRetentionCategory = "crash_spool_retention";
 
@@ -135,10 +133,10 @@ template<typename ArenaT>
 static bool IsSafePackageName(const ::Path<ArenaT>& path){
     const ::Path<ArenaT> filename = path.filename();
     const auto name = filename.native();
-    if(name.empty() || GlobalFilesystemPathDetail::IsDot(name) || GlobalFilesystemPathDetail::IsDotDot(name))
+    if(name.empty() || IsDot(name) || IsDotDot(name))
         return false;
     for(const auto ch : name){
-        const bool ok = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= s_SafeNameDigitFirst && ch <= s_SafeNameDigitLast) || ch == '-' || ch == '_' || ch == '.';
+        const bool ok = IsAsciiIdentifierChar(ch) || ch == '-' || ch == '.';
         if(!ok)
             return false;
     }

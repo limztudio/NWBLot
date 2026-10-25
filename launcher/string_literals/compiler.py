@@ -27,6 +27,7 @@ CLANG_CL_DRIVER_NAME = "clang-cl"
 CL_DRIVER_MODE_OPTION = "--driver-mode=cl"
 MAX_RESPONSE_FILE_DEPTH = 64
 DOUBLED_QUOTE_WIDTH = 2
+ESCAPED_BACKSLASH_PAIR_WIDTH = 2
 OPTION_WITH_VALUE_WIDTH = 2
 CLANG_CL_SOURCE_OPTION_LENGTH = 3
 XCLANG_PAIR_ARGUMENT_COUNT = 4
@@ -119,8 +120,8 @@ def split_windows_response(text: str) -> list[str]:
                     index += 1
                 count = index - start
                 if index < len(text) and text[index] == '"':
-                    word.append("\\" * (count // 2))
-                    if count % 2:
+                    word.append("\\" * (count // ESCAPED_BACKSLASH_PAIR_WIDTH))
+                    if count % ESCAPED_BACKSLASH_PAIR_WIDTH:
                         word.append('"')
                         index += 1
                         continue

@@ -62,7 +62,7 @@ protected:
     void addFile(AStringView relativePath){
         const NWB::Path path = m_root / relativePath;
         ASSERT_TRUE(EnsureDirectories(path.parentPath()));
-        GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary);
+        OutputFileStream stream(path, OutputFileStream::binary);
         ASSERT_TRUE(stream);
         stream.close();
         ASSERT_TRUE(stream);

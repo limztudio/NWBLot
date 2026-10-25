@@ -75,7 +75,7 @@ uint2 nwbMeshPackGeneratedHalf4(const half4 value){
 }
 
 half4 nwbMeshUnpackGeneratedHalf4(const uint2 value){
-    return half4(float4(nwbUnpackHalf2x16(value.x), nwbUnpackHalf2x16(value.y)));
+    return half4(half2(nwbUnpackHalf2x16(value.x)), half2(nwbUnpackHalf2x16(value.y)));
 }
 #endif
 
@@ -145,7 +145,7 @@ void nwbMeshSetMeshletRasterFlags(const uint rasterFlags, const uint groupThread
 NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertexWithRasterFlags(const float4 position, const float3 normal, const float4 tangent, const float2 uv0, const half4 color, const float3 worldPosition, const uint rasterFlags){
     NwbMeshGeneratedVertex generatedVertex;
     generatedVertex.position = position;
-    nwbMeshSetGeneratedVertexNormal(generatedVertex, half4(half3(normal), half(0.0)));
+    nwbMeshSetGeneratedVertexNormal(generatedVertex, half4(half3(normal), half(0.0h)));
     nwbMeshSetGeneratedVertexTangent(generatedVertex, half4(tangent));
     generatedVertex.uv0 = uv0;
     nwbMeshSetGeneratedVertexColor(generatedVertex, color);

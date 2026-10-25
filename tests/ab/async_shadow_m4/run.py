@@ -186,6 +186,9 @@ def parse_lane_status(log_text: str) -> Optional[LaneStatus]:
         compute_dedicated=dedicated == LIT_ENABLED_FLAG, compute_supported=supported == LIT_ENABLED_FLAG, compute_graphics=graphics == LIT_ENABLED_FLAG,)
 
 
+LOG_TAIL_CHAR_LIMIT = 4000
+
+
 def wait_for_lane_status(process, log_directory: Path, log_baseline: Mapping[Path, int], log_pattern: str, timeout_seconds: float,) -> LaneStatus:
     deadline = time.monotonic() + timeout_seconds
     latest_log = ""
@@ -197,7 +200,7 @@ def wait_for_lane_status(process, log_directory: Path, log_baseline: Mapping[Pat
             return status
         time.sleep(LIT_PROCESS_POLL_SECONDS)
 
-    detail = latest_log[-4000:]
+    detail = latest_log[-LOG_TAIL_CHAR_LIMIT:]
     raise SmokeFailure(f"timed out waiting for selected async-lane capability log\n{detail}")
 
 
@@ -211,7 +214,7 @@ def wait_for_log_message(process, log_directory: Path, log_baseline: Mapping[Pat
             return
         time.sleep(LIT_PROCESS_POLL_SECONDS)
 
-    detail = latest_log[-4000:]
+    detail = latest_log[-LOG_TAIL_CHAR_LIMIT:]
     raise SmokeFailure(f"timed out waiting for benchmark log message '{message}'\n{detail}")
 
 

@@ -96,7 +96,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
     const GpuSubmissionPacket& packet = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
     const GpuPhysicalQueueInfo* const packetQueueInfo = planAccess.queueInfo(packet.queue);
-    if(!tasks || packet.taskCount == 0u || !packetQueueInfo || !m_device.matchesPhysicalQueueIdentity(packet.queue) || (initialStates && !initialStates->validForDeviceGeneration(planAccess.deviceGeneration())))
+    if(packet.taskCount == 0u || !packetQueueInfo || !m_device.matchesPhysicalQueueIdentity(packet.queue) || (initialStates && !initialStates->validForDeviceGeneration(planAccess.deviceGeneration())))
         return false;
 
     const auto validateOwnership = [&](const ResourceQueueSharing::Mask sharing, const ResourceQueueSharing::Mask resourceSharing, const bool usesConcurrentSharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue)noexcept{
@@ -210,8 +210,6 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         if(!declarationAccess.validResource(resourceID))
             return MakeUnexpected(Failure{});
         const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
-        if(resource.id != resourceID)
-            return MakeUnexpected(Failure{});
         if(resource.type == GpuGraphResourceType::HazardDomain){
             if(resource.hasBackendResource)
                 return MakeUnexpected(Failure{});
@@ -267,7 +265,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             return false;
         const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(resourceID.index);
         if(resource.type == GpuGraphResourceType::HazardDomain)
-            return resource.id == resourceID && !resource.hasBackendResource;
+            return !resource.hasBackendResource;
         if(requiredState == ResourceStates::Unknown)
             return false;
 
@@ -344,8 +342,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
     };
 
     const auto validateBarrierList = [&](const GpuCompiledBarrier* const barriers, const u32 barrierCount)noexcept{
-        if(barrierCount != 0u && !barriers)
-            return false;
+        NWB_ASSERT(barrierCount == 0u || barriers != nullptr);
         for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){
             const GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(barrier.type >= GpuCompiledBarrierType::kCount || !declarationAccess.validResource(barrier.resource) || declarationAccess.resourceAt(barrier.resource.index).type != __hidden_gpu_packet_runtime_preflight::BarrierResourceType(barrier.type))
@@ -412,8 +409,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(task);
         const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
         const GpuTaskGraphTaskView taskView = declarationAccess.taskAt(task.index);
-        if(!compiledTaskView.valid() || compiledTask->packet != packetID || taskView.id != task || (taskView.resourceUseCount != 0u && !taskView.resourceUses))
-            return false;
+        NWB_ASSERT(compiledTaskView.valid() && compiledTask->packet == packetID && taskView.id == task && (taskView.resourceUseCount == 0u || taskView.resourceUses != nullptr));
         for(usize useIndex = 0u; useIndex < taskView.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = taskView.resourceUses[useIndex];
             if(use.access >= GpuTaskResourceAccess::kCount || !validateResourceState(use.resource, use.requiredState))
@@ -425,11 +421,10 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 return false;
         }
         const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
-        if(compiledTask->prologueStateSeedCount != 0u && !stateSeeds)
-            return false;
+        NWB_ASSERT(compiledTask->prologueStateSeedCount == 0u || stateSeeds != nullptr);
         for(u32 seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
             const GpuPacketStateSeed& seed = stateSeeds[seedIndex];
-            if(!planAccess.validPacket(seed.sourcePacket) || seed.sourcePacket == packetID || seed.sourcePacket.index >= packetID.index || !validateResourceReady(seed.resource))
+            if(!planAccess.validPacket(seed.sourcePacket) || seed.sourcePacket.index >= packetID.index || !validateResourceReady(seed.resource))
                 return false;
             const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(seed.resource.index);
             if(

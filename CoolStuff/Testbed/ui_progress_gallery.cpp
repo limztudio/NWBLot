@@ -21,7 +21,7 @@ TESTBED_BEGIN
 
 void UiProgressGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     constexpr f32 s_PanelHeight = 180.0f;
-    constexpr f64 s_AdvanceFraction = 0.25;
+    constexpr f64 s_AdvanceFraction = s_DefaultProgressFraction;
     constexpr f64 s_PercentScale = 100.0;
     NWB::Impl::Ui::Builder& ui = context.ui;
     if(!ui.beginPanel("progress_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))

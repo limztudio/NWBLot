@@ -39,9 +39,9 @@ TEST(TextInputText, ValidatesStrictUtf8AndEmbeddedNul){
 TEST(TextInputText, BoundariesUseBytesForBmpAndSupplementaryScalars){
     constexpr AStringView s_Text = "A\xED\x95\x9C\xF0\x9F\x98\x80";
     for(const usize index : { 0u, 1u, 4u, 8u })
-        EXPECT_TRUE(IsTextInputUtf8Boundary(s_Text, index));
+        EXPECT_TRUE(IsUtf8ScalarBoundary(s_Text, index));
     for(const usize index : { 2u, 3u, 5u, 6u, 7u, 9u })
-        EXPECT_FALSE(IsTextInputUtf8Boundary(s_Text, index));
+        EXPECT_FALSE(IsUtf8ScalarBoundary(s_Text, index));
 }
 
 TEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins){
@@ -54,7 +54,7 @@ TEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins
 }
 
 TEST(TextInputText, RejectsInvalidScalarsWithoutPublishingAnEncodedLength){
-    char bytes[4] = {};
+    char bytes[s_Utf8MaxSequenceBytes] = {};
     const auto length = EncodeTextInputCodePoint(0x1f600u, bytes);
     ASSERT_TRUE(length);
     EXPECT_EQ(AStringView(bytes, *length), "\xF0\x9F\x98\x80");

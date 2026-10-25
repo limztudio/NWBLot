@@ -61,7 +61,7 @@ bool nwbRefractionResolvePixel(const uint3 groupId, const uint3 groupThreadId, o
     if(groupId.y != 0u && queueIndex >= g_NwbRefractionTileArguments.Load(NWB_REFRACTION_TILE_COUNTER_OFFSET))
         return false;
     const uint tilesX = (g_NwbRefractionPush.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE;
-    const uint tile = g_NwbRefractionTileList.Load(queueIndex * 4u);
+    const uint tile = g_NwbRefractionTileList.Load(queueIndex * NWB_REFRACTION_TILE_WORD_BYTES);
     pixel = uint2(tile % tilesX, tile / tilesX) * NWB_REFRACTION_GROUP_SIZE + groupThreadId.xy;
 #endif
     return pixel.x < g_NwbRefractionPush.width && pixel.y < g_NwbRefractionPush.height;
@@ -75,8 +75,8 @@ static const float NWB_REFRACTION_MAX_DISTANCE = 10000.0;
 static const float NWB_REFRACTION_MIN_DISTANCE = 0.001;
 static const float NWB_REFRACTION_MIN_CLIP_W = 1e-6;
 static const half NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN = 1e-4h;
-static const float NWB_REFRACTION_TINT_MIN = 1e-4;
-static const float NWB_REFRACTION_IOR_MAX = 4.0;
+static const half NWB_REFRACTION_TINT_MIN = 1e-4h;
+static const half NWB_REFRACTION_IOR_MAX = 4.0h;
 static const float NWB_REFRACTION_BIAS_DISTANCE_SCALE = 1e-5;
 // Association tolerances grow with the entry bias.
 static const float NWB_REFRACTION_BIAS_TOLERANCE_SCALE = 8.0;
@@ -145,14 +145,14 @@ half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const ha
     // Tint/Beer attenuation plus two bounded Fresnel transmissions stay in (0, 1]; half color math is sufficient.
     const half ratio = (ior - half(1.0h)) / (ior + half(1.0h));
     const half r0 = ratio * ratio;
-    const float fresnel = float(nwbRefractionFresnelTransmissionFromR0(r0, entryCosine)) * float(nwbRefractionFresnelTransmissionFromR0(r0, exitCosine));
-    return half3(exp(log(clamp(float3(tint), float3(NWB_REFRACTION_TINT_MIN), float3(1.0))) * max(thickness, 0.0)) * fresnel);
+    const half fresnel = nwbRefractionFresnelTransmissionFromR0(r0, entryCosine) * nwbRefractionFresnelTransmissionFromR0(r0, exitCosine);
+    return half3(exp(float3(log(clamp(tint, half3(NWB_REFRACTION_TINT_MIN), half3(1.0h)))) * max(thickness, 0.0))) * fresnel;
 }
 
 half3 nwbRefractionFallbackAttenuation(const half3 tint, const half ior, const half cosine){
     // Unit-thickness fallback attenuation simplifies exp(log(tint) * 1.0) to clamped tint and squares one Fresnel evaluation.
-    const float fresnel = float(nwbRefractionFresnelTransmission(ior, cosine));
-    return half3(clamp(float3(tint), float3(NWB_REFRACTION_TINT_MIN), float3(1.0)) * (fresnel * fresnel));
+    const half fresnel = nwbRefractionFresnelTransmission(ior, cosine);
+    return clamp(tint, half3(NWB_REFRACTION_TINT_MIN), half3(1.0h)) * (fresnel * fresnel);
 }
 
 struct NwbRefractionEntry{
@@ -189,7 +189,7 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     const float3 rawNormal = nwbSafeNormalize(normalIor.xyz, -entry.incident);
     const float incidentDotNormal = dot(entry.incident, rawNormal);
     entry.normal = select(bool3(incidentDotNormal > 0.0), -rawNormal, rawNormal);
-    entry.ior = half(clamp(normalIor.w, 1.0, NWB_REFRACTION_IOR_MAX));
+    entry.ior = clamp(half(normalIor.w), half(1.0h), NWB_REFRACTION_IOR_MAX);
     entry.tint = saturate(tint);
     entry.cosine = half(saturate(abs(incidentDotNormal)));
     entry.bias = max(NWB_REFRACTION_MIN_DISTANCE, entry.cameraDistance * NWB_REFRACTION_BIAS_DISTANCE_SCALE);

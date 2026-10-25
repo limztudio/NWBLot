@@ -142,7 +142,7 @@ bool X11TextInputService::dispatchKey(XKeyEvent& event){
         return true;
     const AStringView text(m_lookup.data(), static_cast<usize>(bytes));
     // Editing and shortcut controls remain physical key events, rather than text commits.
-    if(text.size() == 1u && (static_cast<u8>(text[0]) < s_TextInputFirstPrintableCodePoint || text[0] == s_TextInputDeleteCodePoint))
+    if(text.size() == 1u && (static_cast<u8>(text[0]) < s_UnicodeSpace || static_cast<u8>(text[0]) == s_UnicodeDelete))
         return true;
     const TextInputAdmission::Enum admission = emitCommit(token, text);
     if(admission != TextInputAdmission::Accepted && admission != TextInputAdmission::InvalidSession)

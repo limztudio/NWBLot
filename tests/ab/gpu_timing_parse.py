@@ -19,6 +19,10 @@ LIT_REPLACE = "replace"
 NAME_SYMBOLS_HEADER = "nwb_namesym_v1"
 # Unattended windows can stall into zero intervals; this many positive intervals or fewer cannot qualify performance.
 MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS = 10
+MINIMUM_NAME_SYMBOL_FIELDS = 3
+UINT32_LIMIT = 1 << 32
+UINT64_LIMIT = 1 << 64
+POSITIVE_TIMING_SAMPLE_EPSILON_MS = 1.0e-6
 
 
 NUMBER = r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
@@ -50,7 +54,7 @@ def load_name_symbols(path: Optional[Path], required_scopes: Iterable[str], *, m
 
     for raw_line in lines:
         fields = raw_line.split("\t")
-        if len(fields) >= 3 and fields[2]:
+        if len(fields) >= MINIMUM_NAME_SYMBOL_FIELDS and fields[2]:
             decoded[fields[0]] = fields[2]
     return decoded
 
@@ -72,7 +76,7 @@ def parse_timing_file(path: Path, symbols: Mapping[str, str], start_byte_offset:
         if header:
             frames = int(header.group("frames"))
             seconds = float(header.group("seconds"))
-            if not 0 < frames < 2 ** 32 or not math.isfinite(seconds) or seconds <= 0.0:
+            if not 0 < frames < UINT32_LIMIT or not math.isfinite(seconds) or seconds <= 0.0:
                 raise SmokeFailure(f"invalid GPU timing interval in {path}: {raw_line}")
             if current:
                 intervals.append(current)
@@ -94,7 +98,7 @@ def parse_timing_file(path: Path, symbols: Mapping[str, str], start_byte_offset:
         raw_scope = match.group("scope")
         scope = symbols.get(raw_scope, raw_scope)
         values = tuple(float(match.group(field)) for field in ("average", "minimum", "maximum", "total", "sample_average"))
-        if (any(not math.isfinite(value) or value < 0.0 for value in values) or not 0 < int(match.group("published_windows")) < 2 ** 32 or not 0 < int(match.group("gpu_samples")) < 2 ** 64 or values[1] > values[0] or values[0] > values[2] or scope in current):
+        if (any(not math.isfinite(value) or value < 0.0 for value in values) or not 0 < int(match.group("published_windows")) < UINT32_LIMIT or not 0 < int(match.group("gpu_samples")) < UINT64_LIMIT or values[1] > values[0] or values[0] > values[2] or scope in current):
             raise SmokeFailure(f"invalid current GPU timing values in {path}: {raw_line}")
         current[scope] = values[0]
 
@@ -106,7 +110,7 @@ def parse_timing_file(path: Path, symbols: Mapping[str, str], start_byte_offset:
 def summarize_samples(values: Sequence[float]) -> ScopeSummary:
     if not values:
         return ScopeSummary(0, 0, 0.0, 0.0, 0.0, 0.0)
-    return ScopeSummary(sample_count=len(values), positive_sample_count=sum(value > 1.0e-6 for value in values), median_ms=statistics.median(values), mean_ms=statistics.fmean(values), min_ms=min(values), max_ms=max(values),)
+    return ScopeSummary(sample_count=len(values), positive_sample_count=sum(value > POSITIVE_TIMING_SAMPLE_EPSILON_MS for value in values), median_ms=statistics.median(values), mean_ms=statistics.fmean(values), min_ms=min(values), max_ms=max(values),)
 
 
 def summarize_scopes(intervals: Iterable[Mapping[str, float]]) -> Dict[str, ScopeSummary]:

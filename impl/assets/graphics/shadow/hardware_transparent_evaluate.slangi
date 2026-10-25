@@ -119,7 +119,7 @@ NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(const RayDesc ray,
     NwbHardwareTransparentCrossingOptics optics;
     // Bounded (0, 1) optics factors stay half; geometry chord/distances below remain float for precision.
     optics.absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
-    optics.transmission = nwbShadowFresnelTransmittedFraction(float(surface.refractionIor), cosine);
+    optics.transmission = nwbShadowFresnelTransmittedFraction(surface.refractionIor, cosine);
     optics.facing = nwbHwShadowFacing(geometricNormal, objectDirection);
     return optics;
 }

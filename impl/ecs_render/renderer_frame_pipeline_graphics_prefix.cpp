@@ -309,10 +309,12 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::BufferRange csgReceiverRange(0u, csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData));
     const Core::BufferRange csgCutterRange(0u, csgFrameData.cutters.size() * sizeof(CsgCutterGpuData));
 
+    constexpr usize s_CsgReceiverSpanResourceUseCapacity = 6u;
+    constexpr usize s_CsgIntervalCombineResourceUseCapacity = 11u;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ scratchArena };
-    Core::GpuTaskResourceUse csgReceiverSpanResourceUses[6u] = {};
+    Core::GpuTaskResourceUse csgReceiverSpanResourceUses[s_CsgReceiverSpanResourceUseCapacity] = {};
     usize csgReceiverSpanResourceUseCount = 0u;
-    Core::GpuTaskResourceUse csgIntervalCombineResourceUses[11u] = {};
+    Core::GpuTaskResourceUse csgIntervalCombineResourceUses[s_CsgIntervalCombineResourceUseCapacity] = {};
     usize csgIntervalCombineResourceUseCount = 0u;
     Core::GpuGraphResourceSetId gbufferMaterialGeometrySet;
     Core::GpuGraphResourceSetId gbufferMaterialSampledTextureSet;
@@ -522,7 +524,8 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    Core::GpuTaskResourceSetUse gbufferMaterialResourceSetUses[4u] = {};
+    constexpr usize s_GbufferMaterialResourceSetUseCapacity = 4u;
+    Core::GpuTaskResourceSetUse gbufferMaterialResourceSetUses[s_GbufferMaterialResourceSetUseCapacity] = {};
     usize gbufferMaterialResourceSetUseCount = 0u;
     if(gbufferPayload.materialGeometryStatesGraphOwned)
         gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] = gbufferMaterialGeometrySetUse;

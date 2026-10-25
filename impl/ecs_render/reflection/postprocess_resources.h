@@ -90,8 +90,10 @@ private:
     Core::ComputePipelineHandle m_temporalPipeline;
     Core::ComputePipelineHandle m_spatialPipelines[NWB_REFLECTION_SPATIAL_MAX_RADIUS];
     Core::ShaderHandle m_temporalShader;
+    static constexpr usize s_PostprocessDescriptorCount = 4u;
+
     Core::ShaderHandle m_spatialShaders[NWB_REFLECTION_SPATIAL_MAX_RADIUS];
-    Core::GpuDescriptorHandle m_descriptors[4];
+    Core::GpuDescriptorHandle m_descriptors[s_PostprocessDescriptorCount];
     u32 m_width = 0u;
     u32 m_height = 0u;
 };

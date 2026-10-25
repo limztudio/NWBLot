@@ -61,7 +61,7 @@ NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble4TransformStream(NotNull<
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Transform(SIMDVectorSingle value, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SSE4)
     const SIMDVectorSingle v = _mm_or_ps(_mm_and_ps(value, s_SIMDMaskXY), s_SIMDIdentityR3);
-    return SIMDVectorDetail::MatrixDotPack<0xBF>(matrix, v);
+    return SIMDVectorDetail::MatrixDotPack<s_SIMDSse4Dot2TransformMask>(matrix, v);
 #else
     return Vector4Transform(VectorSetW(VectorSetZ(value, 0.0f), 1.0f), matrix);
 #endif
@@ -124,7 +124,7 @@ NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble2TransformCoordStream(Not
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2TransformNormal(SIMDVectorSingle value, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SSE4)
     const SIMDVectorSingle v = _mm_and_ps(value, s_SIMDMaskXY);
-    return SIMDVectorDetail::MatrixDotPack<0x3F>(matrix, v);
+    return SIMDVectorDetail::MatrixDotPack<s_SIMDSse4Dot2BroadcastMask>(matrix, v);
 #else
     return Vector4Transform(VectorAndInt(value, s_SIMDMaskXY), matrix);
 #endif
@@ -155,7 +155,7 @@ NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble2TransformNormalStream(No
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3Transform(SIMDVectorSingle value, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SSE4)
     const SIMDVectorSingle v = _mm_or_ps(_mm_and_ps(value, s_SIMDMask3), s_SIMDIdentityR3);
-    return SIMDVectorDetail::MatrixDotPack<0xFF>(matrix, v);
+    return SIMDVectorDetail::MatrixDotPack<s_SIMDSse4Dot4BroadcastMask>(matrix, v);
 #else
     return Vector4Transform(VectorSetW(value, 1.0f), matrix);
 #endif
@@ -218,7 +218,7 @@ NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble3TransformCoordStream(Not
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3TransformNormal(SIMDVectorSingle value, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SSE4)
     const SIMDVectorSingle v = _mm_and_ps(value, s_SIMDMask3);
-    return SIMDVectorDetail::MatrixDotPack<0x7F>(matrix, v);
+    return SIMDVectorDetail::MatrixDotPack<s_SIMDSse4Dot3BroadcastMask>(matrix, v);
 #else
     return Vector4Transform(VectorAndInt(value, s_SIMDMask3), matrix);
 #endif

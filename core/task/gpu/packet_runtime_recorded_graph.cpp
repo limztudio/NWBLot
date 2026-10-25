@@ -306,7 +306,7 @@ void GpuRecordedGraph::revokeCommandListPublicationsWithoutCallbacks(ArtifactSto
 }
 
 bool GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess){
-    if(!planAccess.validFor(compiledGraph) || !planAccess.valid() || !m_candidateStorage)
+    if(!planAccess.validFor(compiledGraph) || !m_candidateStorage)
         return false;
 
     ArtifactStorage& candidate = *m_candidateStorage;
@@ -328,8 +328,7 @@ bool GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& com
 
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
         const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
-        if(!planAccess.validPacket(packetID))
-            return false;
+        NWB_ASSERT(planAccess.validPacket(packetID));
 
         candidate.packets[packetIndex].packet = packetID;
         candidate.packetRecordingOverlaps[packetIndex] = 0u;
@@ -430,7 +429,6 @@ bool GpuRecordedGraph::validForWithinArtifactOperation(const GpuCompiledGraph& c
         && artifactAccess.validFor(*this)
         && storage
         && storage->valid
-        && planAccess.valid()
         && storage->compiledObjectIdentity == planAccess.objectIdentity()
         && storage->generation == planAccess.generation()
         && storage->planGeneration == planAccess.planGeneration()

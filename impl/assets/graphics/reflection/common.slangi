@@ -24,7 +24,7 @@
 
 // A stored glass IOR must exceed the lower bound to count as glass; it is clamped to the upper bound.
 static const float NWB_REFLECTION_GLASS_IOR_MIN = 1.0001;
-static const float NWB_REFLECTION_GLASS_IOR_MAX = 4.0;
+static const half NWB_REFLECTION_GLASS_IOR_MAX = 4.0h;
 // Captured glass bounds this many representable D32 depth steps.
 static const uint NWB_REFLECTION_GLASS_DEPTH_UNCERTAINTY_STEPS = 4u;
 static const half NWB_REFLECTION_SCHLICK_EXPONENT = 5.0h;
@@ -92,7 +92,7 @@ struct NwbReflectionSurface{
     float3 normal;
     float3 direction;
     half3 weight;
-    float roughness;
+    half roughness;
     float bias;
 };
 
@@ -125,20 +125,20 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     surface = (NwbReflectionSurface)0;
     const int3 texel = int3(pixel, 0);
     const uint specularSlot = glass ? g_NwbReflectionParameters.glassSpecularSlot : g_NwbReflectionParameters.opaqueSpecularSlot;
-    const float4 specularRoughness = nwbHeapSampledImage2DNonUniform(specularSlot).Load(texel);
+    const half4 specularRoughness = half4(nwbHeapSampledImage2DNonUniform(specularSlot).Load(texel));
     const uint normalSlot = glass ? g_NwbReflectionResources.refractionSlots0.y : g_NwbReflectionResources.gbufferSlots.y;
     float4 packedNormal = float4(0.0);
-    half3 f0 = half3(saturate(specularRoughness.rgb));
+    half3 f0 = saturate(specularRoughness.rgb);
     if(glass){
         packedNormal = nwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
         if(!isfinite(packedNormal.w) || packedNormal.w <= NWB_REFLECTION_GLASS_IOR_MIN)
             return false;
         // Glass reflection and transmission share the same optical boundary. Its IOR determines F0, so the two entry terms stay complementary even without an authored opaque-reflection parameter.
-        const float ior = clamp(packedNormal.w, 1.0, NWB_REFLECTION_GLASS_IOR_MAX);
-        const half ratio = half((ior - 1.0) / (ior + 1.0));
+        const half ior = clamp(half(packedNormal.w), half(1.0h), NWB_REFLECTION_GLASS_IOR_MAX);
+        const half ratio = (ior - half(1.0h)) / (ior + half(1.0h));
         f0 = half3(ratio * ratio);
     }
-    if(!isfinite(specularRoughness.a) || !all(isfinite(float3(f0))) || !any(f0 > half3(0.0h)))
+    if(!isfinite(float(specularRoughness.a)) || !all(isfinite(float3(f0))) || !any(f0 > half3(0.0h)))
         return false;
     const uint depthSlot = glass ? g_NwbReflectionResources.refractionSlots0.x : g_NwbReflectionResources.gbufferSlots.w;
     const float depth = nwbHeapSampledImage2DNonUniform(depthSlot).Load(texel).r;
@@ -176,17 +176,17 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     }
     surface.direction = reflect(incident, surface.normal);
     // Rough glass requires paired microfacet transmission; retain the existing complementary smooth interface.
-    surface.roughness = glass ? 0.0 : saturate(specularRoughness.a);
+    surface.roughness = glass ? half(0.0h) : saturate(specularRoughness.a);
     const half cosine = half(saturate(-dot(incident, surface.normal)));
     // The Schlick weight is a (0, 1) bounded factor, so half arithmetic is sufficient here.
-    const half3 weight = half3(f0) + (half3(1.0h) - half3(f0)) * half(pow(half(1.0h) - cosine, half(NWB_REFLECTION_SCHLICK_EXPONENT)));
+    const half3 weight = f0 + (half3(1.0h) - f0) * half(pow(half(1.0h) - cosine, NWB_REFLECTION_SCHLICK_EXPONENT));
     surface.weight = weight;
     surface.bias = max(NWB_REFLECTION_SURFACE_BIAS_MIN, originUncertainty + length(cameraRay) * NWB_REFLECTION_SURFACE_BIAS_DISTANCE_SCALE);
     if(!isfinite(surface.bias) || !all(isfinite(surface.direction)) || !all(isfinite(surface.weight)) || !all(isfinite(surface.position + surface.normal * surface.bias)))
         return false;
     // The scheduling upper bound precedes stochastic VNDF outcomes, including zero or rejected samples. A prior frame's actual candidates cannot prove a later sample fits the same queue budget.
-    stableTraceEligible = surface.roughness <= g_NwbReflectionParameters.roughnessCutoff && surface.bias < g_NwbReflectionParameters.maxRayDistance;
-    if(!glass && surface.roughness > 0.0){
+    stableTraceEligible = float(surface.roughness) <= g_NwbReflectionParameters.roughnessCutoff && surface.bias < g_NwbReflectionParameters.maxRayDistance;
+    if(!glass && surface.roughness > half(0.0h)){
         const float2 randomSample = nwbReflectionSample2D(pixel, uint2(g_NwbReflectionParameters.sampleBaseX, g_NwbReflectionParameters.sampleBaseY), g_NwbReflectionParameters.samplingSeed);
         nwbReflectionSampleGgx(surface.normal, -incident, f0, surface.roughness, randomSample, surface.direction, surface.weight);
     }

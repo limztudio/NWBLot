@@ -19,6 +19,25 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_command_list_validation{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
+inline constexpr TStringView s_UnnamedCommandName = NWB_TEXT("unnamed command");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_DEBUG)
 
 
@@ -171,17 +190,16 @@ bool CommandList::validateCommandRecordingScope(const TStringView operationName)
     if(m_commandRecordingFailed)
         return false;
 
-    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
     const u8 exactCapabilityBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     const bool validRecordingScope = matchesActiveNativeLeaseIdentity();
-    const bool validExactQueue = queueInfo && queueInfo->queueClass == m_creationDesc.queueType && (exactCapabilityBits & s_KnownCapabilityBits) != 0u;
+    const bool validExactQueue = queueInfo && queueInfo->queueClass == m_creationDesc.queueType && (exactCapabilityBits & __hidden_command_list_validation::s_KnownCapabilityBits) != 0u;
     if(validRecordingScope && validExactQueue)
         return true;
 
     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, recording {})")
-        , !operationName.empty() ? operationName : NWB_TEXT("unnamed command")
+        , !operationName.empty() ? operationName : __hidden_command_list_validation::s_UnnamedCommandName
         , m_creationDesc.physicalQueue.index
         , m_creationDesc.physicalQueue.deviceGeneration
         , static_cast<u32>(m_creationDesc.queueType)
@@ -202,7 +220,6 @@ bool CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::M
     }
 #endif
 
-    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
     const u8 requiredBits = static_cast<u8>(requiredCapabilities);
     if(!validateCommandRecordingScope(operationName))
         return false;
@@ -210,13 +227,13 @@ bool CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::M
     auto& queueInfo = *MakeNotNull(m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue));
     const u8 availableBits = static_cast<u8>(queueInfo.capabilities);
     const CommandQueue::Enum exactQueueClass = queueInfo.queueClass;
-    const bool validRequiredMask = requiredBits != 0u && (requiredBits & ~s_KnownCapabilityBits) == 0u;
+    const bool validRequiredMask = requiredBits != 0u && (requiredBits & ~__hidden_command_list_validation::s_KnownCapabilityBits) == 0u;
     const bool supported = validRequiredMask && (availableBits & requiredBits) == requiredBits;
     if(supported)
         return true;
 
     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, required mask {}, available mask {}, recording {})")
-        , !operationName.empty() ? operationName : NWB_TEXT("unnamed command")
+        , !operationName.empty() ? operationName : __hidden_command_list_validation::s_UnnamedCommandName
         , m_creationDesc.physicalQueue.index
         , m_creationDesc.physicalQueue.deviceGeneration
         , static_cast<u32>(m_creationDesc.queueType)
@@ -232,7 +249,6 @@ bool CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::M
 bool CommandList::recordAndValidateAnyCommandCapability(const GpuQueueCapability::Mask alternativeCapabilities, const TStringView operationName){
     if(!publicCommandStateAccessible())
         return false;
-    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
     const u8 alternativeBits = static_cast<u8>(alternativeCapabilities);
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const u8 availableBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
@@ -245,7 +261,7 @@ bool CommandList::recordAndValidateAnyCommandCapability(const GpuQueueCapability
     }
 #endif
 
-    if(alternativeBits == 0u || (alternativeBits & ~s_KnownCapabilityBits) != 0u)
+    if(alternativeBits == 0u || (alternativeBits & ~__hidden_command_list_validation::s_KnownCapabilityBits) != 0u)
         return recordAndValidateCommandCapability(alternativeCapabilities, operationName);
     if(selectableBits == 0u)
         selectableBits = alternativeBits;
@@ -258,7 +274,7 @@ void CommandList::rejectCommandRecording(const TStringView operationName, const 
     if(!publicCommandStateAccessible())
         return;
     if(!m_commandRecordingFailed){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Rejecting {} command recording: {}"), !operationName.empty() ? operationName : NWB_TEXT("unnamed command"), !reason.empty() ? reason : NWB_TEXT("invalid command semantics"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Rejecting {} command recording: {}"), !operationName.empty() ? operationName : __hidden_command_list_validation::s_UnnamedCommandName, !reason.empty() ? reason : NWB_TEXT("invalid command semantics"));
     }
     invalidateCommandRecording();
 }

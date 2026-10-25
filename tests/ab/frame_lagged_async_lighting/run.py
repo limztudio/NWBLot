@@ -123,6 +123,9 @@ def require_final_run_verdict(log_text: str, app_exit_code: int | None, app_exit
     require_lifecycle_stage(log_text, len(LAGGED_LIGHTING_LIFECYCLE))
 
 
+LOG_TAIL_CHAR_LIMIT = 4000
+
+
 def wait_for_lifecycle_stage(process, log_directory: Path, log_baseline: Mapping[Path, int], log_pattern: str, expected_event_count: int, timeout_seconds: float, stage: str,) -> str:
     deadline = time.monotonic() + timeout_seconds
     latest_log = ""
@@ -138,7 +141,7 @@ def wait_for_lifecycle_stage(process, log_directory: Path, log_baseline: Mapping
         time.sleep(LIT_PROCESS_POLL_SECONDS)
 
     expected_events = tuple(event_name for event_name, _ in LAGGED_LIGHTING_LIFECYCLE)
-    raise SmokeFailure(f"timed out {stage}: expected accepted lifecycle prefix {expected_events[:expected_event_count]}\n" f"{latest_log[-4000:]}")
+    raise SmokeFailure(f"timed out {stage}: expected accepted lifecycle prefix {expected_events[:expected_event_count]}\n" f"{latest_log[-LOG_TAIL_CHAR_LIMIT:]}")
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:

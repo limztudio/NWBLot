@@ -184,9 +184,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
 
     // The native step only consumes graph-owned data; never rebuild it.
     const bool drawBuffersReady = frameBindings.frameReady(instanceCount, materialTypedByteCount);
-    const bool csgResourcesReady = csgResources.frameReady(csgFrameData);
     const bool receiverSurfaceDrawResourcesReady = m_materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, frameBindings);
-    if(!drawBuffersReady || !csgResourcesReady || !receiverSurfaceDrawResourcesReady){
+    if(!drawBuffersReady || !receiverSurfaceDrawResourcesReady){
         // Preserve the short interval; drop the unfinished reservation.
         if(!Core::FinishSplitGpuTimingMarker(&intervalTiming))
             return;

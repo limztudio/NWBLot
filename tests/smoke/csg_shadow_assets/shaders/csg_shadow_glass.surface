@@ -2,10 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const half3 NWB_SMOKE_CSG_SHADOW_GLASS_ABSORPTION_TINT = half3(0.25h, 0.5h, 0.75h);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NwbMeshSurface nwbMaterialSurface(){
     // Unit IOR removes interface loss, isolating Beer thickness and per-instance overlap accumulation.
-    NwbMeshSurface result = nwbMakeGlassSurface(half3(1.0h), inNormal, half(1.0h), half3(0.25h, 0.5h, 0.75h), half(1.0h));
-    result.shadowAbsorptionTint = half3(0.25h, 0.5h, 0.75h);
+    NwbMeshSurface result = nwbMakeGlassSurface(half3(1.0h), inNormal, half(1.0h), NWB_SMOKE_CSG_SHADOW_GLASS_ABSORPTION_TINT, half(1.0h));
+    result.shadowAbsorptionTint = NWB_SMOKE_CSG_SHADOW_GLASS_ABSORPTION_TINT;
     return result;
 }
 

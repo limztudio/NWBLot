@@ -10,6 +10,7 @@ import window_capture_validation  # noqa: E402
 
 LIT_RESIZE_BEFORE_CAPTURE = "--resize-before-capture"
 LIT_UI_RESIZE_FIXTURE = "UI resize fixture"
+MAX_RESIZE_DIMENSION = 16384
 
 
 def _resize_request(argv):
@@ -22,7 +23,7 @@ def _resize_request(argv):
         target = int(argv[index + 1]), int(argv[index + 2])
     except ValueError as error:
         raise window_capture_smoke.SmokeFailure("resize dimensions must be decimal integers") from error
-    if any(value < 1 or value > 16384 for value in target):
+    if any(value < 1 or value > MAX_RESIZE_DIMENSION for value in target):
         raise window_capture_smoke.SmokeFailure("resize dimensions must be between 1 and 16384")
     return target, argv[:index] + argv[index + 3:]
 

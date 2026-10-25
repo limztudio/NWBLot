@@ -10,10 +10,6 @@
 #include <global/error_code.h>
 #include <global/scope_exit.h>
 
-#if !defined(NWB_PLATFORM_WINDOWS)
-#include <fcntl.h>
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -153,72 +149,6 @@ Expected<ScratchString> BuildMetadata(const PreparedTexture& payload, Core::Allo
     return Move(output).str();
 }
 
-[[nodiscard]] Expected<void, ErrorCode> StageOutput(const ScratchPath& path, const void* const data, const usize count, bool& outOwned)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
-    if(static_cast<u64>(count) > static_cast<u64>(Limit<i64>::s_Max))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-    const HANDLE handle = CreateFile(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if(handle == INVALID_HANDLE_VALUE)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
-    outOwned = true;
-    ErrorCode error;
-    const u8* cursor = static_cast<const u8*>(data);
-    usize remaining = count;
-    while(remaining > 0u){
-        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max) ? Limit<DWORD>::s_Max : static_cast<DWORD>(remaining);
-        DWORD transferred = 0u;
-        if(!WriteFile(handle, cursor, requestSize, &transferred, nullptr)){
-            error = GlobalFilesystemDetail::LastSystemError();
-            break;
-        }
-        if(transferred == 0u){
-            error = MakeErrorCode(ErrorCondition::io_error);
-            break;
-        }
-        cursor += transferred;
-        remaining -= transferred;
-    }
-    if(!error && !FlushFileBuffers(handle))
-        error = GlobalFilesystemDetail::LastSystemError();
-    if(!CloseHandle(handle) && !error)
-        error = GlobalFilesystemDetail::LastSystemError();
-#else
-    if(static_cast<u64>(count) > static_cast<u64>(Limit<off_t>::s_Max))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-    constexpr u32 s_NewFileMode = 0666u;
-    const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, s_NewFileMode);
-    if(descriptor < 0)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
-    outOwned = true;
-    ErrorCode error;
-    const u8* cursor = static_cast<const u8*>(data);
-    usize remaining = count;
-    while(remaining > 0u){
-        const usize requestSize = remaining > static_cast<usize>(Limit<ssize_t>::s_Max) ? static_cast<usize>(Limit<ssize_t>::s_Max) : remaining;
-        const ssize_t transferred = write(descriptor, cursor, requestSize);
-        if(transferred < 0){
-            if(errno == EINTR)
-                continue;
-            error = GlobalFilesystemDetail::LastSystemError();
-            break;
-        }
-        if(transferred == 0){
-            error = MakeErrorCode(ErrorCondition::io_error);
-            break;
-        }
-        cursor += static_cast<usize>(transferred);
-        remaining -= static_cast<usize>(transferred);
-    }
-    if(!error && fsync(descriptor) != 0)
-        error = GlobalFilesystemDetail::LastSystemError();
-    if(close(descriptor) != 0 && !error)
-        error = GlobalFilesystemDetail::LastSystemError();
-#endif
-    if(error)
-        return MakeUnexpected(error);
-    return {};
-}
-
 void CaptureCleanupFailure(const ScratchPath& path, const ErrorCode& error)noexcept{
     const DiagnosticEventText diagnostic = MakeDiagnosticEventText("tex_conv: publication cleanup failed for '{}', error {}", path.c_str(), error.value());
     CaptureDiagnosticEvent("tex_conv_publication", diagnostic.view(), __FILE__, __LINE__);
@@ -330,12 +260,12 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
     ScopeExit restoreOnFailure(rollback);
 
     const auto publish = [&](){
-        const auto dataStaged = __hidden_output::StageOutput(paths.dataTemporary, payload.bytes.data(), payload.bytes.size(), ownedTemporary[0u]);
+        const auto dataStaged = StageNewBinaryFileDurable(paths.dataTemporary, payload.bytes.data(), payload.bytes.size(), ownedTemporary[0u]);
         if(!dataStaged){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output data file '{}': {}"), PathToString<tchar>(outputPaths.dataTemporary), StringConvert(dataStaged.error().message()));
             return false;
         }
-        const auto metadataStaged = __hidden_output::StageOutput(paths.metadataTemporary, metadata->data(), metadata->size(), ownedTemporary[1u]);
+        const auto metadataStaged = StageNewBinaryFileDurable(paths.metadataTemporary, metadata->data(), metadata->size(), ownedTemporary[1u]);
         if(!metadataStaged){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output metadata file '{}': {}"), PathToString<tchar>(outputPaths.metadataTemporary), StringConvert(metadataStaged.error().message()));
             return false;

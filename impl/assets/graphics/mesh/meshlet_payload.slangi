@@ -194,14 +194,14 @@ float3 nwbMeshUnpackConeOct16Axis(const uint conePacked){
     return nwbSafeNormalize(axis, float3(0.0, 0.0, 1.0));
 }
 
-float nwbMeshConservativePackedConeCutoff(const float3 axis, const float cutoff, const uint packedAxis){
+half nwbMeshConservativePackedConeCutoff(const float3 axis, const float cutoff, const uint packedAxis){
     const float3 unpackedAxis = nwbMeshUnpackConeOct16Axis(packedAxis);
     // Cone cutoff + axis-dot are (0, 1) bounded visibility factors; half math is sufficient here.
     const half axisDot = half(clamp(dot(nwbSafeNormalize(axis, unpackedAxis), unpackedAxis), -1.0, 1.0));
     const half safeCutoff = saturate(half(cutoff));
     const half sinTheta = sqrt(max(half(0.0h), half(1.0h) - safeCutoff * safeCutoff));
     const half sinAxisError = sqrt(max(half(0.0h), half(1.0h) - axisDot * axisDot));
-    return float(safeCutoff * axisDot - sinTheta * sinAxisError);
+    return safeCutoff * axisDot - sinTheta * sinAxisError;
 }
 
 uint nwbMeshPackCone(const float3 axis, const float cutoff){
@@ -209,7 +209,7 @@ uint nwbMeshPackCone(const float3 axis, const float cutoff){
         return 0u;
 
     const uint packedAxis = nwbMeshPackConeOct16(axis);
-    const uint packedCutoff = nwbMeshPackConeCutoffUnorm8(half(nwbMeshConservativePackedConeCutoff(axis, cutoff, packedAxis)));
+    const uint packedCutoff = nwbMeshPackConeCutoffUnorm8(nwbMeshConservativePackedConeCutoff(axis, cutoff, packedAxis));
     if(packedCutoff == 0u)
         return 0u;
 
@@ -220,8 +220,8 @@ float3 nwbMeshUnpackConeAxis(const uint conePacked){
     return nwbMeshUnpackConeOct16Axis(conePacked);
 }
 
-float nwbMeshUnpackConeCutoff(const uint conePacked){
-    return ((conePacked >> NWB_MESHLET_CONE_FLAG_SHIFT) & NWB_MESHLET_CONE_FLAG_ENABLED) != 0u ? nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_CUTOFF_SHIFT) : -1.0;
+half nwbMeshUnpackConeCutoff(const uint conePacked){
+    return ((conePacked >> NWB_MESHLET_CONE_FLAG_SHIFT) & NWB_MESHLET_CONE_FLAG_ENABLED) != 0u ? nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_CUTOFF_SHIFT) : half(-1.0h);
 }
 
 

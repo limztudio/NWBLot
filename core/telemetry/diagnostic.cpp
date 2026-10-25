@@ -44,7 +44,7 @@ inline constexpr StringView s_LifecycleCategory = "telemetry_diagnostic_lifecycl
 }
 
 [[nodiscard]] static Expected<AStringView> ReadText(const BinaryByteView& payload, const u32 byteCount, usize& inOutCursor)noexcept{
-    if(!BinaryDetail::CanReadBytes(payload, inOutCursor, byteCount))
+    if(!CanReadBytes(payload, inOutCursor, byteCount))
         return MakeUnexpected(Failure{});
 
     const AStringView text(reinterpret_cast<const char*>(payload.data() + inOutCursor), byteCount);

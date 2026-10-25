@@ -205,6 +205,30 @@ inline constexpr u32 s_InvalidCodePointReplacement = static_cast<u32>('?');
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline constexpr bool IsUtf16HighSurrogate(const u32 codeUnit)noexcept{
+    return codeUnit >= s_UnicodeHighSurrogateMin && codeUnit <= s_UnicodeHighSurrogateMax;
+}
+
+[[nodiscard]] inline constexpr bool IsUtf16LowSurrogate(const u32 codeUnit)noexcept{
+    return codeUnit >= s_UnicodeLowSurrogateMin && codeUnit <= s_UnicodeLowSurrogateMax;
+}
+
+[[nodiscard]] inline constexpr bool IsUnicodeSurrogate(const u32 codePoint)noexcept{
+    return codePoint >= s_UnicodeHighSurrogateMin && codePoint <= s_UnicodeLowSurrogateMax;
+}
+
+[[nodiscard]] inline constexpr bool IsUnicodeScalarValue(const u32 codePoint)noexcept{
+    return codePoint <= s_UnicodeMaxCodePoint && !IsUnicodeSurrogate(codePoint);
+}
+
+[[nodiscard]] inline constexpr u32 DecodeUtf16SurrogatePair(const u32 highSurrogate, const u32 lowSurrogate)noexcept{
+    return s_Utf8FourByteMinCodePoint + ((highSurrogate - s_UnicodeHighSurrogateMin) << s_Utf16SurrogatePayloadBits) + (lowSurrogate - s_UnicodeLowSurrogateMin);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename In>
 struct StringConvertArg{
     const In& value;
@@ -264,16 +288,16 @@ inline void WriteWStringAsUtf8(Out& out, const WStringView src)noexcept(noexcept
         u32 codePoint = static_cast<u32>(src[i]);
 
 #if WCHAR_MAX <= NWB_STRING_UTF16_CODE_UNIT_MAX
-        if(codePoint >= s_UnicodeHighSurrogateMin && codePoint <= s_UnicodeHighSurrogateMax && (i + 1) < src.size()){
+        if(IsUtf16HighSurrogate(codePoint) && (i + 1) < src.size()){
             const u32 low = static_cast<u32>(src[i + 1]);
-            if(low >= s_UnicodeLowSurrogateMin && low <= s_UnicodeLowSurrogateMax){
-                codePoint = s_Utf8FourByteMinCodePoint + (((codePoint - s_UnicodeHighSurrogateMin) << s_Utf16SurrogatePayloadBits) | (low - s_UnicodeLowSurrogateMin));
+            if(IsUtf16LowSurrogate(low)){
+                codePoint = DecodeUtf16SurrogatePair(codePoint, low);
                 ++i;
             }
             else
                 codePoint = s_InvalidCodePointReplacement;
         }
-        else if(codePoint >= s_UnicodeHighSurrogateMin && codePoint <= s_UnicodeLowSurrogateMax){
+        else if(IsUnicodeSurrogate(codePoint)){
             codePoint = s_InvalidCodePointReplacement;
         }
 #endif
@@ -389,6 +413,23 @@ inline void WriteConvertedText(Out& out, const In& input)noexcept(ConvertedTextI
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using BasicStringDetail::s_Utf8OneByteMaxExclusive;
+using BasicStringDetail::s_UnicodeMaxCodePoint;
+using BasicStringDetail::IsUtf16HighSurrogate;
+using BasicStringDetail::IsUtf16LowSurrogate;
+using BasicStringDetail::IsUnicodeSurrogate;
+using BasicStringDetail::IsUnicodeScalarValue;
+using BasicStringDetail::DecodeUtf16SurrogatePair;
+using BasicStringDetail::CanMakeCharView;
+using BasicStringDetail::CanMakeWCharView;
+using BasicStringDetail::StringConvertArg;
+using BasicStringDetail::WideToUtf8;
+using BasicStringDetail::WriteConvertedText;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

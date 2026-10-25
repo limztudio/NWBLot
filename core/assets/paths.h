@@ -71,9 +71,9 @@ template<typename PathArenaT>
     ConvertedPathByteCounter counter;
     for(auto componentIt = relativePath.begin(); componentIt != relativePath.end(); ++componentIt){
         const auto component = componentIt.nativeComponent();
-        if(component.empty() || GlobalFilesystemPathDetail::IsDot(component))
+        if(component.empty() || IsDot(component))
             continue;
-        if(GlobalFilesystemPathDetail::IsDotDot(component) || component.find_first_of(s_PathSeparatorChars) != NativeStringView::npos){
+        if(IsDotDot(component) || component.find_first_of(s_PathSeparatorChars) != NativeStringView::npos){
             layout.acceptedEnd = componentIt;
             layout.byteCount = counter.byteCount;
             return layout;
@@ -81,7 +81,7 @@ template<typename PathArenaT>
 
         if(counter.byteCount != 0u)
             counter.byteCount = AddSize(counter.byteCount, 1u);
-        BasicStringDetail::WriteConvertedText<char>(counter, component);
+        WriteConvertedText<char>(counter, component);
     }
     layout.byteCount = counter.byteCount;
     layout.accepted = counter.byteCount != 0u;
@@ -94,11 +94,11 @@ inline void WriteRelativeAssetPathText(const ::Path<PathArenaT>& relativePath, c
     bool hasComponent = false;
     for(auto componentIt = relativePath.begin(); componentIt != layout.acceptedEnd; ++componentIt){
         const auto component = componentIt.nativeComponent();
-        if(component.empty() || GlobalFilesystemPathDetail::IsDot(component))
+        if(component.empty() || IsDot(component))
             continue;
         if(hasComponent)
             *cursor++ = '/';
-        BasicStringDetail::WriteConvertedText<char>(cursor, component);
+        WriteConvertedText<char>(cursor, component);
         hasComponent = true;
     }
     NWB_ASSERT(static_cast<usize>(cursor - output.get()) == layout.byteCount);

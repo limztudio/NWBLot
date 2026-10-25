@@ -176,12 +176,14 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     }
     const Core::GpuGraphResourceId backbuffer = *backbufferResult;
 
-    Core::GpuTaskResourceUse presentResourceUses[4u] = {
+    constexpr usize s_PresentBaseResourceUseCount = 3u;
+    constexpr usize s_PresentMaxResourceUseCount = 4u;
+    constexpr usize s_PresentMaxDependencyCount = 4u;
+    Core::GpuTaskResourceUse presentResourceUses[s_PresentMaxResourceUseCount] = {
         ReadUse(compositeColor),
         ReadUse(compositeBindlessSlots, Core::ResourceStates::ConstantBuffer),
         WriteTextureUse(backbuffer, presentationFramebufferDesc.colorAttachments[0].subresources, Core::ResourceStates::RenderTarget),
     };
-    constexpr usize s_PresentBaseResourceUseCount = 3u;
     usize presentResourceUseCount = s_PresentBaseResourceUseCount;
     const Core::GpuTaskResourceVersionUse outputLayerVersionUse{ .version = outputLayer.colorVersion, .role = Core::GpuTaskResourceVersionRole::Consume, };
     if(outputLayer.color.valid())
@@ -192,7 +194,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     presentScheduling.avoidQueueCrossing = inputs.useLaggedLightingHistory;
     presentScheduling.forceSubmissionBoundary = true;
     presentScheduling.allowPacketMerge = false;
-    Core::GpuTaskId presentDependencies[4u] = { result.compositeTask };
+    Core::GpuTaskId presentDependencies[s_PresentMaxDependencyCount] = { result.compositeTask };
     usize presentDependencyCount = 1u;
     if(inputs.useLaggedLightingHistory){
         presentDependencies[presentDependencyCount++] = inputs.surfelGiTask;

@@ -15,6 +15,7 @@
 #include <windows.h>
 #else
 #include <dirent.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -117,6 +118,8 @@ using OutputFileStream = GlobalFilesystemDetail::OutputFileStream;
 using FileStream = GlobalFilesystemDetail::FileStream;
 using StreamOffset = GlobalFilesystemDetail::StreamOffset;
 using StreamSize = GlobalFilesystemDetail::StreamSize;
+using GlobalFilesystemDetail::CanRepresentStreamSize;
+using GlobalFilesystemDetail::LastSystemError;
 
 using FileOpenMode = std::ios_base::openmode;
 
@@ -225,6 +228,14 @@ template<typename ArenaT>
     }
 
     return false;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline usize PathDepth(const Path<ArenaT>& path)noexcept{
+    usize depth = 0u;
+    for(auto it = path.begin(); it != path.end(); ++it)
+        ++depth;
+    return depth;
 }
 
 

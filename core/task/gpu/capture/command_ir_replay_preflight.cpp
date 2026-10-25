@@ -391,8 +391,6 @@ struct TextureClearDestination{
         return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(GpuCommandIrReplayError::InvalidStream, reader.validation(), reader.validation().recordIndex);
     if(!compiledGraph.validFor(graph))
         return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::InvalidCompiledGraph);
-    if(!compiledGraph.validPacket(packet))
-        return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::InvalidPacket);
 
     const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
     if(!packetView.valid())

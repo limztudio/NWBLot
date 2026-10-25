@@ -179,7 +179,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     const float pixelFootprint = max(2.0 * abs(clip.w) / max(float(g_NwbReflectionSpatial.width) * focalX, NWB_REFLECTION_SPATIAL_FOCAL_MIN), 2.0 * abs(clip.w) / max(float(g_NwbReflectionSpatial.height) * focalY, NWB_REFLECTION_SPATIAL_FOCAL_MIN));
     const float3 viewDirection = nwbSafeNormalize(g_NwbReflectionSpatialView.cameraPosition.xyz - position, normal);
     const float tangentFootprint = pixelFootprint / max(abs(dot(normal, viewDirection)), NWB_REFLECTION_SPATIAL_VIEW_COSINE_MIN);
-    const half roughness = half(saturate(float(specular.a)));
+    const half roughness = saturate(specular.a);
     // Rougher lobes tolerate more spatial variance reduction; the mirror limit continuously approaches one texel.
     const float sigma = float(radius) * float(roughness);
     const float spatialDenominator = max(2.0 * sigma * sigma, NWB_REFLECTION_SPATIAL_DENOMINATOR_MIN);
@@ -204,8 +204,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             const half4 neighborSpecular = neighborSpecularH;
             if(!isfinite(neighborDepth) || neighborDepth < 0.0 || neighborDepth >= 1.0 || !all(isfinite(float4(neighborSpecular))) || neighborSpecular.a <= half(0.0h) || !any(neighborSpecular.rgb > half3(0.0h)))
                 continue;
-            const half roughnessDifference = half(abs(neighborSpecular.a - roughness));
-            const half3 f0Difference = half3(abs(half3(neighborSpecular.rgb) - half3(specular.rgb)));
+            const half roughnessDifference = abs(neighborSpecular.a - roughness);
+            const half3 f0Difference = abs(neighborSpecular.rgb - specular.rgb);
             const half maxF0Difference = max(max(f0Difference.x, f0Difference.y), f0Difference.z);
             if(roughnessDifference > half(NWB_REFLECTION_SPATIAL_ROUGHNESS_DIFFERENCE_MAX) || maxF0Difference > half(NWB_REFLECTION_SPATIAL_F0_DIFFERENCE_MAX))
                 continue;
@@ -226,13 +226,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
                 continue;
             const half4 neighborH = g_NwbReflectionSpatialRadiance[neighborIndex];
             const half4 neighbor = neighborH;
-            if(neighbor.a <= 0.0 || !all(isfinite(neighbor.rgb)))
+            if(neighbor.a <= half(0.0h) || !all(isfinite(neighbor.rgb)))
                 continue;
             // The combined bilateral weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
             const half normalizedPlaneDistance = half(planeDistance / planeTolerance);
             const half weight = half(exp(
                 spatialExponent
-                -0.5 * normalizedPlaneDistance * normalizedPlaneDistance
+                -half(0.5h) * normalizedPlaneDistance * normalizedPlaneDistance
                 -half(NWB_REFLECTION_SPATIAL_NORMAL_FALLOFF) * (half(1.0h) - saturate(normalAgreement))
                 -half(NWB_REFLECTION_SPATIAL_F0_FALLOFF) * maxF0Difference * maxF0Difference
                 -half(NWB_REFLECTION_SPATIAL_ROUGHNESS_FALLOFF) * roughnessDifference * roughnessDifference

@@ -86,16 +86,11 @@ namespace ECSRenderDetail{
             if(materialTypedByteCount == 0u || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u)
                 return false;
 
-            return bindingValid() && instanceBufferCapacity >= instanceCount && materialTypedBufferCapacity >= Max<usize>(materialTypedByteCount, sizeof(u32));
+            return bindingValid() && instanceBufferCapacity >= instanceCount && materialTypedBufferCapacity >= materialTypedByteCount;
         }
     };
 
-    // Shared opaque/gbuffer record prologue: frame setup is ready when both setup flags are present and set.
-    [[nodiscard]] inline bool FrameSetupReady(const bool* meshViewSetupReady, const bool* sceneShadingSetupReady)noexcept{
-        return meshViewSetupReady && sceneShadingSetupReady && *meshViewSetupReady && *sceneShadingSetupReady;
-    }
-
-    // Reference overload for task payloads that carry the required setup flags by reference.
+    // Shared opaque/gbuffer record prologue: frame setup is ready when both setup flags are set.
     [[nodiscard]] inline bool FrameSetupReady(const bool& meshViewSetupReady, const bool& sceneShadingSetupReady)noexcept{
         return meshViewSetupReady && sceneShadingSetupReady;
     }

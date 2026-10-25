@@ -9,7 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES 4u
 #define NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE 128u
+#define NWB_REFRACTION_DIAGNOSTIC_WORD_COUNT (NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES)
+#define NWB_REFRACTION_DIAGNOSTIC_COUNTER_MAX 0xffffffffu
 #define NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(FIELD) \
     FIELD(hardwarePixels, 0u) \
     FIELD(entryQueries, 4u) \

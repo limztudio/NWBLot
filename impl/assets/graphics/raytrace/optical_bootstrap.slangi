@@ -95,7 +95,7 @@ bool nwbOpticalBootstrap(const NwbOpticalTraceConfig config, const float3 origin
                 query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(), query.CandidateWorldToObject3x4()
             );
             // A flat alpha surface cannot contain a medium. An unspecified refractor may be open or displaced; without an authored volume contract it cannot prove that the initial origin is in air.
-            if(!isfinite(float(hit.surface.refractionIor)) || hit.surface.refractionIor != half(1.0)){
+            if(!isfinite(float(hit.surface.refractionIor)) || hit.surface.refractionIor != half(1.0h)){
                 query.Abort();
                 result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
                 return false;
@@ -186,7 +186,7 @@ bool nwbOpticalBootstrap(const NwbOpticalTraceConfig config, const float3 origin
             minimum = geometry.distance;
             if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED){
                 const NwbRayTraceSurfaceHit hit = nwbRayTraceReconstructSurfaceHit(config.instanceMaterialHeapSlot, ray.Origin, ray.Direction, geometry);
-                if(!isfinite(float(hit.surface.refractionIor)) || hit.surface.refractionIor != half(1.0)){
+                if(!isfinite(float(hit.surface.refractionIor)) || hit.surface.refractionIor != half(1.0h)){
                     result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
                     return false;
                 }

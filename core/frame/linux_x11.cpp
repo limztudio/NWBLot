@@ -65,8 +65,6 @@ static constexpr u32 s_X11MouseButton7 = 11u;
 static constexpr u32 s_X11MouseButton8 = 12u;
 static constexpr f64 s_ScrollUnit = 1.0;
 static constexpr usize s_TextInputBufferSize = 64u;
-static constexpr u32 s_TextInputControlCodePointLimit = 32u;
-static constexpr u32 s_TextInputDeleteCodePoint = 127u;
 // Idle throttle while hidden or unfocused; mirrors the Wayland inactive timeout.
 static constexpr i32 s_InactivePollSleepMs = 10;
 static constexpr int s_X11CardinalPropertyFormatBits = 32;
@@ -189,7 +187,7 @@ static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mo
 
         i += consumed;
 
-        if(unicode < s_TextInputControlCodePointLimit || unicode == s_TextInputDeleteCodePoint)
+        if(unicode < s_UnicodeSpace || unicode == s_UnicodeDelete)
             continue;
 
         input.keyboardCharInput(unicode, mods);

@@ -332,27 +332,41 @@ bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     NWB_ASSERT(geometrySignatureCount <= UINT32_MAX);
     NWB_ASSERT(geometrySignatureCount == 0u || geometrySignatures);
 
-    GlobalUniquePtr<AccelStructBuildSignatureRole> preparedRole = MakeGlobalUnique<AccelStructBuildSignatureRole>(m_context.objectArena, m_context.objectArena);
+    GlobalUniquePtr<AccelStructBuildSignatureRole> preparedRole = accelStruct.acquireBuildSignatureRole();
     if(!preparedRole)
         return false;
 
     preparedRole->accelStructType = accelStructType;
     preparedRole->buildFlags = buildFlags;
+    preparedRole->geometrySignatures.clear();
     if(geometrySignatureCount != 0u){
         preparedRole->geometrySignatures.reserve(geometrySignatureCount);
         preparedRole->geometrySignatures.assign(geometrySignatures, geometrySignatures + geometrySignatureCount);
     }
 
     if(instances && instanceCount != 0u){
-        auto* const references = NewArenaObject<AccelStructBottomLevelReferenceControl>(m_context.objectArena, m_context.objectArena);
-        if(!references)
-            return false;
-        preparedRole->bottomLevelReferences = AccelStructBottomLevelReferenceHandle(references, AccelStructBottomLevelReferenceHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+        AccelStructBottomLevelReferenceControl* references = nullptr;
+        if(preparedRole->bottomLevelReferences && preparedRole->bottomLevelReferences->getReferenceCount() == 1u){
+            references = preparedRole->bottomLevelReferences.get();
+            references->resources.clear();
+        }
+        else{
+            references = NewArenaObject<AccelStructBottomLevelReferenceControl>(m_context.objectArena, m_context.objectArena);
+            if(!references)
+                return false;
+            preparedRole->bottomLevelReferences = AccelStructBottomLevelReferenceHandle(references, AccelStructBottomLevelReferenceHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+        }
         references->resources.reserve(instanceCount);
         for(usize instanceIndex = 0u; instanceIndex < instanceCount; ++instanceIndex){
             if(AccelStruct* const bottomLevel = instances[instanceIndex].bottomLevelAS)
                 references->resources.emplace_back(bottomLevel, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
         }
+    }
+    else if(preparedRole->bottomLevelReferences){
+        if(preparedRole->bottomLevelReferences->getReferenceCount() == 1u)
+            preparedRole->bottomLevelReferences->resources.clear();
+        else
+            preparedRole->bottomLevelReferences = nullptr;
     }
 
     m_resourceReferences.retainResource(accelStruct);
@@ -398,15 +412,16 @@ void TrackedCommandBuffer::commitPendingAccelStructBuildCommits()noexcept{
 }
 
 void TrackedCommandBuffer::releasePendingAccelStructBuildCommits()noexcept{
+    m_referencedBottomLevelReferenceSets.clear();
     for(PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
         AccelStructBuildSignatureRole* const preparedRole = commit.preparedRole;
         AccelStructBuildSignatureRole* const displacedRole = commit.displacedRole;
         commit.preparedRole = nullptr;
         commit.displacedRole = nullptr;
         if(preparedRole)
-            DestroyArenaObject(m_context.objectArena, preparedRole);
+            commit.accelStruct->retireBuildSignatureRole(*preparedRole);
         if(displacedRole)
-            DestroyArenaObject(m_context.objectArena, displacedRole);
+            commit.accelStruct->retireBuildSignatureRole(*displacedRole);
     }
     m_pendingAccelStructBuildCommits.clear();
 }
@@ -420,7 +435,7 @@ void TrackedCommandBuffer::retainTopLevelAccelStruct(AccelStruct& accelStruct){
 }
 
 void TrackedCommandBuffer::retainBottomLevelReferenceSet(const AccelStructBottomLevelReferenceHandle& references){
-    if(!references)
+    if(!references || references->resources.empty())
         return;
     for(const AccelStructBottomLevelReferenceHandle& retained : m_referencedBottomLevelReferenceSets){
         if(retained.get() == references.get())
@@ -454,9 +469,9 @@ void TrackedCommandBuffer::retainPendingTopLevelAccelStructReferences(const Trac
 void TrackedCommandBuffer::abandonPendingAccelStructBuildCommits()noexcept{
     static_assert(noexcept(m_pendingAccelStructBuildCommits.clear()), "abandoned acceleration-structure journal release must be non-throwing");
     static_assert(noexcept(DeclVal<AccelStructBottomLevelReferenceHandle&>() = nullptr), "abandoned build references must release without throwing");
+    m_referencedBottomLevelReferenceSets.clear();
     for(PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
         if(commit.preparedRole){
-            commit.preparedRole->bottomLevelReferences = nullptr;
             commit.accelStruct->retireBuildSignatureRole(*commit.preparedRole);
             commit.preparedRole = nullptr;
         }

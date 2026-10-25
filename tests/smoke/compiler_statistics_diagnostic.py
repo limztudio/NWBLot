@@ -91,6 +91,9 @@ def decode_jsonl(data):
     return rows
 
 
+MAX_UINT16_GENERATION = 65535
+
+
 def validate_compiler_rows(rows):
     require(len(rows) >= 2, "compiler configuration and complete footer are required")
     configuration, footer = rows[0], rows[-1]
@@ -124,7 +127,7 @@ def validate_compiler_rows(rows):
         exact_fields(row[LIT_IDENTITY], IDENTITY_FIELDS, "compiler identity")
         for key, value in row[LIT_IDENTITY].items():
             integer(value, "identity " + key, 1)
-        require(row[LIT_IDENTITY][LIT_DEVICE_GENERATION] <= 65535, "identity device_generation exceeds native u16")
+        require(row[LIT_IDENTITY][LIT_DEVICE_GENERATION] <= MAX_UINT16_GENERATION, "identity device_generation exceeds native u16")
         plan = tuple(row[LIT_IDENTITY][key] for key in (LIT_DEVICE_GENERATION, LIT_GRAPH_GENERATION, LIT_PLAN_GENERATION))
         require(plan not in plans, "duplicate compiler plan identity, regardless of recording attempt")
         plans.add(plan)

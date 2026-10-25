@@ -61,7 +61,7 @@ public:
         if(!m_memory)
             return {};
         if(GlobalFree(m_memory))
-            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+            return MakeUnexpected(LastSystemError());
         m_memory = nullptr;
         return {};
     }
@@ -94,11 +94,11 @@ struct ClipboardTextFailure{
         return MakeUnexpected(ClipboardTextFailure{ .operation = "size_clipboard_text", .code = byteSize.error(), });
     const HGLOBAL nativeMemory = GlobalAlloc(GMEM_MOVEABLE, *byteSize);
     if(!nativeMemory)
-        return MakeUnexpected(ClipboardTextFailure{ .operation = "allocate_clipboard_text", .code = GlobalFilesystemDetail::LastSystemError(), });
+        return MakeUnexpected(ClipboardTextFailure{ .operation = "allocate_clipboard_text", .code = LastSystemError(), });
     ClipboardText memory(nativeMemory);
     auto* const destination = static_cast<tchar*>(GlobalLock(nativeMemory));
     if(!destination)
-        return MakeUnexpected(ClipboardTextFailure{ .operation = "lock_clipboard_text", .code = GlobalFilesystemDetail::LastSystemError(), .memory = Move(memory), });
+        return MakeUnexpected(ClipboardTextFailure{ .operation = "lock_clipboard_text", .code = LastSystemError(), .memory = Move(memory), });
     usize cursor = 0u;
     for(const auto& message : messages){
         const LogString& text = message.first();
@@ -111,7 +111,7 @@ struct ClipboardTextFailure{
     destination[cursor] = tchar{};
     SetLastError(NO_ERROR);
     if(!GlobalUnlock(nativeMemory) && GetLastError() != NO_ERROR)
-        return MakeUnexpected(ClipboardTextFailure{ .operation = "unlock_clipboard_text", .code = GlobalFilesystemDetail::LastSystemError(), .memory = Move(memory), });
+        return MakeUnexpected(ClipboardTextFailure{ .operation = "unlock_clipboard_text", .code = LastSystemError(), .memory = Move(memory), });
     return memory;
 }
 

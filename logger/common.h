@@ -153,7 +153,7 @@ template<typename PayloadContainer>
 
     AppendPOD(outPayload, time);
     AppendPOD(outPayload, type);
-    ::BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, str.data(), str.size() * sizeof(tchar));
+    AppendBytesNoReserveUnchecked(outPayload, str.data(), str.size() * sizeof(tchar));
 
     constexpr tchar s_NullTerminator = 0;
     AppendPOD(outPayload, s_NullTerminator);

@@ -19,8 +19,11 @@ add_subdirectory(task)
 add_subdirectory(telemetry)
 add_subdirectory(ui)
 
+set(_nwb_build_config_unit_timeout_seconds 30)
+set(_nwb_string_literal_compiler_tests_timeout_seconds 120)
+
 add_test(NAME nwb_build_configuration_contract_unit COMMAND "${CMAKE_COMMAND}" "-DNWB_TEST_SOURCE_DIR=${PROJECT_SOURCE_DIR}" -P "${CMAKE_CURRENT_LIST_DIR}/build_configuration_tests.cmake")
-set_tests_properties(nwb_build_configuration_contract_unit PROPERTIES TIMEOUT 30)
+set_tests_properties(nwb_build_configuration_contract_unit PROPERTIES TIMEOUT ${_nwb_build_config_unit_timeout_seconds})
 
 if(NWB_OBFUSCATE_STRING_LITERALS)
     set(_nwb_literal_test_target_arguments)
@@ -30,8 +33,11 @@ if(NWB_OBFUSCATE_STRING_LITERALS)
     add_test(NAME nwb_string_literal_compiler_tests COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/string_literal_compiler_tests.py" --compiler "${CMAKE_CXX_COMPILER}" --c-compiler "${CMAKE_C_COMPILER}"
             --runtime-object $<TARGET_OBJECTS:nwb_string_literal_runtime> --llvm-library "${NWB_LLVM_C_LIBRARY}" --llvm-version "${NWB_STRING_LITERAL_LLVM_VERSION}" --configuration "$<CONFIG>" --source-dir "${PROJECT_SOURCE_DIR}"
             ${_nwb_literal_test_target_arguments})
-    set_tests_properties(nwb_string_literal_compiler_tests PROPERTIES TIMEOUT 120)
+    set_tests_properties(nwb_string_literal_compiler_tests PROPERTIES TIMEOUT ${_nwb_string_literal_compiler_tests_timeout_seconds})
 endif()
+
+unset(_nwb_build_config_unit_timeout_seconds)
+unset(_nwb_string_literal_compiler_tests_timeout_seconds)
 
 if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
     add_test(NAME nwb_launcher_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_tests.py")

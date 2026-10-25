@@ -125,7 +125,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const u64 laggedLightingHistoryTargetGeneration = deferredTargets.laggedLightingHistory.generation;
     const Core::QueueSubmissionToken laggedLightingHistorySubmissionToken = m_laggedLightingHistorySubmissionToken;
     const auto laggedLightingHistoryTokenPending = [&device, laggedLightingHistoryTargetGeneration](const Core::QueueSubmissionToken& token, const u64 tokenTargetGeneration){
-        if(!token.valid() || tokenTargetGeneration != laggedLightingHistoryTargetGeneration || !token.hasPhysicalQueueIdentity() || !device.matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration))
+        if(!token.valid() || tokenTargetGeneration != laggedLightingHistoryTargetGeneration || !device.matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration))
             return false;
         // A failed query keeps the writer pending.
         const Expected<u64> completedValue = device.queueGetCompletedInstance(Core::GpuPhysicalQueueId{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration, });

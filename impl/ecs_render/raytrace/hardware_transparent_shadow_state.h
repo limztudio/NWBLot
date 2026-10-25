@@ -20,9 +20,12 @@ NWB_IMPL_BEGIN
 
 
 struct HardwareTransparentShadowState{
+    static constexpr usize s_StageCount = 3u;
+    static constexpr usize s_ScratchBufferCount = 3u;
+
     Core::BindingLayoutHandle m_bindingLayout;
-    Core::ShaderHandle m_shaders[3];
-    Core::ComputePipelineHandle m_pipelines[3];
+    Core::ShaderHandle m_shaders[s_StageCount];
+    Core::ComputePipelineHandle m_pipelines[s_StageCount];
     Core::BufferHandle m_crossingsBuffer;
     Core::BufferHandle m_overflowListBuffer;
     Core::BufferHandle m_overflowArgsBuffer;

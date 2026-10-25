@@ -507,7 +507,7 @@ Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphics
     if(!magic || *magic != NWB::Impl::MaterialBinaryPayload::s_MaterialMagic)
         return MakeUnexpected(Failure{});
 
-    const auto shaderVariantView = BinaryDetail::ReadLengthPrefixedString(binary, cursor);
+    const auto shaderVariantView = ReadLengthPrefixedString(binary, cursor);
     if(!shaderVariantView || shaderVariantView->empty())
         return MakeUnexpected(Failure{});
 
@@ -533,7 +533,7 @@ Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphics
     if(*fieldCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes)
         return MakeUnexpected(Failure{});
     const usize fieldBytes = static_cast<usize>(*fieldCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes;
-    if(!BinaryDetail::SkipBytes(binary, fieldBytes, cursor))
+    if(!SkipBytes(binary, fieldBytes, cursor))
         return MakeUnexpected(Failure{});
 
     return MaterialBinaryTypedLayoutOffsets{ typedLayoutBegin, cursor };

@@ -61,12 +61,12 @@ namespace GpuTaskGraphBuiltinDetail{
 
     const u64 naturalRowPitch = blockCountX * aspectLayout->bytesPerBlock;
     const u64 effectiveRowPitch = rowPitch != 0u ? static_cast<u64>(rowPitch) : naturalRowPitch;
-    if(effectiveRowPitch == 0u || effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout->bytesPerBlock) != 0u || blockCountY > Limit<u64>::s_Max / effectiveRowPitch)
+    if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout->bytesPerBlock) != 0u || blockCountY > Limit<u64>::s_Max / effectiveRowPitch)
         return MakeUnexpected(Failure{});
 
     const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
     const u64 effectiveDepthPitch = depthPitch != 0u ? static_cast<u64>(depthPitch) : packedSlicePitch;
-    if(effectiveDepthPitch == 0u || effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0u)
+    if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0u)
         return MakeUnexpected(Failure{});
 
     // The native texture-copy contract uses 32-bit texel pitch fields in CommandList::writeTexture.

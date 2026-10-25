@@ -112,8 +112,8 @@ float2 nwbCombinedShadowWaveletSigma(const int2 texel, const uint slot){
         }
     }
     if(count > 0){
-        const float invCount = 1.0 / (float)count;
-        const half2 variance = max(mean2 * half(invCount) - (mean * half(invCount)) * (mean * half(invCount)), half2(0.0h));
+        const half invCount = half(1.0h) / half(count);
+        const half2 variance = max(mean2 * invCount - (mean * invCount) * (mean * invCount), half2(0.0h));
         const float2 spatial = sigmaBase * sqrt(float2(variance)) + sigmaEps;
         if(!temporal.x)
             sigma.x = spatial.x;
@@ -183,7 +183,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 nwbCombinedShadowWaveletStore(pixel, slot, 1.0h, half3(1.0h));
             else{
                 const uint centerIndex = (uint)((int(groupThreadID.y) + NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step) * tileWidth + (int(groupThreadID.x) + NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step));
-                const float4 center = float4(g_NwbCombinedShadowWaveletVis[centerIndex]);
+                const half4 center = g_NwbCombinedShadowWaveletVis[centerIndex];
                 const float2 sigma = nwbCombinedShadowWaveletSigma(texel, slot);
                 float opaqueSum = 0.0;
                 float3 rgbSum = float3(0.0);
@@ -194,23 +194,23 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         const uint index = (uint)((int(groupThreadID.y) + (ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS) * step) * tileWidth + (int(groupThreadID.x) + (kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS) * step));
                         if(g_NwbCombinedShadowWaveletValid[index] == 0u)
                             continue;
-                        const float4 tap = float4(g_NwbCombinedShadowWaveletVis[index]);
+                        const half4 tap = g_NwbCombinedShadowWaveletVis[index];
                         const float deltaDistance = float(g_NwbCombinedShadowWaveletDist[index]) - centerDistance;
                         const half distanceWeight = half(exp(-deltaDistance * deltaDistance * invTwoSigmaDistanceSq));
                         const float3 tapNormal = nwbOctDecodeNormal(float2(g_NwbCombinedShadowWaveletNormal[index]));
                         const half normalWeight = half(pow(max(dot(centerNormal, tapNormal), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER));
-                        const half opaqueValueWeight = half(exp(-abs(half(tap.x) - half(center.x)) / half(sigma.x)));
-                        const half rgbValueWeight = half(exp(-abs(half(nwbLuminance(tap.yzw)) - half(nwbLuminance(center.yzw))) / half(sigma.y)));
+                        const half opaqueValueWeight = half(exp(-abs(tap.x - center.x) / half(sigma.x)));
+                        const half rgbValueWeight = half(exp(-abs(nwbLuminance(tap.yzw) - nwbLuminance(center.yzw)) / half(sigma.y)));
                         // Keep each half multiplication and accumulation in the original order, including separate denominators.
                         const half opaqueWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * distanceWeight * normalWeight * opaqueValueWeight;
                         const half rgbWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * distanceWeight * normalWeight * rgbValueWeight;
-                        opaqueSum += opaqueWeight * tap.x;
-                        rgbSum += rgbWeight * tap.yzw;
+                        opaqueSum += float(opaqueWeight) * float(tap.x);
+                        rgbSum += float(rgbWeight) * float3(tap.yzw);
                         opaqueWeightSum += opaqueWeight;
                         rgbWeightSum += rgbWeight;
                     }
                 }
-                const half opaque = opaqueWeightSum > half(0.0h) ? half(opaqueSum / float(opaqueWeightSum)) : half(1.0);
+                const half opaque = opaqueWeightSum > half(0.0h) ? half(opaqueSum / float(opaqueWeightSum)) : half(1.0h);
                 const half3 rgb = rgbWeightSum > half(0.0h) ? half3(rgbSum / float(rgbWeightSum)) : half3(1.0h);
                 nwbCombinedShadowWaveletStore(pixel, slot, opaque, rgb);
             }

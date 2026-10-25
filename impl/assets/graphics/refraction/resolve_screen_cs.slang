@@ -34,7 +34,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     const float3 rawNormal = nwbSafeNormalize(normalIor.xyz, -entry.incident);
     const float incidentDotNormal = dot(entry.incident, rawNormal);
     entry.normal = select(bool3(incidentDotNormal > 0.0), -rawNormal, rawNormal);
-    entry.ior = half(clamp(normalIor.w, 1.0, NWB_REFRACTION_IOR_MAX));
+    entry.ior = clamp(half(normalIor.w), half(1.0h), NWB_REFRACTION_IOR_MAX);
     entry.cosine = half(saturate(abs(incidentDotNormal)));
     entry.bias = max(NWB_REFRACTION_MIN_DISTANCE, entry.cameraDistance * NWB_REFRACTION_BIAS_DISTANCE_SCALE);
 

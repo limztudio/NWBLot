@@ -83,7 +83,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbShadowRqSoftPushConstants.frameIndex * NWB_SW_SHADOW_SOFT_SPP + s);
             accum += nwbShadowRqLightVisible(worldPosition, normal, g_NwbSceneLights[i], sampleJitter);
         }
-        const half3 transmittance = accum * half(1.0 / float(sampleCount));
+        const half3 transmittance = accum * (half(1.0h) / half(sampleCount));
         g_NwbShadowVisibility[uint3(halfPixel, uint(slot))] = float4(transmittance, 1.0);
     }
 }

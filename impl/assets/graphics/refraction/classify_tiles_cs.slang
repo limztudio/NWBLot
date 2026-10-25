@@ -32,7 +32,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     uint queueIndex;
     g_NwbRefractionTileArguments.InterlockedAdd(NWB_REFRACTION_TILE_COUNTER_OFFSET, 1u, queueIndex);
     const uint tilesX = (g_NwbRefractionPush.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE;
-    g_NwbRefractionTileList.Store(queueIndex * 4u, groupId.y * tilesX + groupId.x);
+    g_NwbRefractionTileList.Store(queueIndex * NWB_REFRACTION_TILE_WORD_BYTES, groupId.y * tilesX + groupId.x);
 }
 
 

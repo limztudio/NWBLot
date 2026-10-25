@@ -11,6 +11,36 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace SIMDInterpDetail{
+
+inline constexpr f32 s_HermiteT2CoeffP0 = -3.0f;
+inline constexpr f32 s_HermiteT2CoeffT0 = -2.0f;
+inline constexpr f32 s_HermiteT2CoeffP1 = 3.0f;
+inline constexpr f32 s_HermiteT2CoeffT1 = -1.0f;
+inline constexpr f32 s_HermiteT3CoeffP0 = 2.0f;
+inline constexpr f32 s_HermiteT3CoeffT0 = 1.0f;
+inline constexpr f32 s_HermiteT3CoeffP1 = -2.0f;
+inline constexpr f32 s_HermiteT3CoeffT1 = 1.0f;
+inline constexpr f32 s_CatmullRomThree = 3.0f;
+inline constexpr f32 s_CatmullRomFive = 5.0f;
+
+inline constexpr f64 s_DoubleHermiteT2CoeffP0 = -3.0;
+inline constexpr f64 s_DoubleHermiteT2CoeffT0 = -2.0;
+inline constexpr f64 s_DoubleHermiteT2CoeffP1 = 3.0;
+inline constexpr f64 s_DoubleHermiteT2CoeffT1 = -1.0;
+inline constexpr f64 s_DoubleHermiteT3CoeffP0 = 2.0;
+inline constexpr f64 s_DoubleHermiteT3CoeffT0 = 1.0;
+inline constexpr f64 s_DoubleHermiteT3CoeffP1 = -2.0;
+inline constexpr f64 s_DoubleHermiteT3CoeffT1 = 1.0;
+inline constexpr f64 s_DoubleCatmullRomThree = 3.0;
+inline constexpr f64 s_DoubleCatmullRomFive = 5.0;
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLerp(SIMDVectorSingle v0, SIMDVectorSingle v1, f32 t)noexcept{
     return VectorMultiplyAdd(VectorSubtract(v1, v0), VectorReplicate(t), v0);
 }
@@ -32,8 +62,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLerpV(SIMDVectorDouble v0,
 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorHermiteV(SIMDVectorSingle position0, SIMDVectorSingle tangent0, SIMDVectorSingle position1, SIMDVectorSingle tangent1, SIMDVectorSingle t)noexcept{
-    const SIMDVectorSingle catMulT2 = VectorSet(-3.0f, -2.0f, 3.0f, -1.0f);
-    const SIMDVectorSingle catMulT3 = VectorSet(2.0f, 1.0f, -2.0f, 1.0f);
+    const SIMDVectorSingle catMulT2 = VectorSet(SIMDInterpDetail::s_HermiteT2CoeffP0, SIMDInterpDetail::s_HermiteT2CoeffT0, SIMDInterpDetail::s_HermiteT2CoeffP1, SIMDInterpDetail::s_HermiteT2CoeffT1);
+    const SIMDVectorSingle catMulT3 = VectorSet(SIMDInterpDetail::s_HermiteT3CoeffP0, SIMDInterpDetail::s_HermiteT3CoeffT0, SIMDInterpDetail::s_HermiteT3CoeffP1, SIMDInterpDetail::s_HermiteT3CoeffT1);
     SIMDVectorSingle t2 = VectorMultiply(t, t);
     SIMDVectorSingle t3 = VectorMultiply(t, t2);
     t2 = VectorMultiply(t2, catMulT2);
@@ -48,8 +78,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorHermiteV(SIMDVectorSingle positi
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleHermiteV(SIMDVectorDouble position0, SIMDVectorDouble tangent0, SIMDVectorDouble position1, SIMDVectorDouble tangent1, SIMDVectorDouble t)noexcept{
-    const SIMDVectorDouble catMulT2 = VectorDoubleSet(-3.0, -2.0, 3.0, -1.0);
-    const SIMDVectorDouble catMulT3 = VectorDoubleSet(2.0, 1.0, -2.0, 1.0);
+    const SIMDVectorDouble catMulT2 = VectorDoubleSet(SIMDInterpDetail::s_DoubleHermiteT2CoeffP0, SIMDInterpDetail::s_DoubleHermiteT2CoeffT0, SIMDInterpDetail::s_DoubleHermiteT2CoeffP1, SIMDInterpDetail::s_DoubleHermiteT2CoeffT1);
+    const SIMDVectorDouble catMulT3 = VectorDoubleSet(SIMDInterpDetail::s_DoubleHermiteT3CoeffP0, SIMDInterpDetail::s_DoubleHermiteT3CoeffT0, SIMDInterpDetail::s_DoubleHermiteT3CoeffP1, SIMDInterpDetail::s_DoubleHermiteT3CoeffT1);
     SIMDVectorDouble t2 = VectorDoubleMultiply(t, t);
     SIMDVectorDouble t3 = VectorDoubleMultiply(t, t2);
     t2 = VectorDoubleMultiply(t2, catMulT2);
@@ -76,8 +106,8 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleHermite(SIMDVectorDouble p
 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCatmullRomV(SIMDVectorSingle p0, SIMDVectorSingle p1, SIMDVectorSingle p2, SIMDVectorSingle p3, SIMDVectorSingle t)noexcept{
-    const SIMDVectorSingle three = VectorReplicate(3.0f);
-    const SIMDVectorSingle five = VectorReplicate(5.0f);
+    const SIMDVectorSingle three = VectorReplicate(SIMDInterpDetail::s_CatmullRomThree);
+    const SIMDVectorSingle five = VectorReplicate(SIMDInterpDetail::s_CatmullRomFive);
     SIMDVectorSingle t2 = VectorMultiply(t, t);
     SIMDVectorSingle t3 = VectorMultiply(t, t2);
     SIMDVectorSingle result = VectorSubtract(VectorAdd(t2, t2), t);
@@ -95,8 +125,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorCatmullRomV(SIMDVectorSingle p0,
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleCatmullRomV(SIMDVectorDouble p0, SIMDVectorDouble p1, SIMDVectorDouble p2, SIMDVectorDouble p3, SIMDVectorDouble t)noexcept{
-    const SIMDVectorDouble three = VectorDoubleReplicate(3.0);
-    const SIMDVectorDouble five = VectorDoubleReplicate(5.0);
+    const SIMDVectorDouble three = VectorDoubleReplicate(SIMDInterpDetail::s_DoubleCatmullRomThree);
+    const SIMDVectorDouble five = VectorDoubleReplicate(SIMDInterpDetail::s_DoubleCatmullRomFive);
     SIMDVectorDouble t2 = VectorDoubleMultiply(t, t);
     SIMDVectorDouble t3 = VectorDoubleMultiply(t, t2);
     SIMDVectorDouble result = VectorDoubleSubtract(VectorDoubleAdd(t2, t2), t);

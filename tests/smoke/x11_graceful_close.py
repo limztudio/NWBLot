@@ -30,6 +30,10 @@ xlib.XInternAtom.restype = Atom
 xlib.XInternAtom.argtypes = [DisplayP, ctypes.c_char_p, Bool]
 
 
+X11_CLIENT_MESSAGE_TYPE = 33
+X11_CLIENT_MESSAGE_FORMAT_BITS = 32
+
+
 class XClientMessageEvent(ctypes.Structure):
     _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", Bool), ("display", DisplayP), ("window", Window), ("message_type", Atom), ("format", ctypes.c_int), ("data_l", ctypes.c_long * 5),]
 
@@ -42,11 +46,11 @@ def send_wm_delete(disp, win):
     xlib.XSendEvent.argtypes = [DisplayP, Window, Bool, ctypes.c_long, ctypes.POINTER(XClientMessageEvent)]
     # NoEventMask delivers directly even without a window manager. Send once: a retry can race window destruction.
     ev = XClientMessageEvent()
-    ev.type = 33  # ClientMessage
+    ev.type = X11_CLIENT_MESSAGE_TYPE  # ClientMessage
     ev.display = disp
     ev.window = win
     ev.message_type = protocols
-    ev.format = 32
+    ev.format = X11_CLIENT_MESSAGE_FORMAT_BITS
     ev.data_l[0] = delete_window
     ev.data_l[1] = 0  # timestamp
     if xlib.XSendEvent(disp, win, False, 0, ctypes.byref(ev)) == 0:

@@ -59,8 +59,8 @@ Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& setti
         const u64 drawArgumentBytes = static_cast<u64>(newViewCount) * drawCount * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
         const u64 totalBytes = eventBytes + countBytes + depthBytes + viewBytes + drawArgumentBytes + (csgIntervalDepth ? countBytes : 0u);
         if(
-            totalBytes > settings.memoryBudgetBytes || eventBytes > Limit<u32>::s_Max || pixels > Limit<u32>::s_Max
-            || eventBytes > maxStorageBufferRange || countBytes > maxStorageBufferRange || viewBytes > maxStorageBufferRange
+            totalBytes > settings.memoryBudgetBytes || eventBytes > Limit<u32>::s_Max
+            || eventBytes > maxStorageBufferRange || viewBytes > maxStorageBufferRange
             || drawArgumentBytes > maxStorageBufferRange || drawArgumentBytes > Limit<u32>::s_Max
         )
             continue;

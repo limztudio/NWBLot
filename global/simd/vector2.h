@@ -215,7 +215,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Dot(SIMDVectorSingle v0, SIMDVe
     const float32x2_t result = vpadd_f32(product, product);
     return vcombine_f32(result, result);
 #elif defined(NWB_HAS_SSE4)
-    return _mm_dp_ps(v0, v1, 0x3F);
+    return _mm_dp_ps(v0, v1, s_SIMDSse4Dot2BroadcastMask);
 #elif defined(NWB_HAS_SSE2)
     v0 = _mm_and_ps(v0, s_SIMDMaskXY);
     v1 = _mm_and_ps(v1, s_SIMDMaskXY);
@@ -273,7 +273,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2Cross(SIMDVectorDouble v0
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2LengthSq(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
-    return _mm_dp_ps(value, value, 0x3F);
+    return _mm_dp_ps(value, value, s_SIMDSse4Dot2BroadcastMask);
 #else
     return Vector2Dot(value, value);
 #endif
@@ -285,7 +285,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2LengthSq(SIMDVectorDouble
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2ReciprocalLength(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
-    const SIMDVectorSingle lengthSq = _mm_dp_ps(value, value, 0x3F);
+    const SIMDVectorSingle lengthSq = _mm_dp_ps(value, value, s_SIMDSse4Dot2BroadcastMask);
     const SIMDVectorSingle length = _mm_sqrt_ps(lengthSq);
     return _mm_div_ps(s_SIMDOne, length);
 #else
@@ -303,7 +303,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2ReciprocalLength(SIMDVect
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2ReciprocalLengthEst(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
-    return _mm_rsqrt_ps(_mm_dp_ps(value, value, 0x3F));
+    return _mm_rsqrt_ps(_mm_dp_ps(value, value, s_SIMDSse4Dot2BroadcastMask));
 #else
     return VectorReciprocalSqrtEst(Vector2LengthSq(value));
 #endif
@@ -319,7 +319,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2ReciprocalLengthEst(SIMDV
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Length(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
-    return _mm_sqrt_ps(_mm_dp_ps(value, value, 0x3F));
+    return _mm_sqrt_ps(_mm_dp_ps(value, value, s_SIMDSse4Dot2BroadcastMask));
 #else
     return VectorSqrt(Vector2LengthSq(value));
 #endif
@@ -331,7 +331,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2Length(SIMDVectorDouble v
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2LengthEst(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
-    return _mm_sqrt_ps(_mm_dp_ps(value, value, 0x3F));
+    return _mm_sqrt_ps(_mm_dp_ps(value, value, s_SIMDSse4Dot2BroadcastMask));
 #else
     return VectorSqrtEst(Vector2LengthSq(value));
 #endif
@@ -347,7 +347,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2LengthEst(SIMDVectorDoubl
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Normalize(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
-    SIMDVectorSingle lengthSq = _mm_dp_ps(value, value, 0x3F);
+    SIMDVectorSingle lengthSq = _mm_dp_ps(value, value, s_SIMDSse4Dot2BroadcastMask);
     const SIMDVectorSingle length = _mm_sqrt_ps(lengthSq);
     const SIMDVectorSingle zeroMask = _mm_cmpneq_ps(_mm_setzero_ps(), length);
     lengthSq = _mm_cmpneq_ps(lengthSq, s_SIMDInfinity);
@@ -383,7 +383,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2Normalize(SIMDVectorDoubl
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2NormalizeEst(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE4)
-    const SIMDVectorSingle lengthSq = _mm_dp_ps(value, value, 0x3F);
+    const SIMDVectorSingle lengthSq = _mm_dp_ps(value, value, s_SIMDSse4Dot2BroadcastMask);
     return _mm_and_ps(_mm_mul_ps(value, _mm_rsqrt_ps(lengthSq)), s_SIMDMaskXY);
 #else
     return VectorAndInt(VectorMultiply(value, Vector2ReciprocalLengthEst(value)), s_SIMDMaskXY);

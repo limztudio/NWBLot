@@ -200,8 +200,6 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     // That preserves the source/resource relationship across packet coalescing and lets ordinary record traversal remain compiler-owned.
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuTaskGraphTaskView task = declarationAccess.taskAt(tasks[taskIndex].index);
-        if(task.externalStateSourceCount != 0u && !task.externalStateSources)
-            return MakeUnexpected(Failure{});
         if(task.externalStateSourceCount == 0u)
             continue;
 

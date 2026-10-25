@@ -119,7 +119,7 @@ float nwbCausticResolveHalfPixelArea(const int2 halfTexel){
 
 // 5x5 B-spline a-trous kernel.
 // Geometry-only edge stop: luminance is sparse-splat noise and must not gate filtering.
-static const half NWB_CAUSTIC_RESOLVE_KERNEL[NWB_CAUSTIC_RESOLVE_KERNEL_TAP_COUNT] ={ half(1.0 / 16.0), half(4.0 / 16.0), half(6.0 / 16.0), half(4.0 / 16.0), half(1.0 / 16.0) };
+static const half NWB_CAUSTIC_RESOLVE_KERNEL[NWB_CAUSTIC_RESOLVE_KERNEL_TAP_COUNT] = { half(1.0h / 16.0h), half(4.0h / 16.0h), half(6.0h / 16.0h), half(4.0h / 16.0h), half(1.0h / 16.0h) };
 
 groupshared uint g_NwbCausticResolveInputActivity;
 groupshared uint g_NwbCausticResolveOutputActivity;
@@ -351,7 +351,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
                 if(!nwbCausticResolveValidAtHalf(tap))
                     continue;
-                const half bilinearWeight = (i == 0 ? (1.0h - lerpFrac.x) : half(lerpFrac.x)) * (j == 0 ? (1.0h - lerpFrac.y) : half(lerpFrac.y));
+                const half bilinearWeight = (i == 0 ? (half(1.0h) - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (half(1.0h) - lerpFrac.y) : lerpFrac.y);
                 const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - centerWorld;
                 const half weight = bilinearWeight * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
                 const half3 tapColor = half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);

@@ -28,9 +28,8 @@ namespace __hidden_material_pass_draw{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<ECSRenderDetail::MeshFrameHeapSlots> ResolveMeshFrameHeapSlots(const MaterialPassDrawContext& context)noexcept{
-    if(!context.frameBindings.bindingValid())
-        return MakeUnexpected(Failure{});
+static ECSRenderDetail::MeshFrameHeapSlots ResolveMeshFrameHeapSlots(const MaterialPassDrawContext& context)noexcept{
+    NWB_ASSERT(context.frameBindings.bindingValid());
     ECSRenderDetail::MeshFrameHeapSlots slots;
     slots.instance = context.frameBindings.instanceHeapHandle.slot();
     slots.materialTyped = context.frameBindings.materialTypedHeapHandle.slot();
@@ -135,10 +134,7 @@ bool RendererMaterialSystem::setMaterialPassDrawPushConstants(const MaterialPass
             return false;
         csgContextHeapSlot = *resolvedClipContext;
     }
-    auto resolvedFrameHeapSlots = __hidden_material_pass_draw::ResolveMeshFrameHeapSlots(context);
-    if(!resolvedFrameHeapSlots)
-        return false;
-    ECSRenderDetail::MeshFrameHeapSlots& frameHeapSlots = *resolvedFrameHeapSlots;
+    ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots = __hidden_material_pass_draw::ResolveMeshFrameHeapSlots(context);
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
         ECSRenderDetail::SetTransparentDrawPushConstants(
             context.commandList,
@@ -171,10 +167,7 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(const MaterialP
     context.commandList.setComputeState(computeState);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
 
-    auto resolvedFrameHeapSlots = __hidden_material_pass_draw::ResolveMeshFrameHeapSlots(context);
-    if(!resolvedFrameHeapSlots)
-        return;
-    ECSRenderDetail::MeshFrameHeapSlots& frameHeapSlots = *resolvedFrameHeapSlots;
+    ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots = __hidden_material_pass_draw::ResolveMeshFrameHeapSlots(context);
     frameHeapSlots.generatedVertex = mesh.emulationVertexHeapHandle.slot();
     ECSRenderDetail::ShaderDrivenPushConstants pushConstants = ECSRenderDetail::BuildShaderDrivenPushConstants(
         mesh.meshletCount,

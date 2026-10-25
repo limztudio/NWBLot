@@ -487,7 +487,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
 
     const GpuTaskGraph::DeclarationReadView declarations(graph);
     const GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-    if(!declarations.valid() || !compiledPlan.validFor(declarations))
+    if(!compiledPlan.validFor(declarations))
         return MakeUnexpected(Failure{});
 
     const GpuSubmissionPacketId terminalPacket = compiledPlan.packetForTask(terminalTask);

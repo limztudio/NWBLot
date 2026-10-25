@@ -54,8 +54,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
 
     GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback> acceptedCallbacks(scratchArena);
     if(
-        !planAccess.validFor(declarationAccess)
-        || !planAccess.validPacketRange(range)
+        !planAccess.validPacketRange(range)
         || !recordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation)
         || !transaction.validFor(planAccess)
         || !GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(declarationAccess, planAccess, range)

@@ -352,7 +352,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         AppendPOD(outBinary, fieldBinary);
     }
     AppendPOD(outBinary, static_cast<u32>(material.typedBlockBytes().size()));
-    BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, material.typedBlockBytes().data(), material.typedBlockBytes().size());
+    AppendBytesNoReserveUnchecked(outBinary, material.typedBlockBytes().data(), material.typedBlockBytes().size());
     AppendPOD(outBinary, static_cast<u32>(material.resourceReferences().size()));
     for(const MaterialResourceReference& resourceReference : material.resourceReferences()){
         const Name& resourceName = resourceReference.resourceKind == MaterialResourceKind::SampledImage2D ? resourceReference.textureAsset.name() : resourceReference.samplerAsset.name();

@@ -67,6 +67,8 @@ MeshSkinningSystem::MeshSkinningSystem(Core::Alloc::GlobalArena& arena, Core::EC
     , m_defaultSceneSubsystems(arena)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
     , m_frameDispatchPlans(arena)
+    , m_frameDeformationPlans(arena)
+    , m_frameLocalBoundsDispatches(arena)
     , m_frameLiveBuffers(arena)
     , m_frameTaskGraph(arena)
     , m_frameTaskGraphAnalysis(arena)
@@ -264,16 +266,13 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     const usize previousFrameStateSourceCount = m_acceptedSkinningState.valid() ? LengthOf(previousFrameStateSources) : 0u;
 
     Core::GpuTimingSubmissionTicket timingTicket(m_graphics.gpuTiming());
-    // Each graph payload owns the dispatch data it needs until submission acceptance.
-    TaskGraphSkinningFinalizerTask::Payload finalizerPayload(m_arena, *this);
-    finalizerPayload.plans.clear();
-    finalizerPayload.plans.reserve(dispatchPlans.size());
-    MeshSkinningLocalBoundsTask::Payload localBoundsPayload(m_arena, m_graphics, timingTicket);
-    localBoundsPayload.dispatches.reserve(dispatchPlans.size());
+    // Dispatch payload slices reference reused member storage that outlives m_frameTaskGraph.
+    Vector<MeshSkinningLocalBoundsDispatch, Core::Alloc::GlobalArena>& localBoundsDispatches = m_frameLocalBoundsDispatches;
+    localBoundsDispatches.clear();
+    localBoundsDispatches.reserve(dispatchPlans.size());
     for(const MeshSkinningGraphDispatchPlan& plan : dispatchPlans){
-        finalizerPayload.plans.push_back(plan);
         if(plan.updatesMeshletBounds){
-            localBoundsPayload.dispatches.push_back({
+            localBoundsDispatches.push_back({
                 .bindlessResourceSlotsResource = plan.bindlessResourceSlotsResource,
                 .meshletLocalBoundsResource = plan.meshletLocalBoundsResource,
                 .localBoundsResource = plan.localBoundsResource,
@@ -283,15 +282,19 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             });
         }
     }
+    const Span<const MeshSkinningGraphDispatchPlan> allDispatchPlans(dispatchPlans.data(), dispatchPlans.size());
+    TaskGraphSkinningFinalizerTask::Payload finalizerPayload(*this, allDispatchPlans);
+    MeshSkinningLocalBoundsTask::Payload localBoundsPayload(m_graphics, timingTicket, Span<const MeshSkinningLocalBoundsDispatch>(localBoundsDispatches.data(), localBoundsDispatches.size()));
     Core::GpuTaskId postDispatchDependency = terminalTask;
     if(!resourceUses->deformation.empty()){
-        TaskGraphSkinningDeformationTask::Payload deformationPayload(m_arena, *this, timingTicket);
-        deformationPayload.plans.clear();
-        deformationPayload.plans.reserve(dispatchPlans.size());
+        Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& deformationPlans = m_frameDeformationPlans;
+        deformationPlans.clear();
+        deformationPlans.reserve(dispatchPlans.size());
         for(const MeshSkinningGraphDispatchPlan& plan : dispatchPlans){
             if(plan.hasActiveSkin)
-                deformationPayload.plans.push_back(plan);
+                deformationPlans.push_back(plan);
         }
+        TaskGraphSkinningDeformationTask::Payload deformationPayload(*this, timingTicket, Span<const MeshSkinningGraphDispatchPlan>(deformationPlans.data(), deformationPlans.size()));
 
         Core::GpuTaskDesc deformationDesc;
         deformationDesc
@@ -313,8 +316,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         postDispatchDependency = deformationTask;
     }
 
-    TaskGraphSkinningPostDispatchTask::Payload postDispatchPayload(m_arena, *this, timingTicket);
-    postDispatchPayload.plans = Move(dispatchPlans);
+    TaskGraphSkinningPostDispatchTask::Payload postDispatchPayload(*this, timingTicket, allDispatchPlans);
     Core::GpuTaskDesc postDispatchDesc;
     postDispatchDesc
         .setIdentity(Name("mesh_skinning.frame_bounds_repack"))
@@ -380,7 +382,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
 
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     const Core::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-    if(!declarations.valid() || !compiledPlan.validFor(declarations)){
+    if(!compiledPlan.validFor(declarations)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning compiler inputs"));
         return false;
     }

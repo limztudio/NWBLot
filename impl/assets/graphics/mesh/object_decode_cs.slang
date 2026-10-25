@@ -54,7 +54,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         const NwbMeshSourceVertex source = nwbMeshLoadSourceVertex(meshlet, decodeInfo, vertexIndex, objectPosition, float3(0.0), float4(0.0));
         NwbMeshObjectVertex output;
         output.position = float4(objectPosition, 1.0);
-        output.normal = nwbMeshPackGeneratedHalf4(half4(half3(source.normal), half(0.0)));
+        output.normal = nwbMeshPackGeneratedHalf4(half4(half3(source.normal), half(0.0h)));
         output.tangent = nwbMeshPackGeneratedHalf4(half4(source.tangent));
         output.uv0 = source.uv0;
         output.color = nwbMeshPackGeneratedHalf4(source.color);

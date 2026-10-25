@@ -86,11 +86,11 @@ bool GpuCommandIrCapture::appendUpload(GpuCommandIrBuiltinTaskRecord record, con
     if(
         nextRecordCount == 0u
         || m_nextSerial == Limit<u64>::s_Max
-        || !BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextRecordCount)
-        || !BinaryDetail::CanStoreValueCount(m_blobEndOffsets, nextRecordCount)
-        || !BinaryDetail::CanStoreValueCount(m_recordSerials, nextRecordCount)
-        || !BinaryDetail::CanAppendBytes(m_commandBytes, recordSize)
-        || !BinaryDetail::CanAppendBytes(m_blobBytes, bytes.size())
+        || !CanStoreValueCount(m_recordEndOffsets, nextRecordCount)
+        || !CanStoreValueCount(m_blobEndOffsets, nextRecordCount)
+        || !CanStoreValueCount(m_recordSerials, nextRecordCount)
+        || !CanAppendBytes(m_commandBytes, recordSize)
+        || !CanAppendBytes(m_blobBytes, bytes.size())
         || m_commandBytes.size() + recordSize > m_commandBytes.max_size()
         || m_blobBytes.size() + bytes.size() > m_blobBytes.max_size()
         || m_commandBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - recordSize

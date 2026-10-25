@@ -39,6 +39,12 @@ namespace __hidden_rgd_decode{
 
 inline constexpr Name s_RgdDecodeScratch("Log/RgdDecodeScratch");
 inline constexpr StringView s_ParseFailedError = "parse_failed";
+inline constexpr StringView s_RdfOpenFailedError = "rdf_open_failed";
+inline constexpr StringView s_RdfCloseFailedError = "rdf_close_failed";
+inline constexpr AStringView s_MarkersInProgressDivider = "===================";
+inline constexpr AStringView s_ExecutionMarkerTreeDivider = "=====================";
+inline constexpr AStringView s_LegendDivider = "======";
+inline constexpr AStringView s_PageFaultSummaryDivider = "==================";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,9 +78,9 @@ AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchAre
             txt << "ERROR: failed to serialize the execution marker summary." << '\n';
 
         txt << '\n' << '\n';
-        txt << "===================" << '\n';
+        txt << s_MarkersInProgressDivider << '\n';
         txt << "MARKERS IN PROGRESS" << '\n';
-        txt << "===================" << '\n' << '\n';
+        txt << s_MarkersInProgressDivider << '\n' << '\n';
         txt << markerSummary;
 
         AInteropString markerTree;
@@ -82,11 +88,11 @@ AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchAre
             txt << "ERROR: failed to serialize the execution marker tree." << '\n';
 
         txt << '\n' << '\n';
-        txt << "=====================" << '\n';
+        txt << s_ExecutionMarkerTreeDivider << '\n';
         txt << "EXECUTION MARKER TREE" << '\n';
-        txt << "=====================" << '\n' << '\n';
+        txt << s_ExecutionMarkerTreeDivider << '\n' << '\n';
         txt << "Legend" << '\n';
-        txt << "======" << '\n';
+        txt << s_LegendDivider << '\n';
         txt << "[X] finished" << '\n';
         txt << "[>] in progress" << '\n';
         txt << "[ ] not started" << '\n' << '\n';
@@ -101,9 +107,9 @@ AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchAre
         const auto firstPageFault = FindIf(contents.kmd_crash_data.events.begin(), eventsEnd, isPageFault);
         if(firstPageFault != eventsEnd){
             txt << '\n' << '\n';
-            txt << "==================" << '\n';
+            txt << s_PageFaultSummaryDivider << '\n';
             txt << "PAGE FAULT SUMMARY" << '\n';
-            txt << "==================" << '\n' << '\n';
+            txt << s_PageFaultSummaryDivider << '\n' << '\n';
 
             RgdResourceInfoSerializer resourceSerializer;
             const bool resourceHistoryReady = resourceSerializer.InitializeWithTraceFile(config.crash_dump_file);
@@ -142,7 +148,7 @@ AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchAre
 [[nodiscard]] Expected<void, StringView> AdmitRdfInput(const AInteropString& filePath)noexcept{
     rdfStream* stream = nullptr;
     if(rdfStreamOpenFile(filePath.c_str(), &stream) != rdfResultOk)
-        return MakeUnexpected(StringView("rdf_open_failed"));
+        return MakeUnexpected(s_RdfOpenFailedError);
 
     rdfChunkFile* chunks = nullptr;
     const int formatStatus = rdfChunkFileOpenStream(stream, &chunks);
@@ -151,7 +157,7 @@ AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchAre
     if(formatStatus != rdfResultOk)
         return MakeUnexpected(s_ParseFailedError);
     if(chunksCloseStatus != rdfResultOk || streamCloseStatus != rdfResultOk)
-        return MakeUnexpected(StringView("rdf_close_failed"));
+        return MakeUnexpected(s_RdfCloseFailedError);
     return {};
 }
 

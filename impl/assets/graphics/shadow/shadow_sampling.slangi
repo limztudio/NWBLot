@@ -25,6 +25,8 @@
 #define NWB_SHADOW_SAMPLE_FIELD_MASK 0xffffu
 #define NWB_SHADOW_SAMPLE_FIELD_BITS 16u
 #define NWB_SHADOW_SAMPLE_FIELD_RANGE 65536.0
+#define NWB_SHADOW_R2_ALPHA_1 0.75487766624669276005
+#define NWB_SHADOW_R2_ALPHA_2 0.56984029099805326591
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,11 +53,9 @@ uint nwbShadowSeed(const uint2 pixel, const uint frameIndex){
 
 // R2 sequence with per-pixel Cranley-Patterson rotation. Keep unnormalized indices and hash values in float: 65536 exceeds finite half range.
 float2 nwbShadowLowDiscrepancy2D(const uint2 pixel, const uint frameIndex){
-    const float a1 = 0.75487766624669276005; // 1 / phi2
-    const float a2 = 0.56984029099805326591; // 1 / phi2^2
     // Mask before float conversion to preserve R2 fractional precision for large frame indices.
     const float indexF = float((frameIndex & NWB_SHADOW_SAMPLE_FIELD_MASK) + 1u);
-    const float2 r2 = frac(float2(a1, a2) * indexF);
+    const float2 r2 = frac(float2(NWB_SHADOW_R2_ALPHA_1, NWB_SHADOW_R2_ALPHA_2) * indexF);
 
     const uint seed = nwbShadowSeed(pixel, frameIndex);
     const float2 offset = float2(float(seed & NWB_SHADOW_SAMPLE_FIELD_MASK), float((seed >> NWB_SHADOW_SAMPLE_FIELD_BITS) & NWB_SHADOW_SAMPLE_FIELD_MASK)) * (1.0 / NWB_SHADOW_SAMPLE_FIELD_RANGE);

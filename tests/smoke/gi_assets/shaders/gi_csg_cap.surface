@@ -3,9 +3,18 @@
 
 
 // Only the inward back cap reflects green. Original cube triangles and the cutter-union side seams stay black.
+static const float NWB_SMOKE_GI_CSG_CAP_PLANE_Z = 0.4;
+static const float NWB_SMOKE_GI_CSG_CAP_PLANE_Z_TOLERANCE = 0.015;
+static const float NWB_SMOKE_GI_CSG_CAP_NORMAL_Z_THRESHOLD = -0.9;
+static const half3 NWB_SMOKE_GI_CSG_CAP_COLOR = half3(0.02h, 1.0h, 0.02h);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NwbMeshSurface nwbMaterialSurface(){
-    const bool cap = abs(inWorldPosition.z - 0.4) < 0.015 && inNormal.z < -0.9;
-    return nwbMakeMeshSurface(cap ? half3(0.02h, 1.0h, 0.02h) : half3(0.0h), inNormal);
+    const bool cap = abs(inWorldPosition.z - NWB_SMOKE_GI_CSG_CAP_PLANE_Z) < NWB_SMOKE_GI_CSG_CAP_PLANE_Z_TOLERANCE && inNormal.z < NWB_SMOKE_GI_CSG_CAP_NORMAL_Z_THRESHOLD;
+    return nwbMakeMeshSurface(cap ? NWB_SMOKE_GI_CSG_CAP_COLOR : half3(0.0h), inNormal);
 }
 
 

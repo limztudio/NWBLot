@@ -31,9 +31,11 @@ struct CausticResolveActivityLayout{
 };
 
 // Both buffers are scratch for one complete resolve chain; every producing group overwrites its own word.
+inline constexpr usize s_CausticResolveActivityBufferCount = LengthOf(s_CausticResolveActivityBufferNames);
+
 struct CausticResolveActivitySnapshot{
-    Core::BufferHandle buffers[2];
-    Core::GpuDescriptorHandle descriptors[2] = { Core::GpuDescriptorHandle::Invalid(), Core::GpuDescriptorHandle::Invalid() };
+    Core::BufferHandle buffers[s_CausticResolveActivityBufferCount];
+    Core::GpuDescriptorHandle descriptors[s_CausticResolveActivityBufferCount] = { Core::GpuDescriptorHandle::Invalid(), Core::GpuDescriptorHandle::Invalid() };
     u32 halfWidth = 0u;
     u32 halfHeight = 0u;
 

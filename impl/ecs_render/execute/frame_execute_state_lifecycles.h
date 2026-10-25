@@ -29,6 +29,11 @@ struct FrameExecuteStateLifecycleSet final : NoCopy{
     // Scene TLAS backing and the three BVH sort buffers; the CSG trace context adds one.
     static constexpr usize s_ShadowPrepareFixedStateBufferCapacity = 4u;
     static constexpr usize s_ShadowPrepareCsgStateBufferCapacity = 5u;
+    static constexpr usize s_SinglePersistentResourceCapacity = 1u;
+    static constexpr usize s_ShadowComputeScratchTextureCapacity = 15u;
+    static constexpr usize s_ShadowComputeScratchBufferCapacity = 12u;
+    static constexpr usize s_CausticsComputeScratchTextureCapacity = 4u;
+    static constexpr usize s_SurfelGiComputeScratchBufferCapacity = 6u;
 
     // Prep/prefix stay serial; later upload packets may use workers.
     Core::Alloc::ScratchArena shadowPrepareStateScratchArena;
@@ -37,25 +42,25 @@ struct FrameExecuteStateLifecycleSet final : NoCopy{
     // Build the sparse candidate after recording; commit on Shadow Preparation accept.
     Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate;
     Core::Alloc::ScratchArena normalExecutionScratchArena;
-    Core::TextureHandle shadowVisibilityReturnTextures[1];
+    Core::TextureHandle shadowVisibilityReturnTextures[s_SinglePersistentResourceCapacity];
     // Freeze the resource generation selected during graph declaration from preflight-owned light-space storage.
     LightSpaceShadowSnapshot lightSpaceShadowResources;
-    Core::TextureHandle shadowComputeScratchTextures[15];
-    Core::BufferHandle shadowComputeScratchBuffers[12];
+    Core::TextureHandle shadowComputeScratchTextures[s_ShadowComputeScratchTextureCapacity];
+    Core::BufferHandle shadowComputeScratchBuffers[s_ShadowComputeScratchBufferCapacity];
     Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate;
-    Core::TextureHandle causticsComputeScratchTextures[4];
-    Core::TextureHandle causticIrradianceTextures[1];
+    Core::TextureHandle causticsComputeScratchTextures[s_CausticsComputeScratchTextureCapacity];
+    Core::TextureHandle causticIrradianceTextures[s_SinglePersistentResourceCapacity];
     Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate;
-    Core::TextureHandle surfelIrradianceReturnTextures[1];
-    Core::BufferHandle surfelGiCounterBuffers[1];
-    Core::TextureHandle surfelGiComputeScratchTextures[1];
-    Core::BufferHandle surfelGiComputeScratchBuffers[6];
+    Core::TextureHandle surfelIrradianceReturnTextures[s_SinglePersistentResourceCapacity];
+    Core::BufferHandle surfelGiCounterBuffers[s_SinglePersistentResourceCapacity];
+    Core::TextureHandle surfelGiComputeScratchTextures[s_SinglePersistentResourceCapacity];
+    Core::BufferHandle surfelGiComputeScratchBuffers[s_SurfelGiComputeScratchBufferCapacity];
     Core::GpuPersistentResourceStateCache::Candidate surfelIrradianceReturnStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate surfelGiCounterStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate surfelGiComputeStateCandidate;
-    Core::TextureHandle hardwareCausticAccumulatorTextures[1];
+    Core::TextureHandle hardwareCausticAccumulatorTextures[s_SinglePersistentResourceCapacity];
     Core::GpuPersistentResourceStateCache::Candidate hardwareCausticAccumulatorStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingShadowReturnStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingCausticReturnStateCandidate;

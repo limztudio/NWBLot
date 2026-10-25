@@ -163,6 +163,18 @@ Object AccelStruct::getNativeHandle(ObjectType objectType)noexcept{
     return Object(nullptr);
 }
 
+GlobalUniquePtr<AccelStructBuildSignatureRole> AccelStruct::acquireBuildSignatureRole(){
+    {
+        NothrowScopedLock lock(m_acceptedBuildSignatureMutex);
+        if(AccelStructBuildSignatureRole* const role = m_retiredBuildSignatureRoles){
+            m_retiredBuildSignatureRoles = role->nextRetiredRole;
+            role->nextRetiredRole = nullptr;
+            return GlobalUniquePtr<AccelStructBuildSignatureRole>(role, GlobalUniquePtr<AccelStructBuildSignatureRole>::deleter_type(m_context.objectArena));
+        }
+    }
+    return MakeGlobalUnique<AccelStructBuildSignatureRole>(m_context.objectArena, m_context.objectArena);
+}
+
 void AccelStruct::collectRetiredBuildSignatureRoles()noexcept{
     AccelStructBuildSignatureRole* retiredRoles = nullptr;
     {
@@ -180,6 +192,16 @@ void AccelStruct::collectRetiredBuildSignatureRoles()noexcept{
 }
 
 void AccelStruct::retireBuildSignatureRole(AccelStructBuildSignatureRole& role)noexcept{
+    role.accelStructType = VK_ACCELERATION_STRUCTURE_TYPE_GENERIC_KHR;
+    role.buildFlags = 0u;
+    role.geometrySignatures.clear();
+    if(role.bottomLevelReferences){
+        if(role.bottomLevelReferences->getReferenceCount() == 1u)
+            role.bottomLevelReferences->resources.clear();
+        else
+            role.bottomLevelReferences = nullptr;
+    }
+
     NothrowScopedLock lock(m_acceptedBuildSignatureMutex);
     role.nextRetiredRole = m_retiredBuildSignatureRoles;
     m_retiredBuildSignatureRoles = &role;
@@ -431,6 +453,26 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
             return MakeUnexpected(Failure{});
         }
         as->m_deviceAddress = m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
+    }
+
+    constexpr usize s_InitialBuildSignatureRoleCount = 2u;
+    for(usize roleIndex = 0u; roleIndex < s_InitialBuildSignatureRoleCount; ++roleIndex){
+        GlobalUniquePtr<AccelStructBuildSignatureRole> role = MakeGlobalUnique<AccelStructBuildSignatureRole>(m_context.objectArena, m_context.objectArena);
+        if(!role)
+            return MakeUnexpected(Failure{});
+        if(desc.isTopLevel){
+            role->geometrySignatures.reserve(1u);
+            if(desc.topLevelMaxInstances > 0u){
+                auto* const references = NewArenaObject<AccelStructBottomLevelReferenceControl>(m_context.objectArena, m_context.objectArena);
+                if(!references)
+                    return MakeUnexpected(Failure{});
+                role->bottomLevelReferences = AccelStructBottomLevelReferenceHandle(references, AccelStructBottomLevelReferenceHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
+                references->resources.reserve(desc.topLevelMaxInstances);
+            }
+        }
+        else if(!desc.bottomLevelGeometries.empty())
+            role->geometrySignatures.reserve(desc.bottomLevelGeometries.size());
+        as->retireBuildSignatureRole(*role.release());
     }
 
     return as;

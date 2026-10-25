@@ -59,7 +59,7 @@ WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(const AStringView t
     using namespace __hidden_wayland_text_input_state;
     if(anchorByte > text.size() || caretByte > text.size())
         return {};
-    if(!IsTextInputUtf8Boundary(text, anchorByte) || !IsTextInputUtf8Boundary(text, caretByte))
+    if(!IsUtf8ScalarBoundary(text, anchorByte) || !IsUtf8ScalarBoundary(text, caretByte))
         return {};
     const usize firstSelection = Min(anchorByte, caretByte);
     const usize lastSelection = Max(anchorByte, caretByte);
@@ -72,9 +72,9 @@ WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(const AStringView t
         last = lastSelection;
     if(last - first < s_MaxSurroundingBytes)
         first = last > s_MaxSurroundingBytes ? last - s_MaxSurroundingBytes : 0u;
-    while(first < firstSelection && !IsTextInputUtf8Boundary(text, first))
+    while(first < firstSelection && !IsUtf8ScalarBoundary(text, first))
         ++first;
-    while(last > lastSelection && !IsTextInputUtf8Boundary(text, last))
+    while(last > lastSelection && !IsUtf8ScalarBoundary(text, last))
         --last;
     return { text.substr(first, last - first), first, anchorByte - first, caretByte - first, true };
 }

@@ -636,7 +636,7 @@ void WaylandFrameInput::dispatchTextInput(const u32 keycode, const i32 scancode,
         return;
 
     const u32 unicode = xkb_state_key_get_utf32(m_xkbState, keycode);
-    if(unicode < s_TextInputFirstPrintableCodePoint || unicode == s_TextInputDeleteCodePoint)
+    if(unicode < s_UnicodeSpace || unicode == s_UnicodeDelete)
         return;
 
     if(ITextInputService* const textInput = m_frame.tryTextInput()){

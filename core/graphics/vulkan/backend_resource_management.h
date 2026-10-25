@@ -107,6 +107,7 @@ public:
 
 
 private:
+    [[nodiscard]] GlobalUniquePtr<AccelStructBuildSignatureRole> acquireBuildSignatureRole();
     void collectRetiredBuildSignatureRoles()noexcept;
     void retireBuildSignatureRole(AccelStructBuildSignatureRole& role)noexcept;
 

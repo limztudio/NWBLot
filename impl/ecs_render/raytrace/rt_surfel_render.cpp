@@ -288,7 +288,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             const Expected<u64> completedValue = m_graphics.getDevice().queueGetCompletedInstance(Core::GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration, });
             submissionComplete = completedValue && *completedValue >= submissionToken.value;
         }
-        if(submissionToken.valid() && (frameIndex - m_rayTracingState.m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay && submissionComplete){
+        if(submissionComplete && (frameIndex - m_rayTracingState.m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay){
             const Expected<void*> mappedCounts = m_graphics.getDevice().mapBuffer(*readback, Core::CpuAccessMode::Read);
             if(mappedCounts){
                 const u32* counts = static_cast<const u32*>(*mappedCounts);

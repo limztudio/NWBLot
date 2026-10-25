@@ -373,7 +373,7 @@ TEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth){
     {
         AString source("struct Description{ float value; }; Description runtime;\n");
         for(usize index = 0u; index < 128u; ++index){
-            char indexText[TextDetail::s_DecimalTextBufferBytes] = {};
+            char indexText[s_DecimalTextBufferBytes] = {};
             const AStringView indexView = FormatDecimal(index, indexText);
             source.append("float extra");
             source.append(indexView.data(), indexView.size());

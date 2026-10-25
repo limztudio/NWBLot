@@ -100,7 +100,8 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         reflectionHardwareReads.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
         reflectionHardwareReads.push_back(ReadUse(lights));
     }
-    Core::GpuTaskResourceSetUse reflectionSets[2] = {};
+    constexpr usize s_ReflectionResourceSetUseCapacity = 2u;
+    Core::GpuTaskResourceSetUse reflectionSets[s_ReflectionResourceSetUseCapacity] = {};
     usize reflectionSetCount = 0u;
     for(const Core::GpuGraphResourceSetId set : {hardwareTraceGeometrySet, traceMaterialSampledTextureSet}){
         if(set.valid()){
@@ -186,7 +187,8 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         refractionUses.push_back(ReadUse(tileArguments, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument));
         if(refractionCounters.valid())
             refractionUses.push_back(ReadWriteUse(refractionCounters, Core::ResourceStates::UnorderedAccess));
-        Core::GpuTaskResourceSetUse refractionSets[3] = {};
+        constexpr usize s_RefractionResourceSetUseCapacity = 3u;
+        Core::GpuTaskResourceSetUse refractionSets[s_RefractionResourceSetUseCapacity] = {};
         usize refractionSetCount = 0;
         if(refractionResources.usesHardwareTrace){
             for(const Core::GpuTaskResourceUse& read : sceneReads.uses)

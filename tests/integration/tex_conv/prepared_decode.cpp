@@ -91,8 +91,10 @@ inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv_prepared_decod
             NWB_MEMCPY(&half, sizeof(half), decoded->bytes.data() + index * sizeof(Half), sizeof(half));
             value = ConvertHalfToFloat(half);
         }
-        else
-            value = VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(decoded->bytes[index])), VectorReplicate(255.0f)));
+        else{
+            constexpr f32 s_Unorm8MaxF32 = 255.0f;
+            value = VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(decoded->bytes[index])), VectorReplicate(s_Unorm8MaxF32)));
+        }
         const u32 bits = BitCast<u32>(value);
         for(u32 byte = 0u; byte < sizeof(u32); ++byte)
             output[offset++] = static_cast<u8>(bits >> (byte * s_BitsPerByte));
@@ -107,7 +109,8 @@ int Run(const int argc, char** argv){
         return 1;
     }
     NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
-    if(argc != 4 || !Decode(argv[1], argv[2], argv[3])){
+    constexpr int s_ExpectedArgCount = 4;
+    if(argc != s_ExpectedArgCount || !Decode(argv[1], argv[2], argv[3])){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv_prepared_decode: expected valid texture metadata with its paired raw sidecar, output filename, and mip index."));
         return 1;
     }

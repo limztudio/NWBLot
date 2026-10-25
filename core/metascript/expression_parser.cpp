@@ -25,6 +25,9 @@ namespace __hidden_metascript_expression_parser{
 
 
 constexpr usize s_InitialReferencePathSegmentCount = 4u;
+constexpr const char* s_ListExpectedCommaOrCloseMessage = "expected ',' or '}' in list";
+constexpr const char* s_MapKeysMustBeStringsMessage = "map keys must be strings";
+constexpr const char* s_MapExpectedCommaOrCloseMessage = "expected ',' or '}' in map";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -240,7 +243,7 @@ Value ExpressionParser::parseBraceExpression(){
         return list;
     }
 
-    if(!m_cursor.expect(TokenType::Comma, "expected ',' or '}' in list"))
+    if(!m_cursor.expect(TokenType::Comma, __hidden_metascript_expression_parser::s_ListExpectedCommaOrCloseMessage))
         return Value(m_arena);
     if(m_cursor.m_current.type == TokenType::RightBrace){
         m_cursor.advance();
@@ -256,7 +259,7 @@ Value ExpressionParser::parseBraceExpression(){
         if(m_cursor.m_current.type == TokenType::RightBrace)
             break;
 
-        if(!m_cursor.expect(TokenType::Comma, "expected ',' or '}' in list"))
+        if(!m_cursor.expect(TokenType::Comma, __hidden_metascript_expression_parser::s_ListExpectedCommaOrCloseMessage))
             return Value(m_arena);
         if(m_cursor.m_current.type == TokenType::RightBrace)
             break;
@@ -270,7 +273,7 @@ Value ExpressionParser::parseMapLiteralContinuation(Value&& firstKey){
     m_cursor.advance();
 
     if(!firstKey.isString()){
-        m_cursor.error("map keys must be strings");
+        m_cursor.error(__hidden_metascript_expression_parser::s_MapKeysMustBeStringsMessage);
         return Value(m_arena);
     }
 
@@ -288,7 +291,7 @@ Value ExpressionParser::parseMapLiteralContinuation(Value&& firstKey){
         return map;
     }
 
-    if(!m_cursor.expect(TokenType::Comma, "expected ',' or '}' in map"))
+    if(!m_cursor.expect(TokenType::Comma, __hidden_metascript_expression_parser::s_MapExpectedCommaOrCloseMessage))
         return Value(m_arena);
     if(m_cursor.m_current.type == TokenType::RightBrace){
         m_cursor.advance();
@@ -301,7 +304,7 @@ Value ExpressionParser::parseMapLiteralContinuation(Value&& firstKey){
             return Value(m_arena);
 
         if(!key.isString()){
-            m_cursor.error("map keys must be strings");
+            m_cursor.error(__hidden_metascript_expression_parser::s_MapKeysMustBeStringsMessage);
             return Value(m_arena);
         }
 
@@ -317,7 +320,7 @@ Value ExpressionParser::parseMapLiteralContinuation(Value&& firstKey){
         if(m_cursor.m_current.type == TokenType::RightBrace)
             break;
 
-        if(!m_cursor.expect(TokenType::Comma, "expected ',' or '}' in map"))
+        if(!m_cursor.expect(TokenType::Comma, __hidden_metascript_expression_parser::s_MapExpectedCommaOrCloseMessage))
             return Value(m_arena);
         if(m_cursor.m_current.type == TokenType::RightBrace)
             break;

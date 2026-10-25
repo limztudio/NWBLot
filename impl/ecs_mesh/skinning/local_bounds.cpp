@@ -87,10 +87,10 @@ bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshS
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshSkinningLocalBoundsTask::Payload::Payload(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket)noexcept
+MeshSkinningLocalBoundsTask::Payload::Payload(Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket, const Span<const MeshSkinningLocalBoundsDispatch> dispatches)noexcept
     : graphics(graphics)
     , timingTicket(timingTicket)
-    , dispatches(arena)
+    , dispatches(dispatches)
 {}
 
 

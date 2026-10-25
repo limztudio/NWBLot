@@ -43,8 +43,8 @@ bool nwbOpticalReadInstance(const NwbOpticalTraceConfig config, const uint insta
 }
 
 bool nwbOpticalSetMediumProperties(const NwbMeshSurface surface, inout NwbOpticalMedium medium, inout NwbOpticalTraceResult result){
-    medium.ior = float(surface.refractionIor);
-    if(!isfinite(medium.ior) || medium.ior < 1.0 || !all(isfinite(float3(surface.shadowAbsorptionTint)))){
+    medium.ior = surface.refractionIor;
+    if(!isfinite(float(medium.ior)) || medium.ior < half(1.0h) || !all(isfinite(float3(surface.shadowAbsorptionTint)))){
         result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
         return false;
     }

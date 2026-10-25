@@ -80,8 +80,8 @@ namespace __hidden_ui_edit_caret_geometry{
             if(
                 cluster.lineIndex != lineIndex || cluster.byteBegin != coveredByte
                 || cluster.byteEnd <= cluster.byteBegin || cluster.byteEnd > line.byteEnd
-                || !GraphemeSegmentation::IsScalarBoundary(text, cluster.byteBegin)
-                || !GraphemeSegmentation::IsScalarBoundary(text, cluster.byteEnd)
+                || !IsUtf8ScalarBoundary(text, cluster.byteBegin)
+                || !IsUtf8ScalarBoundary(text, cluster.byteEnd)
                 || cluster.firstGlyph != nextGlyph || cluster.glyphCount == 0u || cluster.glyphCount > glyphEnd - nextGlyph
                 || !IsFinite(cluster.leadingX) || !IsFinite(cluster.trailingX)
                 || cluster.leadingX != previousX || cluster.trailingX < cluster.leadingX || cluster.trailingX > line.advance
@@ -124,7 +124,7 @@ namespace __hidden_ui_edit_caret_geometry{
 }
 
 [[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCaretRect(const TextLayout& layout, const EditBoundaryVector& boundaries, const usize byte)noexcept{
-    if(layout.lines().empty() || !GraphemeSegmentation::IsScalarBoundary(layout.utf8(), byte))
+    if(layout.lines().empty() || !IsUtf8ScalarBoundary(layout.utf8(), byte))
         return MakeUnexpected(Failure{});
     const TextLine& line = layout.lines()[LineForByte(layout, byte)];
     if(byte < line.byteBegin || byte > line.byteEnd)
@@ -343,8 +343,8 @@ Expected<Rect> EditCaretGeometry::rangeOnLine(const EditBoxRange range, const u3
     if(
         !m_ready || lineIndex >= m_lines.size() || range.begin > range.end || range.end > m_layout.utf8().size()
         || !IsFinite(breakWidth) || breakWidth < 0.0f
-        || !GraphemeSegmentation::IsScalarBoundary(m_layout.utf8(), range.begin)
-        || !GraphemeSegmentation::IsScalarBoundary(m_layout.utf8(), range.end)
+        || !IsUtf8ScalarBoundary(m_layout.utf8(), range.begin)
+        || !IsUtf8ScalarBoundary(m_layout.utf8(), range.end)
     )
         return MakeUnexpected(Failure{});
     if(range.begin == range.end){

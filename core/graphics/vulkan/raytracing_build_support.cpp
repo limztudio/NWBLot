@@ -214,8 +214,6 @@ Expected<bool> CommandList::validateAccelStructBuildSignature(
     const bool performUpdate,
     const TStringView operationName
 ){
-    accelStruct.collectRetiredBuildSignatureRoles();
-
     const auto validatePriorSignature = [
         accelStructType,
         buildFlags,

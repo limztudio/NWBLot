@@ -31,8 +31,8 @@ inline constexpr AStringView s_OwnerSeparator = "_";
     if(!sourceName || label.empty())
         return MakeUnexpected(Failure{});
 
-    char ownerBuffer[TextDetail::s_DecimalTextBufferBytes];
-    char revisionBuffer[TextDetail::s_DecimalTextBufferBytes];
+    char ownerBuffer[s_DecimalTextBufferBytes];
+    char revisionBuffer[s_DecimalTextBufferBytes];
     const AStringView ownerText = FormatDecimal(static_cast<usize>(ownerId), ownerBuffer);
     const AStringView revisionText = FormatDecimal(static_cast<usize>(editRevision), revisionBuffer);
     if(ownerText.empty() || revisionText.empty())

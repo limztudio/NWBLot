@@ -13,6 +13,8 @@ CRLF = "\r\n"
 HEX_RADIX = 16
 MIN_RANGE_FIELDS = 2
 MIN_INCB_FIELDS = 3
+INCB_VALUE_FIELD_INDEX = 2
+RANGE_VALUE_INDEX = 2
 KIND_GRAPHEME = "gcb"
 KIND_INDIC_CONJUNCT = "incb"
 KIND_EMOJI = "emoji"
@@ -35,7 +37,7 @@ def parse_ranges(data, kind):
         elif kind == KIND_INDIC_CONJUNCT:
             if len(fields) < MIN_INCB_FIELDS or fields[1] != "InCB":
                 continue
-            value = fields[2]
+            value = fields[INCB_VALUE_FIELD_INDEX]
         else:
             if fields[1] != "Extended_Pictographic":
                 continue
@@ -44,7 +46,7 @@ def parse_ranges(data, kind):
         ranges.append((int(span[0], HEX_RADIX), int(span[-1], HEX_RADIX), value))
     merged = []
     for first, last, value in sorted(ranges):
-        if merged and merged[-1][1] + 1 == first and merged[-1][2] == value:
+        if merged and merged[-1][1] + 1 == first and merged[-1][RANGE_VALUE_INDEX] == value:
             merged[-1] = (merged[-1][0], last, value)
         else:
             merged.append((first, last, value))

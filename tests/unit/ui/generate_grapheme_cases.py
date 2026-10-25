@@ -12,6 +12,8 @@ LIT_LF = "\n"
 
 HERE = Path(__file__).resolve().parent
 SEP = "/" * 128
+HEX_RADIX = 16
+CASES_PER_CHUNK = 500
 
 
 def write_cpp(path, text):
@@ -29,12 +31,12 @@ def generate_cases(data):
             if token == "\u00F7":
                 boundaries.append(len(text))
             elif token != "\u00D7":
-                text.extend(chr(int(token, 16)).encode(LIT_UTF_8))
+                text.extend(chr(int(token, HEX_RADIX)).encode(LIT_UTF_8))
         encoded = "".join(f"\\x{value:02X}" for value in text)
         positions = ",".join(str(value) for value in boundaries)
         cases.append(f'    {{ "{encoded}", "{positions}", {len(text)}u }},')
-    for index, start in enumerate(range(0, len(cases), 500)):
-        content = LIT_LF.join(cases[start:start + 500])
+    for index, start in enumerate(range(0, len(cases), CASES_PER_CHUNK)):
+        content = LIT_LF.join(cases[start:start + CASES_PER_CHUNK])
         write_cpp(HERE / f"edit_grapheme_cases_{index}.inc", f"// limztudio@gmail.com\n{SEP}\n\n\n" f"// Generated Unicode 17.0.0 GraphemeBreakTest cases; see global/unicode/LICENSE.txt.\n{content}\n\n\n{SEP}\n\n")
     return len(cases)
 

@@ -514,8 +514,10 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         if(!CheckPair(LoadTrianglePair(pairs[0]), kind != 4u && kind != 5u))
             return false;
     }
-    u64 state = 0x4f1bbcdc6762c13fu;
-    for(u32 sample = 0u; sample < 200000u; ++sample){
+    constexpr u64 s_VerifyInitialState = 0x4f1bbcdc6762c13fu;
+    constexpr u32 s_ContainedSampleCount = 200000u;
+    u64 state = s_VerifyInitialState;
+    for(u32 sample = 0u; sample < s_ContainedSampleCount; ++sample){
         TrianglePairVectors pair{};
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
             f64 coordinates[3];
@@ -554,10 +556,11 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     }
     Fill(0u, pairs);
     TrianglePairVectors signaling = LoadTrianglePair(pairs[0]);
+    constexpr u64 s_SignalingNaNBits = 0x7ff0000000000001u;
     for(SIMDVectorDouble& vertex : signaling.first)
-        vertex = VectorDoubleSetIntW(vertex, 0x7ff0000000000001u);
+        vertex = VectorDoubleSetIntW(vertex, s_SignalingNaNBits);
     for(SIMDVectorDouble& vertex : signaling.second)
-        vertex = VectorDoubleSetIntW(vertex, 0x7ff0000000000001u);
+        vertex = VectorDoubleSetIntW(vertex, s_SignalingNaNBits);
     const auto environment = HoldFloatingPointExceptions();
     if(!environment)
         return false;

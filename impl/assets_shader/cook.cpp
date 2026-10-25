@@ -212,12 +212,7 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
         }
         CookString defineName(key.data(), key.size(), arena);
         const AStringView defineNameView(defineName);
-        if(
-            defineNameView.empty()
-            || !IsAsciiIdentifierChar(defineNameView.front())
-            || (defineNameView.front() >= '0' && defineNameView.front() <= '9')
-            || FindIf(defineNameView.begin(), defineNameView.end(), [](const char ch)noexcept{ return !IsAsciiIdentifierChar(ch); }) != defineNameView.end()
-        ){
+        if(!IsAsciiIdentifier(defineNameView)){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier"), PathToString<tchar>(nwbFilePath), StringConvert(defineName));
             return MakeUnexpected(Failure{});
         }

@@ -15,12 +15,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const half3 NWB_SMOKE_MATERIAL_VERTEX_TINT = half3(1.0h, 0.92h, 0.85h);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 half3 nwbSmokeMaterialApplyColorTransform(half3 color){
     return sqrt(max(color, half3(0.0h)));
 }
 
 half3 nwbSmokeMaterialApplyVertexTint(half3 color){
-    return color * half3(1.0h, 0.92h, 0.85h);
+    return color * NWB_SMOKE_MATERIAL_VERTEX_TINT;
 }
 
 half3 nwbSmokeMaterialVertexColor(half3 color){

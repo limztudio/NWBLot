@@ -116,7 +116,7 @@ bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const Nwb
     const bool valid = nwbReflectionLoadSurface(pixel, glass, surface, stableTraceEligible);
     if(stableTraceEligible){
         observations = NWB_REFLECTION_POTENTIAL_OBSERVATION;
-        if(!glass && surface.roughness > 0.0)
+        if(!glass && surface.roughness > half(0.0h))
             observations |= NWB_REFLECTION_ROUGH_OBSERVATION;
     }
     if(!valid)
@@ -131,7 +131,7 @@ bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const Nwb
     result = half4(surface.weight * environment, 1.0h);
     const bool screen = g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_SCREEN || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID;
     if(screen && stableTraceEligible){
-        if(tile.bypass && surface.roughness == 0.0)
+        if(tile.bypass && surface.roughness == half(0.0h))
             screenWork = 1u << NWB_REFLECTION_SCREEN_WORK_BYPASS_SHIFT;
         else{
             observations |= NWB_REFLECTION_ATTEMPT_OBSERVATION;
@@ -148,7 +148,7 @@ bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const Nwb
                 // Hardware replaces it only through the ordinary fallback route; feedback never drops a useful screen return.
                 // Weighted blend is half color math: weight/environment/radiance/confidence all fit FP16.
                 // Keep source encoding and the threshold comparison in FP32; the stored tag is half.
-                result = half4(half3(surface.weight) * lerp(half3(environment), radiance, confidence), half(NWB_REFLECTION_SOURCE_SCREEN + NWB_REFLECTION_SOURCE_CONFIDENCE_ENCODE_SCALE * float(confidence)));
+                result = half4(surface.weight * lerp(environment, radiance, confidence), half(NWB_REFLECTION_SOURCE_SCREEN + NWB_REFLECTION_SOURCE_CONFIDENCE_ENCODE_SCALE * float(confidence)));
                 if(float(confidence) >= g_NwbReflectionParameters.screenConfidenceThreshold){
                     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_SCREEN_HITS, 1u);
                     return false;

@@ -21,19 +21,19 @@ NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_REFRACTION_DIAGNOSTIC_OFFSET)
 
 #if NWB_REFRACTION_DIAGNOSTICS
 #define g_NwbRefractionDiagnostics g_NwbHeapStorageBuffers[g_NwbRefractionPush.diagnosticsSlot]
-groupshared uint g_NwbRefractionLocalDiagnostics[NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / 4u];
+groupshared uint g_NwbRefractionLocalDiagnostics[NWB_REFRACTION_DIAGNOSTIC_WORD_COUNT];
 
 void nwbRefractionInitializeDiagnostics(const uint groupIndex){
-    if(groupIndex < NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / 4u)
+    if(groupIndex < NWB_REFRACTION_DIAGNOSTIC_WORD_COUNT)
         g_NwbRefractionLocalDiagnostics[groupIndex] = 0u;
     GroupMemoryBarrierWithGroupSync();
 }
 
 void nwbRefractionFlushDiagnostics(const uint groupIndex){
     GroupMemoryBarrierWithGroupSync();
-    if(groupIndex >= NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / 4u)
+    if(groupIndex >= NWB_REFRACTION_DIAGNOSTIC_WORD_COUNT)
         return;
-    const uint offset = groupIndex * 4u;
+    const uint offset = groupIndex * NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES;
     const uint amount = g_NwbRefractionLocalDiagnostics[groupIndex];
     if(amount == 0u)
         return;
@@ -42,7 +42,7 @@ void nwbRefractionFlushDiagnostics(const uint groupIndex){
         g_NwbRefractionDiagnostics.InterlockedOr(offset, amount, previous);
     else{
         g_NwbRefractionDiagnostics.InterlockedAdd(offset, amount, previous);
-        if(previous > 0xffffffffu - amount){
+        if(previous > NWB_REFRACTION_DIAGNOSTIC_COUNTER_MAX - amount){
             uint unused;
             g_NwbRefractionDiagnostics.InterlockedOr(NWB_REFRACTION_COUNTER_overflowFlags, 1u, unused);
         }
@@ -56,10 +56,10 @@ void nwbRefractionCount(const uint offset, const uint amount = 1u){
     if(amount == 0u)
         return;
     uint previous;
-    InterlockedAdd(g_NwbRefractionLocalDiagnostics[offset / 4u], amount, previous);
-    if(previous > 0xffffffffu - amount){
+    InterlockedAdd(g_NwbRefractionLocalDiagnostics[offset / NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES], amount, previous);
+    if(previous > NWB_REFRACTION_DIAGNOSTIC_COUNTER_MAX - amount){
         uint unused;
-        InterlockedOr(g_NwbRefractionLocalDiagnostics[NWB_REFRACTION_COUNTER_overflowFlags / 4u], 1u, unused);
+        InterlockedOr(g_NwbRefractionLocalDiagnostics[NWB_REFRACTION_COUNTER_overflowFlags / NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES], 1u, unused);
     }
 #endif
 }

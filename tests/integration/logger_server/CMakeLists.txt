@@ -19,7 +19,9 @@ nwb_copy_aftermath_runtime(nwb_logserver_crash_tests)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET nwb_logserver AND Python3_Interpreter_FOUND)
     add_test(NAME nwb_logserver_aborted_upload_integration COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/aborted_upload_cli_tests.py" --executable "$<TARGET_FILE:nwb_logserver>"
             --output-directory "${CMAKE_BINARY_DIR}/Testing/logserver_aborted_upload/$<CONFIG>")
-    set_tests_properties(nwb_logserver_aborted_upload_integration PROPERTIES TIMEOUT 60)
+    set(_nwb_logserver_aborted_upload_timeout_seconds 60)
+    set_tests_properties(nwb_logserver_aborted_upload_integration PROPERTIES TIMEOUT ${_nwb_logserver_aborted_upload_timeout_seconds})
+    unset(_nwb_logserver_aborted_upload_timeout_seconds)
 endif()
 if(WIN32)
     target_sources(nwb_logserver_crash_tests PRIVATE

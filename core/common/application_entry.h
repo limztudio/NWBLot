@@ -115,7 +115,7 @@ template<typename Run>
             continue;
         }
 
-        utf8Args.emplace_back(BasicStringDetail::WideToUtf8(arena, WStringView(argv[i])));
+        utf8Args.emplace_back(WideToUtf8(arena, WStringView(argv[i])));
         utf8Argv.push_back(utf8Args.back().data());
     }
 

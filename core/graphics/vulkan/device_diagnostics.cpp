@@ -259,9 +259,12 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const GpuPhysicalQueueId
     if(m_amdBreadcrumb.buffer == VK_NULL_HANDLE || !getPhysicalQueueInfo(queue))
         return write;
     // A live breadcrumb buffer exists only after its metadata was built from the same layout.
-    NWB_ASSERT(m_amdBreadcrumb.metadata && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount && m_amdBreadcrumb.metadata->nextSerialCount == m_amdBreadcrumb.layout.physicalQueueCount);
-    if(static_cast<usize>(queue.index) >= m_amdBreadcrumb.metadata->nextSerialCount)
-        return write;
+    NWB_ASSERT(
+        m_amdBreadcrumb.metadata
+        && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount
+        && m_amdBreadcrumb.metadata->nextSerialCount == m_amdBreadcrumb.layout.physicalQueueCount
+        && static_cast<usize>(queue.index) < m_amdBreadcrumb.metadata->nextSerialCount
+    );
 
     {
         // Serialize the queue-local reservation and its paired CPU record.

@@ -51,7 +51,6 @@ void GpuTimingAccumulator::collect(
             continue;
         if(
             !record.acceptedSubmission.valid()
-            || !record.acceptedSubmission.hasPhysicalQueueIdentity()
             || record.acceptedSubmission.queue != record.queueClass
             || !record.acceptedSubmission.matchesPhysicalQueue(record.physicalQueue.index, record.physicalQueue.deviceGeneration)
             || !device.matchesPhysicalQueueIdentity(record.acceptedSubmission.queue, record.acceptedSubmission.physicalQueueIndex, record.acceptedSubmission.deviceGeneration)
@@ -161,7 +160,7 @@ void GpuTimingAccumulator::confirmFrameReset(const QueueSubmissionToken& token){
             continue;
 
         record.frameResetRecorded = false;
-        const bool matchesResetQueue = token.valid() && token.hasPhysicalQueueIdentity() && token.matchesPhysicalQueue(record.frameResetRecordingQueue.index, record.frameResetRecordingQueue.deviceGeneration);
+        const bool matchesResetQueue = token.valid() && token.matchesPhysicalQueue(record.frameResetRecordingQueue.index, record.frameResetRecordingQueue.deviceGeneration);
         record.frameResetRecordingQueue = {};
         if(m_captureEnabled && record.state == QueryState::Available && matchesResetQueue){
             record.frameResetSubmission = token;
@@ -304,7 +303,7 @@ bool GpuTimingAccumulator::validateQuerySubmission(const GpuTimingScope& scope, 
     if(record.state != QueryState::Recording && record.state != QueryState::EndedUnaccepted && record.state != QueryState::EndFailedUnaccepted)
         return false;
 
-    return token.valid() && token.hasPhysicalQueueIdentity() && token.queue == record.queueClass && token.matchesPhysicalQueue(record.physicalQueue.index, record.physicalQueue.deviceGeneration);
+    return token.valid() && token.queue == record.queueClass && token.matchesPhysicalQueue(record.physicalQueue.index, record.physicalQueue.deviceGeneration);
 }
 
 bool GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token, const bool publishSample)noexcept{

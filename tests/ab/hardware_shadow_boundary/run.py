@@ -163,6 +163,9 @@ def find_missing_log_messages(log_text: str, needles: Sequence[str]) -> List[str
     return [needle for needle in needles if needle not in log_text]
 
 
+LOG_TAIL_CHAR_LIMIT = 4000
+
+
 def wait_for_log_message(process, log_directory: Path, log_baseline: Mapping[Path, int], log_pattern: str, message: str, timeout_seconds: float, skip_message: Optional[str] = None,) -> Optional[str]:
     deadline = time.monotonic() + timeout_seconds
     latest_log = ""
@@ -175,7 +178,7 @@ def wait_for_log_message(process, log_directory: Path, log_baseline: Mapping[Pat
             return None
         time.sleep(LIT_PROCESS_POLL_SECONDS)
 
-    raise SmokeFailure(f"timed out waiting for benchmark log message '{message}'\n{latest_log[-4000:]}")
+    raise SmokeFailure(f"timed out waiting for benchmark log message '{message}'\n{latest_log[-LOG_TAIL_CHAR_LIMIT:]}")
 
 
 def wait_while_running(process, seconds: float, stage: str) -> None:

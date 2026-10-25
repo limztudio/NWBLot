@@ -84,7 +84,7 @@ template<typename HeaderT>
 [[nodiscard]] static Expected<ParsedPerfPayload<HeaderT>> ParsePerfPayloadWithScopeText(const void* const payload, const usize payloadBytes)noexcept(
     noexcept(ReadPOD<HeaderT>(DeclVal<const BinaryByteView&>(), DeclVal<usize&>()))
     && noexcept(ValidateHeader(DeclVal<const HeaderT&>()))
-    && noexcept(BinaryDetail::CanReadBytes(DeclVal<const BinaryByteView&>(), DeclVal<usize>(), DeclVal<const HeaderT&>().scopeNameBytes))
+    && noexcept(CanReadBytes(DeclVal<const BinaryByteView&>(), DeclVal<usize>(), DeclVal<const HeaderT&>().scopeNameBytes))
     && noexcept((DeclVal<usize>() != DeclVal<const HeaderT&>().scopeNameBytes) ? 0 : 0)
     && noexcept(DeclVal<void (*)(Expected<ParsedPerfPayload<HeaderT>>)noexcept>()(MakeUnexpected(Failure{})))
     && noexcept(DeclVal<void (*)(Expected<ParsedPerfPayload<HeaderT>>)noexcept>()(ParsedPerfPayload<HeaderT>{ .header = DeclVal<const HeaderT&>(), .scopeText = AStringView(DeclVal<const char*>(), DeclVal<const HeaderT&>().scopeNameBytes) }))
@@ -97,7 +97,7 @@ template<typename HeaderT>
     const auto header = ReadPOD<HeaderT>(encoded, cursor);
     if(!header || !ValidateHeader(*header))
         return MakeUnexpected(Failure{});
-    if(!BinaryDetail::CanReadBytes(encoded, cursor, header->scopeNameBytes))
+    if(!CanReadBytes(encoded, cursor, header->scopeNameBytes))
         return MakeUnexpected(Failure{});
     if(payloadBytes - cursor != header->scopeNameBytes)
         return MakeUnexpected(Failure{});

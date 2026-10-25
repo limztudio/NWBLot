@@ -55,15 +55,22 @@ inline constexpr u64 s_NameHashByteMask = 0xFFu;
 
 static_assert(sizeof(NameHash) == s_NameHashBytes, "NameHash size must stay stable");
 
+inline constexpr u64 s_LaneSeedSalt1 = 0x0123456789ABCDEFull;
+inline constexpr u64 s_LaneSeedSalt2 = 0xFEDCBA9876543210ull;
+inline constexpr u64 s_LaneSeedSalt3 = 0x0F1E2D3C4B5A6978ull;
+inline constexpr u64 s_LaneSeedSalt4 = 0x8796A5B4C3D2E1F0ull;
+inline constexpr u64 s_LaneSeedSalt5 = 0xDEADBEEFCAFEBABEull;
+inline constexpr u64 s_LaneSeedSalt6 = 0x1234ABCD5678EF01ull;
+inline constexpr u64 s_LaneSeedSalt7 = 0xA0B1C2D3E4F50617ull;
 inline constexpr u64 s_LaneSeeds[s_HashLaneCount] = {
     s_Fnv64OffsetBasis,
-    s_Fnv64OffsetBasis ^ 0x0123456789ABCDEFull,
-    s_Fnv64OffsetBasis ^ 0xFEDCBA9876543210ull,
-    s_Fnv64OffsetBasis ^ 0x0F1E2D3C4B5A6978ull,
-    s_Fnv64OffsetBasis ^ 0x8796A5B4C3D2E1F0ull,
-    s_Fnv64OffsetBasis ^ 0xDEADBEEFCAFEBABEull,
-    s_Fnv64OffsetBasis ^ 0x1234ABCD5678EF01ull,
-    s_Fnv64OffsetBasis ^ 0xA0B1C2D3E4F50617ull,
+    s_Fnv64OffsetBasis ^ s_LaneSeedSalt1,
+    s_Fnv64OffsetBasis ^ s_LaneSeedSalt2,
+    s_Fnv64OffsetBasis ^ s_LaneSeedSalt3,
+    s_Fnv64OffsetBasis ^ s_LaneSeedSalt4,
+    s_Fnv64OffsetBasis ^ s_LaneSeedSalt5,
+    s_Fnv64OffsetBasis ^ s_LaneSeedSalt6,
+    s_Fnv64OffsetBasis ^ s_LaneSeedSalt7,
 };
 
 

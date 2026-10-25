@@ -55,7 +55,7 @@ Expected<usize> MeshCookMetadata::CountFlattenedValueLeaves(const Core::Metascri
 
 
 ScratchString MeshCookMetadata::MakeIndexedLabel(Core::Alloc::ScratchArena& arena, const AStringView baseLabel, const usize index){
-    char indexBuffer[TextDetail::s_DecimalTextBufferBytes];
+    char indexBuffer[s_DecimalTextBufferBytes];
     const AStringView indexText = FormatDecimal(index, indexBuffer);
     NWB_ASSERT(!indexText.empty());
 

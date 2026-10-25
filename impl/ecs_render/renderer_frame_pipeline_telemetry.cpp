@@ -29,6 +29,19 @@ namespace __hidden_renderer_frame_pipeline_telemetry{
 
 
 static constexpr AStringView s_UnknownStageLabel = "Unknown";
+static constexpr AStringView s_GraphicsQueueLabel = "Graphics";
+static constexpr AStringView s_ComputeQueueLabel = "Compute";
+static constexpr AStringView s_TransferQueueLabel = "Transfer";
+static constexpr AStringView s_InternalRouteLabel = "Internal";
+static constexpr AStringView s_ExternalImportRouteLabel = "ExternalImport";
+static constexpr AStringView s_ExternalExportRouteLabel = "ExternalExport";
+static constexpr AStringView s_ExclusiveSharingLabel = "Exclusive";
+static constexpr AStringView s_AsyncComputeSharingLabel = "AsyncCompute";
+static constexpr AStringView s_GraphicsAndAsyncComputeSharingLabel = "GraphicsAndAsyncCompute";
+static constexpr AStringView s_GraphicsAndTransferSharingLabel = "GraphicsAndTransfer";
+static constexpr AStringView s_AsyncComputeAndTransferSharingLabel = "AsyncComputeAndTransfer";
+static constexpr AStringView s_GraphicsAsyncComputeAndTransferSharingLabel = "GraphicsAsyncComputeAndTransfer";
+static constexpr AStringView s_RendererFrameTitle = "Renderer Frame";
 static constexpr f64 s_MillisecondsPerSecondTelemetry = 1000.0;
 static constexpr f64 s_PercentScaleTelemetry = 100.0;
 
@@ -39,11 +52,11 @@ static constexpr f64 s_PercentScaleTelemetry = 100.0;
 [[nodiscard]] static AStringView PhysicalQueueClassLabel(const Core::CommandQueue::Enum queueClass)noexcept{
     switch(queueClass){
     case Core::CommandQueue::Graphics:
-        return "Graphics";
+        return s_GraphicsQueueLabel;
     case Core::CommandQueue::Compute:
-        return "Compute";
+        return s_ComputeQueueLabel;
     case Core::CommandQueue::Transfer:
-        return "Transfer";
+        return s_TransferQueueLabel;
     default:
         return s_UnknownStageLabel;
     }
@@ -52,11 +65,11 @@ static constexpr f64 s_PercentScaleTelemetry = 100.0;
 [[nodiscard]] static AStringView OwnershipTransferRouteLabel(const Core::GpuOwnershipTransferRoute::Enum route)noexcept{
     switch(route){
     case Core::GpuOwnershipTransferRoute::Internal:
-        return "Internal";
+        return s_InternalRouteLabel;
     case Core::GpuOwnershipTransferRoute::ExternalImport:
-        return "ExternalImport";
+        return s_ExternalImportRouteLabel;
     case Core::GpuOwnershipTransferRoute::ExternalExport:
-        return "ExternalExport";
+        return s_ExternalExportRouteLabel;
     default:
         return s_UnknownStageLabel;
     }
@@ -65,21 +78,21 @@ static constexpr f64 s_PercentScaleTelemetry = 100.0;
 [[nodiscard]] static AStringView ResourceQueueSharingLabel(const Core::ResourceQueueSharing::Mask queueSharing)noexcept{
     switch(queueSharing){
     case Core::ResourceQueueSharing::Exclusive:
-        return "Exclusive";
+        return s_ExclusiveSharingLabel;
     case Core::ResourceQueueSharing::Graphics:
-        return "Graphics";
+        return s_GraphicsQueueLabel;
     case Core::ResourceQueueSharing::AsyncCompute:
-        return "AsyncCompute";
+        return s_AsyncComputeSharingLabel;
     case Core::ResourceQueueSharing::Transfer:
-        return "Transfer";
+        return s_TransferQueueLabel;
     case Core::ResourceQueueSharing::GraphicsAndAsyncCompute:
-        return "GraphicsAndAsyncCompute";
+        return s_GraphicsAndAsyncComputeSharingLabel;
     case Core::ResourceQueueSharing::GraphicsAndTransfer:
-        return "GraphicsAndTransfer";
+        return s_GraphicsAndTransferSharingLabel;
     case Core::ResourceQueueSharing::AsyncComputeAndTransfer:
-        return "AsyncComputeAndTransfer";
+        return s_AsyncComputeAndTransferSharingLabel;
     case Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer:
-        return "GraphicsAsyncComputeAndTransfer";
+        return s_GraphicsAsyncComputeAndTransferSharingLabel;
     default:
         return s_UnknownStageLabel;
     }
@@ -454,7 +467,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         }
     }
     else
-        m_frameGraphRendererLabel += "Renderer Frame";
+        m_frameGraphRendererLabel += __hidden_renderer_frame_pipeline_telemetry::s_RendererFrameTitle;
 
     const Core::GpuTimingRecorderStatistics gpuTimingStatistics = m_graphics.gpuTiming().statistics(device);
     StringAppendFormat(

@@ -25,7 +25,8 @@ class Texture;
 inline constexpr u32 s_UiSkinMaxRegionCount = 4096u;
 inline constexpr f32 s_UiSkinPaletteRgbMax = 16.0f;
 inline constexpr f32 s_UiSkinDefaultFontSize = 16.0f;
-inline constexpr f32 s_UiSkinMinDefaultFontSize = 1.0f / 64.0f;
+inline constexpr f32 s_UiSkinMinDefaultFontSizeScale = 64.0f;
+inline constexpr f32 s_UiSkinMinDefaultFontSize = 1.0f / s_UiSkinMinDefaultFontSizeScale;
 inline constexpr f32 s_UiSkinMaxDefaultFontSize = 2048.0f;
 
 namespace UiSkinDrawMode{
@@ -97,25 +98,43 @@ struct UiSkinColor{
     f32 a = 0.0f;
 };
 
+inline constexpr UiSkinColor s_DefaultTextNormalColor = { 0.92f, 0.94f, 0.98f, 1.0f };
+inline constexpr UiSkinColor s_DefaultTextDisabledColor = { 0.48f, 0.5f, 0.55f, 1.0f };
+inline constexpr UiSkinColor s_DefaultTextTooltipColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+inline constexpr UiSkinColor s_DefaultEditBackgroundColor = { 0.08f, 0.1f, 0.14f, 1.0f };
+inline constexpr UiSkinColor s_DefaultEditSelectionColor = { 0.2f, 0.4f, 0.78f, 0.75f };
+inline constexpr UiSkinColor s_DefaultEditInactiveSelectionColor = { 0.28f, 0.31f, 0.38f, 0.55f };
+inline constexpr UiSkinColor s_DefaultEditCaretColor = { 0.95f, 0.97f, 1.0f, 1.0f };
+inline constexpr UiSkinColor s_DefaultEditPreeditColor = { 0.5f, 0.72f, 1.0f, 1.0f };
+inline constexpr UiSkinColor s_DefaultScrollbarTrackColor = { 0.08f, 0.1f, 0.14f, 1.0f };
+inline constexpr UiSkinColor s_DefaultScrollbarThumbColor = { 0.35f, 0.4f, 0.48f, 1.0f };
+inline constexpr UiSkinColor s_DefaultScrollbarDisabledColor = { 0.25f, 0.28f, 0.32f, 1.0f };
+inline constexpr UiSkinColor s_DefaultPopupBackdropColor = { 0.0f, 0.0f, 0.0f, 0.4f };
+inline constexpr UiSkinColor s_DefaultControlHoverTintColor = { 1.08f, 1.08f, 1.08f, 1.0f };
+inline constexpr UiSkinColor s_DefaultControlPressedTintColor = { 0.85f, 0.85f, 0.85f, 1.0f };
+inline constexpr UiSkinColor s_DefaultControlDisabledTintColor = { 0.55f, 0.55f, 0.55f, 0.6f };
+inline constexpr UiSkinColor s_DefaultProgressTrackTintColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+inline constexpr UiSkinColor s_DefaultProgressFillTintColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+
 struct UiSkinPalette{
     Array<UiSkinColor, UiSkinColorRole::Count> colors{{
-        { 0.92f, 0.94f, 0.98f, 1.0f }, // TextNormal
-        { 0.48f, 0.5f, 0.55f, 1.0f }, // TextDisabled
-        { 1.0f, 1.0f, 1.0f, 1.0f }, // TextTooltip
-        { 0.08f, 0.1f, 0.14f, 1.0f }, // EditBackground
-        { 0.2f, 0.4f, 0.78f, 0.75f }, // EditSelection
-        { 0.28f, 0.31f, 0.38f, 0.55f }, // EditInactiveSelection
-        { 0.95f, 0.97f, 1.0f, 1.0f }, // EditCaret
-        { 0.5f, 0.72f, 1.0f, 1.0f }, // EditPreedit
-        { 0.08f, 0.1f, 0.14f, 1.0f }, // ScrollbarTrack
-        { 0.35f, 0.4f, 0.48f, 1.0f }, // ScrollbarThumb
-        { 0.25f, 0.28f, 0.32f, 1.0f }, // ScrollbarDisabled
-        { 0.0f, 0.0f, 0.0f, 0.4f }, // PopupBackdrop
-        { 1.08f, 1.08f, 1.08f, 1.0f }, // ControlHoverTint
-        { 0.85f, 0.85f, 0.85f, 1.0f }, // ControlPressedTint
-        { 0.55f, 0.55f, 0.55f, 0.6f }, // ControlDisabledTint
-        { 1.0f, 1.0f, 1.0f, 1.0f }, // ProgressTrackTint
-        { 1.0f, 1.0f, 1.0f, 1.0f }, // ProgressFillTint
+        s_DefaultTextNormalColor, // TextNormal
+        s_DefaultTextDisabledColor, // TextDisabled
+        s_DefaultTextTooltipColor, // TextTooltip
+        s_DefaultEditBackgroundColor, // EditBackground
+        s_DefaultEditSelectionColor, // EditSelection
+        s_DefaultEditInactiveSelectionColor, // EditInactiveSelection
+        s_DefaultEditCaretColor, // EditCaret
+        s_DefaultEditPreeditColor, // EditPreedit
+        s_DefaultScrollbarTrackColor, // ScrollbarTrack
+        s_DefaultScrollbarThumbColor, // ScrollbarThumb
+        s_DefaultScrollbarDisabledColor, // ScrollbarDisabled
+        s_DefaultPopupBackdropColor, // PopupBackdrop
+        s_DefaultControlHoverTintColor, // ControlHoverTint
+        s_DefaultControlPressedTintColor, // ControlPressedTint
+        s_DefaultControlDisabledTintColor, // ControlDisabledTint
+        s_DefaultProgressTrackTintColor, // ProgressTrackTint
+        s_DefaultProgressFillTintColor, // ProgressFillTint
     }};
 };
 

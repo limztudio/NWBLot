@@ -58,9 +58,10 @@ template<u32 ActiveMask>
 NWB_INLINE bool NWB_SIMD_CALL AllComparisonMask(SIMDVectorDouble value)noexcept{
     static_assert(ActiveMask == VectorDoubleComponentMask::s_DoubleXYZ || ActiveMask == VectorDoubleComponentMask::s_DoubleXYZW);
 #if defined(NWB_HAS_NEON64)
+    constexpr u64 s_AllOnesLaneMask = 0xFFFFFFFFFFFFFFFFu;
     NativeUIntPair high = GetHighBits(value);
     if constexpr(ActiveMask == VectorDoubleComponentMask::s_DoubleXYZ)
-        high = vsetq_lane_u64(0xFFFFFFFFFFFFFFFFu, high, 1);
+        high = vsetq_lane_u64(s_AllOnesLaneMask, high, 1);
     return vminvq_u32(BitCast<uint32x4_t>(vandq_u64(GetLowBits(value), high))) != 0u;
 #else
     return (VectorDoubleMoveMask(value) & ActiveMask) == ActiveMask;

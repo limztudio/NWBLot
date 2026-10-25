@@ -14,5 +14,7 @@ if(Python3_Interpreter_FOUND AND TARGET nwb_assets_font_atlas_cook AND TARGET nw
 
     add_test(NAME nwb_font_builder_cli_integration COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/font_builder_cli_tests.py" --executable "$<TARGET_FILE:nwb_font_builder>" --package-probe "$<TARGET_FILE:nwb_font_builder_package_probe>"
             --fonts "${PROJECT_SOURCE_DIR}/impl/assets/ui/fonts/default")
-    set_tests_properties(nwb_font_builder_cli_integration PROPERTIES TIMEOUT 420)
+    set(_nwb_font_builder_cli_integration_timeout_seconds 420)
+    set_tests_properties(nwb_font_builder_cli_integration PROPERTIES TIMEOUT ${_nwb_font_builder_cli_integration_timeout_seconds})
+    unset(_nwb_font_builder_cli_integration_timeout_seconds)
 endif()

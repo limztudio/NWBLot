@@ -156,12 +156,15 @@ def profiles_command(_args) -> int:
     return 0
 
 
+MAX_UINT32_RAY_BUDGET = 0xffffffff
+
+
 def reflection_ray_budget(value: str) -> int:
     try:
         budget = int(value)
     except ValueError as error:
         raise argparse.ArgumentTypeError(MSG_RAY_BUDGET) from error
-    if budget < 0 or budget > 0xffffffff:
+    if budget < 0 or budget > MAX_UINT32_RAY_BUDGET:
         raise argparse.ArgumentTypeError(MSG_RAY_BUDGET)
     return budget
 

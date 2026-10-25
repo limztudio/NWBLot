@@ -18,7 +18,7 @@
 struct NwbDielectricInterface{
     float3 direction;
     float reflectedFraction;
-    float radianceTransmission;
+    half radianceTransmission;
     bool totalInternalReflection;
 };
 
@@ -30,15 +30,15 @@ static const float NWB_DIELECTRIC_RADIANCE_TRANSMISSION_MAX = 65504.0;
 
 
 // Exact unpolarized dielectric Fresnel + Snell. The admitted half IOR range needs FP32 sums/products; photon power excludes the radiance eta-squared factor.
-NwbDielectricInterface nwbDielectricTransmit(const float3 direction, const float3 opposingNormal, const float etaIncident, const float etaTransmitted){
+NwbDielectricInterface nwbDielectricTransmit(const float3 direction, const float3 opposingNormal, const half incidentIor, const half transmittedIor){
     NwbDielectricInterface result = (NwbDielectricInterface)0;
-    if(etaIncident == etaTransmitted){
+    if(incidentIor == transmittedIor){
         result.direction = direction;
-        result.radianceTransmission = 1.0;
+        result.radianceTransmission = half(1.0h);
         return result;
     }
     const float cosineIncident = saturate(-dot(direction, opposingNormal));
-    const float eta = etaIncident / etaTransmitted;
+    const float eta = float(incidentIor) / float(transmittedIor);
     const float sineTransmittedSquared = eta * eta * max(0.0, 1.0 - cosineIncident * cosineIncident);
     if(sineTransmittedSquared >= 1.0){
         result.direction = reflect(direction, opposingNormal);
@@ -47,11 +47,11 @@ NwbDielectricInterface nwbDielectricTransmit(const float3 direction, const float
         return result;
     }
     const float cosineTransmitted = sqrt(max(0.0, 1.0 - sineTransmittedSquared));
-    const float perpendicular = (etaIncident * cosineIncident - etaTransmitted * cosineTransmitted) / (etaIncident * cosineIncident + etaTransmitted * cosineTransmitted);
-    const float parallel = (etaTransmitted * cosineIncident - etaIncident * cosineTransmitted) / (etaTransmitted * cosineIncident + etaIncident * cosineTransmitted);
+    const float perpendicular = (float(incidentIor) * cosineIncident - float(transmittedIor) * cosineTransmitted) / (float(incidentIor) * cosineIncident + float(transmittedIor) * cosineTransmitted);
+    const float parallel = (float(transmittedIor) * cosineIncident - float(incidentIor) * cosineTransmitted) / (float(transmittedIor) * cosineIncident + float(incidentIor) * cosineTransmitted);
     result.reflectedFraction = saturate(0.5 * (perpendicular * perpendicular + parallel * parallel));
     result.direction = nwbSafeNormalize(eta * direction + (eta * cosineIncident - cosineTransmitted) * opposingNormal, direction);
-    result.radianceTransmission = min((1.0 - result.reflectedFraction) * (eta * eta), NWB_DIELECTRIC_RADIANCE_TRANSMISSION_MAX);
+    result.radianceTransmission = half(min((1.0 - result.reflectedFraction) * (eta * eta), NWB_DIELECTRIC_RADIANCE_TRANSMISSION_MAX));
     return result;
 }
 

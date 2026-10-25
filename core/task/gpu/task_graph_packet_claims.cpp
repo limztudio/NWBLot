@@ -78,7 +78,7 @@ GpuPacketRecordingAbort::~GpuPacketRecordingAbort()noexcept{
 
 
 bool GpuPacketRecordingLease::validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)const noexcept{
-    if(!valid() || !planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet) || m_packet != packet || m_planGeneration != planAccess.planGeneration())
+    if(!valid() || !planAccess.validFor(compiledGraph) || m_packet != packet || m_planGeneration != planAccess.planGeneration())
         return false;
 
     const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);

@@ -35,31 +35,6 @@ static constexpr Array<StringView, 5u> s_Labels{ "Alpha", "Beta", "Gamma (disabl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static char Lower(const char value)noexcept{
-    return value >= 'A' && value <= 'Z' ? static_cast<char>(value - 'A' + 'a') : value;
-}
-
-[[nodiscard]] static bool Matches(const StringView text, const AStringView query)noexcept{
-    if(query.size() > text.size())
-        return false;
-    for(usize start = 0u; start <= text.size() - query.size(); ++start){
-        bool matched = true;
-        for(usize offset = 0u; offset < query.size(); ++offset){
-            if(Lower(text[start + offset]) != Lower(query[offset])){
-                matched = false;
-                break;
-            }
-        }
-        if(matched)
-            return true;
-    }
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -142,7 +117,7 @@ bool UiNestedPopupSmokeSource::filter(const AStringView query){
         m_query.assign(query.data(), query.size());
     m_count = 0u;
     for(u64 index = 0u; index < rowCount(); ++index){
-        if(!__hidden_ui_nested_popup_source::Matches(__hidden_ui_nested_popup_source::s_Labels[index], query))
+        if(!ContainsAsciiIgnoreCase(__hidden_ui_nested_popup_source::s_Labels[index], query))
             continue;
         m_indices[m_count] = index;
         ++m_count;

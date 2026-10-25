@@ -14,7 +14,7 @@
 
 
 bool nwbAvboitLoadAcceptedMaterialAlpha(const float4 position, const half4 color, const float3 normal, const float4 tangent, const float2 uv0, const float4 worldPosition, out half outAlpha){
-    outAlpha = half(0.0);
+    outAlpha = half(0.0h);
 
     // The selected optical object's entry and exit surfaces are resolved together by bounded refraction.
     // Removing that complete instance here keeps full-coverage glass from extinguishing its own background.
@@ -44,7 +44,7 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(const float4 position, const half4 color
 
     const NwbMeshSurface surface = nwbMaterialSurface();
 
-    outAlpha = half(clamp(surface.renderCoverage, 0.0, 1.0));
+    outAlpha = clamp(surface.renderCoverage, half(0.0h), half(1.0h));
     uint virtualSlice;
     return nwbAvboitAcceptLowDepthFragment(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w), nwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w), position, outAlpha, virtualSlice);
 }

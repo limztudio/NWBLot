@@ -110,10 +110,6 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
             return false;
         m_rayTracingState.m_refractionFinalizeTilesPipeline = Move(*pipeline);
     }
-    if(!m_graphics.gpuTiming().prepareScopeQueries(RendererGpuTimingScope::s_RefractionClassifyTiles.identity, device, 32u))
-        return false;
-    if(!m_graphics.gpuTiming().prepareScopeQueries(RendererGpuTimingScope::s_RefractionClearTileArguments.identity, device, 32u))
-        return false;
 
     if(m_refractionDiagnosticsEnabled && !m_refractionStatistics.prepareResources())
         return false;

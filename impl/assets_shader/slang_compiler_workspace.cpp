@@ -128,7 +128,7 @@ bool SlangCompilerWorkspace::WriteBomStrippedCompilerInput(ScratchString& source
         }
         begin = end < scanView.size() ? end + 1u : end;
     }
-    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(outputBytes))){
+    if(!CanRepresentStreamSize(static_cast<u64>(outputBytes))){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: BOM-stripped compiler input '{}' exceeds stream size"), PathToString<tchar>(outputPath));
         return false;
     }
@@ -205,7 +205,7 @@ Expected<SlangCompilerWorkspace::ScratchString> SlangCompilerWorkspace::BuildCom
     ScratchString text{scratchArena};
     text.reserve(*capacity);
     auto out = BackInserter(text);
-    BasicStringDetail::WriteConvertedText<char>(out, path.native());
+    WriteConvertedText<char>(out, path.native());
     return text;
 }
 

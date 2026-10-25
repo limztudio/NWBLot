@@ -297,7 +297,7 @@ bool GpuTaskGraph::deferPacketRecordingAbort(const GpuCompiledGraph& compiledGra
 
 
 bool GpuTaskGraph::completePacketRecordingAbort(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuPacketRecordingAbort& abort)const{
-    if(!planAccess.validFor(compiledGraph) || !abort.valid() || !planAccess.validPacket(abort.m_packet) || abort.m_planGeneration != planAccess.planGeneration())
+    if(!planAccess.validFor(compiledGraph) || !abort.valid() || abort.m_planGeneration != planAccess.planGeneration())
         return false;
     const GpuCompiledPacketView packetView = planAccess.packetWithTasks(abort.m_packet);
     if(!packetView.valid())

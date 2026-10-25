@@ -35,21 +35,25 @@ static constexpr usize s_BitmapInfoHeaderSize = 40u;
 static constexpr usize s_BitmapPixelOffset = s_BitmapFileHeaderSize + s_BitmapInfoHeaderSize;
 static constexpr usize s_BitmapBytesPerPixel = 3u;
 static constexpr usize s_SourceBytesPerPixel = 4u;
+static constexpr u32 s_ByteMask = 0xffu;
+static constexpr u32 s_Byte1Shift = 8u;
+static constexpr u32 s_Byte2Shift = 16u;
+static constexpr u32 s_Byte3Shift = 24u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static void WriteU16LE(const NotNull<u8*> destination, const u16 value)noexcept{
-    destination.get()[0] = static_cast<u8>(value & 0xffu);
-    destination.get()[1] = static_cast<u8>((value >> 8u) & 0xffu);
+    destination.get()[0] = static_cast<u8>(value & s_ByteMask);
+    destination.get()[1] = static_cast<u8>((value >> s_Byte1Shift) & s_ByteMask);
 }
 
 static void WriteU32LE(const NotNull<u8*> destination, const u32 value)noexcept{
-    destination.get()[0] = static_cast<u8>(value & 0xffu);
-    destination.get()[1] = static_cast<u8>((value >> 8u) & 0xffu);
-    destination.get()[2] = static_cast<u8>((value >> 16u) & 0xffu);
-    destination.get()[3] = static_cast<u8>((value >> 24u) & 0xffu);
+    destination.get()[0] = static_cast<u8>(value & s_ByteMask);
+    destination.get()[1] = static_cast<u8>((value >> s_Byte1Shift) & s_ByteMask);
+    destination.get()[2] = static_cast<u8>((value >> s_Byte2Shift) & s_ByteMask);
+    destination.get()[3] = static_cast<u8>((value >> s_Byte3Shift) & s_ByteMask);
 }
 
 static bool IsSupportedSdrFormat(const Core::Format::Enum format)noexcept{

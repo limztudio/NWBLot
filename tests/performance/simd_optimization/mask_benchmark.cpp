@@ -99,14 +99,19 @@ NWB_NOINLINE u32 Qualify()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
     });
-    u64 state = 0x7462825482129431ull;
+    constexpr u64 s_QualifyInitialState = 0x7462825482129431ull;
+    constexpr u32 s_XorShift1 = 13u;
+    constexpr u32 s_XorShift2 = 7u;
+    constexpr u32 s_XorShift3 = 17u;
+    constexpr usize s_RandomQualificationSampleCount = 1000000u;
+    u64 state = s_QualifyInitialState;
     const auto next = [&]()noexcept{
-        state ^= state << 13u;
-        state ^= state >> 7u;
-        state ^= state << 17u;
+        state ^= state << s_XorShift1;
+        state ^= state >> s_XorShift2;
+        state ^= state << s_XorShift3;
         return state;
     };
-    for(usize sample = 0u; sample < 1000000u; ++sample){
+    for(usize sample = 0u; sample < s_RandomQualificationSampleCount; ++sample){
         const SIMDVectorDouble value = VectorDoubleSetInt(next(), next(), next(), next());
         if(MoveDouble<false>(value) != MoveDouble<true>(value))
             return 1u;

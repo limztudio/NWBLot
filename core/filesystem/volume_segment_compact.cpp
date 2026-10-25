@@ -12,51 +12,11 @@
 #include <global/limit.h>
 #include <global/simplemath.h>
 
-#include <cerrno>
-#if defined(NWB_PLATFORM_WINDOWS)
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_FILESYSTEM_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Expected<void, ErrorCode> ResizeFile(const Path& path, const u64 byteCount)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
-    if(byteCount > static_cast<u64>(Limit<LONGLONG>::s_Max))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-    HANDLE file = CreateFile(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if(file == INVALID_HANDLE_VALUE)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
-
-    LARGE_INTEGER offset{};
-    offset.QuadPart = static_cast<LONGLONG>(byteCount);
-    const bool seekSucceeded = SetFilePointerEx(file, offset, nullptr, FILE_BEGIN) != 0;
-    const bool resizeSucceeded = seekSucceeded && SetEndOfFile(file) != 0;
-    const ErrorCode errorCode = resizeSucceeded ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
-    const bool closeSucceeded = CloseHandle(file) != 0;
-    const ErrorCode closeError = closeSucceeded ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
-    if(errorCode)
-        return MakeUnexpected(errorCode);
-    if(closeError)
-        return MakeUnexpected(closeError);
-    return {};
-#else
-    if(!::CanRepresentU64<off_t>(byteCount))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-    if(::truncate(path.c_str(), static_cast<off_t>(byteCount)) != 0)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
-    return {};
-#endif
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

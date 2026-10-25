@@ -221,10 +221,7 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
     NothrowScopedLock lock(m_mutex);
 
     if(
-        !declarationAccess.validFor(graph)
-        || !planAccess.validFor(declarationAccess)
-        || !planAccess.validFor(compiledGraph)
-        || !validForLocked(planAccess)
+        !validForLocked(planAccess)
         || m_recordingAttemptGeneration == 0u
         || !recordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation)
         || m_recordingAttemptGeneration
@@ -249,7 +246,7 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
             || !source.sourceQueue.valid()
             || !producerToken.valid()
             || !producerToken.matchesPhysicalQueue(source.sourceQueue.index, source.sourceQueue.deviceGeneration)
-            || !recordedGraph.packetStateSeed(planAccess.packetForTask(source.producerTask), artifactOperation)
+            || !recordedGraph.packetStateSeed(packet, artifactOperation)
         )
             return false;
 

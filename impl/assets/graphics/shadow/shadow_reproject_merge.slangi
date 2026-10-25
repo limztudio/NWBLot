@@ -99,22 +99,22 @@ NwbShadowMergeResult nwbShadowMergeChannel<let UseValidTapMask : bool>(
 
     // Rejected history resets to the current sample.
     float3 hist = cur;
-    float n = 0.0;
-    float m1Prev = 0.0;
-    float m2Prev = 0.0;
+    half n = half(0.0h);
+    half m1Prev = half(0.0h);
+    half m2Prev = half(0.0h);
     if(historyAccepted){
         const half3 historySample = half3(nwbHeapSampledImage2DArray(historyInSlot).Load(int4(hp, slot, 0)).rgb);
         const half3 momentSample = half3(nwbHeapSampledImage2DArray(momentsInSlot).Load(int4(hp, slot, 0)).xyz);
         hist = float3(historySample);
-        const float3 mom = float3(momentSample);
+        const half3 mom = momentSample;
         m1Prev = mom.x;
         m2Prev = mom.y;
         n = mom.z;
     }
 
     // Clamp history to the current neighbourhood. Visibility luma stays in (0, 1), so half math is sufficient here.
-    const half lumaCur = half(nwbLuminance(cur));
-    const half lumaHistRaw = half(nwbLuminance(hist));
+    const half lumaCur = nwbLuminance(currentVisibilitySample);
+    const half lumaHistRaw = nwbLuminance(half3(hist));
     const half temporalDelta = lumaCur - lumaHistRaw;
     const half temporalDeltaAbs = abs(temporalDelta);
     float3 mu = float3(0.0, 0.0, 0.0);
@@ -140,11 +140,11 @@ NwbShadowMergeResult nwbShadowMergeChannel<let UseValidTapMask : bool>(
             const half3 s = half3(nwbHeapSampledImage2DArray(softTraceSlot).Load(int4(t, slot, 0)).rgb);
             mu += float3(s);
             mu2 += float3(s * s);
-            const half sl = half(nwbLuminance(float3(s)));
+            const half sl = nwbLuminance(s);
             lumaM1 += float(sl);
             lumaM2 += float(sl * sl);
             const half tapDelta = sl - lumaHistRaw;
-            if(supportTapInBounds && temporalDeltaAbs > 0.0 && tapDelta * temporalDelta > 0.0 && abs(tapDelta) >= temporalDeltaAbs * NWB_SHADOW_TEMPORAL_ANTILAG_SUPPORT_FRACTION)
+            if(supportTapInBounds && temporalDeltaAbs > half(0.0h) && tapDelta * temporalDelta > half(0.0h) && abs(tapDelta) >= temporalDeltaAbs * half(NWB_SHADOW_TEMPORAL_ANTILAG_SUPPORT_FRACTION))
                 ++temporalChangeSupport;
             ++cnt;
         }
@@ -164,25 +164,25 @@ NwbShadowMergeResult nwbShadowMergeChannel<let UseValidTapMask : bool>(
     }
 
     // Reduce history at temporal edges after removing local noise. Visibility luma stays in (0, 1), so half math is sufficient here.
-    const half lumaHist = half(nwbLuminance(histClamped));
+    const half lumaHist = nwbLuminance(half3(histClamped));
     const bool temporalChangeCoherent = temporalChangeSupport >= NWB_SHADOW_TEMPORAL_ANTILAG_MIN_SUPPORT;
     // Edge signal, gradient, and effective history count feed only the (0, 1) saturate below; variance accumulators above and the float4 moments-store count below stay on float. Widen only at those uses.
     const half edgeSignal = temporalChangeCoherent ? max(half(0.0h), abs(lumaCur - lumaHist) - half(NWB_SHADOW_TEMPORAL_NOISE_SLACK) * half(sigmaLuma)) : half(0.0h);
     const half tempGrad = edgeSignal / max(max(lumaCur, lumaHist), half(NWB_SHADOW_TEMPORAL_LUMA_MIN));
-    const half nEff = half(n) * saturate(half(1.0h) - half(NWB_SHADOW_TEMPORAL_ANTILAG) * tempGrad);
+    const half nEff = n * saturate(half(1.0h) - half(NWB_SHADOW_TEMPORAL_ANTILAG) * tempGrad);
 
     // Bound the current-sample blend weight. The merge alpha and luminance moments are (0, 1) bounded factors, so half arithmetic is sufficient here.
-    const half alpha = half(max(1.0 / (float(nEff) + 1.0), NWB_SHADOW_TEMPORAL_ALPHA_MIN));
-    const half3 outVis = half3(lerp(histClamped, cur, float(alpha)));
-    const float nNext = min(float(nEff) + 1.0, NWB_SHADOW_TEMPORAL_MAX_HISTORY);
+    const half alpha = max(half(1.0h) / (nEff + half(1.0h)), half(NWB_SHADOW_TEMPORAL_ALPHA_MIN));
+    const half3 outVis = lerp(half3(histClamped), currentVisibilitySample, alpha);
+    const half nNext = min(nEff + half(1.0h), half(NWB_SHADOW_TEMPORAL_MAX_HISTORY));
 
     // Integrate current-sample luminance moments with the same alpha.
-    const half m1 = half(lerp(m1Prev, lumaCur, float(alpha)));
-    const half m2 = half(lerp(m2Prev, lumaCur * lumaCur, float(alpha)));
+    const half m1 = lerp(m1Prev, lumaCur, alpha);
+    const half m2 = lerp(m2Prev, lumaCur * lumaCur, alpha);
 
     NwbShadowMergeResult result;
     result.history = float4(float3(outVis), 1.0);
-    result.moments = float4(float(m1), float(m2), nNext, 0.0);
+    result.moments = float4(float(m1), float(m2), float(nNext), 0.0);
     return result;
 }
 

@@ -282,7 +282,7 @@ bool nwbRefractionTryResolveHardware(const NwbRefractionEntry entry, out half4 o
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_secondaryGlassPixels);
                 break;
             }
-            coverage = half(saturate(float(backgroundSurface.renderCoverage)));
+            coverage = saturate(backgroundSurface.renderCoverage);
             opaqueHit = coverage >= half(NWB_REFRACTION_OPAQUE_COVERAGE_MIN);
             if(opaqueHit){
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedHitAttempts);
@@ -297,7 +297,7 @@ bool nwbRefractionTryResolveHardware(const NwbRefractionEntry entry, out half4 o
         }
         const half3 shadedRadiance = nwbRefractionShadeSurfaceHit(backgroundSurface, backgroundPosition, outgoingDirection);
         if(opaqueHit){
-            outRadiance = half4((accumulated + transmittance * half3(shadedRadiance)) * half3(attenuation), 1.0h);
+            outRadiance = half4((accumulated + transmittance * shadedRadiance) * attenuation, 1.0h);
             return true;
         }
         accumulated += transmittance * coverage * shadedRadiance;
@@ -337,7 +337,7 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
     if(volumeExited)
         nwbRefractionCount(displaced ? NWB_REFRACTION_COUNTER_exitScreenBackgroundReturns : NWB_REFRACTION_COUNTER_exitStraightFallbackPixels);
     const half3 backgroundRadiance = nwbRefractionBackgroundForEntry(select(bool2(displaced), samplePixel, pixel), entry, true, displaced && any(samplePixel != pixel));
-    return half4(half3(backgroundRadiance) * half3(continuationAttenuation), 1.0h);
+    return half4(backgroundRadiance * continuationAttenuation, 1.0h);
 }
 
 

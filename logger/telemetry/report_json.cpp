@@ -104,7 +104,7 @@ void AppendFrameGraphQueueAssignmentJson(AString<TelemetryArena>& out, const Tel
     StringAppendFormat(out, ", \"modifierMask\": {}", static_cast<u32>(assignment.modifiers));
     out += s_JsonAcceptanceKey;
     AppendJsonQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
-    StringAppendFormat(out, ", \"dedicated\": {}", assignment.dedicated ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText);
+    StringAppendFormat(out, ", \"dedicated\": {}", assignment.dedicated ? s_TrueText : s_FalseText);
     StringAppendFormat(
         out,
         ", \"score\": {{\"overlap\": {}, \"queueLoad\": {}, \"incomingCrossings\": {}, "
@@ -343,8 +343,8 @@ void AppendFrameGraphPacketSubmissionStatisticsJson(AString<TelemetryArena>& out
     StringAppendFormat(
         out,
         ", \"joinsAcceptedQueueFrontier\": {}, \"recoverySubmission\": {}, \"submissionSeconds\": {:.9}}}",
-        statistics.joinsAcceptedQueueFrontier ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText,
-        statistics.recoverySubmission ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText,
+        statistics.joinsAcceptedQueueFrontier ? s_TrueText : s_FalseText,
+        statistics.recoverySubmission ? s_TrueText : s_FalseText,
         statistics.submissionSeconds
     );
 }
@@ -457,7 +457,7 @@ void BuildJson(const TelemetryReportSummary& summary, const FrameGraphReportReco
     out += s_JsonDocumentOpen;
     StringAppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
     out += "  \"frameRange\": {";
-    StringAppendFormat(out, "\"present\": {}", summary.hasFrameRange ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText);
+    StringAppendFormat(out, "\"present\": {}", summary.hasFrameRange ? s_TrueText : s_FalseText);
     if(summary.hasFrameRange)
         StringAppendFormat(out, ", \"min\": {}, \"max\": {}", summary.minFrameIndex, summary.maxFrameIndex);
     out += "},\n";

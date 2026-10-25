@@ -6,6 +6,7 @@
 
 
 #include "graph_dispatch_plan.h"
+#include "local_bounds.h"
 #include "runtime_cache.h"
 #include "submission_state.h"
 
@@ -270,6 +271,8 @@ private:
     HashMap<u64, RuntimeResources, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_runtimeResources;
     // Reused across submitFrameSkinningGraph() calls so per-frame render performs no GlobalArena creation.
     Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> m_frameDispatchPlans;
+    Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> m_frameDeformationPlans;
+    Vector<MeshSkinningLocalBoundsDispatch, Core::Alloc::GlobalArena> m_frameLocalBoundsDispatches;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_frameLiveBuffers;
     // Frame graph compiler artifacts. Declared once with the system and reset per submission so render() only redeclares into reused storage instead of constructing graph objects.
     Core::GpuTaskGraph m_frameTaskGraph;

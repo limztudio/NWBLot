@@ -291,6 +291,11 @@ inline void FormatEventText(char (&outText)[s_MaxEventTextBytes], const BasicStr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using DiagnosticDetail::s_MaxEventTextBytes;
+using DiagnosticDetail::s_TrueText;
+using DiagnosticDetail::s_FalseText;
+using DiagnosticDetail::CopyEventText;
+
 [[nodiscard]] inline StringView DiagnosticEventNameFromCategory(const StringView category)noexcept{
     if(category == DiagnosticEventCategory::s_Assert || category == DiagnosticEventCategory::s_FatalAssert)
         return DiagnosticEventName::s_Assert;

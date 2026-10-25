@@ -111,7 +111,7 @@ bool RayTracingOpticalUploadState::accept(const RayTracingOpticalUploadPlan& pla
 }
 
 bool RayTracingOpticalUploadState::matchesBuffer(const RayTracingOpticalUploadPlan& plan)const noexcept{
-    return !m_retired && !m_quarantined && plan.valid() && plan.owner == this && plan.buffer.get() == m_buffer.get() && plan.queue == m_primaryQueue && m_buffer && m_primaryQueue.valid() && m_primaryQueue.deviceGeneration == m_buffer->getDeviceGeneration();
+    return !m_retired && !m_quarantined && plan.valid() && plan.owner == this && plan.buffer.get() == m_buffer.get() && plan.queue == m_primaryQueue && m_primaryQueue.deviceGeneration == m_buffer->getDeviceGeneration();
 }
 
 

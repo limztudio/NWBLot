@@ -61,7 +61,7 @@ struct NwbOpticalMedium{
     uint mode;
     int priority;
     uint winding;
-    float ior;
+    half ior;
     half3 absorption;
 };
 
@@ -74,7 +74,7 @@ struct NwbOpticalMedia{
 
 NwbOpticalMedium nwbOpticalDominantMedium(__constref NwbOpticalMedia media){
     NwbOpticalMedium result = (NwbOpticalMedium)0;
-    result.ior = 1.0;
+    result.ior = half(1.0h);
     if(media.count == 0u)
         return result;
 #if NWB_OPTICAL_CLOSED_MEDIA

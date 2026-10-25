@@ -93,7 +93,7 @@ static void AppendMaterialBindGeneratedSeparator(CookString& inOutSource, const 
 }
 
 static void AppendU32Slang(const u32 value, CookString& inOutText){
-    char digits[TextDetail::s_DecimalTextBufferBytes];
+    char digits[s_DecimalTextBufferBytes];
     inOutText += FormatDecimal(static_cast<usize>(value), digits);
     inOutText += 'u';
 }
@@ -323,7 +323,7 @@ static bool AppendMaterialBindLayoutConstants(const AStringView includePath, con
     const NameHash& interfaceHash = interfaceName.hash();
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         ScratchString laneSuffix(s_MaterialBindInterfaceHashSymbolPrefix, scratchArena);
-        char laneDigits[TextDetail::s_DecimalTextBufferBytes];
+        char laneDigits[s_DecimalTextBufferBytes];
         laneSuffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, AStringView(laneSuffix));
         if(!AppendMaterialBindU64Constant(includePath, symbol, interfaceHash.qwords[lane], scratchArena, inOutSymbols, inOutSource))

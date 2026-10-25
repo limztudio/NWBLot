@@ -286,10 +286,6 @@ bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, 
     return true;
 }
 
-void ActiveSceneSubsystems::enableSubsystem(const SubsystemRef& subsystem){
-    __hidden_scene_runtime::AppendUniqueAssetRef(m_subsystems, subsystem);
-}
-
 bool ActiveSceneSubsystems::hasSubsystem(const SubsystemRef& subsystem)const noexcept{
     if(!subsystem.valid())
         return false;

@@ -78,11 +78,7 @@ UiWidgetGallery::UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena)
     , m_textAreas(arena)
 {}
 
-bool UiWidgetGallery::loadAssets(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const NWB::Core::Assets::AssetManager& assets,
-    const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems
-){
+bool UiWidgetGallery::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
     return m_images.loadAssets(arena, assets, sceneSubsystems);
 }
 

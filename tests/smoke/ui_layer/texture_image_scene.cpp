@@ -7,6 +7,8 @@
 #include "../smoke_environment.h"
 #include "passive_scene_support.h"
 
+#include <impl/assets_scene/asset.h>
+
 #include <global/simplemath.h>
 #include <global/simdmath.h>
 
@@ -32,8 +34,8 @@ namespace __hidden_ui_texture_image_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Core::Assets::AssetRef<Impl::Texture> s_DefaultTexture{"engine/ui/skins/default/texture"};
-static constexpr Core::Assets::AssetRef<Impl::Texture> s_AlternateTexture{"project/ui/skins/alternate/texture"};
+inline constexpr Name s_DefaultTextureNickname("default_skin_texture");
+inline constexpr Name s_AlternateTextureNickname("alternate_skin_texture");
 static constexpr Impl::Ui::Color s_Backdrop{ 0.07f, 0.13f, 0.2f, 1.0f };
 
 
@@ -55,17 +57,26 @@ static constexpr Impl::Ui::Color s_Backdrop{ 0.07f, 0.13f, 0.2f, 1.0f };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiTextureImageSmokeScene::UiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets)
+UiTextureImageSmokeScene::UiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Core::Assets::AssetManager& assets)
     : m_arena(arena)
     , m_input(input)
 {
     using namespace __hidden_ui_texture_image_scene;
-    auto defaultSource = Impl::Ui::LoadImageSource(arena, assets, s_DefaultTexture);
-    if(defaultSource)
-        m_default = Move(*defaultSource);
-    auto alternateSource = Impl::Ui::LoadImageSource(arena, assets, s_AlternateTexture);
-    if(alternateSource)
-        m_alternate = Move(*alternateSource);
+    Impl::ActiveSceneSubsystems sceneSubsystems(arena);
+    if(sceneSubsystems.loadProjectStartScene(assets)){
+        const auto defaultTexture = sceneSubsystems.findAsset<Impl::Texture>(s_DefaultTextureNickname);
+        if(defaultTexture.valid()){
+            auto defaultSource = Impl::Ui::LoadImageSource(arena, assets, defaultTexture);
+            if(defaultSource)
+                m_default = Move(*defaultSource);
+        }
+        const auto alternateTexture = sceneSubsystems.findAsset<Impl::Texture>(s_AlternateTextureNickname);
+        if(alternateTexture.valid()){
+            auto alternateSource = Impl::Ui::LoadImageSource(arena, assets, alternateTexture);
+            if(alternateSource)
+                m_alternate = Move(*alternateSource);
+        }
+    }
     m_replacement = m_default;
     m_sourcesValid = m_default && m_alternate && m_default->texture().width() == 256u
         && m_default->texture().height() == 256u && m_alternate->texture().width() == 256u
@@ -304,7 +315,7 @@ bool IsUiLayerTextureImageSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXTURE_IMAGE_SKIN");
 }
 
-SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets){
+SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Core::Assets::AssetManager& assets){
     return SharedUiTextureImageSmokeScene(NewArenaObject<RefCounter<UiTextureImageSmokeScene>>(arena, arena, input, assets), ArenaRefDeleter<RefCounter<UiTextureImageSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 

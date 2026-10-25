@@ -163,9 +163,6 @@ public:
     [[nodiscard]] bool isTransparentFeatureEnabled()const noexcept{
         return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Transparent);
     }
-    [[nodiscard]] bool isRefractiveFeatureEnabled()const noexcept{
-        return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Refractive);
-    }
     [[nodiscard]] bool isCsgFeatureEnabled()const noexcept{
         return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Csg);
     }

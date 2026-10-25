@@ -193,8 +193,6 @@ public:
     [[nodiscard]] bool loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project = ProjectAssetDefaults::s_DefaultProjectRef);
     [[nodiscard]] bool loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene);
 
-    void enableSubsystem(const SubsystemRef& subsystem);
-
     [[nodiscard]] bool valid()const noexcept{ return m_scene.valid() && !m_subsystems.empty(); }
     [[nodiscard]] const ProjectRef& project()const noexcept{ return m_project; }
     [[nodiscard]] const SceneRef& scene()const noexcept{ return m_scene; }

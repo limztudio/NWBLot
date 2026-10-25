@@ -9,5 +9,6 @@ asset.assets = {
     "default_korean_face": "engine/ui/fonts/default/korean/face",
     "default_latin_atlas": "engine/ui/fonts/default/latin/atlas",
     "default_latin_face": "engine/ui/fonts/default/latin/face",
-    "default_skin": "engine/ui/skins/default/atlas"
+    "default_skin": "engine/ui/skins/default/atlas",
+    "default_skin_texture": "engine/ui/skins/default/texture"
 };

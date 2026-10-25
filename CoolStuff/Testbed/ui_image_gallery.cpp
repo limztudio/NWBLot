@@ -37,11 +37,7 @@ inline constexpr Name s_GalleryImageTextureNickname("gallery_image_texture");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiImageGallery::loadAssets(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const NWB::Core::Assets::AssetManager& assets,
-    const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems
-){
+bool UiImageGallery::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
     const auto textureRef = sceneSubsystems.findSceneAsset<NWB::Impl::Texture>(__hidden_ui_image_gallery::s_GalleryImageTextureNickname);
     if(!textureRef.valid())
         return false;

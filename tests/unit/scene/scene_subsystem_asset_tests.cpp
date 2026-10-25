@@ -306,9 +306,6 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsResolvesTransitiveSubsystemsAndN
     EXPECT_FALSE(active.hasSubsystem(BuiltInSubsystems::s_Csg));
     EXPECT_FALSE(active.hasSubsystem(Core::Assets::AssetRef<Subsystem>("project/subsystems/custom")));
 
-    active.enableSubsystem(BuiltInSubsystems::s_Csg);
-    EXPECT_TRUE(active.hasSubsystem(BuiltInSubsystems::s_Csg));
-
     EXPECT_EQ(active.findSceneAsset(Name("cesium_man_model")).name(), Name("project/characters/cesium_man/model"));
     EXPECT_EQ(active.findSubsystemAsset(BuiltInSubsystems::s_Renderer, Name("depth_prepass_vs")).name(), Name("engine/shaders/depth_prepass_vs"));
     EXPECT_EQ(active.findSubsystemAsset(BuiltInSubsystems::s_Default, Name("default_skin")).name(), Name("engine/ui/skins/default/atlas"));

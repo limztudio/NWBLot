@@ -98,6 +98,11 @@ MeshSkinningSystem::~MeshSkinningSystem()noexcept{
 void MeshSkinningSystem::prepare(Core::ECS::World& world){
     static_cast<void>(world);
     m_runtimeSetupReady = false;
+    if(!m_activeSceneSubsystems){
+        if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
+            return;
+        m_activeSceneSubsystems = &m_defaultSceneSubsystems;
+    }
     if(!isSkinningFeatureEnabled()){
         m_runtimeSetupReady = true;
         return;

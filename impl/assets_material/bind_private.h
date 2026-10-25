@@ -92,7 +92,7 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,
     const ACompactString& parameterName,
-    const ACompactString& parameterValue,
+    AStringView parameterValue,
     Material::TypedBlockByteVector& inOutBlockBytes,
     Material::ResourceReferenceVector& outResourceReferences
 );

@@ -132,8 +132,7 @@ ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena){
     return message;
 }
 
-Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value, Core::Alloc::ScratchArena& scratchArena){
-    static_cast<void>(scratchArena);
+Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value)noexcept{
     return __hidden_common::ParseNormalizedAssetTypeText(value);
 }
 
@@ -153,8 +152,7 @@ ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena){
     return message;
 }
 
-Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value, Core::Alloc::ScratchArena& scratchArena){
-    static_cast<void>(scratchArena);
+Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value)noexcept{
     return __hidden_common::ParseNormalizedNormalModeText(value);
 }
 

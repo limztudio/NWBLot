@@ -181,9 +181,7 @@ bool AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
         auto parentDirectoryName = PathToString(testArena.arena, assetRoot.lexicallyNormal().parentPath().filenameView());
         CanonicalizeTextInPlace(parentDirectoryName);
 
-        ACompactString virtualRoot;
-        if(!virtualRoot.assign(parentDirectoryName == __hidden_assets_graphics_fixture::s_EngineDirectory ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot))
-            return false;
+        const AStringView virtualRoot = parentDirectoryName == __hidden_assets_graphics_fixture::s_EngineDirectory ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot;
 
         auto assetRootText = PathToString(testArena.arena, assetRoot);
         options.assetRoots.emplace_back(testArena.arena, AStringView(assetRootText.data(), assetRootText.size()), virtualRoot);

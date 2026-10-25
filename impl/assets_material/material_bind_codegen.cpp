@@ -637,7 +637,7 @@ Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirec
         const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / AStringView(includePath);
         auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), ConvertString(ensureDirectoriesResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult.error().message()));
             return MakeUnexpected(Failure{});
         }
 

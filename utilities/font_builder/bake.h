@@ -62,7 +62,7 @@ public:
 
 using RasterGlyphs = Core::Assets::AssetVector<RasterGlyph>;
 
-[[nodiscard]] bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scratch);
+[[nodiscard]] bool ValidateOptions(const BakeOptions& options);
 // Options must already pass ValidateOptions.
 [[nodiscard]] Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch);
 [[nodiscard]] bool PackGlyphs(const BakeOptions& options, Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload);

@@ -6,6 +6,7 @@
 
 
 #include "operations.h"
+#include "../span.h"
 #include "../text_utils.h"
 
 
@@ -18,9 +19,9 @@ namespace GlobalFilesystemUtilityDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename CharT, typename PathT>
+template<typename CharT, GlobalFilesystemPathDetail::PathChar SourceCharT>
 struct PathToStringArg{
-    const PathT& path;
+    BasicStringView<SourceCharT> path;
 };
 
 
@@ -32,10 +33,20 @@ struct PathToStringArg{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+template<typename CharT = char, GlobalFilesystemPathDetail::PathChar SourceCharT>
+[[nodiscard]] inline GlobalFilesystemUtilityDetail::PathToStringArg<CharT, SourceCharT> PathToString(const BasicStringView<SourceCharT> path)noexcept{
+    return GlobalFilesystemUtilityDetail::PathToStringArg<CharT, SourceCharT>{ path };
+}
 
 template<typename CharT = char, typename PathT>
-[[nodiscard]] inline GlobalFilesystemUtilityDetail::PathToStringArg<CharT, PathT> PathToString(const PathT& path)noexcept{
-    return GlobalFilesystemUtilityDetail::PathToStringArg<CharT, PathT>{ path };
+    requires requires(const PathT& path){
+        path.native().data();
+        path.native().size();
+    }
+[[nodiscard]] inline auto PathToString(const PathT& path)noexcept(noexcept(path.native().data()) && noexcept(path.native().size())){
+    using SourceChar = typename Decay_T<decltype(path.native())>::value_type;
+    return GlobalFilesystemUtilityDetail::PathToStringArg<CharT, SourceChar>{ BasicStringView<SourceChar>(path.native().data(), path.native().size()) };
 }
 
 
@@ -48,22 +59,22 @@ namespace std{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename RequestedCharT, typename PathT, typename FormatCharT>
-struct formatter<GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, PathT>, FormatCharT>{
+template<typename RequestedCharT, GlobalFilesystemPathDetail::PathChar SourceCharT, typename FormatCharT>
+struct formatter<GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, SourceCharT>, FormatCharT>{
     constexpr auto parse(basic_format_parse_context<FormatCharT>& ctx)noexcept{
         return ctx.begin();
     }
 
     template<typename FormatContext>
-    auto format(const GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, PathT>& arg, FormatContext& ctx)const noexcept([]()consteval noexcept{
+    auto format(const GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, SourceCharT>& arg, FormatContext& ctx)const noexcept([]()consteval noexcept{
         using Output = Decay_T<decltype(DeclVal<FormatContext&>().out())>;
         return noexcept(DeclVal<void(*)(Output)noexcept>()(DeclVal<FormatContext&>().out()))
-            && noexcept(WriteConvertedText<FormatCharT>(DeclVal<Output&>(), DeclVal<const PathT&>().native()))
+            && noexcept(WriteConvertedText<FormatCharT>(DeclVal<Output&>(), DeclVal<const BasicStringView<SourceCharT>&>()))
             && IsNothrowMoveConstructible_V<Output> && IsNothrowDestructible_V<Output>
         ;
     }()){
         auto out = ctx.out();
-        WriteConvertedText<FormatCharT>(out, arg.path.native());
+        WriteConvertedText<FormatCharT>(out, arg.path);
         return out;
     }
 };
@@ -280,15 +291,13 @@ template<typename StringT, typename PathT>
         return ToAsciiLowerCopy(PathToGenericString<StringT>(path.extension()));
 }
 
-template<typename PathT, typename ExtensionArray>
-[[nodiscard]] inline bool PathHasListedExtension(const PathT& path, const ExtensionArray& extensions)noexcept([]()consteval noexcept{
+template<typename PathT>
+[[nodiscard]] inline bool PathHasListedExtension(const PathT& path, const Span<const AStringView> extensions)noexcept([]()consteval noexcept{
     using PathChar = typename PathT::value_type;
     if constexpr(requires{ DeclVal<const PathT&>().extensionView(); }){
         using Extension = Decay_T<decltype(DeclVal<const PathT&>().extensionView())>;
         return
             noexcept(DeclVal<void(*)(Extension)noexcept>()(DeclVal<const PathT&>().extensionView())) && IsNothrowDestructible_V<Extension>
-            && noexcept(static_cast<bool>(DeclVal<usize&>() < LengthOf(DeclVal<const ExtensionArray&>())))
-            && noexcept(AStringView(DeclVal<const ExtensionArray&>()[DeclVal<usize&>()].data(), DeclVal<const ExtensionArray&>()[DeclVal<usize&>()].size()))
             && noexcept(static_cast<bool>(DeclVal<const Extension&>().size() != DeclVal<usize>()))
             && noexcept(static_cast<bool>(DeclVal<usize&>() < DeclVal<const Extension&>().size()))
             && noexcept(static_cast<bool>(ToAsciiLower(DeclVal<const Extension&>()[DeclVal<usize&>()]) != static_cast<PathChar>(ToAsciiLower(DeclVal<const AStringView&>()[DeclVal<usize&>()]))))
@@ -300,8 +309,6 @@ template<typename PathT, typename ExtensionArray>
         return
             noexcept(DeclVal<void(*)(ExtensionPath)noexcept>()(DeclVal<const PathT&>().extension())) && IsNothrowDestructible_V<ExtensionPath>
             && noexcept(DeclVal<void(*)(Extension)noexcept>()(DeclVal<const ExtensionPath&>().native())) && IsNothrowDestructible_V<Extension>
-            && noexcept(static_cast<bool>(DeclVal<usize&>() < LengthOf(DeclVal<const ExtensionArray&>())))
-            && noexcept(AStringView(DeclVal<const ExtensionArray&>()[DeclVal<usize&>()].data(), DeclVal<const ExtensionArray&>()[DeclVal<usize&>()].size()))
             && noexcept(static_cast<bool>(DeclVal<const Extension&>().size() != DeclVal<usize>()))
             && noexcept(static_cast<bool>(DeclVal<usize&>() < DeclVal<const Extension&>().size()))
             && noexcept(static_cast<bool>(ToAsciiLower(DeclVal<const Extension&>()[DeclVal<usize&>()]) != static_cast<PathChar>(ToAsciiLower(DeclVal<const AStringView&>()[DeclVal<usize&>()]))))
@@ -311,8 +318,7 @@ template<typename PathT, typename ExtensionArray>
     using PathChar = typename PathT::value_type;
     if constexpr(requires{ path.extensionView(); }){
         const auto extension = path.extensionView();
-        for(usize i = 0u; i < LengthOf(extensions); ++i){
-            const AStringView listed(extensions[i].data(), extensions[i].size());
+        for(const AStringView listed : extensions){
             if(extension.size() != listed.size())
                 continue;
             bool matched = true;
@@ -330,8 +336,7 @@ template<typename PathT, typename ExtensionArray>
     else{
         const auto extensionPath = path.extension();
         const auto extension = extensionPath.native();
-        for(usize i = 0u; i < LengthOf(extensions); ++i){
-            const AStringView listed(extensions[i].data(), extensions[i].size());
+        for(const AStringView listed : extensions){
             if(extension.size() != listed.size())
                 continue;
             bool matched = true;

@@ -44,7 +44,7 @@ int Run(const int argc, char** argv){
                 options.source = AStringView(sourceArgument.data(), sourceArgument.size());
                 options.output = AStringView(outputArgument.data(), outputArgument.size());
                 Core::Alloc::ScratchArena scratch(Name("utilities/font_builder/bake"));
-                if(!ValidateOptions(options, scratch))
+                if(!ValidateOptions(options))
                     return 1;
                 const auto exists = FileExists(options.output);
                 if(!exists){

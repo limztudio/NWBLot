@@ -363,10 +363,10 @@ template<typename SubmissionStatistics>
     return manualAcceptedPacketCount <= statistics.acceptedTaskCount - total.taskCount;
 }
 
-template<typename NodeContainer>
+template<typename NodeT>
 [[nodiscard]] inline bool ValidatePacketSubmissionStatisticsTable(
     Alloc::ScratchArena& scratchArena,
-    const NodeContainer& nodes,
+    const Span<const NodeT> nodes,
     const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     const Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics
 ){

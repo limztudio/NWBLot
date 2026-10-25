@@ -198,7 +198,7 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
     const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / s_DeferredBxdfModuleSubPath;
     auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
     if(!ensureDirectoriesResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), ConvertString(ensureDirectoriesResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
@@ -544,7 +544,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
     const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / s_ShadowSurfaceModuleSubPath;
     auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
     if(!ensureDirectoriesResult2){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), ConvertString(ensureDirectoriesResult2.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult2.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(!WriteTextFile(outputPath, AStringView(source))){

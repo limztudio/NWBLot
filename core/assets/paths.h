@@ -203,10 +203,6 @@ template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
     return *virtualPath;
 }
 
-[[nodiscard]] inline Expected<Name> BuildDerivedAssetVirtualPath(const Path& assetRoot, const ACompactString& virtualRoot, const Path& sourceOrMetaPath, Alloc::ScratchArena& scratchArena){
-    return BuildDerivedAssetVirtualPath(assetRoot, virtualRoot.view(), sourceOrMetaPath, scratchArena);
-}
-
 [[nodiscard]] inline bool HasReservedAssetVirtualRoot(const AStringView virtualPath, Alloc::ScratchArena& scratchArena){
     const auto virtualRoot = AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, scratchArena);
     if(!virtualRoot)
@@ -253,14 +249,13 @@ template<typename AssetRootVector>
 }
 
 [[nodiscard]] inline Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, AssetArena& arena, Alloc::ScratchArena& scratchArena){
-    const ::Path<Alloc::ScratchArena> metadataPath(scratchArena, nwbFilePath);
-    const ::Path<Alloc::ScratchArena> parentDirectory = metadataPath.parentPath();
+    const ::Path<Alloc::ScratchArena> parentDirectory(scratchArena, nwbFilePath.parentPathView());
     if(parentDirectory.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata directory is empty"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
-    auto nwbStem = PathToString(scratchArena, metadataPath.stemView());
+    auto nwbStem = PathToString(scratchArena, nwbFilePath.stemView());
     CanonicalizeTextInPlace(nwbStem);
     if(nwbStem.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata filename stem is empty"), PathToString<tchar>(nwbFilePath));
@@ -452,17 +447,16 @@ template<typename SourceStringT, typename MetadataDocument, typename ParseDocume
 
     if(!parseDoc(AStringView(ioText))){
         for(const auto& err : outDoc.errors()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}' parse error at {}:{}: {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(filePath), err.line, err.column, ConvertString(AStringView(err.message.data(), err.message.size())));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}' parse error at {}:{}: {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(filePath), err.line, err.column, ConvertString(err.message));
         }
         return false;
     }
     return true;
 }
 
-template<typename ScratchArenaT, typename SourceStringT>
-[[nodiscard]] inline bool CheckPairedSourceExtension(const Path& nwbFilePath, const SourceStringT& sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, ScratchArenaT& scratchArena){
-    const ::Path<ScratchArenaT> sourcePathValue(scratchArena, sourcePath);
-    AString<ScratchArenaT> extension(PathToString(scratchArena, sourcePathValue.extensionView()));
+[[nodiscard]] inline bool CheckPairedSourceExtension(const Path& nwbFilePath, const AStringView sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena){
+    const ::Path<Alloc::ScratchArena> sourcePathValue(scratchArena, sourcePath);
+    AString<Alloc::ScratchArena> extension(PathToString(scratchArena, sourcePathValue.extensionView()));
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) == expectedExtension)
         return true;
@@ -531,14 +525,13 @@ template<typename NamedEnumT, typename MetadataValue>
     const MetadataValue& object,
     const AStringView diagnosticPrefix,
     const AStringView fieldName,
-    const ::NamedEnumCase<NamedEnumT>* cases,
-    const usize caseCount,
+    const Span<const ::NamedEnumCase<NamedEnumT>> cases,
     const AStringView errorDetailText
 ){
     const auto text = ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, true);
     if(!text)
         return MakeUnexpected(text.error());
-    const auto value = ParseNamedEnumText<NamedEnumT>(text->text, cases, caseCount);
+    const auto value = ParseNamedEnumText<NamedEnumT>(text->text, cases);
     if(value)
         return value;
 

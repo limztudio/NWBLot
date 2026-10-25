@@ -37,6 +37,7 @@ constexpr u32 s_ExpectedDualCount = 2u;
 using Document = NWB::Core::Metascript::Document;
 using Value = NWB::Core::Metascript::Value;
 using MStringView = NWB::Core::Metascript::MStringView;
+using NWB::Core::Metascript::LiteralView;
 using AString = NWB::Tests::TestAString;
 
 
@@ -48,19 +49,6 @@ struct DestinationArenaTag{};
 
 using SourceArena = NWB::Tests::TestArena<SourceArenaTag>;
 using DestinationArena = NWB::Tests::TestArena<DestinationArenaTag>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static MStringView ViewOf(const AString& text)noexcept{
-    return MStringView(text.data(), text.size());
-}
-
-template<usize N>
-[[nodiscard]] static MStringView LiteralView(const char (&text)[N])noexcept{
-    return MStringView(text, N > 0u ? N - 1u : 0u);
-}
 
 static void CheckStringListElement(const Value& value, const MStringView expected){
     ASSERT_TRUE(value.isString());
@@ -77,8 +65,7 @@ static void CheckParseFailsWithMessage(const MStringView source, MStringView exp
     ASSERT_FALSE(document.errors().empty());
 
     const auto& error = document.errors()[0u];
-    const MStringView message(error.message.data(), error.message.size());
-    EXPECT_EQ(message, expectedMessage);
+    EXPECT_EQ(MStringView(error.message), expectedMessage);
 }
 
 static void CheckSingleStringListValue(const Value& value, const MStringView text){
@@ -98,13 +85,13 @@ TEST(Metascript, CrossArenaMoveAssignmentCopiesIntoDestinationArena){
     DestinationArena destinationArena;
     const AString text(128u, 'm');
 
-    Value source(ViewOf(text), sourceArena.arena);
+    Value source(text, sourceArena.arena);
     Value destination(destinationArena.arena);
 
     destination = Move(source);
 
     EXPECT_TRUE(source.isNull());
-    EXPECT_EQ(destination.asString(), ViewOf(text));
+    EXPECT_EQ(destination.asString(), text);
 }
 
 TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena){
@@ -114,7 +101,7 @@ TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena)
 
     Value source(sourceArena.arena);
     source.makeMap();
-    Value& list = source.field(MStringView(s_ItemsField.data(), 5u));
+    Value& list = source.field(s_ItemsField);
     MakeSingleStringList(list, sourceArena, text);
 
     Value destination(destinationArena.arena);
@@ -122,7 +109,7 @@ TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena)
     destination = source;
 
     EXPECT_TRUE(source.isMap());
-    const Value* copiedList = destination.findField(MStringView(s_ItemsField.data(), 5u));
+    const Value* copiedList = destination.findField(s_ItemsField);
     ASSERT_NE(copiedList, nullptr);
     CheckSingleStringListValue(*copiedList, text);
 }
@@ -148,7 +135,7 @@ TEST(Metascript, CrossArenaAppendCopiesIntoDestinationArena){
     DestinationArena destinationArena;
     const AString text(128u, 'a');
 
-    Value source(ViewOf(text), sourceArena.arena);
+    Value source(text, sourceArena.arena);
     Value destination(destinationArena.arena);
     destination.makeList();
 
@@ -326,7 +313,7 @@ TEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth){
             source.append(indexView.data(), indexView.size());
             source.append(";\n");
         }
-        ASSERT_TRUE(document.parse(ViewOf(source)));
+        ASSERT_TRUE(document.parse(source));
     }
     ASSERT_EQ(document.declarations().size(), 129u);
     const auto structure = document.structs().find(LiteralView("Description"));
@@ -335,7 +322,7 @@ TEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth){
     ASSERT_NE(fields, nullptr);
     ASSERT_TRUE(fields->isList());
     ASSERT_EQ(fields->asList().size(), 1u);
-    const Value* fieldName = fields->asList()[0u].findField(MStringView(s_NameField.data(), s_NameField.size()));
+    const Value* fieldName = fields->asList()[0u].findField(s_NameField);
     ASSERT_NE(fieldName, nullptr);
     EXPECT_EQ(fieldName->asString(), "value");
     EXPECT_EQ(document.findDeclaration("runtime")->type, "Description");
@@ -388,7 +375,7 @@ TEST(Metascript, InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue){
         ASSERT_EQ(document.errors().size(), 1u);
         EXPECT_EQ(document.errors()[0u].line, 2u);
         EXPECT_EQ(document.errors()[0u].column, 1u);
-        EXPECT_EQ(MStringView(document.errors()[0u].message.data(), document.errors()[0u].message.size()), testCase.message);
+        EXPECT_EQ(MStringView(document.errors()[0u].message), testCase.message);
         const Value* asset = document.findVariable(s_AssetVariable);
         ASSERT_NE(asset, nullptr);
         ASSERT_TRUE(asset->isInteger());

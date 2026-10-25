@@ -50,16 +50,6 @@ struct AssignmentRange{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsSameText(const Core::Metascript::MStringView lhs, const AStringView rhs)noexcept{
-    if(lhs.size() != rhs.size())
-        return false;
-    for(usize i = 0u; i < lhs.size(); ++i){
-        if(lhs[i] != rhs[i])
-            return false;
-    }
-    return true;
-}
-
 [[nodiscard]] Expected<AssignmentRange> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName)noexcept{
     AssignmentRange outRange;
     Core::Metascript::Lexer lexer(source);
@@ -70,11 +60,11 @@ struct AssignmentRange{
         if(token.type == Core::Metascript::TokenType::Error)
             return MakeUnexpected(Failure{});
 
-        if(statementBegin && token.type == Core::Metascript::TokenType::Identifier && IsSameText(token.text, variableName)){
+        if(statementBegin && token.type == Core::Metascript::TokenType::Identifier && token.text == variableName){
             token = lexer.next();
             if(token.type == Core::Metascript::TokenType::Dot){
                 token = lexer.next();
-                if(token.type == Core::Metascript::TokenType::Identifier && IsSameText(token.text, fieldName)){
+                if(token.type == Core::Metascript::TokenType::Identifier && token.text == fieldName){
                     token = lexer.next();
                     const bool assignment = token.type == Core::Metascript::TokenType::Equal || token.type == Core::Metascript::TokenType::PlusEqual || token.type == Core::Metascript::TokenType::MinusEqual
                         || token.type == Core::Metascript::TokenType::StarEqual || token.type == Core::Metascript::TokenType::SlashEqual;
@@ -209,14 +199,10 @@ void ApplyTextReplacements(ScratchString& inOutSource, const Span<TextReplacemen
 }
 
 [[nodiscard]] bool IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
-    if(value.isReference()){
-        const Core::Metascript::MStringView reference = value.asReference();
-        return IsSameText(reference, variableName);
-    }
-    if(value.isString()){
-        const Core::Metascript::MStringView text = value.asString();
-        return IsSameText(text, variableName);
-    }
+    if(value.isReference())
+        return value.asReference() == variableName;
+    if(value.isString())
+        return value.asString() == variableName;
     return false;
 }
 
@@ -224,10 +210,10 @@ void ApplyTextReplacements(ScratchString& inOutSource, const Span<TextReplacemen
     SkinReference result;
 
     for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
-        if(!IsSameText(Core::Metascript::MStringView(declaration.type.data(), declaration.type.size()), s_SkinAssetTypeText))
+        if(declaration.type != s_SkinAssetTypeText)
             continue;
 
-        const Core::Metascript::MStringView skinVariable(declaration.variable.data(), declaration.variable.size());
+        const Core::Metascript::MStringView skinVariable(declaration.variable);
         const Core::Metascript::Value* skinAsset = doc.findVariable(skinVariable);
         if(!skinAsset || !skinAsset->isMap())
             continue;

@@ -251,8 +251,7 @@ Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
     const RenderState& renderState,
     PipelineStencilFaceMode::Enum stencilFaceMode,
-    const VkDynamicState* dynamicStates,
-    u32 dynamicStateCount,
+    Span<const VkDynamicState> dynamicStates,
     TStringView operationName,
     Alloc::ScratchArena& scratchArena
 );

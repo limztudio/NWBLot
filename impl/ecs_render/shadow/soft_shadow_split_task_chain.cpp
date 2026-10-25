@@ -134,7 +134,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
             .shadowPrepared = inputs.shadowPrepared,
             .snapshot = inputs.rayTracingPlan.lightSpace,
             .dependency = inputs.prefixTask,
-            .sceneReads = Span<const Core::GpuTaskResourceUse>(lightSpaceReads.data(), lightSpaceReads.size()),
+            .sceneReads = lightSpaceReads,
             .sceneReadSets = inputs.traceResourceSetUses,
             .stateSources = inputs.stateSources,
         },

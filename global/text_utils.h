@@ -8,6 +8,7 @@
 #include "basic_string.h"
 #include "expected.h"
 #include "range_traits.h"
+#include "span.h"
 #include "text_trim_parse.h"
 
 
@@ -269,25 +270,25 @@ struct NamedEnumCase{
 };
 
 template<typename EnumT, typename ViewT = AStringView>
-[[nodiscard]] inline Expected<EnumT> ParseNamedEnumText(const ViewT value, const NamedEnumCase<EnumT>* cases, const usize caseCount)noexcept(
+[[nodiscard]] inline Expected<EnumT> ParseNamedEnumText(const ViewT value, const Span<const NamedEnumCase<EnumT>> cases)noexcept(
     noexcept(static_cast<bool>(value == ViewT(cases[DeclVal<usize&>()].text.data(), cases[DeclVal<usize&>()].text.size())))
     && noexcept(Expected<EnumT>(cases[DeclVal<usize&>()].value))
 ){
-    for(usize i = 0u; i < caseCount; ++i){
-        if(value == ViewT(cases[i].text.data(), cases[i].text.size()))
-            return cases[i].value;
+    for(const NamedEnumCase<EnumT>& item : cases){
+        if(value == ViewT(item.text.data(), item.text.size()))
+            return item.value;
     }
     return MakeUnexpected(Failure{});
 }
 
 template<typename EnumT, typename TextFunction, typename ViewT = AStringView>
-[[nodiscard]] inline Expected<EnumT> ParseNormalizedEnumText(const ViewT value, TextFunction textFunction, const EnumT* values, const usize valueCount)noexcept(
+[[nodiscard]] inline Expected<EnumT> ParseNormalizedEnumText(const ViewT value, TextFunction textFunction, const Span<const EnumT> values)noexcept(
     noexcept(static_cast<bool>(value == textFunction(values[DeclVal<usize&>()])))
     && noexcept(Expected<EnumT>(values[DeclVal<usize&>()]))
 ){
-    for(usize i = 0u; i < valueCount; ++i){
-        if(value == textFunction(values[i]))
-            return values[i];
+    for(const EnumT& item : values){
+        if(value == textFunction(item))
+            return item;
     }
     return MakeUnexpected(Failure{});
 }

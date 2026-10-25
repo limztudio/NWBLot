@@ -110,7 +110,7 @@ bool WriteNwbAsset(
     const Span<const JointMatrix> inverseBindMatrices,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    const auto assetTypeResult = ParseAssetTypeText(assetTypeText, scratchArena);
+    const auto assetTypeResult = ParseAssetTypeText(assetTypeText);
     if(!assetTypeResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: {}"), ConvertString(OutputAssetTypeErrorText(scratchArena)));
         return false;
@@ -131,7 +131,7 @@ bool WriteNwbAsset(
     }
 
     const bool skinnedModel = !mesh.skin.empty() || !skeletonJoints.empty() || !inverseBindMatrices.empty();
-    const ScratchPath packageDirectory = outputPath.parentPath() / outputPath.stemView();
+    const ScratchPath packageDirectory = ScratchPath(scratchArena, outputPath.parentPathView()) / outputPath.stemView();
     const ScratchPath meshPath = packageDirectory / __hidden_asset_writer::s_MeshSplitFileName;
     const ScratchString virtualBase = __hidden_asset_writer::BuildVirtualBasePath(outputPath, virtualRoot);
     const ScratchString meshName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_MeshNameSuffix, scratchArena);

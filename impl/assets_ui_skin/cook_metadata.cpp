@@ -131,7 +131,7 @@ template<usize Count>
     if(!Core::Assets::CheckMetadataAssetMap(path, object, s_DiagnosticPrefix))
         return MakeUnexpected(Failure{});
     if(FindField(object, s_DrawModeField)){
-        auto drawModeResult = Core::Assets::ParseNamedMetadataEnumField(path, object, s_DiagnosticPrefix, s_DrawModeField, s_DrawModeCases, LengthOf(s_DrawModeCases), s_DrawModeHint);
+        auto drawModeResult = Core::Assets::ParseNamedMetadataEnumField<UiSkinDrawMode::Enum>(path, object, s_DiagnosticPrefix, s_DrawModeField, s_DrawModeCases, s_DrawModeHint);
         if(!drawModeResult)
             return MakeUnexpected(Failure{});
         region.drawMode = *drawModeResult;

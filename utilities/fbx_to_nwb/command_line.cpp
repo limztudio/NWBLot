@@ -484,12 +484,12 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         if(!defaultColor)
             return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbDefaultColorOption, "Must contain four finite numbers, for example 1,1,1,1.", scratchArena);
 
-        auto selectionResult = SelectMeshInstances(instances, options.meshSelector, scratchArena);
+        auto selectionResult = SelectMeshInstances(instances, options.meshSelector);
         if(!selectionResult)
             return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbMeshOption, "Must select an available zero-based index, node name, or mesh name.", scratchArena);
 
         const UtilityVector<usize>& selection = *selectionResult;
-        const auto assetTypeResult = ParseAssetTypeText(options.assetType, scratchArena);
+        const auto assetTypeResult = ParseAssetTypeText(options.assetType);
         if(!assetTypeResult)
             return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText(scratchArena), scratchArena);
         const OutputAssetType::Enum assetTypeValue = *assetTypeResult;

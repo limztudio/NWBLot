@@ -135,10 +135,14 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
     static_cast<void>(sampleCount);
     if(width == 0 || height == 0)
         return true;
-    if(!m_activeSceneSubsystems && !m_defaultSceneSubsystemsAttempted){
-        m_defaultSceneSubsystemsAttempted = true;
-        if(m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
-            m_activeSceneSubsystems = &m_defaultSceneSubsystems;
+    if(!m_activeSceneSubsystems){
+        if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
+            return false;
+        m_activeSceneSubsystems = &m_defaultSceneSubsystems;
+    }
+    if(!m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Renderer)){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: active scene does not include required subsystem '{}'"), StringConvert(BuiltInSubsystems::s_RendererText));
+        return false;
     }
     if(!isSkinningFeatureEnabled())
         return true;

@@ -1,0 +1,14 @@
+scene asset;
+
+asset.subsystems = [
+    "engine/subsystems/renderer"
+];
+
+asset.assets = [
+    "project/characters/body/model",
+    "project/meshes/shadow_plane",
+    "project/smoke/soft_shadow/materials/timing_opaque",
+    "project/smoke/soft_shadow/materials/timing_transparent",
+    "project/smoke/transparent_multi/materials/ground",
+    "project/smoke/transparent_multi/materials/shared"
+];

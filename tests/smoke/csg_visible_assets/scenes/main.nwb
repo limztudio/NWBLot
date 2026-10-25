@@ -1,0 +1,24 @@
+scene asset;
+
+asset.subsystems = [
+    "engine/subsystems/renderer"
+];
+
+asset.enabled_features = [
+    "csg"
+];
+
+asset.assets = [
+    "project/meshes/cube_hard_edges",
+    "project/smoke/csg_visible/materials/cap_state",
+    "project/smoke/csg_visible/materials/direct",
+    "project/smoke/csg_visible/materials/event_data",
+    "project/smoke/csg_visible/materials/event_order",
+    "project/smoke/csg_visible/materials/event_state",
+    "project/smoke/csg_visible/materials/indirect",
+    "project/smoke/csg_visible/materials/interval_state",
+    "project/smoke/csg_visible/materials/normal",
+    "project/smoke/csg_visible/materials/position",
+    "project/smoke/csg_visible/materials/solid",
+    "project/smoke/csg_visible/materials/span_state"
+];

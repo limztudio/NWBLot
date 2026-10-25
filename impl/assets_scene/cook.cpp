@@ -33,7 +33,7 @@ bool ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     if(!checkSerializeAssetType(asset, ProjectBinaryPayload::s_ProjectSerializeContext))
         return false;
 
-    const ProjectAsset& project = static_cast<const ProjectAsset&>(asset);
+    const ProjectAsset& project = *MakeNotNull(checked_cast<const ProjectAsset*>(&asset));
     if(!project.validatePayload())
         return false;
 
@@ -50,7 +50,7 @@ bool SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     if(!checkSerializeAssetType(asset, SceneBinaryPayload::s_SceneSerializeContext))
         return false;
 
-    const SceneAsset& scene = static_cast<const SceneAsset&>(asset);
+    const SceneAsset& scene = *MakeNotNull(checked_cast<const SceneAsset*>(&asset));
     Core::Alloc::ScratchArena scratchArena(AssetsSceneArenaScope::s_SceneSerializeArena);
     if(!scene.validatePayload(scratchArena))
         return false;

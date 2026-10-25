@@ -50,6 +50,7 @@ asset.assets = [
     "project/smoke/reflection/materials/opaque",
     "project/smoke/reflection/materials/optical_pane",
     "project/smoke/reflection/materials/optical_volume",
+    "project/smoke/reflection/materials/roughness_lit",
     "project/smoke/refraction/materials/clear",
     "project/smoke/refraction/materials/gallery_glass",
     "project/smoke/refraction/materials/gallery_preview",
@@ -63,4 +64,3 @@ asset.assets = [
     "project/smoke/transparent_multi/materials/shared",
     "project/textures/smoke_checker"
 ];
-

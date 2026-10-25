@@ -33,7 +33,7 @@ bool SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Ass
     if(!checkSerializeAssetType(asset, SubsystemBinaryPayload::s_SubsystemSerializeContext))
         return false;
 
-    const Subsystem& subsystem = static_cast<const Subsystem&>(asset);
+    const Subsystem& subsystem = *MakeNotNull(checked_cast<const Subsystem*>(&asset));
     Core::Alloc::ScratchArena scratchArena(AssetsSubsystemArenaScope::s_SerializeArena);
     if(!subsystem.validatePayload(scratchArena))
         return false;

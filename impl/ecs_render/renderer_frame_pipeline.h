@@ -161,13 +161,13 @@ public:
     [[nodiscard]] bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
     [[nodiscard]] bool isTransparentFeatureEnabled()const noexcept{
-        return !m_activeSceneSubsystems || m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Transparent);
+        return m_activeSceneSubsystems && m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Transparent);
     }
     [[nodiscard]] bool isRefractiveFeatureEnabled()const noexcept{
-        return !m_activeSceneSubsystems || m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Refractive);
+        return m_activeSceneSubsystems && m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Refractive);
     }
     [[nodiscard]] bool isCsgFeatureEnabled()const noexcept{
-        return !m_activeSceneSubsystems || m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Csg);
+        return m_activeSceneSubsystems && m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Csg);
     }
     // Trades one frame of effect latency for overlap; off by default, self-bootstraps on toggle.
     void setRefractionEnabled(const bool enabled)noexcept{ m_refractionEnabled = enabled; }
@@ -558,7 +558,6 @@ private:
     Core::IGpuTaskGraphOutputLayerContributor* m_preparedTaskGraphOutputLayerContributor = nullptr;
     ActiveSceneSubsystems m_defaultSceneSubsystems;
     const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
-    bool m_defaultSceneSubsystemsAttempted = false;
 
 private:
     RendererMeshState m_meshState;

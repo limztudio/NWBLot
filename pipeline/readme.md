@@ -90,7 +90,8 @@ python -m launcher run nwb_asset_gatherer --config dbg --working-directory . -- 
 ```
 
 `pipeline/launch.py` is discovered by the root launcher as the `pipeline` command,
-using the same convention as the repository's other runnable directories. It discovers `.nwb` files, configures and
+using the same convention as the repository's other runnable directories. It validates
+asset roots and optional input overrides, configures and
 builds `nwb_pipeline`, calls `dependency_computer`, passes that result to
 `asset_builder`, then passes the builder manifest to `asset_gatherer`. Discovery
 errors and failed stages stop the pipeline and preserve the published volume.

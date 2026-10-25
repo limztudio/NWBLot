@@ -13,7 +13,12 @@ LIT_GENERATION_IDENTITY_JSON = "generation_identity.json"
 LIT_EMPTY = ", "
 LIT_MAIN = "__main__"
 
-MATERIAL = '''material asset;
+PROJECT = """project asset;
+
+asset.start_scene = "project/scenes/main";
+"""
+
+MATERIAL = """material asset;
 
 asset.interface = "project/shaders/smoke_surface.bind";
 asset.surface = "project/shaders/gather_benchmark_glass.surface";
@@ -30,7 +35,7 @@ asset.parameters = {
     },
     "runtime": { "color_tint": "half4(1.0h, 1.0h, 1.0h, 1.0h)" },
 };
-'''
+"""
 
 
 def crlf(text):
@@ -38,10 +43,30 @@ def crlf(text):
 
 
 def generated_contents(mesh_text, surface_text):
-    result = {"shaders/gather_benchmark_glass.surface": crlf(surface_text)}
+    result = {
+        "project.nwb": crlf(PROJECT),
+        "shaders/gather_benchmark_glass.surface": crlf(surface_text),
+    }
+    scene_assets = [
+        "project/characters/body/model",
+        "project/meshes/octahedron",
+        "project/meshes/shadow_plane",
+        "project/smoke/reflection/materials/opaque",
+    ]
     for index in range(64):
-        result[f"smoke/gather_benchmark/meshes/mesh_{index:02d}.nwb"] = crlf(mesh_text)
-        result[f"smoke/gather_benchmark/materials/glass_{index:02d}.nwb"] = crlf(MATERIAL)
+        mesh_rel = f"smoke/gather_benchmark/meshes/mesh_{index:02d}.nwb"
+        mat_rel = f"smoke/gather_benchmark/materials/glass_{index:02d}.nwb"
+        result[mesh_rel] = crlf(mesh_text)
+        result[mat_rel] = crlf(MATERIAL)
+        scene_assets.append("project/" + mesh_rel[:-4])
+        scene_assets.append("project/" + mat_rel[:-4])
+    assets_lines = ("," + LIT_N).join(f'    "{item}"' for item in sorted(scene_assets))
+    scene_text = (
+        "scene asset;\n\n"
+        'asset.subsystems = [\n    "engine/subsystems/renderer"\n];\n\n'
+        f"asset.assets = [\n{assets_lines}\n];\n"
+    )
+    result["scenes/main.nwb"] = crlf(scene_text)
     return result
 
 
@@ -60,21 +85,11 @@ def main(argv=None):
     if output == Path(output.anchor) or source_root.is_relative_to(output) or output.is_relative_to(source_root) \
         or any(path.is_relative_to(output) for path in sources):
         parser.error("generated root must be separate from its authored templates")
-    # Material dispatch resolves one physical root per virtual project.
-    # Keep its existing bind/BXDF sources and the generated surface in that same private root; two project roots would resolve the wrong include.
     contents = {path.relative_to(source_root).as_posix(): path.read_bytes() for path in sorted(source_root.rglob("*")) if path.is_file()}
     generated = generated_contents(sources[0].read_text(encoding=LIT_UTF_8), sources[1].read_text(encoding=LIT_UTF_8))
     if contents.keys() & generated.keys():
         parser.error("generated benchmark identities collide with source assets")
     contents.update(generated)
-    if "scenes/main.nwb" in contents:
-        scene_text = contents["scenes/main.nwb"].decode(LIT_UTF_8)
-        closing = LIT_R_N + "];"
-        assets_start = scene_text.index("asset.assets = [")
-        closing_index = scene_text.index(closing, assets_start)
-        extra_assets = ["project/" + relative[:-4] for relative in sorted(generated.keys()) if relative.lower().endswith(".nwb")]
-        extra_lines = "," + LIT_R_N + ("," + LIT_R_N).join(f'    "{asset}"' for asset in extra_assets)
-        contents["scenes/main.nwb"] = (scene_text[:closing_index] + extra_lines + scene_text[closing_index:]).encode(LIT_UTF_8)
     if LIT_GENERATION_IDENTITY_JSON in contents:
         parser.error("source assets collide with the reserved generation identity")
     expected = dict(contents)

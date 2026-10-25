@@ -225,7 +225,7 @@ public:
 
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
     [[nodiscard]] bool isSkinningFeatureEnabled()const noexcept{
-        return !m_activeSceneSubsystems || m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Skinning);
+        return m_activeSceneSubsystems && m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Skinning);
     }
 
 
@@ -265,7 +265,6 @@ private:
     MeshSkinningRuntimeCache m_runtimeMeshCache;
     ActiveSceneSubsystems m_defaultSceneSubsystems;
     const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
-    bool m_defaultSceneSubsystemsAttempted = false;
     bool m_runtimeSetupReady = false;
 
     HashMap<u64, RuntimeResources, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_runtimeResources;

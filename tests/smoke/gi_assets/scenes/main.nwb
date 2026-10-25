@@ -1,0 +1,22 @@
+scene asset;
+
+asset.subsystems = [
+    "engine/subsystems/renderer"
+];
+
+asset.enabled_features = [
+    "csg"
+];
+
+asset.assets = [
+    "project/meshes/cube_hard_edges",
+    "project/meshes/gi_csg_mixed",
+    "project/meshes/gi_csg_open_quad",
+    "project/meshes/shadow_plane",
+    "project/smoke/gi/materials/coverage_probe",
+    "project/smoke/gi/materials/csg_cap",
+    "project/smoke/gi/materials/csg_mixed",
+    "project/smoke/gi/materials/diffuse",
+    "project/smoke/gi/materials/indirect",
+    "project/smoke/transparent_multi/materials/ground"
+];

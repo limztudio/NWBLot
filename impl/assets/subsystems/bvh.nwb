@@ -1,0 +1,7 @@
+bvh_subsystem asset;
+
+asset.bitonic_sort_cs = "engine/graphics/bvh/bvh_bitonic_sort_cs";
+asset.fit_cs = "engine/graphics/bvh/bvh_fit_cs";
+asset.morton_cs = "engine/graphics/bvh/bvh_morton_cs";
+asset.topology_cs = "engine/graphics/bvh/bvh_topology_cs";
+asset.scene_refit_cs = "engine/graphics/bvh/scene_refit_cs";

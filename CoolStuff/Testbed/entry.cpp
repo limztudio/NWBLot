@@ -32,10 +32,6 @@ static constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
 static constexpr TStringView s_WorldAllocFailed = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
 static constexpr TStringView s_ResolverNull = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
 static constexpr TStringView s_DestroyRequiresIdleOrLoss = NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
-static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultLatin{"default_latin_face"};
-static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultKorean{"default_korean_face"};
-static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultLatinAtlas{"default_latin_atlas"};
-static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultKoreanAtlas{"default_korean_atlas"};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,7 +58,6 @@ static Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialWorl
     auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(*world, context.graphics, context.assetManager, context.shaderPathResolver);
     world->addSystem<NWB::Impl::ModelSystem>(*world, context.assetManager, NWB::Impl::CreateModelObjectRendererHooks());
     auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(*world, context.graphics, context.assetManager, meshSystem, context.shaderPathResolver);
-    const NWB::Impl::UiFontBinding fonts[] = { { s_DefaultLatin, s_DefaultLatinAtlas }, { s_DefaultKorean, s_DefaultKoreanAtlas } };
     auto& uiLayerSystem = world->addSystem<NWB::Impl::UiLayerSystem>(
         *world,
         context.graphics,
@@ -72,7 +67,7 @@ static Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialWorl
         context.assetManager,
         context.shaderPathResolver,
         NWB::Impl::s_DefaultUiSkinRef,
-        fonts,
+        Span<const NWB::Impl::UiFontBinding>{},
         NWB::Impl::UiLayerPresentation::Scene
     );
     context.graphics.addRenderPassToBack(meshSkinningSystem);

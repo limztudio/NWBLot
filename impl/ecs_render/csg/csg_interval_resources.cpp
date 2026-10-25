@@ -189,17 +189,17 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     }
 
     if(!m_csgState.m_intervalPeelComputeShader){
-        if(!m_shaderSystem.loadShader<ComputeShader>(m_csgState.m_intervalPeelComputeShader, AssetsGraphicsCsg::s_IntervalPeelComputeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalPeelCS"))
+        if(!m_shaderSystem.loadShader<ComputeShader>(m_csgState.m_intervalPeelComputeShader, &CsgSubsystem::intervalPeelCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalPeelCS"))
             return false;
     }
 
     if(!m_csgState.m_receiverSpanBuildComputeShader){
-        if(!m_shaderSystem.loadShader<ComputeShader>(m_csgState.m_receiverSpanBuildComputeShader, AssetsGraphicsCsg::s_ReceiverSpanBuildComputeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgReceiverSpanBuildCS"))
+        if(!m_shaderSystem.loadShader<ComputeShader>(m_csgState.m_receiverSpanBuildComputeShader, &CsgSubsystem::receiverSpanBuildCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgReceiverSpanBuildCS"))
             return false;
     }
 
     if(!m_csgState.m_intervalCombineComputeShader){
-        if(!m_shaderSystem.loadShader<ComputeShader>(m_csgState.m_intervalCombineComputeShader, AssetsGraphicsCsg::s_IntervalCombineComputeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalCombineCS"))
+        if(!m_shaderSystem.loadShader<ComputeShader>(m_csgState.m_intervalCombineComputeShader, &CsgSubsystem::intervalCombineCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalCombineCS"))
             return false;
     }
 
@@ -208,7 +208,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
             return false;
 
         if(!m_csgState.m_intervalCapFillPixelShader){
-            if(!m_shaderSystem.loadShader<PixelShader>(m_csgState.m_intervalCapFillPixelShader, AssetsGraphicsCsg::s_IntervalCapFillPixelShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalCapFillPS"))
+            if(!m_shaderSystem.loadShader<PixelShader>(m_csgState.m_intervalCapFillPixelShader, &CsgSubsystem::intervalCapFillPs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalCapFillPS"))
                 return false;
         }
     }
@@ -277,7 +277,7 @@ bool RendererCsgSystem::prepareRefractionIntervalCapResources(const DeferredFram
     if(!m_shaderSystem.loadDeferredCompositeVertexShader())
         return false;
     if(!m_csgState.m_refractionCapFillPixelShader){
-        if(!m_shaderSystem.loadShader<PixelShader>(m_csgState.m_refractionCapFillPixelShader, AssetsGraphicsCsg::s_RefractionCapFillPixelShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgRefractionCapFillPS"))
+        if(!m_shaderSystem.loadShader<PixelShader>(m_csgState.m_refractionCapFillPixelShader, &CsgSubsystem::refractionCapFillPs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgRefractionCapFillPS"))
             return false;
     }
     if(!CsgIntervalDetail::CreateIntervalCapFillPipeline(

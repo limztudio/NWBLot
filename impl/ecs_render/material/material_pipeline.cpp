@@ -8,8 +8,6 @@
 #include <impl/ecs_render/material/material_shader_variants_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
-#include <impl/assets_graphics/csg/names.h>
-#include <impl/assets_graphics/mesh/names.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/ecs_csg/shape_registry.h>
 
@@ -214,7 +212,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     const AStringView pixelShaderVariant = csgClipPipeline && !avboitCsgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
     const AStringView meshShaderVariant = csgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
 
-    const Name sharedMeshShaderAssetName = m_shaderSystem.resolveShaderName(AssetsGraphicsMesh::s_SharedMeshShaderName);
+    const Name sharedMeshShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::sharedMs);
     const bool sharedObjectGeometry = sharedMeshShaderAssetName && materialInfo.meshShader.name() == sharedMeshShaderAssetName && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
     const AStringView objectGeometryShaderVariant = sharedObjectGeometry ? shaderVariant : meshShaderVariant;
 
@@ -230,7 +228,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     case MaterialPipelinePass::Opaque:
         break;
     case MaterialPipelinePass::CsgReceiverSurface:
-        passPixelShaderName = AssetsGraphicsCsg::s_ReceiverSurfacePixelShaderName;
+        passPixelShaderName = m_shaderSystem.resolveSubsystemAsset<CsgSubsystem>(&CsgSubsystem::receiverSurfacePs);
         passPixelShaderDebugName = "ECSRender_CsgReceiverSurfacePS";
         break;
     case MaterialPipelinePass::AvboitOccupancy:
@@ -260,7 +258,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
             return m_shaderSystem.loadShaderAsset<PixelShader>(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, "ECSRender_RendererPS");
         }
         if(pass == MaterialPipelinePass::CsgReceiverSurface){
-            return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Name(passPixelShaderDebugName));
+            return m_shaderSystem.loadShaderAsset<PixelShader>(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Name(passPixelShaderDebugName));
         }
         if(avboitCsgClipPipeline){
             return m_shaderSystem.loadShaderAsset<PixelShader>(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Name(passPixelShaderDebugName));

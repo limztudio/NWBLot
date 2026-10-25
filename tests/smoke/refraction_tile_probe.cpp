@@ -5,7 +5,6 @@
 #include "refraction_tile_probe.h"
 #include "assets/shaders/refraction_tile_probe_layout.h"
 
-#include <impl/assets_graphics/refraction/names.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
@@ -361,9 +360,10 @@ bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl
     Core::ShaderHandle finalizeShader;
     Core::ShaderHandle verifyCompactShader;
     Core::ShaderHandle verifyDenseShader;
-    const auto classifyShaderRef = sceneSubsystems.findAsset<Impl::ComputeShader>(Impl::AssetsGraphicsRefraction::s_ClassifyTilesShaderName);
-    const auto finalizeShaderRef = sceneSubsystems.findAsset<Impl::ComputeShader>(Impl::AssetsGraphicsRefraction::s_FinalizeTilesShaderName);
-    const auto verifyShaderRef = sceneSubsystems.findAsset<Impl::ComputeShader>(s_VerifyShaderName);
+    const Impl::RefractiveSubsystem* const refractiveSubsystem = sceneSubsystems.findSubsystem<Impl::RefractiveSubsystem>();
+    const auto classifyShaderRef = refractiveSubsystem ? refractiveSubsystem->refractionClassifyTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
+    const auto finalizeShaderRef = refractiveSubsystem ? refractiveSubsystem->refractionFinalizeTilesCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
+    const auto verifyShaderRef = sceneSubsystems.findSceneAsset<Impl::ComputeShader>(s_VerifyShaderName);
     if(!classifyShaderRef.valid() || !finalizeShaderRef.valid() || !verifyShaderRef.valid())
         return false;
     if(

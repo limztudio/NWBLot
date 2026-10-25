@@ -73,30 +73,34 @@ using namespace NWB::Impl;
     return binary;
 }
 
-[[nodiscard]] static AssetBytes MakeSubsystemBinary(
-    AssetArena& arena,
-    const Span<const Subsystem::SubsystemRef> subsystems,
-    const Subsystem::AssetMap& assets
-){
+template<typename SubsystemT>
+static void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
+    const Span<const SubsystemFieldDescriptor<SubsystemT>> descriptors = SubsystemT::FieldDescriptors();
+    for(const SubsystemFieldDescriptor<SubsystemT>& descriptor : descriptors){
+        if(!descriptor.get(subsystem))
+            descriptor.set(subsystem, Name("engine/test/default_asset"));
+    }
+}
+
+template<typename SubsystemT>
+[[nodiscard]] static AssetBytes MakeSubsystemBinary(AssetArena& arena, const SubsystemT& subsystem){
+    const Span<const SubsystemFieldDescriptor<SubsystemT>> descriptors = SubsystemT::FieldDescriptors();
     SubsystemBinaryPayload::SubsystemHeaderBinary header;
-    header.subsystemCount = static_cast<u64>(subsystems.size());
-    header.assetCount = static_cast<u64>(assets.size());
+    header.subsystemTypeHash = SubsystemT::AssetTypeName().hash();
+    header.subsystemCount = static_cast<u64>(subsystem.subsystems().size());
+    header.assetCount = static_cast<u64>(descriptors.size());
 
     AssetBytes binary(arena);
     binary.reserve(
         sizeof(header)
-        + subsystems.size() * sizeof(NameHash)
-        + assets.size() * sizeof(SubsystemBinaryPayload::SubsystemAssetEntryBinary)
+        + subsystem.subsystems().size() * sizeof(NameHash)
+        + descriptors.size() * sizeof(NameHash)
     );
     AppendPOD(binary, header);
-    for(const Subsystem::SubsystemRef& ref : subsystems)
+    for(const ISubsystem::SubsystemRef& ref : subsystem.subsystems())
         AppendPOD(binary, ref.name().hash());
-    for(const auto& [nickname, ref] : assets){
-        SubsystemBinaryPayload::SubsystemAssetEntryBinary entry;
-        entry.nicknameHash = nickname.hash();
-        entry.assetHash = ref.name().hash();
-        AppendPOD(binary, entry);
-    }
+    for(const SubsystemFieldDescriptor<SubsystemT>& descriptor : descriptors)
+        AppendPOD(binary, descriptor.get(subsystem).hash());
     return binary;
 }
 
@@ -165,38 +169,51 @@ TEST(SceneSubsystemAssets, SubsystemBinaryDecodeAndValidation){
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
     AssetArena arena(Name("tests/scene/subsystem_round_trip"));
-    Subsystem::SubsystemRefVector subsystems(arena);
+    DefaultSubsystem defaultSubsystem(arena, BuiltInSubsystems::s_Default.name());
+    ISubsystem::SubsystemRefVector subsystems(arena);
     subsystems.push_back(BuiltInSubsystems::s_Renderer);
     subsystems.push_back(BuiltInSubsystems::s_Ui);
+    defaultSubsystem.subsystems() = Move(subsystems);
 
-    Subsystem::AssetMap assets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    assets.emplace(Name("hzb_2d_cs"), Subsystem::AssetRef("engine/shaders/hzb_2d_cs"));
-    assets.emplace(Name("skinning_cs"), Subsystem::AssetRef("engine/shaders/skinning_cs"));
-
-    const AssetBytes binary = MakeSubsystemBinary(arena, subsystems, assets);
-    EXPECT_FALSE(binary.empty());
+    const AssetBytes defaultBinary = MakeSubsystemBinary(arena, defaultSubsystem);
+    EXPECT_FALSE(defaultBinary.empty());
 
     SubsystemAssetCodec codec;
-    auto decodedResult = codec.deserialize(arena, BuiltInSubsystems::s_Default.name(), binary);
-    ASSERT_TRUE(decodedResult.has_value());
-    const auto* decoded = static_cast<const Subsystem*>(decodedResult->get());
-    ASSERT_NE(decoded, nullptr);
-    ASSERT_EQ(decoded->subsystems().size(), 2u);
-    EXPECT_EQ(decoded->subsystems()[0], BuiltInSubsystems::s_Renderer);
-    EXPECT_EQ(decoded->subsystems()[1], BuiltInSubsystems::s_Ui);
-    ASSERT_EQ(decoded->assets().size(), 2u);
-    EXPECT_EQ(decoded->findAsset(Name("hzb_2d_cs")).name(), Name("engine/shaders/hzb_2d_cs"));
-    EXPECT_EQ(decoded->findAsset(Name("skinning_cs")).name(), Name("engine/shaders/skinning_cs"));
-    EXPECT_FALSE(decoded->findAsset(Name("missing_asset")).valid());
+    auto decodedDefaultResult = codec.deserialize(arena, BuiltInSubsystems::s_Default.name(), defaultBinary);
+    ASSERT_TRUE(decodedDefaultResult.has_value());
+    const DefaultSubsystem* const decodedDefault = CastAsset<DefaultSubsystem>(decodedDefaultResult->get());
+    ASSERT_NE(decodedDefault, nullptr);
+    ASSERT_EQ(decodedDefault->subsystems().size(), 2u);
+    EXPECT_EQ(decodedDefault->subsystems()[0], BuiltInSubsystems::s_Renderer);
+    EXPECT_EQ(decodedDefault->subsystems()[1], BuiltInSubsystems::s_Ui);
 
-    AssetBytes trailing = binary;
+    SkinningSubsystem skinningSubsystem(arena, BuiltInSubsystems::s_Skinning.name());
+    skinningSubsystem.skinningCs = AssetRef<ComputeShader>("engine/graphics/skinned_mesh/skinning_cs");
+    skinningSubsystem.meshletBoundsCs = AssetRef<ComputeShader>("engine/graphics/skinned_mesh/meshlet_bounds_cs");
+    PopulateRequiredSubsystemFields(skinningSubsystem);
+
+    const AssetBytes skinningBinary = MakeSubsystemBinary(arena, skinningSubsystem);
+    TypedSubsystemAssetCodec<SkinningSubsystem> skinningCodec;
+    auto decodedSkinningResult = skinningCodec.deserialize(arena, BuiltInSubsystems::s_Skinning.name(), skinningBinary);
+    ASSERT_TRUE(decodedSkinningResult.has_value());
+    const SkinningSubsystem* const decodedSkinning = CastAsset<SkinningSubsystem>(decodedSkinningResult->get());
+    ASSERT_NE(decodedSkinning, nullptr);
+    EXPECT_EQ(decodedSkinning->skinningCs.name(), Name("engine/graphics/skinned_mesh/skinning_cs"));
+    EXPECT_EQ(decodedSkinning->meshletBoundsCs.name(), Name("engine/graphics/skinned_mesh/meshlet_bounds_cs"));
+    EXPECT_EQ(decodedSkinning->localBoundsCs.name(), Name("engine/test/default_asset"));
+
+    TypedSubsystemAssetCodec<RendererSubsystem> rendererCodec;
+    EXPECT_FALSE(rendererCodec.deserialize(arena, BuiltInSubsystems::s_Skinning.name(), skinningBinary).has_value());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("subsystem binary type does not match")));
+
+    AssetBytes trailing = skinningBinary;
     trailing.push_back(0u);
-    EXPECT_FALSE(codec.deserialize(arena, BuiltInSubsystems::s_Default.name(), trailing).has_value());
+    EXPECT_FALSE(codec.deserialize(arena, BuiltInSubsystems::s_Skinning.name(), trailing).has_value());
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("trailing bytes detected")));
 
-    AssetBytes badMagic = binary;
+    AssetBytes badMagic = skinningBinary;
     badMagic[0] ^= 0xFFu;
-    EXPECT_FALSE(codec.deserialize(arena, BuiltInSubsystems::s_Default.name(), badMagic).has_value());
+    EXPECT_FALSE(codec.deserialize(arena, BuiltInSubsystems::s_Skinning.name(), badMagic).has_value());
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid subsystem asset format")));
 }
 
@@ -245,7 +262,7 @@ TEST(SceneSubsystemAssets, ProjectAndSceneBinaryDecodeAndValidation){
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("scene must declare at least one subsystem")));
 }
 
-TEST(SceneSubsystemAssets, ActiveSceneSubsystemsResolvesTransitiveSubsystemsAndNicknames){
+TEST(SceneSubsystemAssets, ActiveSceneSubsystemsResolvesTransitiveSubsystemsAndTypedFields){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
@@ -253,30 +270,36 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsResolvesTransitiveSubsystemsAndN
     Core::Alloc::GlobalArena globalArena(Name("tests/scene/active_scene_subsystems_global"));
     AssetRegistry registry(arena);
     ASSERT_TRUE(registry.registerCodec(MakeUnique<SubsystemAssetCodec>()));
+#define NWB_REGISTER_TEST_SUBSYSTEM_CODEC(Type) ASSERT_TRUE(registry.registerCodec(MakeUnique<Type##AssetCodec>()));
+    NWB_SUBSYSTEM_ASSET_TYPE_ENTRIES(NWB_REGISTER_TEST_SUBSYSTEM_CODEC)
+#undef NWB_REGISTER_TEST_SUBSYSTEM_CODEC
     ASSERT_TRUE(registry.registerCodec(MakeUnique<ProjectAssetCodec>()));
     ASSERT_TRUE(registry.registerCodec(MakeUnique<SceneAssetCodec>()));
 
     MapAssetBinarySource source(arena);
     AssetManager assets(arena, registry, source);
 
-    Subsystem::SubsystemRefVector emptySubsystems(arena);
-    Subsystem::AssetMap emptyAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    RendererSubsystem rendererSubsystem(arena, BuiltInSubsystems::s_Renderer.name());
+    rendererSubsystem.linearClamp = AssetRef<Sampler>("engine/samplers/linear_clamp");
+    PopulateRequiredSubsystemFields(rendererSubsystem);
 
-    Subsystem::AssetMap rendererAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    rendererAssets.emplace(Name("depth_prepass_vs"), Subsystem::AssetRef("engine/shaders/depth_prepass_vs"));
+    SkinningSubsystem skinningSubsystem(arena, BuiltInSubsystems::s_Skinning.name());
+    skinningSubsystem.skinningCs = AssetRef<ComputeShader>("engine/graphics/skinned_mesh/skinning_cs");
+    PopulateRequiredSubsystemFields(skinningSubsystem);
 
-    Subsystem::AssetMap skinningAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    skinningAssets.emplace(Name("skinning_cs"), Subsystem::AssetRef("engine/graphics/skinned_mesh/skinning_cs"));
+    TransparentSubsystem transparentSubsystem(arena, BuiltInSubsystems::s_Transparent.name());
+    transparentSubsystem.avboitDepthWarpCs = AssetRef<ComputeShader>("engine/graphics/avboit/depth_warp_cs");
+    PopulateRequiredSubsystemFields(transparentSubsystem);
 
-    Subsystem::AssetMap transparentAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    transparentAssets.emplace(Name("avboit_depth_warp_cs"), Subsystem::AssetRef("engine/graphics/avboit/depth_warp_cs"));
+    UiSubsystem uiSubsystem(arena, BuiltInSubsystems::s_Ui.name());
+    uiSubsystem.defaultSkin = AssetRef<UiSkin>("engine/ui/skins/default/atlas");
+    PopulateRequiredSubsystemFields(uiSubsystem);
 
-    Subsystem::AssetMap uiAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    uiAssets.emplace(Name("default_skin"), Subsystem::AssetRef("engine/ui/skins/default/atlas"));
-
-    Subsystem::SubsystemRefVector defaultSubsystems(arena);
+    DefaultSubsystem defaultSubsystem(arena, BuiltInSubsystems::s_Default.name());
+    ISubsystem::SubsystemRefVector defaultSubsystems(arena);
     defaultSubsystems.push_back(BuiltInSubsystems::s_Renderer);
     defaultSubsystems.push_back(BuiltInSubsystems::s_Ui);
+    defaultSubsystem.subsystems() = Move(defaultSubsystems);
 
     SceneAsset::SubsystemRefVector sceneSubsystems(arena);
     sceneSubsystems.push_back(BuiltInSubsystems::s_Default);
@@ -285,11 +308,11 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsResolvesTransitiveSubsystemsAndN
     SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
     sceneAssets.emplace(Name("cesium_man_model"), SceneAsset::AssetRef("project/characters/cesium_man/model"));
 
-    source.setBinary(BuiltInSubsystems::s_Renderer.name(), MakeSubsystemBinary(arena, emptySubsystems, rendererAssets));
-    source.setBinary(BuiltInSubsystems::s_Skinning.name(), MakeSubsystemBinary(arena, emptySubsystems, skinningAssets));
-    source.setBinary(BuiltInSubsystems::s_Transparent.name(), MakeSubsystemBinary(arena, emptySubsystems, transparentAssets));
-    source.setBinary(BuiltInSubsystems::s_Ui.name(), MakeSubsystemBinary(arena, emptySubsystems, uiAssets));
-    source.setBinary(BuiltInSubsystems::s_Default.name(), MakeSubsystemBinary(arena, defaultSubsystems, emptyAssets));
+    source.setBinary(BuiltInSubsystems::s_Renderer.name(), MakeSubsystemBinary(arena, rendererSubsystem));
+    source.setBinary(BuiltInSubsystems::s_Skinning.name(), MakeSubsystemBinary(arena, skinningSubsystem));
+    source.setBinary(BuiltInSubsystems::s_Transparent.name(), MakeSubsystemBinary(arena, transparentSubsystem));
+    source.setBinary(BuiltInSubsystems::s_Ui.name(), MakeSubsystemBinary(arena, uiSubsystem));
+    source.setBinary(BuiltInSubsystems::s_Default.name(), MakeSubsystemBinary(arena, defaultSubsystem));
     source.setBinary(ProjectAssetDefaults::s_DefaultProjectVirtualPath, MakeProjectBinary(arena, Name("project/scenes/main")));
     source.setBinary(Name("project/scenes/main"), MakeSceneBinary(arena, sceneSubsystems, sceneAssets));
 
@@ -297,6 +320,13 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsResolvesTransitiveSubsystemsAndN
     ASSERT_TRUE(active.loadProjectStartScene(assets));
     EXPECT_TRUE(active.valid());
     EXPECT_EQ(active.scene().name(), Name("project/scenes/main"));
+    EXPECT_TRUE(active.hasSubsystem<DefaultSubsystem>());
+    EXPECT_TRUE(active.hasSubsystem<RendererSubsystem>());
+    EXPECT_TRUE(active.hasSubsystem<UiSubsystem>());
+    EXPECT_TRUE(active.hasSubsystem<SkinningSubsystem>());
+    EXPECT_TRUE(active.hasSubsystem<TransparentSubsystem>());
+    EXPECT_FALSE(active.hasSubsystem<RefractiveSubsystem>());
+    EXPECT_FALSE(active.hasSubsystem<CsgSubsystem>());
     EXPECT_TRUE(active.hasSubsystem(BuiltInSubsystems::s_Default));
     EXPECT_TRUE(active.hasSubsystem(BuiltInSubsystems::s_Renderer));
     EXPECT_TRUE(active.hasSubsystem(BuiltInSubsystems::s_Ui));
@@ -304,15 +334,26 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsResolvesTransitiveSubsystemsAndN
     EXPECT_TRUE(active.hasSubsystem(BuiltInSubsystems::s_Transparent));
     EXPECT_FALSE(active.hasSubsystem(BuiltInSubsystems::s_Refractive));
     EXPECT_FALSE(active.hasSubsystem(BuiltInSubsystems::s_Csg));
-    EXPECT_FALSE(active.hasSubsystem(Core::Assets::AssetRef<Subsystem>("project/subsystems/custom")));
+    EXPECT_FALSE(active.hasSubsystem(Core::Assets::AssetRef<ISubsystem>("project/subsystems/custom")));
 
     EXPECT_EQ(active.findSceneAsset(Name("cesium_man_model")).name(), Name("project/characters/cesium_man/model"));
-    EXPECT_EQ(active.findSubsystemAsset(BuiltInSubsystems::s_Renderer, Name("depth_prepass_vs")).name(), Name("engine/shaders/depth_prepass_vs"));
-    EXPECT_EQ(active.findSubsystemAsset(BuiltInSubsystems::s_Default, Name("default_skin")).name(), Name("engine/ui/skins/default/atlas"));
-    EXPECT_EQ(active.findAsset(Name("skinning_cs")).name(), Name("engine/graphics/skinned_mesh/skinning_cs"));
-    EXPECT_EQ(active.findAsset(Name("avboit_depth_warp_cs")).name(), Name("engine/graphics/avboit/depth_warp_cs"));
-    EXPECT_EQ(active.findAsset(Name("cesium_man_model")).name(), Name("project/characters/cesium_man/model"));
-    EXPECT_FALSE(active.findAsset(Name("nonexistent_nickname")).valid());
+    EXPECT_FALSE(active.findSceneAsset(Name("nonexistent_nickname")).valid());
+
+    const RendererSubsystem* const activeRenderer = active.findSubsystem<RendererSubsystem>();
+    ASSERT_NE(activeRenderer, nullptr);
+    EXPECT_EQ(activeRenderer->linearClamp.name(), Name("engine/samplers/linear_clamp"));
+
+    const UiSubsystem* const activeUi = active.findSubsystem<UiSubsystem>();
+    ASSERT_NE(activeUi, nullptr);
+    EXPECT_EQ(activeUi->defaultSkin.name(), Name("engine/ui/skins/default/atlas"));
+
+    const SkinningSubsystem* const activeSkinning = active.findSubsystem<SkinningSubsystem>();
+    ASSERT_NE(activeSkinning, nullptr);
+    EXPECT_EQ(activeSkinning->skinningCs.name(), Name("engine/graphics/skinned_mesh/skinning_cs"));
+
+    const TransparentSubsystem* const activeTransparent = active.findSubsystem<TransparentSubsystem>();
+    ASSERT_NE(activeTransparent, nullptr);
+    EXPECT_EQ(activeTransparent->avboitDepthWarpCs.name(), Name("engine/graphics/avboit/depth_warp_cs"));
 
     SceneAsset::SubsystemRefVector brokenSceneSubsystems(arena);
     brokenSceneSubsystems.push_back(SceneAsset::SubsystemRef("project/subsystems/missing_subsystem"));
@@ -320,7 +361,7 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsResolvesTransitiveSubsystemsAndN
 
     EXPECT_FALSE(active.loadScene(assets, ActiveSceneSubsystems::SceneRef("project/scenes/broken")));
     EXPECT_EQ(active.scene().name(), Name("project/scenes/main"));
-    EXPECT_TRUE(active.hasSubsystem(BuiltInSubsystems::s_Default));
+    EXPECT_TRUE(active.hasSubsystem<DefaultSubsystem>());
     EXPECT_EQ(active.findSceneAsset(Name("cesium_man_model")).name(), Name("project/characters/cesium_man/model"));
 }
 

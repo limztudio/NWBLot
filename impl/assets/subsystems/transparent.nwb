@@ -1,11 +1,9 @@
-subsystem asset;
+transparent_subsystem asset;
 
-asset.assets = {
-    "avboit_depth_warp_cs": "engine/graphics/avboit/depth_warp_cs",
-    "avboit_integrate_cs": "engine/graphics/avboit/integrate_cs",
-    "optical_bounds_finalize_cs": "engine/graphics/raytrace/optical_bounds_finalize_cs",
-    "refraction_classify_tiles_cs": "engine/graphics/refraction/classify_tiles_cs",
-    "refraction_finalize_tiles_cs": "engine/graphics/refraction/finalize_tiles_cs",
-    "refraction_resolve_hw_cs": "engine/graphics/refraction/resolve_hw_cs",
-    "refraction_resolve_screen_cs": "engine/graphics/refraction/resolve_screen_cs"
-};
+asset.avboit_depth_warp_cs = "engine/graphics/avboit/depth_warp_cs";
+asset.avboit_integrate_cs = "engine/graphics/avboit/integrate_cs";
+asset.optical_bounds_finalize_cs = "engine/graphics/raytrace/optical_bounds_finalize_cs";
+asset.refraction_classify_tiles_cs = "engine/graphics/refraction/classify_tiles_cs";
+asset.refraction_finalize_tiles_cs = "engine/graphics/refraction/finalize_tiles_cs";
+asset.refraction_resolve_hw_cs = "engine/graphics/refraction/resolve_hw_cs";
+asset.refraction_resolve_screen_cs = "engine/graphics/refraction/resolve_screen_cs";

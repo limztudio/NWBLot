@@ -141,17 +141,14 @@ static bool PrepareSceneVolumeEntries(Core::Assets::AssetsVolumeCookDetail::Asse
     if(!sceneBucket || sceneBucket->size() == 0u)
         return true;
 
-    const Core::Assets::ICookEntryBucket* subsystemBucket = entryRegistry.find(Subsystem::AssetTypeName());
-    if(!subsystemBucket || subsystemBucket->size() == 0u)
+    Vector<ISubsystem::SubsystemRef, Core::Alloc::ScratchArena> cookedSubsystems(context.scratchArena);
+    CollectCookedSubsystemVirtualPaths(entryRegistry, cookedSubsystems);
+    if(cookedSubsystems.empty())
         return true;
 
-    const auto& subsystemEntries = entryRegistry.entries<SubsystemCookEntry>(Subsystem::AssetTypeName());
     for(SceneCookEntry& scene : entryRegistry.entries<SceneCookEntry>(SceneAsset::AssetTypeName())){
-        for(const SubsystemCookEntry& subsystemEntry : subsystemEntries){
-            SceneAsset::SubsystemRef ref;
-            ref.virtualPath = subsystemEntry.virtualPath;
-            AppendSubsystemIfAbsent(scene.subsystems, ref);
-        }
+        for(const SceneAsset::SubsystemRef& subsystemRef : cookedSubsystems)
+            AppendSubsystemIfAbsent(scene.subsystems, subsystemRef);
     }
 
     return true;

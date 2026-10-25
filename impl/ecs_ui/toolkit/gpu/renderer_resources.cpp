@@ -4,7 +4,6 @@
 
 #include "renderer_internal.h"
 
-#include <impl/assets_graphics/ui/names.h>
 #include <impl/assets_shader/loader.h>
 
 #include <core/graphics/shader_archive.h>
@@ -94,12 +93,18 @@ public:
 }
 
 template<typename TShader>
-[[nodiscard]] static bool LoadShader(GpuRendererState& state, Core::ShaderHandle& shader, const Name& identity){
+[[nodiscard]] static bool LoadShader(
+    GpuRendererState& state,
+    Core::ShaderHandle& shader,
+    const Core::Assets::AssetRef<TShader> UiSubsystem::* const member,
+    const Name& identity
+){
     if(!state.m_activeSceneSubsystems)
         return false;
-    Core::Assets::AssetRef<TShader> resolved = state.m_activeSceneSubsystems->findSubsystemAsset<TShader>(BuiltInSubsystems::s_Ui, identity);
-    if(!resolved.valid())
-        resolved = state.m_activeSceneSubsystems->findAsset<TShader>(identity);
+    const UiSubsystem* const uiSubsystem = state.m_activeSceneSubsystems->findSubsystem<UiSubsystem>();
+    if(!uiSubsystem)
+        return false;
+    const Core::Assets::AssetRef<TShader>& resolved = uiSubsystem->*member;
     if(!resolved.valid())
         return false;
     return ShaderAssetLoader::Load<TShader>(shader, resolved.name(), Core::ShaderArchive::s_DefaultVariant, identity, state.m_graphics, state.m_assets, state.m_resolver, s_GpuRendererContext);
@@ -136,10 +141,10 @@ bool GpuRendererState::createResources(){
         return false;
     GpuVersion<GpuSharedResources> resources = Move(*resourcesResult);
     if(
-        !__hidden_ui_gpu_resources::LoadShader<VertexShader>(*this, resources->m_vertexShader, AssetsGraphicsUi::s_VertexShaderName)
-        || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(*this, resources->m_pixelShader, AssetsGraphicsUi::s_PixelShaderName)
-        || !__hidden_ui_gpu_resources::LoadShader<VertexShader>(*this, resources->m_outputVertexShader, AssetsGraphicsUi::s_OutputVertexShaderName)
-        || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(*this, resources->m_outputPixelShader, AssetsGraphicsUi::s_OutputPixelShaderName)
+        !__hidden_ui_gpu_resources::LoadShader<VertexShader>(*this, resources->m_vertexShader, &UiSubsystem::vs, Name("UiLayer_VS"))
+        || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(*this, resources->m_pixelShader, &UiSubsystem::ps, Name("UiLayer_PS"))
+        || !__hidden_ui_gpu_resources::LoadShader<VertexShader>(*this, resources->m_outputVertexShader, &UiSubsystem::outputVs, Name("UiLayer_OutputVS"))
+        || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(*this, resources->m_outputPixelShader, &UiSubsystem::outputPs, Name("UiLayer_OutputPS"))
     )
         return false;
     Core::VertexAttributeDesc attributes[NWB_UI_VERTEX_ATTRIBUTE_COUNT];

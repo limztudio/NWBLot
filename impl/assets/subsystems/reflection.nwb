@@ -1,0 +1,8 @@
+reflection_subsystem asset;
+
+asset.build_args_cs = "engine/graphics/reflection/build_args_cs";
+asset.classify_cs = "engine/graphics/reflection/classify_cs";
+asset.depth_reduce_cs = "engine/graphics/reflection/depth_reduce_cs";
+asset.resolve_hw_cs = "engine/graphics/reflection/resolve_hw_cs";
+asset.spatial_cs = "engine/graphics/reflection/spatial_cs";
+asset.temporal_cs = "engine/graphics/reflection/temporal_cs";

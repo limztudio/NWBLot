@@ -12,7 +12,6 @@
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/assets/graphics/deferred/binding_slots.h>
-#include <impl/assets_graphics/deferred/names.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -133,13 +132,13 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         return false;
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_deferredState.m_compositeComputeShader, AssetsGraphicsDeferred::s_CompositeComputeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeCS"))
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_deferredState.m_compositeComputeShader, &DeferredSubsystem::compositeCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeCS"))
         return false;
 
     if(!m_shaderSystem.loadDeferredCompositeVertexShader())
         return false;
 
-    if(!m_shaderSystem.loadShader<PixelShader>(m_deferredState.m_presentPixelShader, AssetsGraphicsDeferred::s_PresentPixelShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredPresentPS"))
+    if(!m_shaderSystem.loadShader<PixelShader>(m_deferredState.m_presentPixelShader, &DeferredSubsystem::compositePs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredPresentPS"))
         return false;
 
     return true;

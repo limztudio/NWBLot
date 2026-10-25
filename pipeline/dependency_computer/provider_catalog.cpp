@@ -6,6 +6,7 @@
 
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_scene/asset.h>
+#include <impl/assets_subsystem/asset.h>
 
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_paths.h>
@@ -31,6 +32,18 @@ inline constexpr AStringView s_CsgShapeFileSuffix = "/shape";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] static bool MatchesExpectedAssetType(
+    const Name& actualType,
+    const Name& expectedType,
+    const Assets::CookDependencyRegistry* const dependencyRegistry
+)noexcept{
+    if(!expectedType)
+        return true;
+    if(expectedType == Impl::ISubsystem::AssetTypeName() && dependencyRegistry)
+        return dependencyRegistry->isSubsystemType(actualType);
+    return actualType == expectedType;
+}
 
 [[nodiscard]] static Expected<bool, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
     for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
@@ -232,7 +245,13 @@ Expected<NWB::Core::Metascript::Document> DependencyProviderCatalog::read(const 
     return document;
 }
 
-Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, const Name& assetType, const AStringView virtualPathTextHint, NWB::Core::Alloc::ScratchArena& scratchArena)const{
+Expected<usize> DependencyProviderCatalog::resolve(
+    const Name& virtualPath,
+    const Name& assetType,
+    const AStringView virtualPathTextHint,
+    NWB::Core::Alloc::ScratchArena& scratchArena,
+    const NWB::Core::Assets::CookDependencyRegistry* const dependencyRegistry
+)const{
     using namespace __hidden_dependency_provider_catalog;
     if(!virtualPath)
         return MakeUnexpected(Failure{});
@@ -279,7 +298,7 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
             const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
             if(!documentAssetType)
                 return MakeUnexpected(Failure{});
-            if(assetType && *documentAssetType != assetType)
+            if(!MatchesExpectedAssetType(*documentAssetType, assetType, dependencyRegistry))
                 continue;
             if(document->declarations().size() != 1u){
                 NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), ConvertString(virtualPath));
@@ -308,7 +327,7 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
             for(const Assets::ExpandedAssetMetadata& item : *expanded){
                 if(item.virtualPath != virtualPath)
                     continue;
-                if(assetType && item.assetType != assetType)
+                if(!MatchesExpectedAssetType(item.assetType, assetType, dependencyRegistry))
                     continue;
                 bunchItemMatched = true;
                 break;

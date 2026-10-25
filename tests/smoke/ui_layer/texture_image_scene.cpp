@@ -34,7 +34,6 @@ namespace __hidden_ui_texture_image_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_DefaultTextureNickname("default_skin_texture");
 inline constexpr Name s_AlternateTextureNickname("alternate_skin_texture");
 static constexpr Impl::Ui::Color s_Backdrop{ 0.07f, 0.13f, 0.2f, 1.0f };
 
@@ -64,13 +63,15 @@ UiTextureImageSmokeScene::UiTextureImageSmokeScene(Core::Alloc::GlobalArena& are
     using namespace __hidden_ui_texture_image_scene;
     Impl::ActiveSceneSubsystems sceneSubsystems(arena);
     if(sceneSubsystems.loadProjectStartScene(assets)){
-        const auto defaultTexture = sceneSubsystems.findAsset<Impl::Texture>(s_DefaultTextureNickname);
-        if(defaultTexture.valid()){
-            auto defaultSource = Impl::Ui::LoadImageSource(arena, assets, defaultTexture);
-            if(defaultSource)
-                m_default = Move(*defaultSource);
+        if(const Impl::UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<Impl::UiSubsystem>()){
+            const auto& defaultTexture = uiSubsystem->defaultSkinTexture;
+            if(defaultTexture.valid()){
+                auto defaultSource = Impl::Ui::LoadImageSource(arena, assets, defaultTexture);
+                if(defaultSource)
+                    m_default = Move(*defaultSource);
+            }
         }
-        const auto alternateTexture = sceneSubsystems.findAsset<Impl::Texture>(s_AlternateTextureNickname);
+        const auto alternateTexture = sceneSubsystems.findSceneAsset<Impl::Texture>(s_AlternateTextureNickname);
         if(alternateTexture.valid()){
             auto alternateSource = Impl::Ui::LoadImageSource(arena, assets, alternateTexture);
             if(alternateSource)

@@ -94,15 +94,20 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         if(!layoutResult)
             return false;
     }
-    const Name names[] = { AssetsGraphicsShadow::s_LightSpaceViewShaderName, AssetsGraphicsShadow::s_LightSpaceCaptureVertexShaderName,
-        AssetsGraphicsShadow::s_LightSpaceCapturePixelShaderName, AssetsGraphicsShadow::s_LightSpaceResolveShaderName,
-        AssetsGraphicsShadow::s_LightSpaceResolveShaderName, AssetsGraphicsShadow::s_LightSpaceFallbackShaderName,
-        AssetsGraphicsShadow::s_LightSpaceFallbackShaderName, AssetsGraphicsShadow::s_LightSpaceShadeShaderName,
-        AssetsGraphicsShadow::s_LightSpaceShadeShaderName,
-        hardwareCsg ? AssetsGraphicsShadow::s_LightSpaceResolveHwShaderName : AssetsGraphicsShadow::s_LightSpaceResolveShaderName,
-        hardwareCsg ? AssetsGraphicsShadow::s_LightSpaceResolveHwShaderName : AssetsGraphicsShadow::s_LightSpaceResolveShaderName,
-        AssetsGraphicsShadow::s_LightSpaceFallbackShaderName,
-        AssetsGraphicsShadow::s_LightSpaceFallbackShaderName, AssetsGraphicsShadow::s_LightSpaceCullShaderName };
+    const ShadowSubsystem* const shadowSubsystem = m_shaderSystem.findSubsystem<ShadowSubsystem>();
+    if(!shadowSubsystem){
+        state.m_pipelineFailed = true;
+        return false;
+    }
+    const Name names[] = { shadowSubsystem->lightSpaceViewCs.name(), shadowSubsystem->lightSpaceCaptureVs.name(),
+        shadowSubsystem->lightSpaceCapturePs.name(), shadowSubsystem->lightSpaceResolveCs.name(),
+        shadowSubsystem->lightSpaceResolveCs.name(), shadowSubsystem->lightSpaceFallbackCs.name(),
+        shadowSubsystem->lightSpaceFallbackCs.name(), shadowSubsystem->lightSpaceShadeCs.name(),
+        shadowSubsystem->lightSpaceShadeCs.name(),
+        hardwareCsg ? shadowSubsystem->lightSpaceResolveHwCs.name() : shadowSubsystem->lightSpaceResolveCs.name(),
+        hardwareCsg ? shadowSubsystem->lightSpaceResolveHwCs.name() : shadowSubsystem->lightSpaceResolveCs.name(),
+        shadowSubsystem->lightSpaceFallbackCs.name(),
+        shadowSubsystem->lightSpaceFallbackCs.name(), shadowSubsystem->lightSpaceCullCs.name() };
     const Core::ShaderType::Mask stages[] = { Core::ShaderType::Compute, Core::ShaderType::Vertex, Core::ShaderType::Pixel,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,

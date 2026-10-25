@@ -63,13 +63,13 @@ bool RendererAvboitSystem::createAvboitResources(){
     if(!createAvboitSampler())
         return false;
 
-    auto loadAvboitComputeShader = [&](Core::ShaderHandle& outShader, const Name& shaderName, const Name& debugName) -> bool{
-        return m_shaderSystem.loadShader<ComputeShader>(outShader, shaderName, Core::ShaderArchive::s_DefaultVariant, debugName);
+    auto loadAvboitComputeShader = [&](Core::ShaderHandle& outShader, const Core::Assets::AssetRef<ComputeShader> TransparentSubsystem::* member, const Name& debugName) -> bool{
+        return m_shaderSystem.loadShader<ComputeShader>(outShader, member, Core::ShaderArchive::s_DefaultVariant, debugName);
     };
 
     if(
-        !loadAvboitComputeShader(m_avboitState.m_depthWarpComputeShader, AssetsGraphicsAvboit::s_DepthWarpComputeShaderName, "ECSRender_AvboitDepthWarpCS")
-        || !loadAvboitComputeShader(m_avboitState.m_integrateComputeShader, AssetsGraphicsAvboit::s_IntegrateComputeShaderName, "ECSRender_AvboitIntegrateCS")
+        !loadAvboitComputeShader(m_avboitState.m_depthWarpComputeShader, &TransparentSubsystem::avboitDepthWarpCs, "ECSRender_AvboitDepthWarpCS")
+        || !loadAvboitComputeShader(m_avboitState.m_integrateComputeShader, &TransparentSubsystem::avboitIntegrateCs, "ECSRender_AvboitIntegrateCS")
     )
         return false;
 

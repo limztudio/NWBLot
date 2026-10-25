@@ -25,7 +25,7 @@ bool RendererRayTracingSystem::ensureSoftCombinedUpsamplePipeline(){
     auto& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    if(!m_shaderSystem.loadShader<ComputeShader>(resolve.m_combinedUpsample.m_shader, AssetsGraphicsShadow::s_SoftResolveCombinedShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowUpsample")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(resolve.m_combinedUpsample.m_shader, &ShadowSubsystem::shadowResolveCombinedCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowUpsample")){
         resolve.m_combinedUpsampleFailed = true;
         return false;
     }

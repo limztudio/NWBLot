@@ -7,6 +7,7 @@
 
 #include "../command_line.h"
 
+#include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_metadata.h>
 
 
@@ -39,7 +40,13 @@ public:
     [[nodiscard]] bool discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<DependencyInputSelection> selectInputs(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena)const;
     [[nodiscard]] Expected<NWB::Core::Metascript::Document> read(usize index, NWB::Core::Alloc::ScratchArena& scratchArena)const;
-    [[nodiscard]] Expected<usize> resolve(const Name& virtualPath, const Name& assetType, AStringView virtualPathTextHint, NWB::Core::Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] Expected<usize> resolve(
+        const Name& virtualPath,
+        const Name& assetType,
+        AStringView virtualPathTextHint,
+        NWB::Core::Alloc::ScratchArena& scratchArena,
+        const NWB::Core::Assets::CookDependencyRegistry* dependencyRegistry = nullptr
+    )const;
 
 
 private:

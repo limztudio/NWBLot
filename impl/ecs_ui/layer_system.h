@@ -133,14 +133,33 @@ private:
     void routePointerInput(const Ui::PointerInput& input, bool* consumed = nullptr);
     void synchronizeNativeInput();
     [[nodiscard]] bool loadFonts(Core::Alloc::ScratchArena& scratchArena);
-    template<typename TAsset>
-    [[nodiscard]] Core::Assets::AssetRef<TAsset> resolveAsset(const Core::Assets::AssetRef<TAsset>& ref)const noexcept{
+    [[nodiscard]] Core::Assets::AssetRef<UiSkin> resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept{
+        if(!m_activeSceneSubsystems)
+            return {};
+        const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>();
+        if(!uiSubsystem)
+            return {};
+        if(!ref.valid() || ref == s_DefaultUiSkinRef || ref == uiSubsystem->defaultSkin)
+            return uiSubsystem->defaultSkin;
+        return m_activeSceneSubsystems->findSceneAsset<UiSkin>(ref.name());
+    }
+    [[nodiscard]] Core::Assets::AssetRef<Font> resolveFont(const Core::Assets::AssetRef<Font>& ref)const noexcept{
         if(!ref.valid() || !m_activeSceneSubsystems)
             return {};
-        Core::Assets::AssetRef<TAsset> resolved = m_activeSceneSubsystems->findSubsystemAsset<TAsset>(BuiltInSubsystems::s_Ui, ref.name());
-        if(!resolved.valid())
-            resolved = m_activeSceneSubsystems->findAsset<TAsset>(ref.name());
-        return resolved;
+        if(const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>()){
+            if(ref == uiSubsystem->defaultLatinFace || ref == uiSubsystem->defaultKoreanFace)
+                return ref;
+        }
+        return m_activeSceneSubsystems->findSceneAsset<Font>(ref.name());
+    }
+    [[nodiscard]] Core::Assets::AssetRef<FontAtlas> resolveFontAtlas(const Core::Assets::AssetRef<FontAtlas>& ref)const noexcept{
+        if(!ref.valid() || !m_activeSceneSubsystems)
+            return {};
+        if(const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>()){
+            if(ref == uiSubsystem->defaultLatinAtlas || ref == uiSubsystem->defaultKoreanAtlas)
+                return ref;
+        }
+        return m_activeSceneSubsystems->findSceneAsset<FontAtlas>(ref.name());
     }
 
 

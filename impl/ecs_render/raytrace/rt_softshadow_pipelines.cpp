@@ -21,7 +21,7 @@ namespace __hidden_softshadow_pipelines{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool EnsureResolveChannel(RendererShaderSystem& shaderSystem, Core::GraphicsBackend::Device& device, const Core::BindingLayoutHandle& bindingLayout, const Name& shaderName, SoftShadowResolveChannelState& channel){
+[[nodiscard]] bool EnsureResolveChannel(RendererShaderSystem& shaderSystem, Core::GraphicsBackend::Device& device, const Core::BindingLayoutHandle& bindingLayout, const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* member, SoftShadowResolveChannelState& channel){
     struct StageRequest{
         AStringView m_variant;
         SoftShadowResolveStageState& m_state;
@@ -35,7 +35,7 @@ namespace __hidden_softshadow_pipelines{
     for(const StageRequest& stage : stages){
         if(stage.m_state.m_pipeline)
             continue;
-        if(!shaderSystem.loadShader<ComputeShader>(stage.m_state.m_shader, shaderName, stage.m_variant, "ECSRender_SoftShadowResolve")){
+        if(!shaderSystem.loadShader<ComputeShader>(stage.m_state.m_shader, member, stage.m_variant, "ECSRender_SoftShadowResolve")){
             channel.m_failed = true;
             return false;
         }
@@ -102,7 +102,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
             return false;
         }
     }
-    return __hidden_softshadow_pipelines::EnsureResolveChannel(m_shaderSystem, device, resolve.m_bindingLayout, AssetsGraphicsShadow::s_SoftResolveShaderName, resolve.m_scalar);
+    return __hidden_softshadow_pipelines::EnsureResolveChannel(m_shaderSystem, device, resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveCs, resolve.m_scalar);
 }
 
 bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
@@ -129,7 +129,7 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowGeometryDownsampleShader, AssetsGraphicsShadow::s_GeometryDownsampleShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowGeometryDownsample")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowGeometryDownsampleShader, &ShadowSubsystem::shadowGeometryDownsampleCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowGeometryDownsample")){
         m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
         return false;
     }
@@ -157,7 +157,7 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
     auto& device = m_graphics.getDevice();
     if(!device.getDescriptorHeap().isInitialized())
         return false;
-    return __hidden_softshadow_pipelines::EnsureResolveChannel(m_shaderSystem, device, resolve.m_bindingLayout, AssetsGraphicsShadow::s_SoftResolveRgbShaderName, resolve.m_rgb);
+    return __hidden_softshadow_pipelines::EnsureResolveChannel(m_shaderSystem, device, resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveRgbCs, resolve.m_rgb);
 }
 
 // Both trace backends publish the same independent channel textures and use the same optional resolve pipelines.
@@ -304,7 +304,7 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowReprojectMergeShader, AssetsGraphicsShadow::s_SoftReprojectMergeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SoftShadowReprojectMerge")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowReprojectMergeShader, &ShadowSubsystem::shadowReprojectMergeCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SoftShadowReprojectMerge")){
         m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
         return false;
     }

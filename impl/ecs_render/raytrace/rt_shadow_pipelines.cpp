@@ -55,7 +55,7 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowShader, AssetsGraphicsShadow::s_RayQueryShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuery")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowShader, &ShadowSubsystem::shadowRayqueryCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuery")){
         m_rayTracingState.m_shadowPipelineFailed = true;
         return false;
     }
@@ -103,7 +103,7 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
         return false;
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowSoftShader, AssetsGraphicsShadow::s_RayQuerySoftShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuerySoft")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_shadowSoftShader, &ShadowSubsystem::shadowRayquerySoftCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuerySoft")){
         m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
     }
@@ -210,13 +210,13 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     }
 
     const bool passesReady =
-        ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowOpaquePrepassShader, m_rayTracingState.m_swShadowOpaquePrepassPipeline, AssetsGraphicsShadow::s_SwOpaquePrepassShaderName, "ECSRender_SwShadowOpaquePrepass")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowSoftOpaqueShader, m_rayTracingState.m_swShadowSoftOpaquePipeline, AssetsGraphicsShadow::s_SwSoftOpaqueShaderName, "ECSRender_SwShadowSoftOpaque")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentCoarseShader, m_rayTracingState.m_swShadowTransparentCoarsePipeline, AssetsGraphicsShadow::s_SwTransparentCoarseShaderName, "ECSRender_SwShadowTransparentCoarse")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentResolveShader, m_rayTracingState.m_swShadowTransparentResolvePipeline, AssetsGraphicsShadow::s_SwTransparentResolveShaderName, "ECSRender_SwShadowTransparentResolve")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentClassifyShader, m_rayTracingState.m_swShadowTransparentClassifyPipeline, AssetsGraphicsShadow::s_SwTransparentClassifyShaderName, "ECSRender_SwShadowTransparentClassify")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentBuildArgsShader, m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, AssetsGraphicsShadow::s_SwTransparentBuildArgsShaderName, "ECSRender_SwShadowTransparentBuildArgs")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentIndirectShader, m_rayTracingState.m_swShadowTransparentIndirectPipeline, AssetsGraphicsShadow::s_SwTransparentIndirectShaderName, "ECSRender_SwShadowTransparentIndirect")
+        ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowOpaquePrepassShader, m_rayTracingState.m_swShadowOpaquePrepassPipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowOpaquePrepassCs), "ECSRender_SwShadowOpaquePrepass")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowSoftOpaqueShader, m_rayTracingState.m_swShadowSoftOpaquePipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowSoftOpaqueCs), "ECSRender_SwShadowSoftOpaque")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentCoarseShader, m_rayTracingState.m_swShadowTransparentCoarsePipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowTransparentCoarseCs), "ECSRender_SwShadowTransparentCoarse")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentResolveShader, m_rayTracingState.m_swShadowTransparentResolvePipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowTransparentResolveCs), "ECSRender_SwShadowTransparentResolve")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentClassifyShader, m_rayTracingState.m_swShadowTransparentClassifyPipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowTransparentClassifyCs), "ECSRender_SwShadowTransparentClassify")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentBuildArgsShader, m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowTransparentBuildargsCs), "ECSRender_SwShadowTransparentBuildArgs")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentIndirectShader, m_rayTracingState.m_swShadowTransparentIndirectPipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowTransparentIndirectCs), "ECSRender_SwShadowTransparentIndirect")
         && ensureSoftwareTransparentSamplingPipeline()
     ;
     if(!passesReady){
@@ -230,7 +230,7 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
     if(pipeline)
         return true;
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
+    if(!m_shaderSystem.loadShaderAsset<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
         return false;
 
     Core::ComputePipelineDesc pipelineDesc;

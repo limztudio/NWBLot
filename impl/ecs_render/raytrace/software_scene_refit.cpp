@@ -4,7 +4,6 @@
 
 #include "software_scene_refit.h"
 
-#include <impl/assets_graphics/bvh/names.h>
 #include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 #include <impl/ecs_render/shader/shader_system.h>
 
@@ -166,7 +165,7 @@ bool SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSys
         if(!bindingLayoutResult)
             return false;
     }
-    if(!shaderSystem.loadShader<ComputeShader>(m_shader, AssetsGraphicsBvh::s_SceneRefitShaderName, __hidden_software_scene_refit::s_DefaultShaderVariant, Name("SoftwareSceneRefit")))
+    if(!shaderSystem.loadShader<ComputeShader>(m_shader, &BvhSubsystem::sceneRefitCs, __hidden_software_scene_refit::s_DefaultShaderVariant, Name("SoftwareSceneRefit")))
         return false;
     Core::ComputePipelineDesc desc;
     desc.setComputeShader(m_shader).addBindingLayout(m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());

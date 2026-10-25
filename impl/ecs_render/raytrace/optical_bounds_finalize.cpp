@@ -5,7 +5,6 @@
 #include "optical_bounds_finalize.h"
 
 #include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
-#include <impl/assets_graphics/raytrace/names.h>
 #include <impl/ecs_render/shader/shader_system.h>
 
 #include <core/graphics/runtime/runtime.h>
@@ -184,7 +183,7 @@ bool RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSyst
             return false;
         }
     }
-    if(!shaderSystem.loadShader<ComputeShader>(m_shader, AssetsGraphicsRayTrace::s_OpticalBoundsFinalizeShaderName, __hidden_optical_bounds_finalize::s_DefaultShaderVariant, Name("RayOpticalBoundsFinalize")))
+    if(!shaderSystem.loadShader<ComputeShader>(m_shader, &TransparentSubsystem::opticalBoundsFinalizeCs, __hidden_optical_bounds_finalize::s_DefaultShaderVariant, Name("RayOpticalBoundsFinalize")))
         return false;
     Core::ComputePipelineDesc desc;
     desc.setComputeShader(m_shader).addBindingLayout(m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());

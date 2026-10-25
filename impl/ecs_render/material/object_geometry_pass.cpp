@@ -4,7 +4,6 @@
 
 #include "material_system.h"
 
-#include <impl/assets_graphics/mesh/names.h>
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
@@ -33,7 +32,7 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(const Name& m
     auto& heap = device.getDescriptorHeap();
     // A single fixed engine decoder defines cache contents independently of the selected material or raster pass.
     if(!m_materialState.m_objectGeometryDecodePipeline){
-        if(!m_shaderSystem.loadShader<ComputeShader>(m_materialState.m_objectGeometryDecodeShader, AssetsGraphicsMesh::s_ObjectGeometryDecodeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ObjectGeometryDecode"))
+        if(!m_shaderSystem.loadShader<ComputeShader>(m_materialState.m_objectGeometryDecodeShader, &MeshSubsystem::objectDecodeCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ObjectGeometryDecode"))
             return false;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(m_materialState.m_objectGeometryDecodeShader).addBindingLayout(m_materialState.m_computeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());

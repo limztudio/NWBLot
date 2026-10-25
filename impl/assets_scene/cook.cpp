@@ -305,7 +305,7 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SubsystemsField));
         return MakeUnexpected(Failure{});
     }
-    auto subsystems = ParseAssetRefList<Subsystem>(nwbFilePath, *subsystemsValue, s_SubsystemsField, arena, scratchArena);
+    auto subsystems = ParseAssetRefList<ISubsystem>(nwbFilePath, *subsystemsValue, s_SubsystemsField, arena, scratchArena);
     if(!subsystems)
         return MakeUnexpected(Failure{});
     entry.subsystems = Move(*subsystems);

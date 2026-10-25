@@ -97,7 +97,7 @@ bool SlangCompilerWorkspace::WriteBomStrippedCompilerInput(ScratchString& source
         const AStringView scanLine = scanView.substr(begin, end - begin);
         const auto include = ShaderSourceDependencies::ExtractIncludeDirective(scanLine);
         if(include && include->kind == ShaderSourceDependencies::IncludeKind::Unsupported){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported dependency directive '{}' in '{}'"), StringConvert(TrimView(scanLine)), PathToString<tchar>(sourcePath));
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported dependency directive '{}' in '{}'"), ConvertString(TrimView(scanLine)), PathToString<tchar>(sourcePath));
             return false;
         }
         if(include && include->kind != ShaderSourceDependencies::IncludeKind::Macro){
@@ -105,13 +105,13 @@ bool SlangCompilerWorkspace::WriteBomStrippedCompilerInput(ScratchString& source
             if(includePath.isAbsolute()){
                 const auto absoluteIncludePath = AbsolutePath(includePath);
                 if(!absoluteIncludePath){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve compiler include '{}': {}:{}"), PathToString<tchar>(includePath), StringConvert(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve compiler include '{}': {}:{}"), PathToString<tchar>(includePath), ConvertString(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
                     return false;
                 }
                 const ScratchPath normalizedIncludePath = absoluteIncludePath->lexicallyNormal();
                 auto overlayIncludePath = BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
                 if(!IsCompilerDependency(request.dependencies, normalizedIncludePath) || !overlayIncludePath){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: absolute include '{}' from '{}' is not a mapped compiler dependency"), StringConvert(include->name), PathToString<tchar>(sourcePath));
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: absolute include '{}' from '{}' is not a mapped compiler dependency"), ConvertString(include->name), PathToString<tchar>(sourcePath));
                     return false;
                 }
                 const auto pathText = BuildCompilerPathText(*overlayIncludePath, scratchArena);
@@ -163,7 +163,7 @@ bool SlangCompilerWorkspace::WriteBomStrippedCompilerInput(ScratchString& source
 Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::CreateCompilerWorkDirectory(const ScratchPath& parentDirectory, Alloc::ScratchArena& scratchArena){
     auto ensureDirectoriesResult = EnsureDirectories(parentDirectory);
     if(!ensureDirectoriesResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create compiler temporary parent '{}' : {}"), PathToString<tchar>(parentDirectory), StringConvert(ensureDirectoriesResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create compiler temporary parent '{}' : {}"), PathToString<tchar>(parentDirectory), ConvertString(ensureDirectoriesResult.error().message()));
         return MakeUnexpected(Failure{});
     }
 
@@ -183,7 +183,7 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::CreateComp
         if(created && *created)
             return directory;
         if(!created){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create isolated compiler directory '{}' : {}"), PathToString<tchar>(directory), StringConvert(created.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create isolated compiler directory '{}' : {}"), PathToString<tchar>(directory), ConvertString(created.error().message()));
             return MakeUnexpected(Failure{});
         }
     }
@@ -248,7 +248,7 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
     ScratchVector<ScratchPath> includeDirectories(scratchArena);
 
     if(request.dependencies.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has no resolved source dependencies"), StringConvert(request.shaderName));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has no resolved source dependencies"), ConvertString(request.shaderName));
         return MakeUnexpected(Failure{});
     }
 
@@ -261,7 +261,7 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
 
     auto ensureDirectoriesResult2 = EnsureDirectories(overlayRoot);
     if(!ensureDirectoriesResult2){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create temporary compiler source directory '{}' : {}"), PathToString<tchar>(overlayRoot), StringConvert(ensureDirectoriesResult2.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create temporary compiler source directory '{}' : {}"), PathToString<tchar>(overlayRoot), ConvertString(ensureDirectoriesResult2.error().message()));
         return MakeUnexpected(Failure{});
     }
 
@@ -275,14 +275,14 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
 
         auto ensureDirectoriesResult3 = EnsureDirectories(overlayDependencyPath->parentPath());
         if(!ensureDirectoriesResult3){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create temporary compiler source parent '{}' : {}"), PathToString<tchar>(overlayDependencyPath->parentPath()), StringConvert(ensureDirectoriesResult3.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create temporary compiler source parent '{}' : {}"), PathToString<tchar>(overlayDependencyPath->parentPath()), ConvertString(ensureDirectoriesResult3.error().message()));
             return MakeUnexpected(Failure{});
         }
 
         ScratchString sourceText{scratchArena};
         const auto sourceRead = ReadTextFile(dependency, sourceText);
         if(!sourceRead){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler input '{}' while writing BOM-stripped source: {}:{}"), PathToString<tchar>(dependency), StringConvert(sourceRead.error().category().name()), sourceRead.error().value());
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler input '{}' while writing BOM-stripped source: {}:{}"), PathToString<tchar>(dependency), ConvertString(sourceRead.error().category().name()), sourceRead.error().value());
             return MakeUnexpected(Failure{});
         }
         StripUtf8Bom(sourceText);
@@ -292,7 +292,7 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
 
     const auto absoluteSourcePath = AbsolutePath(ScratchPath(scratchArena, request.sourcePath));
     if(!absoluteSourcePath){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve compiler source '{}': {}:{}"), PathToString<tchar>(request.sourcePath), StringConvert(absoluteSourcePath.error().category().name()), absoluteSourcePath.error().value());
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve compiler source '{}': {}:{}"), PathToString<tchar>(request.sourcePath), ConvertString(absoluteSourcePath.error().category().name()), absoluteSourcePath.error().value());
         return MakeUnexpected(Failure{});
     }
     const ScratchPath normalizedSourcePath = absoluteSourcePath->lexicallyNormal();
@@ -303,7 +303,7 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
     }
 
     if(request.includeDirectories.size() > Limit<usize>::s_Max / 2u){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many include directories"), StringConvert(request.shaderName));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many include directories"), ConvertString(request.shaderName));
         return MakeUnexpected(Failure{});
     }
 
@@ -311,7 +311,7 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
     for(const Path& includeDirectory : request.includeDirectories){
         const auto absoluteIncludeDirectory = AbsolutePath(ScratchPath(scratchArena, includeDirectory));
         if(!absoluteIncludeDirectory){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve compiler include directory '{}': {}:{}"), PathToString<tchar>(includeDirectory), StringConvert(absoluteIncludeDirectory.error().category().name()), absoluteIncludeDirectory.error().value());
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve compiler include directory '{}': {}:{}"), PathToString<tchar>(includeDirectory), ConvertString(absoluteIncludeDirectory.error().category().name()), absoluteIncludeDirectory.error().value());
             return MakeUnexpected(Failure{});
         }
         const ScratchPath normalizedIncludeDirectory = absoluteIncludeDirectory->lexicallyNormal();

@@ -91,7 +91,7 @@ bool MergeGatheredGraphicsAsset(const Name& virtualPath, const void* incomingPay
 
         const auto& previous = records[found.value()];
         if(previous.shaderName != record.shaderName || previous.stage != record.stage || previous.variantName != record.variantName || previous.sourceChecksum != record.sourceChecksum || previous.bytecodeChecksum != record.bytecodeChecksum){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsGather: conflicting shader index record '{}' variant '{}' stage '{}'"), StringConvert(record.shaderName.resolvedText()), StringConvert(record.variantName), StringConvert(record.stage.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsGather: conflicting shader index record '{}' variant '{}' stage '{}'"), ConvertString(record.shaderName.resolvedText()), ConvertString(record.variantName), ConvertString(record.stage.resolvedText()));
             return false;
         }
     }

@@ -147,7 +147,7 @@ template<typename ObjectT, typename ParseObjectFn>
     if(!fieldValue)
         return objects;
     if(!fieldValue->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': field '{}' must be a map"), PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': field '{}' must be a map"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
 
@@ -156,7 +156,7 @@ template<typename ObjectT, typename ParseObjectFn>
     for(const auto& [objectName, objectValue] : map){
         const auto nameResult = Name::FromText(AStringView(objectName.data(), objectName.size()));
         if(!nameResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': object name contains an embedded null"), StringConvert(objectKind), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': object name contains an embedded null"), ConvertString(objectKind), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
         const Name name = *nameResult;
@@ -174,7 +174,7 @@ template<typename ObjectT, typename ParseObjectFn>
     ModelSkeletonObject object{};
     static constexpr AStringView s_ObjectKind = "Model skeleton object";
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), StringConvert(s_ObjectKind), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     if(!ValidateModelObjectFields(nwbFilePath, objectValue, s_ObjectKind, { s_SkeletonField, s_TransformField }))
@@ -195,7 +195,7 @@ template<typename ObjectT, typename ParseObjectFn>
     ModelStaticMeshObject object{};
     static constexpr AStringView s_ObjectKind = "Model static mesh object";
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), StringConvert(s_ObjectKind), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     if(!ValidateModelObjectFields(nwbFilePath, objectValue, s_ObjectKind, { s_MeshField, s_MaterialField, s_ParentObjectField, s_ParentJointField, s_TransformField }))
@@ -228,7 +228,7 @@ template<typename ObjectT, typename ParseObjectFn>
     ModelSkinnedMeshObject object{};
     static constexpr AStringView s_ObjectKind = "Model skinned mesh object";
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), StringConvert(s_ObjectKind), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     if(!ValidateModelObjectFields(nwbFilePath, objectValue, s_ObjectKind, { s_SkinField, s_MaterialField, s_SkeletonField, s_TransformField }))

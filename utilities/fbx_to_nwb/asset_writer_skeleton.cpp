@@ -41,21 +41,21 @@ bool ValidateStreamIndex(const u32 index, const usize count, const AStringView f
     if(index < count)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{}: vertex_ref {} index is out of range"), StringConvert(context), StringConvert(fieldName));
+    NWB_LOGGER_ERROR(NWB_TEXT("{}: vertex_ref {} index is out of range"), ConvertString(context), ConvertString(fieldName));
     return false;
 }
 
 bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context){
     if(mesh.positions.empty() || mesh.normals.empty() || mesh.uv0.empty() || mesh.colors.empty() || mesh.vertexRefs.empty() || mesh.indices.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh payload is incomplete"), StringConvert(context));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh payload is incomplete"), ConvertString(context));
         return false;
     }
     if(mesh.tangents.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh tangent stream is required"), StringConvert(context));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh tangent stream is required"), ConvertString(context));
         return false;
     }
     if((mesh.indices.size() % s_TriangleIndexCount) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh index stream must contain whole triangles"), StringConvert(context));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh index stream must contain whole triangles"), ConvertString(context));
         return false;
     }
 
@@ -65,7 +65,7 @@ bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView conte
         if(!ValidateStreamIndex(ref.normal, mesh.normals.size(), s_NormalStreamLabel, context))
             return false;
         if(ref.tangent == s_MissingSourceStreamIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh vertex_ref tangent is missing"), StringConvert(context));
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh vertex_ref tangent is missing"), ConvertString(context));
             return false;
         }
         if(!ValidateStreamIndex(ref.tangent, mesh.tangents.size(), s_TangentStreamLabel, context))
@@ -78,7 +78,7 @@ bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView conte
 
     for(const u32 index : mesh.indices){
         if(index >= mesh.vertexRefs.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh triangle index references an out-of-range vertex_ref"), StringConvert(context));
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh triangle index references an out-of-range vertex_ref"), ConvertString(context));
             return false;
         }
     }
@@ -234,7 +234,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
 
         const auto localBindPoseMatrix = BuildLocalBindPoseMatrix(globalBindPoseMatrix, parentGlobalBindPoseMatrixPtr);
         if(!localBindPoseMatrix){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'"), StringConvert(sortNames[oldJointIndex]));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'"), ConvertString(sortNames[oldJointIndex]));
             return MakeUnexpected(Failure{});
         }
         JointMatrix localBindPose{};

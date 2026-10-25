@@ -124,14 +124,14 @@ bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, const u64 sourceV
         return true;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG clip variant count overflow for entry '{}'"), StringConvert(entry.name));
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG clip variant count overflow for entry '{}'"), ConvertString(entry.name));
     return false;
 }
 
 Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& cookArena, const AStringView entryName, const ShaderCook::DefineCombo& sourceCombo){
     constexpr usize s_AddedDefineCount = 2u;
     if(sourceCombo.size() > Limit<usize>::s_Max - s_AddedDefineCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG shader define combo size overflow for entry '{}'"), StringConvert(entryName));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG shader define combo size overflow for entry '{}'"), ConvertString(entryName));
         return MakeUnexpected(Failure{});
     }
 
@@ -145,14 +145,14 @@ Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& co
     }
 
     if(!combo.try_emplace(s_IntervalSampleEnabledImplicitDefineName, s_IntervalSampleEnabledImplicitDefineValue).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), StringConvert(s_IntervalSampleEnabledImplicitDefineName), StringConvert(entryName));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), ConvertString(s_IntervalSampleEnabledImplicitDefineName), ConvertString(entryName));
         return MakeUnexpected(Failure{});
     }
 
     if(combo.try_emplace(s_ClipImplicitDefineName, s_EnabledImplicitDefineValue).second)
         return combo;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), StringConvert(s_ClipImplicitDefineName), StringConvert(entryName));
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), ConvertString(s_ClipImplicitDefineName), ConvertString(entryName));
     return MakeUnexpected(Failure{});
 }
 

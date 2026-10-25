@@ -58,7 +58,7 @@ struct AutoMetadataParser{
 
     if(!doc.parse(AStringView(metaText))){
         for(const Core::Metascript::ParseError& err : doc.errors()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: meta '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), err.line, err.column, StringConvert(AStringView(err.message.data(), err.message.size())));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: meta '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), err.line, err.column, ConvertString(AStringView(err.message.data(), err.message.size())));
         }
         return MakeUnexpected(Failure{});
     }
@@ -98,7 +98,7 @@ struct AutoMetadataParser{
 ){
     const auto* assetDeclaration = FindMetadataAssetDeclaration(doc);
     if(!assetDeclaration){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: meta '{}' is missing asset declaration '{}'"), PathToString<tchar>(discoveredNwbFile.filePath), StringConvert(s_MetadataAssetVariable));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: meta '{}' is missing asset declaration '{}'"), PathToString<tchar>(discoveredNwbFile.filePath), ConvertString(s_MetadataAssetVariable));
         return false;
     }
     const AStringView rawAssetTypeText(assetDeclaration->type.data(), assetDeclaration->type.size());
@@ -120,7 +120,7 @@ struct AutoMetadataParser{
         return outMetadata.entryRegistry.parseDocument(assetType, discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, parseContext);
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), StringConvert(rawAssetTypeText), PathToString<tchar>(discoveredNwbFile.filePath));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), ConvertString(rawAssetTypeText), PathToString<tchar>(discoveredNwbFile.filePath));
     return false;
 }
 
@@ -167,7 +167,7 @@ Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookAren
         const auto directory = IsDirectory(assetRoot.path);
         if(!directory || !*directory){
             if(!directory){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to query asset root '{}': {}"), PathToString<tchar>(assetRoot.path), StringConvert(directory.error().message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to query asset root '{}': {}"), PathToString<tchar>(assetRoot.path), ConvertString(directory.error().message()));
                 return MakeUnexpected(Failure{});
             }
 
@@ -178,7 +178,7 @@ Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookAren
         const ::Path<ScratchArena> scratchRoot(scratchArena, assetRoot.path);
         const auto entries = RecursiveDirectoryIterator<ScratchArena>::Create(scratchRoot);
         if(!entries){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: error scanning asset root '{}': {}"), PathToString<tchar>(assetRoot.path), StringConvert(entries.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: error scanning asset root '{}': {}"), PathToString<tchar>(assetRoot.path), ConvertString(entries.error().message()));
             return MakeUnexpected(Failure{});
         }
         files.reserve(AddSize(files.size(), static_cast<usize>(entries->end() - entries->begin())));
@@ -186,7 +186,7 @@ Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookAren
         for(const auto& dirEntry : *entries){
             const auto isRegularFile = dirEntry.isRegularFile();
             if(!isRegularFile){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to inspect '{}' while scanning '{}': {}"), PathToString<tchar>(dirEntry.path()), PathToString<tchar>(assetRoot.path), StringConvert(isRegularFile.error().message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to inspect '{}' while scanning '{}': {}"), PathToString<tchar>(dirEntry.path()), PathToString<tchar>(assetRoot.path), ConvertString(isRegularFile.error().message()));
                 return MakeUnexpected(Failure{});
             }
             if(!*isRegularFile)

@@ -197,7 +197,7 @@ public:
     CrashScratchPath modulePath(arena, modulePathText);
     const auto regularModule = IsRegularFile(modulePath);
     if(!regularModule){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol module '{}': {}"), PathToString<tchar>(modulePath), StringConvert(regularModule.error().message()));
+        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol module '{}': {}"), PathToString<tchar>(modulePath), ConvertString(regularModule.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(*regularModule)
@@ -214,7 +214,7 @@ public:
     CrashScratchPath symbolStoreCandidate = symbolStoreDirectory / moduleFileName;
     const auto regularCandidate = IsRegularFile(symbolStoreCandidate);
     if(!regularCandidate){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol-store candidate '{}': {}"), PathToString<tchar>(symbolStoreCandidate), StringConvert(regularCandidate.error().message()));
+        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol-store candidate '{}': {}"), PathToString<tchar>(symbolStoreCandidate), ConvertString(regularCandidate.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(*regularCandidate)
@@ -323,7 +323,7 @@ void AppendLinuxArtifactSummary(Core::Alloc::ScratchArena& scratchArena, const C
     const auto corePath = scratchDirectory / CrashNames::s_LinuxCoreFileName;
     const auto corePresent = IsRegularFile(corePath);
     if(!corePresent){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux core artifact '{}': {}"), PathToString<tchar>(corePath), StringConvert(corePresent.error().message()));
+        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux core artifact '{}': {}"), PathToString<tchar>(corePath), ConvertString(corePresent.error().message()));
         outReport += "core_artifact=inspect_failed\n";
     }
     else

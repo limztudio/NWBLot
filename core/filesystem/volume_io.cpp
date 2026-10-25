@@ -68,15 +68,15 @@ ACompactString LastErrnoMessage()noexcept{
 }
 
 void LogFailure(AStringView volumeName, AStringView operation, AStringView detail)noexcept(!NWB_OCCUR_WARNING){
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: {}"), StringConvert(volumeName), StringConvert(operation), StringConvert(detail));
+    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: {}"), ConvertString(volumeName), ConvertString(operation), ConvertString(detail));
 }
 
 void LogFailureWithPath(AStringView volumeName, AStringView operation, const Path& path, AStringView detail)noexcept(!NWB_OCCUR_WARNING){
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': {}"), StringConvert(volumeName), StringConvert(operation), StringConvert(path.native()), StringConvert(detail));
+    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': {}"), ConvertString(volumeName), ConvertString(operation), ConvertString(path.native()), ConvertString(detail));
 }
 
 void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode)noexcept(!NWB_OCCUR_WARNING){
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': [{}] {}"), StringConvert(volumeName), StringConvert(operation), StringConvert(path.native()), errorCode.value(), StringConvert(errorCode.message()));
+    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': [{}] {}"), ConvertString(volumeName), ConvertString(operation), ConvertString(path.native()), errorCode.value(), ConvertString(errorCode.message()));
 }
 
 Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(const AStringView volumeName, const Path& segmentPath){
@@ -118,7 +118,7 @@ static bool ForEachSegmentChunk(const AStringView volumeName, const AStringView 
     }
     const u64 capacityBytes = static_cast<u64>(segmentPaths.size()) * segmentSize;
     if(endOffset > capacityBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: range [{}..{}) exceeds capacity {}"), StringConvert(volumeName), StringConvert(operation), offset, endOffset, capacityBytes);
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: range [{}..{}) exceeds capacity {}"), ConvertString(volumeName), ConvertString(operation), offset, endOffset, capacityBytes);
         return false;
     }
 
@@ -223,11 +223,11 @@ static bool ReadSegmentBytes(
             stream.read(reinterpret_cast<char*>(outputBytes), streamChunkSize);
             if(stream.gcount() != streamChunkSize){
                 NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): readBytes failed on '{}': requested {} bytes, received {} bytes, errno {}")
-                    , StringConvert(volumeName)
-                    , StringConvert(segmentPaths[segmentIndex].native())
+                    , ConvertString(volumeName)
+                    , ConvertString(segmentPaths[segmentIndex].native())
                     , static_cast<i64>(streamChunkSize)
                     , static_cast<i64>(stream.gcount())
-                    , StringConvert(LastErrnoMessage())
+                    , ConvertString(LastErrnoMessage())
                 );
                 return false;
             }
@@ -262,10 +262,10 @@ static bool WriteSegmentBytes(
             stream.write(reinterpret_cast<const char*>(inputBytes), streamChunkSize);
             if(!stream.good()){
                 NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeBytes failed on '{}': attempted {} bytes, errno {}")
-                    , StringConvert(volumeName)
-                    , StringConvert(segmentPaths[segmentIndex].native())
+                    , ConvertString(volumeName)
+                    , ConvertString(segmentPaths[segmentIndex].native())
                     , static_cast<i64>(streamChunkSize)
-                    , StringConvert(LastErrnoMessage())
+                    , ConvertString(LastErrnoMessage())
                 );
                 return false;
             }
@@ -325,7 +325,7 @@ struct WriteSegmentBytesOp{
 
 bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     if(m_maxSegments != 0 && segmentIndex >= m_maxSegments){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} exceeds maxSegments {}"), StringConvert(m_volumeName), segmentIndex, m_maxSegments);
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} exceeds maxSegments {}"), ConvertString(m_volumeName), segmentIndex, m_maxSegments);
         return false;
     }
     if(m_segmentSize == 0){
@@ -335,7 +335,7 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
 
     const auto streamOffset = FilesystemVolumeDetail::ToStreamOff(m_segmentSize - 1);
     if(!streamOffset){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset"), StringConvert(m_volumeName), m_segmentSize);
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset"), ConvertString(m_volumeName), m_segmentSize);
         return false;
     }
 
@@ -370,7 +370,7 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     else if(segmentIndex < m_segmentPaths.size())
         m_segmentPaths[segmentIndex] = path;
     else{
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} is non-contiguous (segment count {})"), StringConvert(m_volumeName), segmentIndex, m_segmentPaths.size());
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} is non-contiguous (segment count {})"), ConvertString(m_volumeName), segmentIndex, m_segmentPaths.size());
         return false;
     }
 
@@ -395,7 +395,7 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
             return true;
 
         if(!m_writable){
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): ensureCapacity failed: required {} bytes, current capacity {} bytes, filesystem is read-only"), StringConvert(m_volumeName), requiredBytes, capacity);
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): ensureCapacity failed: required {} bytes, current capacity {} bytes, filesystem is read-only"), ConvertString(m_volumeName), requiredBytes, capacity);
             return false;
         }
         if(!createSegmentLocked(m_segmentPaths.size()))

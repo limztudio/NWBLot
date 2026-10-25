@@ -119,7 +119,7 @@ Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::Scrat
     ufbx_error error = {};
     outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
     if(!outScene.scene){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to load FBX: {}"), StringConvert(__hidden_scene::FormatUfbxError(error, scratchArena)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to load FBX: {}"), ConvertString(__hidden_scene::FormatUfbxError(error, scratchArena)));
         return MakeUnexpected(Failure{});
     }
 
@@ -153,7 +153,7 @@ void PrintMeshInstances(const UtilityVector<MeshInstance>& instances, Core::Allo
     ScratchStringStream report(s_FileOpenWrite, scratchArena);
     if(instances.empty()){
         report << "No mesh instances found.\n";
-        NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
+        NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
         return;
     }
 
@@ -163,7 +163,7 @@ void PrintMeshInstances(const UtilityVector<MeshInstance>& instances, Core::Allo
         __hidden_scene::AppendMeshDisplayName(report, instance);
         report << s_ReportLineEndText;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
+    NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
 }
 
 Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInstance>& instances, const AStringView selector, Core::Alloc::ScratchArena& scratchArena){
@@ -178,7 +178,7 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInsta
     }
     if(normalized == s_FirstMeshSelectorText){
         if(instances.empty()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': no mesh instances are available"), StringConvert(selector));
+            NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': no mesh instances are available"), ConvertString(selector));
             return MakeUnexpected(Failure{});
         }
         outSelection.push_back(0u);
@@ -188,7 +188,7 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInsta
     const auto parsedIndex = __hidden_scene::ParseIndexSelector(normalized);
     if(parsedIndex){
         if(*parsedIndex >= instances.size()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': mesh index is out of range"), StringConvert(selector));
+            NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': mesh index is out of range"), ConvertString(selector));
             return MakeUnexpected(Failure{});
         }
         outSelection.push_back(*parsedIndex);
@@ -214,7 +214,7 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInsta
         return outSelection;
     }
 
-    NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': did not match any node or mesh"), StringConvert(selector));
+    NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': did not match any node or mesh"), ConvertString(selector));
     return MakeUnexpected(Failure{});
 }
 

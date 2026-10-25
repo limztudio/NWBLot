@@ -156,7 +156,7 @@ private:
             const SIMDVectorDouble averageSeconds = VectorDoubleDivide(VectorDoubleReplicate(accum.sumSeconds), VectorDoubleReplicate(static_cast<f64>(accum.frames)));
             // Lanes are window average, min, max and total.
             const SIMDVectorDouble windowMs = VectorDoubleScale(VectorDoubleSelect(VectorDoubleSet(0.0, accum.minSeconds, accum.maxSeconds, accum.sumSeconds), averageSeconds, s_DoubleSIMDMaskX), s_MillisecondsPerSecond);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}"), StringConvert(scopeName.resolvedText()), VectorDoubleGetX(windowMs), VectorDoubleGetY(windowMs), VectorDoubleGetZ(windowMs), accum.frames);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}"), ConvertString(scopeName.resolvedText()), VectorDoubleGetX(windowMs), VectorDoubleGetY(windowMs), VectorDoubleGetZ(windowMs), accum.frames);
             if(timingFile.is_open()){
                 timingFile
                     << "  " << scopeName.resolvedText()

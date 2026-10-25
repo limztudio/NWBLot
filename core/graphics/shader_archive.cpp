@@ -181,9 +181,9 @@ Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, cons
 
         if(__hidden_shader_archive::SameShaderVariantStage(*sortedRecords[i - 1], record)){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::SerializeIndex failed: duplicate shader+variant+stage key detected (shader='{}', variant='{}', stage='{}')")
-                , StringConvert(record.shaderName.resolvedText())
-                , StringConvert(AStringView(record.variantName))
-                , StringConvert(record.stage.resolvedText())
+                , ConvertString(record.shaderName.resolvedText())
+                , ConvertString(AStringView(record.variantName))
+                , ConvertString(record.stage.resolvedText())
             );
             return MakeUnexpected(Failure{});
         }

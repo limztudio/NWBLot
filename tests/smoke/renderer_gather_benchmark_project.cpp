@@ -208,7 +208,7 @@ public:
         capture.gpuTiming = true;
         capture.memory = m_memoryEnabled;
         m_context.setPerfCapture(capture);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: workload {} mode {} fixed objects 64"), StringConvert(workload), StringConvert(*mode));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: workload {} mode {} fixed objects 64"), ConvertString(workload), ConvertString(*mode));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0"));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1"));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: vsync {}"), m_context.graphics.isVsyncEnabled() ? 1u : 0u);

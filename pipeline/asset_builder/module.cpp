@@ -41,9 +41,9 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Core::Assets::Scrat
     if(!roots){
         const auto& error = roots.error();
         if(error.reason == Assets::AssetRootResolutionFailure::InspectInput)
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to inspect input '{}'"), StringConvert(sources[error.sourceIndex]));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to inspect input '{}'"), ConvertString(sources[error.sourceIndex]));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root from '{}'"), StringConvert(sources[error.sourceIndex]));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root from '{}'"), ConvertString(sources[error.sourceIndex]));
         return false;
     }
     if(roots->empty()){

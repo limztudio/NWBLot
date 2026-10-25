@@ -88,7 +88,7 @@ inline void AppendResolvedText(const AStringView resolvedText, ArenaT& arena, Ba
         outText.append(resolvedText.data(), resolvedText.size());
     }
     else{
-        const BasicString<CharT, ArenaT> converted = StringConvert(arena, resolvedText);
+        const BasicString<CharT, ArenaT> converted = ConvertString(arena, resolvedText);
         outText.append(converted.data(), converted.size());
     }
 }

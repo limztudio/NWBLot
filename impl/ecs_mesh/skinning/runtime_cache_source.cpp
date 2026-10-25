@@ -65,7 +65,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
 [[nodiscard]] bool BuildRuntimeLocalBounds(MeshSkinningRuntimeInstance& instance){
     instance.localBounds = RuntimeMeshLocalBounds{};
     if(instance.restPositions.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds"), StringConvert(instance.sourceName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds"), ConvertString(instance.sourceName.resolvedText()));
         return false;
     }
 
@@ -76,7 +76,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
         AabbTests::Expand(LoadFloat(position), minBounds, maxBounds);
 
     if(!AabbTests::Valid(minBounds, maxBounds)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds"), StringConvert(instance.sourceName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds"), ConvertString(instance.sourceName.resolvedText()));
         return false;
     }
 

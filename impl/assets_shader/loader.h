@@ -68,11 +68,11 @@ template<typename ShaderPathResolver>
 
     const auto shaderVirtualPath = shaderPathResolver(shaderName, variantName, stageName);
     if(!shaderVirtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'"), ownerName, StringConvert(shaderName.resolvedText()), StringConvert(variantName), StringConvert(stageName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'"), ownerName, ConvertString(shaderName.resolvedText()), ConvertString(variantName), ConvertString(stageName.resolvedText()));
         return false;
     }
     if(!*shaderVirtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'"), ownerName, StringConvert(shaderName.resolvedText()), StringConvert(variantName), StringConvert(stageName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'"), ownerName, ConvertString(shaderName.resolvedText()), ConvertString(variantName), ConvertString(stageName.resolvedText()));
         return false;
     }
 
@@ -85,7 +85,7 @@ template<typename ShaderPathResolver>
 
     auto loadedAsset = assetManager.loadSync(assetType, *shaderVirtualPath);
     if(!loadedAsset){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'"), ownerName, StringConvert(assetType.resolvedText()), StringConvert(shaderVirtualPath->resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'"), ownerName, ConvertString(assetType.resolvedText()), ConvertString(shaderVirtualPath->resolvedText()));
         return false;
     }
     if(!*loadedAsset || (*loadedAsset)->assetType() != assetType){
@@ -109,7 +109,7 @@ template<typename ShaderPathResolver>
     else
         outShader.reset();
     if(!outShaderResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create shader '{}' from asset '{}'"), ownerName, StringConvert(debugName.resolvedText()), StringConvert(shaderVirtualPath->resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create shader '{}' from asset '{}'"), ownerName, ConvertString(debugName.resolvedText()), ConvertString(shaderVirtualPath->resolvedText()));
         return false;
     }
 

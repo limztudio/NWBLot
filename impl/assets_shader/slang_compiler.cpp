@@ -103,13 +103,13 @@ static constexpr usize s_QuotePairByteCount = 2u;
     if(!includeName.empty() && includePath.isAbsolute()){
         const auto absoluteIncludePath = AbsolutePath(includePath);
         if(!absoluteIncludePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve planned macro include '{}': {}:{}"), PathToString<tchar>(includePath), StringConvert(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve planned macro include '{}': {}:{}"), PathToString<tchar>(includePath), ConvertString(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
             return MakeUnexpected(Failure{});
         }
         const ScratchPath normalizedIncludePath = absoluteIncludePath->lexicallyNormal();
         overlayIncludePath = SlangCompilerWorkspace::BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
         if(!SlangCompilerWorkspace::IsCompilerDependency(request.dependencies, normalizedIncludePath) || !overlayIncludePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), StringConvert(includeName));
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), ConvertString(includeName));
             return MakeUnexpected(Failure{});
         }
         const auto capacity = SlangCompilerWorkspace::CompilerPathTextCapacity(*overlayIncludePath);
@@ -247,7 +247,7 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
     __hidden_slang_compiler::ScratchString versionText(scratchArena);
     const auto versionRead = ReadBinaryFile(versionPath, versionText);
     if(!versionRead){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read configured compiler version '{}': {}:{}"), PathToString<tchar>(versionPath), StringConvert(versionRead.error().category().name()), versionRead.error().value());
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read configured compiler version '{}': {}:{}"), PathToString<tchar>(versionPath), ConvertString(versionRead.error().category().name()), versionRead.error().value());
         return MakeUnexpected(Failure{});
     }
     if(TrimView(versionText).empty()){
@@ -289,29 +289,29 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
     outBytecode.clear();
 
     if(request.sourcePath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : source path is empty"), StringConvert(request.shaderName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : source path is empty"), ConvertString(request.shaderName));
         return false;
     }
 
     if(request.outputPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : output path is empty"), StringConvert(request.shaderName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : output path is empty"), ConvertString(request.shaderName));
         return false;
     }
 
     if(request.entryPoint.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : entry point is empty"), StringConvert(request.shaderName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : entry point is empty"), ConvertString(request.shaderName));
         return false;
     }
 
     const auto slangStage = __hidden_slang_compiler::TryMapStageToSlangStage(request.stage);
     if(!slangStage){
-        NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader stage '{}' in entry '{}'"), StringConvert(request.stage), StringConvert(request.shaderName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader stage '{}' in entry '{}'"), ConvertString(request.stage), ConvertString(request.shaderName));
         return false;
     }
 
     const AStringView optimizationArgument = __hidden_slang_compiler::SlangOptimizationArgument(request.optimizationLevel);
     if(request.optimizationLevel >= ShaderOptimizationLevel::kCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader '{}' uses an invalid optimization level {}"), StringConvert(request.shaderName), static_cast<u32>(request.optimizationLevel));
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader '{}' uses an invalid optimization level {}"), ConvertString(request.shaderName), static_cast<u32>(request.optimizationLevel));
         return false;
     }
 
@@ -333,7 +333,7 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
     const usize defineCount = static_cast<usize>(request.defineCount);
     constexpr usize s_MaxFixedArgumentCount = __hidden_slang_compiler::s_BaseCompilerArgumentCount + __hidden_slang_compiler::s_MaxTargetProfileCapabilityCount * 2u + __hidden_slang_compiler::s_MaxOptimizationArgumentCount;
     if(AddOverflows<usize>(s_MaxFixedArgumentCount, defineCount) || includeDirectoryCount > (Limit<usize>::s_Max - s_MaxFixedArgumentCount - defineCount) / 2u){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many arguments"), StringConvert(request.shaderName));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many arguments"), ConvertString(request.shaderName));
         return false;
     }
 
@@ -407,20 +407,20 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
         const auto diagnosticsRead = ReadBinaryFile(diagnosticsPath, diagnostics);
         if(!diagnosticsRead){
             NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}; diagnostics read '{}' failed: {}:{}")
-                , StringConvert(request.shaderName)
-                , StringConvert(request.variantName)
+                , ConvertString(request.shaderName)
+                , ConvertString(request.variantName)
                 , failureStage
                 , failureCode
                 , PathToString<tchar>(diagnosticsPath)
-                , StringConvert(diagnosticsRead.error().category().name())
+                , ConvertString(diagnosticsRead.error().category().name())
                 , diagnosticsRead.error().value()
             );
         }
         else if(!diagnostics.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {} :\n{}"), StringConvert(request.shaderName), StringConvert(request.variantName), failureStage, failureCode, StringConvert(diagnostics));
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {} :\n{}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode, ConvertString(diagnostics));
         }
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}"), StringConvert(request.shaderName), StringConvert(request.variantName), failureStage, failureCode);
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode);
         }
         return false;
     }
@@ -430,15 +430,15 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
     if(!diagnosticsRead){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler diagnostics '{}' for '{}' (variant '{}'): {}:{}")
             , PathToString<tchar>(diagnosticsPath)
-            , StringConvert(request.shaderName)
-            , StringConvert(request.variantName)
-            , StringConvert(diagnosticsRead.error().category().name())
+            , ConvertString(request.shaderName)
+            , ConvertString(request.variantName)
+            , ConvertString(diagnosticsRead.error().category().name())
             , diagnosticsRead.error().value()
         );
         return false;
     }
     if(!diagnostics.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader compiler emitted unexpected diagnostics for '{}' (variant '{}') :\n{}"), StringConvert(request.shaderName), StringConvert(request.variantName), StringConvert(diagnostics));
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader compiler emitted unexpected diagnostics for '{}' (variant '{}') :\n{}"), ConvertString(request.shaderName), ConvertString(request.variantName), ConvertString(diagnostics));
         return false;
     }
 
@@ -446,27 +446,27 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
     if(!readBinaryFileResult){
         if(readBinaryFileResult.error()){
             NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}' : {}")
-                , StringConvert(request.shaderName)
-                , StringConvert(request.variantName)
+                , ConvertString(request.shaderName)
+                , ConvertString(request.variantName)
                 , PathToString<tchar>(compilerOutputPath)
-                , StringConvert(readBinaryFileResult.error().message())
+                , ConvertString(readBinaryFileResult.error().message())
             );
         }
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}'"), StringConvert(request.shaderName), StringConvert(request.variantName), PathToString<tchar>(compilerOutputPath));
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}'"), ConvertString(request.shaderName), ConvertString(request.variantName), PathToString<tchar>(compilerOutputPath));
         }
         return false;
     }
 
     const auto stageName = Name::FromText(request.stage);
     if(!stageName){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): shader stage contains an embedded null"), StringConvert(request.shaderName), StringConvert(request.variantName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): shader stage contains an embedded null"), ConvertString(request.shaderName), ConvertString(request.variantName));
         outBytecode.clear();
         return false;
     }
     const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(*stageName);
     if(!Core::ResolveSpirvEntryPointName(BinaryByteView{ outBytecode.data(), outBytecode.size() }, request.entryPoint, Core::ShaderType::ToMask(shaderType))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): malformed SPIR-V or wrong physical stage/entry point"), StringConvert(request.shaderName), StringConvert(request.variantName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): malformed SPIR-V or wrong physical stage/entry point"), ConvertString(request.shaderName), ConvertString(request.variantName));
         outBytecode.clear();
         return false;
     }
@@ -481,7 +481,7 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
             && Core::ResolveSpirvEntryPointName(BinaryByteView{ publishedBytecode.data(), publishedBytecode.size() }, request.entryPoint, Core::ShaderType::ToMask(shaderType))
         )
             return true;
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to publish verified bytecode cache '{}' : {}"), PathToString<tchar>(request.outputPath), StringConvert(renamePathResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to publish verified bytecode cache '{}' : {}"), PathToString<tchar>(request.outputPath), ConvertString(renamePathResult.error().message()));
         outBytecode.clear();
         return false;
     }

@@ -184,7 +184,7 @@ Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Path& assetRoot, const
         return MakeUnexpected(Failure{});
     description.mipBias = *mipBiasResult;
     if(!IsValidSamplerDescription(description)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': sampler description is invalid"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': sampler description is invalid"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 

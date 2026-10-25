@@ -105,7 +105,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
             if(!TextureAssetLoader::Load(outResource, assetRef, assetPath, graphics, assetManager, s_RendererAssetOwnerName))
                 return false;
             if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension"), StringConvert(assetPath.resolvedText()));
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension"), ConvertString(assetPath.resolvedText()));
                 return false;
             }
             return true;
@@ -219,11 +219,11 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
     createdInfo.avboitOccupancyPixelShader = material.avboitOccupancyPixelShader();
     createdInfo.avboitExtinctionPixelShader = material.avboitExtinctionPixelShader();
     if(!hasMeshShader){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required mesh shader"), StringConvert(materialPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required mesh shader"), ConvertString(materialPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     if(!hasPixelShader && !material.transparent()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: opaque material '{}' is missing required pixel shader"), StringConvert(materialPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: opaque material '{}' is missing required pixel shader"), ConvertString(materialPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
 
@@ -298,14 +298,14 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
         case MaterialResourceKind::SampledImage2D:
             heapSlot = __hidden_material_surface::ResolveTextureAssetSlot(resources, resourceReference.textureAsset, graphicsModule, m_assetManager);
             if(!heapSlot){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'"), StringConvert(materialInfo.materialName.resolvedText()), StringConvert(resourceReference.textureAsset.name().resolvedText()));
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'"), ConvertString(materialInfo.materialName.resolvedText()), ConvertString(resourceReference.textureAsset.name().resolvedText()));
                 return false;
             }
             break;
         case MaterialResourceKind::Sampler:
             heapSlot = __hidden_material_surface::ResolveSamplerAssetSlot(resources, resourceReference.samplerAsset, graphicsModule, m_assetManager);
             if(!heapSlot){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'"), StringConvert(materialInfo.materialName.resolvedText()), StringConvert(resourceReference.samplerAsset.name().resolvedText()));
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'"), ConvertString(materialInfo.materialName.resolvedText()), ConvertString(resourceReference.samplerAsset.name().resolvedText()));
                 return false;
             }
             break;

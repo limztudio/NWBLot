@@ -102,7 +102,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         }
         const Name jointName(jointBinary.nameHash);
         if(!candidate.m_jointIndices.emplace(jointName, static_cast<u32>(candidate.m_joints.size())).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), StringConvert(jointName.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), ConvertString(jointName.resolvedText()));
             return false;
         }
 

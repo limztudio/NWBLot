@@ -36,7 +36,7 @@ bool ReflectionCpuTimingProbe::initialize(const AStringView caseName, Core::Allo
     const auto outputPath = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_CPU_GPU_TIMING_FILE");
     if(!m_publications.initialize(true, true, outputPath ? AStringView(outputPath->data(), outputPath->size()) : AStringView{}))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: configured case={} preparation_presentations=64 warmup_seconds=5") NWB_TEXT(" minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1"), StringConvert(caseName));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCpuTiming: configured case={} preparation_presentations=64 warmup_seconds=5") NWB_TEXT(" minimum_seconds=30 minimum_presentations=100 minimum_positive_intervals=11 diagnostic_only=1"), ConvertString(caseName));
     return true;
 }
 

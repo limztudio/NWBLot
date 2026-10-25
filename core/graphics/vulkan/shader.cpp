@@ -58,11 +58,11 @@ inline Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveShaderEnt
     switch(lookupResult.error()){
 
     case SpirvEntryPointLookupResult::NotFound:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}"), StringConvert(entryName), static_cast<u32>(shaderType), StringConvert(errorContext));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}"), ConvertString(entryName), static_cast<u32>(shaderType), ConvertString(errorContext));
         return MakeUnexpected(lookupResult.error());
 
     case SpirvEntryPointLookupResult::InvalidSpirv:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}"), StringConvert(entryName), static_cast<u32>(shaderType), StringConvert(errorContext));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}"), ConvertString(entryName), static_cast<u32>(shaderType), ConvertString(errorContext));
         return MakeUnexpected(lookupResult.error());
 
     }
@@ -150,7 +150,7 @@ Expected<ShaderHandle> ShaderLibrary::getShader(const AStringView entryName, Sha
 
     const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), StringConvert(shader->m_entryPointName), ResultToString(res));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), ConvertString(shader->m_entryPointName), ResultToString(res));
         return MakeUnexpected(Failure{});
     }
 

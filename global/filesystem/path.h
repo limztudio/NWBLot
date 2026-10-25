@@ -515,7 +515,7 @@ private:
             assignSource(AStringView(reinterpret_cast<const char*>(source.data()), source.size()));
         }
         else{
-            m_text = StringConvert(arena(), source);
+            m_text = ConvertString(arena(), source);
         }
     }
 

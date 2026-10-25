@@ -42,7 +42,7 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
     const auto found = m_codecs.find(typeName);
     if(found != m_codecs.end()){
         if(!replaceExisting){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: codec for type '{}' is already registered"), StringConvert(typeName.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: codec for type '{}' is already registered"), ConvertString(typeName.resolvedText()));
             return false;
         }
 
@@ -78,7 +78,7 @@ Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAssetByName(const Name& as
     ScopedLock lock(m_mutex);
     const auto found = m_codecs.find(assetType);
     if(found == m_codecs.end()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), ConvertString(assetType.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     const NotNull<IAssetCodec*> codec(found.value().get());

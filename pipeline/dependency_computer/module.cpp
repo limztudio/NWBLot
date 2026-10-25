@@ -50,7 +50,7 @@ int RunPipelineTool(const int argc, char** argv){
         }
         const auto output = AbsolutePath(Path(arena, parsed.outputPath));
         if(!output || !EnsureDirectories(output->parentPath()) || !WriteTextFile(*output, AStringView(text))){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to write output '{}'"), StringConvert(parsed.outputPath));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to write output '{}'"), ConvertString(parsed.outputPath));
             return s_PipelineExitFailure;
         }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DependencyComputer: returned {} inputs (skin dependencies: {})"), inputs.size(), parsed.includeSkinDependencies);

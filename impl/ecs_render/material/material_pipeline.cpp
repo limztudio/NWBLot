@@ -170,14 +170,14 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(csgClipPipeline){
         const auto csgProjectEvaluatorModuleInclude = __hidden_material_pipeline::ResolveCsgProjectEvaluatorModuleInclude(m_arena, m_csgShapeRegistry, pipelineKey.csgEvaluatorVariant);
         if(!csgProjectEvaluatorModuleInclude){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to resolve CSG evaluator module for material '{}'"), StringConvert(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to resolve CSG evaluator module for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         csgProjectEvaluatorModuleAssignment = __hidden_material_pipeline::BuildCsgProjectEvaluatorModuleAssignment(m_arena, AStringView(*csgProjectEvaluatorModuleInclude));
         if(!csgProjectEvaluatorModuleAssignment.empty()){
             const auto existingEvaluatorModuleAssignment = ECSRenderMaterialShaderVariants::FindVariantDefineAssignment(shaderVariant, ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName);
             if(existingEvaluatorModuleAssignment && *existingEvaluatorModuleAssignment != AStringView(csgProjectEvaluatorModuleAssignment)){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' uses a different CSG evaluator module than its active cutters"), StringConvert(materialKey.resolvedText()));
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' uses a different CSG evaluator module than its active cutters"), ConvertString(materialKey.resolvedText()));
                 return failMaterialPipeline();
             }
             if(!existingEvaluatorModuleAssignment)
@@ -188,7 +188,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(csgClipPipeline && !avboitCsgClipPipeline){
         auto variant = __hidden_material_pipeline::BuildCsgShaderVariantName(m_arena, shaderVariant, materialProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build CSG shader variant for material '{}'"), StringConvert(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build CSG shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         csgShaderVariant = Move(*variant);
@@ -197,7 +197,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(avboitCsgClipPipeline){
         auto variant = __hidden_material_pipeline::BuildCsgShaderVariantName(m_arena, shaderVariant, materialProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG mesh shader variant for material '{}'"), StringConvert(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG mesh shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         csgShaderVariant = Move(*variant);
@@ -206,7 +206,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(avboitCsgClipPipeline){
         auto variant = __hidden_material_pipeline::BuildCsgShaderVariantName(m_arena, Core::ShaderArchive::s_DefaultVariant, avboitProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG pixel shader variant for material '{}'"), StringConvert(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG pixel shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         avboitCsgShaderVariant = Move(*variant);
@@ -293,7 +293,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         else
             resources.meshletPipeline.reset();
         if(!meshletPipelineResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"), StringConvert(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"), ConvertString(materialKey.resolvedText()));
             return false;
         }
 
@@ -322,7 +322,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         else
             resources.indexedPipeline.reset();
         if(!indexedPipelineResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create indexed object geometry pipeline for material '{}'"), StringConvert(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create indexed object geometry pipeline for material '{}'"), ConvertString(materialKey.resolvedText()));
             return false;
         }
         resources.renderPath = RenderPath::VertexIndexed;
@@ -351,7 +351,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         else
             resources.computePipeline.reset();
         if(!computePipelineResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), StringConvert(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), ConvertString(materialKey.resolvedText()));
             return false;
         }
 
@@ -368,7 +368,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         else
             resources.emulationPipeline.reset();
         if(!emulationPipelineResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), StringConvert(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), ConvertString(materialKey.resolvedText()));
             resources.computePipeline.reset();
             return false;
         }
@@ -387,7 +387,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
 
     if(meshSupported){
         if(!tryBuildMeshPipeline()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device"), StringConvert(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
 
@@ -403,7 +403,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
             return failMaterialPipeline();
     }
     else if(!tryBuildComputePipeline()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader"), StringConvert(materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader"), ConvertString(materialKey.resolvedText()));
         return failMaterialPipeline();
     }
 
@@ -454,21 +454,21 @@ void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialK
 
     switch(renderPath){
     case RenderPath::MeshShader:{
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected MeshShader + PS on this device"), StringConvert(materialKey.resolvedText()));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected MeshShader + PS on this device"), ConvertString(materialKey.resolvedText()));
         break;
     }
     case RenderPath::VertexIndexed:{
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected VertexIndexed + PS from persistent object-space geometry"), StringConvert(materialKey.resolvedText()));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected VertexIndexed + PS from persistent object-space geometry"), ConvertString(materialKey.resolvedText()));
         break;
     }
     case RenderPath::ComputeEmulation:{
         if(!meshSupported){
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected CS + PS by compiling its mesh shader for compute emulation because native mesh shaders are unavailable in the current graphics configuration")
-                , StringConvert(materialKey.resolvedText())
+                , ConvertString(materialKey.resolvedText())
             );
         }
         else{
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected CS + PS through compute emulation"), StringConvert(materialKey.resolvedText()));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected CS + PS through compute emulation"), ConvertString(materialKey.resolvedText()));
         }
         break;
     }

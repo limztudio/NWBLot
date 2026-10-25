@@ -79,7 +79,7 @@ static constexpr f32 s_PaletteAlphaMax = 1.0f;
 
 [[nodiscard]] static Expected<u32> ReadU32Value(const Path& path, const Value& value, const AStringView fieldName){
     if(!value.isInteger() || !FitsU32(value.asInteger())){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must contain integers in the u32 range"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(fieldName));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must contain integers in the u32 range"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
     return static_cast<u32>(value.asInteger());
@@ -93,7 +93,7 @@ template<usize Count>
     if(!field && !required)
         return values;
     if(!field || !field->isList() || field->asList().size() != Count){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component integer list"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(fieldName), Count);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component integer list"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), ConvertString(fieldName), Count);
         return MakeUnexpected(Failure{});
     }
     for(usize index = 0u; index < Count; ++index){
@@ -113,7 +113,7 @@ template<usize Count>
     if(!field)
         return values;
     if(!field->isList() || field->asList().size() != Count){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component numeric list"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(fieldName), Count);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component numeric list"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), ConvertString(fieldName), Count);
         return MakeUnexpected(Failure{});
     }
     for(usize index = 0u; index < Count; ++index){
@@ -174,7 +174,7 @@ template<usize Count>
     if(!colors)
         return MakeUnexpected(colors.error());
     if((*colors)->asList().size() != UiSkinColorRole::Count){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), static_cast<u32>(UiSkinColorRole::Count));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), static_cast<u32>(UiSkinColorRole::Count));
         return MakeUnexpected(Failure{});
     }
 
@@ -195,12 +195,12 @@ template<usize Count>
             }
         }
         if(role == UiSkinColorRole::Count || seen[role]){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unknown or duplicate palette role '{}'"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(name));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unknown or duplicate palette role '{}'"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
             return MakeUnexpected(Failure{});
         }
         const Value* rgba = FindField(value, s_RgbaField);
         if(!rgba || !rgba->isList() || rgba->asList().size() != s_RgbaComponentCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs four RGBA components"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(name));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs four RGBA components"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
             return MakeUnexpected(Failure{});
         }
         f32 components[s_RgbaComponentCount] = {};
@@ -210,7 +210,7 @@ template<usize Count>
                 return MakeUnexpected(Failure{});
             components[index] = *indexResultValue;
             if(components[index] < s_PaletteChannelMin || components[index] > (index == s_AlphaComponentIndex ? s_PaletteAlphaMax : s_UiSkinPaletteRgbMax)){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(name));
+                NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
                 return MakeUnexpected(Failure{});
             }
         }
@@ -225,7 +225,7 @@ template<usize Count>
 
     const Value* typography = FindField(asset, s_TypographyField);
     if(!typography){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': skins require typography.default_font_size"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': skins require typography.default_font_size"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
     if(!Core::Assets::CheckMetadataAssetMap(path, *typography, s_DiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, *typography, s_DiagnosticPrefix, { s_DefaultFontSizeField }))
@@ -235,7 +235,7 @@ template<usize Count>
         return MakeUnexpected(Failure{});
     typographyResult.defaultFontSize = *defaultFontSizeResult;
     if(typographyResult.defaultFontSize < s_UiSkinMinDefaultFontSize || typographyResult.defaultFontSize > s_UiSkinMaxDefaultFontSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
     return typographyResult;
@@ -297,7 +297,7 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, const A
     toolkitContract = toolkitContractResult->text;
     hasToolkitContract = toolkitContractResult->present;
     if(hasToolkitContract && toolkitContract != s_WidgetsContract){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets'"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets'"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     parsed.completeToolkitSkin = hasToolkitContract;
@@ -306,11 +306,11 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, const A
     if(!regions)
         return MakeUnexpected(regions.error());
     if((*regions)->asList().size() > s_UiSkinMaxRegionCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions exceed schema limit {}"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), s_UiSkinMaxRegionCount);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions exceed schema limit {}"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), s_UiSkinMaxRegionCount);
         return MakeUnexpected(Failure{});
     }
     if((*regions)->asList().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions must be nonempty and fit the supported count"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions must be nonempty and fit the supported count"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
     parsed.regions.reserve((*regions)->asList().size());

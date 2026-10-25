@@ -78,7 +78,7 @@ bool BackendContext::createDevice(){
 
     for(const auto& name : m_deviceParams.requiredBackendDeviceExtensions){
         if(ResolveDeviceExtensionRequest(m_deviceParams.hardwareRayTracingPolicy, name, true) == DeviceExtensionRequestAction::Reject){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device extension '{}' conflicts with the disabled hardware ray tracing policy."), StringConvert(name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device extension '{}' conflicts with the disabled hardware ray tracing policy."), ConvertString(name));
             return false;
         }
         registerDeviceExtension(m_enabledExtensions.device, name, resolveDeviceExtensionFeature(name));

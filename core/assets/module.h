@@ -93,7 +93,7 @@ private:
 
 template<typename ArenaT>
 [[nodiscard]] inline TString<ArenaT> AssetVirtualPathText(ArenaT& arena, const IAsset& asset){
-    return asset.virtualPath() ? StringConvert(arena, asset.virtualPath().resolvedText()) : TString<ArenaT>(s_UnnamedAssetPathText, arena);
+    return asset.virtualPath() ? ConvertString(arena, asset.virtualPath().resolvedText()) : TString<ArenaT>(s_UnnamedAssetPathText, arena);
 }
 
 template<typename AssetT>
@@ -144,7 +144,7 @@ public:
         if(asset.assetType() == assetType())
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}', expected '{}'"), failureContext, StringConvert(asset.assetType().resolvedText()), StringConvert(assetType().resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}', expected '{}'"), failureContext, ConvertString(asset.assetType().resolvedText()), ConvertString(assetType().resolvedText()));
         return false;
     }
 #endif

@@ -38,43 +38,43 @@ template<typename UsageFlags, typename CreateFlags>
 ){
     if(provenance.sharingMode == VK_SHARING_MODE_EXCLUSIVE){
         if(provenance.queueFamilyIndexCount != 0u || provenance.queueFamilyIndices != nullptr){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: exclusive sharing must not carry queue-family indices"), StringConvert(logPrefix));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: exclusive sharing must not carry queue-family indices"), ConvertString(logPrefix));
             return false;
         }
         if(device.usesConcurrentQueueSharing(queueSharing)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: exclusive native sharing contradicts concurrent logical sharing"), StringConvert(logPrefix));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: exclusive native sharing contradicts concurrent logical sharing"), ConvertString(logPrefix));
             return false;
         }
         return true;
     }
     if(provenance.sharingMode != VK_SHARING_MODE_CONCURRENT){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native sharing mode is invalid"), StringConvert(logPrefix));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native sharing mode is invalid"), ConvertString(logPrefix));
         return false;
     }
     if(provenance.queueFamilyIndexCount < s_MinConcurrentSharingQueueFamilyCount || !provenance.queueFamilyIndices){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: concurrent sharing requires at least two queue-family indices"), StringConvert(logPrefix));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: concurrent sharing requires at least two queue-family indices"), ConvertString(logPrefix));
         return false;
     }
     if(queueSharing == ResourceQueueSharing::Exclusive){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: concurrent native sharing requires explicit logical queue classes"), StringConvert(logPrefix));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: concurrent native sharing requires explicit logical queue classes"), ConvertString(logPrefix));
         return false;
     }
 
     u32 physicalQueueFamilyCount = 0u;
     instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &physicalQueueFamilyCount, nullptr);
     if(physicalQueueFamilyCount == 0u || provenance.queueFamilyIndexCount > physicalQueueFamilyCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native queue-family count is invalid"), StringConvert(logPrefix));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native queue-family count is invalid"), ConvertString(logPrefix));
         return false;
     }
     for(u32 familyIndex = 0u; familyIndex < provenance.queueFamilyIndexCount; ++familyIndex){
         const u32 nativeFamilyIndex = provenance.queueFamilyIndices[familyIndex];
         if(nativeFamilyIndex >= physicalQueueFamilyCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native queue-family index is out of range"), StringConvert(logPrefix));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native queue-family index is out of range"), ConvertString(logPrefix));
             return false;
         }
         for(u32 earlierIndex = 0u; earlierIndex < familyIndex; ++earlierIndex){
             if(provenance.queueFamilyIndices[earlierIndex] == nativeFamilyIndex){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native queue-family indices are not unique"), StringConvert(logPrefix));
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native queue-family indices are not unique"), ConvertString(logPrefix));
                 return false;
             }
         }
@@ -88,12 +88,12 @@ template<typename UsageFlags, typename CreateFlags>
             continue;
         hasLogicalQueue = true;
         if(!ResourceQueueSharing::QueueFamilyIndexListContains(provenance.queueFamilyIndices, provenance.queueFamilyIndexCount, queue.familyIndex)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native sharing omits a logically admitted queue family"), StringConvert(logPrefix));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native sharing omits a logically admitted queue family"), ConvertString(logPrefix));
             return false;
         }
     }
     if(!hasLogicalQueue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: logical sharing admits no device queue"), StringConvert(logPrefix));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: logical sharing admits no device queue"), ConvertString(logPrefix));
         return false;
     }
     return true;

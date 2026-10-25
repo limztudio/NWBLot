@@ -366,7 +366,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
 
         const auto info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, uploadKind);
         if(!info){
-            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), StringConvert(info.error().message()), s_ServerName), Core::Common::LogType::Fatal);
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), s_ServerName), Core::Common::LogType::Fatal);
             return MHD_NO;
         }
 
@@ -501,7 +501,7 @@ bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStr
     else{
         const Core::Common::NameSymbols::DefaultFileLoadFailure& failure = nameSymbolLoad.error();
         loadedNameSymbols = failure.loadedAny;
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Log server: startup name-symbol filesystem load failed: [{}] {}"), failure.code.value(), StringConvert(failure.code.message())), Core::Common::LogType::Warning);
+        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Log server: startup name-symbol filesystem load failed: [{}] {}"), failure.code.value(), ConvertString(failure.code.message())), Core::Common::LogType::Warning);
     }
     if(loadedNameSymbols)
         enqueue(BasicStringView<tchar>(NWB_TEXT("Log server: loaded startup name-symbol mappings")), Core::Common::LogType::Info);

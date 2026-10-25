@@ -56,7 +56,7 @@ bool ReflectionSpatialOwnerProbe::configure(const AStringView selection, Impl::R
     }
     settings.spatialRadius = m_radii[0];
     settings.samplingSeed = 99u;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwner: selection={} initial_radius={} final_radius={} phases={}"), StringConvert(selection), m_radii[0], m_radii[m_lastPhase], m_lastPhase + 1u);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwner: selection={} initial_radius={} final_radius={} phases={}"), ConvertString(selection), m_radii[0], m_radii[m_lastPhase], m_lastPhase + 1u);
     return true;
 }
 

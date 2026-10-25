@@ -380,7 +380,7 @@ inline VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(VkDebugUtilsMessageSev
 
     const AStringView messageIdName = callbackData && callbackData->pMessageIdName ? callbackData->pMessageIdName : "";
     const AStringView message = callbackData && callbackData->pMessage ? callbackData->pMessage : "";
-    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"), StringConvert(DebugUtilsSeverityToString(severity)), static_cast<u32>(types), messageId, StringConvert(messageIdName), StringConvert(message));
+    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"), ConvertString(DebugUtilsSeverityToString(severity)), static_cast<u32>(types), messageId, ConvertString(messageIdName), ConvertString(message));
 
     return VK_FALSE;
 }

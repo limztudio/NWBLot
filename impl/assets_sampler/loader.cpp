@@ -31,26 +31,26 @@ bool SamplerAssetLoader::Create(SamplerGpuResource& outResource, const Sampler& 
     Core::Device& device = graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load sampler '{}' without an initialized descriptor heap"), owner, StringConvert(samplerName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load sampler '{}' without an initialized descriptor heap"), owner, ConvertString(samplerName.resolvedText()));
         return false;
     }
 
     auto samplerResult = device.createSampler(samplerAsset.description());
     if(!samplerResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create sampler '{}'"), owner, StringConvert(samplerName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create sampler '{}'"), owner, ConvertString(samplerName.resolvedText()));
         return false;
     }
     Core::SamplerHandle sampler = Move(*samplerResult);
 
     const Expected<Core::GpuDescriptorHandle> samplerHandleResult = heap.allocate(Core::GpuDescriptorClass::Sampler);
     if(!samplerHandleResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampler slot for '{}'"), owner, StringConvert(samplerName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampler slot for '{}'"), owner, ConvertString(samplerName.resolvedText()));
         return false;
     }
     const Core::GpuDescriptorHandle samplerHandle = *samplerHandleResult;
     if(!heap.write(samplerHandle, Core::DescriptorWriteItem::Sampler(0u, sampler.get()))){
         heap.free(samplerHandle);
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampler slot for '{}'"), owner, StringConvert(samplerName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampler slot for '{}'"), owner, ConvertString(samplerName.resolvedText()));
         return false;
     }
 

@@ -48,7 +48,7 @@ int Run(const int argc, char** argv){
                     return 1;
                 const auto exists = FileExists(options.output);
                 if(!exists){
-                    NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to inspect output metadata: {}"), StringConvert(exists.error().message()));
+                    NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to inspect output metadata: {}"), ConvertString(exists.error().message()));
                     return 1;
                 }
                 if(*exists && !options.overwrite){

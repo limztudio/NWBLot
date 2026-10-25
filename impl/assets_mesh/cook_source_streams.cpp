@@ -94,7 +94,7 @@ bool MeshCookSourceStreams::ValidateSourceStreamIndex(const Path& nwbFilePath, c
     if(index < streamCount)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(streamName));
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(streamName));
     return false;
 }
 

@@ -79,7 +79,7 @@ void BackendContext::logVulkanDeviceConfiguration(
            << " cooperativeVector=" << VulkanDetail::BoolToYesNoText(m_cooperativeVectorFeatureEnabled)
            << "\n    enabled device extensions: " << m_enabledExtensions.device.size()
         ;
-        NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
+        NWB_LOGGER_ESSENTIAL_INFO(ConvertString(ss.str()));
     }
 
     const auto sameClassQueueCount = [this](const CommandQueue::Enum queueClass)noexcept{
@@ -99,13 +99,13 @@ void BackendContext::logVulkanDeviceConfiguration(
             : m_deviceParams.enableCrossFamilySameClassQueueRouting ? "no alternate Graphics family or additional Graphics queues" : "Graphics family exposes no additional queues"
     ;
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class graphics queue requested={} crossFamilyRequested={} effective={} count={} graphicsFamily={} auxiliaryGraphicsFamily={} ({})")
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableSameClassMultiQueue))
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableCrossFamilySameClassQueueRouting))
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_sameClassGraphicsQueueEnabled))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_deviceParams.enableSameClassMultiQueue))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_deviceParams.enableCrossFamilySameClassQueueRouting))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_sameClassGraphicsQueueEnabled))
         , sameClassGraphicsQueueCount
         , m_graphicsQueueFamily
         , m_secondaryGraphicsQueueFamily
-        , StringConvert(sameClassGraphicsQueueReason)
+        , ConvertString(sameClassGraphicsQueueReason)
     );
 
     const i32 schedulerComputeQueueFamily = m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex ? m_asyncComputeQueueFamily : m_computeQueueFamily;
@@ -119,11 +119,11 @@ void BackendContext::logVulkanDeviceConfiguration(
     const bool asyncComputeLaneEffective = m_asyncComputeLaneEnabled;
     const AStringView asyncComputeLaneReason = !m_deviceParams.enableAsyncComputeLane ? VulkanDetail::s_DisabledQueueReason : asyncComputeLaneEffective ? "dedicated compute family selected" : "no dedicated compute-only family";
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: async compute lane requested={} effective={} graphicsFamily={} computeFamily={} ({})")
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableAsyncComputeLane))
-        , StringConvert(VulkanDetail::BoolToYesNoText(asyncComputeLaneEffective))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_deviceParams.enableAsyncComputeLane))
+        , ConvertString(VulkanDetail::BoolToYesNoText(asyncComputeLaneEffective))
         , m_graphicsQueueFamily
         , schedulerComputeQueueFamily
-        , StringConvert(asyncComputeLaneReason)
+        , ConvertString(asyncComputeLaneReason)
     );
 
     const AStringView sameClassComputeQueueReason = !m_deviceParams.enableSameClassMultiQueue ? VulkanDetail::s_DisabledQueueReason : !m_computeQueueEnabled
@@ -133,13 +133,13 @@ void BackendContext::logVulkanDeviceConfiguration(
                 : m_deviceParams.enableCrossFamilySameClassQueueRouting ? "no alternate dedicated Compute family or additional Compute queues" : "Compute family exposes no additional queues"
     ;
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class compute queue requested={} crossFamilyRequested={} effective={} count={} computeFamily={} auxiliaryComputeFamily={} ({})")
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableSameClassMultiQueue))
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableCrossFamilySameClassQueueRouting))
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_sameClassComputeQueueEnabled))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_deviceParams.enableSameClassMultiQueue))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_deviceParams.enableCrossFamilySameClassQueueRouting))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_sameClassComputeQueueEnabled))
         , sameClassComputeQueueCount
         , m_computeQueueFamily
         , m_secondaryComputeQueueFamily
-        , StringConvert(sameClassComputeQueueReason)
+        , ConvertString(sameClassComputeQueueReason)
     );
 
     m_transferQueueEnabled =
@@ -152,12 +152,12 @@ void BackendContext::logVulkanDeviceConfiguration(
     const bool transferQueueEffective = m_transferQueueEnabled;
     const AStringView transferQueueReason = !m_deviceParams.enableTransferQueue ? VulkanDetail::s_DisabledQueueReason : transferQueueEffective ? "dedicated transfer-only family selected" : "no dedicated transfer-only family";
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: transfer queue requested={} effective={} graphicsFamily={} computeFamily={} transferFamily={} ({})")
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableTransferQueue))
-        , StringConvert(VulkanDetail::BoolToYesNoText(transferQueueEffective))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_deviceParams.enableTransferQueue))
+        , ConvertString(VulkanDetail::BoolToYesNoText(transferQueueEffective))
         , m_graphicsQueueFamily
         , m_computeQueueFamily
         , m_transferQueueFamily
-        , StringConvert(transferQueueReason)
+        , ConvertString(transferQueueReason)
     );
 
     const AStringView sameClassTransferQueueReason = !m_deviceParams.enableSameClassMultiQueue ? VulkanDetail::s_DisabledQueueReason : !transferQueueEffective
@@ -167,13 +167,13 @@ void BackendContext::logVulkanDeviceConfiguration(
                 : m_deviceParams.enableCrossFamilySameClassQueueRouting ? "no alternate dedicated Transfer family or additional Transfer queues" : "Transfer family exposes no additional queues"
     ;
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class transfer queue requested={} crossFamilyRequested={} effective={} count={} transferFamily={} auxiliaryTransferFamily={} ({})")
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableSameClassMultiQueue))
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_deviceParams.enableCrossFamilySameClassQueueRouting))
-        , StringConvert(VulkanDetail::BoolToYesNoText(m_sameClassTransferQueueEnabled))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_deviceParams.enableSameClassMultiQueue))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_deviceParams.enableCrossFamilySameClassQueueRouting))
+        , ConvertString(VulkanDetail::BoolToYesNoText(m_sameClassTransferQueueEnabled))
         , sameClassTransferQueueCount
         , m_transferQueueFamily
         , m_secondaryTransferQueueFamily
-        , StringConvert(sameClassTransferQueueReason)
+        , ConvertString(sameClassTransferQueueReason)
     );
 }
 

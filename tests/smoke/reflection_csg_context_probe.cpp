@@ -61,7 +61,7 @@ void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::Renderer
         }
         const auto sliceIdentity = NWB::Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice);
         if(!sliceIdentity){
-            NWB_LOGGER_ERROR(NWB_TEXT("Reflection CSG context probe: failed to format hardware slice identity: {}"), StringConvert(sliceIdentity.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Reflection CSG context probe: failed to format hardware slice identity: {}"), ConvertString(sliceIdentity.error().message()));
             return;
         }
         sliceIdentities.push_back(*sliceIdentity);

@@ -37,7 +37,7 @@ Expected<MeshBuildResult> BuildMesh(
 
     const auto normalMode = ParseNormalModeText(options.normalMode, scratchArena);
     if(!normalMode){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), StringConvert(NormalModeErrorText(scratchArena)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), ConvertString(NormalModeErrorText(scratchArena)));
         return MakeUnexpected(Failure{});
     }
 

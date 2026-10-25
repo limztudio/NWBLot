@@ -437,7 +437,7 @@ using BasicStringDetail::WriteConvertedText;
 
 #if defined(NWB_UNICODE)
 template<typename ArenaT, typename In> requires BasicStringDetail::FromCharView<In>
-inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
+inline TString<ArenaT> ConvertString(ArenaT& arena, const In& raw){
     AStringView src(raw);
     TString<ArenaT> dst{arena};
     if(src.empty())
@@ -461,12 +461,12 @@ inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
 }
 
 template<typename ArenaT, typename In>
-inline TString<ArenaT> StringConvert(ArenaT& arena, const In& src){
+inline TString<ArenaT> ConvertString(ArenaT& arena, const In& src){
     return TString<ArenaT>(src, arena);
 }
 #else
 template<typename ArenaT, typename In> requires BasicStringDetail::FromWcharView<In>
-inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
+inline TString<ArenaT> ConvertString(ArenaT& arena, const In& raw){
     const WStringView src(raw);
     if(src.empty())
         return TString<ArenaT>{arena};
@@ -487,13 +487,13 @@ inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
 }
 
 template<typename ArenaT, typename In>
-inline TString<ArenaT> StringConvert(ArenaT& arena, const In& src){
+inline TString<ArenaT> ConvertString(ArenaT& arena, const In& src){
     return TString<ArenaT>(src, arena);
 }
 #endif
 
 template<typename In>
-inline BasicStringDetail::StringConvertArg<In> StringConvert(const In& src)noexcept{
+inline BasicStringDetail::StringConvertArg<In> ConvertString(const In& src)noexcept{
     return BasicStringDetail::StringConvertArg<In>{ src };
 }
 

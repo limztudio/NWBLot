@@ -399,7 +399,7 @@ TEST(AssetsFont, NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAllocat
     AppendUnsignedToFixedBuffer(expectedCode, static_cast<u64>(signedCode < 0 ? -signedCode : signedCode));
     constexpr Name s_DiagnosticScratch("tests/assets_font/native_validation_diagnostic");
     Core::Alloc::ScratchArena scratchArena(s_DiagnosticScratch);
-    const auto expectedDiagnostic = StringConvert(scratchArena, AStringView(expectedCode));
+    const auto expectedDiagnostic = ConvertString(scratchArena, AStringView(expectedCode));
     EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic));
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(ValidateFontSource(font.fontBytes(), 0u));

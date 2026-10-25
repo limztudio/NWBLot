@@ -136,7 +136,7 @@ bool Initialize(){
     const auto opened = state.library.open(arena, Common::s_AftermathRuntimeName);
     if(!opened){
         const SharedLibraryFailure& failure = opened.error();
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath runtime load failed: {}; native detail '{}'; detail truncated {}"), StringConvert(failure.code.message()), StringConvert(failure.detail.view()), failure.detailTruncated);
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath runtime load failed: {}; native detail '{}'; detail truncated {}"), ConvertString(failure.code.message()), ConvertString(failure.detail.view()), failure.detailTruncated);
         return false;
     }
 
@@ -145,7 +145,7 @@ bool Initialize(){
     const auto getStatus = state.library.resolve<PFN_GFSDK_Aftermath_GetCrashDumpStatus>(arena, "GFSDK_Aftermath_GetCrashDumpStatus");
     if(!enable || !disable || !getStatus){
         const SharedLibraryFailure& failure = !enable ? enable.error() : !disable ? disable.error() : getStatus.error();
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath symbol lookup failed: {}; native detail '{}'; detail truncated {}"), StringConvert(failure.code.message()), StringConvert(failure.detail.view()), failure.detailTruncated);
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath symbol lookup failed: {}; native detail '{}'; detail truncated {}"), ConvertString(failure.code.message()), ConvertString(failure.detail.view()), failure.detailTruncated);
         state.library.close();
         return false;
     }

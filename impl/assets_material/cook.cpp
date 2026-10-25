@@ -78,7 +78,7 @@ static bool SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry,
 
     const auto shaderName = ToName(shaderNameText);
     if(!shaderName || !*shaderName){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT {} pixel shader name"), StringConvert(AStringView(materialEntry.virtualPath)), StringConvert(passLabel));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT {} pixel shader name"), ConvertString(AStringView(materialEntry.virtualPath)), ConvertString(passLabel));
         return false;
     }
 
@@ -94,15 +94,15 @@ static bool SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry,
 
 Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Core::Assets::AssetArena& arena){
     if(materialEntry.materialInterface.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing required material interface"), StringConvert(AStringView(materialEntry.virtualPath)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing required material interface"), ConvertString(AStringView(materialEntry.virtualPath)));
         return MakeUnexpected(Failure{});
     }
     if(materialEntry.typedLayoutHash == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: interface material '{}' is missing typed layout data"), StringConvert(AStringView(materialEntry.virtualPath)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: interface material '{}' is missing typed layout data"), ConvertString(AStringView(materialEntry.virtualPath)));
         return MakeUnexpected(Failure{});
     }
     if(materialEntry.shaderVariant.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has empty shader variant"), StringConvert(AStringView(materialEntry.virtualPath)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has empty shader variant"), ConvertString(AStringView(materialEntry.virtualPath)));
         return MakeUnexpected(Failure{});
     }
 
@@ -131,7 +131,7 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
     asset.setTwoSided(materialEntry.twoSided);
     asset.setRefractive(materialEntry.refractive);
     if(!HasValidMaterialAvboitPixelShaderContract(asset.transparent(), asset.avboitAccumulatePixelShader(), asset.avboitOccupancyPixelShader(), asset.avboitExtinctionPixelShader())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' AVBOIT pixel shaders must be present if and only if it is transparent"), StringConvert(AStringView(materialEntry.virtualPath)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' AVBOIT pixel shaders must be present if and only if it is transparent"), ConvertString(AStringView(materialEntry.virtualPath)));
         return MakeUnexpected(Failure{});
     }
     asset.setTypedLayout(materialEntry.typedLayoutHash, materialEntry.typedLayoutBlocks, materialEntry.typedLayoutFields, materialEntry.typedBlockBytes);
@@ -140,7 +140,7 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
     for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
         if(!asset.setShaderForStage(shaderType, shaderAsset)){
             const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: invalid shader stage '{}' for '{}'"), StringConvert(stageName.resolvedText()), StringConvert(AStringView(materialEntry.virtualPath)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: invalid shader stage '{}' for '{}'"), ConvertString(stageName.resolvedText()), ConvertString(AStringView(materialEntry.virtualPath)));
             return MakeUnexpected(Failure{});
         }
     }

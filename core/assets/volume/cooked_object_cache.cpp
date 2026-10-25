@@ -124,7 +124,7 @@ static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(const Path& object
     if(!read){
         const ErrorCode& errorCode = read.error();
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to read object cache '{}': {}"), PathToString<tchar>(objectPath), StringConvert(errorCode.message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to read object cache '{}': {}"), PathToString<tchar>(objectPath), ConvertString(errorCode.message()));
         }
         return MakeUnexpected(Failure{});
     }
@@ -163,7 +163,7 @@ static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileH
     const auto directories = EnsureDirectories(objectPath.parentPath());
     if(!directories){
         const ErrorCode& errorCode = directories.error();
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to create object cache directory '{}': {}"), PathToString<tchar>(objectPath.parentPath()), StringConvert(errorCode.message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to create object cache directory '{}': {}"), PathToString<tchar>(objectPath.parentPath()), ConvertString(errorCode.message()));
         return false;
     }
     if(WriteBinaryFile(objectPath, objectBytes))
@@ -198,7 +198,7 @@ public:
     virtual bool writeCookedAsset(const TStringView assetKind, const Name& virtualPath, const Core::Assets::IAsset& asset, const Core::Assets::IAssetCodec& codec)override{
         m_payloadBinary.clear();
         if(!codec.serialize(asset, m_payloadBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to serialize {} '{}'"), assetKind, StringConvert(virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to serialize {} '{}'"), assetKind, ConvertString(virtualPath.resolvedText()));
             return false;
         }
 
@@ -261,7 +261,7 @@ static bool RegisterMergedManifestVirtualPath(const Name& virtualPath, AssetsVol
     if(seenVirtualPathHashes.insert(virtualPath.hash()).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: duplicate registry manifest virtual path '{}'"), StringConvert(virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: duplicate registry manifest virtual path '{}'"), ConvertString(virtualPath.resolvedText()));
     return false;
 }
 
@@ -339,7 +339,7 @@ bool BuildRegistryObjectManifestEntries(
 Expected<CookedObjectPayloadView> ReadCookedObjectPayload(const Path& objectPath, const Name& expectedVirtualPath, Vector<u8, ScratchArena>& inOutObjectBytes){
     const auto decoded = __hidden_cooked_object_cache::ReadObjectFileHeader(objectPath, inOutObjectBytes);
     if(!decoded){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid object cache '{}' for '{}'"), PathToString<tchar>(objectPath), StringConvert(expectedVirtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid object cache '{}' for '{}'"), PathToString<tchar>(objectPath), ConvertString(expectedVirtualPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     const auto& header = decoded->header;

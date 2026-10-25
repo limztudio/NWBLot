@@ -52,7 +52,7 @@ ImageSource::ImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture
 
 Expected<SharedImageSource> MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture){
     if(texture.dimension() != TextureDimension::Texture2D || texture.depth() != 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MakeImageSource: texture '{}' must be a static 2D image with depth one"), StringConvert(texture.virtualPath().resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("MakeImageSource: texture '{}' must be a static 2D image with depth one"), ConvertString(texture.virtualPath().resolvedText()));
         return MakeUnexpected(Failure{});
     }
     if(!texture.validatePayload())

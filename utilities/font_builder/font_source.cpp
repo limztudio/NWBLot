@@ -75,7 +75,7 @@ FontSource::~FontSource()noexcept{
 bool FontSource::open(const BakeOptions& options, Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch){
     auto bytes = ReadFontSourceInput(options.source, m_bytes.get_allocator().arena(), scratch);
     if(!bytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed: {}"), StringConvert(bytes.error()));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed: {}"), ConvertString(bytes.error()));
         return false;
     }
     if(!Impl::ValidateFontSource(*bytes, 0u)){

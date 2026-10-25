@@ -176,7 +176,7 @@ private:
         NWB::Core::Alloc::GlobalArena arena(Name("tests/stress/workload"));
         const auto value = ReadEnvironmentVariable(arena, "NWB_STRESS_CHARACTERS_PER_CLASS");
         if(!value){
-            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: failed to read workload environment: {}"), StringConvert(value.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: failed to read workload environment: {}"), ConvertString(value.error().message()));
             return MakeUnexpected(Failure{});
         }
         if(!*value)

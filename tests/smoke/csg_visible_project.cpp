@@ -398,7 +398,7 @@ public:
                 }
                 m_temporalFrameInterval = *interval;
             }
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal scene animated={} view={} minimum_frame=360 warmup_seconds=30 interval={} samples=32"), static_cast<u32>(m_temporalAnimated), StringConvert(*view), m_temporalFrameInterval);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal scene animated={} view={} minimum_frame=360 warmup_seconds=30 interval={} samples=32"), static_cast<u32>(m_temporalAnimated), ConvertString(*view), m_temporalFrameInterval);
             if(m_temporalAnimated)
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: front-facing triangle pose from graphics frame"));
         }

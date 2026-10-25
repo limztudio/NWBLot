@@ -198,7 +198,7 @@ bool EnsureOutputDirectory(const ScratchPath& outputPath, const AStringView asse
     if(created)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}"), StringConvert(assetKind), PathToString<tchar>(parentPath), StringConvert(created.error().message()));
+    NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}"), ConvertString(assetKind), PathToString<tchar>(parentPath), ConvertString(created.error().message()));
     return false;
 }
 

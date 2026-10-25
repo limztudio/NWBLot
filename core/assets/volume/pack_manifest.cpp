@@ -60,7 +60,7 @@ static bool ValidatePayloadIdentity(const Name& virtualPath, const AssetVolumePa
     if(identity.cookKeyHash != 0u)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest entry '{}' has an empty cook key"), StringConvert(virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest entry '{}' has an empty cook key"), ConvertString(virtualPath.resolvedText()));
     return false;
 }
 
@@ -81,7 +81,7 @@ bool AppendObjectFilePayloadToManifest(AssetVolumePackManifest& manifest, const 
     if(!ValidatePayloadIdentity(virtualPath, identity))
         return false;
     if(objectPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object manifest entry '{}' has an empty cache path"), StringConvert(virtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object manifest entry '{}' has an empty cache path"), ConvertString(virtualPath.resolvedText()));
         return false;
     }
 
@@ -99,7 +99,7 @@ bool AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name&
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
     if(payloadByteCount > 0u && payloadBytes == nullptr){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: payload manifest entry '{}' has null bytes"), StringConvert(virtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: payload manifest entry '{}' has null bytes"), ConvertString(virtualPath.resolvedText()));
         return false;
     }
 

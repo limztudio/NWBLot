@@ -75,7 +75,7 @@ bool AppendMeshObjectShaderEntries(const ResolvedCookPaths& resolvedPaths, const
 
     const auto sourceExists = IsRegularFile(prepared.sourcePath);
     if(!sourceExists){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to inspect fixed object geometry shader '{}': {}:{}"), PathToString<tchar>(prepared.sourcePath), StringConvert(sourceExists.error().category().name()), sourceExists.error().value());
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to inspect fixed object geometry shader '{}': {}:{}"), PathToString<tchar>(prepared.sourcePath), ConvertString(sourceExists.error().category().name()), sourceExists.error().value());
         return false;
     }
     if(!*sourceExists){

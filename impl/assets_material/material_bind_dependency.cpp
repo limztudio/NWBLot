@@ -33,7 +33,7 @@ static bool TryResolveMaterialBindDependencyInterface(const ScratchPath& normali
 
     auto normalizedDependencyResult = AbsolutePath(ScratchPath(scratchArena, dependency));
     if(!normalizedDependencyResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize shader dependency '{}': {}"), PathToString<tchar>(dependency), StringConvert(normalizedDependencyResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize shader dependency '{}': {}"), PathToString<tchar>(dependency), ConvertString(normalizedDependencyResult.error().message()));
         return false;
     }
     ScratchPath normalizedDependency = normalizedDependencyResult->lexicallyNormal();
@@ -83,7 +83,7 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
     if(!materialBindIncludeRoot.empty()){
         const auto normalizedRoot = AbsolutePath(ScratchPath(scratchArena, materialBindIncludeRoot));
         if(!normalizedRoot){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize generated include root '{}': {}"), PathToString<tchar>(materialBindIncludeRoot), StringConvert(normalizedRoot.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize generated include root '{}': {}"), PathToString<tchar>(materialBindIncludeRoot), ConvertString(normalizedRoot.error().message()));
             return MakeUnexpected(Failure{});
         }
         normalizedMaterialBindIncludeRoot = normalizedRoot->lexicallyNormal();
@@ -99,7 +99,7 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
 
         const auto dependencyInterfaceNameResult = Name::FromText(AStringView(dependencyInterfacePath));
         if(!dependencyInterfaceNameResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: shader '{}' includes invalid generated " "material bind interface '{}'"), StringConvert(shaderName), StringConvert(dependencyInterfacePath));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: shader '{}' includes invalid generated " "material bind interface '{}'"), ConvertString(shaderName), ConvertString(dependencyInterfacePath));
             return MakeUnexpected(Failure{});
         }
         const Name dependencyInterfaceName = *dependencyInterfaceNameResult;
@@ -107,7 +107,7 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
         // Each generated include comes from one authored file, and Gather already drops repeated paths, so this list has no repeats.
         const MaterialBindEntry* bindEntry = FindMaterialBindEntry(materialBindEntries, dependencyInterfaceName);
         if(!bindEntry){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: shader '{}' includes generated material bind interface '{}' with no authored source"), StringConvert(shaderName), StringConvert(dependencyInterfacePath));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: shader '{}' includes generated material bind interface '{}' with no authored source"), ConvertString(shaderName), ConvertString(dependencyInterfacePath));
             return MakeUnexpected(Failure{});
         }
         result.interfaceSources.emplace_back(arena, AStringView(bindEntry->source));

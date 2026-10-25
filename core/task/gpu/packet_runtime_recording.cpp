@@ -308,7 +308,7 @@ bool GpuNativePacketRecorder::recordPacket(
             if(barrier.isGraphInitialState && barrier.before == ResourceStates::Unknown){
                 if(!GpuPacketRecordingDetail::HasExplicitKnownInitialState(declarationAccess, barrier, *commandList)){
                     const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-                    NWB_LOGGER_ERROR(NWB_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source"), StringConvert(taskView.markerLabel), StringConvert(resource.markerLabel));
+                    NWB_LOGGER_ERROR(NWB_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source"), ConvertString(taskView.markerLabel), ConvertString(resource.markerLabel));
                     recorded = false;
                     break;
                 }
@@ -330,7 +330,7 @@ bool GpuNativePacketRecorder::recordPacket(
         const u64 taskRecordingLeaseSerial = commandList->recordingLeaseSerial();
         bool taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
         if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed())){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its prologue invalidated or replaced the native command buffer"), StringConvert(taskView.markerLabel));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its prologue invalidated or replaced the native command buffer"), ConvertString(taskView.markerLabel));
             recorded = false;
         }
         Optional<GpuTimingMeasure> taskTiming;
@@ -344,7 +344,7 @@ bool GpuNativePacketRecorder::recordPacket(
             }
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact || commandList->commandRecordingFailed()){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its marker invalidated or replaced the native command buffer"), StringConvert(taskView.markerLabel));
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its marker invalidated or replaced the native command buffer"), ConvertString(taskView.markerLabel));
                 recorded = false;
             }
         }
@@ -363,17 +363,17 @@ bool GpuNativePacketRecorder::recordPacket(
             taskRecordSeconds = VectorDoubleAdd(taskRecordSeconds, VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), taskRecordBegin)));
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its record thunk closed or replaced the native command buffer"), StringConvert(taskView.markerLabel));
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its record thunk closed or replaced the native command buffer"), ConvertString(taskView.markerLabel));
                 recorded = false;
             }
             else if(commandList->commandRecordingFailed()){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because native command recording failed on exact queue {}:{}"), StringConvert(taskView.markerLabel), packet.queue.index, packet.queue.deviceGeneration);
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because native command recording failed on exact queue {}:{}"), ConvertString(taskView.markerLabel), packet.queue.index, packet.queue.deviceGeneration);
                 recorded = false;
             }
             else if(!recorded && recordThunkInvoked){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: semantic record thunk for task identity '{}' marker '{}' returned false for packet {}:{} on assigned physical queue class {} index {} device generation {}")
-                    , StringConvert(taskView.identity.resolvedText())
-                    , StringConvert(taskView.markerLabel)
+                    , ConvertString(taskView.identity.resolvedText())
+                    , ConvertString(taskView.markerLabel)
                     , packetID.index
                     , packetID.generation
                     , static_cast<u32>(queue->queueClass)
@@ -397,7 +397,7 @@ bool GpuNativePacketRecorder::recordPacket(
         }
         if(recorded && (!GpuPacketRecordingDetail::HasQueueCapabilities(taskView.commands.allowedCapabilities(), usedCapabilities) || !GpuPacketRecordingDetail::HasQueueCapabilities(queue->capabilities, usedCapabilities))){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because capability mask {} is outside declared mask {} on assigned queue {}:{} (mask {})")
-                , StringConvert(taskView.markerLabel)
+                , ConvertString(taskView.markerLabel)
                 , static_cast<u32>(usedCapabilities)
                 , static_cast<u32>(taskView.commands.allowedCapabilities())
                 , static_cast<u32>(queue->queueClass)

@@ -337,7 +337,7 @@ private:
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
         m_runtimeMeshProvider.setMode(benchmarkCase.mode);
         configureCamera(benchmarkCase.view);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}"), m_repeatIndex + 1u, repeatCount(), StringConvert(BenchmarkModeName(benchmarkCase.mode)), StringConvert(BenchmarkViewName(benchmarkCase.view)));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}"), m_repeatIndex + 1u, repeatCount(), ConvertString(BenchmarkModeName(benchmarkCase.mode)), ConvertString(BenchmarkViewName(benchmarkCase.view)));
     }
 
     void finishCase(){
@@ -345,8 +345,8 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: end repeat={}/{} mode={} view={} sample_frames={}")
             , m_repeatIndex + 1u
             , repeatCount()
-            , StringConvert(BenchmarkModeName(benchmarkCase.mode))
-            , StringConvert(BenchmarkViewName(benchmarkCase.view))
+            , ConvertString(BenchmarkModeName(benchmarkCase.mode))
+            , ConvertString(BenchmarkViewName(benchmarkCase.view))
             , sampleFrameCount()
         );
     }

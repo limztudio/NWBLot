@@ -83,9 +83,9 @@ int ExitParseError(const CLI::App& app, const CLI::ParseError& error, Core::Allo
     const int result = app.exit(error, report, report);
     const ScratchString message = Move(report).str();
     if(message.empty())
-        NWB_LOGGER_ERROR(NWB_TEXT("{}"), StringConvert(AStringView(error.what())));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}"), ConvertString(AStringView(error.what())));
     else
-        NWB_LOGGER_ERROR(NWB_TEXT("{}"), StringConvert(message));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}"), ConvertString(message));
     return result;
 }
 
@@ -160,7 +160,7 @@ f64 PromptDouble(const AStringView label, const f64 defaultValue, Core::Alloc::S
 bool ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena, bool& prompted){
     const auto exists = FileExists(outputPath);
     if(!exists){
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), StringConvert(exists.error().message()));
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), ConvertString(exists.error().message()));
         return false;
     }
     if(!*exists)
@@ -349,7 +349,7 @@ int RunNwbRefresh(const CLI::App& app, const OptionPresence& presence, Core::Cpu
     ScratchStringStream report(s_FileOpenWrite, scratchArena);
     report << "Refreshed " << outputText << s_ReportLineEndText << "  input: " << inputText << s_ReportLineEndText;
     WriteCanonicalizeReport(report, *canonicalizeReport);
-    NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
+    NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
     return s_FbxToNwbExitSuccess;
 }
 
@@ -443,7 +443,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
 
         const auto inputIsRegularFile = IsRegularFile(ScratchPath(scratchArena, options.inputPath));
         if(!inputIsRegularFile && !IsMissingPathError(inputIsRegularFile.error())){
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), StringConvert(inputIsRegularFile.error().message()));
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), ConvertString(inputIsRegularFile.error().message()));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
         if(!inputIsRegularFile || !*inputIsRegularFile)
@@ -546,7 +546,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         if(tangentReport.mode == SourceTangentMode::GeneratedFallback){
             report << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << s_ReportLineEndText << "  tangent_degenerate_uv_triangles: " << tangentReport.degenerateUvTriangleCount << s_ReportLineEndText;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
+        NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
 
         return __hidden_command_line::s_FbxToNwbExitSuccess;
     }, [&](const CLI::ParseError& error){ return __hidden_command_line::ExitParseError(app, error, scratchArena); }, [](){

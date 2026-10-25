@@ -70,7 +70,7 @@ template<typename ArenaT>
 bool CheckOutputPath(const ::Path<ArenaT>& path, const bool force, const bool temporary){
     const auto exists = FileExistsNoFollow(path);
     if(!exists){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to query output path '{}': {}"), PathToString<tchar>(path), StringConvert(exists.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to query output path '{}': {}"), PathToString<tchar>(path), ConvertString(exists.error().message()));
         return false;
     }
     if(!*exists)
@@ -78,7 +78,7 @@ bool CheckOutputPath(const ::Path<ArenaT>& path, const bool force, const bool te
 
     const auto regular = IsRegularFile(path);
     if(!regular){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect output path '{}': {}"), PathToString<tchar>(path), StringConvert(regular.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect output path '{}': {}"), PathToString<tchar>(path), ConvertString(regular.error().message()));
         return false;
     }
     if(!*regular){
@@ -262,19 +262,19 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
     const auto publish = [&](){
         const auto dataStaged = StageNewBinaryFileDurable(paths.dataTemporary, payload.bytes.data(), payload.bytes.size(), ownedTemporary[0u]);
         if(!dataStaged){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output data file '{}': {}"), PathToString<tchar>(outputPaths.dataTemporary), StringConvert(dataStaged.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output data file '{}': {}"), PathToString<tchar>(outputPaths.dataTemporary), ConvertString(dataStaged.error().message()));
             return false;
         }
         const auto metadataStaged = StageNewBinaryFileDurable(paths.metadataTemporary, metadata->data(), metadata->size(), ownedTemporary[1u]);
         if(!metadataStaged){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output metadata file '{}': {}"), PathToString<tchar>(outputPaths.metadataTemporary), StringConvert(metadataStaged.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output metadata file '{}': {}"), PathToString<tchar>(outputPaths.metadataTemporary), ConvertString(metadataStaged.error().message()));
             return false;
         }
 
         for(u32 index = 0u; index < __hidden_output::s_OutputFileCount; ++index){
             const auto present = FileExistsNoFollow(*outputs[index]);
             if(!present){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect existing output '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(present.error().message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect existing output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(present.error().message()));
                 return false;
             }
             if(!*present)
@@ -285,7 +285,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
                 return false;
             const auto preserved = RenamePath(*outputs[index], *backups[index]);
             if(!preserved){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to preserve existing output '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(preserved.error().message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to preserve existing output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(preserved.error().message()));
                 return false;
             }
             backedUp[index] = true;
@@ -293,7 +293,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
         for(u32 index = 0u; index < __hidden_output::s_OutputFileCount; ++index){
             const auto finalized = RenamePath(*temporaries[index], *outputs[index]);
             if(!finalized){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to finalize output '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(finalized.error().message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to finalize output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(finalized.error().message()));
                 return false;
             }
             published[index] = true;
@@ -314,10 +314,10 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
                 );
             }
             if(!backedUp[index] && removalErrors[index]){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to remove newly published output '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(removalErrors[index].message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to remove newly published output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(removalErrors[index].message()));
             }
             if(temporaryErrors[index]){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: failed to remove unpublished temporary '{}': {}"), PathToString<tchar>(*temporaries[index]), StringConvert(temporaryErrors[index].message()));
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: failed to remove unpublished temporary '{}': {}"), PathToString<tchar>(*temporaries[index]), ConvertString(temporaryErrors[index].message()));
             }
         }
         return false;
@@ -329,7 +329,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
             continue;
         const auto removed = RemoveFile(*backups[index]);
         if(!removed){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}"), PathToString<tchar>(*backups[index]), StringConvert(removed.error().message()));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}"), PathToString<tchar>(*backups[index]), ConvertString(removed.error().message()));
         }
     }
     return true;

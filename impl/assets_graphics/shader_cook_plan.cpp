@@ -55,12 +55,12 @@ using DependencyPathScratchSet = HashSet<ScratchString, ScratchArena, Hasher<Scr
 static bool AppendIncludeDirectory(const Path& includeDirectory, const ShaderCook::ShaderEntry& entry, ScratchArena& scratchArena, IncludeDirectoryScratchSet& seenIncludeDirectories, CookVector<Path>& outIncludeDirectories){
     const auto isDirectoryResult = IsDirectory(includeDirectory);
     if(!isDirectoryResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query include root '{}' for entry '{}': {}"), PathToString<tchar>(includeDirectory), StringConvert(entry.name), StringConvert(isDirectoryResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query include root '{}' for entry '{}': {}"), PathToString<tchar>(includeDirectory), ConvertString(entry.name), ConvertString(isDirectoryResult.error().message()));
         return false;
     }
     const bool isDirectory = *isDirectoryResult;
     if(!isDirectory){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: include root is not a directory for entry '{}': '{}'"), StringConvert(entry.name), PathToString<tchar>(includeDirectory));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: include root is not a directory for entry '{}': '{}'"), ConvertString(entry.name), PathToString<tchar>(includeDirectory));
         return false;
     }
 
@@ -88,7 +88,7 @@ static Expected<CookVector<Path>> BuildIncludeDirectories(
 
     CookVector<Path> includeDirectories(arena);
     if(entry.includeRoots.size() > Limit<usize>::s_Max - implicitIncludeRoots.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: include root count overflow for entry '{}'"), StringConvert(entry.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: include root count overflow for entry '{}'"), ConvertString(entry.name));
         return MakeUnexpected(Failure{});
     }
 
@@ -104,12 +104,12 @@ static Expected<CookVector<Path>> BuildIncludeDirectories(
         auto includeDirectory = Core::Assets::ResolveVirtualAssetPath(includeDirectories.get_allocator().arena(), assetRoots, includeRoot, scratchArena);
         if(!includeDirectory){
             if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot, scratchArena)){
-                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve virtual include root '{}' for entry '{}'"), StringConvert(includeRoot), StringConvert(entry.name));
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve virtual include root '{}' for entry '{}'"), ConvertString(includeRoot), ConvertString(entry.name));
                 return MakeUnexpected(Failure{});
             }
             const auto resolved = ResolveAbsolutePath(includeDirectories.get_allocator().arena(), repoRoot, AStringView(includeRoot));
             if(!resolved){
-                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve include root '{}' for entry '{}': {}"), StringConvert(includeRoot), StringConvert(entry.name), StringConvert(resolved.error().message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve include root '{}' for entry '{}': {}"), ConvertString(includeRoot), ConvertString(entry.name), ConvertString(resolved.error().message()));
                 return MakeUnexpected(Failure{});
             }
             includeDirectory = *resolved;
@@ -130,7 +130,7 @@ static bool ValidateShaderDoesNotUseImplicitDefine(ShaderCook::ShaderEntry& entr
     if(entry.defineValues.find(defineName) == entry.defineValues.end())
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: shader '{}' uses reserved implicit define '{}' as a variant define"), StringConvert(entry.name), StringConvert(defineName));
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: shader '{}' uses reserved implicit define '{}' as a variant define"), ConvertString(entry.name), ConvertString(defineName));
     return false;
 }
 
@@ -160,11 +160,11 @@ static Expected<u64> CountShaderVariants(const ShaderCook::ShaderEntry& entry){
     for(const auto& [defineName, defineEntry] : entry.defineValues){
         const u64 valueCount = static_cast<u64>(defineEntry.values.size());
         if(valueCount == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: entry '{}' has define '{}' with no values"), StringConvert(entry.name), StringConvert(defineName));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: entry '{}' has define '{}' with no values"), ConvertString(entry.name), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
         if(variantCount > Limit<u64>::s_Max / valueCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: variant count overflow for entry '{}'"), StringConvert(entry.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: variant count overflow for entry '{}'"), ConvertString(entry.name));
             return MakeUnexpected(Failure{});
         }
         variantCount *= valueCount;
@@ -184,7 +184,7 @@ static Expected<::Path<ScratchArena>> ResolveProjectEvaluatorModuleIncludePath(c
             return includePath.lexicallyNormal();
         }
         if(!includePathQueryResult && !IsMissingPathError(includePathQueryResult.error())){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query CSG evaluator module include '{}': {}"), PathToString<tchar>(includePath), StringConvert(includePathQueryResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query CSG evaluator module include '{}': {}"), PathToString<tchar>(includePath), ConvertString(includePathQueryResult.error().message()));
             return MakeUnexpected(Failure{});
         }
     }
@@ -196,19 +196,19 @@ static Expected<::Path<ScratchArena>> ResolveProjectEvaluatorModuleIncludePath(c
             return candidate;
         }
         if(!candidateQueryResult && !IsMissingPathError(candidateQueryResult.error())){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query CSG evaluator module include '{}': {}"), PathToString<tchar>(candidate), StringConvert(candidateQueryResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query CSG evaluator module include '{}': {}"), PathToString<tchar>(candidate), ConvertString(candidateQueryResult.error().message()));
             return MakeUnexpected(Failure{});
         }
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve CSG evaluator module include '{}'"), StringConvert(includeName));
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve CSG evaluator module include '{}'"), ConvertString(includeName));
     return MakeUnexpected(Failure{});
 }
 
 static bool AppendUniqueDependency(const ::Path<ScratchArena>& dependency, ScratchArena& scratchArena, DependencyPathScratchSet& seenDependencies, ShaderCook::CookVector<Path>& inOutDependencies){
     auto absoluteDependencyResult = AbsolutePath(dependency);
     if(!absoluteDependencyResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve CSG evaluator module dependency '{}': {}"), PathToString<tchar>(dependency), StringConvert(absoluteDependencyResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve CSG evaluator module dependency '{}': {}"), PathToString<tchar>(dependency), ConvertString(absoluteDependencyResult.error().message()));
         return false;
     }
     const ::Path<ScratchArena> absoluteDependency = absoluteDependencyResult->lexicallyNormal();
@@ -246,7 +246,7 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(const ShaderCook::Shader
     for(const ShaderCook::CookString& defineValue : foundDefine.value().values){
         const AStringView includeName = UnquoteDoubleQuotedView(AStringView(defineValue));
         if(includeName.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG evaluator module define value '{}' must be a quoted include path"), StringConvert(defineValue));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG evaluator module define value '{}' must be a quoted include path"), ConvertString(defineValue));
             return false;
         }
 
@@ -348,30 +348,30 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
 
         const auto sourcePath = ResolveAbsolutePath(cookArena, resolvedPaths.repoRoot, AStringView(preparedEntry.entry.source));
         if(!sourcePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve source path '{}' for entry '{}': {}"), StringConvert(preparedEntry.entry.source), StringConvert(preparedEntry.entry.name), StringConvert(sourcePath.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve source path '{}' for entry '{}': {}"), ConvertString(preparedEntry.entry.source), ConvertString(preparedEntry.entry.name), ConvertString(sourcePath.error().message()));
             return MakeUnexpected(Failure{});
         }
         preparedEntry.sourcePath = *sourcePath;
 
         const auto sourceExistsResult = FileExists(preparedEntry.sourcePath);
         if(!sourceExistsResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query source path '{}' for entry '{}': {}"), PathToString<tchar>(preparedEntry.sourcePath), StringConvert(preparedEntry.entry.name), StringConvert(sourceExistsResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query source path '{}' for entry '{}': {}"), PathToString<tchar>(preparedEntry.sourcePath), ConvertString(preparedEntry.entry.name), ConvertString(sourceExistsResult.error().message()));
             return MakeUnexpected(Failure{});
         }
         const bool sourceExists = *sourceExistsResult;
         if(!sourceExists){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader source does not exist for entry '{}': '{}'"), StringConvert(preparedEntry.entry.name), PathToString<tchar>(preparedEntry.sourcePath));
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader source does not exist for entry '{}': '{}'"), ConvertString(preparedEntry.entry.name), PathToString<tchar>(preparedEntry.sourcePath));
             return MakeUnexpected(Failure{});
         }
 
         const auto isRegularSourceFileResult = IsRegularFile(preparedEntry.sourcePath);
         if(!isRegularSourceFileResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to inspect source path '{}' for entry '{}': {}"), PathToString<tchar>(preparedEntry.sourcePath), StringConvert(preparedEntry.entry.name), StringConvert(isRegularSourceFileResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to inspect source path '{}' for entry '{}': {}"), PathToString<tchar>(preparedEntry.sourcePath), ConvertString(preparedEntry.entry.name), ConvertString(isRegularSourceFileResult.error().message()));
             return MakeUnexpected(Failure{});
         }
         const bool isRegularSourceFile = *isRegularSourceFileResult;
         if(!isRegularSourceFile){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader source is not a regular file for entry '{}': '{}'"), StringConvert(preparedEntry.entry.name), PathToString<tchar>(preparedEntry.sourcePath));
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader source is not a regular file for entry '{}': '{}'"), ConvertString(preparedEntry.entry.name), PathToString<tchar>(preparedEntry.sourcePath));
             return MakeUnexpected(Failure{});
         }
 
@@ -439,11 +439,11 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         const auto supportsCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(materialClipShaderKeys, preparedEntry.entry);
         const auto supportsAvboitCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(*avboitClipShaderKeys, preparedEntry.entry);
         if(!supportsCsgClipVariant){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: invalid CSG clip shader identity for entry '{}' (failure {})"), StringConvert(preparedEntry.entry.name), static_cast<u32>(supportsCsgClipVariant.error()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: invalid CSG clip shader identity for entry '{}' (failure {})"), ConvertString(preparedEntry.entry.name), static_cast<u32>(supportsCsgClipVariant.error()));
             return MakeUnexpected(Failure{});
         }
         if(!supportsAvboitCsgClipVariant){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: invalid AVBOIT clip shader identity for entry '{}' (failure {})"), StringConvert(preparedEntry.entry.name), static_cast<u32>(supportsAvboitCsgClipVariant.error()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: invalid AVBOIT clip shader identity for entry '{}' (failure {})"), ConvertString(preparedEntry.entry.name), static_cast<u32>(supportsAvboitCsgClipVariant.error()));
             return MakeUnexpected(Failure{});
         }
         preparedEntry.supportsCsgClipVariant = *supportsCsgClipVariant;
@@ -471,7 +471,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         PreparedShaderEntry meshComputeShadowEntry(cookArena);
         auto shadowEntry = __hidden_shader_cook_plan::BuildMeshComputeShadowEntry(meshShaderEntry.entry);
         if(!shadowEntry){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to build mesh-compute shadow entry for '{}'"), StringConvert(meshShaderEntry.entry.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to build mesh-compute shadow entry for '{}'"), ConvertString(meshShaderEntry.entry.name));
             return MakeUnexpected(Failure{});
         }
 

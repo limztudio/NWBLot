@@ -49,13 +49,13 @@ struct IngestFailure{
 static void ApplyRetention(Core::Alloc::ScratchArena& arena, const CrashIngestConfig& config){
     const auto extracted = ApplyDirectoryRetention(arena, CrashExtractedDirectory(arena, config.storageDirectory), config.retention.maxExtractedPackages);
     if(!extracted)
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to extracted crash packages: {}"), StringConvert(extracted.error().message()));
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to extracted crash packages: {}"), ConvertString(extracted.error().message()));
     const auto raw = ApplyDirectoryRetention(arena, CrashRawDirectory(arena, config.storageDirectory), config.retention.maxRawArchives);
     if(!raw)
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to raw crash archives: {}"), StringConvert(raw.error().message()));
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to raw crash archives: {}"), ConvertString(raw.error().message()));
     const auto invalid = ApplyDirectoryRetention(arena, CrashInvalidDirectory(arena, config.storageDirectory), config.retention.maxInvalidArchives);
     if(!invalid)
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to invalid crash archives: {}"), StringConvert(invalid.error().message()));
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to invalid crash archives: {}"), ConvertString(invalid.error().message()));
 }
 
 [[nodiscard]] static Core::Common::LogType::Enum AcceptedCrashLogType(const CrashPackageSummary& summary)noexcept{
@@ -391,9 +391,9 @@ template<typename ArenaT>
 
     CrashIngestResult result(arena);
     result.type = Core::Common::LogType::Error;
-    result.message = StringFormat(arena, NWB_TEXT("Crash upload rejected: {}; raw='{}'"), StringConvert(failure.detail), PathToString<tchar>(invalidPath ? *invalidPath : archivePath));
+    result.message = StringFormat(arena, NWB_TEXT("Crash upload rejected: {}; raw='{}'"), ConvertString(failure.detail), PathToString<tchar>(invalidPath ? *invalidPath : archivePath));
     if(failure.code)
-        result.message += StringFormat(arena, NWB_TEXT("; native_category='{}'; native_code={}"), StringConvert(failure.code->category().name()), failure.code->value());
+        result.message += StringFormat(arena, NWB_TEXT("; native_category='{}'; native_code={}"), ConvertString(failure.code->category().name()), failure.code->value());
     return result;
 }
 
@@ -440,7 +440,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     result.accepted = true;
     result.type = rawArchived ? Ingest::AcceptedCrashLogType(summary) : Core::Common::LogType::Warning;
     Ingest::AppendAcceptedIngestDetails(rawArchived ? *rawPath : operationArchivePath, rawArchived, scratchArena, symbolicationReport);
-    result.message = StringConvert(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));
+    result.message = ConvertString(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));
     return result;
 }
 

@@ -95,7 +95,7 @@ bool SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedC
     for(const Assets::AssetString& input : options.inputs){
         const auto pathResult = ResolveAbsolutePath(paths.repoRoot.arena(), paths.repoRoot, AStringView(input));
         if(!pathResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve input '{}'"), StringConvert(input));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve input '{}'"), ConvertString(input));
             return false;
         }
 

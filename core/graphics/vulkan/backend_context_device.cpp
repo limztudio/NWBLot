@@ -104,7 +104,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     m_instanceDispatch.vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
 
     const AStringView deviceName(physicalDeviceProperties.deviceName, NWB_STRNLEN(physicalDeviceProperties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE));
-    m_rendererString = StringConvert(m_arena, deviceName);
+    m_rendererString = ConvertString(m_arena, deviceName);
 
     const bool apiSupportsVulkan13 = physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
     const bool coopVecExtensionEnabled = isDeviceExtensionEnabled(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME);
@@ -133,7 +133,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     VulkanDetail::PhysicalDeviceFeatureSupport featureSupport;
     VulkanDetail::QueryPhysicalDeviceFeatureSupport(m_instanceDispatch, m_vulkanPhysicalDevice, featureQueryOptions, featureSupport);
     if(const AStringView missingFeature = VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(featureSupport); !missingFeature.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), StringConvert(missingFeature));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), ConvertString(missingFeature));
         return false;
     }
 
@@ -187,10 +187,10 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     for(const auto& name : unsupportedFeatureExtensions){
         const auto extensionIt = m_enabledExtensions.device.find(AStringView(name));
         if(extensionIt != m_enabledExtensions.device.end() && extensionIt.value() == DeviceExtensionFeature::DescriptorBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device extension '{}' lacks the descriptorBuffer feature."), StringConvert(name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device extension '{}' lacks the descriptorBuffer feature."), ConvertString(name));
             return false;
         }
-        NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because the selected GPU does not support its required feature set."), StringConvert(name));
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because the selected GPU does not support its required feature set."), ConvertString(name));
         m_enabledExtensions.device.erase(AStringView(name));
     }
 
@@ -198,7 +198,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         constexpr AStringView s_SamplerFilterMinmaxExtensionName = VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME;
         const auto samplerFilterMinmaxIt = m_enabledExtensions.device.find(s_SamplerFilterMinmaxExtensionName);
         if(samplerFilterMinmaxIt != m_enabledExtensions.device.end() && supportedVulkan12Features.samplerFilterMinmax != VK_TRUE){
-            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), StringConvert(s_SamplerFilterMinmaxExtensionName));
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), ConvertString(s_SamplerFilterMinmaxExtensionName));
             m_enabledExtensions.device.erase(s_SamplerFilterMinmaxExtensionName);
         }
     }
@@ -208,8 +208,8 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         const auto meshShaderIt = m_enabledExtensions.device.find(s_MeshShaderExtensionName);
         if(meshShaderIt != m_enabledExtensions.device.end() && physicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU){
             NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' on CPU Vulkan device '{}' so native mesh-shader support is not reported.")
-                , StringConvert(s_MeshShaderExtensionName)
-                , StringConvert(physicalDeviceProperties.deviceName)
+                , ConvertString(s_MeshShaderExtensionName)
+                , ConvertString(physicalDeviceProperties.deviceName)
             );
             m_enabledExtensions.device.erase(s_MeshShaderExtensionName);
         }
@@ -230,7 +230,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         ss << "Vulkan: Enabled device extensions:";
         for(const auto& [name, _] : m_enabledExtensions.device)
             ss << "\n    " << name;
-        NWB_LOGGER_INFO(StringConvert(ss.str()));
+        NWB_LOGGER_INFO(ConvertString(ss.str()));
     }
 
     m_dynamicRenderingSupported = true;

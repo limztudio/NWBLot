@@ -49,7 +49,7 @@ template<typename ArenaT>
             return false;
         }
         if(jointIndex >= joints.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup '{}' has invalid index {}"), StringConvert(jointName.resolvedText()), jointIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup '{}' has invalid index {}"), ConvertString(jointName.resolvedText()), jointIndex);
             return false;
         }
         if(namedJoints[jointIndex] != 0u){

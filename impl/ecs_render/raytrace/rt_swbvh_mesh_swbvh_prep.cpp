@@ -25,7 +25,7 @@ NWB_IMPL_BEGIN
 
 bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(Core::CommandList& commandList, const PreparedMeshSwBvhBuild& build){
     if(!preparedMeshSwBvhBuildMatchesCurrent(build)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'"), ConvertString(build.meshName.resolvedText()));
         return false;
     }
 
@@ -36,7 +36,7 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(Core
         : buildMeshSwBvhPrepared(commandList, build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, build.aabbMin, build.aabbMax, build.nodeHeapHandle, build.parentHeapHandle, nodeBuffer, parentBuffer)
     ;
     if(!recorded){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'"), ConvertString(build.meshName.resolvedText()));
     }
     return recorded;
 }
@@ -78,7 +78,7 @@ void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
             continue;
         }
         if(build.firstBuild){
-            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)"), StringConvert(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.primitiveCount));
+            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)"), ConvertString(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.primitiveCount));
         }
     }
     if(!allPlansCurrent)
@@ -130,7 +130,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
             || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(mesh.swBvhPositionHeapHandle)
             || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(mesh.swBvhTriangleIndexHeapHandle)
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH build for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH build for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
             clearPreparedMeshSwBvhBuilds();
             return false;
         }
@@ -282,17 +282,17 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::Scr
         const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
         const auto boundResources = m_meshSystem.ensureRayTracingInputHeapHandles(meshResources);
         if(!boundResources){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH input heap registration failed for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH input heap registration failed for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
             allResourcesReady = false;
             continue;
         }
         ECSRenderDetail::MeshRayTracingResourceSnapshot preparedResources = *boundResources;
         if(!ensureMeshSwBvhResources(primitiveCount, preparedResources.swBvhNodeBuffer, preparedResources.swBvhParentBuffer, preparedResources.swBvhNodeHeapHandle, preparedResources.swBvhParentHeapHandle)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preparation failed for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preparation failed for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
             allResourcesReady = false;
         }
         else if(!m_meshSystem.commitRayTracingResourceSnapshot(*boundResources, preparedResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preflight lost mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preflight lost mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
             allResourcesReady = false;
         }
     }

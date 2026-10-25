@@ -71,7 +71,7 @@ static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Lo
         }
         return __hidden_logger_server_main::s_LoggerServerExitSuccess;
     }, [&](const GeneralException& error){
-        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), StringConvert(error.what())), NWB::Core::Common::LogType::Fatal);
+        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), ConvertString(error.what())), NWB::Core::Common::LogType::Fatal);
         return __hidden_logger_server_main::s_LoggerServerExitFailure;
     }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; }
     );

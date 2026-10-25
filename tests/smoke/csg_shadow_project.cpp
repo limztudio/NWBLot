@@ -410,7 +410,7 @@ private:
         }
         const u32 firstCount = m_openCase == OpenCase::Boundary64 ? 64u : m_openCase == OpenCase::Terminal65 ? 65u : clipped ? 4u : 5u;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: open_case={} retained_events={},{} receiver_z=0 sheets_z_min=-7 sheets_z_max=-5 ior=1.5 unit_transmission=0.25,0.5,0.75 coverage=1")
-            , StringConvert(s_OpenCaseNames[static_cast<u32>(m_openCase)]), firstCount, clipped ? 5u : 6u
+            , ConvertString(s_OpenCaseNames[static_cast<u32>(m_openCase)]), firstCount, clipped ? 5u : 6u
         );
         return true;
     }
@@ -522,7 +522,7 @@ public:
         lightComponent.enableCaustics = false;
 #endif
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
-            , StringConvert(m_finiteLightSource ? s_Finite : s_Hard)
+            , ConvertString(m_finiteLightSource ? s_Finite : s_Hard)
             , static_cast<f64>(lightComponent.angularRadius), static_cast<f64>(lightComponent.sourceRadius)
         );
         if(m_openAtlas){
@@ -535,7 +535,7 @@ public:
             createAtlas();
         const bool hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
-            , static_cast<u32>(m_arm), StringConvert(m_pointLight ? s_Point : s_Directional), hardware ? 1u : 0u
+            , static_cast<u32>(m_arm), ConvertString(m_pointLight ? s_Point : s_Directional), hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );
         constexpr u32 s_DefaultCaptureFrameCount = 120u;

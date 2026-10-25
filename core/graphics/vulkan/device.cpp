@@ -550,7 +550,7 @@ Device::Device(const DeviceDesc& desc)
     }
     res = m_context.deviceDispatch.vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
     if(res != VK_SUCCESS && pipelineCacheInitialData && !pipelineCacheInitialData->empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache from runtime volume '{}'. Retrying empty cache. {}"), StringConvert(m_pipelineCacheVolumeName), ResultToString(res));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache from runtime volume '{}'. Retrying empty cache. {}"), ConvertString(m_pipelineCacheVolumeName), ResultToString(res));
         cacheInfo.initialDataSize = 0;
         cacheInfo.pInitialData = nullptr;
         res = m_context.deviceDispatch.vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);

@@ -97,7 +97,7 @@ template<usize ComponentCount>
 [[nodiscard]] Expected<Array<f64, ComponentCount>> ReadNumericTuple(const Path& nwbFilePath, const Value& value, const AStringView label, const AStringView listValueKind){
     Array<f64, ComponentCount> values{};
     if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must be a {}-component {} list"), PathToString<tchar>(nwbFilePath), StringConvert(label), ComponentCount, StringConvert(listValueKind));
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must be a {}-component {} list"), PathToString<tchar>(nwbFilePath), ConvertString(label), ComponentCount, ConvertString(listValueKind));
         return MakeUnexpected(Failure{});
     }
 
@@ -105,7 +105,7 @@ template<usize ComponentCount>
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
         const Value& component = list[componentIndex];
         if(!component.isNumeric()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be numeric"), PathToString<tchar>(nwbFilePath), StringConvert(label), componentIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be numeric"), PathToString<tchar>(nwbFilePath), ConvertString(label), componentIndex);
             return MakeUnexpected(Failure{});
         }
 
@@ -124,7 +124,7 @@ template<usize ComponentCount>
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
         const f64 numericValue = (*numericValues)[componentIndex];
         if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != VectorDoubleGetX(VectorDoubleFloor(VectorDoubleReplicate(numericValue))) || numericValue > static_cast<f64>(Limit<u16>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be a u16 integer"), PathToString<tchar>(nwbFilePath), StringConvert(label), componentIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be a u16 integer"), PathToString<tchar>(nwbFilePath), ConvertString(label), componentIndex);
             return MakeUnexpected(Failure{});
         }
 
@@ -143,7 +143,7 @@ template<usize ComponentCount>
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
         const f64 numericValue = (*numericValues)[componentIndex];
         if(!IsFinite(numericValue) || numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' is non-finite or outside f32 range"), PathToString<tchar>(nwbFilePath), StringConvert(label), componentIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' is non-finite or outside f32 range"), PathToString<tchar>(nwbFilePath), ConvertString(label), componentIndex);
             return MakeUnexpected(Failure{});
         }
 
@@ -225,7 +225,7 @@ template<usize ComponentCount>
     }
 
     if(values.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), StringConvert(s_InfluencesField));
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(s_InfluencesField));
         return MakeUnexpected(Failure{});
     }
     return values;
@@ -253,7 +253,7 @@ template<usize ComponentCount>
     }
 
     if(values.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), StringConvert(s_InverseBindMatricesField));
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(s_InverseBindMatricesField));
         return MakeUnexpected(Failure{});
     }
     return values;

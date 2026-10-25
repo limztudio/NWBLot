@@ -43,7 +43,7 @@ bool Sampler::validatePayload()const{
     if(!checkVirtualPath(__hidden_sampler_runtime::s_SamplerValidatePayloadContext))
         return false;
     if(!IsValidSamplerDescription(m_description)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::validatePayload failed: sampler '{}' has an invalid description"), StringConvert(virtualPath().resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::validatePayload failed: sampler '{}' has an invalid description"), ConvertString(virtualPath().resolvedText()));
         return false;
     }
     return true;

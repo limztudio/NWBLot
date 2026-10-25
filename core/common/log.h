@@ -123,11 +123,11 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const LogS
 }
 
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const AStringView message){
-    logger.enqueue(StringConvert(logger.arena(), message), type);
+    logger.enqueue(ConvertString(logger.arena(), message), type);
 }
 
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const WStringView message){
-    logger.enqueue(StringConvert(logger.arena(), message), type);
+    logger.enqueue(ConvertString(logger.arena(), message), type);
 }
 
 template<typename In>
@@ -146,7 +146,7 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const TStr
 
 template<typename In>
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const StringConvertArg<In>& message){
-    logger.enqueue(StringConvert(logger.arena(), message.value), type);
+    logger.enqueue(ConvertString(logger.arena(), message.value), type);
 }
 
 template<typename... ARGS>

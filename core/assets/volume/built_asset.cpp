@@ -119,14 +119,14 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
             if(!payload)
                 return false;
             if(payload->identity.payloadSize != entry.identity.payloadSize || payload->identity.payloadHash != entry.identity.payloadHash || payload->identity.cookKeyHash != entry.identity.cookKeyHash){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), StringConvert(entry.virtualPath.resolvedText()));
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), ConvertString(entry.virtualPath.resolvedText()));
                 return false;
             }
             payloadData = payload->data.get();
             payloadSize = payload->size;
         }
         if(entry.identity.payloadSize != payloadSize || (entry.source != AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload && entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize))){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid payload identity '{}'"), StringConvert(entry.virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid payload identity '{}'"), ConvertString(entry.virtualPath.resolvedText()));
             return false;
         }
         if(payloadSize > Limit<usize>::s_Max - __hidden_built_asset::s_HeaderSize){

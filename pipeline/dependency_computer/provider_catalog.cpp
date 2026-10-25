@@ -90,7 +90,7 @@ bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Co
         if(error.reason == Assets::AssetRootResolutionFailure::InspectInput)
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to inspect input '{}'"), PathToString<tchar>(error.inputPath));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve asset root from '{}'"), StringConvert(sources[error.sourceIndex]));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve asset root from '{}'"), ConvertString(sources[error.sourceIndex]));
         return false;
     }
     if(roots->empty()){
@@ -125,7 +125,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const
     for(const auto& input : options.inputs){
         const auto resolved = ResolveAbsolutePath(m_arena, m_repoRoot, AStringView(input));
         if(!resolved){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve input '{}'"), StringConvert(input));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve input '{}'"), ConvertString(input));
             return MakeUnexpected(Failure{});
         }
         const NWB::Path& path = *resolved;
@@ -191,17 +191,17 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
         if(*documentAssetType != assetType)
             continue;
         if(document->declarations().size() != 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), StringConvert(virtualPath));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), ConvertString(virtualPath));
             return MakeUnexpected(Failure{});
         }
         if(matched != Limit<usize>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: multiple physical providers for '{}'"), StringConvert(virtualPath));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: multiple physical providers for '{}'"), ConvertString(virtualPath));
             return MakeUnexpected(Failure{});
         }
         matched = index;
     }
     if(matched == Limit<usize>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), StringConvert(assetType), StringConvert(virtualPath));
+        NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), ConvertString(assetType), ConvertString(virtualPath));
         return MakeUnexpected(Failure{});
     }
     return matched;

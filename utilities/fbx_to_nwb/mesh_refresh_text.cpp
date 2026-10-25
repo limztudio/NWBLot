@@ -153,7 +153,7 @@ template<typename Value, typename WriteValue>
 [[nodiscard]] bool AddReplacement(TextReplacements& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, ScratchString&& replacementText){
     auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
     if(!replacementResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), StringConvert(variableName), StringConvert(fieldName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), ConvertString(variableName), ConvertString(fieldName));
         return false;
     }
 
@@ -237,7 +237,7 @@ void ApplyTextReplacements(ScratchString& inOutSource, TextReplacements& replace
             continue;
 
         if(result.value){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: mesh '{}' has multiple skin assets"), StringConvert(meshVariableName));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: mesh '{}' has multiple skin assets"), ConvertString(meshVariableName));
             return MakeUnexpected(Failure{});
         }
 

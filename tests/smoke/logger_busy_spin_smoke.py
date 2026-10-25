@@ -215,7 +215,7 @@ def capture_visible_messages(backend, handle, output, minimum_rows=1):
         query_log_list(backend, handle, LB_GETITEMRECT, index, ctypes.addressof(rect))
         if rect.left < 0 or rect.top < 0 or rect.right > capture.width or rect.bottom > capture.height:
             raise SmokeFailure("log rows are outside the captured client area")
-        # Owner-drawn rows have no stored text for LB_GETTEXT. Require painted glyphs in every visible row.
+        # Check painted glyphs because owner-drawn rows store no LB_GETTEXT text.
         dark_pixels = sum(max(pixel) < 180 for row in rows[rect.top:rect.bottom] for pixel in row[max(1, rect.left):max(1, rect.right - 1)])
         if dark_pixels < 20:
             raise SmokeFailure(f"logger row {index} has no visible log text ({dark_pixels} dark pixels)")

@@ -87,7 +87,7 @@ struct FieldRecord{
 };
 
 SIMDVectorSingle GatherBoundaryValue(const SIMDVectorSingle position, const bool validateCell)noexcept{
-    // Only lane Z moves; the fixture lanes are nonzero or +0, so adding +0 keeps them.
+    // Move only lane Z.
     const SIMDVectorSingle biased = VectorAdd(position, VectorSet(0.0f, 0.0f, 0.05f, 0.0f));
     float3 biasedPosition;
     StoreFloat(biased, biasedPosition);

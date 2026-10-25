@@ -67,8 +67,7 @@ def observe_popup(frame, snapshot, expected, *, extent=None, skin="default"):
         geometry_matches = geometry_matches and snapshot["side"] == side
         viewport = (0.0, 0.0, *snapshot[LIT_LOGICAL_EXTENT])
         geometry_matches = geometry_matches and snapshot[LIT_RECTANGLES]["viewport"] == viewport
-        # A clear popup gutter sits over an opaque red rectangle painted by a later host root.
-        # The two atlas families have the same popup color and different UV tile positions.
+        # Check that deferred popup chrome paints over the red base rectangle.
         probe("popup_skin_over_later_root", (bx + bw - 16.0, by + bh - 16.0), (26, 34, 45), 8)
     else:
         if bw <= 0.0:

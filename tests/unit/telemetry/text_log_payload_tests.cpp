@@ -56,7 +56,7 @@ TEST(Telemetry, TextLogPayloadRetainsPlatformInvalidUnicodeConversion){
 #endif
     constexpr u8 s_Expected[] = { static_cast<u8>('?'), static_cast<u8>('X'), static_cast<u8>('?') };
 #else
-    // Narrow inputs are already byte strings; the existing conversion deliberately does not repair malformed UTF-8.
+    // Narrow byte strings pass through without repairing invalid UTF-8.
     constexpr tchar s_Message[] = { static_cast<tchar>(0xc0u), static_cast<tchar>(0xafu), static_cast<tchar>('X') };
     constexpr u8 s_Expected[] = { 0xc0u, 0xafu, static_cast<u8>('X') };
 #endif

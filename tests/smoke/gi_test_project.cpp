@@ -57,7 +57,7 @@ using GiTestMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The baseline is an open box; the optional A/B maze admits light only through its skylight.
+// Open-box GI baseline and optional closed skylight maze.
 
 static constexpr GiTestMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr GiTestMeshRef s_BoxMesh{"project/meshes/cube_hard_edges"};
@@ -104,8 +104,7 @@ struct ComplexSceneBox{
     bool indirectOnly = false;
 };
 
-// Cube vertices span -0.5..+0.5, so each scale is the desired full physical size.
-// Both partitions have offset openings; each camera-visible white receiver sees a different mix of the red and blue bounce surfaces.
+// Offset partition doorways expose different mixes of red and blue bounce light.
 static constexpr ComplexSceneBox s_ComplexSceneBoxes[] = {
     // Front doorway: x=-0.4..0.5 at z=-0.35, with a high lintel.
     { Float4(-1.20f, 0.625f, -0.35f, 0.0f), Float4(1.60f, 1.25f, 0.13f, 0.0f), s_NeutralPanelTint, 0.0f },
@@ -129,7 +128,7 @@ static constexpr ComplexSceneBox s_ComplexSceneBoxes[] = {
     { Float4( 0.95f, 0.32f, -1.45f, 0.0f), Float4(0.60f, 0.64f, 0.65f, 0.0f), s_WhiteReceiverTint, 0.0f },
     { Float4( 0.00f, 0.20f,  0.35f, 0.0f), Float4(0.52f, 0.40f, 0.50f, 0.0f), s_WhiteReceiverTint, 0.0f },
 
-    // Angled white fins reveal directional color bleed; colored panels act as local bounce sources.
+    // Angled white fins catch directional bounce from the colored panels.
     { Float4(-1.30f, 0.65f, -0.75f, 0.0f), Float4(0.10f, 1.30f, 1.00f, 0.0f), s_WhiteReceiverTint,  55.0f, true },
     { Float4( 1.30f, 0.65f, -0.75f, 0.0f), Float4(0.10f, 1.30f, 1.00f, 0.0f), s_WhiteReceiverTint, -55.0f, true },
     { Float4( 1.72f, 0.70f,  0.38f, 0.0f), Float4(0.12f, 1.40f, 0.72f, 0.0f), s_RedBounceTint, 0.0f },
@@ -148,16 +147,13 @@ static constexpr ComplexSceneBox s_ComplexSceneBoxes[] = {
     { Float4( 0.000f, 2.04f,  0.975f, 0.0f), Float4(1.90f, 0.12f, 2.05f, 0.0f), s_BlackEnclosureTint, 0.0f },
 };
 
-// Two upward-facing, camera-visible source patches are directly below the skylight.
-// Their adjacent white fins use an indirect-only display material so the captured color on those fins comes from bounced light.
+// Indirect-only white fins next to the floor patches show only bounced light.
 static constexpr ComplexSceneBox s_ComplexBouncePatches[] = {
     { Float4(-0.45f, 0.025f, -0.55f, 0.0f), Float4(0.85f, 0.05f, 0.80f, 0.0f), s_RedBounceTint, 0.0f },
     { Float4( 0.45f, 0.025f, -0.55f, 0.0f), Float4(0.85f, 0.05f, 0.80f, 0.0f), s_BlueBounceTint, 0.0f },
 };
 
-// The camera sits at z=-4.2.
-// These shell pieces extend the floor and roof behind the maze and close the front at z=-5.
-// Full-depth overlapping side walls seal the joins to the original planes and roof, leaving only the skylight.
+// Enclose the maze behind the camera so light enters only through the skylight.
 static constexpr ComplexSceneBox s_ComplexFrontEnclosureBoxes[] = {
     { Float4(-2.00f, 1.00f, -1.50f, 0.0f), Float4(0.12f, 6.00f, 7.10f, 0.0f), s_BlackEnclosureTint, 0.0f },
     { Float4( 2.00f, 1.00f, -1.50f, 0.0f), Float4(0.12f, 6.00f, 7.10f, 0.0f), s_BlackEnclosureTint, 0.0f },
@@ -228,7 +224,7 @@ public:
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: surfel GI resolve switch probe enabled (lagged_lighting=1)"));
         }
 
-        // Emit per-pass GPU timings (render.surfel_*) for A/B capture via NWB_GPU_TIMING_FILE.
+        // Emit per-pass surfel GPU timings when NWB_GPU_TIMING_FILE is set.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(
@@ -238,8 +234,7 @@ public:
             m_complexSceneEnabled ? s_ComplexCameraPitch : s_CameraPitch
         );
 
-        // The original box keeps its grazing sun.
-        // The closed layout uses a near-vertical sun so both colored floor patches receive direct light through the small skylight while their upright catchers stay shaded.
+        // Use a near-vertical sun in the closed maze to light only the floor patches through the skylight.
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             m_complexSceneEnabled ? s_ComplexLightPitch : s_DirectionalLightPitch,
@@ -268,8 +263,7 @@ public:
 
         // Opposing red and blue bounce distinguish GI from constant ambient light.
         m_blueWallNegX = createWall(Float4(-s_BoxHalfExtent, s_BoxHeight * 0.5f, 0.0f, 0.0f), m_complexSceneEnabled ? s_BlackEnclosureTint : Float4(0.08f, 0.08f, 0.80f, 1.0f), 90.0f, enclosureScale, wallHeightScale);
-        // The far (+Z) wall closes the rear of both layouts.
-        // The complex layout adds a black front wall behind its camera in createComplexScene(); the original Cornell-style layout keeps its camera-facing side open.
+        // Close the +Z rear wall for both layouts.
         m_whiteWallPosZ = createWall(Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalfExtent, 0.0f), m_complexSceneEnabled ? s_BlackEnclosureTint : Float4(0.88f, 0.88f, 0.88f, 1.0f), 180.0f, enclosureScale, wallHeightScale);
 
         if(m_complexSceneEnabled && !createComplexScene())
@@ -439,12 +433,11 @@ private:
                 return false;
         }
 
-        // Fixed-seed scattered bodies add varied occlusion without moving the colored sources or changing the skylight.
-        // Reject overlap with the maze and one another so all 20 bodies remain distinct in a replay.
+        // Place 20 non-overlapping seeded bodies without blocking the skylight or doorways.
         ComplexSceneBox placedBodies[s_ComplexRandomBodyCount] = {};
         u32 placedBodyCount = 0u;
         u32 randomState = s_ComplexRandomBodySeed;
-        // Returns the top 24 random bits; scale by 1 / 2^24 for a 0..1 value.
+        // Scale the top 24 random bits into 0..1.
         const auto nextRandom24 = [&randomState]()noexcept -> f32{
             randomState = randomState * 1664525u + 1013904223u;
             return static_cast<f32>(randomState >> 8u);
@@ -540,9 +533,7 @@ private:
             , s_ComplexRandomBodySeed
         );
         if(m_coverageViewEnabled){
-            // Adjacent -X and -Z faces span the same 0.6 m spatial cell near the cube's front-left edge.
-            // Their different normals need separate surfels.
-            // Keeping this above the short seeded bodies makes both faces visible while the closed-room scene still exercises ordinary GI around the probe.
+            // Place the probe cube where its -X and -Z faces share one spatial cell.
             const auto probe = CreateTintedStaticMeshEntity(
                 *m_world, m_context.objectArena, s_BoxMesh, s_CoverageProbeMaterial,
                 s_SmokeSurfaceMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f),

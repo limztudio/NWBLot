@@ -29,7 +29,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// GPU timing is async: windows != frames. Window statistics describe published totals; total_ms/gpu_samples normalize by dispatches, not cadence.
+// Normalize asynchronous GPU timing windows by dispatch count.
 class GpuPassTimingProbe final{
 private:
     static constexpr f64 s_WarmupSeconds = 0.25;
@@ -109,8 +109,7 @@ private:
             if(!stats.valid())
                 continue;
 
-            // Fold each GPU window once: persistent watermark survives resets, so straddling windows never double-count.
-            // Publish indices > 0 post-warmup, so 0 means none folded yet.
+            // Track the last folded GPU window index so resets never double-count.
             if(m_scopes[i].lastFoldedPublish == stats.publishFrameIndex)
                 continue;
             m_scopes[i].lastFoldedPublish = stats.publishFrameIndex;
@@ -136,7 +135,7 @@ private:
     void report(const Core::Perf::TimingView& gpuTiming){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: gpu per-pass timing over {} frames / {}s"), m_label, m_intervalFrames, m_intervalSeconds);
 
-        // GUI logging is not scrapeable; the optional file sink exposes per-pass A/B timings.
+        // Write per-pass timings to the optional file sink for A/B scripts.
         Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
         OutputFileStream timingFile;
         OpenTimingFile(timingFile, scratchArena);

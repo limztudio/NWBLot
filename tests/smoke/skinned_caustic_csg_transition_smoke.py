@@ -161,7 +161,7 @@ def compare_series(series):
     for sample in range(SAMPLE_COUNT):
         for region in REGIONS:
             comparisons[LIT_CURRENT_VS_LAGGED].append({LIT_SAMPLE: sample, LIT_REGION: region, **require_match(series[LIT_CURRENT][sample][region], series[LIT_LAGGED][sample][region], f"current/lagged sample {sample} {region}")})
-        # Only ground pixels qualify photon contribution; body transmission or CSG silhouettes cannot satisfy it.
+        # Measure photon contribution only on ground receiver pixels.
         if sample < 2:
             comparisons[LIT_PHOTON_SIGNAL].append({LIT_SAMPLE: sample, **require_signal(series[LIT_CURRENT][sample][LIT_GROUND], series[LIT_NO_PHOTONS][sample][LIT_GROUND], SIGNAL_LIMITS["photon_changed_pixels"], "hardware photons on ordinary ground",
                     SIGNAL_LIMITS["photon_mean_channel_error"])})

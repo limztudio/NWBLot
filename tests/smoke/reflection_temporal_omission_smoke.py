@@ -70,8 +70,7 @@ def validate_recording_evidence(trial, history_samples, symbols=None):
         raise benchmark.SmokeFailure("raw timing reports differ from the retained trial summary")
     benchmark.validate_coverage(retained, VARIANT, trial[LIT_REPORTS], 100, trial["mip_count"], history_samples)
     frames = retained[benchmark.FRAME][LIT_GPU_SAMPLES]
-    # The benchmark already verifies reflection kernels.
-    # This proof also rejects selective loss of the common control and presentation timing ranges.
+    # Require common control and presentation timing ranges alongside reflection kernels.
     for scope in benchmark.OBSERVED_CONTROLS:
         if abs(retained[scope][LIT_GPU_SAMPLES] - frames) > max(2, frames * .02):
             raise benchmark.SmokeFailure("control scope coverage differs from completed GPU frames: " + scope)
@@ -135,8 +134,7 @@ def run(args):
                 trial = benchmark.run_trial(acquisition, VARIANT, 0, position, symbols, executable_identity)
             except benchmark.SmokeFailure as error:
                 log_path = output / f"block_00_{position:02d}_{VARIANT.name}" / "runtime.log"
-                # Only an acquisition failure can become a capability skip.
-                # Preserve launch, process-exit, parsing, identity, and validation failures.
+                # Convert only hardware capability skips to exit code 77.
                 acquisition_failure = str(error).startswith("GPU benchmark timed out:") \
                     or str(error) == "hardware was unavailable for a hardware benchmark route"
                 if acquisition_failure and log_path.is_file() and not (log_path.parent / "cleanup_error.txt").exists() \

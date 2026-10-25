@@ -59,8 +59,7 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
     };
     const Graphics::GpuTaskResourceUse thirdUses[] = { Graphics::GpuTaskResourceUse{ .resource = secondResource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, }, };
 
-    // The explicit third -> first edge has to order both inferred resource hazards.
-    // Pair-local declaration order would instead infer first -> second -> third and invent a cycle with this valid explicit edge.
+    // Explicit third-to-first ordering reverses declaration order without creating a cycle.
     u64 graphGeneration = 0u;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);

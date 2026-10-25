@@ -271,14 +271,16 @@ class LauncherPlatformTests(unittest.TestCase):
 
     def test_windows_query_only_handle_can_still_complete_gracefully(self):
         events = []
-        process = FakeSpawnedProcess(302, 0, events)
+        process = FakeSpawnedProcess(302, 23, events)
 
         with mock.patch.object(repository_windows_process, LIT_WINDOWSPROCESSAPI, return_value=FakeBoundedProcessApi([False, True], events, can_terminate=False)):
             result = repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0)
 
-        self.assertEqual(0, result.exit_code)
+        self.assertEqual(23, result.exit_code)
         self.assertFalse(result.forced)
         self.assertFalse(any(event[0] == LIT_FORCE for event in events))
+        self.assertNotIn((LIT_TERMINATE, 302), events)
+        self.assertNotIn((LIT_KILL, 302), events)
 
     def test_windows_query_only_handle_reports_live_process_at_hard_boundary(self):
         events = []
@@ -291,20 +293,6 @@ class LauncherPlatformTests(unittest.TestCase):
         retained_handle = next(event[2] for event in events if event[0] == LIT_OPEN)
         self.assertIn((LIT_FORCE, retained_handle), events)
         self.assertEqual(1, sum(event[0] == LIT_OPEN for event in events))
-
-
-    def test_windows_bounded_shutdown_propagates_nonzero_graceful_exit(self):
-        events = []
-        process = FakeSpawnedProcess(304, 23, events)
-
-        with mock.patch.object(repository_windows_process, LIT_WINDOWSPROCESSAPI, return_value=FakeBoundedProcessApi([False, True], events)):
-            result = repository_windows_process.run_bounded_process(process, 8.0, 4.0, 2.0)
-
-        self.assertEqual(23, result.exit_code)
-        self.assertFalse(result.forced)
-        self.assertNotIn((LIT_FORCE, 304), events)
-        self.assertNotIn((LIT_TERMINATE, 304), events)
-        self.assertNotIn((LIT_KILL, 304), events)
 
     def test_windows_bounded_shutdown_forces_exact_process_only_after_grace_timeout(self):
         events = []
@@ -360,26 +348,12 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertNotIn(LIT_CHILD_STDERR, stdout_lines)
         self.assertEqual([LIT_CHILD_STDERR], stderr_lines)
 
-    def test_ignores_nonstandard_leaf_script_names(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            category = root / LIT_TESTS
-            category.mkdir(parents=True)
-            directory = root / LIT_TESTS / LIT_SMOKE
-            directory.mkdir(parents=True)
-            (directory / LIT_LAUNCHER_PY).write_text("", encoding=LIT_UTF_8)
-            (directory / LIT_RUN_PY).write_text("", encoding=LIT_UTF_8)
-
-            launchers = launcher.discover_repo_launchers(root)
-
-        self.assertEqual({}, launchers)
-
     def test_directory_discovery_only_returns_direct_children(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             paths = (root / LIT_TESTS / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_ASYNC_SHADOW_M4 / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_COMMAND_IR / LIT_LAUNCH_PY,
                 root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_HARDWARE_SHADOW_BOUNDARY / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_AB / LIT_TRANSFER_QUEUE / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY,)
+                root / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY, root / LIT_TESTS / LIT_SMOKE / LIT_LAUNCHER_PY, root / LIT_TESTS / LIT_SMOKE / LIT_RUN_PY,)
             for path in paths:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("", encoding=LIT_UTF_8)

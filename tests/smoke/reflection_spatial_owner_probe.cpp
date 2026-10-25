@@ -119,8 +119,7 @@ bool ReflectionSpatialOwnerProbe::observeTiming(const Core::Perf::TimingView& ti
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWork: publish={} first={} last={} samples={}"), work.publishFrameIndex, work.firstSampleFrameIndex, work.lastSampleFrameIndex, work.sampleCount);
     if(m_started && !m_finalReset && !m_phaseWork.valid() && work.firstSampleFrameIndex >= m_phaseSource)
         m_phaseWork = work;
-    // There is exactly one spatial range per rendered frame.
-    // A dense inclusive window proves the captured source owns a completed range even when several source frames are published together.
+    // Require one completed spatial timing range per source frame in the window.
     if(m_finalReset && work.firstSampleFrameIndex <= m_finalSource && work.lastSampleFrameIndex >= m_finalSource && work.sampleCount == work.lastSampleFrameIndex - work.firstSampleFrameIndex + 1u)
         m_captureWork = work;
     return true;

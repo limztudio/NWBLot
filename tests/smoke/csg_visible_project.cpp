@@ -152,7 +152,7 @@ static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS
 }
 
 [[nodiscard]] static SIMDVectorSingle CsgVisibleShapePosition(const usize shapeSlot)noexcept{
-    // Only lane Y moves; adding zero keeps the nonzero X and +0 Z/W lanes.
+    // Move only lane Y.
     const SIMDVectorSingle offsetY = VectorSet(0.0f, s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
     const SIMDVectorSingle left = VectorSet(-s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY, 0.0f, 0.0f);
     const SIMDVectorSingle right = VectorSet(s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY, 0.0f, 0.0f);
@@ -429,7 +429,7 @@ public:
 
         bool allEntitiesValid = activeCamera.camera.valid() && directionalLight.valid();
         if(overlapping){
-            // Only lane Z moves; the other lanes add +0.
+            // Move only lane Z.
             Float4 receiverPosition;
             StoreFloat(VectorAdd(CsgVisibleShapePosition(CsgVisibleShapeSlot::Plane), VectorSet(0.0f, 0.0f, s_OverlappingReceiverDepthOffset, 0.0f)), receiverPosition);
             const auto receiver = CreateSolidCubeEntity(

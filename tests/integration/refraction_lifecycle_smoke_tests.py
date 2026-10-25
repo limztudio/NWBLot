@@ -68,8 +68,7 @@ class RefractionLifecycleAnalysisTests(unittest.TestCase):
         fallback = (width, height, [[(66, 66, 66)] * width] * height)
         metrics = require_partial_tile_displacement(baseline, fallback, allow_screen_fallback=True)
         self.assertEqual(metrics["mode"], "bounded_sheet_fallback")
-        # Clear-output retirement, a flat black replacement, an unrelated tint,
-        # and excessive neutral attenuation must not imitate the Fresnel sheet.
+        # Reject clear, black, tinted, or over-attenuated substitutes for the Fresnel sheet.
         for pixel in ((68, 68, 68), (0, 0, 0), (66, 60, 66), (50, 50, 50)):
             corrupted = (width, height, [[pixel] * width] * height)
             with self.subTest(pixel=pixel), self.assertRaisesRegex(SmokeFailure, "partial right tile"):

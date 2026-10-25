@@ -237,7 +237,7 @@ def wait_for_measurement_timing_boundary(process, timing_path: Path, timeout_sec
             if not math.isfinite(seconds) or seconds <= 0.0:
                 raise SmokeFailure(f"invalid post-warmup GPU timing interval in {timing_path}")
             header_count += 1
-            # The first report can span warmup; the second header proves its append stream closed and accumulator reset.
+            # A second header proves the first warmup report closed.
             if header_count == 2:
                 return match.start()
         time.sleep(LIT_TIMING_POLL_SECONDS)
@@ -583,7 +583,7 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
             f"(more than {MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS} required)",), gate("graph-owned shadow timing", shadow_scope_passed, f"median {format_ms(shadow.median_ms)} (min {args.minimum_shadow_ms:.4f} ms), " f"positive {shadow.positive_sample_count}/{shadow.sample_count}",), gate("critical path", timing_passed,
             f"sync {format_ms(sync_frame.median_ms)}, async {format_ms(async_frame.median_ms)}, " f"delta {regression_percent:+.3f}% (limit +{args.maximum_frame_regression_percent:.3f}%)",), gate("pixel parity", pixel_passed, pixel_detail), gate(
             "runtime and validation logs", logs_passed, "no forbidden log messages" if logs_passed else f"sync={sync.forbidden_log_messages}, async={async_run.forbidden_log_messages}",),]
-    # Too few positive intervals make timing gates untrustworthy; functional gate failures still fail.
+    # Functional failures still fail when positive timing intervals are too few.
     if lane_passed and pixel_passed and logs_passed and not intervals_passed:
         verdict = LIT_INCONCLUSIVE
     else:
@@ -685,8 +685,7 @@ def run(args: argparse.Namespace) -> int:
 
     capture_backend = None
     try:
-        # Run async first.
-        # A no-dedicated-compute host exits 77 before spending time on an A/B whose asynchronous half would only exercise the intentional Graphics queue route.
+        # Run async first so hosts without dedicated compute exit 77 early.
         capture_backend = create_capture_backend()
         async_capture = (run_frame_locked_capture(args, LIT_ASYNC, args.async_executable, capture_backend) if not args.skip_pixel_parity else None)
         async_run = run_single_mode(args, LIT_ASYNC, args.async_executable, load_name_symbols(args.async_namesym), capture_backend, async_capture,)

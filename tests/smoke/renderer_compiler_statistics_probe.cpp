@@ -194,8 +194,7 @@ void RendererCompilerStatisticsProbe::render(Core::Framebuffer*){
         return;
     Sample sample;
     sample.sourceFrame = getGraphics().getFrameIndex();
-    // Serialized tail callback: the renderer completed its record/submit calls, and the next frame has not reset it.
-    // valid() proves a coherent plan/attempt snapshot, not presentation success; the offline join supplies that gate.
+    // Read compiler statistics after frame submission and before the next frame resets them.
     const auto statistics = m_renderer->deferredTaskGraphRuntimeStatistics();
     sample.valid = statistics.valid() && statistics.compile.deviceGeneration != 0u;
     if(sample.valid){

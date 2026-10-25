@@ -143,7 +143,7 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
 
-    // The first merged group and later fixed task remain on queue zero; dependency affinity keeps task six on seven.
+    // Keep merged work on queue zero and route task six to queue seven by affinity.
     const u16 expectedQueueIndices[] = { 0u, 0u, 7u, 0u, 11u, 11u, 7u, 7u };
     const i32 expectedQueueLoads[] = { 10, 16, 6, 10, 8, 1, 8, 6 };
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){

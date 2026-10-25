@@ -54,7 +54,7 @@ def dense_boxes():
 
 
 def closed_box_with_open_tail():
-    # The same receiver has an open event behind the nearest opaque chart; range clipping must not certify a closed-only collection.
+    # Place an open surface behind the opaque chart to test range-clipped classification.
     mesh = Mesh()
     append_box(mesh, -.5, .5)
     mesh.positions = [(x / 24., y / 18., z) for x, y, z in mesh.positions]

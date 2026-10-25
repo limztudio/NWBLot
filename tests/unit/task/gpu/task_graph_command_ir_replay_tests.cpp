@@ -108,8 +108,7 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     EXPECT_TRUE(validContext.streamValidation.valid());
     EXPECT_EQ(validContext.recordIndex, 0u);
 
-    // A normal capture concatenates packet bodies.
-    // Selecting the second packet must skip the first record rather than rejecting the full frame artifact before its requested packet is reached.
+    // Selecting the second packet skips the unlowerable first packet.
     const Graphics::GpuCommandIrReplayResult secondPacketContext = Graphics::PreflightGpuCommandIrPacket(capture.commandBytes(), declarations, compiledPlan, secondPacket);
     EXPECT_EQ(secondPacketContext.error, Graphics::GpuCommandIrReplayError::MissingBackendResource);
     EXPECT_TRUE(secondPacketContext.streamValidation.valid());

@@ -176,7 +176,7 @@ class ReferenceTests(unittest.TestCase):
 
 class ImageOracleTests(unittest.TestCase):
     def synthetic_frame(self, case, queries=16, channel_scale=1.0, shift=0):
-        # Synthetic pixels exercise the analyzer; the ReferenceTests above separately establish physical identities.
+        # Synthetic pixels test the image analyzer.
         rows = [[(0, 0, 0)] * 960 for _ in range(720)]
         for x, y in self.points:
             value, _ = reference.pixel_reference(case, x + shift + 0.5, y + 0.5, max_queries=queries)

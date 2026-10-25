@@ -519,8 +519,7 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     const Graphics::GpuTaskId immediateFinalize = *immediateFinalizeResult;
     ASSERT_TRUE(immediateFinalize.valid());
 
-    // The inferred producer edge fixes this task after the finalizer, but its only explicit dependency remains the first task.
-    // It must not inherit the finalizer's consumer-frontier override.
+    // Inferred ordering after the finalizer must not inherit the finalizer frontier override.
     Graphics::GpuTaskSchedulingHint unrelatedScheduling;
     unrelatedScheduling.allowPacketMerge = true;
     unrelatedScheduling.mergeWithPrevious = true;

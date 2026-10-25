@@ -213,98 +213,6 @@ TEST(GpuTaskGraph, RetainsSameFamilyRoutingWithoutCrossFamilyOptIn){
     EXPECT_EQ(secondAssignment->queue, queues[0u].id);
 }
 
-TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs){
-    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
-
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_graph/cross_family_same_class_buffer"), s_CrossFamilyBufferLabel);
-    ASSERT_TRUE(bufferResult);
-    const Graphics::GpuGraphResourceId buffer = *bufferResult;
-    ASSERT_TRUE(buffer.valid());
-
-    Graphics::GpuTaskCommandRequirements graphicsCommands;
-    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-
-    Graphics::GpuTaskSchedulingHint producerScheduling;
-    producerScheduling.cost = Graphics::GpuTaskCostHint::Large;
-    producerScheduling.allowSameClassQueueRouting = true;
-    producerScheduling.allowCrossFamilySameClassQueueRouting = true;
-    const Graphics::GpuTaskResourceUse producerUse{ .resource = buffer, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write, };
-    Graphics::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph/cross_family_same_class_producer")).setMarkerLabel(s_CrossFamilyProducerLabel).setScheduling(producerScheduling).setResourceUses(&producerUse, 1u);
-    const auto producerResult = graph.addTask(producerDesc, graphicsCommands);
-    ASSERT_TRUE(producerResult);
-    const Graphics::GpuTaskId producer = *producerResult;
-    ASSERT_TRUE(producer.valid());
-
-    Graphics::GpuTaskSchedulingHint consumerScheduling;
-    consumerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
-    consumerScheduling.allowSameClassQueueRouting = true;
-    consumerScheduling.allowCrossFamilySameClassQueueRouting = true;
-    const Graphics::GpuTaskId consumerDependencies[] = { producer };
-    const Graphics::GpuTaskResourceUse consumerUse{ .resource = buffer, .range = {}, .requiredState = Graphics::ResourceStates::CopySource, .access = Graphics::GpuTaskResourceAccess::Read, };
-    Graphics::GpuTaskDesc consumerDesc;
-    consumerDesc
-        .setIdentity(Name("tests/task_graph/cross_family_same_class_consumer"))
-        .setMarkerLabel(s_CrossFamilyConsumerLabel)
-        .setScheduling(consumerScheduling)
-        .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
-        .setResourceUses(&consumerUse, 1u)
-    ;
-    const auto consumerResult = graph.addTask(consumerDesc, graphicsCommands);
-    ASSERT_TRUE(consumerResult);
-    const Graphics::GpuTaskId consumer = *consumerResult;
-    ASSERT_TRUE(consumer.valid());
-
-    Graphics::GpuPhysicalQueueInfo secondaryGraphicsQueue = GraphicsQueue(1u);
-    secondaryGraphicsQueue.familyIndex = 3u;
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), secondaryGraphicsQueue, };
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-
-    const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
-    const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
-    ASSERT_NE(producerAssignment, nullptr);
-    ASSERT_NE(consumerAssignment, nullptr);
-    EXPECT_EQ(producerAssignment->queue, queues[0u].id);
-    EXPECT_EQ(consumerAssignment->queue, queues[1u].id);
-
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
-    ASSERT_TRUE(producerPacket.valid());
-    ASSERT_TRUE(consumerPacket.valid());
-    ASSERT_NE(compiledProducer, nullptr);
-    ASSERT_NE(compiledConsumer, nullptr);
-    EXPECT_NE(compiledPlan.packet(producerPacket).plan->queue, compiledPlan.packet(consumerPacket).plan->queue);
-    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
-    EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
-    ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
-    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-    ASSERT_EQ(compiledConsumer->prologueBarrierCount, s_ExpectedDualCount);
-
-    const Graphics::GpuCompiledBarrier& release = compiledPlan.findTask(producer).epilogueBarriers[0u];
-    EXPECT_EQ(release.type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
-    EXPECT_EQ(release.resource, buffer);
-    EXPECT_EQ(release.sourceQueue, queues[0u].id);
-    EXPECT_EQ(release.destinationQueue, queues[1u].id);
-
-    const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledPlan.findTask(consumer).prologueBarriers;
-    ASSERT_NE(acquireAndTransition, nullptr);
-    EXPECT_EQ(acquireAndTransition[0u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipAcquire);
-    EXPECT_EQ(acquireAndTransition[0u].resource, buffer);
-    EXPECT_EQ(acquireAndTransition[0u].sourceQueue, queues[0u].id);
-    EXPECT_EQ(acquireAndTransition[0u].destinationQueue, queues[1u].id);
-    EXPECT_EQ(acquireAndTransition[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
-
-}
-
 TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOwnershipHandoff){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
@@ -439,6 +347,13 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         ASSERT_NE(compiledConsumer, nullptr);
         EXPECT_EQ(producerAssignment->queue, primaryQueue.id);
         EXPECT_EQ(consumerAssignment->queue, auxiliaryQueue.id);
+        const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+        const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
+        ASSERT_TRUE(producerPacket.valid());
+        ASSERT_TRUE(consumerPacket.valid());
+        EXPECT_NE(compiledPlan.packet(producerPacket).plan->queue, compiledPlan.packet(consumerPacket).plan->queue);
+        ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
+        EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
         EXPECT_EQ(compiledProducer->queue, primaryQueue.id);
         EXPECT_EQ(compiledConsumer->queue, auxiliaryQueue.id);
         ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
@@ -459,6 +374,17 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         EXPECT_EQ(acquireAndTransition[0u].destinationQueue, auxiliaryQueue.id);
         EXPECT_EQ(acquireAndTransition[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
     };
+
+    Graphics::GpuPhysicalQueueInfo auxiliaryGraphics = GraphicsQueue(1u);
+    auxiliaryGraphics.familyIndex = 3u;
+    runCase(
+        Graphics::GpuQueueCapability::Graphics,
+        GraphicsQueue(),
+        auxiliaryGraphics,
+        Name("tests/task_graph/cross_family_same_class_buffer"),
+        Name("tests/task_graph/cross_family_same_class_producer"),
+        Name("tests/task_graph/cross_family_same_class_consumer")
+    );
 
     Graphics::GpuPhysicalQueueInfo auxiliaryCompute = DedicatedComputeQueue(3u);
     auxiliaryCompute.familyIndex = 3u;

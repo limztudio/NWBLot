@@ -134,8 +134,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 ){
     const Graphics::GpuTaskGraphCompiler compiler;
     Graphics::GpuTaskGraphCompileOptions metadataOptions = options;
-    // Unit packetization fixtures intentionally use metadata-only task nodes to isolate compiler structure from backend recording.
-    // Native compilation keeps the stricter default, covered by the payload lifecycle tests.
+    // Allow metadata-only tasks in unit packetization helpers.
     metadataOptions.allowMetadataOnlyTasks = true;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     return compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, metadataOptions);

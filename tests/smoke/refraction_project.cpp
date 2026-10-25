@@ -94,7 +94,7 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
         auto& renderer = AddSmokeRenderSystems(*world, context);
-        // These comparisons isolate transmission. Reflection has its own combined optical capture matrix.
+        // Isolate transmission by disabling reflection.
         NWB::Impl::ReflectionSettings reflection;
         reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
         NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("RefractionSmokeProject: invalid reflection settings"));
@@ -275,7 +275,7 @@ private:
         const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_PlaneMesh, material, s_MaterialInterface, tint, position, scale);
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: panel creation failed"));
         auto& transform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity));
-        // The plane starts in XZ with a +Y normal; face the camera along -Z.
+        // Rotate the XZ plane to face the camera along -Z.
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
         return entity;
     }
@@ -326,8 +326,7 @@ private:
             return false;
         m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 
-        // The opaque base closes stripe seams and fully occludes the in-frustum zero-coverage slab.
-        // All density cases retain this same unlit backdrop, camera, and light.
+        // Shared opaque backdrop that occludes the behind-wall slab.
         constexpr f32 s_BackdropDepth = 2.8f;
         const SIMDVectorSingle backdropHalfHeight = VectorScale(tangent, 6.f + s_BackdropDepth);
         const SIMDVectorSingle backdropHalfWidth = VectorMultiply(backdropHalfHeight, aspect);
@@ -343,8 +342,7 @@ private:
             createPanel(s_OpaqueMaterial, Float4(0.92f, 0.92f, 0.92f, 1.f), Float4(x, 1.4f, s_BackdropDepth - 0.01f, 0.f), Float4(VectorGetX(stripeHalfWidth), 1.f, VectorGetY(backdropPanelHalf), 0.f));
         }
 
-        // cube_hard_edges spans [-0.5, 0.5]; its front rectangle projects onto integer pixel boundaries.
-        // The full case extends one pixel past every edge; the empty case keeps one admitted refractor behind the opaque wall so capture and classification stay live.
+        // Full coverage extends past the viewport while empty coverage hides the refractor behind the wall.
         const SIMDVectorSingle frontDepth = VectorReplicate(percent == 0u ? 4.f : 0.f);
         const SIMDVectorSingle projectedSize = percent == 0u || percent == 100u ? VectorAdd(frameSize, VectorReplicate(2.f)) : VectorSet(static_cast<f32>(coveredWidth), static_cast<f32>(coveredHeight), 1.f, 1.f);
         const SIMDVectorSingle halfHeight = VectorMultiply(VectorAdd(VectorReplicate(6.f), frontDepth), tangent);
@@ -433,15 +431,13 @@ public:
             return CreateRefractionGalleryScene(m_context, *m_world, AStringView(galleryCase->data(), galleryCase->size()), ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_GEOMETRY"));
 
         const auto camera = CreateSmokeCamera(*m_world, 1.4f, 6.0f, 0.0f);
-        // The production TLAS is shared with shadow preparation.
-        // A light exercises that normal preparation path; the unlit material ignores its radiance.
+        // Include a light so shared shadow and TLAS preparation runs.
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
         m_glass = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_SphereMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f));
         NWB_FATAL_ASSERT_MSG(camera.valid() && m_glass.valid() && light.valid(), NWB_TEXT("RefractionSmokeProject: camera/glass/light creation failed"));
         m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 
-        // Fixed opaque stripes make displaced edges measurable.
-        // Unlit materials keep the comparison independent of GI, shadows, and caustic histories.
+        // Unlit opaque stripes provide a static background for measuring refraction displacement.
         const u32 stripeCount = m_lifecycleEnabled ? 48u : 20u;
         const f32 stripeStart = m_lifecycleEnabled ? -7.05f : -2.85f;
         for(u32 stripe = 0u; stripe < stripeCount; ++stripe){
@@ -450,8 +446,7 @@ public:
             StoreFloat(VectorMultiplyAddExpression(VectorSet(static_cast<f32>(stripe), 0.0f, 0.0f, 0.0f), VectorSet(0.3f, 0.0f, 0.0f, 0.0f), VectorSet(stripeStart, 1.4f, 2.8f, 0.0f)), position);
             createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), position, Float4(0.15f, 1.0f, 2.0f, 0.0f));
         }
-        // Red foreground transparency must stay straight across the glass.
-        // The blue strip is behind it and participates in the transmitted background.
+        // Place the red strip in front of the glass and the blue strip behind it.
         createPanel(s_TransparentMaterial, Float4(1.0f, 0.025f, 0.025f, 0.75f), Float4(0.0f, 0.85f, -1.7f, 0.0f), Float4(1.6f, 1.0f, 0.08f, 0.0f));
         createPanel(s_TransparentMaterial, Float4(0.025f, 0.1f, 1.0f, 0.70f), Float4(0.0f, 1.9f, 1.6f, 0.0f), Float4(2.0f, 1.0f, 0.12f, 0.0f));
 

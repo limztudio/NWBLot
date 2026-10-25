@@ -112,7 +112,7 @@ CASES = ("reference", "clear", "tinted", "tilted", "nested2", "nested3", "priori
 CAPTURES = tuple(OpticalCapture(LIT_OPTICAL + name, LIT_OPTICAL + name) for name in CASES) + (OpticalCapture(LIT_OPTICAL_QUERY_LIMIT, "optical_clear", 1), OpticalCapture(LIT_OPTICAL_TIR_LIMIT, LIT_OPTICAL_TIR, 3))
 AMBIGUOUS_VOLUME_CASES = ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp", "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp",
     LIT_OPTICAL_GROUP_ENTRY, LIT_OPTICAL_CSG_GROUP_ENTRY)
-# These budgets straddle 64-thread groups and the 8192-ray CSG dispatch bound. The full capture retains the independent image oracle.
+# Query budgets straddling 64-thread groups and the 8192-ray dispatch limit.
 QUEUE_BOUNDARY_BUDGETS = (0, 1, 63, 64, 65, 8191, 8192, 8193, DEFAULT_RAY_BUDGET)
 QUEUE_BOUNDARY_CAPTURES = (OpticalCapture("optical_csg_reference", "optical_csg_reference"),) + tuple(OpticalCapture("optical_csg_cap" if budget == DEFAULT_RAY_BUDGET else f"optical_csg_cap_budget_{budget}",
         LIT_OPTICAL_CSG_CAP, ray_budget=budget) for budget in QUEUE_BOUNDARY_BUDGETS)
@@ -145,7 +145,7 @@ def parse_optics(log_text):
 
 
 def validate_queue_coverage(statistics, spec):
-    # Smooth interior controls exercise mixed opaque/glass queues; optical query limits apply only after hardware admission.
+    # Optical query limits apply after hardware admission on mixed opaque and glass queues.
     if spec.case not in ("optical_inside", "optical_inside_nested", LIT_OPTICAL_TIR, LIT_OPTICAL_CSG_CAP, LIT_OPTICAL_CSG_OPEN_TAIL, LIT_OPTICAL_UNSPECIFIED_REFERENCE, LIT_OPTICAL_CSG_UNSPECIFIED_CAP, *DENSE_CASES):
         return None
     completed = []
@@ -359,7 +359,7 @@ def analyze_image(frame, spec):
             if path[LIT_REASON] != "opaque_dense" or path[LIT_CROSSINGS] != DENSE_RECEIVER_CROSSINGS or min(expected) <= 0.:
                 raise SmokeFailure("dense receiver oracle lacks eighteen distinct closed crossings and a positive opaque hit")
             dense_crossings.append(path[LIT_CROSSINGS])
-        # Omit a one-pixel neighborhood of an analytic discontinuity; do not blur screenshots or move expected edges.
+        # Exclude a one-pixel margin around analytic discontinuities.
         neighbors = [pixel_reference(spec.case, x + dx + 0.5, y + dy + 0.5, max_queries=spec.queries)[0] for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1))]
         if any(max(abs(a - b) for a, b in zip(expected, neighbor)) > 0.025 for neighbor in neighbors):
             rejected_edges += 1
@@ -383,15 +383,14 @@ def analyze_image(frame, spec):
     mae = sum(errors) / len(errors)
     percentile = sorted(errors)[math.floor(0.95 * (len(errors) - 1))]
     reference_mean = sum(expected_sum) / (3 * stable_points)
-    # Same mesh-discretization allowance as the integrated bound below: admit at most 5% isolated near-critical outliers before judging bulk transport, keeping the mean consistent with p95.
+    # Trim at most 5% near-critical mesh discretization outliers.
     ordered_errors = sorted(errors)
     kept_errors = ordered_errors[:max(len(ordered_errors) - math.ceil(len(ordered_errors) * 0.05), 1)]
     trimmed_mae = sum(kept_errors) / len(kept_errors)
     if trimmed_mae > 0.025 + reference_mean * 0.02 or percentile > 0.065 + reference_mean * 0.035:
         raise SmokeFailure(f"{spec.name}: reflected stripe transport disagrees with the independent reference " f"(linear RGB MAE {mae:.6f}, p95 {percentile:.6f}, expected mean {reference_mean:.6f})")
     for channel, (actual, expected) in enumerate(zip(actual_sum, expected_sum)):
-        # The analytic oracle models smooth planes in float64 while the renderer traces a triangulated mesh in FP32, so a few near-critical TIR pixels legitimately flip at the query-budget boundary.
-        # Admit at most 5% mesh-discretization outliers via the trimmed mean; a bulk energy leak still moves the remaining 95%.
+        # Trim at most 5% FP32 mesh-discretization outliers near the critical angle.
         ordered = sorted(deviation[channel] for deviation in channel_deviations)
         kept = ordered[:max(stable_points - math.ceil(stable_points * 0.05), 1)]
         trimmed = sum(kept) / len(kept)

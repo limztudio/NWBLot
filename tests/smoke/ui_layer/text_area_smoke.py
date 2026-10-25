@@ -136,7 +136,7 @@ class TextAreaRun:
                 raise SmokeSkip("the TextArea fixture needs a logical client of at least 640x440")
             if not settled:
                 if snapshot[LIT_SEQUENCE] <= entry_sequence:
-                    # The viewport click only lands after the next published marker sequence; pre-toggle logs describe the old viewport geometry.
+                    # Wait for the post-toggle marker sequence before clicking the moved viewport.
                     time.sleep(CHECKPOINT_POLL_SECONDS)
                     continue
                 settled = True
@@ -163,7 +163,7 @@ class TextAreaRun:
                     wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
                     self.caret_phase_waits += 1
                 except SmokeFailure:
-                    # The 1s blink phase can be unobservable under full-suite GPU load; retry a fresh capture instead of failing the gate outright.
+                    # Retry capture when GPU load delays the 1s caret blink cycle.
                     time.sleep(CHECKPOINT_POLL_SECONDS)
                     continue
                 # Freeze the admitted caret phase before log collection or another native preparation delay.

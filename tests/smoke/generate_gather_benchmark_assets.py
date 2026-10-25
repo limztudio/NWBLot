@@ -60,8 +60,7 @@ def main(argv=None):
     if output == Path(output.anchor) or source_root.is_relative_to(output) or output.is_relative_to(source_root) \
         or any(path.is_relative_to(output) for path in sources):
         parser.error("generated root must be separate from its authored templates")
-    # Material dispatch resolves one physical root per virtual project.
-    # Keep its existing bind/BXDF sources and the generated surface in that same private root; two project roots would resolve the wrong include.
+    # Keep bind, BXDF, and generated surface files in one private project root.
     contents = {path.relative_to(source_root).as_posix(): path.read_bytes() for path in sorted(source_root.rglob("*")) if path.is_file()}
     generated = generated_contents(sources[0].read_text(encoding=LIT_UTF_8), sources[1].read_text(encoding=LIT_UTF_8))
     if contents.keys() & generated.keys():

@@ -25,7 +25,7 @@ namespace UiTestSupport{
     return nullptr;
 }
 
-// Existing fixtures exercise the native cursor adapter; neutral providers use queuePointer directly.
+// Native cursor adapter helpers for UI unit test fixtures.
 [[nodiscard]] inline NWB::Impl::Ui::InputEvent NativeInput(const NWB::Impl::Ui::InputEvent& event)noexcept{
     using namespace NWB::Impl::Ui;
     InputEvent resolved = event;

@@ -39,8 +39,7 @@ ARMS = (LIT_REFERENCE, LIT_CUT, LIT_UNCUT, LIT_MOVED, LIT_CAMERA_SHIFT)
 ANALYTIC_ARMS = (LIT_CUT, LIT_UNCUT)
 TRANSMISSION = (0.25, 0.5, 0.75)
 BYTE_TOLERANCE = 12.0
-# All regions are inside constant-thickness areas, away from raster and denoiser boundaries.
-# Values are (name, receiver x, receiver y, cut optical length, uncut optical length); None means opaque.
+# Constant-thickness sample regions holding name, receiver xy, and cut or uncut optical lengths.
 REGIONS = ((LIT_CLEAR, 0.0, 0.0, 0.0, 0.0), (LIT_OPAQUE_HOLE, -1.7, 1.0, 0.0, None), ("opaque_old_hole", -2.3, 1.0, None, None), ("opaque_rim", -2.5, 1.0, None, None), ("opaque_cap", 0.0, 1.0, None, None), (LIT_GLASS_DEPTH, 2.0, 1.0, 1.0, 2.0),
     (LIT_GLASS_HOLE, -1.7, -1.0, 0.0, 2.0), ("glass_old_hole", -2.3, -1.0, 2.0, 2.0), ("glass_rim", -2.5, -1.0, 2.0, 2.0), (LIT_OVERLAP, 0.0, -1.0, 2.0, 4.0), ("glass_control", 2.0, -1.0, 2.0, 2.0),)
 
@@ -181,7 +180,7 @@ def analytic_optical_length(x, y, arm):
         if arm == LIT_UNCUT or slot == 5:
             return 2.0
         if slot == 0:
-            # Remove 0.5 * dx + (z + 6) <= 0, leaving a tilted depth cut.
+            # Cut the tilted half-space 0.5 * dx + z + 6 <= 0.
             cuts = [(-math.inf, -6.0 - 0.5 * dx)]
         elif slot == 1:
             radial = (dx / 0.5) ** 2 + (dy / 0.45) ** 2

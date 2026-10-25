@@ -103,7 +103,7 @@ TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears
         scoringData.rebuildAssignmentLoads(assignments, topology);
         const Graphics::GpuPhysicalQueueInfo* const selected = FindTimingFeedbackQueue(declarations, analysis, assignments, assignmentIndices, topology, reachability, scoringData, task, reorderedQueues[0u], assignmentKey, snapshot, s_TimingPolicy, 100u);
         ASSERT_NE(selected, nullptr);
-        // Queue one wins the first slower tie; the later fast tie must use its own loads (eight versus four).
+        // Queue one wins the slow tie while queue two wins the fast tie by lower load.
         EXPECT_EQ(selected->id, queues[4u].id);
     }
 }

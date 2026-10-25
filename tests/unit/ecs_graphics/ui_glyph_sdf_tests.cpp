@@ -46,7 +46,7 @@ using uint = u32;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Compile the production shader helpers unchanged; the pixel shader supplies fwidth(distance) as pixelWidth.
+// Compile the production glyph SDF shader helpers in C++.
 #include <impl/assets/graphics/ui/glyph_sdf.slangi>
 #include <impl/assets/graphics/ui/glyph_coverage.slangi>
 
@@ -68,7 +68,7 @@ TEST(UiGlyphSdf, FreeTypeZeroIs128Over255AndExteriorInteriorClampToEndpoints){
 
 TEST(UiGlyphSdf, FlatFieldsRemainFiniteAcrossEveryAdmittedSpread){
     EXPECT_FLOAT_EQ(nwbUiSdfCoverage(0.f, 0.f), 0.5f);
-    // Fused FP32 decoding can leave a small residual; the flat-field epsilon bounds it at every admitted spread.
+    // The flat-field epsilon bounds FP32 decode residuals across all spreads.
     for(u32 spread = NWB::Impl::s_FontAtlasMinSpreadPixels; spread <= NWB::Impl::s_FontAtlasMaxSpreadPixels; ++spread)
         EXPECT_NEAR(nwbUiSdfCoverage(nwbUiSdfDistance(128.f / 255.f, spread), 0.f), 0.5f, 0.01f);
     EXPECT_FLOAT_EQ(nwbUiSdfCoverage(-1.f, 0.f), 0.f);

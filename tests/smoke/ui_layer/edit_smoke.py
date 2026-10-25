@@ -102,7 +102,7 @@ class EditRun:
             if (snapshot[LIT_PRIMARY] == wanted and snapshot[LIT_SECONDARY] == secondary and snapshot["readonly"] == readonly and snapshot["visible"] == visible):
                 fields = [field for field, state in ((LIT_PRIMARY, wanted), (LIT_SECONDARY, secondary)) if caret_required(field, state, readonly, visible, selection)]
                 if fields:
-                    # Observe off-to-on before the capture's 0.2s settle; full-frame processing can alias the 1s blink cycle.
+                    # Wait for an off-to-on caret transition before settling the capture.
                     self.wait_for_caret_phase(snapshot, fields, stage_deadline)
             self.backend.capture_client_window(self.handle, path)
             report = observe_edit(read_bmp_24_rows(path), snapshot, wanted, secondary, readonly, visible, extent=extent, selection=selection, scrolled=scrolled)
@@ -268,7 +268,7 @@ class EditRun:
             content_x, content_y, _, content_height = self.snapshot[LIT_FIELDS][LIT_PRIMARY][LIT_CONTENT]
             first_word = self.point(content_x + 12.0, content_y + content_height / 2.0)
             with self.native.positioned_cursor(*first_word):
-                # Both releases precede the next press; the two clicks stay inside the 500 ms window.
+                # Keep both clicks inside the 500ms double-click window.
                 self.native.click(*first_word)
                 self.native.click(*first_word)
                 self.checkpoint("native_double_click_first_word", model(primary, 0, 5, True), model(secondary), selection=True, extent=(800, 600))
@@ -281,7 +281,7 @@ def run(args, *, run_type=EditRun, input_bindings=False):
     environment = build_fixture_environment(build_launch_environment(args), "EDIT", force_x11=True)
     environment["NWB_UI_LAYER_INPUT_BINDINGS_SMOKE"] = "1" if input_bindings else "0"
     if platform.system() == "Linux":
-        # Synthetic XSendEvent keycodes resolve through XIM; disable host text commits for binding ownership checks.
+        # Disable X11 text commits so synthetic key events test only key bindings.
         environment["XMODIFIERS"] = ""
         environment["GTK_IM_MODULE"] = LIT_SIMPLE
         environment["QT_IM_MODULE"] = LIT_SIMPLE

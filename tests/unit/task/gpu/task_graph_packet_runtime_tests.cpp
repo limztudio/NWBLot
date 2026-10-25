@@ -112,7 +112,7 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
         EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, secondQueue).valid());
     }
 
-    // reset() releases old packet-owned command-list handles and reconstructs the serial/per-packet scratch for the new immutable graph generation before a future arena can be leased again.
+    // Reset releases old command lists and rebuilds packet scratch for the new graph.
     recordedGraph.reset(compiledGraph);
     transaction.reset(compiledGraph);
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);

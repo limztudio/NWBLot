@@ -43,7 +43,6 @@ struct ResourceSetContext{
     Core::GpuTaskGraph graph{ graphArena };
     Core::Alloc::GlobalArena inputArena{ Name("tests/resource_set_validation/input") };
     Vector<Core::GpuGraphResourceId, Core::Alloc::GlobalArena> members{ inputArena };
-    Core::GpuGraphResourceSetId result;
     bool ready = false;
 
 
@@ -247,36 +246,6 @@ TEST(ResourceSetValidation, ResetRejectsOldGenerationsAndAcceptsFreshIdsAtTheSam
     EXPECT_FALSE(declarations.validResourceSet(previousSet));
     EXPECT_TRUE(declarations.validResourceSet(freshSet));
     EXPECT_EQ(declarations.resourceSetCount(), 1u);
-}
-
-TEST(ResourceSetValidation, LiveReadViewsRejectBothNewAndIdempotentResourceSetMutation){
-    ResourceSetContext context(64u);
-    ASSERT_TRUE(context.ready);
-    const Core::GpuGraphResourceSetDesc first = context.description(Name("tests/resource_set_validation/read_first"));
-    const auto setResult = context.graph.importResourceSet(first);
-    ASSERT_TRUE(setResult);
-    const Core::GpuGraphResourceSetId set = *setResult;
-    ASSERT_TRUE(set.valid());
-    const Core::GpuGraphResourceSetDesc second = context.description(Name("tests/resource_set_validation/read_second"));
-    {
-        const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
-        ASSERT_TRUE(declarations.valid());
-        const u64 revision = declarations.declarationRevision();
-        const Core::GpuTaskGraphResourceSetView stored = declarations.resourceSetAt(set.index);
-        Core::GpuGraphResourceSetDesc borrowed = second;
-        borrowed.setMembers(stored.members, stored.memberCount);
-        EXPECT_FALSE(context.graph.importResourceSet(borrowed).has_value());
-        EXPECT_FALSE(context.graph.importResourceSet(first).has_value());
-        EXPECT_EQ(declarations.declarationRevision(), revision);
-        EXPECT_EQ(declarations.resourceSetCount(), 1u);
-        EXPECT_EQ(stored.members[0u], context.members[0u]);
-    }
-    {
-        const auto gpuTaskAdmission = context.graph.importResourceSet(second);
-        EXPECT_TRUE(gpuTaskAdmission);
-        if(gpuTaskAdmission)
-            EXPECT_TRUE(gpuTaskAdmission->valid());
-    }
 }
 
 

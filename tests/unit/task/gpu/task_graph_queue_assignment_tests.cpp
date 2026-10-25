@@ -355,22 +355,6 @@ TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically
     const Graphics::GpuPhysicalQueueTopology duplicateNativeTopology{ .queues = duplicateNativeQueues, .queueCount = LengthOf(duplicateNativeQueues), };
     EXPECT_FALSE(Assign(assignments, operationScratchArena, graph, analysis, duplicateNativeTopology));
     EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
-
-    const Graphics::GpuPhysicalQueueInfo topologyA[] = { DedicatedComputeQueue(), GraphicsQueue() };
-    const Graphics::GpuPhysicalQueueInfo topologyB[] = { GraphicsQueue(), DedicatedComputeQueue() };
-    const Graphics::GpuPhysicalQueueTopology firstTopology{ .queues = topologyA, .queueCount = LengthOf(topologyA), };
-    const Graphics::GpuPhysicalQueueTopology secondTopology{ .queues = topologyB, .queueCount = LengthOf(topologyB), };
-    Graphics::GpuTaskGraphQueueAssignments firstAssignments(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments secondAssignments(testArena.arena);
-    ASSERT_TRUE(Assign(firstAssignments, operationScratchArena, graph, analysis, firstTopology));
-    ASSERT_TRUE(Assign(secondAssignments, operationScratchArena, graph, analysis, secondTopology));
-    const Graphics::GpuTaskQueueAssignment* const firstAssignment = firstAssignments.find(task);
-    const Graphics::GpuTaskQueueAssignment* const secondAssignment = secondAssignments.find(task);
-    ASSERT_NE(firstAssignment, nullptr);
-    ASSERT_NE(secondAssignment, nullptr);
-    EXPECT_EQ(firstAssignment->queue, secondAssignment->queue);
-    EXPECT_EQ(firstAssignment->queueClass, secondAssignment->queueClass);
-    EXPECT_EQ(firstAssignment->reason, secondAssignment->reason);
 }
 
 

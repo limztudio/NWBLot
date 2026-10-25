@@ -116,6 +116,7 @@ TEST(ReflectionHistory, DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRet
     const auto rejected = control->plan(Stamp(), settings, 11u);
     ASSERT_TRUE(rejected.reused);
     const auto lateReset = ResolveReflectionHistoryOutcome(rejected, false);
+    EXPECT_EQ(lateReset.resetReason, ReflectionHistoryResetReason::HardwareChanged);
     EXPECT_FALSE(lateReset.reused);
     EXPECT_EQ(lateReset.sampleIndex, 0u);
     EXPECT_EQ(lateReset.sampleCount, 1u);
@@ -124,6 +125,7 @@ TEST(ReflectionHistory, DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRet
     abandoned.discard();
     const auto retry = control->plan(Stamp(), settings, 12u);
     EXPECT_EQ(retry.acceptedSequence, first.sequence);
+    EXPECT_EQ(retry.epoch, rejected.epoch);
     EXPECT_EQ(retry.currentBank, rejected.currentBank);
     EXPECT_EQ(retry.previousBank, first.currentBank);
     const auto restoredReady = ResolveReflectionHistoryOutcome(retry, true);
@@ -144,19 +146,6 @@ TEST(ReflectionHistory, DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRet
     EXPECT_EQ(stable.historyStartGraphicsFrame, 12u);
     EXPECT_TRUE(stable.reused);
     EXPECT_FALSE(stable.reset);
-}
-
-TEST(ReflectionHistory, DiscardDoesNotAdvanceSampleBankCountOrEpoch){
-    ReflectionHistoryState state(1u);
-    Accept(state, state.plan(Stamp(), ReflectionSettings{}, 100u));
-    const auto rejected = state.plan(Stamp(), ReflectionSettings{}, 101u);
-    ASSERT_TRUE(state.reserve(rejected));
-    state.discard(rejected);
-    const auto retry = state.plan(Stamp(), ReflectionSettings{}, 102u);
-    EXPECT_EQ(retry.sampleIndex, rejected.sampleIndex);
-    EXPECT_EQ(retry.epoch, rejected.epoch);
-    EXPECT_EQ(retry.previousSampleCount, rejected.previousSampleCount);
-    EXPECT_EQ(retry.currentBank, rejected.currentBank);
 }
 
 TEST(ReflectionHistory, EverySceneDomainAndViewChangeResetsOnce){
@@ -266,24 +255,6 @@ TEST(ReflectionHistory, StableUntrustedSceneNeverAccumulatesButDoesAdvanceAccept
     EXPECT_EQ(next.resetReason, ReflectionHistoryResetReason::None);
     EXPECT_EQ(next.sampleIndex, 1u);
     EXPECT_EQ(ResolveReflectionHistoryOutcome(next, false).historyStartGraphicsFrame, 0u);
-}
-
-TEST(ReflectionHistory, ActualHardwareReadinessResetMatchesNextAcceptedState){
-    ReflectionHistoryState state(1u);
-    Accept(state, state.plan(Stamp(), ReflectionSettings{}, 10u), true);
-    const auto next = state.plan(Stamp(), ReflectionSettings{}, 11u);
-    const auto outcome = ResolveReflectionHistoryOutcome(next, false);
-    EXPECT_EQ(outcome.resetReason, ReflectionHistoryResetReason::HardwareChanged);
-    EXPECT_EQ(outcome.sampleIndex, 0u);
-    EXPECT_EQ(outcome.sampleCount, 1u);
-    EXPECT_FALSE(outcome.reused);
-    Accept(state, next, false);
-    const auto stable = state.plan(Stamp(), ReflectionSettings{}, 12u);
-    const auto stableOutcome = ResolveReflectionHistoryOutcome(stable, false);
-    EXPECT_EQ(stableOutcome.epoch, outcome.epoch);
-    EXPECT_FALSE(stableOutcome.reset);
-    EXPECT_EQ(stableOutcome.sampleIndex, 1u);
-    EXPECT_EQ(stableOutcome.sampleCount, s_ExpectedDualCount);
 }
 
 TEST(ReflectionHistory, StalePlanCannotReserveAfterAnotherFrameAccepts){

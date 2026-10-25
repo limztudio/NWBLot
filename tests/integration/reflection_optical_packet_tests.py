@@ -227,10 +227,7 @@ class SlicePacketTests(unittest.TestCase):
         text = self.log().replace("ReflectionSmokeSlicePackets: source_frame=8 plan_generation=23 device_generation=1", "ReflectionSmokeSlicePackets: source_frame=8 plan_generation=23 device_generation=2")
         with self.assertRaisesRegex(SmokeFailure, "queue identity"):
             self.validate(text)
-
-    def test_readback_may_use_a_different_queue_from_primary_hardware_packets(self):
-        text = self.log().replace("physical_queue=0", "physical_queue=1")
-        self.validate(text)
+        self.validate(self.log().replace("physical_queue=0", "physical_queue=1"))
 
     def test_budget_or_slice_count_cannot_be_relabelled(self):
         for old, new in (("ray_capacity=8193", "ray_capacity=8192"), ("expected_slices=2", "expected_slices=1")):

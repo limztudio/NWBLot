@@ -161,8 +161,7 @@ def analyze_long_miss_panels(frame):
 
 def compare_static_images(baseline, feedback, case):
     if case == LIT_ROUGH_FURNACE:
-        # A raw rough frame has a progressive sample index.
-        # Independently integrate its many pixel samples; do not pretend distinct completed source indices should have the same stochastic pixels.
+        # Average pixel samples across each rough frame instead of comparing stochastic pixels directly.
         from reflection_roughness_reference import analyze_furnace
         return {LIT_BASELINE_2: analyze_furnace(baseline, 1.0), LIT_FEEDBACK_2: analyze_furnace(feedback, 1.0)}
     if case == LIT_FEEDBACK_LONG_MISS:

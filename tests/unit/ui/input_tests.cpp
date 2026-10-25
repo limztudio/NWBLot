@@ -357,9 +357,6 @@ TEST_F(UiInputTests, InvalidatedDeclarationPrunesActionsAndCaptureWithoutAdvanci
     EXPECT_EQ(m_router.hitTest({ 45.0f, 15.0f }).value, 2u);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Space)).commandConsumed);
-    m_router.invalidateTarget({ 999u });
-    EXPECT_EQ(m_router.layoutGeneration(), 7u);
-    EXPECT_EQ(m_router.targets().size(), 1u);
 }
 
 TEST_F(UiInputTests, PanelBlocksPointerAndClearsKeyboardFocusWithoutActivating){

@@ -37,7 +37,7 @@ namespace __hidden_mesh_solid_codec_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// These interfaces deliberately model throwing supplied operations; no runtime implementation is invoked.
+// Declarations for testing non-noexcept callback traits without calling them.
 struct ThrowingPositionStreamGeometry : Impl::MeshGeometryPayload{
     [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positionStream()const;
 };

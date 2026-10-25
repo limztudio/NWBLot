@@ -109,7 +109,6 @@ public:
 
     static constexpr Name s_MaterialScratchArena = Name("tests/integration/assets_graphics/material");
     static constexpr Name s_ShaderScratchArena = Name("tests/integration/assets_graphics/shader");
-    static constexpr Name s_ModelFixtureScratchArena = Name("tests/integration/assets_graphics/model_fixture");
     static constexpr Name s_CodecScratchArena = Name("tests/integration/assets_graphics/codec");
 
 

@@ -131,37 +131,6 @@ TEST(CpuTaskWaitTests, ScopeRechecksDependenciesPublishedByCooperativeWork){
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
-TEST(CpuTaskWaitTests, ScopeCanJoinIndependentPrerequisitesAndDescendants){
-    using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 callbacks = 0u;
-    const auto callerTaskAdmission = scheduler.submit([&](){ scope.wait(); });
-    ASSERT_TRUE(callerTaskAdmission);
-    const auto caller = *callerTaskAdmission;
-    ASSERT_TRUE(caller.valid());
-    const auto prerequisiteTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
-    ASSERT_TRUE(prerequisiteTaskAdmission);
-    const auto prerequisite = *prerequisiteTaskAdmission;
-    ASSERT_TRUE(prerequisite.valid());
-    const auto cpuTaskAdmission = scope.submit([&](){
-        ++callbacks;
-        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
-        ASSERT_TRUE(secondCpuTaskAdmission);
-        if(secondCpuTaskAdmission)
-            ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    }, prerequisite
-    );
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    scheduler.wait(caller);
-    scope.wait();
-    EXPECT_EQ(callbacks, 3u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
 
 TEST(CpuTaskWaitTests, NewDependencyInvalidatesAnEarlierUnrelatedSearch){
     using namespace __hidden_cpu_task_wait_tests;

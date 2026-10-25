@@ -220,7 +220,7 @@ private:
         for(u32 parentIndex = skeleton->joints()[anchorIndex].parentIndex; parentIndex != NWB::Impl::s_SkeletonInvalidJointIndex && parentIndex < jointCount; parentIndex = skeleton->joints()[parentIndex].parentIndex)
             boneToModel = MatrixMultiply(LoadFloat(skeleton->joints()[parentIndex].localBindPose), boneToModel);
 
-        // The bone origin in model space is the translation column (M*v convention); receiver scale is 1.
+        // Bone origin in model space is the matrix translation column.
         return VectorMergeX(VectorSplatW(boneToModel.v[0]), VectorSplatW(boneToModel.v[1]), VectorSplatW(boneToModel.v[2]), VectorZero());
     }
 
@@ -330,8 +330,7 @@ public:
         const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
-                // This test-only suspension freezes the animated skinned receiver and CSG cutter at the exact accepted frame the baseline manifest names.
-                // Production renderer scheduling is not involved.
+                // Freeze the animated pose at the target frame for baseline capture.
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);

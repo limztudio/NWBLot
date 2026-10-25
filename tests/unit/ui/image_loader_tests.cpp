@@ -98,7 +98,7 @@ public:
     bool m_available = true;
 };
 
-// An application codec can violate its declared type or return a different path; the loader must fence both.
+// Codec doubles that return mismatched asset types or virtual paths.
 class MisdirectedImageCodec final : public IAssetCodec{
 public:
     explicit MisdirectedImageCodec(const bool wrongType)noexcept

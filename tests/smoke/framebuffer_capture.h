@@ -34,7 +34,7 @@ namespace Tests::Smoke{
 
 
 struct FramebufferCaptureOptions{
-    // Optional borrowed predicate context must remain alive until stop() completes.
+    // Borrowed predicate context must outlive stop.
     bool (*shouldCapture)(void*, u64) = nullptr;
     void* predicateContext = nullptr;
     u32 requiredWidth = 0u;
@@ -42,8 +42,7 @@ struct FramebufferCaptureOptions{
     bool quitWhenReady = true;
 };
 
-// One-shot framebuffer observer for unattended smoke acceptance.
-// Completion state is ref-counted independently so graph rejection/teardown can resolve an old payload after the owning project has stopped the observer.
+// Ref-count completion state so teardown can finish after the project stops the observer.
 class FramebufferCapture final
     : public Core::IRenderPass
     , public Core::IGpuTaskGraphPresentationContributor
@@ -129,7 +128,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Missing capture configuration is a successful null result; a configured result owns a started observer.
+// Return a started observer when capture is configured.
 [[nodiscard]] inline Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
     ProjectRuntimeContext& context,
     Core::Alloc::ScratchArena& scratchArena,

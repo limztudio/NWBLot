@@ -64,8 +64,7 @@ static constexpr AStringView s_TextureRuntimeTintParameter = "texture_runtime.co
 static constexpr f32 s_CameraHeight = 3.1f;
 static constexpr f32 s_CameraDistance = 5.7f;
 static constexpr f32 s_CameraPitch = 0.36f;
-// A low, bright white key makes the opaque sphere cast a long direct shadow.
-// The nearby part of that shadow is the unambiguous receiver-only location where the texture's red-dominant diffuse bounce is visible.
+// Cast a foreground shadow on the white floor to expose red indirect bounce from the sphere.
 static constexpr f32 s_DirectionalLightPitch = 0.48f;
 // Aim the shadow toward the foreground rather than hiding the receiver spill behind the sphere from the camera.
 static constexpr f32 s_DirectionalLightYaw = 2.2f;
@@ -278,11 +277,9 @@ public:
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), s_DirectionalLightIntensity);
 
-        // A white diffuse receiver makes the textured sphere's direct shadow and colored indirect bounce readable.
-        // Keep the plane separate from the texture material so no pattern leaks onto the GI receiver itself.
+        // Use an untextured white floor to isolate indirect color bounce from the sphere.
         m_whiteGround = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_GroundPlaneMesh, s_WhiteGroundMaterial, s_WhiteGroundMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(3.25f, 1.0f, 3.25f, 0.0f));
-        // caustic_sphere is the smoke asset's dense, smooth, UV-mapped sphere.
-        // It rests just above the receiver, where the white plane provides a clean read of the texture's colored irradiance after GI converges.
+        // Place the UV-mapped sphere just above the white floor.
         m_texturedSphere = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,

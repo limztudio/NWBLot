@@ -402,8 +402,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFamily
     ASSERT_NE(preloadAssignment, nullptr);
     ASSERT_NE(targetAssignment, nullptr);
     EXPECT_EQ(preloadAssignment->queue, firstAuxiliaryGraphicsQueue.id);
-    // Both auxiliary histories are equally fast.
-    // The first already owns the expensive preload, so the score must choose the second route instead of depending on topology order alone.
+    // Choose the unloaded second auxiliary queue when both histories are equally fast.
     EXPECT_EQ(targetAssignment->queue, secondAuxiliaryGraphicsQueue.id);
 
     // A non-committing sample adds route history but must not move the committed incumbent or restart its dwell.

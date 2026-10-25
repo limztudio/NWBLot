@@ -97,8 +97,7 @@ def main(argv):
             window_capture_smoke.write_status("FAIL: --resize-before-capture requires --application-capture")
             return 1
         return _capture_after_resize(args, resize)
-    # The shared capture checks readiness and logs, but its generic visual gate rejects flat images.
-    # This fixture independently requires every startup pixel to be black after the readback.
+    # Require every pixel in the captured flat startup frame to be black.
     window_capture_validation.validate_capture_result = lambda result: None
     return window_capture_smoke.main(argv)
 

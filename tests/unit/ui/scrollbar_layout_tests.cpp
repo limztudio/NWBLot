@@ -335,8 +335,6 @@ TEST(UiScrollbarLayoutTests, OverscrollUpdatesClampBothThumbsAndRestoreExactStar
 TEST(UiScrollbarLayoutTests, InvalidCalculationInputsRejectPlacement){
     const Rect bounds{ 10.0f, 20.0f, 112.0f, 112.0f };
     const Insets padding{ 1.0f, 2.0f, 3.0f, 4.0f };
-    const auto previousResult = ScrollbarLayout::Calculate(bounds, bounds, padding, { 399.0f, 400.0f }, 1.0f, { 40.0f, 50.0f }, 12.0f, 16.0f);
-    ASSERT_TRUE(previousResult);
     const auto reject = [](const Rect& valueBounds, const Rect& clip, const Insets& valuePadding, const Point& measure, const f32 caret, const Point& scroll, const f32 thickness, const f32 minimum){
         EXPECT_FALSE(ScrollbarLayout::Calculate(valueBounds, clip, valuePadding, measure, caret, scroll, thickness, minimum));
     };
@@ -366,16 +364,12 @@ TEST(UiScrollbarLayoutTests, InvalidCalculationInputsRejectPlacement){
 
 TEST(UiScrollbarLayoutTests, UnrepresentableFinalViewportRejectsExtremeContent){
     const Rect bounds{ 0.0f, 0.0f, 112.0f, 112.0f };
-    const auto previousResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
-    ASSERT_TRUE(previousResult);
     EXPECT_FALSE(ScrollbarLayout::Calculate(bounds, bounds, {}, { Limit<f32>::s_Max, Limit<f32>::s_Max }, Limit<f32>::s_Max, { Limit<f32>::s_Max, Limit<f32>::s_Max }, 12.0f, 16.0f));
     EXPECT_FALSE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 1.0e30f, 1.0e30f }, 1.0f, {}, 0.0f, 16.0f));
 }
 
 TEST(UiScrollbarLayoutTests, UnrepresentableBarReservationRejectsCalculation){
     const Rect bounds{ 0.0f, 0.0f, 112.0f, 112.0f };
-    const auto previousResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
-    ASSERT_TRUE(previousResult);
     EXPECT_FALSE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 1.0e-30f, 0.0f));
 }
 

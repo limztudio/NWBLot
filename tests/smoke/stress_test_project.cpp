@@ -92,8 +92,8 @@ static constexpr f32 s_TransparentRowZ = -0.55f;
 static constexpr f32 s_OpaqueRowZ = 0.55f;
 static constexpr f32 s_CharacterLift = 0.0f;
 
-// The open-front colored box exposes indirect bounce on the crowd and floor.
-static constexpr Float2U s_BoxHalf = Float2U(4.0f, 4.5f); // x: side half-width; y: depth half-width. The -Z front stays open.
+// Lanes are side half-width and depth half-width.
+static constexpr Float2U s_BoxHalf = Float2U(4.0f, 4.5f);
 static constexpr f32 s_BoxHeight = 4.0f;
 static constexpr f32 s_GroundScale = 2.0f * s_BoxHalf.y;
 
@@ -121,7 +121,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Repeat the authored five-color palette across each material row; transparency and density remain unchanged.
+// Cycle the five-color palette across each material row.
 [[nodiscard]] static Float4 CharacterTint(const u32 classIndex, const bool transparent)noexcept{
     static const Float4 s_TransparentTints[s_CharacterTintCount] = {
         Float4(0.72f, 0.86f, 1.00f, 0.42f),
@@ -206,8 +206,7 @@ private:
         return world;
     }
 
-    // Spin bind-pose bodies about Y with staggered phases (BVH + shadows re-resolve per frame).
-    // NWB_STRESS_TEST_SPIN_ANGLE freezes yaw for deterministic A/B.
+    // Spin bodies with staggered Y phases unless NWB_STRESS_TEST_SPIN_ANGLE pins yaw.
     static f32 FrozenYaw(){
         static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment("NWB_STRESS_TEST_SPIN_ANGLE");
         return s_Yaw;
@@ -220,7 +219,7 @@ private:
     }
 
     [[nodiscard]] NWB::Core::ECS::EntityID createCharacter(const u32 index){
-        // Comparison mode pins the zigzag layout; the full crowd uses staggered material rows.
+        // Comparison mode uses the zigzag layout instead of staggered material rows.
         const bool transparentMaterialClass = (index % 2u) == 0u;
         const bool transparent = !HardwareShadowOpaqueBaseline() && transparentMaterialClass;
         const u32 classIndex = index / 2u;
@@ -383,7 +382,7 @@ public:
         , m_characterOwners(context.objectArena)
     {}
     virtual ~StressTestSmokeProject()noexcept override{
-        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
+        m_context.input.removeHandler(m_arrowYawInput);
         m_timingRenderPass.stop();
         destroyWorld();
     }
@@ -463,7 +462,7 @@ public:
             return false;
         if(m_reflectionDiagnosticsEnabled)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: reflection diagnostics enabled"));
-        // GPU durations are sampled diagnostics; FPS comes only from accepted native presentations and steady wall time.
+        // Report FPS from accepted presentations alongside sampled GPU pass durations.
         const auto cpuTimingPath = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_STRESS_CPU_TIMING_FILE");
         if(!m_cpuTimingProbe.initialize(m_cpuDiagnosticsEnabled, m_timingEnabled, cpuTimingPath ? AStringView(cpuTimingPath->data(), cpuTimingPath->size()) : AStringView{}))
             return false;
@@ -494,7 +493,7 @@ public:
             );
         }
 
-        // Handle Left/Right first; the title reports yaw for reproducible captures.
+        // Register arrow yaw scrubbing at the front of the input chain.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
         const bool comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
@@ -527,7 +526,7 @@ public:
             Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f)
         );
 
-        // Lane x spans the side walls; lane y spans the back wall.
+        // Lanes are side-wall extent and back-wall extent.
         const SIMDVectorSingle wallSpans = VectorMultiply(VectorReplicate(2.0f), VectorSet(s_BoxHalf.y, s_BoxHalf.x, 0.0f, 0.0f));
         m_wallPosX = createWall(Float4(s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.80f, 0.08f, 0.08f, 1.0f), -90.0f, VectorGetX(wallSpans));
         m_wallNegX = createWall(Float4(-s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.08f, 0.12f, 0.80f, 1.0f), 90.0f, VectorGetX(wallSpans));
@@ -627,8 +626,7 @@ public:
                 if(!m_frameGraphSnapshotPath.empty() && !NWB::Tests::Smoke::CaptureStressFrameGraphSnapshot(m_context, m_frameGraphSnapshotPath, m_m4RenderedFrameCount))
                     return false;
 #endif
-                // Stop runFrame before publishing the marker.
-                // The external M4 harness can therefore settle and capture the last completed image without advancing temporal shadow/caustic history after this frame index.
+                // Suspend rendering before logging the held-frame marker so temporal history stops advancing.
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_m4PixelCapturePaused = true;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: M4 pixel capture ready after {} rendered frames; render submission suspended"), m_m4RenderedFrameCount);
@@ -639,8 +637,7 @@ public:
         const u32 baselineCaptureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(baselineCaptureFreezeFrame != 0u && m_m4RenderedFrameCount >= baselineCaptureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
-                // Keep the M4-specific capture contract above intact.
-                // Ordinary baseline captures use their own smoke-only marker and share the fixed submitted-frame counter without affecting async tests.
+                // Log the separate baseline capture marker after the requested frame count.
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_m4RenderedFrameCount);

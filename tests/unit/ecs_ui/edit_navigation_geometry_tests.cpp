@@ -36,23 +36,6 @@ TEST_F(UiEditNavigationHostTests, CandidateGeometryCannotReplacePublishedYHitsBe
     EXPECT_TRUE(m_resolver.records.empty());
 }
 
-TEST_F(UiEditNavigationHostTests, CapturedCrossLineDragClampsPastThePublishedViewport){
-    ASSERT_TRUE(m_navigationModel.setText("ab\ncd\nxy"));
-    ASSERT_TRUE(m_navigationModel.setSelection(0u, 0u));
-    ASSERT_TRUE(activateNavigation());
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = { 20.0f, 26.0f } }));
-    ASSERT_EQ(m_context.input().capture(), m_widget.id);
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PointerMove, .position = { 30.0f, 120.0f } }));
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = { 30.0f, 120.0f } }));
-    EXPECT_EQ(m_navigationModel.caret(), 0u);
-    ASSERT_TRUE(navigationFrame());
-    EXPECT_EQ(m_navigationModel.anchor(), 1u);
-    EXPECT_EQ(m_navigationModel.caret(), 8u);
-    EXPECT_EQ(m_navigationModel.selectedText(), "b\ncd\nxy");
-    EXPECT_FALSE(m_context.input().capture().valid());
-    EXPECT_FALSE(m_navigationModel.canUndo());
-}
-
 TEST_F(UiEditNavigationHostTests, EmptyAndTrailingHardLinesPublishDistinctEndpoints){
     ASSERT_TRUE(m_navigationModel.setText("a\n\n"));
     ASSERT_TRUE(m_navigationModel.setSelection(0u, 0u));

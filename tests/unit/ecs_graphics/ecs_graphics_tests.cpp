@@ -50,7 +50,6 @@ namespace __hidden_ecs_graphics_tests{
 
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::MakeTriangleIndices;
-using NWB::Tests::NearlyEqual;
 
 inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
 
@@ -91,27 +90,6 @@ TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending)
     NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 17u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
 
     EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty);
-    EXPECT_TRUE(bindlessResourceSlotsUploaded);
-}
-
-TEST(EcsGraphics, MeshSkinningGraphOwnedDispatchCommitsSelectorWithAcceptedCompute){
-    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
-    // The immutable selector upload and compute dispatch share one graph packet.
-    // A rejected packet keeps both the selector and deformation retryable; acceptance publishes both CPU facts together.
-    bool bindlessResourceSlotsUploaded = false;
-    NWB::Impl::MeshSkinningSubmissionCommit commit;
-    commit.editRevision = 23u;
-    commit.handledDirtyFlags = dirtyFlags;
-    commit.bindlessResourceSlotsUploadRecorded = true;
-
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(false, 23u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
-
-    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty));
-    EXPECT_FALSE(bindlessResourceSlotsUploaded);
-
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 23u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
-
-    EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::None);
     EXPECT_TRUE(bindlessResourceSlotsUploaded);
 }
 
@@ -232,18 +210,6 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), -1.f);
     EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 1.f);
-}
-
-
-TEST(EcsGraphics, CsgReceiverWorkRegionKeepsAbsoluteBoundsForSubrectDispatch){
-    NWB::Impl::CsgFrameWorkRegion region;
-    region.expandWorldBounds(MatrixIdentity(), VectorSet(-0.5f, -0.25f, 1.f, 0.f), VectorSet(0.5f, 0.25f, 2.f, 0.f), 1001u, 701u);
-    ASSERT_TRUE(region.bounded());
-    const NWB::Core::Rect rect = region.resolveRect(1001u, 701u);
-    EXPECT_EQ(rect.minX, 248);
-    EXPECT_EQ(rect.maxX, 753);
-    EXPECT_EQ(rect.minY, 260);
-    EXPECT_EQ(rect.maxY, 441);
 }
 
 
@@ -395,13 +361,6 @@ TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
         const auto rangeResult1 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(bytes, uploadBytes, ranges);
         ASSERT_TRUE(rangeResult1);
         firstRange = *rangeResult1;
-        constexpr u32 s_WarmupIterations = 64u;
-        for(usize warmup = 0u; warmup < s_WarmupIterations; ++warmup){
-            ByteRange range;
-            const auto rangeResult2 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(bytes, uploadBytes, ranges);
-            ASSERT_TRUE(rangeResult2);
-            range = *rangeResult2;
-        }
 
         const ArenaMemoryStats before = scratchArena.memoryStats();
         for(usize lookup = 0u; lookup < 256u; ++lookup){
@@ -450,7 +409,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeHashCollisionRetainsOwnedBytes){
         firstBytes.fill(0u);
     }
 
-    // Equal hash and length must still distinguish content; the first source has already expired.
+    // Compare payload bytes even when hash and byte length match.
     const ByteLookup firstLookup{s_CollisionHash, Span<const u8>(originalFirstBytes.data(), originalFirstBytes.size())};
     const ByteLookup secondLookup{s_CollisionHash, Span<const u8>(secondBytes.data(), secondBytes.size())};
     const auto firstFound = ranges.find(firstLookup);

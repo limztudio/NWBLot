@@ -162,7 +162,7 @@ bool ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
 }
 
 bool ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics){
-    // Wait before advancing the fixture/world; a later wait cannot recover skipped latest-only diagnostic rows.
+    // Wait before advancing the world so latest-only diagnostic rows are not skipped.
     if(!m_context.graphics.waitForIdle()){
         NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: diagnostic frame synchronization failed"));
         return false;

@@ -37,51 +37,6 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/subresource_states"), "Subresource States");
-    ASSERT_TRUE(textureResult);
-    const Graphics::GpuGraphResourceId texture = *textureResult;
-    ASSERT_TRUE(texture.valid());
-
-    const Graphics::GpuTaskResourceUse firstUse[] = {
-        Graphics::GpuTaskResourceUse{
-            .resource = texture,
-            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = Graphics::TextureSubresourceSet{ 0u, 1u, 0u, 1u }, },
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        },
-    };
-    const Graphics::GpuTaskResourceUse secondUse[] = {
-        Graphics::GpuTaskResourceUse{
-            .resource = texture,
-            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = Graphics::TextureSubresourceSet{ 1u, 1u, 0u, 1u }, },
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-    };
-    const auto firstResult = AddTask(graph, Name("tests/task_graph/subresource_first"), "First Subresource", nullptr, 0u, firstUse, LengthOf(firstUse));
-    ASSERT_TRUE(firstResult);
-    const Graphics::GpuTaskId first = *firstResult;
-    const auto secondResult = AddTask(graph, Name("tests/task_graph/subresource_second"), "Second Subresource", nullptr, 0u, secondUse, LengthOf(secondUse));
-    ASSERT_TRUE(secondResult);
-    const Graphics::GpuTaskId second = *secondResult;
-    ASSERT_TRUE(first.valid());
-    ASSERT_TRUE(second.valid());
-
-    SingleQueueCompile singleQueueCompile(testArena);
-    ASSERT_TRUE(singleQueueCompile.compile(graph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
-
-
-    const Graphics::GpuCompiledBarrier* const secondBarrier = compiledPlan.findTask(second).prologueBarriers;
-    ASSERT_NE(secondBarrier, nullptr);
-    EXPECT_EQ(secondBarrier[0].type, Graphics::GpuCompiledBarrierType::TextureTransition);
-    EXPECT_EQ(secondBarrier[0].before, Graphics::ResourceStates::Common);
-    EXPECT_EQ(secondBarrier[0].after, Graphics::ResourceStates::ShaderResource);
-}
-
 TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 

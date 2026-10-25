@@ -100,8 +100,7 @@ def exr_attribute(name: str, kind: str, value: bytes) -> bytes:
 
 
 def write_openexr(path: pathlib.Path, pixels: tuple[tuple[float, float, float, float], ...], channel_names: tuple[str, ...] = (LIT_A, LIT_B, LIT_G, LIT_R), channel_types: tuple[int, ...] = ()) -> None:
-    # This is a minimal uncompressed scanline EXR writer with explicit UINT or FLOAT channel declarations.
-    # Keeping it here makes the converter test independent of host image packages.
+    # Minimal uncompressed scanline EXR writer so tests need no external image packages.
     width = 4
     height = 2
     if len(pixels) != width * height:
@@ -435,7 +434,7 @@ def main() -> int:
         expected = tuple((*pixel[:3], 1.0) for pixel in pixels) if len(channels) == 1 else pixels
         require_pixels(decode_pixels(args.prepared_decode, result), expected, absolute=0.04, relative=0.05)
 
-    # UINT channels carry numeric integers, including alpha; mixed planes must use their own declared type.
+    # Mixed EXR planes must decode each channel using its own declared type.
     uint_exr_cases = (
         ("uint_rgba", (7, 3, 11, 1), (EXR_UINT,) * 4, 0),
         ("uint_rgb_float_alpha", (7, 0.25, 11, 0.5), (EXR_FLOAT, EXR_UINT, EXR_FLOAT, EXR_UINT), 2),

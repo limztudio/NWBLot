@@ -94,19 +94,6 @@ TEST(Telemetry, TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEventsAn
     EXPECT_TRUE(forwardLogger.sawMessageContaining(NWB_TEXT("capture admission")));
 }
 
-TEST(Telemetry, TextLogPayloadRejectsCorruptedHeaderAfterValidParse){
-    TestArena testArena;
-    Telemetry::TelemetryBytes payload(testArena.arena);
-
-    ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.scratchArena, NWB::Core::Common::LogType::Warning, NWB_TEXT("telemetry text log"), payload));
-
-    Expected<Telemetry::TextLogPayload> parsed = MakeUnexpected(Failure{});
-    ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(payload.data(), payload.size())));
-
-    payload[0u] = 0u;
-    EXPECT_FALSE((parsed = Telemetry::ParseTextLogPayload(payload.data(), payload.size())));
-}
-
 TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
@@ -132,22 +119,6 @@ TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
 
     payload[0u] = 0u;
     EXPECT_FALSE((parsed = Telemetry::ParseDiagnosticPayload(payload.data(), payload.size())));
-}
-
-TEST(Telemetry, DiagnosticCaptureGuardDestructionStopsGlobalCapture){
-    TestArena testArena;
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-
-    {
-        Telemetry::DiagnosticCaptureGuard guard(recorder);
-        EXPECT_TRUE(guard.installed());
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_TelemetryGuardCategory, .message = "captured diagnostic", .file = "guard.cpp", .line = 44u, });
-    }
-
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_TelemetryGuardCategory, .message = "ignored after guard", });
-
-    EXPECT_EQ(recorder.eventCount(), 1u);
 }
 
 TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){

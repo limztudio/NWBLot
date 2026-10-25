@@ -136,7 +136,7 @@ static Core::ECS::EntityID CreateBox(
 }
 
 static Expected<OpticalReceiverEntities> CreateDenseReceiver(ProjectRuntimeContext& context, Core::ECS::World& world, const bool csg){
-    // One opaque receiver has eighteen distinct closed crossings; an admitted cutter leaves its nearest surface intact.
+    // An admitted cutter leaves the nearest surface of the 18-crossing receiver intact.
     const auto receiver = CreateTintedStaticMeshEntity(world, context.objectArena, s_Dense, s_Opaque, s_SurfaceInterface, Float4(0.9f, 0.2f, 0.05f, 1.f), Float4(0.f, 1.4f, -8.5f, 0.f), Float4(1.f, 1.f, 1.f, 0.f));
     if(!receiver.valid())
         return MakeUnexpected(Failure{});
@@ -162,7 +162,7 @@ static Expected<OpticalReceiverEntities> CreateDenseReceiver(ProjectRuntimeConte
 }
 
 static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(ProjectRuntimeContext& context, Core::ECS::World& world, const SmokeMeshRef& mesh, const bool cavity, const f32 ior, const Float4& transmission, const Impl::OpticalBoundaryMode::Enum mode){
-    // Both retain [-10,-9]; the cavity case starts the reflected ray inside the removed receiver volume.
+    // The cavity case starts the reflected ray inside the removed receiver volume.
     const auto receiver = CreateBoundary(context, world, mesh, Float4(0.f, 1.4f, cavity ? -3.f : -9.f, 0.f), Float4(24.f, 18.f, cavity ? 14.f : 2.f, 0.f), ior, transmission, mode);
     if(!receiver.valid())
         return MakeUnexpected(Failure{});
@@ -230,7 +230,7 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
     }
     const bool subUlp = caseName == s_OpticalSubUlpCase || caseName == "optical_csg_sub_ulp";
     if(subUlp || caseName == s_OpticalSliverCase || caseName == "optical_csg_sliver"){
-        // Positive sub-ULP thickness can round nonincident interfaces to identical ray parameters; Fresnel loss must not disappear.
+        // Preserve Fresnel loss when sub-ULP thickness rounds interfaces to equal ray distances.
         const auto receiver = CreateBox(context, world, -9.f, subUlp ? 4e-7f : 8e-6f, 1.5f, s_Tinted);
         if(!receiver.valid())
             return false;
@@ -300,7 +300,7 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
     if(caseName == "optical_nested2" || caseName == s_OpticalNested3Case || caseName == s_OpticalOverflowCase){
         const u32 count = caseName == s_OpticalOverflowCase ? 5u : caseName == s_OpticalNested3Case ? 3u : 2u;
         for(u32 index = 0u; index < count; ++index){
-            // Lane x is the stepped thickness; lane y is the layer opacity.
+            // Lanes are stepped thickness and layer opacity.
             const SIMDVectorSingle layerFade = VectorNegativeMultiplySubtractExpression(VectorSet(0.6f, 0.1f, 0.f, 0.f), VectorReplicate(static_cast<f32>(index)), VectorSet(4.f, 1.f, 0.f, 0.f));
             const f32 thickness = count == 5u ? VectorGetX(layerFade) : VectorGetX(VectorDivide(VectorReplicate(3.f), VectorReplicate(static_cast<f32>(1u << index))));
             const f32 ior = index == 0u ? 1.5f : index == 1u ? 1.33f : VectorGetX(VectorMultiplyAddExpression(VectorReplicate(0.02f), VectorReplicate(static_cast<f32>(index - 2u)), VectorReplicate(1.1f)));

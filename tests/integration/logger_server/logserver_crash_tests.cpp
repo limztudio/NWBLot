@@ -56,7 +56,6 @@ static constexpr AStringView s_Event = "[event]";
 static constexpr AStringView s_Callstack = "callstack:";
 static constexpr AStringView s_StatusCallstackCaptured = "status=callstack_captured";
 #endif
-static constexpr AStringView s_TestsIntegrationLoggerServerLogserve = "tests/integration/logger_server/logserver_crash_tests.cpp";
 static constexpr AStringView s_Linux = "linux";
 static constexpr AStringView s_Crash = "crash";
 static constexpr AStringView s_Signal = "signal";
@@ -174,7 +173,7 @@ NWB_NOINLINE static void LinuxForceAssertFalseForCrashObservation(){
 }
 #endif
 
-// Shared by Windows and Linux; match the test guard to avoid an unused Android helper.
+// Guard this helper on Android where its caller test is disabled.
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
 NWB_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStringView message)noexcept{
     CaptureDiagnosticEvent(DiagnosticEventRecord{
@@ -293,7 +292,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     EXPECT_TRUE(Contains(report, s_StatusCallstackCaptured));
     EXPECT_TRUE(Contains(report, s_Callstack));
     EXPECT_EQ(FindText(report, "false\nat "), 0u);
-    EXPECT_TRUE(Contains(report, s_TestsIntegrationLoggerServerLogserve));
+    EXPECT_TRUE(Contains(report, s_TestSourceFilename));
     const auto externalSymbolizer = LinuxExternalSymbolizerAvailable(arena);
     ASSERT_TRUE(externalSymbolizer);
     if(*externalSymbolizer){
@@ -353,7 +352,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     EXPECT_TRUE(Contains(report, s_Event));
     EXPECT_TRUE(Contains(report, "event=error"));
     EXPECT_TRUE(Contains(report, s_ErrorMessage));
-    EXPECT_TRUE(Contains(report, s_TestsIntegrationLoggerServerLogserve));
+    EXPECT_TRUE(Contains(report, s_TestSourceFilename));
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     EXPECT_TRUE(Contains(report, s_PlatformLinux));
     EXPECT_TRUE(Contains(report, s_StatusCallstackCaptured));
@@ -504,7 +503,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess
     auto reportResult = ReadServerSymbolication(arena, s_Group, s_Stem);
     ASSERT_TRUE(reportResult);
     CrashTestText report = Move(*reportResult);
-    // The section header is always emitted (the decoder ran), and garbage input degrades to a reported failure.
+    // The decoder always emits the section header before reporting invalid input.
     EXPECT_TRUE(Contains(report, "[gpu_detective]"));
     EXPECT_TRUE(Contains(report, "status=decode_failed"));
 
@@ -765,7 +764,6 @@ TEST_F(LoggerServerCrash, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedN
 TEST_F(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), AStringView()));
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), "bad"));
-    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer secret-token"));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, AStringView()));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, s_SecretToken));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer wrong"));

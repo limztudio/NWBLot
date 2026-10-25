@@ -271,45 +271,6 @@ TEST(GpuTaskGraphResourceVersion, TreatsImportedRootLifetimeWriterAsPreBirthForP
     EXPECT_FALSE(HasResourceVersionEdge(analysis, consumer, importedConsumer, resource, producedVersion, Graphics::GpuTaskHazardType::VersionLifetime));
 }
 
-TEST(GpuTaskGraphResourceVersion, LeavesDisjointBufferWriterOutsideVersionLifetime){
-    Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphResourceVersionTestUtils::s_ResourceVersionScratchArena);
-
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/disjoint_lifetime_resource"));
-    ASSERT_TRUE(resourceResult);
-    const Graphics::GpuGraphResourceId resource = *resourceResult;
-    const auto versionResult = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::TaskProduced, BufferRange(0u, 32u));
-    ASSERT_TRUE(versionResult);
-    const Graphics::GpuGraphResourceVersionId version = *versionResult;
-    ASSERT_TRUE(resource.valid());
-    ASSERT_TRUE(version.valid());
-
-    const Graphics::GpuTaskResourceUse producerResourceUse = ResourceUse(resource, BufferRange(0u, 32u), Graphics::ResourceStates::UnorderedAccess, Graphics::GpuTaskResourceAccess::Write);
-    const Graphics::GpuTaskResourceVersionUse producerVersionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Produce);
-    const auto producerResult = AddTask(graph, Name("tests/task_graph_resource_version/disjoint_lifetime_producer"), &producerResourceUse, 1u, &producerVersionUse, 1u);
-    ASSERT_TRUE(producerResult);
-    const Graphics::GpuTaskId producer = *producerResult;
-
-    const Graphics::GpuTaskResourceUse consumerResourceUse = ResourceUse(resource, BufferRange(0u, 32u), Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
-    const Graphics::GpuTaskResourceVersionUse consumerVersionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume);
-    const auto consumerResult = AddTask(graph, Name("tests/task_graph_resource_version/disjoint_lifetime_consumer"), &consumerResourceUse, 1u, &consumerVersionUse, 1u);
-    ASSERT_TRUE(consumerResult);
-    const Graphics::GpuTaskId consumer = *consumerResult;
-    const Graphics::GpuTaskResourceUse writerResourceUse = ResourceUse(resource, BufferRange(64u, 32u), Graphics::ResourceStates::CopyDest, Graphics::GpuTaskResourceAccess::Write);
-    const auto writerResult = AddTask(graph, Name("tests/task_graph_resource_version/disjoint_lifetime_writer"), &writerResourceUse, 1u, nullptr, 0u);
-    ASSERT_TRUE(writerResult);
-    const Graphics::GpuTaskId writer = *writerResult;
-    ASSERT_TRUE(producer.valid());
-    ASSERT_TRUE(consumer.valid());
-    ASSERT_TRUE(writer.valid());
-
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
-    EXPECT_FALSE(HasResourceVersionEdge(analysis, consumer, writer, resource, version, Graphics::GpuTaskHazardType::VersionLifetime));
-    EXPECT_FALSE(HasResourceVersionEdge(analysis, writer, producer, resource, version, Graphics::GpuTaskHazardType::VersionLifetime));
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

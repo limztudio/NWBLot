@@ -203,8 +203,7 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     EXPECT_EQ(assignment->queue, queues[0u].id);
     EXPECT_FALSE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingCalibration);
 
-    // Replacing the probe history with a faster observation makes the first adaptive choice from the implicit deterministic baseline.
-    // Neither calibration observation becomes a committed dwell incumbent.
+    // Calibration observations update route history without becoming the committed incumbent.
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(timingKey, auxiliaryGraphicsQueue.id, 0.001));
     timingHistory.snapshot(timingSnapshot);
     assignmentOptions.timingFrameIndex = 3u;
@@ -216,8 +215,7 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
     EXPECT_TRUE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
-    // An under-sampled probe remains bounded to its configured interval.
-    // Its first observation neither becomes the incumbent nor causes the following non-calibration frame to retain that route.
+    // Under-sampled probe frames do not commit the probed route as the incumbent.
     Graphics::GpuTaskTimingHistoryStore intervalTimingHistory(testArena.arena, s_ExpectedDualCount);
     intervalTimingHistory.resetForDeviceGeneration(queues[0u].id.deviceGeneration);
     ASSERT_TRUE(intervalTimingHistory.recordSample(timingKey, queues[0u].id, 0.010, 10u));
@@ -397,8 +395,7 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     ASSERT_NE(thirdAssignment, nullptr);
     EXPECT_EQ(firstAssignment->queue, firstAuxiliaryQueue.id);
     EXPECT_EQ(secondAssignment->queue, secondAuxiliaryQueue.id);
-    // Equal timing and queue load leave incoming crossings decisive.
-    // Only the reduced B -> C edge participates, so C stays with B instead of tying on the redundant A -> C diagnostic and falling back to the lower queue ID.
+    // Transitive reduction drops the redundant A-to-C edge so C stays on B's queue.
     EXPECT_EQ(thirdAssignment->queue, secondAuxiliaryQueue.id);
 }
 

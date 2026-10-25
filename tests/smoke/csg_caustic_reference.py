@@ -31,7 +31,7 @@ def decode_srgb(value):
 
 def expected_split_ratio():
     interface = 1.0 - ((IOR - 1.0) / (IOR + 1.0)) ** 2
-    # Removing one unit of glass adds two air/glass interfaces; photons still travel straight at normal incidence.
+    # Normal-incidence photons travel straight through the two added cavity interfaces.
     return tuple(interface ** 2 / tint for tint in TRANSMISSION)
 
 

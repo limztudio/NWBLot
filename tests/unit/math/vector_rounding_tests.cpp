@@ -62,8 +62,7 @@ NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first
 
 
 TEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero){
-    // Runtime inputs give vector and scalar paths the same contraction context on targets without FMA.
-    // The first two products lose a 2^-26 residual when rounded separately; contraction retains it.
+    // Contraction retains the 2^-26 residual lost by separate rounding.
     volatile f32 first[]{ 0x1.0008p+0f, -0x1.0008p+0f, 0.0f, -0.0f };
     volatile f32 second[]{ 0x1.fffp-1f, 0x1.fffp-1f, -0.0f, 1.0f };
     volatile f32 addend[]{ -1.0f, 1.0f, -0.0f, -0.0f };
@@ -198,7 +197,7 @@ TEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero){
     EXPECT_EQ(precision.z, -0x1.0000000001p+40);
     EXPECT_EQ(precision.w, -0x1.0000000001p-40);
 
-    // Separately rounded products lose the 2^-54 residual; expression contraction follows the scalar compiler policy.
+    // Expression contraction retains the 2^-54 residual under the scalar compiler policy.
     volatile f64 runtimeInputs[][4]{
         { 0x1.0000002p+0, -0x1.0000002p+0, 0.0, -0.0 },
         { 0x1.ffffffcp-1, 0x1.ffffffcp-1, -0.0, 1.0 },
@@ -239,7 +238,7 @@ TEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero){
     });
     ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
 
-    // FMA retains the 2^-54 residual; negating c-a*b would reverse an exact cancellation's zero sign.
+    // FMA retains the 2^-54 residual and preserves the sign of zero on cancellation.
     volatile f64 doubleInputs[][4]{
         { 0x1.0000002p+0, -0x1.0000002p+0, 1.0, -0.0 },
         { 0x1.ffffffcp-1, 0x1.ffffffcp-1, 1.0, 1.0 },

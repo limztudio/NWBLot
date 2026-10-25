@@ -162,13 +162,6 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
             with self.subTest(arguments=extra), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 benchmark.parse_args(self.arguments() + list(extra))
 
-    def test_unsupported_host_allocation_extent_requires_explicit_1080p_selection(self):
-        # The qualified adapter's existing 1080p CSG target exceeds its allocation
-        # cap; a default matrix must not silently request that unsupported case.
-        selected = benchmark.parse_args(self.arguments()).extent
-        self.assertEqual(selected, ["960x720", "1600x900"])
-        self.assertEqual(benchmark.parse_args(self.arguments() + ["--extent", "1920x1080"]).extent, ["1920x1080"])
-
     def test_initial_workarea_clamp_requires_matching_final_resize(self):
         cell = benchmark.Cell("1920x1080", 1, "screen")
         text = ("Frame Win32 client size clamped from 1920x1080 to 1904x1011 for work area 1920x1050\n"
@@ -199,8 +192,7 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
     def test_old_extent_and_unsealed_boundary_reports_cannot_count_as_target_warmup(self):
         sample = lambda frames: {benchmark.FRAME: benchmark.timing.ScopeSample(1, frames)}
         reports = [sample(10000), sample(10000), sample(10000), sample(20), sample(30), sample(50), sample(500)]
-        # All three headers existed at resize confirmation, including the last
-        # report which was still unsealed and can contain mixed-extent samples.
+        # Discard the unsealed third header present at resize confirmation.
         start, retained = benchmark.retain_target_reports(reports, 3, 2, 100)
         self.assertEqual(start, 6)
         self.assertEqual(retained, reports[6:])

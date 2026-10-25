@@ -26,7 +26,7 @@ LIT_REFLECTION = "reflection"
 REFLECTION_CAPTURES = tuple(reflection.OpticalCapture(name, name) for name in ("optical_csg_reference", "optical_csg_cap", "optical_csg_cavity", "optical_sliver", "optical_csg_sliver",
         "optical_sub_ulp", "optical_csg_sub_ulp", "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp", "optical_group_entry", "optical_csg_group_entry"))
 REFRACTION_CAPTURES = (("csg_reference", "automatic"), ("csg_reference", "screen"), ("csg_cap", "automatic"), ("csg_cap", "screen"), ("csg_middle", "automatic"), ("csg_middle", "screen"), ("csg_uncut", "automatic"))
-# This rectangle stays inside the retained slab silhouette for every fixture. Rim rasterization and the original receiver silhouette cannot establish optical equivalence.
+# Sample inside the retained slab interior away from rim rasterization.
 REFRACTION_RECTANGLE = (325, 235, 635, 485)
 MAXIMUM_MEAN_ERROR = 0.4
 MAXIMUM_CHANGED_FRACTION = 0.01

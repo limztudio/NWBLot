@@ -39,7 +39,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Default-off fixture controller; it observes existing completed history/timing and owns no renderer resources.
+// Observes completed reflection history and timing without owning renderer resources.
 class ReflectionSpatialOwnerProbe final{
 public:
     ReflectionSpatialOwnerProbe(ProjectRuntimeContext& context, Impl::RendererSystem& renderer)noexcept;

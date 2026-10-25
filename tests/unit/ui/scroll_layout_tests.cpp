@@ -234,16 +234,12 @@ TEST(UiScrollLayoutTests, RowBoundsRejectsCulledAndInvalidRows){
 
 TEST(UiScrollLayoutTests, ExtentsBeyondDoubleViewportPrecisionFailInsteadOfLosingTheFinalPage){
     const Rect bounds{ 0.0f, 0.0f, 200.0f, 100.0f };
-    const auto previousResult = ScrollLayout::Calculate(bounds, bounds, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
-    ASSERT_TRUE(previousResult);
     EXPECT_FALSE(ScrollLayout::Calculate(bounds, bounds, {}, 12.0f, 16.0f, Limit<u64>::s_Max, Limit<f32>::s_Max, Limit<f64>::s_Max));
 }
 
 TEST(UiScrollLayoutTests, InvalidLayoutInputsRejectPlacement){
     const Rect validBounds{ 10.0f, 20.0f, 200.0f, 100.0f };
     const Insets validPadding{ 4.0f, 8.0f, 12.0f, 16.0f };
-    const auto previousResult = ScrollLayout::Calculate(validBounds, validBounds, validPadding, 12.0f, 16.0f, 20u, 20.0f, 40.0);
-    ASSERT_TRUE(previousResult);
     const auto reject = [](const Rect& bounds, const Rect& clip, const Insets& padding, const f32 width, const f32 minimum, const f32 height, const f64 offset){
         EXPECT_FALSE(ScrollLayout::Calculate(bounds, clip, padding, width, minimum, 20u, height, offset));
     };

@@ -38,7 +38,7 @@ using TaskGraphTestUtils::TestArena;
     return DeriveName(prefix, FormatDecimal(index, text));
 }
 
-static void BuildVersionChain(Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceVersionOrigin::Enum origin, const usize taskCount, const bool disjointClobber, const bool overlappingClobber = false){
+static void BuildVersionChain(Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceVersionOrigin::Enum origin, const usize taskCount, const bool disjointClobber, const bool overlappingClobber){
     ASSERT_GE(taskCount, overlappingClobber ? 3u : 2u);
     const auto bufferResult = AddBufferMetadata(graph, Name("tests/analysis_optimization/version_buffer"), "Analysis Version Buffer");
     ASSERT_TRUE(bufferResult);
@@ -100,7 +100,7 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionsWithoutOverlappingClobbersPreserveSta
         SCOPED_TRACE(origin);
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        ASSERT_NO_FATAL_FAILURE(BuildVersionChain(graph, origin, 8u, true));
+        ASSERT_NO_FATAL_FAILURE(BuildVersionChain(graph, origin, 8u, true, false));
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
         ASSERT_EQ(analysis.topologicalOrder().size(), 8u);

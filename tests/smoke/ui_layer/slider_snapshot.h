@@ -23,7 +23,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// All native observations own copies; accepted target references never survive publication.
+// Snapshot of copied slider values and expected geometry.
 struct UiSliderSnapshot{
     Array<u64, 16u> values{};
     Array<u64, 4u> bits{};

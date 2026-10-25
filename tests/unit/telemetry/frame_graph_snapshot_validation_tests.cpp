@@ -60,23 +60,9 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(FrameGraphSnapshotValidation, AcceptsOnlyTheUnusedIndependentRecoveryPacket){
-    Fixture fixture;
-    EXPECT_TRUE(fixture.valid());
-}
-
-TEST(FrameGraphSnapshotValidation, AcceptsFullyAcceptedNormalGraphsWithoutRecovery){
-    Fixture fixture;
-    fixture.payload.nodes.pop_back();
-    --fixture.runtime.compile.taskCount;
-    --fixture.runtime.compile.packetCount;
-    fixture.runtime.submission.rejectedTaskCount = 0u;
-    fixture.runtime.submission.rejectedPacketCount = 0u;
-    EXPECT_TRUE(fixture.valid());
-}
-
 TEST(FrameGraphSnapshotValidation, FullyAcceptedCountsCannotHideMissingTasksOrPackets){
     Fixture fixture;
+    ASSERT_TRUE(fixture.valid());
     fixture.payload.nodes.pop_back();
     --fixture.runtime.compile.taskCount;
     --fixture.runtime.compile.packetCount;

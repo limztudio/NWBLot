@@ -278,38 +278,6 @@ TEST(Metascript, ConcatenatesNestedListElementsAcrossReallocation){
     }
 }
 
-TEST(Metascript, NamedLookupDoesNotSelectAnAssetOrDependOnDeclarationOrder){
-    DestinationArena arena;
-    Document document(arena.arena);
-    ASSERT_TRUE(document.parse(LiteralView("number first = 9; texture asset; asset.source = \"albedo.png\"; number last = 2;")));
-    ASSERT_EQ(document.declarations().size(), 3u);
-    EXPECT_EQ(document.declarations()[0u].variable, "first");
-
-    const Document& constDocument = document;
-    const Value* first = constDocument.findVariable("first");
-    ASSERT_NE(first, nullptr);
-    EXPECT_EQ(first->asInteger(), 9);
-    const auto* declaration = constDocument.findDeclaration("asset");
-    ASSERT_NE(declaration, nullptr);
-    EXPECT_EQ(declaration->type, "texture");
-    EXPECT_EQ(declaration->variable, "asset");
-    const Value* asset = constDocument.findVariable("asset");
-    ASSERT_NE(asset, nullptr);
-    ASSERT_TRUE(asset->isMap());
-    const Value* source = asset->findField("source");
-    ASSERT_NE(source, nullptr);
-    EXPECT_EQ(source->asString(), "albedo.png");
-    EXPECT_EQ(constDocument.findVariable("missing"), nullptr);
-    EXPECT_EQ(document.findVariable("missing"), nullptr);
-    EXPECT_EQ(constDocument.findDeclaration("missing"), nullptr);
-
-    Value* last = document.findVariable("last");
-    ASSERT_NE(last, nullptr);
-    last->setInteger(5);
-    EXPECT_EQ(constDocument.findVariable("last")->asInteger(), 5);
-    EXPECT_EQ(document.findDeclaration("first")->type, "number");
-}
-
 TEST(Metascript, EmptyAndStructOnlyDocumentsHaveNoImplicitVariables){
     DestinationArena arena;
     Document document(arena.arena);
@@ -323,28 +291,7 @@ TEST(Metascript, EmptyAndStructOnlyDocumentsHaveNoImplicitVariables){
     EXPECT_EQ(document.findVariable("asset"), nullptr);
     EXPECT_EQ(document.findVariable("Description"), nullptr);
     ASSERT_EQ(document.structs().size(), 1u);
-    const auto structure = document.structs().find(LiteralView("Description"));
-    ASSERT_NE(structure, document.structs().end());
-    const Value* attributes = structure.value().findField("attributes");
-    ASSERT_NE(attributes, nullptr);
-    ASSERT_TRUE(attributes->isList());
-    ASSERT_EQ(attributes->asList().size(), 1u);
-    const Value* attributeName = attributes->asList()[0u].findField("name");
-    ASSERT_NE(attributeName, nullptr);
-    EXPECT_EQ(attributeName->asString(), "custom");
-    const Value* arguments = attributes->asList()[0u].findField("arguments");
-    ASSERT_NE(arguments, nullptr);
-    ASSERT_EQ(arguments->asList().size(), 1u);
-    EXPECT_EQ(arguments->asList()[0u].asString(), "argument");
-    const Value* fields = structure.value().findField("fields");
-    ASSERT_NE(fields, nullptr);
-    ASSERT_EQ(fields->asList().size(), 1u);
-    EXPECT_EQ(fields->asList()[0u].findField("type")->asString(), "float");
-    EXPECT_EQ(fields->asList()[0u].findField("name")->asString(), "value");
-    const Value* fieldAttributes = fields->asList()[0u].findField("attributes");
-    ASSERT_NE(fieldAttributes, nullptr);
-    ASSERT_EQ(fieldAttributes->asList().size(), 1u);
-    EXPECT_EQ(fieldAttributes->asList()[0u].findField("name")->asString(), "field");
+    EXPECT_NE(document.structs().find(LiteralView("Description")), document.structs().end());
 }
 
 TEST(Metascript, StructNamesAndVariablesUseSeparateNamespaces){

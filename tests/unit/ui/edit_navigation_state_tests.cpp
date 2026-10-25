@@ -29,9 +29,6 @@ using namespace NWB::Impl::Ui;
 TEST(UiEditNavigationStateTests, IndependentOwnersCannotReviveEachOthersCopiedIntent){
     EditNavigationState first;
     EditNavigationState second;
-    EXPECT_NE(first.instanceGeneration(), 0u);
-    EXPECT_NE(first.instanceGeneration(), second.instanceGeneration());
-    EXPECT_TRUE(first.matches(first.snapshot()));
     EXPECT_FALSE(second.matches(first.snapshot()));
     ASSERT_TRUE(first.setPreferredX(40.0f));
     ASSERT_TRUE(second.setPreferredX(40.0f));

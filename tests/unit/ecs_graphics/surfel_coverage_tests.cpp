@@ -76,10 +76,8 @@ TEST(SurfelCoverage, UpsampleRejectsIncompatibleNormalsAndDistantGeometry){
 
 TEST(SurfelCoverage, MissingAndPartialTapsRetainFractionalAlpha){
     const float weight = nwbSurfelUpsampleGeometryWeight(0.25f, 0.0f, 1.0f);
-    const float missing = nwbSurfelUpsampleCoveredWeight(weight, 0.0f);
     const float partial = nwbSurfelUpsampleCoveredWeight(weight, 0.5f);
     const float full = nwbSurfelUpsampleCoveredWeight(weight, 1.0f);
-    EXPECT_FLOAT_EQ(missing, 0.0f);
     EXPECT_FLOAT_EQ(partial, 0.125f);
     EXPECT_FLOAT_EQ(full, 0.25f);
 

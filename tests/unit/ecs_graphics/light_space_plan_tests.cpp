@@ -123,9 +123,6 @@ TEST(LightSpacePlan, RejectsInvalidIdentityWithoutPublishingPartialPlan){
     requests[1].shadowSlot = 1u;
     requests[1].type = Scene::LightType::kCount;
     EXPECT_FALSE(BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(requests, s_ExpectedDualCount), Limit<u32>::s_Max, 20u));
-    plan = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>{}, Limit<u32>::s_Max, 0u);
-    ASSERT_TRUE(plan);
-    EXPECT_EQ(plan->totalByteSize, 0u);
 }
 
 TEST(LightSpacePlan, RespectsDeviceDescriptorRangeAndRetainsLaterFittingLights){

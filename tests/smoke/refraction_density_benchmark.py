@@ -40,9 +40,7 @@ DEFAULT_EXTENTS = ("960x720", "1600x900")
 DENSITIES = (0, 1, 10, 50, 100)
 ROUTES = ("screen", "hardware")
 SCHEDULING_STRATEGIES = ("full-frame", "tiled")
-# Compiled instrumentation used by density scenes. Extend this list if its
-# implementation moves into another compiled source; analysis scripts are not
-# executable fixture inputs and may evolve independently during acquisition.
+# Compiled C++ sources that define the refraction density fixture.
 FIXTURE_SOURCE_FILES = ("tests/smoke/refraction_project.cpp", "tests/smoke/avboit_timing_render_pass.cpp")
 DENSITY_MARKER = re.compile(r"^RefractionDensity: extent (\d+)x(\d+) requested_percent (\d+) admitted_pixels (\d+) total_pixels (\d+) active_tiles (\d+) total_tiles (\d+) glass_instances (\d+) capture_mode (visible|occluded)$", re.MULTILINE)
 BOUNDS_MARKER = re.compile(r"^RefractionDensity: pixel_bounds (-?\d+) (-?\d+) (-?\d+) (-?\d+)$", re.MULTILINE)
@@ -194,8 +192,7 @@ def prepare_target_extent(backend, handle, process, cell, read_log, timeout):
 
 
 def retain_target_reports(reports, startup_headers, warmup_intervals, minimum_warmup_frames, minimum_warmup_seconds=0, report_durations=None):
-    # Headers present at target confirmation include an unsealed report that may
-    # mix old-extent GPU observations. Discard it before any target-only warmup.
+    # Discard headers present at target confirmation because the last report is still unsealed.
     relative, retained = timing.retain_after_warmup(reports[startup_headers:], warmup_intervals, minimum_warmup_frames)
     start = startup_headers + relative
     if minimum_warmup_seconds:
@@ -210,9 +207,7 @@ def retain_target_reports(reports, startup_headers, warmup_intervals, minimum_wa
 
 
 def startup_report_boundary(text):
-    # The append writer can be between bytes of a header during this read. One
-    # extra sealing boundary prevents that partial header from becoming target
-    # warmup evidence, even though the strict header regex cannot see it yet.
+    # Require one extra sealed header in case the file was read mid-write.
     return len(list(timing.HEADER.finditer(text))) + 1
 
 
@@ -227,8 +222,7 @@ def validate_log(text, cell):
 
 
 def wall_frames(log, sidecar, workload, start, stop, stall_threshold_ms):
-    # Both fixtures use the same FpsProbe formatting and real callback delta;
-    # reuse the existing checked window alignment and consistency oracle.
+    # Reuse the shared FpsProbe window alignment and consistency parser.
     normalized = log.replace("RefractionSmokeProject: fps ", "ReflectionSmokeProject: fps ")
     try:
         result = ab.summarize_wall_frames(normalized, sidecar, replace(workload, reflection_policy=True), [start, stop])

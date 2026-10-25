@@ -143,7 +143,7 @@ static void CheckInactiveLoop(const bool renderUnfocused){
     NWB::Core::CpuTaskSchedulerConfig cpuTasks;
     cpuTasks.workerCount = 1u;
     NWB::Core::Frame frame(instance, 64u, 64u, cpuTasks);
-    // This test has no shaders; supply a valid generic heap layout before native startup.
+    // Supply a generic descriptor heap layout for shaderless startup.
     NWB::Core::GpuDescriptorHeapAbi heapAbi;
     heapAbi.resourceSetIndex = 0u;
     heapAbi.samplerSetIndex = 1u;

@@ -243,16 +243,6 @@ TEST(TextGlyphVisibilityTests, MissingNativeFaceAndCoverageBoundsRejectsUnknownI
     EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Invisible);
 }
 
-TEST(TextGlyphVisibilityTests, KnownNativeBoundsCanCullWithoutHarfBuzzInkOrFaceMetadata){
-    PlacedGlyph glyph;
-    glyph.position = { 10000.0f, 10000.0f };
-    glyph.coverage = { { -1.0f, -2.0f, 3.0f, 4.0f }, true };
-    const Rect clip{ 0.0f, 0.0f, 100.0f, 100.0f };
-    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Invisible);
-    glyph.position = { 10.0f, 20.0f };
-    EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Visible);
-}
-
 TEST(TextGlyphVisibilityTests, KnownEmptyNativeOutlinesDoNotRequirePreparation){
     PlacedGlyph glyph;
     glyph.coverage.known = true;
@@ -313,13 +303,7 @@ TEST(TextGlyphVisibilityTests, CandidateRejectsInvalidParametersAndKnownBounds){
     glyph.coverage.ink.width = 3.0f;
     glyph.position.y = Limit<f32>::s_Infinity;
     EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Invalid);
-}
-
-TEST(TextGlyphVisibilityTests, CandidateRejectsFiniteUnrepresentableNativePlacement){
-    PlacedGlyph glyph;
-    glyph.position.x = Limit<f32>::s_Max;
-    glyph.coverage = { { 1.0f, 2.0f, 3.0f, 4.0f }, true };
-    const Rect clip{ 0.0f, 0.0f, 100.0f, 100.0f };
+    glyph.position = { Limit<f32>::s_Max, 0.0f };
     EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, { Limit<f32>::s_Max, 0.0f }, clip), TextGlyphIntersection::Invalid);
 }
 

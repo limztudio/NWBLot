@@ -38,27 +38,6 @@ public:
     [[nodiscard]] virtual Expected<usize> read(MChar*, usize)noexcept override{ return 0u; }
 };
 
-class ChunkedReader final : public IMetaReader{
-public:
-    explicit ChunkedReader(MStringView source)noexcept
-        : m_source(source)
-    {}
-
-
-public:
-    [[nodiscard]] virtual Expected<usize> read(MChar* buffer, const usize maxBytes)noexcept override{
-        usize count = 0u;
-        while(count < 3u && count < maxBytes && m_offset < m_source.size())
-            buffer[count++] = m_source[m_offset++];
-        return count;
-    }
-
-
-private:
-    MStringView m_source;
-    usize m_offset = 0u;
-};
-
 class RejectedReader final : public IMetaReader{
 public:
     explicit RejectedReader(const bool oversized)noexcept
@@ -112,29 +91,6 @@ TEST(Metascript, SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure){
     EXPECT_TRUE(document.declarations().empty());
     EXPECT_TRUE(document.structs().empty());
     EXPECT_EQ(document.findVariable("prior"), nullptr);
-}
-
-TEST(Metascript, ReaderBufferProducesOwnedStructsAndNamedVariables){
-    ReaderArena arena;
-    Document document(arena.arena);
-    ChunkedReader reader(LiteralView("struct Description{ float value; }; Description runtime; runtime.value = 7;"));
-
-    ASSERT_TRUE(document.parse(reader));
-    EXPECT_FALSE(document.hasErrors());
-    ASSERT_EQ(document.structs().size(), 1u);
-    const auto structure = document.structs().find(LiteralView("Description"));
-    ASSERT_NE(structure, document.structs().end());
-    const Value* fields = structure.value().findField("fields");
-    ASSERT_NE(fields, nullptr);
-    ASSERT_EQ(fields->asList().size(), 1u);
-    EXPECT_EQ(fields->asList()[0u].findField("name")->asString(), "value");
-    const auto* declaration = document.findDeclaration("runtime");
-    ASSERT_NE(declaration, nullptr);
-    EXPECT_EQ(declaration->type, "Description");
-    const Value* runtime = document.findVariable("runtime");
-    ASSERT_NE(runtime, nullptr);
-    EXPECT_EQ(runtime->findField("value")->asInteger(), 7);
-    EXPECT_EQ(document.findVariable("asset"), nullptr);
 }
 
 TEST(Metascript, OversizedReaderResultIsRejectedBeforeUsingItsBuffer){

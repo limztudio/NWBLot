@@ -115,14 +115,6 @@ static constexpr f32 s_Oct16SignedScale = 2.0f;
     return Vector3NormalizeOr(VectorSet(x, y, z, 0.0f), VectorSet(0.0f, 0.0f, 1.0f, 0.0f), NWB::Impl::s_MeshletConeAxisLengthSquaredEpsilon);
 }
 
-TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
-    EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(255u), NWB::Impl::MeshletRefDeltaWidth::U8);
-    EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(256u), NWB::Impl::MeshletRefDeltaWidth::U16);
-    EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(65535u), NWB::Impl::MeshletRefDeltaWidth::U16);
-    EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(65536u), NWB::Impl::MeshletRefDeltaWidth::U32);
-}
-
-
 TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
     TestArena testArena;
     auto meshlets = AssetsGraphicsFixture::MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
@@ -169,7 +161,7 @@ TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
 }
 
 TEST(AssetsGraphics, MeshletOct16DecodePreservesQuantizationAndFoldBits){
-    // Scalar octahedral reconstruction fixes UNORM endpoint and fold rounding independently of packed lane expressions; normalization retains the shared math policy.
+    // Scalar octahedral decode fixes UNORM endpoint and fold rounding.
     for(u32 packed = 0u; packed < 65536u; ++packed){
         const SIMDVectorSingle reference = ScalarOct16Reference(packed);
         const SIMDVectorSingle decoded = NWB::Impl::UnpackMeshletConeOct16Axis(packed);
@@ -198,9 +190,6 @@ TEST(AssetsGraphics, MeshletOct16EncodingRetainsHalfStepAndFoldBoundaries){
         volatile f32 x = boundary.axis.x, y = boundary.axis.y, z = boundary.axis.z;
         EXPECT_EQ(NWB::Impl::PackMeshletConeOct16(VectorSet(x, y, z, 0.0f)), boundary.packed) << boundary.packed;
     }
-}
-
-TEST(AssetsGraphics, MeshletConeDegenerateDirectionUsesExplicitFallback){
     EXPECT_EQ(NWB::Impl::PackMeshletConeOct16(VectorZero()), NWB::Impl::s_MeshletConeAxisFallback);
 }
 

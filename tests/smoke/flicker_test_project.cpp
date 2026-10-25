@@ -58,7 +58,7 @@ using FlickerMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Spinning opaque/glass bodies expose shadow flicker; arrows scrub yaw and the title reports it.
+// Spinning opaque and glass bodies expose shadow flicker.
 static constexpr FlickerModelRef s_Model{"project/characters/body/model"};
 static constexpr FlickerModelRef s_CausticModel{"project/characters/caustic_closed_body/model"};
 static constexpr FlickerMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
@@ -108,7 +108,7 @@ public:
         , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
     {}
     virtual ~FlickerTestSmokeProject()noexcept override{
-        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
+        m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
     }
 
@@ -130,14 +130,14 @@ private:
 
 public:
     virtual bool onStartup()override{
-        // Handle Left/Right before other input handlers; the title reports reproducible yaw.
+        // Register arrow yaw scrubbing at the front of the input chain.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DirectionalLightIntensity);
         const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_PointLightIntensity, s_PointLightRange);
-        // Keep caustics enabled for the repro; NWB_FLICKER_TEST_NO_CAUSTICS selects the control.
+        // Enable caustics unless NWB_FLICKER_TEST_NO_CAUSTICS is set.
         static const bool s_DisableCaustics = [](){
             NWB::Core::Alloc::ScratchArena arena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
             const auto value = ReadSmokeEnvironmentText(arena, "NWB_FLICKER_TEST_NO_CAUSTICS");

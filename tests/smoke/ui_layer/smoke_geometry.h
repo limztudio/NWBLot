@@ -81,7 +81,7 @@ template<typename Source>
     return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
 }
 
-// The accepted uniform content extent owns row height; smoke input never supplies a sizing policy.
+// Compute expected row height from the accepted content extent.
 [[nodiscard]] inline Expected<Impl::Ui::Rect> SmokeListRowBounds(const Impl::Ui::ScrollPlacement& placement, const u64 index)noexcept{
     if(placement.rowCount == 0u)
         return MakeUnexpected(Failure{});

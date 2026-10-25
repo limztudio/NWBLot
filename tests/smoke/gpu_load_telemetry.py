@@ -74,8 +74,7 @@ def retained_publication_bounds(observations, start, stop, durations):
         raise SmokeFailure("telemetry lacks retained publication-header observations")
     if any(not math.isfinite(value) or value <= 0 for value in durations[start:stop]):
         raise SmokeFailure("telemetry retained publication durations must be finite and positive")
-    # A header is written after the publication interval that it describes.
-    # Counter completion and buffered log publication can lag GPU execution.
+    # Log headers arrive after their publication interval.
     return observations[start] - durations[start], observations[stop - 1]
 
 
@@ -147,8 +146,7 @@ class PdhEngineQuery:
         storage = ctypes.create_string_buffer(size.value)
         status = self.api.PdhGetFormattedCounterArrayW(self.counter, 0x200 | 0x8000, ctypes.byref(size), ctypes.byref(count), storage)
         if status in (NO_DATA, INVALID_DATA, CSTATUS_INVALID_DATA, MORE_DATA):
-            # Instances may appear between sizing and reading. Retain this gap;
-            # the next 1 Hz observation retries without a blocking sample loop.
+            # Skip transient PDH buffer races and retry on the next 1 Hz sample.
             return status, []
         self._require(status, "read engine samples")
         items = ctypes.cast(storage, ctypes.POINTER(self.item_type))

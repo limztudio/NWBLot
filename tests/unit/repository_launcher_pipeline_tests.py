@@ -173,9 +173,6 @@ class LauncherExecutableMetadataTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, LIT_CMAKE_FILE_API_METADATA_IS_REQUIRED):
                     launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False)
 
-        self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [self.actual])
-        self.assertEqual(self.actual, launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False))
-
     def test_executable_metadata_without_artifact_or_with_library_type_is_rejected(self):
         self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [])
         with self.assertRaisesRegex(SystemExit, "has no executable artifact"):

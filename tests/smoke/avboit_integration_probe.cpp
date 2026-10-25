@@ -143,7 +143,7 @@ static void SetExtinction(ProbeTask::Payload& payload, const u32 pixel, const u3
 }
 
 static void PreparePhase(ProbeTask::Payload& payload, const u32 phase)noexcept{
-    // A fresh image has no established layout; completed phases restore CopyDest before reuse.
+    // Completed phases restore CopyDest before reusing the image.
     payload.volumeInitialState = phase == 0u ? Core::ResourceStates::Unknown : Core::ResourceStates::CopyDest;
     payload.words.fill(0u);
     payload.overflowSlices.fill(NWB_AVBOIT_OVERFLOW_INVALID);

@@ -356,8 +356,7 @@ def timed_environment(base, args, variant, timing_file):
 
 
 def validate_trial_log(text, args, variant):
-    # Startup values occupy their own logger message lines.
-    # Match their complete values, including any contradictory later message, rather than substrings.
+    # Match complete startup log values across the entire run.
     lines = text.replace("\r\n", "\n").splitlines()
     expected_fields = {LIT_CASE: f"{args.family} created", "reflection mode": variant.mode, "hardware ray budget": str(args.ray_budget), "screen feedback": str(int(variant.feedback)), "screen steps": str(args.screen_steps), "timing render unfocused": "1",
         "timing in-flight ranges": str(TIMING_IN_FLIGHT_RANGES), "timing depth mip count": str(args.mip_count)}
@@ -411,8 +410,7 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
         backend = create_capture_backend()
         logserver, port, log_directory, baseline, pattern = launch_logserver(args, args.executable, env)
         runtime = launch_testbed(args, args.executable, env, port)
-        # Timing continues without a mapped window; focus is best-effort for presentation pacing.
-        # Retain an unmapped window ID for graceful WM_DELETE shutdown.
+        # Keep unmapped window IDs for graceful shutdown while timing continues.
         handle = backend.wait_for_window(runtime.pid, min(args.timeout, LIT_WINDOW_TIMEOUT_SECONDS))
         if handle is None:
             handle = backend.find_window_for_pid(runtime.pid, None, require_mapped=False)

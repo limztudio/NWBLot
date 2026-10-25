@@ -28,7 +28,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// RefCounter derives from this scene; its sources and states outlive every outer Builder loan.
+// Scene fixture owning radio group sources and states across Builder loans.
 class UiRadioGroupSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     explicit UiRadioGroupSmokeScene(Core::InputDispatcher& input);

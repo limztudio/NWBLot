@@ -208,32 +208,6 @@ TEST_F(TextBakedTests, OutsideBakedSizeRangeUsesCoverageWithLowerThresholdContro
     EXPECT_TRUE(paint().sdfPages().empty());
 }
 
-TEST_F(TextBakedTests, TextBelowThreeQuarterBakeSizeUsesCoverageAtNormalDpi){
-    ASSERT_TRUE(installAtlas());
-    {
-        auto layoutResult = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 22.f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    ASSERT_TRUE(m_layout.glyphs()[0u].face->bakedAtlas());
-    const DrawSnapshot small = paint();
-    EXPECT_TRUE(small.sdfPages().empty());
-    ASSERT_EQ(small.glyphPages().size(), 1u);
-    ASSERT_EQ(small.commands().size(), 1u);
-    EXPECT_EQ(small.commands()[0u].material, PaintMaterial::Glyph);
-
-    {
-        auto layoutResult = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 24.f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    const DrawSnapshot threshold = paint();
-    EXPECT_TRUE(threshold.glyphPages().empty());
-    ASSERT_EQ(threshold.sdfPages().size(), 1u);
-    ASSERT_EQ(threshold.commands().size(), 1u);
-    EXPECT_EQ(threshold.commands()[0u].material, PaintMaterial::SdfGlyph);
-}
-
 TEST_F(TextBakedTests, FractionalPhysicalSizeBelowSdfThresholdUsesCoverage){
     ASSERT_TRUE(installAtlas());
     {

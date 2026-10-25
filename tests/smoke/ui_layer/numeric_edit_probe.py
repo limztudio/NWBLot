@@ -98,8 +98,7 @@ def center(rectangle):
 
 
 def ink_coverage(observed, background, foreground):
-    # Small glyphs can be antialiased throughout.
-    # Require ink along the expected color ray, with appreciable coverage, instead of requiring a fully opaque core pixel.
+    # Check antialiased glyph coverage along the expected color ray.
     actual, backdrop = linear_channels(observed), linear_channels(background)
     direction = tuple(target - base for target, base in zip(foreground, backdrop))
     denominator = sum(component * component for component in direction)

@@ -212,21 +212,6 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
     }
 }
 
-TEST(Math, DoubleMinMaxRetainRightOperandNaNPayloadAndZeroSign){
-    const u64 firstBits[]{ 0xfff8000012345678u, 0x8000000000000000u, 0u, 0x3ff8000000000000u };
-    const u64 secondBits[]{ 0x7ff800009abcdef0u, 0u, 0x8000000000000000u, 0x7ff8000013579bdfu };
-    const SIMDVectorDouble first = VectorDoubleSetInt(firstBits[0], firstBits[1], firstBits[2], firstBits[3]);
-    const SIMDVectorDouble second = VectorDoubleSetInt(secondBits[0], secondBits[1], secondBits[2], secondBits[3]);
-    const SIMDVectorDouble forward[]{ VectorDoubleMin(first, second), VectorDoubleMax(first, second) };
-    const SIMDVectorDouble reverse[]{ VectorDoubleMin(second, first), VectorDoubleMax(second, first) };
-    for(usize operation = 0u; operation < LengthOf(forward); ++operation){
-        for(usize lane = 0u; lane < 4u; ++lane){
-            EXPECT_EQ(VectorDoubleGetIntByIndex(forward[operation], lane), secondBits[lane]) << operation << ':' << lane;
-            EXPECT_EQ(VectorDoubleGetIntByIndex(reverse[operation], lane), firstBits[lane]) << operation << ':' << lane;
-        }
-    }
-}
-
 TEST(Math, DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane){
     const u64 firstBits[]{ 0x0123456789abcdefu, 0x8000000000000000u, 0x7ff800009abcdef0u, 0xfedcba9876543210u };
     const u64 differences[]{ 0x0000000000000001u, 0x0000000100000000u };

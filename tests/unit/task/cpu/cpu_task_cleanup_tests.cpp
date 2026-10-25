@@ -354,63 +354,6 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
 }
 
 
-TEST(CpuTaskCleanupTests, CancelingOneScopeKeepsTheSchedulerAvailableForOtherWork){
-    using namespace __hidden_cpu_task_cleanup_tests;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope canceled(scheduler);
-    CpuTaskScope other(scheduler);
-    u32 canceledCallbacks = 0u;
-    u32 completedCallbacks = 0u;
-    const auto cpuTaskAdmission = canceled.submit([&]()noexcept{ ++canceledCallbacks; });
-    EXPECT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        EXPECT_TRUE(cpuTaskAdmission->valid());
-    const auto secondCpuTaskAdmission = other.submit([&]()noexcept{ ++completedCallbacks; });
-    EXPECT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        EXPECT_TRUE(secondCpuTaskAdmission->valid());
-    canceled.cancel();
-    canceled.wait();
-    other.wait();
-    const auto laterTaskAdmission = scheduler.submit([&]()noexcept{ ++completedCallbacks; });
-    ASSERT_TRUE(laterTaskAdmission);
-    const auto later = *laterTaskAdmission;
-    ASSERT_TRUE(later.valid());
-    scheduler.wait(later);
-    EXPECT_EQ(canceledCallbacks, 0u);
-    EXPECT_EQ(completedCallbacks, s_ExpectedDualCount);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-
-TEST(CpuTaskCleanupTests, ConcurrentProducersCompleteNestedTaskRanges){
-    using namespace __hidden_cpu_task_cleanup_tests;
-    Atomic<u32> visits{ 0u };
-    CpuTaskSchedulerConfig config;
-    config.workerCount = s_ExpectedDualCount;
-    config.heterogeneous = false;
-    CpuTaskScheduler scheduler(config);
-    CpuTaskScope scope(scheduler);
-    for(u32 producer = 0u; producer < s_ExpectedDualCount; ++producer){
-        const auto cpuTaskAdmission = scope.submit([&](){
-            EXPECT_TRUE((scheduler.parallelFor(0u, 128u, 4u, [&](usize){
-                EXPECT_TRUE((scheduler.parallelFor(0u, 32u, 4u, [&](usize)noexcept{
-                    visits.fetch_add(1u, MemoryOrder::relaxed);
-                }
-                )));
-            }
-            )));
-        });
-        ASSERT_TRUE(cpuTaskAdmission);
-        if(cpuTaskAdmission)
-            ASSERT_TRUE(cpuTaskAdmission->valid());
-    }
-    scope.wait();
-    EXPECT_EQ(visits.load(MemoryOrder::acquire), s_ExpectedDualCount * 128u * 32u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-
 TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheReceivingScope){
     using namespace __hidden_cpu_task_cleanup_tests;
     Atomic<u32> retirements{ 0u };

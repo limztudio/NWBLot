@@ -94,9 +94,7 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
 
     @classmethod
     def receiver_hull(cls, pose, clipped):
-        # Independent fixture projection: authored six-axis octahedron (.6), receiver scale .78, camera distance2.2, vertical FOV60.
-        # Euler application is roll, pitch, then the combined local/parent yaw.
-        # Clipping local y>0 removes only the upper axis vertex; the equator and lower vertex form the retained convex pyramid.
+        # Project the scaled octahedron and keep the local y<=0 pyramid after roll, pitch, and yaw.
         yaw = {LIT_EARLY: 0.0, LIT_MID: 1.0, "late": 2.0}[pose]
         pitch, roll = .32 * yaw, .16 * yaw
         points = []
@@ -139,8 +137,7 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
             for x in range(x0, x1):
                 point = ((x + .5 - cls.WIDTH / 2) / cls.HEIGHT, (y + .5 - cls.HEIGHT / 2) / cls.HEIGHT)
                 if cls.signed_margin(hull, point) >= 0:
-                    # A missing green receiver may expose dense red/blue neighboring meshes.
-                    # Generic foreground coverage is deliberately preserved, so only receiver identity can reject this negative control.
+                    # Keep foreground coverage high so only missing green receiver identity rejects this control.
                     rows[y][x] = (receiver_color or cls.RECEIVER) if receiver else ((180, 50, 30) if x % 2 == 0 else (40, 90, 180))
         return rows
 

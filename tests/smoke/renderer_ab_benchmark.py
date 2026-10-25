@@ -167,7 +167,7 @@ class Workload:
     name: str
     width: int
     height: int
-    # The AVBOIT raster timings span a complete pass, including split emulation; they are one range per frame, not one sample per draw or native dispatch.
+    # AVBOIT raster timing records one range per frame across the whole pass.
     scope_multipliers: tuple
     secondary_scope: str
     environment_overrides: tuple
@@ -187,7 +187,7 @@ class Workload:
 
     @property
     def observed_scopes(self):
-        # Decode inactive scope hashes too; otherwise an unexpected scope could evade a zero-coverage check.
+        # Decode inactive scope hashes so unexpected scopes still fail zero-coverage checks.
         return self.scopes + self.inactive_scopes
 
     @property
@@ -225,8 +225,7 @@ def reflection_log(text, workload, require_hardware):
     availability = [line for line in lines if line in ("ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: hardware unavailable")]
     if len(availability) != 1:
         raise SmokeFailure("one unambiguous reflection hardware capability marker is required")
-    # The shared benchmark currently checks this field for optical_clear.
-    # The inside fixture exposes the same startup field and must pin its independent query cap too.
+    # Check the startup query cap for both optical_clear and optical_inside.
     if policy.family == LIT_OPTICAL_INSIDE:
         prefix = "ReflectionSmokeProject: optical query limit "
         if [line[len(prefix):] for line in lines if line.startswith(prefix)] != [str(policy.optical_queries)]:

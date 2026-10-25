@@ -72,8 +72,7 @@ bool ReflectionFeedbackScene::create(const AStringView caseName, const bool fina
     if(!createPanel(Float4(0.008f, 0.008f, 0.008f, 1.f), Float4(0.f, 1.4f, 0.f, 0.f), Float4(2.8f, 1.f, 1.8f, 0.f), 0.95f).valid())
         return false;
     const auto red = createPanel(Float4(1.f, 0.01f, 0.01f, 1.f), Float4(-1.7f, 1.f, -3.f, 0.f), Float4(0.3f, 1.f, 0.25f, 0.f));
-    // The initial green panel lies outside the direct viewport but remains visible in the wall's hardware reflection.
-    // Moving it into the viewport creates a provisional SSR return; feedback must wake on any return, not only accepted hits.
+    // Move the off-screen green panel into view to trigger provisional SSR feedback.
     m_green = createPanel(Float4(0.01f, 1.f, 0.01f, 1.f), Float4(3.f, 2.f, -3.f, 0.f), Float4(0.3f, 1.f, 0.35f, 0.f));
     if(!red.valid() || !m_green.valid())
         return false;

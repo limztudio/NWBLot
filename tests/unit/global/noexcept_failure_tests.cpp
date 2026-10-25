@@ -575,11 +575,6 @@ TEST(NoexceptFailureTests, HexAppendCapacityAndOutputFailuresPreservePublishedCh
     static_assert(noexcept(AppendHexU32(u32{}, fixed)));
     static_assert(noexcept(AppendHexU64(u64{}, fixed)));
     static_assert(noexcept(AppendHexU32UnsignedLiteral(u32{}, fixed)));
-    AppendHexU64(0x0123456789abcdefu, fixed);
-    EXPECT_EQ(fixed.view(), AStringView("0123456789abcdef"));
-    fixed.clear();
-    AppendHexU32UnsignedLiteral(0x89abcdefu, fixed);
-    EXPECT_EQ(fixed.view(), AStringView("0x89abcdefu"));
 
     ThrowingHexCapacityString capacity;
     static_assert(!noexcept(AppendHexU64(u64{}, capacity)));

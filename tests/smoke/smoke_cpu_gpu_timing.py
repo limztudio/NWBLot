@@ -34,9 +34,7 @@ LIT_UTF_8 = "utf-8"
 ENABLED = "SmokeCpuGpuTimingProbe: enabled "
 COMPLETE = "SmokeCpuGpuTimingProbe: complete "
 REQUIRED_CPU = {LIT_GRAPHICS_FRAME, LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES, LIT_GRAPHICS_BEGIN_FRAME, LIT_GRAPHICS_PRESENT}
-# Exact stable producer scope strings; the helper computes global/name.h's canonical eight-lane hash.
-# This is not an externally supplied dictionary.
-# Unrecognized labels retain their original token.
+# Known producer scope names decoded via the canonical Name hash.
 KNOWN_CPU = ("frame.project_update", LIT_GRAPHICS_FRAME, "graphics.animate", LIT_GRAPHICS_BEGIN_FRAME, "graphics.frame_preamble", "graphics.render", LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES,
     "graphics.prepare_resources_failed", LIT_GRAPHICS_PRESENT, "graphics.garbage_collect", "cpu.task.queue_delay", "cpu.task.execution", "cpu.task.handle_join", "cpu.task.scope_join",
     "cpu.task.scheduler_join", "cpu.worker.idle", "cpu.task.ecs.world", "cpu.task.graphics.setup", "cpu.task.graphics.frame")

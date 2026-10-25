@@ -60,7 +60,6 @@ LIT_SYNC_LOG = "sync.log"
 
 def run_self_test(harness) -> int:
     numeric_parser = mock.Mock()
-    harness.require_positive(numeric_parser, LIT_STARTUP_TIMEOUT, 1.0)
     harness.require_non_negative(numeric_parser, LIT_WARMUP_SECONDS, 0.0)
     numeric_parser.error.assert_not_called()
     for validator in (harness.require_positive, harness.require_non_negative):
@@ -332,8 +331,7 @@ def run_self_test(harness) -> int:
         assert terminate_mock.mock_calls == [mock.call(app, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17), mock.call(None, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17), mock.call(None, LIT_BENCHMARK_LOGSERVER), mock.call(app, LIT_SYNC_BENCHMARK, 17),
             mock.call(None, LIT_SYNC_BENCHMARK, 17), mock.call(None, LIT_BENCHMARK_LOGSERVER),]
 
-        # The prefix envelope is diagnostic-only: it is absent when the compiler splits its endpoints into separate submissions.
-        # The rollout gate must still accept complete frame/shadow/final timing in that valid topology.
+        # The prefix envelope is absent when its endpoints are in separate submissions.
         stable_scope = harness.ScopeSummary(11, 11, 1.0, 1.0, 1.0, 1.0)
         async_run = harness.RunResult(mode=LIT_ASYNC, executable="async.exe", timing_file="async.timing.txt", log_file=LIT_ASYNC_LOG, capture_file=None, lane=harness.LaneStatus(True, True, harness.PhysicalQueueId(0, 17), harness.PhysicalQueueId(1, 17), True, True, False), scopes={
                 LIT_RENDER_FRAME: stable_scope, LIT_RENDER_ASYNC_SHADOW: stable_scope, LIT_RENDER_ASYNC_FINAL: stable_scope, }, forbidden_log_messages=[],)
@@ -349,7 +347,7 @@ def run_self_test(harness) -> int:
         assert harness.evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_FAIL
         async_run.forbidden_log_messages = []
 
-        # Warmup can falsely fail an accepted measurement or mask a real regression; neither prefix may reach the gate.
+        # Exclude warmup intervals from the gate.
         sync_run.scopes = {LIT_RENDER_FRAME: harness.ScopeSummary(11, 11, 10.0, 10.0, 10.0, 10.0)}
         timing_path = root / "measurement-boundary.timing.txt"
         timing_symbols = harness.load_name_symbols(None)

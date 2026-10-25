@@ -45,7 +45,7 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(const Name& m
         if(!objectGeometryDecodePipelineResult)
             return false;
     }
-    if(!m_shaderSystem.loadShader<VertexShader>(resources.objectGeometryVertexShader, meshShaderName, variantName, "ECSRender_ObjectGeometryVS", &MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName))
+    if(!m_shaderSystem.loadShaderAsset<VertexShader>(resources.objectGeometryVertexShader, meshShaderName, variantName, "ECSRender_ObjectGeometryVS", &MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName))
         return false;
     if(!m_materialState.m_objectGeometryInputLayout){
         constexpr usize s_ObjectGeometryVertexAttributeCount = 5u;

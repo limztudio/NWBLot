@@ -95,15 +95,14 @@ public:
 
 template<typename TShader>
 [[nodiscard]] static bool LoadShader(GpuRendererState& state, Core::ShaderHandle& shader, const Name& identity){
-    Name resolvedIdentity = identity;
-    if(state.m_activeSceneSubsystems){
-        Core::Assets::AssetRef<TShader> resolved = state.m_activeSceneSubsystems->findSubsystemAsset<TShader>(BuiltInSubsystems::s_Ui, identity);
-        if(!resolved.valid())
-            resolved = state.m_activeSceneSubsystems->findAsset<TShader>(identity);
-        if(resolved.valid())
-            resolvedIdentity = resolved.name();
-    }
-    return ShaderAssetLoader::Load<TShader>(shader, resolvedIdentity, Core::ShaderArchive::s_DefaultVariant, identity, state.m_graphics, state.m_assets, state.m_resolver, s_GpuRendererContext);
+    if(!state.m_activeSceneSubsystems)
+        return false;
+    Core::Assets::AssetRef<TShader> resolved = state.m_activeSceneSubsystems->findSubsystemAsset<TShader>(BuiltInSubsystems::s_Ui, identity);
+    if(!resolved.valid())
+        resolved = state.m_activeSceneSubsystems->findAsset<TShader>(identity);
+    if(!resolved.valid())
+        return false;
+    return ShaderAssetLoader::Load<TShader>(shader, resolved.name(), Core::ShaderArchive::s_DefaultVariant, identity, state.m_graphics, state.m_assets, state.m_resolver, s_GpuRendererContext);
 }
 
 

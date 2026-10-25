@@ -136,11 +136,11 @@ private:
     template<typename TAsset>
     [[nodiscard]] Core::Assets::AssetRef<TAsset> resolveAsset(const Core::Assets::AssetRef<TAsset>& ref)const noexcept{
         if(!ref.valid() || !m_activeSceneSubsystems)
-            return ref;
+            return {};
         Core::Assets::AssetRef<TAsset> resolved = m_activeSceneSubsystems->findSubsystemAsset<TAsset>(BuiltInSubsystems::s_Ui, ref.name());
         if(!resolved.valid())
             resolved = m_activeSceneSubsystems->findAsset<TAsset>(ref.name());
-        return resolved.valid() ? resolved : ref;
+        return resolved;
     }
 
 

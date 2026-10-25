@@ -38,15 +38,14 @@ namespace __hidden_pipeline{
     const Name& debugName,
     Core::ShaderHandle& shader
 ){
-    Name resolvedShaderName = shaderName;
-    if(activeSceneSubsystems){
-        Core::Assets::AssetRef<ComputeShader> resolved = activeSceneSubsystems->findSubsystemAsset<ComputeShader>(BuiltInSubsystems::s_Skinning, shaderName);
-        if(!resolved.valid())
-            resolved = activeSceneSubsystems->findAsset<ComputeShader>(shaderName);
-        if(resolved.valid())
-            resolvedShaderName = resolved.name();
-    }
-    return ShaderAssetLoader::Load<ComputeShader>(shader, resolvedShaderName, Core::ShaderArchive::s_DefaultVariant, debugName, graphics, assetManager, shaderPathResolver, NWB_TEXT("MeshSkinningSystem"));
+    if(!activeSceneSubsystems)
+        return false;
+    Core::Assets::AssetRef<ComputeShader> resolved = activeSceneSubsystems->findSubsystemAsset<ComputeShader>(BuiltInSubsystems::s_Skinning, shaderName);
+    if(!resolved.valid())
+        resolved = activeSceneSubsystems->findAsset<ComputeShader>(shaderName);
+    if(!resolved.valid())
+        return false;
+    return ShaderAssetLoader::Load<ComputeShader>(shader, resolved.name(), Core::ShaderArchive::s_DefaultVariant, debugName, graphics, assetManager, shaderPathResolver, NWB_TEXT("MeshSkinningSystem"));
 }
 
 

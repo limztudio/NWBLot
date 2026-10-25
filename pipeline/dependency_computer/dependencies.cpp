@@ -139,13 +139,10 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
     KnownVirtualPathTextMap knownVirtualPathTexts(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
 
     RecordVirtualPathText(Impl::AssetsGraphicsMesh::s_SharedMeshShaderText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_RendererText, arena, knownVirtualPathTexts);
     RecordVirtualPathText(Impl::BuiltInSubsystems::s_SkinningText, arena, knownVirtualPathTexts);
     RecordVirtualPathText(Impl::BuiltInSubsystems::s_TransparentText, arena, knownVirtualPathTexts);
     RecordVirtualPathText(Impl::BuiltInSubsystems::s_RefractiveText, arena, knownVirtualPathTexts);
     RecordVirtualPathText(Impl::BuiltInSubsystems::s_CsgText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_UiText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_DefaultText, arena, knownVirtualPathTexts);
 
     const auto enqueueDependency = [&](const Name& depVirtualPath, const Name& expectedAssetType) -> bool{
         if(!depVirtualPath)

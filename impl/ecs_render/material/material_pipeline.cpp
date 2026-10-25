@@ -214,7 +214,8 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     const AStringView pixelShaderVariant = csgClipPipeline && !avboitCsgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
     const AStringView meshShaderVariant = csgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
 
-    const bool sharedObjectGeometry = m_shaderSystem.resolveShaderName(materialInfo.meshShader.name()) == m_shaderSystem.resolveShaderName(AssetsGraphicsMesh::s_SharedMeshShaderName) && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
+    const Name sharedMeshShaderAssetName = m_shaderSystem.resolveShaderName(AssetsGraphicsMesh::s_SharedMeshShaderName);
+    const bool sharedObjectGeometry = sharedMeshShaderAssetName && materialInfo.meshShader.name() == sharedMeshShaderAssetName && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
     const AStringView objectGeometryShaderVariant = sharedObjectGeometry ? shaderVariant : meshShaderVariant;
 
     Core::ShaderHandle passPixelShader;
@@ -256,24 +257,24 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
 
     auto loadPassPixelShader = [&]() -> bool{
         if(pass == MaterialPipelinePass::Opaque){
-            return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, "ECSRender_RendererPS");
+            return m_shaderSystem.loadShaderAsset<PixelShader>(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, "ECSRender_RendererPS");
         }
         if(pass == MaterialPipelinePass::CsgReceiverSurface){
             return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Name(passPixelShaderDebugName));
         }
         if(avboitCsgClipPipeline){
-            return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Name(passPixelShaderDebugName));
+            return m_shaderSystem.loadShaderAsset<PixelShader>(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Name(passPixelShaderDebugName));
         }
         if(!passPixelShader){
             // AVBOIT pixel shaders are generated for the selected material and use its typed binding and surface/BXDF contract, so load the resolved per-material pass shader at its default variant.
-            return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Name(passPixelShaderDebugName));
+            return m_shaderSystem.loadShaderAsset<PixelShader>(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Name(passPixelShaderDebugName));
         }
         resources.pixelShader = passPixelShader;
         return true;
     };
 
     auto tryBuildMeshPipeline = [&]() -> bool{
-        if(!m_shaderSystem.loadShader<MeshShader>(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, "ECSRender_RendererMesh"))
+        if(!m_shaderSystem.loadShaderAsset<MeshShader>(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, "ECSRender_RendererMesh"))
             return false;
         if(!loadPassPixelShader())
             return false;
@@ -336,7 +337,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         NWB_ASSERT(m_materialState.m_emulationVertexShader);
         NWB_ASSERT(m_materialState.m_emulationInputLayout);
         const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
-        if(!m_shaderSystem.loadShader<ComputeShader>(resources.computeShader, materialInfo.meshShader.name(), meshShaderVariant, "ECSRender_RendererCS", &meshComputeArchiveStageName))
+        if(!m_shaderSystem.loadShaderAsset<ComputeShader>(resources.computeShader, materialInfo.meshShader.name(), meshShaderVariant, "ECSRender_RendererCS", &meshComputeArchiveStageName))
             return false;
         if(!loadPassPixelShader())
             return false;
@@ -376,7 +377,8 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         resources.renderPath = RenderPath::ComputeEmulation;
         // The shared mesh_compute program is independent of authored materials.
         resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None
-            && m_shaderSystem.resolveShaderName(materialInfo.meshShader.name()) == m_shaderSystem.resolveShaderName(AssetsGraphicsMesh::s_SharedMeshShaderName)
+            && sharedMeshShaderAssetName
+            && materialInfo.meshShader.name() == sharedMeshShaderAssetName
             && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant
         ;
         resources.indexedGeometryOutput = resources.sharedGeometryComputeProgram;

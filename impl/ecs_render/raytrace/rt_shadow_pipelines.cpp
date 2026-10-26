@@ -209,20 +209,14 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         return false;
     }
 
-    const ShadowSubsystem* const shadowSubsystem = m_shaderSystem.findSubsystem<ShadowSubsystem>();
-    if(!shadowSubsystem){
-        m_rayTracingState.m_swShadowPipelineFailed = true;
-        return false;
-    }
-
     const bool passesReady =
-        ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowOpaquePrepassShader, m_rayTracingState.m_swShadowOpaquePrepassPipeline, shadowSubsystem->swShadowOpaquePrepassCs.name(), "ECSRender_SwShadowOpaquePrepass")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowSoftOpaqueShader, m_rayTracingState.m_swShadowSoftOpaquePipeline, shadowSubsystem->swShadowSoftOpaqueCs.name(), "ECSRender_SwShadowSoftOpaque")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentCoarseShader, m_rayTracingState.m_swShadowTransparentCoarsePipeline, shadowSubsystem->swShadowTransparentCoarseCs.name(), "ECSRender_SwShadowTransparentCoarse")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentResolveShader, m_rayTracingState.m_swShadowTransparentResolvePipeline, shadowSubsystem->swShadowTransparentResolveCs.name(), "ECSRender_SwShadowTransparentResolve")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentClassifyShader, m_rayTracingState.m_swShadowTransparentClassifyPipeline, shadowSubsystem->swShadowTransparentClassifyCs.name(), "ECSRender_SwShadowTransparentClassify")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentBuildArgsShader, m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, shadowSubsystem->swShadowTransparentBuildargsCs.name(), "ECSRender_SwShadowTransparentBuildArgs")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentIndirectShader, m_rayTracingState.m_swShadowTransparentIndirectPipeline, shadowSubsystem->swShadowTransparentIndirectCs.name(), "ECSRender_SwShadowTransparentIndirect")
+        ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowOpaquePrepassShader, m_rayTracingState.m_swShadowOpaquePrepassPipeline, &ShadowSubsystem::swShadowOpaquePrepassCs, "ECSRender_SwShadowOpaquePrepass")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowSoftOpaqueShader, m_rayTracingState.m_swShadowSoftOpaquePipeline, &ShadowSubsystem::swShadowSoftOpaqueCs, "ECSRender_SwShadowSoftOpaque")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentCoarseShader, m_rayTracingState.m_swShadowTransparentCoarsePipeline, &ShadowSubsystem::swShadowTransparentCoarseCs, "ECSRender_SwShadowTransparentCoarse")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentResolveShader, m_rayTracingState.m_swShadowTransparentResolvePipeline, &ShadowSubsystem::swShadowTransparentResolveCs, "ECSRender_SwShadowTransparentResolve")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentClassifyShader, m_rayTracingState.m_swShadowTransparentClassifyPipeline, &ShadowSubsystem::swShadowTransparentClassifyCs, "ECSRender_SwShadowTransparentClassify")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentBuildArgsShader, m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, &ShadowSubsystem::swShadowTransparentBuildargsCs, "ECSRender_SwShadowTransparentBuildArgs")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentIndirectShader, m_rayTracingState.m_swShadowTransparentIndirectPipeline, &ShadowSubsystem::swShadowTransparentIndirectCs, "ECSRender_SwShadowTransparentIndirect")
         && ensureSoftwareTransparentSamplingPipeline()
     ;
     if(!passesReady){
@@ -232,11 +226,11 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const NameText<char> debugLabel){
+bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* shaderMember, const NameText<char> debugLabel){
     if(pipeline)
         return true;
 
-    if(!m_shaderSystem.loadShaderAsset<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
+    if(!m_shaderSystem.loadShader<ComputeShader>(shader, shaderMember, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
         return false;
 
     Core::ComputePipelineDesc pipelineDesc;

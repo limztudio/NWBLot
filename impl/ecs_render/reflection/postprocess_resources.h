@@ -76,7 +76,7 @@ public:
 
 private:
     void releaseTargets();
-    [[nodiscard]] bool preparePipeline(Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, Name name, AStringView variant);
+    [[nodiscard]] bool preparePipeline(Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* shaderMember, AStringView variant);
     [[nodiscard]] bool prepareImage(ReflectionRadianceBinding& image, u32 descriptorIndex, Name name);
 
 

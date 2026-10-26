@@ -182,7 +182,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const AStringView sharedMeshShaderName,
+    const Name& sharedMeshShaderName,
     CookArena& arena,
     ScratchArena& scratchArena,
     Span<MaterialCookEntry> materialEntries

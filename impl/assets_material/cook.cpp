@@ -185,7 +185,7 @@ Expected<Path> EmitShadowSurfaceDispatchModule(
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShaders(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const AStringView sharedMeshShaderName,
+    const Name& sharedMeshShaderName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
     const Span<MaterialCookEntry> materialEntries

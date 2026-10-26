@@ -95,11 +95,11 @@ public:
         const Name resolvedShaderName = resolveSubsystemAsset<SubsystemT>(member);
         if(!resolvedShaderName)
             return false;
-        return loadShaderAsset<TShader>(outShader, resolvedShaderName, variantName, debugName, archiveStageName);
+        return loadShader<TShader>(outShader, resolvedShaderName, variantName, debugName, archiveStageName);
     }
     template<typename TShader>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
-    [[nodiscard]] bool loadShaderAsset(Core::ShaderHandle& outShader, const Name& shaderAssetName, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
+    [[nodiscard]] bool loadShader(Core::ShaderHandle& outShader, const Name& shaderAssetName, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
         return ShaderAssetLoader::Load<TShader>(outShader, shaderAssetName, variantName, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
     }

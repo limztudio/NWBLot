@@ -181,7 +181,7 @@ public:
 [[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShaders(
     const Path& cacheDirectory,
     AStringView configurationSafeName,
-    AStringView sharedMeshShaderName,
+    const Name& sharedMeshShaderName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
     Span<MaterialCookEntry> materialEntries

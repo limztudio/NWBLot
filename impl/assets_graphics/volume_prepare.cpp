@@ -288,15 +288,15 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return false;
     const Path& shadowSurfaceIncludeRoot = *shadowSurfaceIncludeRootResult;
 
-    AStringView sharedMeshShaderText;
+    Name sharedMeshShaderName = s_NameNone;
     if(const Core::Assets::ICookEntryBucket* const meshSubsystemBucket = context.parsedMetadata.entryRegistry.find(MeshSubsystem::AssetTypeName()); meshSubsystemBucket && meshSubsystemBucket->size() > 0u){
         const auto& meshSubsystemEntries = context.parsedMetadata.entryRegistry.entries<SubsystemCookEntry<MeshSubsystem>>(MeshSubsystem::AssetTypeName());
-        sharedMeshShaderText = meshSubsystemEntries[0u].subsystem.sharedMs.name().resolvedText();
+        sharedMeshShaderName = meshSubsystemEntries[0u].subsystem.sharedMs.name();
     }
 
     // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored ones. Before shader prep + ValidateMaterials.
     auto& materialCookArena = materialEntries.get_allocator().arena();
-    auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, sharedMeshShaderText, materialCookArena, context.scratchArena, materialEntries);
+    auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, sharedMeshShaderName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedPixelShadersResult)
         return false;
 

@@ -68,7 +68,7 @@ static void AssignGeneratedMaterialShaderSource(CookString& outSource, ScratchAr
 Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const AStringView sharedMeshShaderName,
+    const Name& sharedMeshShaderName,
     CookArena& arena,
     ScratchArena& scratchArena,
     const Span<MaterialCookEntry> materialEntries
@@ -81,14 +81,9 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
     }
     generatedShaders.reserve(generatedShaderCount);
 
-    Name sharedMeshShaderNameId = s_NameNone;
-    if(generatedShaderCount > 0u){
-        const auto parsedSharedMeshShaderNameId = ToName(sharedMeshShaderName);
-        if(!parsedSharedMeshShaderNameId || !*parsedSharedMeshShaderNameId){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: invalid shared mesh shader name '{}'"), ConvertString(sharedMeshShaderName));
-            return MakeUnexpected(Failure{});
-        }
-        sharedMeshShaderNameId = **parsedSharedMeshShaderNameId;
+    if(generatedShaderCount > 0u && !sharedMeshShaderName){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: missing shared mesh shader name"));
+        return MakeUnexpected(Failure{});
     }
 
     const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / s_GeneratedCacheDirectory / "material_pixel_shaders";
@@ -152,7 +147,7 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
         Core::Assets::AssetRef<IShader> pixelShaderRef;
         pixelShaderRef.virtualPath = **pixelShaderName;
         Core::Assets::AssetRef<IShader> meshShaderRef;
-        meshShaderRef.virtualPath = sharedMeshShaderNameId;
+        meshShaderRef.virtualPath = sharedMeshShaderName;
         if(!entry.stageShaders.emplace(Core::ShaderType::PixelStage, pixelShaderRef).second || !entry.stageShaders.emplace(Core::ShaderType::MeshStage, meshShaderRef).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign generated stage shaders for material '{}'"), ConvertString(AStringView(entry.virtualPath)));
             return MakeUnexpected(Failure{});
@@ -219,7 +214,12 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
         const ScratchPath outputPath = generatedRoot / AStringView(relativeFile);
         auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult2){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}"), ConvertString(passLabel), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult2.error().message()));
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}"),
+                ConvertString(passLabel),
+                PathToString<tchar>(outputPath.parentPathView()),
+                ConvertString(ensureDirectoriesResult2.error().message())
+            );
             return MakeUnexpected(Failure{});
         }
         if(!WriteTextFile(outputPath, AStringView(generatedSource))){

@@ -33,7 +33,6 @@ namespace ProjectAssetDefaults{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_ProjectFileName = "project.nwb";
 inline constexpr AStringView s_DefaultProjectVirtualPathText = "project/project";
 inline constexpr Name s_DefaultProjectVirtualPath(s_DefaultProjectVirtualPathText);
 inline constexpr Core::Assets::AssetRef<ProjectAsset> s_DefaultProjectRef(s_DefaultProjectVirtualPathText);

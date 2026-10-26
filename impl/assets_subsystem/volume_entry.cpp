@@ -30,66 +30,79 @@ namespace __hidden_assets_subsystem_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<SubsystemCookEntry> ParseSubsystemDocument(
+template<typename SubsystemT>
+static Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemDocument(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     Core::Assets::CookEntryParseContext& context
 ){
-    return ParseSubsystemCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
+    return ParseSubsystemCookMetadata<SubsystemT>(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static Expected<SubsystemCookEntry> ParseSubsystemValue(
+template<typename SubsystemT>
+static Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemValue(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     Core::Assets::CookEntryParseContext& context
 ){
-    return ParseSubsystemCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
+    return ParseSubsystemCookMetadata<SubsystemT>(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
 }
 
+template<typename SubsystemT>
 static bool ExtractSubsystemDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto subsystemEntry = context.document
-        ? ParseSubsystemCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena)
-        : ParseSubsystemCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
+        ? ParseSubsystemCookMetadata<SubsystemT>(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena)
+        : ParseSubsystemCookMetadata<SubsystemT>(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
     ;
     if(!subsystemEntry)
         return false;
 
-    for(const Subsystem::SubsystemRef& childSubsystem : subsystemEntry->subsystems){
+    for(const ISubsystem::SubsystemRef& childSubsystem : subsystemEntry->subsystem.subsystems()){
         if(!collector.addSubsystemDependency(childSubsystem.name()))
             return false;
     }
 
-    Vector<Pair<Name, Name>, Core::Alloc::ScratchArena> sortedAssets(context.scratchArena);
-    sortedAssets.reserve(subsystemEntry->assets.size());
-    for(const auto& [nickname, assetRef] : subsystemEntry->assets)
-        sortedAssets.emplace_back(nickname, assetRef.name());
-    Sort(sortedAssets.begin(), sortedAssets.end(), [](const Pair<Name, Name>& lhs, const Pair<Name, Name>& rhs)noexcept{
-        if(lhs.first() != rhs.first())
-            return lhs.first() < rhs.first();
-        return lhs.second() < rhs.second();
-    });
-    for(const Pair<Name, Name>& entry : sortedAssets){
-        if(!collector.addAssetDependency(entry.second()))
+    const auto descriptors = TypedSubsystem<SubsystemT>::FieldDescriptors();
+    for(const SubsystemFieldDescriptor<SubsystemT>& descriptor : descriptors){
+        const Name assetName = descriptor.get(subsystemEntry->subsystem);
+        Name expectedType = s_NameNone;
+        if(!descriptor.expectedAssetTypeText.empty()){
+            const auto parsedType = Name::FromText(descriptor.expectedAssetTypeText);
+            if(!parsedType)
+                return false;
+            expectedType = *parsedType;
+        }
+        if(!collector.addAssetDependency(assetName, expectedType))
             return false;
     }
     return true;
 }
 
 static bool RegisterSubsystemCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<SubsystemCookEntry, Subsystem, SubsystemAssetCodec>(
-        registry,
-        SubsystemBinaryPayload::s_SubsystemAssetKindLabel,
-        &ParseSubsystemDocument,
-        &ParseSubsystemValue,
-        &BuildSubsystemAsset
-    );
+#define NWB_REGISTER_SUBSYSTEM_COOK_ENTRY(Type) \
+    if(!Core::Assets::RegisterDocumentValueCookEntry<SubsystemCookEntry<Type>, Type, Type##AssetCodec>( \
+        registry, \
+        SubsystemBinaryPayload::s_SubsystemAssetKindLabel, \
+        &ParseSubsystemDocument<Type>, \
+        &ParseSubsystemValue<Type>, \
+        &BuildSubsystemAsset<Type> \
+    )) \
+        return false;
+    NWB_SUBSYSTEM_ASSET_TYPE_ENTRIES(NWB_REGISTER_SUBSYSTEM_COOK_ENTRY)
+#undef NWB_REGISTER_SUBSYSTEM_COOK_ENTRY
+    return true;
 }
 
 static bool RegisterSubsystemCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerType(Subsystem::AssetTypeName(), &ExtractSubsystemDependencies);
+#define NWB_REGISTER_SUBSYSTEM_COOK_DEPENDENCY(Type) \
+    if(!registry.registerSubsystemType(Type::AssetTypeName(), &ExtractSubsystemDependencies<Type>)) \
+        return false;
+    NWB_SUBSYSTEM_ASSET_TYPE_ENTRIES(NWB_REGISTER_SUBSYSTEM_COOK_DEPENDENCY)
+#undef NWB_REGISTER_SUBSYSTEM_COOK_DEPENDENCY
+    return true;
 }
 
 

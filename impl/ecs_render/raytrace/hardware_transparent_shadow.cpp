@@ -86,11 +86,15 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
             return false;
         }
     }
-    const Name shaderNames[] = { AssetsGraphicsShadow::s_HardwareTransparentGatherShaderName, AssetsGraphicsShadow::s_HardwareTransparentEvaluateShaderName, AssetsGraphicsShadow::s_HardwareTransparentOverflowShaderName, };
+    const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* const shaderMembers[] = {
+        &ShadowSubsystem::hardwareTransparentGatherCs,
+        &ShadowSubsystem::hardwareTransparentEvaluateCs,
+        &ShadowSubsystem::hardwareTransparentOverflowCs,
+    };
     for(u32 i = 0u; i < LengthOf(state.m_pipelines); ++i){
         if(state.m_pipelines[i])
             continue;
-        if(!m_shaderSystem.loadShader<ComputeShader>(state.m_shaders[i], shaderNames[i], Core::ShaderArchive::s_DefaultVariant, "ECSRender_HardwareTransparentShadow")){
+        if(!m_shaderSystem.loadShader<ComputeShader>(state.m_shaders[i], shaderMembers[i], Core::ShaderArchive::s_DefaultVariant, "ECSRender_HardwareTransparentShadow")){
             state.m_pipelineFailed = true;
             return false;
         }

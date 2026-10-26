@@ -52,12 +52,7 @@ namespace __hidden_ui_layer_smoke_world{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_DefaultSkin{"default_skin"};
 static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_AlternateSkin{"alternate_skin"};
-static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultLatin{"default_latin_face"};
-static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultKorean{"default_korean_face"};
-static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultLatinAtlas{"default_latin_atlas"};
-static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultKoreanAtlas{"default_korean_atlas"};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,10 +75,7 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
         return MakeUnexpected(Failure{});
     }
 
-    const Impl::UiFontBinding fonts[] = {
-        { __hidden_ui_layer_smoke_world::s_DefaultLatin, __hidden_ui_layer_smoke_world::s_DefaultLatinAtlas },
-        { __hidden_ui_layer_smoke_world::s_DefaultKorean, __hidden_ui_layer_smoke_world::s_DefaultKoreanAtlas },
-    };
+
     const bool windowSmoke = IsUiLayerWindowSmokeEnabled();
     const bool popupSmoke = IsUiLayerPopupSmokeEnabled();
     const bool popupToolsSmoke = IsUiLayerPopupToolsSmokeEnabled();
@@ -111,7 +103,7 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
         || (progressSmoke && IsUiLayerProgressSkinSmokeEnabled())
         || (imageSmoke && IsUiLayerImageSkinSmokeEnabled())
         || (textureImageSmoke && IsUiLayerTextureImageSkinSmokeEnabled());
-    const auto& skin = alternateSkin ? __hidden_ui_layer_smoke_world::s_AlternateSkin : __hidden_ui_layer_smoke_world::s_DefaultSkin;
+    const auto& skin = alternateSkin ? __hidden_ui_layer_smoke_world::s_AlternateSkin : Impl::s_DefaultUiSkinRef;
     if(windowSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     if(popupSmoke)
@@ -141,7 +133,7 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
     if(textureImageSmoke){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     }
-    auto& layer = world->addSystem<Impl::UiLayerSystem>(*world, context.graphics, context.input, context.clipboard, context.textInput, context.assetManager, context.shaderPathResolver, skin, fonts, Impl::UiLayerPresentation::Standalone);
+    auto& layer = world->addSystem<Impl::UiLayerSystem>(*world, context.graphics, context.input, context.clipboard, context.textInput, context.assetManager, context.shaderPathResolver, skin, Span<const Impl::UiFontBinding>{}, Impl::UiLayerPresentation::Standalone);
     if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_INPUT_BINDINGS_SMOKE")){
         Impl::Ui::InputBindings defaults(context.objectArena);
         Impl::Ui::InputBindings::BindingVector bindings(context.objectArena);

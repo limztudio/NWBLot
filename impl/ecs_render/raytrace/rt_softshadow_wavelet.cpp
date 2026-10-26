@@ -57,7 +57,7 @@ bool RendererRayTracingSystem::ensureSoftCombinedWaveletPipeline(){
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader<ComputeShader>(resolve.m_combinedWavelet.m_shader, AssetsGraphicsShadow::s_SoftResolveCombinedWaveletShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowWavelet")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(resolve.m_combinedWavelet.m_shader, &ShadowSubsystem::shadowResolveWaveletCombinedCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowWavelet")){
         resolve.m_combinedWaveletFailed = true;
         return false;
     }

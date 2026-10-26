@@ -84,10 +84,10 @@ void UiLayerSystem::prepare(Core::ECS::World& world){
     static_cast<void>(world);
     synchronizeInput();
     const UiSkinChangeResult::Enum skinChange = m_skinSelection.applyChangeIfReady(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready(), [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-        const Core::Assets::AssetRef<UiSkin> resolvedRef = resolveAsset(ref);
+        const Core::Assets::AssetRef<UiSkin> resolvedRef = resolveSkin(ref);
         auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName, s_UiSkinAssetKindText);
         const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
-        if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, generation))
+        if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(resolvedRef, *skin, generation))
             return false;
         m_skinAsset = Move(*candidateAsset);
         return true;
@@ -110,7 +110,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
         m_activeSceneSubsystems = &m_defaultSceneSubsystems;
         m_renderer.setActiveSceneSubsystems(m_activeSceneSubsystems);
     }
-    if(!m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Ui)){
+    if(!m_activeSceneSubsystems->hasSubsystem<UiSubsystem>()){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(BuiltInSubsystems::s_UiText));
         return false;
     }
@@ -124,14 +124,14 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
         return false;
 
     const UiSkinSelectionResult::Enum selection = m_skinSelection.ensure([this](const Core::Assets::AssetRef<UiSkin>& ref){
+        const Core::Assets::AssetRef<UiSkin> resolvedRef = resolveSkin(ref);
         if(ref == m_skinSelection.selected() && m_skinAsset){
             const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
-            return skin && ValidateUiSkinToolkitContract(*skin) && m_renderer.setSkin(ref, *skin, m_skinSelection.generation());
+            return skin && ValidateUiSkinToolkitContract(*skin) && m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation());
         }
-        const Core::Assets::AssetRef<UiSkin> resolvedRef = resolveAsset(ref);
         auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName, s_UiSkinAssetKindText);
         const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
-        if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, m_skinSelection.generation()))
+        if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation()))
             return false;
         m_skinAsset = Move(*candidateAsset);
         return true;

@@ -225,7 +225,7 @@ public:
 
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
     [[nodiscard]] bool isSkinningFeatureEnabled()const noexcept{
-        return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Skinning);
+        return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem<SkinningSubsystem>();
     }
 
 

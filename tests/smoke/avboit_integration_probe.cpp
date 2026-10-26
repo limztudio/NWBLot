@@ -4,7 +4,6 @@
 
 #include "avboit_integration_probe.h"
 
-#include <impl/assets_graphics/avboit/names.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/ecs_render/avboit/avboit.h>
 
@@ -218,7 +217,8 @@ bool RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context, const NWB::I
     auto& device = graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     Core::ShaderHandle shader;
-    const auto integrateShaderRef = sceneSubsystems.findAsset<Impl::ComputeShader>(Impl::AssetsGraphicsAvboit::s_IntegrateComputeShaderName);
+    const Impl::TransparentSubsystem* const transparentSubsystem = sceneSubsystems.findSubsystem<Impl::TransparentSubsystem>();
+    const auto integrateShaderRef = transparentSubsystem ? transparentSubsystem->avboitIntegrateCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
     if(
         !integrateShaderRef.valid()
         || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(shader, integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("AvboitIntegrationProbe"))

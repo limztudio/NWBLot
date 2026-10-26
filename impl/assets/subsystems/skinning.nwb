@@ -1,8 +1,6 @@
-subsystem asset;
+skinning_subsystem asset;
 
-asset.assets = {
-    "local_bounds_cs": "engine/graphics/skinned_mesh/local_bounds_cs",
-    "meshlet_bounds_cs": "engine/graphics/skinned_mesh/meshlet_bounds_cs",
-    "repack_normals_cs": "engine/graphics/skinned_mesh/repack_normals_cs",
-    "skinning_cs": "engine/graphics/skinned_mesh/skinning_cs"
-};
+asset.local_bounds_cs = "engine/graphics/skinned_mesh/local_bounds_cs";
+asset.meshlet_bounds_cs = "engine/graphics/skinned_mesh/meshlet_bounds_cs";
+asset.repack_normals_cs = "engine/graphics/skinned_mesh/repack_normals_cs";
+asset.skinning_cs = "engine/graphics/skinned_mesh/skinning_cs";

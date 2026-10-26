@@ -1,0 +1,6 @@
+deferred_subsystem asset;
+
+asset.composite_cs = "engine/graphics/deferred/composite_cs";
+asset.composite_ps = "engine/graphics/deferred/composite_ps";
+asset.composite_vs = "engine/graphics/deferred/composite_vs";
+asset.lighting_cs = "engine/graphics/deferred/lighting_cs";

@@ -38,7 +38,7 @@ bool RendererRayTracingSystem::ensureSoftwareTransparentSamplingPipeline(){
     for(u32 index = 0u; index < LengthOf(variants); ++index){
         if(sampling.m_pipelines[index])
             continue;
-        if(!m_shaderSystem.loadShader<ComputeShader>(sampling.m_shaders[index], AssetsGraphicsShadow::s_SwTransparentSoftShaderName, variants[index], "ECSRender_SwShadowTransparentSoft"))
+        if(!m_shaderSystem.loadShader<ComputeShader>(sampling.m_shaders[index], &ShadowSubsystem::swShadowTransparentSoftCs, variants[index], "ECSRender_SwShadowTransparentSoft"))
             return false;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(sampling.m_shaders[index]).addBindingLayout(sampling.m_layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());

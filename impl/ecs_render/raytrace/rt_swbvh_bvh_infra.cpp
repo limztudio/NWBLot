@@ -55,7 +55,7 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_bvhSortShader, AssetsGraphicsBvh::s_BitonicSortShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_BvhBitonicSort")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_bvhSortShader, &BvhSubsystem::bitonicSortCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_BvhBitonicSort")){
         m_rayTracingState.m_bvhSortPipelineFailed = true;
         return false;
     }
@@ -286,10 +286,10 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
         }
     }
 
-    const auto createBuildPipeline = [this, &device, &heap](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const NameText<char> debugLabel)->bool{
+    const auto createBuildPipeline = [this, &device, &heap](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> BvhSubsystem::* member, const NameText<char> debugLabel)->bool{
         if(pipeline)
             return true;
-        if(!m_shaderSystem.loadShader<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
+        if(!m_shaderSystem.loadShader<ComputeShader>(shader, member, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
             return false;
 
         Core::ComputePipelineDesc pipelineDesc;
@@ -303,9 +303,9 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     };
 
     if(
-        !createBuildPipeline(m_rayTracingState.m_bvhMortonShader, m_rayTracingState.m_bvhMortonPipeline, AssetsGraphicsBvh::s_BvhMortonShaderName, "ECSRender_BvhMorton")
-        || !createBuildPipeline(m_rayTracingState.m_bvhTopologyShader, m_rayTracingState.m_bvhTopologyPipeline, AssetsGraphicsBvh::s_BvhTopologyShaderName, "ECSRender_BvhTopology")
-        || !createBuildPipeline(m_rayTracingState.m_bvhFitShader, m_rayTracingState.m_bvhFitPipeline, AssetsGraphicsBvh::s_BvhFitShaderName, "ECSRender_BvhFit")
+        !createBuildPipeline(m_rayTracingState.m_bvhMortonShader, m_rayTracingState.m_bvhMortonPipeline, &BvhSubsystem::mortonCs, "ECSRender_BvhMorton")
+        || !createBuildPipeline(m_rayTracingState.m_bvhTopologyShader, m_rayTracingState.m_bvhTopologyPipeline, &BvhSubsystem::topologyCs, "ECSRender_BvhTopology")
+        || !createBuildPipeline(m_rayTracingState.m_bvhFitShader, m_rayTracingState.m_bvhFitPipeline, &BvhSubsystem::fitCs, "ECSRender_BvhFit")
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build compute pipeline"));
         m_rayTracingState.m_bvhBuildPipelineFailed = true;

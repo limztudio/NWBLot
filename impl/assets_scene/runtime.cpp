@@ -253,29 +253,38 @@ bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, 
 
     for(usize index = 0u; index < worklist.size(); ++index){
         const SubsystemRef currentSubsystem = worklist[index];
-        auto subsystemResult = assetManager.loadTypedSync<Subsystem>(currentSubsystem.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner, "subsystem");
-        if(!subsystemResult)
+        auto loadedAsset = assetManager.loadSync(ISubsystem::AssetTypeName(), currentSubsystem.name());
+        if(!loadedAsset){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("{}: failed to load subsystem asset '{}'"),
+                __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner,
+                ConvertString(currentSubsystem.name().resolvedText())
+            );
             return false;
-        const Subsystem& subsystem = **subsystemResult;
-
-        LoadedSubsystem loaded(m_arena);
-        loaded.subsystem = currentSubsystem;
-        loaded.children.reserve(subsystem.subsystems().size());
-        for(const SubsystemRef& childSubsystem : subsystem.subsystems()){
-            loaded.children.push_back(childSubsystem);
+        }
+        const ISubsystem* const subsystemPtr = CastSubsystem(loadedAsset->get());
+        if(!subsystemPtr){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("{}: asset '{}' is not a subsystem"),
+                __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner,
+                ConvertString(currentSubsystem.name().resolvedText())
+            );
+            return false;
+        }
+        UniquePtr<ISubsystem> subsystem(checked_cast<ISubsystem*>(loadedAsset->release()));
+        for(const SubsystemRef& childSubsystem : subsystem->subsystems()){
             const usize previousSize = nextSubsystems.size();
             __hidden_scene_runtime::AppendUniqueAssetRef(nextSubsystems, childSubsystem);
             if(nextSubsystems.size() != previousSize)
                 worklist.push_back(childSubsystem);
         }
 
-        loaded.assets.reserve(subsystem.assets().size());
-        for(const auto& [nickname, asset] : subsystem.assets()){
-            loaded.assets.emplace(nickname, asset);
+        AssetRefVector subsystemAssets(m_arena);
+        subsystem->collectAssets(subsystemAssets);
+        for(const AssetRef& asset : subsystemAssets)
             __hidden_scene_runtime::AppendUniqueAssetRef(nextResolvedAssets, asset);
-        }
 
-        nextLoadedSubsystems.push_back(Move(loaded));
+        nextLoadedSubsystems.push_back(Move(subsystem));
     }
 
     m_scene = scene;
@@ -286,10 +295,6 @@ bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, 
     return true;
 }
 
-void ActiveSceneSubsystems::enableSubsystem(const SubsystemRef& subsystem){
-    __hidden_scene_runtime::AppendUniqueAssetRef(m_subsystems, subsystem);
-}
-
 bool ActiveSceneSubsystems::hasSubsystem(const SubsystemRef& subsystem)const noexcept{
     if(!subsystem.valid())
         return false;
@@ -298,42 +303,6 @@ bool ActiveSceneSubsystems::hasSubsystem(const SubsystemRef& subsystem)const noe
             return true;
     }
     return false;
-}
-
-ActiveSceneSubsystems::AssetRef ActiveSceneSubsystems::findSubsystemAssetUntyped(const SubsystemRef& subsystem, const Name& nickname, const usize depth)const noexcept{
-    if(!subsystem.valid() || !nickname || depth >= m_loadedSubsystems.size())
-        return {};
-
-    for(const LoadedSubsystem& loaded : m_loadedSubsystems){
-        if(loaded.subsystem != subsystem)
-            continue;
-        const auto found = loaded.assets.find(nickname);
-        if(found != loaded.assets.end())
-            return found.value();
-        for(const SubsystemRef& child : loaded.children){
-            const AssetRef childFound = findSubsystemAssetUntyped(child, nickname, depth + 1u);
-            if(childFound.valid())
-                return childFound;
-        }
-        break;
-    }
-    return {};
-}
-
-ActiveSceneSubsystems::AssetRef ActiveSceneSubsystems::findAssetUntyped(const Name& nickname)const noexcept{
-    if(!nickname)
-        return {};
-
-    const auto sceneFound = m_sceneAssets.find(nickname);
-    if(sceneFound != m_sceneAssets.end())
-        return sceneFound.value();
-
-    for(const LoadedSubsystem& loaded : m_loadedSubsystems){
-        const auto found = loaded.assets.find(nickname);
-        if(found != loaded.assets.end())
-            return found.value();
-    }
-    return {};
 }
 
 

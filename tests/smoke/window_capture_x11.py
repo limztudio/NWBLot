@@ -150,7 +150,7 @@ class LinuxX11Capture:
             return None
 
         try:
-            if actual_format.value != X11_CARDINAL32_FORMAT_BITS or item_count.value < 1:
+            if actual_format.value != self.X11_CARDINAL32_FORMAT_BITS or item_count.value < 1:
                 return None
             return int(ctypes.cast(value, ctypes.POINTER(ctypes.c_ulong))[0])
         finally:

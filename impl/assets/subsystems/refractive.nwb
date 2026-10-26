@@ -1,15 +1,13 @@
-subsystem asset;
+refractive_subsystem asset;
 
-asset.assets = {
-    "caustic_accumulator_decay_cs": "engine/graphics/caustic/caustic_accumulator_decay_cs",
-    "caustic_geometry_downsample_cs": "engine/graphics/caustic/caustic_geometry_downsample_cs",
-    "caustic_photon_hw_chit": "engine/graphics/caustic/caustic_photon_hw_chit",
-    "caustic_photon_hw_miss": "engine/graphics/caustic/caustic_photon_hw_miss",
-    "caustic_photon_hw_raygen": "engine/graphics/caustic/caustic_photon_hw_raygen",
-    "caustic_photon_sw_cs": "engine/graphics/caustic/caustic_photon_sw_cs",
-    "caustic_resolve_cs": "engine/graphics/caustic/caustic_resolve_cs",
-    "refraction_classify_tiles_cs": "engine/graphics/refraction/classify_tiles_cs",
-    "refraction_finalize_tiles_cs": "engine/graphics/refraction/finalize_tiles_cs",
-    "refraction_resolve_hw_cs": "engine/graphics/refraction/resolve_hw_cs",
-    "refraction_resolve_screen_cs": "engine/graphics/refraction/resolve_screen_cs"
-};
+asset.caustic_accumulator_decay_cs = "engine/graphics/caustic/caustic_accumulator_decay_cs";
+asset.caustic_geometry_downsample_cs = "engine/graphics/caustic/caustic_geometry_downsample_cs";
+asset.caustic_photon_hw_chit = "engine/graphics/caustic/caustic_photon_hw_chit";
+asset.caustic_photon_hw_miss = "engine/graphics/caustic/caustic_photon_hw_miss";
+asset.caustic_photon_hw_raygen = "engine/graphics/caustic/caustic_photon_hw_raygen";
+asset.caustic_photon_sw_cs = "engine/graphics/caustic/caustic_photon_sw_cs";
+asset.caustic_resolve_cs = "engine/graphics/caustic/caustic_resolve_cs";
+asset.refraction_classify_tiles_cs = "engine/graphics/refraction/classify_tiles_cs";
+asset.refraction_finalize_tiles_cs = "engine/graphics/refraction/finalize_tiles_cs";
+asset.refraction_resolve_hw_cs = "engine/graphics/refraction/resolve_hw_cs";
+asset.refraction_resolve_screen_cs = "engine/graphics/refraction/resolve_screen_cs";

@@ -2,6 +2,8 @@ scene asset;
 
 asset.subsystems = [
     "engine/subsystems/renderer",
+    "engine/subsystems/transparent",
+    "engine/subsystems/refractive",
     "engine/subsystems/csg"
 ];
 

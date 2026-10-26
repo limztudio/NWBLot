@@ -1,7 +1,6 @@
-subsystem asset;
+default_subsystem asset;
 
 asset.subsystems = [
     "engine/subsystems/renderer",
     "engine/subsystems/ui"
 ];
-

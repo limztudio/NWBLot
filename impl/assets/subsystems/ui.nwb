@@ -1,13 +1,12 @@
-subsystem asset;
+ui_subsystem asset;
 
-asset.assets = {
-    "ui_output_ps": "engine/graphics/ui/output_ps",
-    "ui_output_vs": "engine/graphics/ui/output_vs",
-    "ui_ps": "engine/graphics/ui/ps",
-    "ui_vs": "engine/graphics/ui/vs",
-    "default_korean_atlas": "engine/ui/fonts/default/korean/atlas",
-    "default_korean_face": "engine/ui/fonts/default/korean/face",
-    "default_latin_atlas": "engine/ui/fonts/default/latin/atlas",
-    "default_latin_face": "engine/ui/fonts/default/latin/face",
-    "default_skin": "engine/ui/skins/default/atlas"
-};
+asset.output_ps = "engine/graphics/ui/output_ps";
+asset.output_vs = "engine/graphics/ui/output_vs";
+asset.ps = "engine/graphics/ui/ps";
+asset.vs = "engine/graphics/ui/vs";
+asset.default_korean_atlas = "engine/ui/fonts/default/korean/atlas";
+asset.default_korean_face = "engine/ui/fonts/default/korean/face";
+asset.default_latin_atlas = "engine/ui/fonts/default/latin/atlas";
+asset.default_latin_face = "engine/ui/fonts/default/latin/face";
+asset.default_skin = "engine/ui/skins/default/atlas";
+asset.default_skin_texture = "engine/ui/skins/default/texture";

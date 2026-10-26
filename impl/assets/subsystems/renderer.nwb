@@ -1,64 +1,17 @@
-subsystem asset;
+renderer_subsystem asset;
 
-asset.assets = {
-    "bvh_bitonic_sort_cs": "engine/graphics/bvh/bvh_bitonic_sort_cs",
-    "bvh_fit_cs": "engine/graphics/bvh/bvh_fit_cs",
-    "bvh_morton_cs": "engine/graphics/bvh/bvh_morton_cs",
-    "bvh_topology_cs": "engine/graphics/bvh/bvh_topology_cs",
-    "scene_refit_cs": "engine/graphics/bvh/scene_refit_cs",
-    "composite_cs": "engine/graphics/deferred/composite_cs",
-    "composite_ps": "engine/graphics/deferred/composite_ps",
-    "composite_vs": "engine/graphics/deferred/composite_vs",
-    "lighting_cs": "engine/graphics/deferred/lighting_cs",
-    "surfel_age_free_cs": "engine/graphics/gi/surfel/surfel_age_free_cs",
-    "surfel_hash_build_cs": "engine/graphics/gi/surfel/surfel_hash_build_cs",
-    "surfel_resolve_cs": "engine/graphics/gi/surfel/surfel_resolve_cs",
-    "surfel_spawn_cs": "engine/graphics/gi/surfel/surfel_spawn_cs",
-    "surfel_trace_build_args_cs": "engine/graphics/gi/surfel/surfel_trace_build_args_cs",
-    "surfel_trace_cs": "engine/graphics/gi/surfel/surfel_trace_cs",
-    "surfel_trace_hw_cs": "engine/graphics/gi/surfel/surfel_trace_hw_cs",
-    "surfel_upsample_cs": "engine/graphics/gi/surfel/surfel_upsample_cs",
-    "emulation_vs": "engine/graphics/mesh/emulation_vs",
-    "object_decode_cs": "engine/graphics/mesh/object_decode_cs",
-    "shared_ms": "engine/graphics/mesh/shared_ms",
-    "reflection_build_args_cs": "engine/graphics/reflection/build_args_cs",
-    "reflection_classify_cs": "engine/graphics/reflection/classify_cs",
-    "reflection_depth_reduce_cs": "engine/graphics/reflection/depth_reduce_cs",
-    "reflection_resolve_hw_cs": "engine/graphics/reflection/resolve_hw_cs",
-    "reflection_spatial_cs": "engine/graphics/reflection/spatial_cs",
-    "reflection_temporal_cs": "engine/graphics/reflection/temporal_cs",
-    "hardware_transparent_evaluate_cs": "engine/graphics/shadow/hardware_transparent_evaluate_cs",
-    "hardware_transparent_gather_cs": "engine/graphics/shadow/hardware_transparent_gather_cs",
-    "hardware_transparent_overflow_cs": "engine/graphics/shadow/hardware_transparent_overflow_cs",
-    "light_space_capture_ps": "engine/graphics/shadow/light_space_capture_ps",
-    "light_space_capture_vs": "engine/graphics/shadow/light_space_capture_vs",
-    "light_space_cull_cs": "engine/graphics/shadow/light_space_cull_cs",
-    "light_space_fallback_cs": "engine/graphics/shadow/light_space_fallback_cs",
-    "light_space_resolve_cs": "engine/graphics/shadow/light_space_resolve_cs",
-    "light_space_resolve_hw_cs": "engine/graphics/shadow/light_space_resolve_hw_cs",
-    "light_space_shade_cs": "engine/graphics/shadow/light_space_shade_cs",
-    "light_space_view_cs": "engine/graphics/shadow/light_space_view_cs",
-    "shadow_geometry_downsample_cs": "engine/graphics/shadow/shadow_geometry_downsample_cs",
-    "shadow_rayquery_cs": "engine/graphics/shadow/shadow_rayquery_cs",
-    "shadow_rayquery_soft_cs": "engine/graphics/shadow/shadow_rayquery_soft_cs",
-    "shadow_reproject_merge_combined_cs": "engine/graphics/shadow/shadow_reproject_merge_combined_cs",
-    "shadow_reproject_merge_cs": "engine/graphics/shadow/shadow_reproject_merge_cs",
-    "shadow_resolve_combined_cs": "engine/graphics/shadow/shadow_resolve_combined_cs",
-    "shadow_resolve_cs": "engine/graphics/shadow/shadow_resolve_cs",
-    "shadow_resolve_rgb_cs": "engine/graphics/shadow/shadow_resolve_rgb_cs",
-    "shadow_resolve_wavelet_combined_cs": "engine/graphics/shadow/shadow_resolve_wavelet_combined_cs",
-    "sw_shadow_opaque_prepass_cs": "engine/graphics/shadow/sw_shadow_opaque_prepass_cs",
-    "sw_shadow_soft_opaque_cs": "engine/graphics/shadow/sw_shadow_soft_opaque_cs",
-    "sw_shadow_transparent_buildargs_cs": "engine/graphics/shadow/sw_shadow_transparent_buildargs_cs",
-    "sw_shadow_transparent_classify_cs": "engine/graphics/shadow/sw_shadow_transparent_classify_cs",
-    "sw_shadow_transparent_coarse_cs": "engine/graphics/shadow/sw_shadow_transparent_coarse_cs",
-    "sw_shadow_transparent_indirect_cs": "engine/graphics/shadow/sw_shadow_transparent_indirect_cs",
-    "sw_shadow_transparent_resolve_cs": "engine/graphics/shadow/sw_shadow_transparent_resolve_cs",
-    "sw_shadow_transparent_soft_cs": "engine/graphics/shadow/sw_shadow_transparent_soft_cs",
-    "linear_clamp": "engine/samplers/linear_clamp",
-    "linear_mirror": "engine/samplers/linear_mirror",
-    "linear_wrap": "engine/samplers/linear_wrap",
-    "nearest_clamp": "engine/samplers/nearest_clamp",
-    "nearest_mirror": "engine/samplers/nearest_mirror",
-    "nearest_wrap": "engine/samplers/nearest_wrap"
-};
+asset.subsystems = [
+    "engine/subsystems/mesh",
+    "engine/subsystems/deferred",
+    "engine/subsystems/bvh",
+    "engine/subsystems/shadow",
+    "engine/subsystems/gi",
+    "engine/subsystems/reflection"
+];
+
+asset.linear_clamp = "engine/samplers/linear_clamp";
+asset.linear_mirror = "engine/samplers/linear_mirror";
+asset.linear_wrap = "engine/samplers/linear_wrap";
+asset.nearest_clamp = "engine/samplers/nearest_clamp";
+asset.nearest_mirror = "engine/samplers/nearest_mirror";
+asset.nearest_wrap = "engine/samplers/nearest_wrap";

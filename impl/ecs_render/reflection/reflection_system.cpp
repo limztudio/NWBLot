@@ -6,7 +6,6 @@
 #include "timing_names.h"
 
 #include <impl/assets/graphics/reflection/depth_constants.h>
-#include <impl/assets_graphics/reflection/names.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
@@ -579,7 +578,7 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
     const auto preparePipeline = [&](
         Core::ComputePipelineHandle& pipeline,
         Core::ShaderHandle& shader,
-        const Name shaderName,
+        const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* member,
         const Name debugName,
         const bool hardware,
         const Core::BindingLayoutHandle& bindingLayout,
@@ -587,7 +586,7 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
     ){
         if(pipeline)
             return true;
-        if(!m_shaders.loadShader<ComputeShader>(shader, shaderName, variant, debugName))
+        if(!m_shaders.loadShader<ComputeShader>(shader, member, variant, debugName))
             return false;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
@@ -601,18 +600,18 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
         return static_cast<bool>(pipelineResult);
     };
     if(
-        !preparePipeline(m_resources.classifyPipeline, m_classifyShader, AssetsGraphicsReflection::s_ClassifyShaderName, Name("ECSRender_ReflectionClassify"), false, m_bindingLayout)
-        || !preparePipeline(m_resources.buildArgsPipeline, m_buildArgsShader, AssetsGraphicsReflection::s_BuildArgsShaderName, Name("ECSRender_ReflectionBuildArgs"), false, m_bindingLayout, s_ReflectionBuildArgsVariant)
-        || !preparePipeline(m_resources.depthPyramid.pipeline, m_depthShader, AssetsGraphicsReflection::s_DepthReduceShaderName, Name("ECSRender_ReflectionDepthReduce"), false, m_depthBindingLayout)
+        !preparePipeline(m_resources.classifyPipeline, m_classifyShader, &ReflectionSubsystem::classifyCs, Name("ECSRender_ReflectionClassify"), false, m_bindingLayout)
+        || !preparePipeline(m_resources.buildArgsPipeline, m_buildArgsShader, &ReflectionSubsystem::buildArgsCs, Name("ECSRender_ReflectionBuildArgs"), false, m_bindingLayout, s_ReflectionBuildArgsVariant)
+        || !preparePipeline(m_resources.depthPyramid.pipeline, m_depthShader, &ReflectionSubsystem::depthReduceCs, Name("ECSRender_ReflectionDepthReduce"), false, m_depthBindingLayout)
     )
         return false;
     if(
         prepareHardware && m_graphics.queryFeatureSupport(Core::Feature::RayQuery) && heap.hasAccelStructLayout()
-        && (!preparePipeline(m_resources.hardwarePipeline, m_hardwareShader, AssetsGraphicsReflection::s_HardwareResolveShaderName, Name("ECSRender_ReflectionOpticalHardware"), true, m_bindingLayout, s_ReflectionHwOpticalVariant) || !preparePipeline(
+        && (!preparePipeline(m_resources.hardwarePipeline, m_hardwareShader, &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionOpticalHardware"), true, m_bindingLayout, s_ReflectionHwOpticalVariant) || !preparePipeline(
             m_plainHardwarePipeline, m_plainHardwareShader,
-            AssetsGraphicsReflection::s_HardwareResolveShaderName, Name("ECSRender_ReflectionHardware"), true, m_bindingLayout,
+            &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionHardware"), true, m_bindingLayout,
             s_ReflectionHwPlainVariant
-        ) || !preparePipeline(m_unspecifiedHardwarePipeline, m_unspecifiedHardwareShader, AssetsGraphicsReflection::s_HardwareResolveShaderName, Name("ECSRender_ReflectionUnspecifiedOpticalHardware"), true, m_bindingLayout, s_ReflectionHwUnspecifiedVariant))
+        ) || !preparePipeline(m_unspecifiedHardwarePipeline, m_unspecifiedHardwareShader, &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionUnspecifiedOpticalHardware"), true, m_bindingLayout, s_ReflectionHwUnspecifiedVariant))
     )
         return false;
     const bool csgHardware = prepareCsgHardware && m_graphics.queryFeatureSupport(Core::Feature::RayQuery) && heap.hasAccelStructLayout();
@@ -630,13 +629,13 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
     }
     if(
         csgHardware
-        && (!preparePipeline(m_csgBuildArgsPipeline, m_csgBuildArgsShader, AssetsGraphicsReflection::s_BuildArgsShaderName, Name("ECSRender_ReflectionCsgBuildArgs"), false, m_csgBindingLayout, s_ReflectionCsgBuildArgsVariant) || !preparePipeline(
+        && (!preparePipeline(m_csgBuildArgsPipeline, m_csgBuildArgsShader, &ReflectionSubsystem::buildArgsCs, Name("ECSRender_ReflectionCsgBuildArgs"), false, m_csgBindingLayout, s_ReflectionCsgBuildArgsVariant) || !preparePipeline(
             m_csgHardwarePipeline, m_csgHardwareShader,
-            AssetsGraphicsReflection::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgOpticalHardware"), true, m_csgBindingLayout,
+            &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionCsgOpticalHardware"), true, m_csgBindingLayout,
             s_ReflectionHwCsgOpticalVariant
-        ) || !preparePipeline(m_csgPlainHardwarePipeline, m_csgPlainHardwareShader, AssetsGraphicsReflection::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgHardware"), true, m_csgBindingLayout, s_ReflectionHwCsgPlainVariant) || !preparePipeline(
+        ) || !preparePipeline(m_csgPlainHardwarePipeline, m_csgPlainHardwareShader, &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionCsgHardware"), true, m_csgBindingLayout, s_ReflectionHwCsgPlainVariant) || !preparePipeline(
             m_csgUnspecifiedHardwarePipeline, m_csgUnspecifiedHardwareShader,
-            AssetsGraphicsReflection::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgUnspecifiedOpticalHardware"), true, m_csgBindingLayout,
+            &ReflectionSubsystem::resolveHwCs, Name("ECSRender_ReflectionCsgUnspecifiedOpticalHardware"), true, m_csgBindingLayout,
             s_ReflectionHwCsgUnspecifiedVariant
         ))
     )

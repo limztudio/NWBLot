@@ -9,7 +9,6 @@
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
-#include <impl/assets_graphics/mesh/names.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -76,7 +75,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
         return false;
 
     if(!m_materialState.m_emulationVertexShader){
-        if(!m_shaderSystem.loadShader<VertexShader>(m_materialState.m_emulationVertexShader, AssetsGraphicsMesh::s_EmulationVertexShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_MeshEmulationVS"))
+        if(!m_shaderSystem.loadShader<VertexShader>(m_materialState.m_emulationVertexShader, &MeshSubsystem::emulationVs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_MeshEmulationVS"))
             return false;
     }
 

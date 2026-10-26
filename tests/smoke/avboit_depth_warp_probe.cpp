@@ -7,7 +7,6 @@
 
 #include <loader/project_entry.h>
 
-#include <impl/assets_graphics/avboit/names.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/ecs_render/avboit/avboit.h>
 
@@ -349,7 +348,8 @@ public:
         }
         if(!m_sceneSubsystems.loadProjectStartScene(m_context.assetManager))
             return false;
-        const auto depthWarpShaderRef = m_sceneSubsystems.findAsset<Impl::ComputeShader>(Impl::AssetsGraphicsAvboit::s_DepthWarpComputeShaderName);
+        const Impl::TransparentSubsystem* const transparentSubsystem = m_sceneSubsystems.findSubsystem<Impl::TransparentSubsystem>();
+        const auto depthWarpShaderRef = transparentSubsystem ? transparentSubsystem->avboitDepthWarpCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
         if(!depthWarpShaderRef.valid())
             return false;
         if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(

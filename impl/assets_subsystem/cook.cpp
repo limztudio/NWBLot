@@ -13,6 +13,7 @@
 #include "binary_payload.h"
 
 #include <core/assets/binary_payload_io.h>
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 
@@ -29,37 +30,27 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, SubsystemBinaryPayload::s_SubsystemSerializeContext))
-        return false;
-
-    const Subsystem& subsystem = *MakeNotNull(checked_cast<const Subsystem*>(&asset));
+bool SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary){
     Core::Alloc::ScratchArena scratchArena(AssetsSubsystemArenaScope::s_SerializeArena);
     if(!subsystem.validatePayload(scratchArena))
         return false;
 
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
-    Vector<SubsystemBinaryPayload::SubsystemAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
+    Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
 
     subsystemHashes.reserve(subsystem.subsystems().size());
-    for(const Subsystem::SubsystemRef& child : subsystem.subsystems())
+    for(const ISubsystem::SubsystemRef& child : subsystem.subsystems())
         subsystemHashes.push_back(child.name().hash());
 
-    assetEntries.reserve(subsystem.assets().size());
-    for(const auto& [nickname, item] : subsystem.assets()){
-        SubsystemBinaryPayload::SubsystemAssetEntryBinary entry;
-        entry.nicknameHash = nickname.hash();
-        entry.assetHash = item.name().hash();
-        assetEntries.push_back(entry);
-    }
-    Sort(assetEntries.begin(), assetEntries.end(), [](const SubsystemBinaryPayload::SubsystemAssetEntryBinary& lhs, const SubsystemBinaryPayload::SubsystemAssetEntryBinary& rhs)noexcept{
-        return LessNameHash(lhs.nicknameHash, rhs.nicknameHash);
-    });
+    const usize fieldCount = subsystem.fieldCount();
+    assetHashes.reserve(fieldCount);
+    for(usize i = 0u; i < fieldCount; ++i)
+        assetHashes.push_back(subsystem.fieldValue(i).hash());
 
     usize reserveBytes = sizeof(SubsystemBinaryPayload::SubsystemHeaderBinary);
     const bool canReserve =
         AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes)
-        && AddBinaryVectorReserveBytes(reserveBytes, assetEntries)
+        && AddBinaryVectorReserveBytes(reserveBytes, assetHashes)
     ;
 
     outBinary.clear();
@@ -67,14 +58,29 @@ bool SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Ass
         outBinary.reserve(reserveBytes);
 
     SubsystemBinaryPayload::SubsystemHeaderBinary header;
+    header.subsystemTypeHash = subsystem.assetType().hash();
     header.subsystemCount = static_cast<u64>(subsystemHashes.size());
-    header.assetCount = static_cast<u64>(assetEntries.size());
+    header.assetCount = static_cast<u64>(assetHashes.size());
     AppendPOD(outBinary, header);
 
     return
         Core::Assets::AppendVectorPayload(outBinary, subsystemHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_SubsystemsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, assetEntries, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_AssetsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, assetHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_AssetsPayloadLabel)
     ;
+}
+
+bool SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+    const ISubsystem* const subsystem = CastSubsystem(&asset);
+    if(!subsystem){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("{} failed: invalid asset type '{}'"),
+            SubsystemBinaryPayload::s_SubsystemSerializeContext,
+            ConvertString(asset.assetType().resolvedText())
+        );
+        return false;
+    }
+
+    return SubsystemAssetSerialization::Serialize(*subsystem, outBinary);
 }
 
 
@@ -90,7 +96,6 @@ namespace __hidden_subsystem_cook{
 using namespace Core::Metascript;
 
 static constexpr AStringView s_SubsystemsField = "subsystems";
-static constexpr AStringView s_AssetsField = "assets";
 static constexpr AStringView s_DiagnosticPrefix = "Subsystem meta";
 
 
@@ -102,7 +107,7 @@ template<typename TAsset>
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!itemValue.isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a string"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
     const AStringView text(itemValue.asString().data(), itemValue.asString().size());
@@ -146,41 +151,20 @@ template<typename TAsset>
     return refs;
 }
 
-[[nodiscard]] static Expected<Subsystem::AssetMap> ParseAssetsMap(
-    const Path& nwbFilePath,
-    const Value& mapValue,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    if(!mapValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_AssetsField));
-        return MakeUnexpected(Failure{});
-    }
-
-    const auto& map = mapValue.asMap();
-    Subsystem::AssetMap assets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    assets.reserve(map.size());
-    for(const auto& [nicknameKey, assetValue] : map){
-        const AStringView nicknameView(nicknameKey.data(), nicknameKey.size());
-        if(TrimView(nicknameView).empty() || nicknameView != TrimView(nicknameView)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' must not be empty or padded"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
-            return MakeUnexpected(Failure{});
+template<typename SubsystemT>
+[[nodiscard]] static bool ValidateSubsystemMetadataFields(const Path& nwbFilePath, const Value& asset){
+    const auto descriptors = TypedSubsystem<SubsystemT>::FieldDescriptors();
+    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, [descriptors](const AStringView fieldName)noexcept{
+        if constexpr(SubsystemT::s_SupportsChildSubsystems){
+            if(fieldName == s_SubsystemsField)
+                return true;
         }
-        const auto nickname = Name::FromText(nicknameView);
-        if(!nickname || !*nickname){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' contains an embedded null"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
-            return MakeUnexpected(Failure{});
+        for(const SubsystemFieldDescriptor<SubsystemT>& descriptor : descriptors){
+            if(fieldName == descriptor.fieldName)
+                return true;
         }
-
-        const auto parsedRef = ParseAssetRefString<Core::Assets::IAsset>(nwbFilePath, assetValue, nicknameView, scratchArena);
-        if(!parsedRef)
-            return MakeUnexpected(Failure{});
-        if(!assets.emplace(*nickname, *parsedRef).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': duplicate asset nickname '{}'"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
-            return MakeUnexpected(Failure{});
-        }
-    }
-    return assets;
+        return false;
+    });
 }
 
 
@@ -193,7 +177,8 @@ template<typename TAsset>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SubsystemCookEntry> ParseSubsystemCookMetadata(
+template<typename SubsystemT>
+Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemCookMetadata(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -202,37 +187,51 @@ Expected<SubsystemCookEntry> ParseSubsystemCookMetadata(
 ){
     using namespace __hidden_subsystem_cook;
 
-    SubsystemCookEntry entry(arena);
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix))
         return MakeUnexpected(Failure{});
+
+    SubsystemCookEntry<SubsystemT> entry(arena, virtualPath);
     if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_DiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { s_SubsystemsField, s_AssetsField }))
+    if(!ValidateSubsystemMetadataFields<SubsystemT>(nwbFilePath, asset))
         return MakeUnexpected(Failure{});
 
-    if(const Core::Metascript::Value* subsystemsValue = asset.findField(s_SubsystemsField)){
-        auto subsystems = ParseAssetRefList<Subsystem>(nwbFilePath, *subsystemsValue, s_SubsystemsField, arena, scratchArena);
-        if(!subsystems)
-            return MakeUnexpected(Failure{});
-        entry.subsystems = Move(*subsystems);
+    if constexpr(SubsystemT::s_SupportsChildSubsystems){
+        if(const Core::Metascript::Value* const subsystemsValue = asset.findField(s_SubsystemsField)){
+            auto subsystems = ParseAssetRefList<ISubsystem>(nwbFilePath, *subsystemsValue, s_SubsystemsField, arena, scratchArena);
+            if(!subsystems)
+                return MakeUnexpected(Failure{});
+            entry.subsystem.subsystems() = Move(*subsystems);
+        }
     }
 
-    if(const Core::Metascript::Value* assetsValue = asset.findField(s_AssetsField)){
-        auto assets = ParseAssetsMap(nwbFilePath, *assetsValue, arena, scratchArena);
-        if(!assets)
+    const auto descriptors = TypedSubsystem<SubsystemT>::FieldDescriptors();
+    for(const SubsystemFieldDescriptor<SubsystemT>& descriptor : descriptors){
+        const Core::Metascript::Value* const fieldValue = asset.findField(descriptor.fieldName);
+        if(!fieldValue){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("{} '{}': required field '{}' is missing for '{}'"),
+                ConvertString(s_DiagnosticPrefix),
+                PathToString<tchar>(nwbFilePath),
+                ConvertString(descriptor.fieldName),
+                ConvertString(SubsystemT::s_AssetTypeText)
+            );
             return MakeUnexpected(Failure{});
-        entry.assets = Move(*assets);
+        }
+        const auto parsedRef = ParseAssetRefString<Core::Assets::IAsset>(nwbFilePath, *fieldValue, descriptor.fieldName, scratchArena);
+        if(!parsedRef)
+            return MakeUnexpected(Failure{});
+        descriptor.set(entry.subsystem, parsedRef->name());
     }
 
-    Subsystem candidate(arena, entry.virtualPath);
-    candidate.setContents(Subsystem::SubsystemRefVector(entry.subsystems), Subsystem::AssetMap(entry.assets));
-    if(!candidate.validatePayload(scratchArena))
+    if(!entry.subsystem.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
 
     return entry;
 }
 
-Expected<SubsystemCookEntry> ParseSubsystemCookMetadata(
+template<typename SubsystemT>
+Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemCookMetadata(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
@@ -246,20 +245,58 @@ Expected<SubsystemCookEntry> ParseSubsystemCookMetadata(
     const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, __hidden_subsystem_cook::s_DiagnosticPrefix);
     if(!asset)
         return MakeUnexpected(asset.error());
-    return ParseSubsystemCookMetadata(*virtualPathResult, nwbFilePath, **asset, arena, scratchArena);
+    return ParseSubsystemCookMetadata<SubsystemT>(*virtualPathResult, nwbFilePath, **asset, arena, scratchArena);
 }
 
-Expected<Subsystem> BuildSubsystemAsset(
-    SubsystemCookEntry& entry,
-    Core::Assets::AssetArena& arena,
+template<typename SubsystemT>
+Expected<SubsystemT> BuildSubsystemAsset(
+    SubsystemCookEntry<SubsystemT>& entry,
+    Core::Assets::AssetArena&,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    Subsystem asset(arena, entry.virtualPath);
-    asset.setContents(Move(entry.subsystems), Move(entry.assets));
+    SubsystemT asset = Move(entry.subsystem);
     if(!asset.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
     return asset;
 }
+
+void CollectCookedSubsystemVirtualPaths(
+    const Core::Assets::CookEntryRegistry& entryRegistry,
+    Vector<ISubsystem::SubsystemRef, Core::Alloc::ScratchArena>& inOutSubsystems
+){
+#define NWB_COLLECT_COOKED_SUBSYSTEM_PATHS(Type) \
+    if(entryRegistry.has(Type::AssetTypeName())){ \
+        for(const SubsystemCookEntry<Type>& entry : entryRegistry.entries<SubsystemCookEntry<Type>>(Type::AssetTypeName())) \
+            inOutSubsystems.push_back(ISubsystem::SubsystemRef(entry.virtualPath)); \
+    }
+    NWB_SUBSYSTEM_ASSET_TYPE_ENTRIES(NWB_COLLECT_COOKED_SUBSYSTEM_PATHS)
+#undef NWB_COLLECT_COOKED_SUBSYSTEM_PATHS
+}
+
+
+#define NWB_INSTANTIATE_SUBSYSTEM_COOK_FUNCTIONS(Type) \
+    template Expected<SubsystemCookEntry<Type>> ParseSubsystemCookMetadata<Type>( \
+        Name virtualPath, \
+        const Path& nwbFilePath, \
+        const Core::Metascript::Value& asset, \
+        Core::Assets::AssetArena& arena, \
+        Core::Alloc::ScratchArena& scratchArena \
+    ); \
+    template Expected<SubsystemCookEntry<Type>> ParseSubsystemCookMetadata<Type>( \
+        const Path& assetRoot, \
+        AStringView virtualRoot, \
+        const Path& nwbFilePath, \
+        const Core::Metascript::Document& doc, \
+        Core::Assets::AssetArena& arena, \
+        Core::Alloc::ScratchArena& scratchArena \
+    ); \
+    template Expected<Type> BuildSubsystemAsset<Type>( \
+        SubsystemCookEntry<Type>& entry, \
+        Core::Assets::AssetArena& arena, \
+        Core::Alloc::ScratchArena& scratchArena \
+    );
+NWB_SUBSYSTEM_ASSET_TYPE_ENTRIES(NWB_INSTANTIATE_SUBSYSTEM_COOK_FUNCTIONS)
+#undef NWB_INSTANTIATE_SUBSYSTEM_COOK_FUNCTIONS
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

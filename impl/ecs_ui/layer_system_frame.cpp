@@ -40,7 +40,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update(Core::EC
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: clipboard publication failed"));
     m_ui.reset();
     m_ui.setSkin(skin);
-    m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation(), m_skinSelection.selected(), skin);
+    m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation(), Core::Assets::AssetRef<UiSkin>(skin.virtualPath()), skin);
     constexpr usize s_PaintReserveQuads = 256u;
     m_paint.reserve(s_PaintReserveQuads);
     m_ui.setDeltaSeconds(frameDelta);

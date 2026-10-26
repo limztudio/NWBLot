@@ -1,14 +1,12 @@
-subsystem asset;
+csg_subsystem asset;
 
-asset.assets = {
-    "csg_box_shape": "engine/csg/box/shape",
-    "csg_capsule_shape": "engine/csg/capsule/shape",
-    "csg_plane_shape": "engine/csg/plane/shape",
-    "csg_sphere_shape": "engine/csg/sphere/shape",
-    "csg_interval_cap_fill_ps": "engine/graphics/csg/interval_cap_fill_ps",
-    "csg_interval_combine_cs": "engine/graphics/csg/interval_combine_cs",
-    "csg_interval_peel_cs": "engine/graphics/csg/interval_peel_cs",
-    "csg_receiver_span_build_cs": "engine/graphics/csg/receiver_span_build_cs",
-    "csg_receiver_surface_ps": "engine/graphics/csg/receiver_surface_ps",
-    "csg_refraction_cap_fill_ps": "engine/graphics/csg/refraction_cap_fill_ps"
-};
+asset.box_shape = "engine/csg/box/shape";
+asset.capsule_shape = "engine/csg/capsule/shape";
+asset.plane_shape = "engine/csg/plane/shape";
+asset.sphere_shape = "engine/csg/sphere/shape";
+asset.interval_cap_fill_ps = "engine/graphics/csg/interval_cap_fill_ps";
+asset.interval_combine_cs = "engine/graphics/csg/interval_combine_cs";
+asset.interval_peel_cs = "engine/graphics/csg/interval_peel_cs";
+asset.receiver_span_build_cs = "engine/graphics/csg/receiver_span_build_cs";
+asset.receiver_surface_ps = "engine/graphics/csg/receiver_surface_ps";
+asset.refraction_cap_fill_ps = "engine/graphics/csg/refraction_cap_fill_ps";

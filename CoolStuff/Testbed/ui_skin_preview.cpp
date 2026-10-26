@@ -152,11 +152,7 @@ UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena)
     NWB_FATAL_ASSERT_MSG(configured, NWB_TEXT("Testbed UI labels must have valid constant text"));
 }
 
-bool UiSkinPreview::loadAssets(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const NWB::Core::Assets::AssetManager& assets,
-    const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems
-){
+bool UiSkinPreview::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
     return m_widgets.loadAssets(arena, assets, sceneSubsystems);
 }
 

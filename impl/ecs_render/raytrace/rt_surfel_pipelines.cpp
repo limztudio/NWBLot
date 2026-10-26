@@ -67,7 +67,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelSpawnShader, AssetsGraphicsGi::s_SurfelSpawnShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelSpawn")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelSpawnShader, &GiSubsystem::surfelSpawnCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelSpawn")){
         m_rayTracingState.m_surfelSpawnPipelineFailed = true;
         return false;
     }
@@ -118,7 +118,7 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelAgeFreeShader, AssetsGraphicsGi::s_SurfelAgeFreeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelAgeFree")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelAgeFreeShader, &GiSubsystem::surfelAgeFreeCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelAgeFree")){
         m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
         return false;
     }
@@ -169,7 +169,7 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelHashBuildShader, AssetsGraphicsGi::s_SurfelHashBuildShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelHashBuild")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelHashBuildShader, &GiSubsystem::surfelHashBuildCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelHashBuild")){
         m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
         return false;
     }
@@ -225,7 +225,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsGi::s_SurfelTraceShaderName, csg ? __hidden_rt_surfel_pipelines::s_GiCsgEnabledVariant : __hidden_rt_surfel_pipelines::s_GiCsgDisabledVariant, "ECSRender_SurfelTrace")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(shader, &GiSubsystem::surfelTraceCs, csg ? __hidden_rt_surfel_pipelines::s_GiCsgEnabledVariant : __hidden_rt_surfel_pipelines::s_GiCsgDisabledVariant, "ECSRender_SurfelTrace")){
         failed = true;
         return false;
     }
@@ -287,7 +287,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsGi::s_SurfelTraceHwShaderName, csg ? __hidden_rt_surfel_pipelines::s_GiCsgEnabledVariant : __hidden_rt_surfel_pipelines::s_GiCsgDisabledVariant, "ECSRender_SurfelTraceHw")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(shader, &GiSubsystem::surfelTraceHwCs, csg ? __hidden_rt_surfel_pipelines::s_GiCsgEnabledVariant : __hidden_rt_surfel_pipelines::s_GiCsgDisabledVariant, "ECSRender_SurfelTraceHw")){
         failed = true;
         return false;
     }
@@ -340,7 +340,7 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelResolveShader, AssetsGraphicsGi::s_SurfelResolveShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelResolve")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelResolveShader, &GiSubsystem::surfelResolveCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelResolve")){
         m_rayTracingState.m_surfelResolvePipelineFailed = true;
         return false;
     }
@@ -391,7 +391,7 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelUpsampleShader, AssetsGraphicsGi::s_SurfelUpsampleShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelUpsample")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelUpsampleShader, &GiSubsystem::surfelUpsampleCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelUpsample")){
         m_rayTracingState.m_surfelUpsamplePipelineFailed = true;
         return false;
     }
@@ -442,7 +442,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelTraceBuildArgsShader, AssetsGraphicsGi::s_SurfelTraceBuildArgsShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelTraceBuildArgs")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_surfelTraceBuildArgsShader, &GiSubsystem::surfelTraceBuildArgsCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SurfelTraceBuildArgs")){
         m_rayTracingState.m_surfelTraceBuildArgsPipelineFailed = true;
         return false;
     }

@@ -31,7 +31,7 @@ namespace Tests::Smoke{
 // Scene fixture for primitive and Builder texture image declarations.
 class UiTextureImageSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
-    UiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets);
+    UiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Core::Assets::AssetManager& assets);
     virtual ~UiTextureImageSmokeScene()noexcept override;
 
 
@@ -74,7 +74,7 @@ using SharedUiTextureImageSmokeScene = RefCountPtr< RefCounter<UiTextureImageSmo
 
 [[nodiscard]] bool IsUiLayerTextureImageSmokeEnabled();
 [[nodiscard]] bool IsUiLayerTextureImageSkinSmokeEnabled();
-[[nodiscard]] SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets);
+[[nodiscard]] SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Core::Assets::AssetManager& assets);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

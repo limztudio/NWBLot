@@ -28,11 +28,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool loadAssets(
-        NWB::Core::Alloc::GlobalArena& arena,
-        const NWB::Core::Assets::AssetManager& assets,
-        const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems
-    );
+    [[nodiscard]] bool loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems);
     void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
 
 

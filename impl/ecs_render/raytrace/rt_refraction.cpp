@@ -5,7 +5,6 @@
 #include "rt_private.h"
 #include "renderer_raytracing_state.h"
 
-#include <impl/assets_graphics/refraction/names.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
 
 
@@ -90,8 +89,18 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
             return false;
     }
 
+    const auto resolveRefractionShader = [this](
+        const Core::Assets::AssetRef<ComputeShader> RefractiveSubsystem::* refractiveMember,
+        const Core::Assets::AssetRef<ComputeShader> TransparentSubsystem::* transparentMember
+    )noexcept -> Name{
+        if(const Name resolved = m_shaderSystem.resolveSubsystemAsset<RefractiveSubsystem>(refractiveMember))
+            return resolved;
+        return m_shaderSystem.resolveSubsystemAsset<TransparentSubsystem>(transparentMember);
+    };
+
     if(!m_rayTracingState.m_refractionClassifyTilesPipeline){
-        if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_refractionClassifyTilesShader, AssetsGraphicsRefraction::s_ClassifyTilesShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_RefractionClassifyTiles"))
+        const Name classifyShaderName = resolveRefractionShader(&RefractiveSubsystem::refractionClassifyTilesCs, &TransparentSubsystem::refractionClassifyTilesCs);
+        if(!m_shaderSystem.loadShaderAsset<ComputeShader>(m_rayTracingState.m_refractionClassifyTilesShader, classifyShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_RefractionClassifyTiles"))
             return false;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(m_rayTracingState.m_refractionClassifyTilesShader).addBindingLayout(m_rayTracingState.m_refractionBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
@@ -101,7 +110,8 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         m_rayTracingState.m_refractionClassifyTilesPipeline = Move(*pipeline);
     }
     if(!m_rayTracingState.m_refractionFinalizeTilesPipeline){
-        if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_refractionFinalizeTilesShader, AssetsGraphicsRefraction::s_FinalizeTilesShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_RefractionFinalizeTiles"))
+        const Name finalizeShaderName = resolveRefractionShader(&RefractiveSubsystem::refractionFinalizeTilesCs, &TransparentSubsystem::refractionFinalizeTilesCs);
+        if(!m_shaderSystem.loadShaderAsset<ComputeShader>(m_rayTracingState.m_refractionFinalizeTilesShader, finalizeShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_RefractionFinalizeTiles"))
             return false;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(m_rayTracingState.m_refractionFinalizeTilesShader).addBindingLayout(m_rayTracingState.m_refractionBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
@@ -133,9 +143,12 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
             ? (diagnostics ? __hidden_rt_refraction::s_DiagnosticHardwareVariants[csg ? 1u : 0u][dense ? 1u : 0u]
                 : (csg ? (dense ? __hidden_rt_refraction::s_CsgHardwareDenseVariant : __hidden_rt_refraction::s_CsgHardwareSparseVariant) : (dense ? __hidden_rt_refraction::s_HardwareDenseVariant : __hidden_rt_refraction::s_HardwareSparseVariant)))
             : (dense ? __hidden_rt_refraction::s_ScreenDenseVariant : __hidden_rt_refraction::s_ScreenSparseVariant);
-        if(!m_shaderSystem.loadShader<ComputeShader>(
+        const Name resolveShaderName = hardware
+            ? resolveRefractionShader(&RefractiveSubsystem::refractionResolveHwCs, &TransparentSubsystem::refractionResolveHwCs)
+            : resolveRefractionShader(&RefractiveSubsystem::refractionResolveScreenCs, &TransparentSubsystem::refractionResolveScreenCs);
+        if(!m_shaderSystem.loadShaderAsset<ComputeShader>(
             shader,
-            hardware ? AssetsGraphicsRefraction::s_HwResolveShaderName : AssetsGraphicsRefraction::s_ScreenResolveShaderName,
+            resolveShaderName,
             variant,
             hardware ? (dense ? "ECSRender_RefractionHwDense" : "ECSRender_RefractionHw") : (dense ? "ECSRender_RefractionScreenDense" : "ECSRender_RefractionScreen")
         )){

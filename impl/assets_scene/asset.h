@@ -88,7 +88,7 @@ NWB_DEFINE_ASSET_CODEC(ProjectAssetCodec, ProjectAsset);
 
 class SceneAsset final : public Core::Assets::TypedAsset<SceneAsset>{
 public:
-    using SubsystemRef = Core::Assets::AssetRef<Subsystem>;
+    using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
     using AssetRef = Core::Assets::AssetRef<Core::Assets::IAsset>;
     using SubsystemRefVector = Core::Assets::AssetVector<SubsystemRef>;
     using AssetMap = HashMap<Name, AssetRef, Core::Assets::AssetArena, Hasher<Name>, EqualTo<Name>>;
@@ -156,27 +156,12 @@ class ActiveSceneSubsystems final{
 public:
     using ProjectRef = Core::Assets::AssetRef<ProjectAsset>;
     using SceneRef = Core::Assets::AssetRef<SceneAsset>;
-    using SubsystemRef = Core::Assets::AssetRef<Subsystem>;
+    using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
     using AssetRef = Core::Assets::AssetRef<Core::Assets::IAsset>;
     using SubsystemRefVector = Vector<SubsystemRef, Core::Alloc::GlobalArena>;
     using AssetRefVector = Vector<AssetRef, Core::Alloc::GlobalArena>;
     using AssetMap = HashMap<Name, AssetRef, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
-
-
-private:
-    struct LoadedSubsystem{
-        SubsystemRef subsystem;
-        SubsystemRefVector children;
-        AssetMap assets;
-
-
-    public:
-        explicit LoadedSubsystem(Core::Alloc::GlobalArena& arena)noexcept
-            : children(arena)
-            , assets(0, Hasher<Name>(), EqualTo<Name>(), arena)
-        {}
-    };
-    using LoadedSubsystemVector = Vector<LoadedSubsystem, Core::Alloc::GlobalArena>;
+    using LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>, Core::Alloc::GlobalArena>;
 
 
 public:
@@ -193,16 +178,29 @@ public:
     [[nodiscard]] bool loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project = ProjectAssetDefaults::s_DefaultProjectRef);
     [[nodiscard]] bool loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene);
 
-    void enableSubsystem(const SubsystemRef& subsystem);
-
     [[nodiscard]] bool valid()const noexcept{ return m_scene.valid() && !m_subsystems.empty(); }
     [[nodiscard]] const ProjectRef& project()const noexcept{ return m_project; }
     [[nodiscard]] const SceneRef& scene()const noexcept{ return m_scene; }
     [[nodiscard]] const SubsystemRefVector& subsystems()const noexcept{ return m_subsystems; }
     [[nodiscard]] const AssetMap& sceneAssets()const noexcept{ return m_sceneAssets; }
+    [[nodiscard]] const LoadedSubsystemVector& loadedSubsystems()const noexcept{ return m_loadedSubsystems; }
     [[nodiscard]] const AssetRefVector& resolvedAssets()const noexcept{ return m_resolvedAssets; }
 
     [[nodiscard]] bool hasSubsystem(const SubsystemRef& subsystem)const noexcept;
+
+    template<typename SubsystemT>
+    [[nodiscard]] const SubsystemT* findSubsystem()const noexcept{
+        for(const UniquePtr<ISubsystem>& loaded : m_loadedSubsystems){
+            if(loaded && loaded->assetType() == SubsystemT::AssetTypeName())
+                return checked_cast<const SubsystemT*>(loaded.get());
+        }
+        return nullptr;
+    }
+
+    template<typename SubsystemT>
+    [[nodiscard]] bool hasSubsystem()const noexcept{
+        return findSubsystem<SubsystemT>() != nullptr;
+    }
 
     template<typename TAsset = Core::Assets::IAsset>
     [[nodiscard]] Core::Assets::AssetRef<TAsset> findSceneAsset(const Name& nickname)const noexcept{
@@ -215,31 +213,6 @@ public:
         result.virtualPath = found.value().name();
         return result;
     }
-
-    template<typename TAsset = Core::Assets::IAsset>
-    [[nodiscard]] Core::Assets::AssetRef<TAsset> findSubsystemAsset(const SubsystemRef& subsystem, const Name& nickname)const noexcept{
-        const AssetRef found = findSubsystemAssetUntyped(subsystem, nickname);
-        if(!found.valid())
-            return {};
-        Core::Assets::AssetRef<TAsset> result;
-        result.virtualPath = found.name();
-        return result;
-    }
-
-    template<typename TAsset = Core::Assets::IAsset>
-    [[nodiscard]] Core::Assets::AssetRef<TAsset> findAsset(const Name& nickname)const noexcept{
-        const AssetRef found = findAssetUntyped(nickname);
-        if(!found.valid())
-            return {};
-        Core::Assets::AssetRef<TAsset> result;
-        result.virtualPath = found.name();
-        return result;
-    }
-
-
-private:
-    [[nodiscard]] AssetRef findSubsystemAssetUntyped(const SubsystemRef& subsystem, const Name& nickname, usize depth = 0u)const noexcept;
-    [[nodiscard]] AssetRef findAssetUntyped(const Name& nickname)const noexcept;
 
 
 private:

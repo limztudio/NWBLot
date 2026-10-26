@@ -31,6 +31,8 @@ NWB_ASSETS_BEGIN
 using CookArena = Core::Alloc::GlobalArena;
 template<typename T, typename V>
 using CookDependencyMap = HashMap<T, V, CookArena, Hasher<T>, EqualTo<T>>;
+template<typename T>
+using CookDependencySet = HashSet<T, CookArena, Hasher<T>, EqualTo<T>>;
 using ScratchArena = Core::Alloc::ScratchArena;
 
 
@@ -73,24 +75,29 @@ using CookDependencyExtractFunction = bool (*)(const CookDependencyItemContext& 
 class CookDependencyRegistry : NoCopy{
 private:
     using ExtractorLookup = CookDependencyMap<Name, NotNull<CookDependencyExtractFunction>>;
+    using SubsystemTypeSet = CookDependencySet<Name>;
 
 
 public:
     explicit CookDependencyRegistry(CookArena& arena)noexcept
         : m_lookup(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , m_subsystemTypes(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
 
 
 public:
     bool registerType(const Name& assetType, CookDependencyExtractFunction extractDependencies);
+    bool registerSubsystemType(const Name& assetType, CookDependencyExtractFunction extractDependencies);
 
     [[nodiscard]] CookDependencyExtractFunction find(const Name& assetType)const noexcept;
     [[nodiscard]] bool has(const Name& assetType)const noexcept{ return find(assetType) != nullptr; }
+    [[nodiscard]] bool isSubsystemType(const Name& assetType)const noexcept;
     [[nodiscard]] bool extractDependencies(const CookDependencyItemContext& context, ICookDependencyCollector& collector)const;
 
 
 private:
     ExtractorLookup m_lookup;
+    SubsystemTypeSet m_subsystemTypes;
 };
 
 

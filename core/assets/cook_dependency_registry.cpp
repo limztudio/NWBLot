@@ -63,9 +63,23 @@ bool CookDependencyRegistry::registerType(const Name& assetType, const CookDepen
     return false;
 }
 
+bool CookDependencyRegistry::registerSubsystemType(const Name& assetType, const CookDependencyExtractFunction extractDependencies){
+    if(!registerType(assetType, extractDependencies))
+        return false;
+
+    m_subsystemTypes.emplace(assetType);
+    return true;
+}
+
 CookDependencyExtractFunction CookDependencyRegistry::find(const Name& assetType)const noexcept{
     const auto found = m_lookup.find(assetType);
     return found == m_lookup.end() ? nullptr : found.value().get();
+}
+
+bool CookDependencyRegistry::isSubsystemType(const Name& assetType)const noexcept{
+    if(!assetType)
+        return false;
+    return m_subsystemTypes.find(assetType) != m_subsystemTypes.end();
 }
 
 bool CookDependencyRegistry::extractDependencies(const CookDependencyItemContext& context, ICookDependencyCollector& collector)const{

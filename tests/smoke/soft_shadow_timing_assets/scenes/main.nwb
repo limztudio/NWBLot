@@ -1,7 +1,10 @@
 scene asset;
 
 asset.subsystems = [
-    "engine/subsystems/renderer"
+    "engine/subsystems/renderer",
+    "engine/subsystems/skinning",
+    "engine/subsystems/transparent",
+    "engine/subsystems/refractive"
 ];
 
 asset.assets = {

@@ -72,26 +72,47 @@ public:
 
 public:
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
-    [[nodiscard]] Name resolveShaderName(const Name& shaderName)const noexcept{
-        if(m_activeSceneSubsystems){
-            const auto resolved = m_activeSceneSubsystems->findAsset(shaderName);
-            if(resolved.valid())
-                return resolved.name();
-        }
-        return shaderName;
+    [[nodiscard]] const ActiveSceneSubsystems* activeSceneSubsystems()const noexcept{ return m_activeSceneSubsystems; }
+
+    template<typename SubsystemT>
+    [[nodiscard]] const SubsystemT* findSubsystem()const noexcept{
+        return m_activeSceneSubsystems ? m_activeSceneSubsystems->findSubsystem<SubsystemT>() : nullptr;
+    }
+
+    template<typename SubsystemT, typename TAsset>
+    [[nodiscard]] Name resolveSubsystemAsset(const Core::Assets::AssetRef<TAsset> SubsystemT::* member)const noexcept{
+        const SubsystemT* const subsystem = findSubsystem<SubsystemT>();
+        if(!subsystem)
+            return s_NameNone;
+        const Core::Assets::AssetRef<TAsset>& ref = subsystem->*member;
+        return ref.valid() ? ref.name() : s_NameNone;
     }
 
     void invalidateResources()noexcept;
+    template<typename TShader, typename SubsystemT, typename TAsset>
+        requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
+    [[nodiscard]] bool loadShader(
+        Core::ShaderHandle& outShader,
+        const Core::Assets::AssetRef<TAsset> SubsystemT::* member,
+        const AStringView variantName,
+        const Name& debugName,
+        const Name* archiveStageName = nullptr
+    ){
+        static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
+        const Name resolvedShaderName = resolveSubsystemAsset<SubsystemT>(member);
+        if(!resolvedShaderName)
+            return false;
+        return loadShaderAsset<TShader>(outShader, resolvedShaderName, variantName, debugName, archiveStageName);
+    }
     template<typename TShader>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
-    [[nodiscard]] bool loadShader(Core::ShaderHandle& outShader, const Name& shaderName, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
+    [[nodiscard]] bool loadShaderAsset(Core::ShaderHandle& outShader, const Name& shaderAssetName, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
-        const Name resolvedShaderName = resolveShaderName(shaderName);
-        return ShaderAssetLoader::Load<TShader>(outShader, resolvedShaderName, variantName, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
+        return ShaderAssetLoader::Load<TShader>(outShader, shaderAssetName, variantName, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
     }
 
-    [[nodiscard]] bool loadShaderForStage(Core::ShaderHandle& outShader, const Name& shaderName, AStringView variantName, Core::ShaderType::Mask shaderType, const Name& debugName, const Name* archiveStageName = nullptr);
-    [[nodiscard]] bool hasShaderArchiveStage(const Name& shaderName, AStringView variantName, const Name& stageName)const;
+    [[nodiscard]] bool loadShaderForStage(Core::ShaderHandle& outShader, const Name& shaderAssetName, AStringView variantName, Core::ShaderType::Mask shaderType, const Name& debugName, const Name* archiveStageName = nullptr);
+    [[nodiscard]] bool hasShaderArchiveStage(const Name& shaderAssetName, AStringView variantName, const Name& stageName)const;
     [[nodiscard]] bool loadDeferredCompositeVertexShader();
     [[nodiscard]] const Core::ShaderHandle& deferredCompositeVertexShader()const noexcept{
         return m_deferredCompositeVertexShader;

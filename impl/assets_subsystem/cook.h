@@ -63,12 +63,7 @@ inline constexpr AStringView s_SubsystemDiagnosticPrefix = "Subsystem meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseSubsystemCookMetadata(
-    ISubsystem& outSubsystem,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] bool ParseSubsystemCookMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena, ISubsystem& outSubsystem);
 
 template<typename SubsystemT>
 [[nodiscard]] Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemCookMetadata(
@@ -84,7 +79,7 @@ template<typename SubsystemT>
     SubsystemCookEntry<SubsystemT> entry(arena, virtualPath);
     if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_SubsystemDiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!ParseSubsystemCookMetadata(entry.subsystem, nwbFilePath, asset, scratchArena))
+    if(!ParseSubsystemCookMetadata(nwbFilePath, asset, scratchArena, entry.subsystem))
         return MakeUnexpected(Failure{});
 
     return entry;
@@ -130,11 +125,7 @@ template<typename SubsystemT>
 }
 
 template<typename SubsystemT>
-[[nodiscard]] Expected<SubsystemT> BuildSubsystemAsset(
-    SubsystemCookEntry<SubsystemT>& entry,
-    Core::Assets::AssetArena&,
-    Core::Alloc::ScratchArena&
-){
+[[nodiscard]] Expected<SubsystemT> BuildSubsystemAsset(SubsystemCookEntry<SubsystemT>& entry, Core::Assets::AssetArena&, Core::Alloc::ScratchArena&){
     SubsystemT asset = Move(entry.subsystem);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure{});
@@ -142,10 +133,7 @@ template<typename SubsystemT>
 }
 
 template<typename SubsystemT>
-[[nodiscard]] bool ExtractSubsystemDependencies(
-    const Core::Assets::CookDependencyItemContext& context,
-    Core::Assets::ICookDependencyCollector& collector
-){
+[[nodiscard]] bool ExtractSubsystemDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto subsystemEntry = context.document
         ? ParseSubsystemCookMetadata<SubsystemT>(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena)
         : ParseSubsystemCookMetadata<SubsystemT>(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
@@ -209,3 +197,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

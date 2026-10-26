@@ -37,6 +37,8 @@ public:
 public:
     SubsystemAssetRefVector<Sampler> basicSamplers;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<RendererSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<RendererSubsystem, Sampler, &RendererSubsystem::basicSamplers>("basic_samplers"),
     };
@@ -52,3 +54,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

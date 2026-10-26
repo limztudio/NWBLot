@@ -33,6 +33,8 @@ public:
     Core::Assets::AssetRef<VertexShader> compositeVs;
     Core::Assets::AssetRef<ComputeShader> lightingCs;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<DeferredSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<DeferredSubsystem, ComputeShader, &DeferredSubsystem::compositeCs>("composite_cs"),
         MakeSubsystemFieldDescriptor<DeferredSubsystem, PixelShader, &DeferredSubsystem::compositePs>("composite_ps"),
@@ -51,3 +53,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -161,10 +161,7 @@ public:
     [[nodiscard]] bool loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene);
 
     [[nodiscard]] bool valid()const noexcept{ return m_scene.valid() && !m_loadedSubsystems.empty(); }
-    [[nodiscard]] const ProjectRef& project()const noexcept{ return m_project; }
     [[nodiscard]] const SceneRef& scene()const noexcept{ return m_scene; }
-    [[nodiscard]] const AssetMap& sceneAssets()const noexcept{ return m_sceneAssets; }
-    [[nodiscard]] const LoadedSubsystemVector& loadedSubsystems()const noexcept{ return m_loadedSubsystems; }
 
     template<typename SubsystemT>
     [[nodiscard]] const SubsystemT* findSubsystem()const noexcept{
@@ -195,7 +192,6 @@ public:
 
 private:
     Core::Alloc::GlobalArena& m_arena;
-    ProjectRef m_project;
     SceneRef m_scene;
     AssetMap m_sceneAssets;
     LoadedSubsystemVector m_loadedSubsystems;
@@ -209,3 +205,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

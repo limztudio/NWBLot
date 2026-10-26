@@ -57,6 +57,8 @@ public:
     Core::Assets::AssetRef<ComputeShader> swShadowTransparentResolveCs;
     Core::Assets::AssetRef<ComputeShader> swShadowTransparentSoftCs;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<ShadowSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<ShadowSubsystem, ComputeShader, &ShadowSubsystem::hardwareTransparentEvaluateCs>("hardware_transparent_evaluate_cs"),
         MakeSubsystemFieldDescriptor<ShadowSubsystem, ComputeShader, &ShadowSubsystem::hardwareTransparentGatherCs>("hardware_transparent_gather_cs"),
@@ -99,3 +101,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

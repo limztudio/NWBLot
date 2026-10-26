@@ -33,6 +33,8 @@ public:
     Core::Assets::AssetRef<ComputeShader> repackNormalsCs;
     Core::Assets::AssetRef<ComputeShader> skinningCs;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<SkinningSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<SkinningSubsystem, ComputeShader, &SkinningSubsystem::localBoundsCs>("local_bounds_cs"),
         MakeSubsystemFieldDescriptor<SkinningSubsystem, ComputeShader, &SkinningSubsystem::meshletBoundsCs>("meshlet_bounds_cs"),
@@ -51,3 +53,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

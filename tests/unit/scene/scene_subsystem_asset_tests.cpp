@@ -57,21 +57,13 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
     return binary;
 }
 
-[[nodiscard]] static AssetBytes MakeSceneBinary(
-    AssetArena& arena,
-    const Span<const SceneAsset::SubsystemRef> subsystems,
-    const SceneAsset::AssetMap& assets
-){
+[[nodiscard]] static AssetBytes MakeSceneBinary(AssetArena& arena, const Span<const SceneAsset::SubsystemRef> subsystems, const SceneAsset::AssetMap& assets){
     SceneBinaryPayload::SceneHeaderBinary header;
     header.subsystemCount = static_cast<u64>(subsystems.size());
     header.assetCount = static_cast<u64>(assets.size());
 
     AssetBytes binary(arena);
-    binary.reserve(
-        sizeof(header)
-        + subsystems.size() * sizeof(NameHash)
-        + assets.size() * sizeof(SceneBinaryPayload::SceneAssetEntryBinary)
-    );
+    binary.reserve(sizeof(header) + subsystems.size() * sizeof(NameHash) + assets.size() * sizeof(SceneBinaryPayload::SceneAssetEntryBinary));
     AppendPOD(binary, header);
     for(const SceneAsset::SubsystemRef& ref : subsystems)
         AppendPOD(binary, ref.name().hash());
@@ -93,9 +85,8 @@ static void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
             if(subsystem.fieldValueCount(i) == 0u)
                 subsystem.appendFieldValue(i, Name("engine/test/default_asset"));
         }
-        else if(!subsystem.fieldValue(i)){
+        else if(!subsystem.fieldValue(i))
             subsystem.appendFieldValue(i, Name("engine/test/default_asset"));
-        }
     }
 }
 
@@ -112,11 +103,7 @@ template<typename SubsystemT>
     header.assetCount = totalAssetCount;
 
     AssetBytes binary(arena);
-    binary.reserve(
-        sizeof(header)
-        + fieldCount * sizeof(u64)
-        + static_cast<usize>(totalAssetCount) * sizeof(NameHash)
-    );
+    binary.reserve(sizeof(header) + fieldCount * sizeof(u64) + static_cast<usize>(totalAssetCount) * sizeof(NameHash));
     AppendPOD(binary, header);
     for(usize i = 0u; i < fieldCount; ++i){
         const u64 valueCount = static_cast<u64>(subsystem.fieldValueCount(i));
@@ -411,3 +398,4 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

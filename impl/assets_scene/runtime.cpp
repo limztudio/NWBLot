@@ -34,11 +34,7 @@ using NameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash
 
 
 template<typename TAsset>
-[[nodiscard]] static bool ValidateUniqueAssetRefs(
-    const Span<const Core::Assets::AssetRef<TAsset>> references,
-    const TStringView contextLabel,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] static bool ValidateUniqueAssetRefs(const Span<const Core::Assets::AssetRef<TAsset>> references, const TStringView contextLabel, Core::Alloc::ScratchArena& scratchArena){
     NameHashSet seen(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     seen.reserve(references.size());
     for(usize i = 0u; i < references.size(); ++i){
@@ -198,10 +194,7 @@ bool ActiveSceneSubsystems::loadProjectStartScene(Core::Assets::AssetManager& as
     auto projectAsset = assetManager.loadTypedSync<ProjectAsset>(project.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner, "project manifest");
     if(!projectAsset)
         return false;
-    if(!loadScene(assetManager, (*projectAsset)->startScene()))
-        return false;
-    m_project = project;
-    return true;
+    return loadScene(assetManager, (*projectAsset)->startScene());
 }
 
 bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene){
@@ -265,3 +258,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

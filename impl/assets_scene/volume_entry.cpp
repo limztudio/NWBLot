@@ -41,12 +41,7 @@ static Expected<ProjectCookEntry> ParseProjectDocument(
     return ParseProjectCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static Expected<ProjectCookEntry> ParseProjectValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
+static Expected<ProjectCookEntry> ParseProjectValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
     return ParseProjectCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
 }
 
@@ -84,12 +79,7 @@ static Expected<SceneCookEntry> ParseSceneDocument(
     return ParseSceneCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static Expected<SceneCookEntry> ParseSceneValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
+static Expected<SceneCookEntry> ParseSceneValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
     return ParseSceneCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
 }
 
@@ -133,10 +123,7 @@ static bool RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
 }
 
 static bool RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& registry){
-    return
-        registry.registerType(ProjectAsset::AssetTypeName(), &ExtractProjectDependencies)
-        && registry.registerType(SceneAsset::AssetTypeName(), &ExtractSceneDependencies)
-    ;
+    return registry.registerType(ProjectAsset::AssetTypeName(), &ExtractProjectDependencies) && registry.registerType(SceneAsset::AssetTypeName(), &ExtractSceneDependencies);
 }
 
 
@@ -167,3 +154,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

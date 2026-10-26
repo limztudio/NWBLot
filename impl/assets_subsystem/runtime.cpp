@@ -31,11 +31,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SubsystemAssetCodecAutoRegistrar, SubsystemAs
 static const SubsystemTypeAutoRegistrar* s_RegisteredSubsystemTypesHead = nullptr;
 
 
-[[nodiscard]] static UniquePtr<ISubsystem> CreateSubsystemByTypeHash(
-    Core::Assets::AssetArena& arena,
-    const Name& virtualPath,
-    const NameHash& subsystemTypeHash
-){
+[[nodiscard]] static UniquePtr<ISubsystem> CreateSubsystemByTypeHash(Core::Assets::AssetArena& arena, const Name& virtualPath, const NameHash& subsystemTypeHash){
     for(const SubsystemTypeAutoRegistrar* node = s_RegisteredSubsystemTypesHead; node != nullptr; node = node->next()){
         if(node->assetType().hash() == subsystemTypeHash && node->create() != nullptr)
             return node->create()(arena, virtualPath);
@@ -244,11 +240,7 @@ bool LoadBinary(ISubsystem& subsystem, const Span<const u8> binary){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(
-    Core::Assets::AssetArena& arena,
-    const Name& virtualPath,
-    const Span<const u8> binary
-)const{
+Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const{
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemBinaryPayload::SubsystemHeaderBinary>(
         binary,
@@ -282,3 +274,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

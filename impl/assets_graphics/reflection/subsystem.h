@@ -35,6 +35,8 @@ public:
     Core::Assets::AssetRef<ComputeShader> spatialCs;
     Core::Assets::AssetRef<ComputeShader> temporalCs;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<ReflectionSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::buildArgsCs>("build_args_cs"),
         MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::classifyCs>("classify_cs"),
@@ -55,3 +57,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

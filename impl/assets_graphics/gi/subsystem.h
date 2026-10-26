@@ -37,6 +37,8 @@ public:
     Core::Assets::AssetRef<ComputeShader> surfelTraceHwCs;
     Core::Assets::AssetRef<ComputeShader> surfelUpsampleCs;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<GiSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<GiSubsystem, ComputeShader, &GiSubsystem::surfelAgeFreeCs>("surfel_age_free_cs"),
         MakeSubsystemFieldDescriptor<GiSubsystem, ComputeShader, &GiSubsystem::surfelHashBuildCs>("surfel_hash_build_cs"),
@@ -59,3 +61,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

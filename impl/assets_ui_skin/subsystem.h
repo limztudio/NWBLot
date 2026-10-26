@@ -44,6 +44,8 @@ public:
     Core::Assets::AssetRef<UiSkin> defaultSkin;
     Core::Assets::AssetRef<Texture> defaultSkinTexture;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<UiSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<UiSubsystem, PixelShader, &UiSubsystem::outputPs>("output_ps"),
         MakeSubsystemFieldDescriptor<UiSubsystem, VertexShader, &UiSubsystem::outputVs>("output_vs"),
@@ -68,3 +70,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

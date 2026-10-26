@@ -36,6 +36,8 @@ public:
     Core::Assets::AssetRef<ComputeShader> refractionResolveHwCs;
     Core::Assets::AssetRef<ComputeShader> refractionResolveScreenCs;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<TransparentSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<TransparentSubsystem, ComputeShader, &TransparentSubsystem::avboitDepthWarpCs>("avboit_depth_warp_cs"),
         MakeSubsystemFieldDescriptor<TransparentSubsystem, ComputeShader, &TransparentSubsystem::avboitIntegrateCs>("avboit_integrate_cs"),
@@ -57,3 +59,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

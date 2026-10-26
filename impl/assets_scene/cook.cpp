@@ -74,10 +74,7 @@ bool SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     });
 
     usize reserveBytes = sizeof(SceneBinaryPayload::SceneHeaderBinary);
-    const bool canReserve =
-        AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes)
-        && AddBinaryVectorReserveBytes(reserveBytes, assetEntries)
-    ;
+    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes) && AddBinaryVectorReserveBytes(reserveBytes, assetEntries);
 
     outBinary.clear();
     if(canReserve)
@@ -166,12 +163,7 @@ template<typename TAsset>
     return refs;
 }
 
-[[nodiscard]] static Expected<SceneAsset::AssetMap> ParseAssetsMap(
-    const Path& nwbFilePath,
-    const Value& mapValue,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] static Expected<SceneAsset::AssetMap> ParseAssetsMap(const Path& nwbFilePath, const Value& mapValue, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     if(!mapValue.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_AssetsField));
         return MakeUnexpected(Failure{});
@@ -267,11 +259,7 @@ Expected<ProjectCookEntry> ParseProjectCookMetadata(
     return ParseProjectCookMetadata(*virtualPathResult, nwbFilePath, **asset, arena, scratchArena);
 }
 
-Expected<ProjectAsset> BuildProjectAsset(
-    ProjectCookEntry& entry,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena&
-){
+Expected<ProjectAsset> BuildProjectAsset(ProjectCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
     ProjectAsset asset(arena, entry.virtualPath);
     asset.setStartScene(entry.startScene);
     if(!asset.validatePayload())
@@ -342,11 +330,7 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(
     return ParseSceneCookMetadata(*virtualPathResult, nwbFilePath, **asset, arena, scratchArena);
 }
 
-Expected<SceneAsset> BuildSceneAsset(
-    SceneCookEntry& entry,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<SceneAsset> BuildSceneAsset(SceneCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     SceneAsset asset(arena, entry.virtualPath);
     asset.setContents(Move(entry.subsystems), Move(entry.assets));
     if(!asset.validatePayload(scratchArena))

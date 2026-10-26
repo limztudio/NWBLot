@@ -40,6 +40,8 @@ public:
     Core::Assets::AssetRef<ComputeShader> refractionResolveHwCs;
     Core::Assets::AssetRef<ComputeShader> refractionResolveScreenCs;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<RefractiveSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<RefractiveSubsystem, ComputeShader, &RefractiveSubsystem::causticAccumulatorDecayCs>("caustic_accumulator_decay_cs"),
         MakeSubsystemFieldDescriptor<RefractiveSubsystem, ComputeShader, &RefractiveSubsystem::causticGeometryDownsampleCs>("caustic_geometry_downsample_cs"),
@@ -65,3 +67,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

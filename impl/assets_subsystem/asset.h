@@ -33,9 +33,11 @@ struct SubsystemFieldValueDescriptor{
 
 interface ISubsystem : Core::Assets::IAsset{
 public:
-    NWB_DEFINE_ASSET_TYPE("subsystem")
-
     using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
+
+
+public:
+    NWB_DEFINE_ASSET_TYPE("subsystem")
 
 
 public:
@@ -79,9 +81,7 @@ struct SubsystemFieldDescriptor{
 };
 
 template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> SubsystemT::* Member>
-[[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(
-    const AStringView fieldName
-)noexcept{
+[[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(const AStringView fieldName)noexcept{
     static_assert(!TAsset::s_AssetTypeText.empty(), "Subsystem field asset type must define a non-empty s_AssetTypeText");
     return SubsystemFieldDescriptor<SubsystemT>{
         fieldName,
@@ -104,9 +104,7 @@ template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> Su
 }
 
 template<typename SubsystemT, typename TAsset, SubsystemAssetRefVector<TAsset> SubsystemT::* Member>
-[[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(
-    const AStringView fieldName
-)noexcept{
+[[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(const AStringView fieldName)noexcept{
     static_assert(!TAsset::s_AssetTypeText.empty(), "Subsystem field asset type must define a non-empty s_AssetTypeText");
     return SubsystemFieldDescriptor<SubsystemT>{
         fieldName,
@@ -154,6 +152,13 @@ namespace SubsystemAssetRuntime{
 template<typename SubsystemT>
 class TypedSubsystem : public ISubsystem{
 public:
+    [[nodiscard]] static Span<const SubsystemFieldDescriptor<SubsystemT>> FieldDescriptors()noexcept{
+        static_assert(LengthOf(SubsystemT::s_Fields) > 0u, "Concrete subsystem must declare at least one asset field");
+        return Span<const SubsystemFieldDescriptor<SubsystemT>>(SubsystemT::s_Fields, LengthOf(SubsystemT::s_Fields));
+    }
+
+
+public:
     explicit TypedSubsystem(Core::Assets::AssetArena&)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName())))
         : ISubsystem(SubsystemT::AssetTypeName())
     {}
@@ -168,13 +173,6 @@ public:
 public:
     TypedSubsystem& operator=(const TypedSubsystem&) = default;
     TypedSubsystem& operator=(TypedSubsystem&&)noexcept = default;
-
-
-public:
-    [[nodiscard]] static Span<const SubsystemFieldDescriptor<SubsystemT>> FieldDescriptors()noexcept{
-        static_assert(LengthOf(SubsystemT::s_Fields) > 0u, "Concrete subsystem must declare at least one asset field");
-        return Span<const SubsystemFieldDescriptor<SubsystemT>>(SubsystemT::s_Fields, LengthOf(SubsystemT::s_Fields));
-    }
 
 
 public:
@@ -193,11 +191,7 @@ public:
     [[nodiscard]] virtual SubsystemFieldValueDescriptor fieldDescriptor(const usize index)const noexcept override{
         const auto descriptors = FieldDescriptors();
         NWB_ASSERT(index < descriptors.size());
-        return SubsystemFieldValueDescriptor{
-            descriptors[index].fieldName,
-            descriptors[index].expectedAssetTypeText,
-            descriptors[index].isArray
-        };
+        return SubsystemFieldValueDescriptor{ descriptors[index].fieldName, descriptors[index].expectedAssetTypeText, descriptors[index].isArray };
     }
 
     [[nodiscard]] virtual usize fieldValueCount(const usize index)const noexcept override{
@@ -274,11 +268,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(
-        Core::Assets::AssetArena& arena,
-        const Name& virtualPath,
-        Span<const u8> binary
-    )const override;
+    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, Span<const u8> binary)const override;
 #if defined(NWB_COOK)
     virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif
@@ -301,11 +291,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(
-        Core::Assets::AssetArena& arena,
-        const Name& virtualPath,
-        const Span<const u8> binary
-    )const override{
+    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const override{
         auto asset = MakeUnique<SubsystemT>(arena, virtualPath);
         if(!asset->loadBinary(binary))
             return MakeUnexpected(Failure{});
@@ -324,17 +310,17 @@ public:
 
 template<typename SubsystemT>
 class TypedSubsystemAutoRegistrar final : NoCopy{
+private:
+    [[nodiscard]] static UniquePtr<ISubsystem> CreateInstance(Core::Assets::AssetArena& arena, const Name& virtualPath){
+        return MakeUnique<SubsystemT>(arena, virtualPath);
+    }
+
+
 public:
     TypedSubsystemAutoRegistrar()noexcept
         : m_typeRegistrar(SubsystemT::AssetTypeName(), &CreateInstance)
         , m_codecRegistrar(&Core::Assets::CreateAssetCodec<TypedSubsystemAssetCodec<SubsystemT>>)
     {}
-
-
-private:
-    [[nodiscard]] static UniquePtr<ISubsystem> CreateInstance(Core::Assets::AssetArena& arena, const Name& virtualPath){
-        return MakeUnique<SubsystemT>(arena, virtualPath);
-    }
 
 
 private:
@@ -353,3 +339,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

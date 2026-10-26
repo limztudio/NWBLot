@@ -55,8 +55,7 @@ bool SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::A
     }
 
     usize reserveBytes = sizeof(SubsystemBinaryPayload::SubsystemHeaderBinary);
-    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, fieldCounts)
-        && AddBinaryVectorReserveBytes(reserveBytes, assetHashes);
+    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, fieldCounts) && AddBinaryVectorReserveBytes(reserveBytes, assetHashes);
 
     outBinary.clear();
     if(canReserve)
@@ -68,8 +67,10 @@ bool SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::A
     header.assetCount = static_cast<u64>(assetHashes.size());
     AppendPOD(outBinary, header);
 
-    return Core::Assets::AppendVectorPayload(outBinary, fieldCounts, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_FieldCountsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, assetHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_AssetsPayloadLabel);
+    return
+        Core::Assets::AppendVectorPayload(outBinary, fieldCounts, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_FieldCountsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, assetHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_AssetsPayloadLabel)
+    ;
 }
 
 bool SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
@@ -113,9 +114,8 @@ template<typename TAsset>
     const AStringView text(itemValue.asString().data(), itemValue.asString().size());
     if(TrimView(text).empty() || text != TrimView(text)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), ConvertString(AssetsSubsystemCook::s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
-    }
-    if(TrimView(text).empty() || text != TrimView(text))
         return MakeUnexpected(Failure{});
+    }
     if(text.find('\\') != AStringView::npos || !Core::Assets::HasReservedAssetVirtualRoot(text, scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), ConvertString(AssetsSubsystemCook::s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
         return MakeUnexpected(Failure{});
@@ -128,11 +128,7 @@ template<typename TAsset>
     return *ref;
 }
 
-[[nodiscard]] static bool ValidateSubsystemMetadataFields(
-    const ISubsystem& subsystem,
-    const Path& nwbFilePath,
-    const Value& asset
-){
+[[nodiscard]] static bool ValidateSubsystemMetadataFields(const ISubsystem& subsystem, const Path& nwbFilePath, const Value& asset){
     const usize count = subsystem.fieldCount();
     return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, AssetsSubsystemCook::s_SubsystemDiagnosticPrefix, [&subsystem, count](const AStringView fieldName)noexcept{
         for(usize i = 0u; i < count; ++i){
@@ -153,12 +149,7 @@ template<typename TAsset>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsSubsystemCook::ParseSubsystemCookMetadata(
-    ISubsystem& outSubsystem,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Alloc::ScratchArena& scratchArena
-){
+bool AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena, ISubsystem& outSubsystem){
     using namespace __hidden_subsystem_cook;
 
     if(!ValidateSubsystemMetadataFields(outSubsystem, nwbFilePath, asset))
@@ -234,3 +225,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

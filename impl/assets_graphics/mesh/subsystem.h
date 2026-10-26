@@ -33,6 +33,8 @@ public:
     Core::Assets::AssetRef<VertexShader> objectVs;
     Core::Assets::AssetRef<MeshShader> sharedMs;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<MeshSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<MeshSubsystem, VertexShader, &MeshSubsystem::emulationVs>("emulation_vs"),
         MakeSubsystemFieldDescriptor<MeshSubsystem, ComputeShader, &MeshSubsystem::objectDecodeCs>("object_decode_cs"),
@@ -51,3 +53,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -34,6 +34,8 @@ public:
     Core::Assets::AssetRef<ComputeShader> topologyCs;
     Core::Assets::AssetRef<ComputeShader> sceneRefitCs;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<BvhSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::bitonicSortCs>("bitonic_sort_cs"),
         MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::fitCs>("fit_cs"),
@@ -53,3 +55,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

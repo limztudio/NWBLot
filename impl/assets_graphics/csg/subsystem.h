@@ -44,6 +44,8 @@ public:
     Core::Assets::AssetRef<PixelShader> receiverSurfacePs;
     Core::Assets::AssetRef<PixelShader> refractionCapFillPs;
 
+
+public:
     static constexpr SubsystemFieldDescriptor<CsgSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<CsgSubsystem, CsgShape, &CsgSubsystem::basicShapes>("basic_shapes"),
         MakeSubsystemFieldDescriptor<CsgSubsystem, PixelShader, &CsgSubsystem::intervalCapFillPs>("interval_cap_fill_ps"),
@@ -65,3 +67,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

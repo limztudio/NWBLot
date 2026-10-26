@@ -72,7 +72,6 @@ public:
 
 public:
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
-    [[nodiscard]] const ActiveSceneSubsystems* activeSceneSubsystems()const noexcept{ return m_activeSceneSubsystems; }
 
     template<typename SubsystemT>
     [[nodiscard]] const SubsystemT* findSubsystem()const noexcept{
@@ -91,13 +90,7 @@ public:
     void invalidateResources()noexcept;
     template<typename TShader, typename SubsystemT, typename TAsset>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
-    [[nodiscard]] bool loadShader(
-        Core::ShaderHandle& outShader,
-        const Core::Assets::AssetRef<TAsset> SubsystemT::* member,
-        const AStringView variantName,
-        const Name& debugName,
-        const Name* archiveStageName = nullptr
-    ){
+    [[nodiscard]] bool loadShader(Core::ShaderHandle& outShader, const Core::Assets::AssetRef<TAsset> SubsystemT::* member, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
         const Name resolvedShaderName = resolveSubsystemAsset<SubsystemT>(member);
         if(!resolvedShaderName)
@@ -114,9 +107,7 @@ public:
     [[nodiscard]] bool loadShaderForStage(Core::ShaderHandle& outShader, const Name& shaderAssetName, AStringView variantName, Core::ShaderType::Mask shaderType, const Name& debugName, const Name* archiveStageName = nullptr);
     [[nodiscard]] bool hasShaderArchiveStage(const Name& shaderAssetName, AStringView variantName, const Name& stageName)const;
     [[nodiscard]] bool loadDeferredCompositeVertexShader();
-    [[nodiscard]] const Core::ShaderHandle& deferredCompositeVertexShader()const noexcept{
-        return m_deferredCompositeVertexShader;
-    }
+    [[nodiscard]] const Core::ShaderHandle& deferredCompositeVertexShader()const noexcept{ return m_deferredCompositeVertexShader; }
 
 
 private:

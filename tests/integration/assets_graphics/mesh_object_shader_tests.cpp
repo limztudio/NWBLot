@@ -69,12 +69,10 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
         const u32 priorErrors = logger.errorCount();
         EXPECT_EQ(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook).has_value(), testCase.accepted);
-        if(testCase.accepted){
+        if(testCase.accepted)
             EXPECT_EQ(logger.errorCount(), priorErrors);
-        }
-        else{
+        else
             EXPECT_GT(logger.errorCount(), priorErrors);
-        }
     }
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
@@ -99,3 +97,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

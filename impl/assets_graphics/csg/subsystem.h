@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <impl/assets_csg/asset.h>
+#include <impl/assets_shader/asset.h>
 #include <impl/assets_subsystem/asset.h>
 
 
@@ -12,14 +14,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CsgShape;
-class PixelShader;
-class ComputeShader;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,13 +45,13 @@ public:
     Core::Assets::AssetRef<PixelShader> refractionCapFillPs;
 
     static constexpr SubsystemFieldDescriptor<CsgSubsystem> s_Fields[] = {
-        MakeSubsystemFieldDescriptor<CsgSubsystem, CsgShape, &CsgSubsystem::basicShapes>("basic_shapes", "csg_shape"),
-        MakeSubsystemFieldDescriptor<CsgSubsystem, PixelShader, &CsgSubsystem::intervalCapFillPs>("interval_cap_fill_ps", "pixel_shader"),
-        MakeSubsystemFieldDescriptor<CsgSubsystem, ComputeShader, &CsgSubsystem::intervalCombineCs>("interval_combine_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<CsgSubsystem, ComputeShader, &CsgSubsystem::intervalPeelCs>("interval_peel_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<CsgSubsystem, ComputeShader, &CsgSubsystem::receiverSpanBuildCs>("receiver_span_build_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<CsgSubsystem, PixelShader, &CsgSubsystem::receiverSurfacePs>("receiver_surface_ps", "pixel_shader"),
-        MakeSubsystemFieldDescriptor<CsgSubsystem, PixelShader, &CsgSubsystem::refractionCapFillPs>("refraction_cap_fill_ps", "pixel_shader"),
+        MakeSubsystemFieldDescriptor<CsgSubsystem, CsgShape, &CsgSubsystem::basicShapes>("basic_shapes"),
+        MakeSubsystemFieldDescriptor<CsgSubsystem, PixelShader, &CsgSubsystem::intervalCapFillPs>("interval_cap_fill_ps"),
+        MakeSubsystemFieldDescriptor<CsgSubsystem, ComputeShader, &CsgSubsystem::intervalCombineCs>("interval_combine_cs"),
+        MakeSubsystemFieldDescriptor<CsgSubsystem, ComputeShader, &CsgSubsystem::intervalPeelCs>("interval_peel_cs"),
+        MakeSubsystemFieldDescriptor<CsgSubsystem, ComputeShader, &CsgSubsystem::receiverSpanBuildCs>("receiver_span_build_cs"),
+        MakeSubsystemFieldDescriptor<CsgSubsystem, PixelShader, &CsgSubsystem::receiverSurfacePs>("receiver_surface_ps"),
+        MakeSubsystemFieldDescriptor<CsgSubsystem, PixelShader, &CsgSubsystem::refractionCapFillPs>("refraction_cap_fill_ps"),
     };
 };
 

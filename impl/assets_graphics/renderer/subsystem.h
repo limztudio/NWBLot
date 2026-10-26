@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/assets_sampler/asset.h>
 #include <impl/assets_subsystem/asset.h>
 
 
@@ -12,12 +13,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Sampler;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,7 +38,7 @@ public:
     SubsystemAssetRefVector<Sampler> basicSamplers;
 
     static constexpr SubsystemFieldDescriptor<RendererSubsystem> s_Fields[] = {
-        MakeSubsystemFieldDescriptor<RendererSubsystem, Sampler, &RendererSubsystem::basicSamplers>("basic_samplers", "sampler"),
+        MakeSubsystemFieldDescriptor<RendererSubsystem, Sampler, &RendererSubsystem::basicSamplers>("basic_samplers"),
     };
 };
 

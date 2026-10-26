@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/assets_shader/asset.h>
 #include <impl/assets_subsystem/asset.h>
 
 
@@ -12,12 +13,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ComputeShader;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,11 +35,11 @@ public:
     Core::Assets::AssetRef<ComputeShader> sceneRefitCs;
 
     static constexpr SubsystemFieldDescriptor<BvhSubsystem> s_Fields[] = {
-        MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::bitonicSortCs>("bitonic_sort_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::fitCs>("fit_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::mortonCs>("morton_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::topologyCs>("topology_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::sceneRefitCs>("scene_refit_cs", "compute_shader"),
+        MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::bitonicSortCs>("bitonic_sort_cs"),
+        MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::fitCs>("fit_cs"),
+        MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::mortonCs>("morton_cs"),
+        MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::topologyCs>("topology_cs"),
+        MakeSubsystemFieldDescriptor<BvhSubsystem, ComputeShader, &BvhSubsystem::sceneRefitCs>("scene_refit_cs"),
     };
 };
 

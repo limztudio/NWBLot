@@ -8,6 +8,7 @@
 #include <impl/global.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/binary_payload.h>
+#include <impl/assets_shader/shader_types.h>
 
 #include <core/assets/manager.h>
 #include <core/graphics/runtime/runtime.h>
@@ -148,4 +149,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

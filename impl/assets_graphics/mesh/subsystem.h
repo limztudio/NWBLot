@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/assets_shader/asset.h>
 #include <impl/assets_subsystem/asset.h>
 
 
@@ -12,14 +13,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class VertexShader;
-class ComputeShader;
-class MeshShader;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,10 +34,10 @@ public:
     Core::Assets::AssetRef<MeshShader> sharedMs;
 
     static constexpr SubsystemFieldDescriptor<MeshSubsystem> s_Fields[] = {
-        MakeSubsystemFieldDescriptor<MeshSubsystem, VertexShader, &MeshSubsystem::emulationVs>("emulation_vs", "vertex_shader"),
-        MakeSubsystemFieldDescriptor<MeshSubsystem, ComputeShader, &MeshSubsystem::objectDecodeCs>("object_decode_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<MeshSubsystem, VertexShader, &MeshSubsystem::objectVs>("object_vs", "vertex_shader"),
-        MakeSubsystemFieldDescriptor<MeshSubsystem, MeshShader, &MeshSubsystem::sharedMs>("shared_ms", "mesh_shader"),
+        MakeSubsystemFieldDescriptor<MeshSubsystem, VertexShader, &MeshSubsystem::emulationVs>("emulation_vs"),
+        MakeSubsystemFieldDescriptor<MeshSubsystem, ComputeShader, &MeshSubsystem::objectDecodeCs>("object_decode_cs"),
+        MakeSubsystemFieldDescriptor<MeshSubsystem, VertexShader, &MeshSubsystem::objectVs>("object_vs"),
+        MakeSubsystemFieldDescriptor<MeshSubsystem, MeshShader, &MeshSubsystem::sharedMs>("shared_ms"),
     };
 };
 

@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/assets_shader/asset.h>
 #include <impl/assets_subsystem/asset.h>
 
 
@@ -12,12 +13,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ComputeShader;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,10 +34,10 @@ public:
     Core::Assets::AssetRef<ComputeShader> skinningCs;
 
     static constexpr SubsystemFieldDescriptor<SkinningSubsystem> s_Fields[] = {
-        MakeSubsystemFieldDescriptor<SkinningSubsystem, ComputeShader, &SkinningSubsystem::localBoundsCs>("local_bounds_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<SkinningSubsystem, ComputeShader, &SkinningSubsystem::meshletBoundsCs>("meshlet_bounds_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<SkinningSubsystem, ComputeShader, &SkinningSubsystem::repackNormalsCs>("repack_normals_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<SkinningSubsystem, ComputeShader, &SkinningSubsystem::skinningCs>("skinning_cs", "compute_shader"),
+        MakeSubsystemFieldDescriptor<SkinningSubsystem, ComputeShader, &SkinningSubsystem::localBoundsCs>("local_bounds_cs"),
+        MakeSubsystemFieldDescriptor<SkinningSubsystem, ComputeShader, &SkinningSubsystem::meshletBoundsCs>("meshlet_bounds_cs"),
+        MakeSubsystemFieldDescriptor<SkinningSubsystem, ComputeShader, &SkinningSubsystem::repackNormalsCs>("repack_normals_cs"),
+        MakeSubsystemFieldDescriptor<SkinningSubsystem, ComputeShader, &SkinningSubsystem::skinningCs>("skinning_cs"),
     };
 };
 

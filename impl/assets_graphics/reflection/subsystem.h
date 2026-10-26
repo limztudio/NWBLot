@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/assets_shader/asset.h>
 #include <impl/assets_subsystem/asset.h>
 
 
@@ -12,12 +13,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ComputeShader;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,12 +36,12 @@ public:
     Core::Assets::AssetRef<ComputeShader> temporalCs;
 
     static constexpr SubsystemFieldDescriptor<ReflectionSubsystem> s_Fields[] = {
-        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::buildArgsCs>("build_args_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::classifyCs>("classify_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::depthReduceCs>("depth_reduce_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::resolveHwCs>("resolve_hw_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::spatialCs>("spatial_cs", "compute_shader"),
-        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::temporalCs>("temporal_cs", "compute_shader"),
+        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::buildArgsCs>("build_args_cs"),
+        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::classifyCs>("classify_cs"),
+        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::depthReduceCs>("depth_reduce_cs"),
+        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::resolveHwCs>("resolve_hw_cs"),
+        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::spatialCs>("spatial_cs"),
+        MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::temporalCs>("temporal_cs"),
     };
 };
 

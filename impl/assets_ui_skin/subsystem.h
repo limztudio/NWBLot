@@ -7,22 +7,17 @@
 
 #include "asset.h"
 
+#include <impl/assets_font/asset.h>
+#include <impl/assets_font_atlas/asset.h>
+#include <impl/assets_shader/asset.h>
 #include <impl/assets_subsystem/asset.h>
+#include <impl/assets_texture/asset.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class VertexShader;
-class PixelShader;
-class Font;
-class FontAtlas;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,16 +45,16 @@ public:
     Core::Assets::AssetRef<Texture> defaultSkinTexture;
 
     static constexpr SubsystemFieldDescriptor<UiSubsystem> s_Fields[] = {
-        MakeSubsystemFieldDescriptor<UiSubsystem, PixelShader, &UiSubsystem::outputPs>("output_ps", "pixel_shader"),
-        MakeSubsystemFieldDescriptor<UiSubsystem, VertexShader, &UiSubsystem::outputVs>("output_vs", "vertex_shader"),
-        MakeSubsystemFieldDescriptor<UiSubsystem, PixelShader, &UiSubsystem::ps>("ps", "pixel_shader"),
-        MakeSubsystemFieldDescriptor<UiSubsystem, VertexShader, &UiSubsystem::vs>("vs", "vertex_shader"),
-        MakeSubsystemFieldDescriptor<UiSubsystem, FontAtlas, &UiSubsystem::defaultKoreanAtlas>("default_korean_atlas", "font_atlas"),
-        MakeSubsystemFieldDescriptor<UiSubsystem, Font, &UiSubsystem::defaultKoreanFace>("default_korean_face", "font"),
-        MakeSubsystemFieldDescriptor<UiSubsystem, FontAtlas, &UiSubsystem::defaultLatinAtlas>("default_latin_atlas", "font_atlas"),
-        MakeSubsystemFieldDescriptor<UiSubsystem, Font, &UiSubsystem::defaultLatinFace>("default_latin_face", "font"),
-        MakeSubsystemFieldDescriptor<UiSubsystem, UiSkin, &UiSubsystem::defaultSkin>("default_skin", "ui_skin"),
-        MakeSubsystemFieldDescriptor<UiSubsystem, Texture, &UiSubsystem::defaultSkinTexture>("default_skin_texture", "texture"),
+        MakeSubsystemFieldDescriptor<UiSubsystem, PixelShader, &UiSubsystem::outputPs>("output_ps"),
+        MakeSubsystemFieldDescriptor<UiSubsystem, VertexShader, &UiSubsystem::outputVs>("output_vs"),
+        MakeSubsystemFieldDescriptor<UiSubsystem, PixelShader, &UiSubsystem::ps>("ps"),
+        MakeSubsystemFieldDescriptor<UiSubsystem, VertexShader, &UiSubsystem::vs>("vs"),
+        MakeSubsystemFieldDescriptor<UiSubsystem, FontAtlas, &UiSubsystem::defaultKoreanAtlas>("default_korean_atlas"),
+        MakeSubsystemFieldDescriptor<UiSubsystem, Font, &UiSubsystem::defaultKoreanFace>("default_korean_face"),
+        MakeSubsystemFieldDescriptor<UiSubsystem, FontAtlas, &UiSubsystem::defaultLatinAtlas>("default_latin_atlas"),
+        MakeSubsystemFieldDescriptor<UiSubsystem, Font, &UiSubsystem::defaultLatinFace>("default_latin_face"),
+        MakeSubsystemFieldDescriptor<UiSubsystem, UiSkin, &UiSubsystem::defaultSkin>("default_skin"),
+        MakeSubsystemFieldDescriptor<UiSubsystem, Texture, &UiSubsystem::defaultSkinTexture>("default_skin_texture"),
     };
 };
 

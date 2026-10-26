@@ -80,12 +80,12 @@ struct SubsystemFieldDescriptor{
 
 template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> SubsystemT::* Member>
 [[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(
-    const AStringView fieldName,
-    const AStringView expectedAssetTypeText
+    const AStringView fieldName
 )noexcept{
+    static_assert(!TAsset::s_AssetTypeText.empty(), "Subsystem field asset type must define a non-empty s_AssetTypeText");
     return SubsystemFieldDescriptor<SubsystemT>{
         fieldName,
-        expectedAssetTypeText,
+        TAsset::s_AssetTypeText,
         false,
         [](const SubsystemT&)noexcept -> usize{
             return 1u;
@@ -105,12 +105,12 @@ template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> Su
 
 template<typename SubsystemT, typename TAsset, SubsystemAssetRefVector<TAsset> SubsystemT::* Member>
 [[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(
-    const AStringView fieldName,
-    const AStringView expectedAssetTypeText
+    const AStringView fieldName
 )noexcept{
+    static_assert(!TAsset::s_AssetTypeText.empty(), "Subsystem field asset type must define a non-empty s_AssetTypeText");
     return SubsystemFieldDescriptor<SubsystemT>{
         fieldName,
-        expectedAssetTypeText,
+        TAsset::s_AssetTypeText,
         true,
         [](const SubsystemT& subsystem)noexcept -> usize{
             return (subsystem.*Member).size();

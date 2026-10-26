@@ -1,5 +1,6 @@
 nwb_declare_interface_library(nwb_assets_csg)
 target_sources(nwb_assets_csg INTERFACE
+    "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/shape_id.h"
 )
 

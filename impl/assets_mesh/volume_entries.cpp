@@ -12,8 +12,9 @@
 #include "skin_cook.h"
 #include "binary_payload.h"
 #include "skin_binary_payload.h"
+#include "subsystem.h"
 
-#include <impl/assets_subsystem/asset.h>
+#include <impl/assets_subsystem/cook.h>
 
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
@@ -71,9 +72,7 @@ static bool ExtractSkinDependencies(const Core::Assets::CookDependencyItemContex
         return false;
     if(!collector.addAssetDependency(meshRef->name(), Mesh::AssetTypeName()))
         return false;
-    if(!collector.addAssetDependency(skeletonRef->name(), Skeleton::AssetTypeName()))
-        return false;
-    return collector.addSubsystemDependency(BuiltInSubsystems::s_Skinning.name());
+    return collector.addAssetDependency(skeletonRef->name(), Skeleton::AssetTypeName());
 }
 
 static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
@@ -86,11 +85,15 @@ static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
             &ParseSkinValue,
             [](SkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildSkinAsset(entry, arena); }
         )
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<SkinningSubsystem>(registry)
     ;
 }
 
 static bool RegisterSkinCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerType(Skin::AssetTypeName(), &ExtractSkinDependencies);
+    return
+        registry.registerType(Skin::AssetTypeName(), &ExtractSkinDependencies)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<SkinningSubsystem>(registry)
+    ;
 }
 
 

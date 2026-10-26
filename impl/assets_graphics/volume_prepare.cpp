@@ -13,11 +13,12 @@
 #include "shader_volume_writer.h"
 
 #include <impl/assets_csg/cook.h>
-#include <impl/assets_graphics/mesh/names.h>
+#include <impl/assets_graphics/mesh/subsystem.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/shader_types.h>
 #include <impl/assets_shader/cook.h>
+#include <impl/assets_subsystem/cook.h>
 
 #include <core/assets/volume/volume_prepare_registry.h>
 #include <core/assets/cook_metadata.h>
@@ -156,7 +157,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
         return AssetMetadataParseResult::Parsed;
     }
 
-    if(context.assetType == AssetsCsgCook::s_CsgShapeAssetTypeName){
+    if(context.assetType == CsgShape::AssetTypeName()){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
         auto csgShapeEntryResult = AssetsCsgCook::ParseCsgShapeCookMetadata(context.cookArena, context.discoveredNwbFile.filePath, context.doc, context.scratchArena);
         if(!csgShapeEntryResult)
@@ -287,9 +288,15 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return false;
     const Path& shadowSurfaceIncludeRoot = *shadowSurfaceIncludeRootResult;
 
+    Name sharedMeshShaderName = s_NameNone;
+    if(const Core::Assets::ICookEntryBucket* const meshSubsystemBucket = context.parsedMetadata.entryRegistry.find(MeshSubsystem::AssetTypeName()); meshSubsystemBucket && meshSubsystemBucket->size() > 0u){
+        const auto& meshSubsystemEntries = context.parsedMetadata.entryRegistry.entries<SubsystemCookEntry<MeshSubsystem>>(MeshSubsystem::AssetTypeName());
+        sharedMeshShaderName = meshSubsystemEntries[0u].subsystem.sharedMs.name();
+    }
+
     // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored ones. Before shader prep + ValidateMaterials.
     auto& materialCookArena = materialEntries.get_allocator().arena();
-    auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, AssetsGraphicsMesh::s_SharedMeshShaderText, materialCookArena, context.scratchArena, materialEntries);
+    auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, sharedMeshShaderName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedPixelShadersResult)
         return false;
 

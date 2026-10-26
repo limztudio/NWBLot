@@ -1,9 +1,11 @@
 csg_subsystem asset;
 
-asset.box_shape = "engine/csg/box/shape";
-asset.capsule_shape = "engine/csg/capsule/shape";
-asset.plane_shape = "engine/csg/plane/shape";
-asset.sphere_shape = "engine/csg/sphere/shape";
+asset.basic_shapes = [
+    "engine/csg/box/shape",
+    "engine/csg/capsule/shape",
+    "engine/csg/plane/shape",
+    "engine/csg/sphere/shape",
+];
 asset.interval_cap_fill_ps = "engine/graphics/csg/interval_cap_fill_ps";
 asset.interval_combine_cs = "engine/graphics/csg/interval_combine_cs";
 asset.interval_peel_cs = "engine/graphics/csg/interval_peel_cs";

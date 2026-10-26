@@ -21,7 +21,13 @@ asset.start_scene = "project/scenes/main";
 SCENE_NWB = b"""scene asset;
 
 asset.subsystems = [
-    "engine/subsystems/renderer"
+    "engine/subsystems/renderer",
+    "engine/subsystems/mesh",
+    "engine/subsystems/deferred",
+    "engine/subsystems/bvh",
+    "engine/subsystems/shadow",
+    "engine/subsystems/gi",
+    "engine/subsystems/reflection"
 ];
 
 asset.assets = {

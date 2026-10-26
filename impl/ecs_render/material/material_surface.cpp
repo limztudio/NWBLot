@@ -193,7 +193,7 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
         return MakeNotNull(&info);
     }
 
-    auto loadedAsset = m_assetManager.loadTypedSync<Material>(materialPath, s_RendererAssetOwnerName, Material::s_AssetTypeText);
+    auto loadedAsset = m_assetManager.loadTypedSync<Material>(materialPath, s_RendererAssetOwnerName);
     if(!loadedAsset)
         return MakeUnexpected(Failure{});
 

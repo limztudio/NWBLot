@@ -21,8 +21,6 @@ NWB_IMPL_BEGIN
 
 class UiSkin;
 
-inline constexpr Core::Assets::AssetRef<UiSkin> s_DefaultUiSkinRef{ "engine/ui/skins/default/atlas" };
-
 namespace UiSkinSelectionResult{
     enum Enum : u8{ Failed, Selected, DefaultFallback };
 };
@@ -43,18 +41,23 @@ public:
 
 public:
     template<typename TTryBind>
-    [[nodiscard]] UiSkinSelectionResult::Enum ensure(TTryBind&& tryBind)noexcept(noexcept(static_cast<bool>(tryBind(m_selected))) && noexcept(static_cast<bool>(tryBind(s_DefaultUiSkinRef))) && noexcept(static_cast<bool>(true || !tryBind(s_DefaultUiSkinRef)))){
+    [[nodiscard]] UiSkinSelectionResult::Enum ensure(
+        const Core::Assets::AssetRef<UiSkin>& basicSkin,
+        TTryBind&& tryBind
+    )noexcept(noexcept(static_cast<bool>(tryBind(m_selected))) && noexcept(static_cast<bool>(tryBind(basicSkin))) && noexcept(static_cast<bool>(true || !tryBind(basicSkin)))){
         if(m_selected.valid())
             return tryBind(m_selected) ? UiSkinSelectionResult::Selected : UiSkinSelectionResult::Failed;
+        if(!basicSkin.valid())
+            return UiSkinSelectionResult::Failed;
 
-        const Core::Assets::AssetRef<UiSkin> preferred = m_requested.valid() ? m_requested : s_DefaultUiSkinRef;
+        const Core::Assets::AssetRef<UiSkin> preferred = m_requested.valid() ? m_requested : basicSkin;
         if(tryBind(preferred)){
             m_selected = preferred;
             return UiSkinSelectionResult::Selected;
         }
-        if(preferred == s_DefaultUiSkinRef || !tryBind(s_DefaultUiSkinRef))
+        if(preferred == basicSkin || !tryBind(basicSkin))
             return UiSkinSelectionResult::Failed;
-        m_selected = s_DefaultUiSkinRef;
+        m_selected = basicSkin;
         return UiSkinSelectionResult::DefaultFallback;
     }
 
@@ -71,15 +74,21 @@ public:
     }
 
     template<typename TTryBind>
-    [[nodiscard]] UiSkinChangeResult::Enum applyChangeIfReady(const bool resourcesReady, const bool gpuFramePending, const bool layoutPending, TTryBind&& tryBind)noexcept(noexcept(static_cast<bool>(!tryBind(s_DefaultUiSkinRef, DeclVal<const u64&>())))){
+    [[nodiscard]] UiSkinChangeResult::Enum applyChangeIfReady(
+        const bool resourcesReady,
+        const bool gpuFramePending,
+        const bool layoutPending,
+        const Core::Assets::AssetRef<UiSkin>& basicSkin,
+        TTryBind&& tryBind
+    )noexcept(noexcept(static_cast<bool>(!tryBind(basicSkin, DeclVal<const u64&>())))){
         if(!m_changePending || !resourcesReady || gpuFramePending || layoutPending)
             return UiSkinChangeResult::Deferred;
         m_changePending = false;
-        if(!m_selected.valid() || m_generation == Limit<u64>::s_Max){
+        const Core::Assets::AssetRef<UiSkin> candidate = m_requestedChange.valid() ? m_requestedChange : basicSkin;
+        if(!m_selected.valid() || !candidate.valid() || m_generation == Limit<u64>::s_Max){
             m_changeFailed = true;
             return UiSkinChangeResult::Failed;
         }
-        const Core::Assets::AssetRef<UiSkin> candidate = m_requestedChange.valid() ? m_requestedChange : s_DefaultUiSkinRef;
         const u64 nextGeneration = m_generation + 1u;
         if(!tryBind(candidate, nextGeneration)){
             m_changeFailed = true;

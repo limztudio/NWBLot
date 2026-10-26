@@ -1,5 +1,6 @@
 nwb_declare_interface_library(nwb_assets_csg)
 target_sources(nwb_assets_csg INTERFACE
+    "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/shape_id.h"
 )
 
@@ -16,6 +17,6 @@ if(NWB_BUILD_PIPELINE)
     target_sources(nwb_assets_csg_volume_entry PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/volume_entry.cpp"
     )
-    target_link_libraries(nwb_assets_csg_volume_entry PRIVATE nwb_assets_csg_cook nwb_assets_subsystem nwb_assets_cook)
+    target_link_libraries(nwb_assets_csg_volume_entry PRIVATE nwb_assets_csg_cook nwb_assets_cook)
     target_compile_definitions(nwb_assets_csg_volume_entry PRIVATE NWB_COOK=1)
 endif()

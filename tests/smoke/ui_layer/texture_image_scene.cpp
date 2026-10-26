@@ -8,6 +8,7 @@
 #include "passive_scene_support.h"
 
 #include <impl/assets_scene/asset.h>
+#include <impl/assets_ui_skin/subsystem.h>
 
 #include <global/simplemath.h>
 #include <global/simdmath.h>
@@ -34,12 +35,26 @@ namespace __hidden_ui_texture_image_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_AlternateTextureNickname("alternate_skin_texture");
+inline constexpr Name s_AlternateSkinNickname("alternate_skin");
+inline constexpr TStringView s_OwnerName = NWB_TEXT("UiTextureImageSmokeScene");
 static constexpr Impl::Ui::Color s_Backdrop{ 0.07f, 0.13f, 0.2f, 1.0f };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] static Expected<Impl::Ui::SharedImageSource> LoadSkinImageSource(
+    Core::Alloc::GlobalArena& arena,
+    Core::Assets::AssetManager& assets,
+    const Core::Assets::AssetRef<Impl::UiSkin>& skinRef
+){
+    if(!skinRef.valid())
+        return MakeUnexpected(Failure{});
+    const auto skin = assets.loadTypedSync<Impl::UiSkin>(skinRef.name(), s_OwnerName);
+    if(!skin || !*skin || !(*skin)->texture().valid())
+        return MakeUnexpected(Failure{});
+    return Impl::Ui::LoadImageSource(arena, assets, (*skin)->texture());
+}
 
 [[nodiscard]] static Impl::Ui::Rect TextureUv(const f32 x, const f32 y, const f32 width = 24.0f)noexcept{
     const SIMDVectorSingle uv = VectorScale(VectorSet(x, y, width, 24.0f), 1.0f / 256.0f);
@@ -64,19 +79,13 @@ UiTextureImageSmokeScene::UiTextureImageSmokeScene(Core::Alloc::GlobalArena& are
     Impl::ActiveSceneSubsystems sceneSubsystems(arena);
     if(sceneSubsystems.loadProjectStartScene(assets)){
         if(const Impl::UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<Impl::UiSubsystem>()){
-            const auto& defaultTexture = uiSubsystem->defaultSkinTexture;
-            if(defaultTexture.valid()){
-                auto defaultSource = Impl::Ui::LoadImageSource(arena, assets, defaultTexture);
-                if(defaultSource)
-                    m_default = Move(*defaultSource);
-            }
+            auto defaultSource = LoadSkinImageSource(arena, assets, uiSubsystem->basicSkin);
+            if(defaultSource)
+                m_default = Move(*defaultSource);
         }
-        const auto alternateTexture = sceneSubsystems.findSceneAsset<Impl::Texture>(s_AlternateTextureNickname);
-        if(alternateTexture.valid()){
-            auto alternateSource = Impl::Ui::LoadImageSource(arena, assets, alternateTexture);
-            if(alternateSource)
-                m_alternate = Move(*alternateSource);
-        }
+        auto alternateSource = LoadSkinImageSource(arena, assets, sceneSubsystems.findSceneAsset<Impl::UiSkin>(s_AlternateSkinNickname));
+        if(alternateSource)
+            m_alternate = Move(*alternateSource);
     }
     m_replacement = m_default;
     m_sourcesValid = m_default && m_alternate && m_default->texture().width() == 256u

@@ -62,7 +62,6 @@ public:
 
 public:
     [[nodiscard]] virtual bool addAssetDependency(const Name& virtualPath, const Name& expectedAssetType = s_NameNone) = 0;
-    [[nodiscard]] virtual bool addSubsystemDependency(const Name& subsystemVirtualPath) = 0;
 };
 
 

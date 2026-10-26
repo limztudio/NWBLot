@@ -11,7 +11,7 @@
 #pragma once
 
 
-#include "../global.h"
+#include "asset.h"
 
 #include <core/alloc/scratch.h>
 #include <core/metascript/parser.h>
@@ -32,7 +32,6 @@ namespace AssetsCsgCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_CsgShapeAssetTypeName("csg_shape");
 inline constexpr AStringView s_DefaultGeneratedIncludeDirectory = "engine/csg/generated";
 inline constexpr AStringView s_GeneratedIncludeCacheDirectory = "csg_modules";
 

@@ -5,9 +5,10 @@
 #pragma once
 
 
-#include "shader_types.h"
+#include "../global.h"
 
 #include <core/assets/module.h>
+#include <core/graphics/rhi/shader.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,11 +93,9 @@ TypedShader<ShaderT>::~TypedShader()noexcept = default;
 
 class VertexShader final : public TypedShader<VertexShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("vertex_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::VertexStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -106,11 +105,9 @@ public:
 
 class HullShader final : public TypedShader<HullShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("hull_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::HullStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -120,11 +117,9 @@ public:
 
 class DomainShader final : public TypedShader<DomainShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("domain_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::DomainStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -134,11 +129,9 @@ public:
 
 class GeometryShader final : public TypedShader<GeometryShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("geometry_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::GeometryStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -148,11 +141,9 @@ public:
 
 class PixelShader final : public TypedShader<PixelShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("pixel_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::PixelStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -162,11 +153,9 @@ public:
 
 class ComputeShader final : public TypedShader<ComputeShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("compute_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::ComputeStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -176,11 +165,9 @@ public:
 
 class AmplificationShader final : public TypedShader<AmplificationShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("amplification_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::AmplificationStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -190,11 +177,9 @@ public:
 
 class MeshShader final : public TypedShader<MeshShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("mesh_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::MeshStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -204,11 +189,9 @@ public:
 
 class RayGenerationShader final : public TypedShader<RayGenerationShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("ray_generation_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::RayGenerationStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -218,11 +201,9 @@ public:
 
 class AnyHitShader final : public TypedShader<AnyHitShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("any_hit_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::AnyHitStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -232,11 +213,9 @@ public:
 
 class ClosestHitShader final : public TypedShader<ClosestHitShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("closest_hit_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::ClosestHitStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -246,11 +225,9 @@ public:
 
 class MissShader final : public TypedShader<MissShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("miss_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::MissStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -260,11 +237,9 @@ public:
 
 class IntersectionShader final : public TypedShader<IntersectionShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("intersection_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::IntersectionStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:
@@ -274,11 +249,9 @@ public:
 
 class CallableShader final : public TypedShader<CallableShader>{
 public:
+    NWB_DEFINE_ASSET_TYPE("callable_shader")
+
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::CallableStage;
-
-
-public:
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
 public:

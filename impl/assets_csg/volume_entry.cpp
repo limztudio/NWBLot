@@ -10,8 +10,6 @@
 
 #include "cook.h"
 
-#include <impl/assets_subsystem/asset.h>
-
 #include <core/assets/cook_dependency_registry.h>
 
 
@@ -30,17 +28,15 @@ namespace __hidden_assets_csg_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ExtractCsgShapeDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+static bool ExtractCsgShapeDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
     if(!context.document)
         return false;
     const auto csgEntry = AssetsCsgCook::ParseCsgShapeCookMetadata(context.arena, context.nwbFilePath, *context.document, context.scratchArena);
-    if(!csgEntry)
-        return false;
-    return collector.addSubsystemDependency(BuiltInSubsystems::s_Csg.name());
+    return static_cast<bool>(csgEntry);
 }
 
 static bool RegisterCsgShapeCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerType(AssetsCsgCook::s_CsgShapeAssetTypeName, &ExtractCsgShapeDependencies);
+    return registry.registerType(CsgShape::AssetTypeName(), &ExtractCsgShapeDependencies);
 }
 
 

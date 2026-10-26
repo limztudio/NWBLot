@@ -33,7 +33,6 @@ namespace ProjectAssetDefaults{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_ProjectFileName = "project.nwb";
 inline constexpr AStringView s_DefaultProjectVirtualPathText = "project/project";
 inline constexpr Name s_DefaultProjectVirtualPath(s_DefaultProjectVirtualPathText);
 inline constexpr Core::Assets::AssetRef<ProjectAsset> s_DefaultProjectRef(s_DefaultProjectVirtualPathText);
@@ -122,20 +121,6 @@ public:
     [[nodiscard]] const SubsystemRefVector& subsystems()const noexcept{ return m_subsystems; }
     [[nodiscard]] const AssetMap& assets()const noexcept{ return m_assets; }
 
-    [[nodiscard]] bool hasSubsystem(const SubsystemRef& subsystem)const noexcept;
-
-    template<typename TAsset = Core::Assets::IAsset>
-    [[nodiscard]] Core::Assets::AssetRef<TAsset> findAsset(const Name& nickname)const noexcept{
-        if(!nickname)
-            return {};
-        const auto found = m_assets.find(nickname);
-        if(found == m_assets.end())
-            return {};
-        Core::Assets::AssetRef<TAsset> result;
-        result.virtualPath = found.value().name();
-        return result;
-    }
-
 
 private:
     SubsystemRefVector m_subsystems;
@@ -158,8 +143,6 @@ public:
     using SceneRef = Core::Assets::AssetRef<SceneAsset>;
     using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
     using AssetRef = Core::Assets::AssetRef<Core::Assets::IAsset>;
-    using SubsystemRefVector = Vector<SubsystemRef, Core::Alloc::GlobalArena>;
-    using AssetRefVector = Vector<AssetRef, Core::Alloc::GlobalArena>;
     using AssetMap = HashMap<Name, AssetRef, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
     using LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>, Core::Alloc::GlobalArena>;
 
@@ -167,10 +150,8 @@ public:
 public:
     explicit ActiveSceneSubsystems(Core::Alloc::GlobalArena& arena)noexcept
         : m_arena(arena)
-        , m_subsystems(arena)
         , m_sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena)
         , m_loadedSubsystems(arena)
-        , m_resolvedAssets(arena)
     {}
 
 
@@ -178,15 +159,8 @@ public:
     [[nodiscard]] bool loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project = ProjectAssetDefaults::s_DefaultProjectRef);
     [[nodiscard]] bool loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene);
 
-    [[nodiscard]] bool valid()const noexcept{ return m_scene.valid() && !m_subsystems.empty(); }
-    [[nodiscard]] const ProjectRef& project()const noexcept{ return m_project; }
+    [[nodiscard]] bool valid()const noexcept{ return m_scene.valid() && !m_loadedSubsystems.empty(); }
     [[nodiscard]] const SceneRef& scene()const noexcept{ return m_scene; }
-    [[nodiscard]] const SubsystemRefVector& subsystems()const noexcept{ return m_subsystems; }
-    [[nodiscard]] const AssetMap& sceneAssets()const noexcept{ return m_sceneAssets; }
-    [[nodiscard]] const LoadedSubsystemVector& loadedSubsystems()const noexcept{ return m_loadedSubsystems; }
-    [[nodiscard]] const AssetRefVector& resolvedAssets()const noexcept{ return m_resolvedAssets; }
-
-    [[nodiscard]] bool hasSubsystem(const SubsystemRef& subsystem)const noexcept;
 
     template<typename SubsystemT>
     [[nodiscard]] const SubsystemT* findSubsystem()const noexcept{
@@ -217,12 +191,9 @@ public:
 
 private:
     Core::Alloc::GlobalArena& m_arena;
-    ProjectRef m_project;
     SceneRef m_scene;
-    SubsystemRefVector m_subsystems;
     AssetMap m_sceneAssets;
     LoadedSubsystemVector m_loadedSubsystems;
-    AssetRefVector m_resolvedAssets;
 };
 
 

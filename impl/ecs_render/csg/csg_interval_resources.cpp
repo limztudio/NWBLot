@@ -9,6 +9,7 @@
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/csg/renderer_csg_state.h>
+#include <impl/assets_graphics/csg/subsystem.h>
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>

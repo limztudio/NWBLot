@@ -28,7 +28,7 @@ namespace __hidden_ui_text_samples{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_LatinFontPath = "default_latin_face";
+constexpr AStringView s_LatinFontPath = "tests/smoke/ui_layer/coverage_font";
 static constexpr StringView s_Korean = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9";
 static constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
 

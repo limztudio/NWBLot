@@ -33,7 +33,7 @@ inline constexpr TStringView s_UnnamedAssetPathText = NWB_TEXT("<unnamed>");
 #define NWB_DEFINE_ASSET_TYPE(assetTypeLiteral) \
     static constexpr AStringView s_AssetTypeText = assetTypeLiteral; \
     inline static constexpr Name s_AssetTypeName = Name(assetTypeLiteral); \
-    [[nodiscard]] static const Name& AssetTypeName()noexcept{ \
+    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ \
         return s_AssetTypeName; \
     }
 

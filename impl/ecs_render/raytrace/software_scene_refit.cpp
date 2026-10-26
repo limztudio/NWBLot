@@ -5,10 +5,12 @@
 #include "software_scene_refit.h"
 
 #include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
+#include <impl/assets_graphics/bvh/subsystem.h>
 #include <impl/ecs_render/shader/shader_system.h>
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/shader_archive.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +28,6 @@ namespace __hidden_software_scene_refit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr StringView s_DefaultShaderVariant = "default";
 static constexpr u64 s_SoftwareNodeByteSize = 32u;
 
 
@@ -165,7 +166,7 @@ bool SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSys
         if(!bindingLayoutResult)
             return false;
     }
-    if(!shaderSystem.loadShader<ComputeShader>(m_shader, &BvhSubsystem::sceneRefitCs, __hidden_software_scene_refit::s_DefaultShaderVariant, Name("SoftwareSceneRefit")))
+    if(!shaderSystem.loadShader<ComputeShader>(m_shader, &BvhSubsystem::sceneRefitCs, Core::ShaderArchive::s_DefaultVariant, Name("SoftwareSceneRefit")))
         return false;
     Core::ComputePipelineDesc desc;
     desc.setComputeShader(m_shader).addBindingLayout(m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());

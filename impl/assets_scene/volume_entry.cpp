@@ -11,12 +11,9 @@
 #include "cook.h"
 #include "binary_payload.h"
 
-#include <impl/assets_subsystem/cook.h>
-
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
 #include <core/assets/cook_metadata.h>
-#include <core/assets/volume/volume_prepare_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,12 +41,7 @@ static Expected<ProjectCookEntry> ParseProjectDocument(
     return ParseProjectCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static Expected<ProjectCookEntry> ParseProjectValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
+static Expected<ProjectCookEntry> ParseProjectValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
     return ParseProjectCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
 }
 
@@ -87,12 +79,7 @@ static Expected<SceneCookEntry> ParseSceneDocument(
     return ParseSceneCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static Expected<SceneCookEntry> ParseSceneValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
+static Expected<SceneCookEntry> ParseSceneValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
     return ParseSceneCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
 }
 
@@ -105,7 +92,7 @@ static bool ExtractSceneDependencies(const Core::Assets::CookDependencyItemConte
         return false;
 
     for(const SceneAsset::SubsystemRef& subsystemRef : sceneEntry->subsystems){
-        if(!collector.addSubsystemDependency(subsystemRef.name()))
+        if(!collector.addAssetDependency(subsystemRef.name(), ISubsystem::AssetTypeName()))
             return false;
     }
 
@@ -125,35 +112,6 @@ static bool ExtractSceneDependencies(const Core::Assets::CookDependencyItemConte
     return true;
 }
 
-static void AppendSubsystemIfAbsent(SceneAsset::SubsystemRefVector& subsystems, const SceneAsset::SubsystemRef& subsystem){
-    if(!subsystem.valid())
-        return;
-    for(const SceneAsset::SubsystemRef& existing : subsystems){
-        if(existing == subsystem)
-            return;
-    }
-    subsystems.push_back(subsystem);
-}
-
-static bool PrepareSceneVolumeEntries(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
-    auto& entryRegistry = context.parsedMetadata.entryRegistry;
-    const Core::Assets::ICookEntryBucket* sceneBucket = entryRegistry.find(SceneAsset::AssetTypeName());
-    if(!sceneBucket || sceneBucket->size() == 0u)
-        return true;
-
-    Vector<ISubsystem::SubsystemRef, Core::Alloc::ScratchArena> cookedSubsystems(context.scratchArena);
-    CollectCookedSubsystemVirtualPaths(entryRegistry, cookedSubsystems);
-    if(cookedSubsystems.empty())
-        return true;
-
-    for(SceneCookEntry& scene : entryRegistry.entries<SceneCookEntry>(SceneAsset::AssetTypeName())){
-        for(const SceneAsset::SubsystemRef& subsystemRef : cookedSubsystems)
-            AppendSubsystemIfAbsent(scene.subsystems, subsystemRef);
-    }
-
-    return true;
-}
-
 static bool RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<SceneCookEntry, SceneAsset, SceneAssetCodec>(
         registry,
@@ -165,10 +123,7 @@ static bool RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
 }
 
 static bool RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& registry){
-    return
-        registry.registerType(ProjectAsset::AssetTypeName(), &ExtractProjectDependencies)
-        && registry.registerType(SceneAsset::AssetTypeName(), &ExtractSceneDependencies)
-    ;
+    return registry.registerType(ProjectAsset::AssetTypeName(), &ExtractProjectDependencies) && registry.registerType(SceneAsset::AssetTypeName(), &ExtractSceneDependencies);
 }
 
 
@@ -178,7 +133,6 @@ static bool RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& 
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_ProjectCookEntryRegistrar, RegisterProjectCookEntry);
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_SceneCookEntryRegistrar, RegisterSceneCookEntry);
 NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_SceneCookDependencyRegistrar, RegisterSceneCookDependencies);
-static Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_SceneVolumePrepareRegistrar(&PrepareSceneVolumeEntries);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,6 +4,7 @@
 
 #include "asset.h"
 #include "binary_payload.h"
+#include "shader_types.h"
 
 #include <core/common/log.h>
 #include <core/graphics/spirv_entry_point.h>
@@ -25,7 +26,7 @@ namespace __hidden_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_REGISTER_SHADER_ASSET_CODEC(Type, Stage, Text) NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_##Type##AssetCodecAutoRegistrar, Type##AssetCodec);
+#define NWB_REGISTER_SHADER_ASSET_CODEC(Type) NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_##Type##AssetCodecAutoRegistrar, Type##AssetCodec);
 NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_REGISTER_SHADER_ASSET_CODEC)
 #undef NWB_REGISTER_SHADER_ASSET_CODEC
 

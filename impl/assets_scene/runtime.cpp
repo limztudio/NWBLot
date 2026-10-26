@@ -34,11 +34,7 @@ using NameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash
 
 
 template<typename TAsset>
-[[nodiscard]] static bool ValidateUniqueAssetRefs(
-    const Span<const Core::Assets::AssetRef<TAsset>> references,
-    const TStringView contextLabel,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] static bool ValidateUniqueAssetRefs(const Span<const Core::Assets::AssetRef<TAsset>> references, const TStringView contextLabel, Core::Alloc::ScratchArena& scratchArena){
     NameHashSet seen(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     seen.reserve(references.size());
     for(usize i = 0u; i < references.size(); ++i){
@@ -67,17 +63,6 @@ template<typename TAsset>
         }
     }
     return true;
-}
-
-template<typename TAsset>
-static void AppendUniqueAssetRef(Vector<Core::Assets::AssetRef<TAsset>, Core::Alloc::GlobalArena>& list, const Core::Assets::AssetRef<TAsset>& ref){
-    if(!ref.valid())
-        return;
-    for(const Core::Assets::AssetRef<TAsset>& existing : list){
-        if(existing == ref)
-            return;
-    }
-    list.push_back(ref);
 }
 
 
@@ -201,58 +186,32 @@ bool SceneAsset::loadBinary(const Span<const u8> binary){
     return true;
 }
 
-bool SceneAsset::hasSubsystem(const SubsystemRef& subsystem)const noexcept{
-    if(!subsystem.valid())
-        return false;
-    for(const SubsystemRef& entry : m_subsystems){
-        if(entry == subsystem)
-            return true;
-    }
-    return false;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool ActiveSceneSubsystems::loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project){
-    auto projectAsset = assetManager.loadTypedSync<ProjectAsset>(project.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner, "project manifest");
+    auto projectAsset = assetManager.loadTypedSync<ProjectAsset>(project.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner);
     if(!projectAsset)
         return false;
-    if(!loadScene(assetManager, (*projectAsset)->startScene()))
-        return false;
-    m_project = project;
-    return true;
+    return loadScene(assetManager, (*projectAsset)->startScene());
 }
 
 bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene){
-    auto sceneAssetResult = assetManager.loadTypedSync<SceneAsset>(scene.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner, "scene");
+    auto sceneAssetResult = assetManager.loadTypedSync<SceneAsset>(scene.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner);
     if(!sceneAssetResult)
         return false;
     const SceneAsset& sceneAsset = **sceneAssetResult;
 
-    SubsystemRefVector nextSubsystems(m_arena);
     AssetMap nextSceneAssets(0, Hasher<Name>(), EqualTo<Name>(), m_arena);
     LoadedSubsystemVector nextLoadedSubsystems(m_arena);
-    AssetRefVector nextResolvedAssets(m_arena);
 
     nextSceneAssets.reserve(sceneAsset.assets().size());
-    for(const auto& [nickname, asset] : sceneAsset.assets()){
+    for(const auto& [nickname, asset] : sceneAsset.assets())
         nextSceneAssets.emplace(nickname, asset);
-        __hidden_scene_runtime::AppendUniqueAssetRef(nextResolvedAssets, asset);
-    }
 
-    Core::Alloc::ScratchArena scratchArena(AssetsSceneArenaScope::s_RuntimeSubsystemLoadArena);
-    Vector<SubsystemRef, Core::Alloc::ScratchArena> worklist(scratchArena);
-    for(const SubsystemRef& subsystem : sceneAsset.subsystems()){
-        const usize previousSize = nextSubsystems.size();
-        __hidden_scene_runtime::AppendUniqueAssetRef(nextSubsystems, subsystem);
-        if(nextSubsystems.size() != previousSize)
-            worklist.push_back(subsystem);
-    }
-
-    for(usize index = 0u; index < worklist.size(); ++index){
-        const SubsystemRef currentSubsystem = worklist[index];
+    nextLoadedSubsystems.reserve(sceneAsset.subsystems().size());
+    for(const SubsystemRef& currentSubsystem : sceneAsset.subsystems()){
         auto loadedAsset = assetManager.loadSync(ISubsystem::AssetTypeName(), currentSubsystem.name());
         if(!loadedAsset){
             NWB_LOGGER_ERROR(
@@ -271,38 +230,24 @@ bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, 
             );
             return false;
         }
-        UniquePtr<ISubsystem> subsystem(checked_cast<ISubsystem*>(loadedAsset->release()));
-        for(const SubsystemRef& childSubsystem : subsystem->subsystems()){
-            const usize previousSize = nextSubsystems.size();
-            __hidden_scene_runtime::AppendUniqueAssetRef(nextSubsystems, childSubsystem);
-            if(nextSubsystems.size() != previousSize)
-                worklist.push_back(childSubsystem);
+        for(const UniquePtr<ISubsystem>& existing : nextLoadedSubsystems){
+            if(existing && existing->assetType() == subsystemPtr->assetType()){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("{}: duplicate subsystem type '{}' in scene '{}'"),
+                    __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner,
+                    ConvertString(subsystemPtr->assetType().resolvedText()),
+                    ConvertString(scene.name().resolvedText())
+                );
+                return false;
+            }
         }
-
-        AssetRefVector subsystemAssets(m_arena);
-        subsystem->collectAssets(subsystemAssets);
-        for(const AssetRef& asset : subsystemAssets)
-            __hidden_scene_runtime::AppendUniqueAssetRef(nextResolvedAssets, asset);
-
-        nextLoadedSubsystems.push_back(Move(subsystem));
+        nextLoadedSubsystems.push_back(UniquePtr<ISubsystem>(checked_cast<ISubsystem*>(loadedAsset->release())));
     }
 
     m_scene = scene;
-    m_subsystems = Move(nextSubsystems);
     m_sceneAssets = Move(nextSceneAssets);
     m_loadedSubsystems = Move(nextLoadedSubsystems);
-    m_resolvedAssets = Move(nextResolvedAssets);
     return true;
-}
-
-bool ActiveSceneSubsystems::hasSubsystem(const SubsystemRef& subsystem)const noexcept{
-    if(!subsystem.valid())
-        return false;
-    for(const SubsystemRef& enabled : m_subsystems){
-        if(enabled == subsystem)
-            return true;
-    }
-    return false;
 }
 
 

@@ -45,7 +45,13 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ResolveAttributeSkins(const Span<const MeshletDesc> meshlets, const Span<const MeshletPositionStreamRef> positionRefs, const Span<const MeshletLocalVertexRef> localVertexRefs, const usize attributeRefCount, MeshSkinningRuntimeInstance::AttributeSkinVector& outAttributeSkins){
+[[nodiscard]] bool ResolveAttributeSkins(
+    const Span<const MeshletDesc> meshlets,
+    const Span<const MeshletPositionStreamRef> positionRefs,
+    const Span<const MeshletLocalVertexRef> localVertexRefs,
+    const usize attributeRefCount,
+    MeshSkinningRuntimeInstance::AttributeSkinVector& outAttributeSkins
+){
     return MeshMeshletRefValidation::ResolveMeshletAttributeSkins(meshlets, positionRefs, localVertexRefs, attributeRefCount, [](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
             static_cast<void>(attributeIndex);
             static_cast<void>(previousSkin);
@@ -281,11 +287,11 @@ Expected<NotNull<MeshSkinningRuntimeCache::MeshSkinningSource*>> MeshSkinningRun
         return MakeNotNull(&cachedSource);
     }
 
-    auto loadedSkinAsset = m_assetManager.loadTypedSync<Skin>(skinAsset.name(), __hidden_runtime_cache_source::s_AssetLoadContext, Skin::s_AssetTypeText);
+    auto loadedSkinAsset = m_assetManager.loadTypedSync<Skin>(skinAsset.name(), __hidden_runtime_cache_source::s_AssetLoadContext);
     if(!loadedSkinAsset)
         return MakeUnexpected(Failure{});
 
-    auto loadedMeshAsset = m_assetManager.loadTypedSync<Mesh>((*loadedSkinAsset)->mesh().name(), __hidden_runtime_cache_source::s_AssetLoadContext, Mesh::s_AssetTypeText);
+    auto loadedMeshAsset = m_assetManager.loadTypedSync<Mesh>((*loadedSkinAsset)->mesh().name(), __hidden_runtime_cache_source::s_AssetLoadContext);
     if(!loadedMeshAsset)
         return MakeUnexpected(Failure{});
 

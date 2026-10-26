@@ -15,7 +15,7 @@ nwb_target_link_libraries_whole_archive(nwb_dependency_computer
     nwb_assets_mesh_volume_entries
     nwb_assets_model_volume_entry
     nwb_assets_scene_volume_entry
-    nwb_assets_subsystem_volume_entry
+    nwb_assets_graphics_volume_entry
     nwb_assets_ui_skin_volume_entry
 )
 get_property(_nwb_registered_pipeline_volume_entries GLOBAL PROPERTY NWB_PIPELINE_VOLUME_ENTRY_TARGETS)

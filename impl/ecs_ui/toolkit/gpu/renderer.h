@@ -6,6 +6,7 @@
 
 
 #include <impl/assets_scene/asset.h>
+#include <impl/assets_ui_skin/subsystem.h>
 #include <impl/ecs_ui/toolkit/paint.h>
 
 #include <core/assets/manager.h>

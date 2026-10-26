@@ -11,6 +11,7 @@
 #include "skin_selection.h"
 
 #include <impl/assets_scene/asset.h>
+#include <impl/assets_ui_skin/subsystem.h>
 #include <impl/ecs_ui/toolkit/input/pointer.h>
 #include <impl/ecs_ui/toolkit/gpu/renderer.h>
 
@@ -33,14 +34,7 @@ namespace UiLayerPresentation{
 };
 
 inline constexpr TStringView s_UiLayerSystemOwnerName = NWB_TEXT("UiLayerSystem");
-inline constexpr AStringView s_UiSkinAssetKindText = "UI skin";
 inline constexpr usize s_UiNativeKeySlotCount = 512u;
-
-
-struct UiFontBinding{
-    Core::Assets::AssetRef<Font> font;
-    Core::Assets::AssetRef<FontAtlas> atlas;
-};
 
 
 // ECS owns callback execution; the independent GPU renderer receives only frozen paint snapshots.
@@ -58,7 +52,6 @@ private:
 
 public:
     using ShaderPathResolveCallback = Function<Expected<Name>(const Name&, AStringView, const Name&)>;
-    using FontReferences = Vector<UiFontBinding, Core::Alloc::GlobalArena>;
 
 
 public:
@@ -72,7 +65,6 @@ public:
         Core::Assets::AssetManager& assetManager,
         ShaderPathResolveCallback shaderPathResolver,
         const Core::Assets::AssetRef<UiSkin>& skin,
-        Span<const UiFontBinding> fonts,
         UiLayerPresentation::Enum presentation
     );
     virtual ~UiLayerSystem()noexcept override;
@@ -133,33 +125,19 @@ private:
     void routePointerInput(const Ui::PointerInput& input, bool* consumed = nullptr);
     void synchronizeNativeInput();
     [[nodiscard]] bool loadFonts(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Core::Assets::AssetRef<UiSkin> resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept{
+    [[nodiscard]] Core::Assets::AssetRef<UiSkin> basicSkin()const noexcept{
         if(!m_activeSceneSubsystems)
             return {};
         const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>();
-        if(!uiSubsystem)
+        return uiSubsystem ? uiSubsystem->basicSkin : Core::Assets::AssetRef<UiSkin>{};
+    }
+    [[nodiscard]] Core::Assets::AssetRef<UiSkin> resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept{
+        const Core::Assets::AssetRef<UiSkin> fallbackSkin = basicSkin();
+        if(!fallbackSkin.valid())
             return {};
-        if(!ref.valid() || ref == s_DefaultUiSkinRef || ref == uiSubsystem->defaultSkin)
-            return uiSubsystem->defaultSkin;
+        if(!ref.valid() || ref == fallbackSkin)
+            return fallbackSkin;
         return m_activeSceneSubsystems->findSceneAsset<UiSkin>(ref.name());
-    }
-    [[nodiscard]] Core::Assets::AssetRef<Font> resolveFont(const Core::Assets::AssetRef<Font>& ref)const noexcept{
-        if(!ref.valid() || !m_activeSceneSubsystems)
-            return {};
-        if(const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>()){
-            if(ref == uiSubsystem->defaultLatinFace || ref == uiSubsystem->defaultKoreanFace)
-                return ref;
-        }
-        return m_activeSceneSubsystems->findSceneAsset<Font>(ref.name());
-    }
-    [[nodiscard]] Core::Assets::AssetRef<FontAtlas> resolveFontAtlas(const Core::Assets::AssetRef<FontAtlas>& ref)const noexcept{
-        if(!ref.valid() || !m_activeSceneSubsystems)
-            return {};
-        if(const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>()){
-            if(ref == uiSubsystem->defaultLatinAtlas || ref == uiSubsystem->defaultKoreanAtlas)
-                return ref;
-        }
-        return m_activeSceneSubsystems->findSceneAsset<FontAtlas>(ref.name());
     }
 
 
@@ -174,7 +152,6 @@ private:
     const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
     UiSkinSelection m_skinSelection;
     UniquePtr<Core::Assets::IAsset> m_skinAsset;
-    FontReferences m_fontRefs;
     Ui::PaintBuilder m_paint;
     Ui::TextService m_text;
     Ui::Context m_context;

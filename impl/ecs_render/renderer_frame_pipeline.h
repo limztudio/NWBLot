@@ -26,6 +26,9 @@
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/task_graph_stage.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
+#include <impl/assets_graphics/csg/subsystem.h>
+#include <impl/assets_graphics/renderer/subsystem.h>
+#include <impl/assets_graphics/transparent/subsystem.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_scene/asset.h>
 #include <impl/ecs_csg/frame_state.h>

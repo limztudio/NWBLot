@@ -258,7 +258,7 @@ bool GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const 
         if(existing.skin == binding.skin && existing.texture == binding.texture && existing.generation == binding.generation)
             return existing.atlasWidth == binding.atlasWidth && existing.atlasHeight == binding.atlasHeight && existing.referenceDensity == binding.referenceDensity;
     }
-    auto loadedAsset = m_state->m_assets.loadTypedSync<Texture>(binding.texture.name(), s_GpuRendererContext, "UI atlas texture");
+    auto loadedAsset = m_state->m_assets.loadTypedSync<Texture>(binding.texture.name(), s_GpuRendererContext);
     const Texture* texture = loadedAsset ? loadedAsset->get() : nullptr;
     if(!texture || !skin.validateTexture(*texture))
         return false;

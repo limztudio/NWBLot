@@ -5,7 +5,7 @@
 #include "material_system.h"
 
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
-#include <impl/assets_material/shader_stage_names.h>
+#include <impl/assets_graphics/mesh/subsystem.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/mesh/mesh_compute_push_constants.h>
@@ -25,7 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMaterialSystem::createObjectGeometryPipelineResources(const Name& meshShaderName, const AStringView variantName, MaterialPipelineResources& resources){
+bool RendererMaterialSystem::createObjectGeometryPipelineResources(MaterialPipelineResources& resources){
     if(!prepareMeshComputeBindingLayout())
         return false;
     auto& device = m_graphics.getDevice();
@@ -44,7 +44,7 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(const Name& m
         if(!objectGeometryDecodePipelineResult)
             return false;
     }
-    if(!m_shaderSystem.loadShaderAsset<VertexShader>(resources.objectGeometryVertexShader, meshShaderName, variantName, "ECSRender_ObjectGeometryVS", &MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName))
+    if(!m_shaderSystem.loadShader<VertexShader>(resources.objectGeometryVertexShader, &MeshSubsystem::objectVs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ObjectGeometryVS"))
         return false;
     if(!m_materialState.m_objectGeometryInputLayout){
         constexpr usize s_ObjectGeometryVertexAttributeCount = 5u;

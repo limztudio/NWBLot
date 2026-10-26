@@ -5,9 +5,6 @@
 #include "dependencies.h"
 #include "provider_catalog.h"
 
-#include <impl/assets_graphics/mesh/names.h>
-#include <impl/assets_subsystem/asset.h>
-
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_metadata.h>
@@ -138,21 +135,6 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
     Vector<usize, Assets::ScratchArena> fileQueue(selection->order, scratchArena);
     KnownVirtualPathTextMap knownVirtualPathTexts(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
 
-    RecordVirtualPathText(Impl::AssetsGraphicsMesh::s_SharedMeshShaderText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_DefaultText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_RendererText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_MeshText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_DeferredText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_BvhText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_GiText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_ReflectionText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_ShadowText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_SkinningText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_TransparentText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_RefractiveText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_CsgText, arena, knownVirtualPathTexts);
-    RecordVirtualPathText(Impl::BuiltInSubsystems::s_UiText, arena, knownVirtualPathTexts);
-
     const auto enqueueDependency = [&](const Name& depVirtualPath, const Name& expectedAssetType) -> bool{
         if(!depVirtualPath)
             return false;
@@ -179,10 +161,6 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
     public:
         [[nodiscard]] virtual bool addAssetDependency(const Name& virtualPath, const Name& expectedAssetType = s_NameNone)override{
             return m_enqueue(virtualPath, expectedAssetType);
-        }
-
-        [[nodiscard]] virtual bool addSubsystemDependency(const Name& subsystemVirtualPath)override{
-            return m_enqueue(subsystemVirtualPath, Impl::ISubsystem::AssetTypeName());
         }
 
 

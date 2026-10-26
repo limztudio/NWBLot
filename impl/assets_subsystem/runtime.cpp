@@ -6,7 +6,7 @@
 #include "arena_names.h"
 #include "binary_payload.h"
 
-#include <core/assets/auto_registration.h>
+#include <core/alloc/scratch.h>
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
 
@@ -27,50 +27,15 @@ namespace __hidden_subsystem_runtime{
 
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SubsystemAssetCodecAutoRegistrar, SubsystemAssetCodec);
-#define NWB_REGISTER_TYPED_SUBSYSTEM_ASSET_CODEC(Type) NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_##Type##AssetCodecAutoRegistrar, Type##AssetCodec);
-NWB_SUBSYSTEM_ASSET_TYPE_ENTRIES(NWB_REGISTER_TYPED_SUBSYSTEM_ASSET_CODEC)
-#undef NWB_REGISTER_TYPED_SUBSYSTEM_ASSET_CODEC
 
-using NameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
+static const SubsystemTypeAutoRegistrar* s_RegisteredSubsystemTypesHead = nullptr;
 
 
-template<typename TAsset>
-[[nodiscard]] static bool ValidateUniqueAssetRefs(
-    const Span<const Core::Assets::AssetRef<TAsset>> references,
-    const TStringView contextLabel,
-    const Name disallowedSelfName,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    NameHashSet seen(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-    seen.reserve(references.size());
-    for(usize i = 0u; i < references.size(); ++i){
-        const Core::Assets::AssetRef<TAsset>& entry = references[i];
-        if(!entry.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: {} entry {} is empty"), contextLabel, i);
-            return false;
-        }
-        if(disallowedSelfName && entry.name() == disallowedSelfName){
-            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: {} entry {} references its own subsystem"), contextLabel, i);
-            return false;
-        }
-        if(!seen.insert(entry.name().hash()).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: duplicate {} entry at index {}"), contextLabel, i);
-            return false;
-        }
+[[nodiscard]] static UniquePtr<ISubsystem> CreateSubsystemByTypeHash(Core::Assets::AssetArena& arena, const Name& virtualPath, const NameHash& subsystemTypeHash){
+    for(const SubsystemTypeAutoRegistrar* node = s_RegisteredSubsystemTypesHead; node != nullptr; node = node->next()){
+        if(node->assetType().hash() == subsystemTypeHash && node->create() != nullptr)
+            return node->create()(arena, virtualPath);
     }
-    return true;
-}
-
-[[nodiscard]] static UniquePtr<ISubsystem> CreateSubsystemByTypeHash(
-    Core::Assets::AssetArena& arena,
-    const Name& virtualPath,
-    const NameHash& subsystemTypeHash
-){
-#define NWB_CREATE_SUBSYSTEM_IF_MATCH(Type) \
-    if(subsystemTypeHash == Type::AssetTypeName().hash()) \
-        return MakeUnique<Type>(arena, virtualPath);
-    NWB_SUBSYSTEM_ASSET_TYPE_ENTRIES(NWB_CREATE_SUBSYSTEM_IF_MATCH)
-#undef NWB_CREATE_SUBSYSTEM_IF_MATCH
     return nullptr;
 }
 
@@ -87,14 +52,22 @@ template<typename TAsset>
 ISubsystem::~ISubsystem()noexcept = default;
 
 
+SubsystemTypeAutoRegistrar::SubsystemTypeAutoRegistrar(const Name& assetType, const SubsystemInstanceFactory create)noexcept
+    : m_assetType(assetType)
+    , m_create(create)
+    , m_next(__hidden_subsystem_runtime::s_RegisteredSubsystemTypesHead)
+{
+    __hidden_subsystem_runtime::s_RegisteredSubsystemTypesHead = this;
+}
+
+
 bool IsSubsystemAssetType(const Name& assetType)noexcept{
     if(!assetType)
         return false;
-#define NWB_CHECK_SUBSYSTEM_TYPE(Type) \
-    if(assetType == Type::AssetTypeName()) \
-        return true;
-    NWB_SUBSYSTEM_ASSET_TYPE_ENTRIES(NWB_CHECK_SUBSYSTEM_TYPE)
-#undef NWB_CHECK_SUBSYSTEM_TYPE
+    for(const SubsystemTypeAutoRegistrar* node = __hidden_subsystem_runtime::s_RegisteredSubsystemTypesHead; node != nullptr; node = node->next()){
+        if(node->assetType() == assetType)
+            return true;
+    }
     return false;
 }
 
@@ -108,86 +81,72 @@ const ISubsystem* CastSubsystem(const Core::Assets::IAsset* const asset)noexcept
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename SubsystemT>
-SubsystemFieldValueDescriptor TypedSubsystem<SubsystemT>::fieldDescriptor(const usize index)const noexcept{
-    const auto descriptors = FieldDescriptors();
-    NWB_ASSERT(index < descriptors.size());
-    return SubsystemFieldValueDescriptor{
-        descriptors[index].fieldName,
-        descriptors[index].expectedAssetTypeText
-    };
-}
+namespace SubsystemAssetRuntime{
 
-template<typename SubsystemT>
-Name TypedSubsystem<SubsystemT>::fieldValue(const usize index)const noexcept{
-    const auto descriptors = FieldDescriptors();
-    NWB_ASSERT(index < descriptors.size());
-    return descriptors[index].get(*static_cast<const SubsystemT*>(this));
-}
 
-template<typename SubsystemT>
-void TypedSubsystem<SubsystemT>::setFieldValue(const usize index, const Name& value)noexcept{
-    const auto descriptors = FieldDescriptors();
-    NWB_ASSERT(index < descriptors.size());
-    descriptors[index].set(*static_cast<SubsystemT*>(this), value);
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-template<typename SubsystemT>
-void TypedSubsystem<SubsystemT>::collectAssets(Vector<AssetRef, Core::Alloc::GlobalArena>& outAssets)const{
-    const auto descriptors = FieldDescriptors();
-    const SubsystemT& derived = *static_cast<const SubsystemT*>(this);
-    for(const SubsystemFieldDescriptor<SubsystemT>& descriptor : descriptors){
-        const Name value = descriptor.get(derived);
-        if(value)
-            outAssets.push_back(AssetRef(value));
-    }
-}
 
-template<typename SubsystemT>
-bool TypedSubsystem<SubsystemT>::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    if(!checkVirtualPath(NWB_TEXT("ISubsystem::validatePayload")))
+bool ValidatePayload(const ISubsystem& subsystem){
+    if(!subsystem.checkVirtualPath(NWB_TEXT("ISubsystem::validatePayload")))
         return false;
 
-    if constexpr(!SubsystemT::s_SupportsChildSubsystems){
-        if(!subsystems().empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' of type '{}' does not support child subsystems"),
-                ConvertString(virtualPath().resolvedText()),
-                ConvertString(SubsystemT::s_AssetTypeText)
-            );
-            return false;
-        }
-    }
-
-    if constexpr(SubsystemT::s_FieldCount == 0u){
-        if(subsystems().empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: subsystem must declare at least one child subsystem or asset"));
-            return false;
-        }
-    }
-
-    if(!__hidden_subsystem_runtime::ValidateUniqueAssetRefs(Span<const SubsystemRef>(subsystems()), NWB_TEXT("child subsystem"), virtualPath(), scratchArena))
+    const usize count = subsystem.fieldCount();
+    if(count == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: subsystem must declare at least one asset field"));
         return false;
+    }
 
-    const auto descriptors = FieldDescriptors();
-    const SubsystemT& derived = *static_cast<const SubsystemT*>(this);
-    for(const SubsystemFieldDescriptor<SubsystemT>& descriptor : descriptors){
-        const Name value = descriptor.get(derived);
-        if(!value){
+    for(usize i = 0u; i < count; ++i){
+        const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
+        const usize valueCount = subsystem.fieldValueCount(i);
+        if(descriptor.isArray){
+            if(valueCount == 0u){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' array field '{}' must not be empty"),
+                    ConvertString(subsystem.virtualPath().resolvedText()),
+                    ConvertString(descriptor.fieldName)
+                );
+                return false;
+            }
+        }
+        else if(valueCount != 1u){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' field '{}' must not be empty"),
-                ConvertString(virtualPath().resolvedText()),
+                NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' field '{}' must contain exactly one value"),
+                ConvertString(subsystem.virtualPath().resolvedText()),
                 ConvertString(descriptor.fieldName)
             );
             return false;
+        }
+
+        for(usize elementIndex = 0u; elementIndex < valueCount; ++elementIndex){
+            const Name value = subsystem.fieldValue(i, elementIndex);
+            if(!value){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' field '{}' must not be empty"),
+                    ConvertString(subsystem.virtualPath().resolvedText()),
+                    ConvertString(descriptor.fieldName)
+                );
+                return false;
+            }
+            for(usize prevIndex = 0u; prevIndex < elementIndex; ++prevIndex){
+                if(subsystem.fieldValue(i, prevIndex) == value){
+                    NWB_LOGGER_ERROR(
+                        NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' array field '{}' has duplicate entry '{}'"),
+                        ConvertString(subsystem.virtualPath().resolvedText()),
+                        ConvertString(descriptor.fieldName),
+                        ConvertString(value.resolvedText())
+                    );
+                    return false;
+                }
+            }
         }
     }
 
     return true;
 }
 
-template<typename SubsystemT>
-bool TypedSubsystem<SubsystemT>::loadBinary(const Span<const u8> binary){
+bool LoadBinary(ISubsystem& subsystem, const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(AssetsSubsystemArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemBinaryPayload::SubsystemHeaderBinary>(
@@ -204,65 +163,84 @@ bool TypedSubsystem<SubsystemT>::loadBinary(const Span<const u8> binary){
         NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: unsupported version {}"), header.version);
         return false;
     }
-    if(header.subsystemTypeHash != SubsystemT::AssetTypeName().hash()){
+    if(header.subsystemTypeHash != subsystem.assetType().hash()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("ISubsystem::loadBinary failed: subsystem binary type does not match '{}'"),
-            ConvertString(SubsystemT::s_AssetTypeText)
+            ConvertString(subsystem.assetType().resolvedText())
         );
         return false;
     }
-    if(header.assetCount != SubsystemT::s_FieldCount){
+    const usize expectedFieldCount = subsystem.fieldCount();
+    if(header.fieldCount != expectedFieldCount){
         NWB_LOGGER_ERROR(
             NWB_TEXT("ISubsystem::loadBinary failed: expected {} asset fields for '{}', got {}"),
-            SubsystemT::s_FieldCount,
-            ConvertString(SubsystemT::s_AssetTypeText),
-            header.assetCount
+            expectedFieldCount,
+            ConvertString(subsystem.assetType().resolvedText()),
+            header.fieldCount
         );
         return false;
     }
 
-    Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
+    Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
-
-    if(!Core::Assets::ReadVectorPayload(binary, header.subsystemCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_SubsystemsPayloadLabel, cursor, subsystemHashes))
+    if(!Core::Assets::ReadVectorPayload(binary, header.fieldCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_FieldCountsPayloadLabel, cursor, fieldCounts))
         return false;
     if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_AssetsPayloadLabel, cursor, assetHashes))
         return false;
     if(!Core::Assets::ReadCompletePayload(binary, cursor, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext))
         return false;
 
-    auto& assetArena = subsystems().get_allocator().arena();
-    SubsystemT candidate(assetArena, virtualPath());
-
-    candidate.subsystems().reserve(subsystemHashes.size());
-    for(const NameHash& hash : subsystemHashes){
-        SubsystemRef ref;
-        ref.virtualPath = Name(hash);
-        candidate.subsystems().push_back(ref);
-    }
-
-    const auto descriptors = FieldDescriptors();
-    for(usize i = 0u; i < descriptors.size(); ++i){
-        const Name assetName(assetHashes[i]);
-        if(!assetName){
-            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: invalid asset entry at index {}"), i);
+    u64 totalCount = 0u;
+    for(const u64 count : fieldCounts){
+        if(count == 0u || count > Limit<u64>::s_Max - totalCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: invalid field element count"));
             return false;
         }
-        descriptors[i].set(candidate, assetName);
+        totalCount += count;
+    }
+    if(totalCount != header.assetCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: field element counts do not sum to asset count"));
+        return false;
     }
 
-    if(!candidate.validatePayload(scratchArena))
-        return false;
-    *static_cast<SubsystemT*>(this) = Move(candidate);
-    return true;
+    usize hashOffset = 0u;
+    for(usize i = 0u; i < expectedFieldCount; ++i){
+        const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
+        const u64 elementCount = fieldCounts[i];
+        if(!descriptor.isArray && elementCount != 1u){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ISubsystem::loadBinary failed: scalar field '{}' in '{}' has element count {}"),
+                ConvertString(descriptor.fieldName),
+                ConvertString(subsystem.assetType().resolvedText()),
+                elementCount
+            );
+            return false;
+        }
+        subsystem.clearFieldValues(i);
+        for(u64 elementIndex = 0u; elementIndex < elementCount; ++elementIndex){
+            const Name assetName(assetHashes[hashOffset++]);
+            if(!assetName){
+                NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: asset reference must not be empty"));
+                return false;
+            }
+            subsystem.appendFieldValue(i, assetName);
+        }
+    }
+
+    return subsystem.validatePayload();
 }
 
 
-Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(
-    Core::Assets::AssetArena& arena,
-    const Name& virtualPath,
-    const Span<const u8> binary
-)const{
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const{
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemBinaryPayload::SubsystemHeaderBinary>(
         binary,
@@ -273,30 +251,20 @@ Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(
     );
     if(!headerResult)
         return MakeUnexpected(Failure{});
-    const SubsystemBinaryPayload::SubsystemHeaderBinary& header = *headerResult;
-    if(header.version != SubsystemBinaryPayload::s_SubsystemVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: unsupported version {}"), header.version);
-        return MakeUnexpected(Failure{});
-    }
 
-    auto subsystem = __hidden_subsystem_runtime::CreateSubsystemByTypeHash(arena, virtualPath, header.subsystemTypeHash);
-    if(!subsystem){
+    auto asset = __hidden_subsystem_runtime::CreateSubsystemByTypeHash(arena, virtualPath, headerResult->subsystemTypeHash);
+    if(!asset){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("ISubsystem::loadBinary failed: unknown concrete subsystem type hash for '{}'"),
+            NWB_TEXT("SubsystemAssetCodec::deserialize failed: unregistered subsystem type in '{}'"),
             ConvertString(virtualPath.resolvedText())
         );
         return MakeUnexpected(Failure{});
     }
-    if(!subsystem->loadBinary(binary))
+    if(!asset->loadBinary(binary))
         return MakeUnexpected(Failure{});
 
-    return UniquePtr<Core::Assets::IAsset>(Move(subsystem));
+    return UniquePtr<Core::Assets::IAsset>(Move(asset));
 }
-
-
-#define NWB_INSTANTIATE_TYPED_SUBSYSTEM(Type) template class TypedSubsystem<Type>;
-NWB_SUBSYSTEM_ASSET_TYPE_ENTRIES(NWB_INSTANTIATE_TYPED_SUBSYSTEM)
-#undef NWB_INSTANTIATE_TYPED_SUBSYSTEM
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

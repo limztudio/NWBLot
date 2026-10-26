@@ -1,12 +1,11 @@
 ui_subsystem asset;
 
+asset.basic_fonts = [
+    "engine/ui/fonts/default/latin/atlas",
+    "engine/ui/fonts/default/korean/atlas",
+];
+asset.basic_skin = "engine/ui/skins/default/atlas";
 asset.output_ps = "engine/graphics/ui/output_ps";
 asset.output_vs = "engine/graphics/ui/output_vs";
 asset.ps = "engine/graphics/ui/ps";
 asset.vs = "engine/graphics/ui/vs";
-asset.default_korean_atlas = "engine/ui/fonts/default/korean/atlas";
-asset.default_korean_face = "engine/ui/fonts/default/korean/face";
-asset.default_latin_atlas = "engine/ui/fonts/default/latin/atlas";
-asset.default_latin_face = "engine/ui/fonts/default/latin/face";
-asset.default_skin = "engine/ui/skins/default/atlas";
-asset.default_skin_texture = "engine/ui/skins/default/texture";

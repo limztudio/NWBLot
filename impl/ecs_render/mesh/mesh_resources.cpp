@@ -223,7 +223,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         return MakeNotNull(&foundMesh.value());
     }
 
-    auto loadedAsset = m_assetManager.loadTypedSync<Mesh>(meshPath, s_RendererAssetOwnerName, Mesh::s_AssetTypeText);
+    auto loadedAsset = m_assetManager.loadTypedSync<Mesh>(meshPath, s_RendererAssetOwnerName);
     if(!loadedAsset)
         return MakeUnexpected(Failure{});
 
@@ -296,25 +296,33 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
     else
         createdMesh.meshletBoundsBuffer.reset();
     uploaded = static_cast<bool>(meshletBoundsBufferResult) && uploaded;
-    auto meshletPositionRefDeltaBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletPositionRefDeltasBufferName, mesh.meshletPositionRefDeltas(), RendererArenaScope::s_MeshletPositionRefDeltaBufferLabel);
+    auto meshletPositionRefDeltaBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(
+        m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletPositionRefDeltasBufferName, mesh.meshletPositionRefDeltas(), RendererArenaScope::s_MeshletPositionRefDeltaBufferLabel
+    );
     if(meshletPositionRefDeltaBufferResult)
         createdMesh.meshletPositionRefDeltaBuffer = Move(*meshletPositionRefDeltaBufferResult);
     else
         createdMesh.meshletPositionRefDeltaBuffer.reset();
     uploaded = static_cast<bool>(meshletPositionRefDeltaBufferResult) && uploaded;
-    auto meshletAttributeRefDeltaBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletAttributeRefDeltasBufferName, mesh.meshletAttributeRefDeltas(), RendererArenaScope::s_MeshletAttributeRefDeltaBufferLabel);
+    auto meshletAttributeRefDeltaBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(
+        m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletAttributeRefDeltasBufferName, mesh.meshletAttributeRefDeltas(), RendererArenaScope::s_MeshletAttributeRefDeltaBufferLabel
+    );
     if(meshletAttributeRefDeltaBufferResult)
         createdMesh.meshletAttributeRefDeltaBuffer = Move(*meshletAttributeRefDeltaBufferResult);
     else
         createdMesh.meshletAttributeRefDeltaBuffer.reset();
     uploaded = static_cast<bool>(meshletAttributeRefDeltaBufferResult) && uploaded;
-    auto meshletLocalVertexRefBufferResult = __hidden_mesh_resources::SetupMeshBuffer<MeshletLocalVertexRef>(m_graphics, meshPath, RendererArenaScope::s_MeshletLocalVertexRefsBufferName, mesh.meshletLocalVertexRefs(), RendererArenaScope::s_MeshletLocalVertexRefBufferLabel);
+    auto meshletLocalVertexRefBufferResult = __hidden_mesh_resources::SetupMeshBuffer<MeshletLocalVertexRef>(
+        m_graphics, meshPath, RendererArenaScope::s_MeshletLocalVertexRefsBufferName, mesh.meshletLocalVertexRefs(), RendererArenaScope::s_MeshletLocalVertexRefBufferLabel
+    );
     if(meshletLocalVertexRefBufferResult)
         createdMesh.meshletLocalVertexRefBuffer = Move(*meshletLocalVertexRefBufferResult);
     else
         createdMesh.meshletLocalVertexRefBuffer.reset();
     uploaded = static_cast<bool>(meshletLocalVertexRefBufferResult) && uploaded;
-    auto meshletPrimitiveIndexBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletPrimitiveIndicesBufferName, mesh.meshletPrimitiveIndices(), RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel);
+    auto meshletPrimitiveIndexBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(
+        m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletPrimitiveIndicesBufferName, mesh.meshletPrimitiveIndices(), RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel
+    );
     if(meshletPrimitiveIndexBufferResult)
         createdMesh.meshletPrimitiveIndexBuffer = Move(*meshletPrimitiveIndexBufferResult);
     else

@@ -4,7 +4,6 @@
 
 #include "provider_catalog.h"
 
-#include <impl/assets_csg/cook.h>
 #include <impl/assets_scene/asset.h>
 #include <impl/assets_subsystem/asset.h>
 
@@ -27,7 +26,6 @@ namespace Assets = Core::Assets;
 
 inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 inline constexpr Name s_AssetBunchTypeName("asset_bunch");
-inline constexpr AStringView s_CsgShapeFileSuffix = "/shape";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,21 +64,6 @@ inline constexpr AStringView s_CsgShapeFileSuffix = "/shape";
     if(!parentName || !*parentName)
         return {};
     return Optional<Name>(*parentName);
-}
-
-[[nodiscard]] static Optional<Name> BuildCsgShapeFileVirtualPath(const AStringView virtualPathText, Assets::ScratchArena& scratchArena){
-    if(virtualPathText.empty())
-        return {};
-
-    Assets::ScratchString candidateText(scratchArena);
-    candidateText.reserve(virtualPathText.size() + s_CsgShapeFileSuffix.size());
-    candidateText.append(virtualPathText.data(), virtualPathText.size());
-    candidateText.append(s_CsgShapeFileSuffix.data(), s_CsgShapeFileSuffix.size());
-
-    const auto shapeFileVirtualPath = Name::FromText(AStringView(candidateText));
-    if(!shapeFileVirtualPath || !*shapeFileVirtualPath)
-        return {};
-    return Optional<Name>(*shapeFileVirtualPath);
 }
 
 [[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory, const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const Span<u8> selected, Vector<usize, Assets::ScratchArena>& order){
@@ -258,7 +241,6 @@ Expected<usize> DependencyProviderCatalog::resolve(
 
     const AStringView virtualPathText = !virtualPathTextHint.empty() ? virtualPathTextHint : virtualPath.resolvedText();
     const Optional<Name> parentVirtualPath = ExtractParentVirtualPath(virtualPathText);
-    const Optional<Name> csgShapeFileVirtualPath = BuildCsgShapeFileVirtualPath(virtualPathText, scratchArena);
 
     usize matched = Limit<usize>::s_Max;
     const auto recordMatch = [&](const usize index) -> bool{
@@ -336,32 +318,11 @@ Expected<usize> DependencyProviderCatalog::resolve(
                 return MakeUnexpected(Failure{});
             continue;
         }
-
-        if(csgShapeFileVirtualPath && m_virtualPaths[index] == *csgShapeFileVirtualPath){
-            if(assetType && assetType != Impl::AssetsCsgCook::s_CsgShapeAssetTypeName)
-                continue;
-            const auto document = read(index, scratchArena);
-            if(!document)
-                return MakeUnexpected(Failure{});
-            if(document->declarations().size() != 1u)
-                continue;
-            const auto* assetDeclaration = Assets::FindMetadataAssetDeclaration(*document);
-            if(!assetDeclaration)
-                continue;
-            const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
-            if(!documentAssetType || *documentAssetType != Impl::AssetsCsgCook::s_CsgShapeAssetTypeName)
-                continue;
-            const auto csgEntry = Impl::AssetsCsgCook::ParseCsgShapeCookMetadata(m_arena, m_files[index].filePath, *document, scratchArena);
-            if(!csgEntry)
-                return MakeUnexpected(Failure{});
-            if(csgEntry->shapeName == virtualPath && !recordMatch(index))
-                return MakeUnexpected(Failure{});
-        }
     }
 
     if(matched == Limit<usize>::s_Max){
         if(assetType)
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), ConvertString(assetType), ConvertString(virtualPath));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), ConvertString(assetType), ConvertString(virtualPathText));
         else
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no provider for '{}'"), ConvertString(virtualPath));
         return MakeUnexpected(Failure{});

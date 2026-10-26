@@ -67,11 +67,7 @@ public:
     Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] Expected<ProjectAsset> BuildProjectAsset(
-    ProjectCookEntry& entry,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<ProjectAsset> BuildProjectAsset(ProjectCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 [[nodiscard]] Expected<SceneCookEntry> ParseSceneCookMetadata(
     Name virtualPath,
@@ -88,11 +84,7 @@ public:
     Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] Expected<SceneAsset> BuildSceneAsset(
-    SceneCookEntry& entry,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<SceneAsset> BuildSceneAsset(SceneCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

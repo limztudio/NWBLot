@@ -307,12 +307,12 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
 
 bool TextureAssetLoader::Load(TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName){
     const TStringView owner = ownerName;
-    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner, Texture::s_AssetTypeText))
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner))
         return outResource.valid();
 
     const Name& textureVirtualPath = textureAsset.name();
 
-    auto loadedAsset = assetManager.loadTypedSync<Texture>(textureVirtualPath, owner, Texture::s_AssetTypeText);
+    auto loadedAsset = assetManager.loadTypedSync<Texture>(textureVirtualPath, owner);
     const Texture* loadedTexture = loadedAsset ? loadedAsset->get() : nullptr;
     if(!loadedTexture)
         return false;

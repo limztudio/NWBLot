@@ -27,11 +27,9 @@ namespace MaterialShaderStageNames{
 
 
 inline constexpr AStringView s_MeshComputeArchiveStageText = "mesh_compute";
-inline constexpr AStringView s_MeshObjectVertexArchiveStageText = "mesh_object_vertex";
 inline constexpr AStringView s_MeshComputeImplicitDefineText = "NWB_MESH_SHADER_EMULATION_COMPUTE";
 
 inline constexpr Name s_MeshComputeArchiveStageName(s_MeshComputeArchiveStageText);
-inline constexpr Name s_MeshObjectVertexArchiveStageName(s_MeshObjectVertexArchiveStageText);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

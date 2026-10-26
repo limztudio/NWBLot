@@ -210,7 +210,7 @@ void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const Mod
     clearModelRuntime(entity, scratchArena);
 
     const Name modelName = component.model.name();
-    auto loadedModel = m_assetManager.loadTypedSync<Model>(modelName, __hidden_model_system::s_AssetLoadContext, Model::s_AssetTypeText);
+    auto loadedModel = m_assetManager.loadTypedSync<Model>(modelName, __hidden_model_system::s_AssetLoadContext);
     if(!loadedModel){
         runtime = ModelRuntimeComponent{};
         return;
@@ -274,7 +274,7 @@ bool ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& mode
 bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const ModelSkeletonObject& object){
     const Name skeletonName = object.skeleton.name();
     NWB_ASSERT(skeletonName);
-    auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext, Skeleton::s_AssetTypeText);
+    auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext);
     if(!skeletonAsset)
         return false;
     const Skeleton& skeleton = **skeletonAsset;
@@ -336,7 +336,7 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
             const Name skeletonName = skeletonComponent->skeleton.name();
             if(!skeletonName)
                 return false;
-            auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext, Skeleton::s_AssetTypeText);
+            auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext);
             if(!skeletonAsset)
                 return false;
             const Skeleton& skeleton = **skeletonAsset;

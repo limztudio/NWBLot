@@ -5,6 +5,8 @@
 #include "ui_image_gallery.h"
 #include "ui_gallery_constants.h"
 
+#include <impl/assets_ui_skin/asset.h>
+#include <impl/assets_ui_skin/subsystem.h>
 #include <impl/ecs_ui/toolkit/images/image_loader.h>
 
 #include <core/common/log.h>
@@ -19,29 +21,14 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_image_gallery{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Name s_GalleryImageTextureNickname("gallery_image_texture");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool UiImageGallery::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
-    const auto textureRef = sceneSubsystems.findSceneAsset<NWB::Impl::Texture>(__hidden_ui_image_gallery::s_GalleryImageTextureNickname);
-    if(!textureRef.valid())
+    const NWB::Impl::UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<NWB::Impl::UiSubsystem>();
+    if(!uiSubsystem || !uiSubsystem->basicSkin.valid())
         return false;
-    auto source = NWB::Impl::Ui::LoadImageSource(arena, assets, textureRef);
+    auto skin = assets.loadTypedSync<NWB::Impl::UiSkin>(uiSubsystem->basicSkin.name(), NWB_TEXT("UiImageGallery"));
+    if(!skin)
+        return false;
+    auto source = NWB::Impl::Ui::LoadImageSource(arena, assets, (*skin)->texture());
     if(!source)
         return false;
     m_source = Move(*source);

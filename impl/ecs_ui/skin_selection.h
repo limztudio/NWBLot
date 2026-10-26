@@ -42,22 +42,22 @@ public:
 public:
     template<typename TTryBind>
     [[nodiscard]] UiSkinSelectionResult::Enum ensure(
-        const Core::Assets::AssetRef<UiSkin>& defaultSkin,
+        const Core::Assets::AssetRef<UiSkin>& basicSkin,
         TTryBind&& tryBind
-    )noexcept(noexcept(static_cast<bool>(tryBind(m_selected))) && noexcept(static_cast<bool>(tryBind(defaultSkin))) && noexcept(static_cast<bool>(true || !tryBind(defaultSkin)))){
+    )noexcept(noexcept(static_cast<bool>(tryBind(m_selected))) && noexcept(static_cast<bool>(tryBind(basicSkin))) && noexcept(static_cast<bool>(true || !tryBind(basicSkin)))){
         if(m_selected.valid())
             return tryBind(m_selected) ? UiSkinSelectionResult::Selected : UiSkinSelectionResult::Failed;
-        if(!defaultSkin.valid())
+        if(!basicSkin.valid())
             return UiSkinSelectionResult::Failed;
 
-        const Core::Assets::AssetRef<UiSkin> preferred = m_requested.valid() ? m_requested : defaultSkin;
+        const Core::Assets::AssetRef<UiSkin> preferred = m_requested.valid() ? m_requested : basicSkin;
         if(tryBind(preferred)){
             m_selected = preferred;
             return UiSkinSelectionResult::Selected;
         }
-        if(preferred == defaultSkin || !tryBind(defaultSkin))
+        if(preferred == basicSkin || !tryBind(basicSkin))
             return UiSkinSelectionResult::Failed;
-        m_selected = defaultSkin;
+        m_selected = basicSkin;
         return UiSkinSelectionResult::DefaultFallback;
     }
 
@@ -78,13 +78,13 @@ public:
         const bool resourcesReady,
         const bool gpuFramePending,
         const bool layoutPending,
-        const Core::Assets::AssetRef<UiSkin>& defaultSkin,
+        const Core::Assets::AssetRef<UiSkin>& basicSkin,
         TTryBind&& tryBind
-    )noexcept(noexcept(static_cast<bool>(!tryBind(defaultSkin, DeclVal<const u64&>())))){
+    )noexcept(noexcept(static_cast<bool>(!tryBind(basicSkin, DeclVal<const u64&>())))){
         if(!m_changePending || !resourcesReady || gpuFramePending || layoutPending)
             return UiSkinChangeResult::Deferred;
         m_changePending = false;
-        const Core::Assets::AssetRef<UiSkin> candidate = m_requestedChange.valid() ? m_requestedChange : defaultSkin;
+        const Core::Assets::AssetRef<UiSkin> candidate = m_requestedChange.valid() ? m_requestedChange : basicSkin;
         if(!m_selected.valid() || !candidate.valid() || m_generation == Limit<u64>::s_Max){
             m_changeFailed = true;
             return UiSkinChangeResult::Failed;

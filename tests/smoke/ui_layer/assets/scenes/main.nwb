@@ -5,6 +5,5 @@ asset.subsystems = [
 ];
 
 asset.assets = {
-    "alternate_skin": "project/ui/skins/alternate/atlas",
-    "alternate_skin_texture": "project/ui/skins/alternate/texture"
+    "alternate_skin": "project/ui/skins/alternate/atlas"
 };

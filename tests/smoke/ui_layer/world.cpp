@@ -133,7 +133,7 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
     if(textureImageSmoke){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     }
-    auto& layer = world->addSystem<Impl::UiLayerSystem>(*world, context.graphics, context.input, context.clipboard, context.textInput, context.assetManager, context.shaderPathResolver, skin, Span<const Impl::UiFontBinding>{}, Impl::UiLayerPresentation::Standalone);
+    auto& layer = world->addSystem<Impl::UiLayerSystem>(*world, context.graphics, context.input, context.clipboard, context.textInput, context.assetManager, context.shaderPathResolver, skin, Impl::UiLayerPresentation::Standalone);
     if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_INPUT_BINDINGS_SMOKE")){
         Impl::Ui::InputBindings defaults(context.objectArena);
         Impl::Ui::InputBindings::BindingVector bindings(context.objectArena);

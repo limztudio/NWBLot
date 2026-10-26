@@ -191,14 +191,14 @@ bool SceneAsset::loadBinary(const Span<const u8> binary){
 
 
 bool ActiveSceneSubsystems::loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project){
-    auto projectAsset = assetManager.loadTypedSync<ProjectAsset>(project.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner, "project manifest");
+    auto projectAsset = assetManager.loadTypedSync<ProjectAsset>(project.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner);
     if(!projectAsset)
         return false;
     return loadScene(assetManager, (*projectAsset)->startScene());
 }
 
 bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene){
-    auto sceneAssetResult = assetManager.loadTypedSync<SceneAsset>(scene.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner, "scene");
+    auto sceneAssetResult = assetManager.loadTypedSync<SceneAsset>(scene.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner);
     if(!sceneAssetResult)
         return false;
     const SceneAsset& sceneAsset = **sceneAssetResult;

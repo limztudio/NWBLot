@@ -32,7 +32,6 @@ UiLayerSystem::UiLayerSystem(
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver,
     const Core::Assets::AssetRef<UiSkin>& skin,
-    const Span<const UiFontBinding> fonts,
     const UiLayerPresentation::Enum presentation
 )
     : Core::ECS::ISystem(arena)
@@ -45,7 +44,6 @@ UiLayerSystem::UiLayerSystem(
     , m_assetManager(assetManager)
     , m_defaultSceneSubsystems(arena)
     , m_skinSelection(skin)
-    , m_fontRefs(fonts.begin(), fonts.end(), arena)
     , m_paint(arena)
     , m_text(arena)
     , m_context(arena)
@@ -83,9 +81,9 @@ void UiLayerSystem::requestSkin(const Core::Assets::AssetRef<UiSkin>& skin)noexc
 void UiLayerSystem::prepare(Core::ECS::World& world){
     static_cast<void>(world);
     synchronizeInput();
-    const UiSkinChangeResult::Enum skinChange = m_skinSelection.applyChangeIfReady(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready(), defaultSkin(), [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
+    const UiSkinChangeResult::Enum skinChange = m_skinSelection.applyChangeIfReady(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready(), basicSkin(), [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
         const Core::Assets::AssetRef<UiSkin> resolvedRef = resolveSkin(ref);
-        auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName, s_UiSkinAssetKindText);
+        auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName);
         const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
         if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(resolvedRef, *skin, generation))
             return false;
@@ -123,13 +121,13 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
     if(!m_renderer.validateResources(width, height))
         return false;
 
-    const UiSkinSelectionResult::Enum selection = m_skinSelection.ensure(defaultSkin(), [this](const Core::Assets::AssetRef<UiSkin>& ref){
+    const UiSkinSelectionResult::Enum selection = m_skinSelection.ensure(basicSkin(), [this](const Core::Assets::AssetRef<UiSkin>& ref){
         const Core::Assets::AssetRef<UiSkin> resolvedRef = resolveSkin(ref);
         if(ref == m_skinSelection.selected() && m_skinAsset){
             const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
             return skin && ValidateUiSkinToolkitContract(*skin) && m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation());
         }
-        auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName, s_UiSkinAssetKindText);
+        auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName);
         const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
         if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation()))
             return false;

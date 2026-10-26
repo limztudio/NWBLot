@@ -39,7 +39,7 @@ Dependency discovery ignores commented directives and resolves literal includes 
 
 Dependency checksums also record whether any compiler input has a UTF-8 BOM. Inputs without BOMs compile directly. BOM inputs use a stripped overlay that preserves nested relative includes and encodes each absolute root into a safe directory component. Temporary source overlays and diagnostics are cleaned on success and failure.
 
-Use `Core::Assets::AssetRef<ComputeShader>` or the required concrete type for a known stage. `ShaderAssetLoader::Load<ComputeShader>(...)` derives the stage from that type. A heterogeneous material stage array uses `AssetRef<IShader>`, while known AVBOIT pixel bindings use `AssetRef<PixelShader>`. `LoadForStage(...)` handles genuinely dynamic physical-stage requests. `IShader` is abstract and is not registered as a generic loadable asset.
+Use `Core::Assets::AssetRef<ComputeShader>` or the required concrete type for a known stage. `ShaderAssetLoader::Load<ComputeShader>(...)` derives the stage from that type. A heterogeneous material stage array uses `AssetRef<IShader>`, while known AVBOIT pixel bindings use `AssetRef<PixelShader>`. `IShader` is abstract and is not registered as a generic loadable asset.
 
 Archive stage names also describe roles. `mesh_compute` selects `ComputeShader` payloads. An explicit archive role selects the lookup key without changing the concrete type's physical stage. Materials continue to author the supported `mesh` and `ps` stage map.
 

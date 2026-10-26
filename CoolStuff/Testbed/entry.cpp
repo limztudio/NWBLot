@@ -67,7 +67,6 @@ static Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialWorl
         context.assetManager,
         context.shaderPathResolver,
         NWB::Core::Assets::AssetRef<NWB::Impl::UiSkin>{},
-        Span<const NWB::Impl::UiFontBinding>{},
         NWB::Impl::UiLayerPresentation::Scene
     );
     context.graphics.addRenderPassToBack(meshSkinningSystem);

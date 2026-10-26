@@ -61,12 +61,12 @@ bool SamplerAssetLoader::Create(SamplerGpuResource& outResource, const Sampler& 
 
 bool SamplerAssetLoader::Load(SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& samplerAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName){
     const TStringView owner = ownerName;
-    if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner, Sampler::s_AssetTypeText))
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner))
         return outResource.valid();
 
     const Name& samplerVirtualPath = samplerAsset.name();
 
-    auto loadedAsset = assetManager.loadTypedSync<Sampler>(samplerVirtualPath, owner, Sampler::s_AssetTypeText);
+    auto loadedAsset = assetManager.loadTypedSync<Sampler>(samplerVirtualPath, owner);
     const Sampler* loadedSampler = loadedAsset ? loadedAsset->get() : nullptr;
     if(!loadedSampler)
         return false;

@@ -4,12 +4,10 @@
 import argparse
 import ast
 from collections import defaultdict
+import hashlib
 import math
 from pathlib import Path
 import struct
-import tempfile
-
-from prepare_fixture_asset_root import prepare_asset_root
 
 PROJECT_NWB = b"""project asset;\r
 \r
@@ -131,8 +129,34 @@ def select_closed_triangles(positions, references, indices):
     return [row for index, row in enumerate(indices) if index in retained], closed_components
 
 
+def write_generated_root(output_root, contents):
+    output = output_root.resolve()
+    if output == Path(output.anchor):
+        raise ValueError("output root must not be a filesystem root")
+    output.mkdir(parents=True, exist_ok=True)
+    for path in sorted(output.rglob("*"), reverse=True):
+        if path.is_symlink():
+            raise ValueError(f"private output must not contain symbolic links: {path}")
+        if path.is_file() and path.relative_to(output).as_posix() not in contents:
+            path.unlink()
+    for relative, payload in contents.items():
+        path = output / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+    mismatched = [
+        relative for relative, payload in contents.items()
+        if hashlib.sha256((output / relative).read_bytes()).digest() != hashlib.sha256(payload).digest()
+    ]
+    if mismatched:
+        raise ValueError("private output payload verification failed: " + ", ".join(mismatched))
+    return len(contents)
+
+
 def prepare_caustic_assets(source_root, output_root):
     source = source_root.resolve()
+    output = output_root.resolve()
+    if output.is_relative_to(source) or source.is_relative_to(output):
+        raise ValueError("output root must be separate from the authored source root")
     body = source / "characters/body.nwb"
     payload = body.read_bytes()
     text = payload.decode("utf-8")
@@ -145,16 +169,14 @@ def prepare_caustic_assets(source_root, output_root):
         "    [" + ", ".join(str(value) for value in row) + "]," + newline for row in selected
     ) + "]"
     variant = (text[:start] + replacement + text[end:]).encode("utf-8")
-    with tempfile.TemporaryDirectory(prefix="nwb_caustic_fixture_") as temporary:
-        generated = Path(temporary)
-        variant_path = generated / "characters/caustic_closed_body.nwb"
-        variant_path.parent.mkdir(parents=True)
-        variant_path.write_bytes(variant)
-        (generated / "project.nwb").write_bytes(PROJECT_NWB)
-        scene_path = generated / "scenes/main.nwb"
-        scene_path.parent.mkdir(parents=True)
-        scene_path.write_bytes(SCENE_NWB)
-        count = prepare_asset_root(output_root, [source, generated])
+    count = write_generated_root(
+        output,
+        {
+            "characters/caustic_closed_body.nwb": variant,
+            "project.nwb": PROJECT_NWB,
+            "scenes/main.nwb": SCENE_NWB,
+        },
+    )
     if body.read_bytes() != payload:
         raise ValueError("authored body changed while preparing the private catalog")
     return count, len(indices), len(selected), components

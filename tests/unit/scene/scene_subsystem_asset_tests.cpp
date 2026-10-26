@@ -317,7 +317,9 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
     PopulateRequiredSubsystemFields(transparentSubsystem);
 
     UiSubsystem uiSubsystem(arena, s_UiSubsystemPath);
-    uiSubsystem.defaultSkin = AssetRef<UiSkin>("engine/ui/skins/default/atlas");
+    uiSubsystem.basicFonts.push_back(AssetRef<FontAtlas>("engine/ui/fonts/default/latin/atlas"));
+    uiSubsystem.basicFonts.push_back(AssetRef<FontAtlas>("engine/ui/fonts/default/korean/atlas"));
+    uiSubsystem.basicSkin = AssetRef<UiSkin>("engine/ui/skins/default/atlas");
     PopulateRequiredSubsystemFields(uiSubsystem);
 
     SceneAsset::SubsystemRefVector sceneSubsystems(arena);
@@ -356,7 +358,10 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
 
     const UiSubsystem* const activeUi = active.findSubsystem<UiSubsystem>();
     ASSERT_NE(activeUi, nullptr);
-    EXPECT_EQ(activeUi->defaultSkin.name(), Name("engine/ui/skins/default/atlas"));
+    ASSERT_EQ(activeUi->basicFonts.size(), 2u);
+    EXPECT_EQ(activeUi->basicFonts[0].name(), Name("engine/ui/fonts/default/latin/atlas"));
+    EXPECT_EQ(activeUi->basicFonts[1].name(), Name("engine/ui/fonts/default/korean/atlas"));
+    EXPECT_EQ(activeUi->basicSkin.name(), Name("engine/ui/skins/default/atlas"));
 
     const SkinningSubsystem* const activeSkinning = active.findSubsystem<SkinningSubsystem>();
     ASSERT_NE(activeSkinning, nullptr);

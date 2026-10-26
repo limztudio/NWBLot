@@ -19,7 +19,7 @@ Expected<SharedImageSource> LoadImageSource(Core::Alloc::GlobalArena& arena, con
         NWB_LOGGER_ERROR(NWB_TEXT("LoadImageSource: texture asset reference is empty"));
         return MakeUnexpected(Failure{});
     }
-    auto loadedAsset = assets.loadTypedSync<Texture>(identity.name(), NWB_TEXT("LoadImageSource"), Texture::s_AssetTypeText);
+    auto loadedAsset = assets.loadTypedSync<Texture>(identity.name(), NWB_TEXT("LoadImageSource"));
     if(!loadedAsset)
         return MakeUnexpected(loadedAsset.error());
     const Texture* texture = loadedAsset->get();

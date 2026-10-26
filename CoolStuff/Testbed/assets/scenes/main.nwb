@@ -16,6 +16,5 @@ asset.assets = {
     "female_model": "project/characters/female/model",
     "skinned_uv_material": "project/materials/mat_skinned_uv",
     "white_opaque_material": "project/materials/mat_white_opaque",
-    "ground_plane_model": "project/meshes/ground_plane/model",
-    "gallery_image_texture": "engine/ui/skins/default/texture"
+    "ground_plane_model": "project/meshes/ground_plane/model"
 };

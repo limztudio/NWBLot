@@ -104,7 +104,6 @@ public:
         return ShaderAssetLoader::Load<TShader>(outShader, shaderAssetName, variantName, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
     }
 
-    [[nodiscard]] bool loadShaderForStage(Core::ShaderHandle& outShader, const Name& shaderAssetName, AStringView variantName, Core::ShaderType::Mask shaderType, const Name& debugName, const Name* archiveStageName = nullptr);
     [[nodiscard]] bool hasShaderArchiveStage(const Name& shaderAssetName, AStringView variantName, const Name& stageName)const;
     [[nodiscard]] bool loadDeferredCompositeVertexShader();
     [[nodiscard]] const Core::ShaderHandle& deferredCompositeVertexShader()const noexcept{ return m_deferredCompositeVertexShader; }

@@ -10,30 +10,13 @@
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/shader_archive.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_optical_bounds_finalize{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr StringView s_DefaultShaderVariant = "default";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,7 +167,7 @@ bool RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSyst
             return false;
         }
     }
-    if(!shaderSystem.loadShader<ComputeShader>(m_shader, &TransparentSubsystem::opticalBoundsFinalizeCs, __hidden_optical_bounds_finalize::s_DefaultShaderVariant, Name("RayOpticalBoundsFinalize")))
+    if(!shaderSystem.loadShader<ComputeShader>(m_shader, &TransparentSubsystem::opticalBoundsFinalizeCs, Core::ShaderArchive::s_DefaultVariant, Name("RayOpticalBoundsFinalize")))
         return false;
     Core::ComputePipelineDesc desc;
     desc.setComputeShader(m_shader).addBindingLayout(m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());

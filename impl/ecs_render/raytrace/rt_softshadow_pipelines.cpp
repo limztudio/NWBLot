@@ -21,7 +21,13 @@ namespace __hidden_softshadow_pipelines{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool EnsureResolveChannel(RendererShaderSystem& shaderSystem, Core::GraphicsBackend::Device& device, const Core::BindingLayoutHandle& bindingLayout, const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* member, SoftShadowResolveChannelState& channel){
+[[nodiscard]] bool EnsureResolveChannel(
+    RendererShaderSystem& shaderSystem,
+    Core::GraphicsBackend::Device& device,
+    const Core::BindingLayoutHandle& bindingLayout,
+    const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* member,
+    SoftShadowResolveChannelState& channel
+){
     struct StageRequest{
         AStringView m_variant;
         SoftShadowResolveStageState& m_state;

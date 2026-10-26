@@ -36,7 +36,7 @@ static bool ExtractCsgShapeDependencies(const Core::Assets::CookDependencyItemCo
 }
 
 static bool RegisterCsgShapeCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerType(AssetsCsgCook::s_CsgShapeAssetTypeName, &ExtractCsgShapeDependencies);
+    return registry.registerType(CsgShape::AssetTypeName(), &ExtractCsgShapeDependencies);
 }
 
 

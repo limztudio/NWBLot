@@ -338,7 +338,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
         }
 
         if(csgShapeFileVirtualPath && m_virtualPaths[index] == *csgShapeFileVirtualPath){
-            if(assetType && assetType != Impl::AssetsCsgCook::s_CsgShapeAssetTypeName)
+            if(assetType && assetType != Impl::CsgShape::AssetTypeName())
                 continue;
             const auto document = read(index, scratchArena);
             if(!document)
@@ -349,7 +349,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
             if(!assetDeclaration)
                 continue;
             const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
-            if(!documentAssetType || *documentAssetType != Impl::AssetsCsgCook::s_CsgShapeAssetTypeName)
+            if(!documentAssetType || *documentAssetType != Impl::CsgShape::AssetTypeName())
                 continue;
             const auto csgEntry = Impl::AssetsCsgCook::ParseCsgShapeCookMetadata(m_arena, m_files[index].filePath, *document, scratchArena);
             if(!csgEntry)

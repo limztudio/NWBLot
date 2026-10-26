@@ -32,7 +32,6 @@ namespace AssetsCsgCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_CsgShapeAssetTypeName = CsgShape::s_AssetTypeName;
 inline constexpr AStringView s_DefaultGeneratedIncludeDirectory = "engine/csg/generated";
 inline constexpr AStringView s_GeneratedIncludeCacheDirectory = "csg_modules";
 

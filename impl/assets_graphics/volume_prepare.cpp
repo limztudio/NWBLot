@@ -157,7 +157,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
         return AssetMetadataParseResult::Parsed;
     }
 
-    if(context.assetType == AssetsCsgCook::s_CsgShapeAssetTypeName){
+    if(context.assetType == CsgShape::AssetTypeName()){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
         auto csgShapeEntryResult = AssetsCsgCook::ParseCsgShapeCookMetadata(context.cookArena, context.discoveredNwbFile.filePath, context.doc, context.scratchArena);
         if(!csgShapeEntryResult)

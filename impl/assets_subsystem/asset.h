@@ -33,10 +33,6 @@ struct SubsystemFieldValueDescriptor{
 
 interface ISubsystem : Core::Assets::IAsset{
 public:
-    using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
-
-
-public:
     NWB_DEFINE_ASSET_TYPE("subsystem")
 
 
@@ -249,13 +245,6 @@ private:
 [[nodiscard]] bool IsSubsystemAssetType(const Name& assetType)noexcept;
 [[nodiscard]] const ISubsystem* CastSubsystem(const Core::Assets::IAsset* asset)noexcept;
 
-template<typename SubsystemT>
-[[nodiscard]] const SubsystemT* CastSubsystem(const Core::Assets::IAsset* asset)noexcept{
-    if(!asset || asset->assetType() != SubsystemT::AssetTypeName())
-        return nullptr;
-    return checked_cast<const SubsystemT*>(asset);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -283,26 +272,18 @@ namespace SubsystemAssetSerialization{
 
 
 template<typename SubsystemT>
-class TypedSubsystemAssetCodec final : public Core::Assets::IAssetCodec{
+class TypedSubsystemAssetCodec final : public Core::Assets::AssetCodec<SubsystemT>{
 public:
-    TypedSubsystemAssetCodec()noexcept
-        : Core::Assets::IAssetCodec(SubsystemT::AssetTypeName())
-    {}
+    TypedSubsystemAssetCodec()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName()))) = default;
 
 
-public:
-    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const override{
-        auto asset = MakeUnique<SubsystemT>(arena, virtualPath);
-        if(!asset->loadBinary(binary))
-            return MakeUnexpected(Failure{});
-        return UniquePtr<Core::Assets::IAsset>(Move(asset));
-    }
 #if defined(NWB_COOK)
+public:
     virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
-        const SubsystemT* const subsystem = CastSubsystem<SubsystemT>(&asset);
-        if(!subsystem)
+        if(!this->checkSerializeAssetType(asset, NWB_TEXT("TypedSubsystemAssetCodec::serialize")))
             return false;
-        return SubsystemAssetSerialization::Serialize(*subsystem, outBinary);
+
+        return SubsystemAssetSerialization::Serialize(*MakeNotNull(checked_cast<const SubsystemT*>(&asset)), outBinary);
     }
 #endif
 };

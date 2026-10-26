@@ -41,7 +41,10 @@ public:
 
 public:
     template<typename TTryBind>
-    [[nodiscard]] UiSkinSelectionResult::Enum ensure(const Core::Assets::AssetRef<UiSkin>& defaultSkin, TTryBind&& tryBind)noexcept(noexcept(static_cast<bool>(tryBind(m_selected))) && noexcept(static_cast<bool>(tryBind(defaultSkin))) && noexcept(static_cast<bool>(true || !tryBind(defaultSkin)))){
+    [[nodiscard]] UiSkinSelectionResult::Enum ensure(
+        const Core::Assets::AssetRef<UiSkin>& defaultSkin,
+        TTryBind&& tryBind
+    )noexcept(noexcept(static_cast<bool>(tryBind(m_selected))) && noexcept(static_cast<bool>(tryBind(defaultSkin))) && noexcept(static_cast<bool>(true || !tryBind(defaultSkin)))){
         if(m_selected.valid())
             return tryBind(m_selected) ? UiSkinSelectionResult::Selected : UiSkinSelectionResult::Failed;
         if(!defaultSkin.valid())
@@ -71,7 +74,13 @@ public:
     }
 
     template<typename TTryBind>
-    [[nodiscard]] UiSkinChangeResult::Enum applyChangeIfReady(const bool resourcesReady, const bool gpuFramePending, const bool layoutPending, const Core::Assets::AssetRef<UiSkin>& defaultSkin, TTryBind&& tryBind)noexcept(noexcept(static_cast<bool>(!tryBind(defaultSkin, DeclVal<const u64&>())))){
+    [[nodiscard]] UiSkinChangeResult::Enum applyChangeIfReady(
+        const bool resourcesReady,
+        const bool gpuFramePending,
+        const bool layoutPending,
+        const Core::Assets::AssetRef<UiSkin>& defaultSkin,
+        TTryBind&& tryBind
+    )noexcept(noexcept(static_cast<bool>(!tryBind(defaultSkin, DeclVal<const u64&>())))){
         if(!m_changePending || !resourcesReady || gpuFramePending || layoutPending)
             return UiSkinChangeResult::Deferred;
         m_changePending = false;

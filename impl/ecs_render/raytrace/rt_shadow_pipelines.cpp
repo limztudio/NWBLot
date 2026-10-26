@@ -209,14 +209,20 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         return false;
     }
 
+    const ShadowSubsystem* const shadowSubsystem = m_shaderSystem.findSubsystem<ShadowSubsystem>();
+    if(!shadowSubsystem){
+        m_rayTracingState.m_swShadowPipelineFailed = true;
+        return false;
+    }
+
     const bool passesReady =
-        ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowOpaquePrepassShader, m_rayTracingState.m_swShadowOpaquePrepassPipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowOpaquePrepassCs), "ECSRender_SwShadowOpaquePrepass")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowSoftOpaqueShader, m_rayTracingState.m_swShadowSoftOpaquePipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowSoftOpaqueCs), "ECSRender_SwShadowSoftOpaque")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentCoarseShader, m_rayTracingState.m_swShadowTransparentCoarsePipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowTransparentCoarseCs), "ECSRender_SwShadowTransparentCoarse")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentResolveShader, m_rayTracingState.m_swShadowTransparentResolvePipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowTransparentResolveCs), "ECSRender_SwShadowTransparentResolve")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentClassifyShader, m_rayTracingState.m_swShadowTransparentClassifyPipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowTransparentClassifyCs), "ECSRender_SwShadowTransparentClassify")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentBuildArgsShader, m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowTransparentBuildargsCs), "ECSRender_SwShadowTransparentBuildArgs")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentIndirectShader, m_rayTracingState.m_swShadowTransparentIndirectPipeline, m_shaderSystem.resolveSubsystemAsset<ShadowSubsystem>(&ShadowSubsystem::swShadowTransparentIndirectCs), "ECSRender_SwShadowTransparentIndirect")
+        ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowOpaquePrepassShader, m_rayTracingState.m_swShadowOpaquePrepassPipeline, shadowSubsystem->swShadowOpaquePrepassCs.name(), "ECSRender_SwShadowOpaquePrepass")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowSoftOpaqueShader, m_rayTracingState.m_swShadowSoftOpaquePipeline, shadowSubsystem->swShadowSoftOpaqueCs.name(), "ECSRender_SwShadowSoftOpaque")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentCoarseShader, m_rayTracingState.m_swShadowTransparentCoarsePipeline, shadowSubsystem->swShadowTransparentCoarseCs.name(), "ECSRender_SwShadowTransparentCoarse")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentResolveShader, m_rayTracingState.m_swShadowTransparentResolvePipeline, shadowSubsystem->swShadowTransparentResolveCs.name(), "ECSRender_SwShadowTransparentResolve")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentClassifyShader, m_rayTracingState.m_swShadowTransparentClassifyPipeline, shadowSubsystem->swShadowTransparentClassifyCs.name(), "ECSRender_SwShadowTransparentClassify")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentBuildArgsShader, m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, shadowSubsystem->swShadowTransparentBuildargsCs.name(), "ECSRender_SwShadowTransparentBuildArgs")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentIndirectShader, m_rayTracingState.m_swShadowTransparentIndirectPipeline, shadowSubsystem->swShadowTransparentIndirectCs.name(), "ECSRender_SwShadowTransparentIndirect")
         && ensureSoftwareTransparentSamplingPipeline()
     ;
     if(!passesReady){

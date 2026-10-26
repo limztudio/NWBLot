@@ -151,19 +151,11 @@ private:
     [[nodiscard]] Core::Assets::AssetRef<Font> resolveFont(const Core::Assets::AssetRef<Font>& ref)const noexcept{
         if(!ref.valid() || !m_activeSceneSubsystems)
             return {};
-        if(const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>()){
-            if(ref == uiSubsystem->defaultLatinFace || ref == uiSubsystem->defaultKoreanFace)
-                return ref;
-        }
         return m_activeSceneSubsystems->findSceneAsset<Font>(ref.name());
     }
     [[nodiscard]] Core::Assets::AssetRef<FontAtlas> resolveFontAtlas(const Core::Assets::AssetRef<FontAtlas>& ref)const noexcept{
         if(!ref.valid() || !m_activeSceneSubsystems)
             return {};
-        if(const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>()){
-            if(ref == uiSubsystem->defaultLatinAtlas || ref == uiSubsystem->defaultKoreanAtlas)
-                return ref;
-        }
         return m_activeSceneSubsystems->findSceneAsset<FontAtlas>(ref.name());
     }
 

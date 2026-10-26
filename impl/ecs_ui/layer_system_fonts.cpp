@@ -26,7 +26,8 @@ bool UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
         { uiSubsystem->defaultLatinFace, uiSubsystem->defaultLatinAtlas },
         { uiSubsystem->defaultKoreanFace, uiSubsystem->defaultKoreanAtlas },
     };
-    const Span<const UiFontBinding> requestedFonts = m_fontRefs.empty() ? Span<const UiFontBinding>(defaultFonts) : Span<const UiFontBinding>(m_fontRefs);
+    const bool useDefaultFonts = m_fontRefs.empty();
+    const Span<const UiFontBinding> requestedFonts = useDefaultFonts ? Span<const UiFontBinding>(defaultFonts) : Span<const UiFontBinding>(m_fontRefs);
     if(requestedFonts.empty() || requestedFonts.size() > Ui::s_TextMaxFontSources){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: the font stack requires between one and eight font assets"));
         return false;
@@ -36,14 +37,14 @@ bool UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
     Vector<Ui::FontSource, Core::Alloc::ScratchArena> sources(scratchArena);
     sources.reserve(requestedFonts.size());
     for(usize index = 0u; index < requestedFonts.size(); ++index){
-        const Core::Assets::AssetRef<Font> resolvedFontRef = resolveFont(requestedFonts[index].font);
+        const Core::Assets::AssetRef<Font> resolvedFontRef = useDefaultFonts ? requestedFonts[index].font : resolveFont(requestedFonts[index].font);
         auto font = m_assetManager.loadTypedSync<Font>(resolvedFontRef.name(), s_UiLayerSystemOwnerName, "UI font");
         if(!font)
             return false;
         assets[index] = Move(*font);
         const FontAtlas* atlas = nullptr;
         if(requestedFonts[index].atlas.valid()){
-            const Core::Assets::AssetRef<FontAtlas> resolvedAtlasRef = resolveFontAtlas(requestedFonts[index].atlas);
+            const Core::Assets::AssetRef<FontAtlas> resolvedAtlasRef = useDefaultFonts ? requestedFonts[index].atlas : resolveFontAtlas(requestedFonts[index].atlas);
             auto loadedAtlas = m_assetManager.loadTypedSync<FontAtlas>(resolvedAtlasRef.name(), s_UiLayerSystemOwnerName, "UI font atlas");
             if(!loadedAtlas)
                 NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: optional font atlas unavailable; using native coverage"));

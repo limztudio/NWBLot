@@ -88,9 +88,9 @@ public:
     }
 
     void invalidateResources()noexcept;
-    template<typename TShader, typename SubsystemT, typename TAsset>
+    template<typename TShader, typename SubsystemT>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
-    [[nodiscard]] bool loadShader(Core::ShaderHandle& outShader, const Core::Assets::AssetRef<TAsset> SubsystemT::* member, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
+    [[nodiscard]] bool loadShader(Core::ShaderHandle& outShader, const Core::Assets::AssetRef<TShader> SubsystemT::* member, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
         const Name resolvedShaderName = resolveSubsystemAsset<SubsystemT>(member);
         if(!resolvedShaderName)

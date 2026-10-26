@@ -117,7 +117,13 @@ template<typename TAsset>
         return MakeUnexpected(Failure{});
     }
     if(text.find('\\') != AStringView::npos || !Core::Assets::HasReservedAssetVirtualRoot(text, scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), ConvertString(AssetsSubsystemCook::s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"),
+            ConvertString(AssetsSubsystemCook::s_SubsystemDiagnosticPrefix),
+            PathToString<tchar>(nwbFilePath),
+            ConvertString(fieldLabel),
+            ConvertString(text)
+        );
         return MakeUnexpected(Failure{});
     }
     const auto ref = Core::Assets::AssetRef<TAsset>::FromText(text);

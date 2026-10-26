@@ -87,6 +87,7 @@ template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> Su
             return 1u;
         },
         [](const SubsystemT& subsystem, const usize elementIndex)noexcept -> Name{
+            static_cast<void>(elementIndex);
             NWB_ASSERT(elementIndex == 0u);
             return (subsystem.*Member).name();
         },

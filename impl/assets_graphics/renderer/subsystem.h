@@ -27,8 +27,6 @@ class RendererSubsystem final : public TypedSubsystem<RendererSubsystem>{
 public:
     NWB_DEFINE_ASSET_TYPE("renderer_subsystem")
 
-    static constexpr usize s_FieldCount = 1u;
-
 
 public:
     explicit RendererSubsystem(Core::Assets::AssetArena& arena)noexcept
@@ -44,7 +42,7 @@ public:
 public:
     SubsystemAssetRefVector<Sampler> basicSamplers;
 
-    static constexpr SubsystemFieldDescriptor<RendererSubsystem> s_Fields[s_FieldCount] = {
+    static constexpr SubsystemFieldDescriptor<RendererSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<RendererSubsystem, Sampler, &RendererSubsystem::basicSamplers>("basic_samplers", "sampler"),
     };
 };

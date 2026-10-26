@@ -29,8 +29,6 @@ class CsgSubsystem final : public TypedSubsystem<CsgSubsystem>{
 public:
     NWB_DEFINE_ASSET_TYPE("csg_subsystem")
 
-    static constexpr usize s_FieldCount = 7u;
-
 
 public:
     explicit CsgSubsystem(Core::Assets::AssetArena& arena)noexcept
@@ -52,7 +50,7 @@ public:
     Core::Assets::AssetRef<PixelShader> receiverSurfacePs;
     Core::Assets::AssetRef<PixelShader> refractionCapFillPs;
 
-    static constexpr SubsystemFieldDescriptor<CsgSubsystem> s_Fields[s_FieldCount] = {
+    static constexpr SubsystemFieldDescriptor<CsgSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<CsgSubsystem, CsgShape, &CsgSubsystem::basicShapes>("basic_shapes", "csg_shape"),
         MakeSubsystemFieldDescriptor<CsgSubsystem, PixelShader, &CsgSubsystem::intervalCapFillPs>("interval_cap_fill_ps", "pixel_shader"),
         MakeSubsystemFieldDescriptor<CsgSubsystem, ComputeShader, &CsgSubsystem::intervalCombineCs>("interval_combine_cs", "compute_shader"),

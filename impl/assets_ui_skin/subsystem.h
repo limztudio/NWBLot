@@ -32,8 +32,6 @@ class UiSubsystem final : public TypedSubsystem<UiSubsystem>{
 public:
     NWB_DEFINE_ASSET_TYPE("ui_subsystem")
 
-    static constexpr usize s_FieldCount = 10u;
-
 
 public:
     using TypedSubsystem<UiSubsystem>::TypedSubsystem;
@@ -51,7 +49,7 @@ public:
     Core::Assets::AssetRef<UiSkin> defaultSkin;
     Core::Assets::AssetRef<Texture> defaultSkinTexture;
 
-    static constexpr SubsystemFieldDescriptor<UiSubsystem> s_Fields[s_FieldCount] = {
+    static constexpr SubsystemFieldDescriptor<UiSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<UiSubsystem, PixelShader, &UiSubsystem::outputPs>("output_ps", "pixel_shader"),
         MakeSubsystemFieldDescriptor<UiSubsystem, VertexShader, &UiSubsystem::outputVs>("output_vs", "vertex_shader"),
         MakeSubsystemFieldDescriptor<UiSubsystem, PixelShader, &UiSubsystem::ps>("ps", "pixel_shader"),

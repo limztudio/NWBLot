@@ -27,8 +27,6 @@ class TransparentSubsystem final : public TypedSubsystem<TransparentSubsystem>{
 public:
     NWB_DEFINE_ASSET_TYPE("transparent_subsystem")
 
-    static constexpr usize s_FieldCount = 7u;
-
 
 public:
     using TypedSubsystem<TransparentSubsystem>::TypedSubsystem;
@@ -43,7 +41,7 @@ public:
     Core::Assets::AssetRef<ComputeShader> refractionResolveHwCs;
     Core::Assets::AssetRef<ComputeShader> refractionResolveScreenCs;
 
-    static constexpr SubsystemFieldDescriptor<TransparentSubsystem> s_Fields[s_FieldCount] = {
+    static constexpr SubsystemFieldDescriptor<TransparentSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<TransparentSubsystem, ComputeShader, &TransparentSubsystem::avboitDepthWarpCs>("avboit_depth_warp_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<TransparentSubsystem, ComputeShader, &TransparentSubsystem::avboitIntegrateCs>("avboit_integrate_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<TransparentSubsystem, ComputeShader, &TransparentSubsystem::opticalBoundsFinalizeCs>("optical_bounds_finalize_cs", "compute_shader"),

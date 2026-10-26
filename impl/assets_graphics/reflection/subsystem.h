@@ -27,8 +27,6 @@ class ReflectionSubsystem final : public TypedSubsystem<ReflectionSubsystem>{
 public:
     NWB_DEFINE_ASSET_TYPE("reflection_subsystem")
 
-    static constexpr usize s_FieldCount = 6u;
-
 
 public:
     using TypedSubsystem<ReflectionSubsystem>::TypedSubsystem;
@@ -42,7 +40,7 @@ public:
     Core::Assets::AssetRef<ComputeShader> spatialCs;
     Core::Assets::AssetRef<ComputeShader> temporalCs;
 
-    static constexpr SubsystemFieldDescriptor<ReflectionSubsystem> s_Fields[s_FieldCount] = {
+    static constexpr SubsystemFieldDescriptor<ReflectionSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::buildArgsCs>("build_args_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::classifyCs>("classify_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<ReflectionSubsystem, ComputeShader, &ReflectionSubsystem::depthReduceCs>("depth_reduce_cs", "compute_shader"),

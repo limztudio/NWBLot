@@ -29,8 +29,6 @@ class ShadowSubsystem final : public TypedSubsystem<ShadowSubsystem>{
 public:
     NWB_DEFINE_ASSET_TYPE("shadow_subsystem")
 
-    static constexpr usize s_FieldCount = 28u;
-
 
 public:
     using TypedSubsystem<ShadowSubsystem>::TypedSubsystem;
@@ -66,7 +64,7 @@ public:
     Core::Assets::AssetRef<ComputeShader> swShadowTransparentResolveCs;
     Core::Assets::AssetRef<ComputeShader> swShadowTransparentSoftCs;
 
-    static constexpr SubsystemFieldDescriptor<ShadowSubsystem> s_Fields[s_FieldCount] = {
+    static constexpr SubsystemFieldDescriptor<ShadowSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<ShadowSubsystem, ComputeShader, &ShadowSubsystem::hardwareTransparentEvaluateCs>("hardware_transparent_evaluate_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<ShadowSubsystem, ComputeShader, &ShadowSubsystem::hardwareTransparentGatherCs>("hardware_transparent_gather_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<ShadowSubsystem, ComputeShader, &ShadowSubsystem::hardwareTransparentOverflowCs>("hardware_transparent_overflow_cs", "compute_shader"),

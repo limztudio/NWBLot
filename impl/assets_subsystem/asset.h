@@ -172,8 +172,8 @@ public:
 
 public:
     [[nodiscard]] static Span<const SubsystemFieldDescriptor<SubsystemT>> FieldDescriptors()noexcept{
-        static_assert(SubsystemT::s_FieldCount > 0u, "Concrete subsystem must declare at least one asset field");
-        return Span<const SubsystemFieldDescriptor<SubsystemT>>(SubsystemT::s_Fields, SubsystemT::s_FieldCount);
+        static_assert(LengthOf(SubsystemT::s_Fields) > 0u, "Concrete subsystem must declare at least one asset field");
+        return Span<const SubsystemFieldDescriptor<SubsystemT>>(SubsystemT::s_Fields, LengthOf(SubsystemT::s_Fields));
     }
 
 
@@ -187,7 +187,7 @@ public:
     }
 
     [[nodiscard]] virtual usize fieldCount()const noexcept override{
-        return SubsystemT::s_FieldCount;
+        return LengthOf(SubsystemT::s_Fields);
     }
 
     [[nodiscard]] virtual SubsystemFieldValueDescriptor fieldDescriptor(const usize index)const noexcept override{

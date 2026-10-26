@@ -27,8 +27,6 @@ class GiSubsystem final : public TypedSubsystem<GiSubsystem>{
 public:
     NWB_DEFINE_ASSET_TYPE("gi_subsystem")
 
-    static constexpr usize s_FieldCount = 8u;
-
 
 public:
     using TypedSubsystem<GiSubsystem>::TypedSubsystem;
@@ -44,7 +42,7 @@ public:
     Core::Assets::AssetRef<ComputeShader> surfelTraceHwCs;
     Core::Assets::AssetRef<ComputeShader> surfelUpsampleCs;
 
-    static constexpr SubsystemFieldDescriptor<GiSubsystem> s_Fields[s_FieldCount] = {
+    static constexpr SubsystemFieldDescriptor<GiSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<GiSubsystem, ComputeShader, &GiSubsystem::surfelAgeFreeCs>("surfel_age_free_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<GiSubsystem, ComputeShader, &GiSubsystem::surfelHashBuildCs>("surfel_hash_build_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<GiSubsystem, ComputeShader, &GiSubsystem::surfelResolveCs>("surfel_resolve_cs", "compute_shader"),

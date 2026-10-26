@@ -29,8 +29,6 @@ class DeferredSubsystem final : public TypedSubsystem<DeferredSubsystem>{
 public:
     NWB_DEFINE_ASSET_TYPE("deferred_subsystem")
 
-    static constexpr usize s_FieldCount = 4u;
-
 
 public:
     using TypedSubsystem<DeferredSubsystem>::TypedSubsystem;
@@ -42,7 +40,7 @@ public:
     Core::Assets::AssetRef<VertexShader> compositeVs;
     Core::Assets::AssetRef<ComputeShader> lightingCs;
 
-    static constexpr SubsystemFieldDescriptor<DeferredSubsystem> s_Fields[s_FieldCount] = {
+    static constexpr SubsystemFieldDescriptor<DeferredSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<DeferredSubsystem, ComputeShader, &DeferredSubsystem::compositeCs>("composite_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<DeferredSubsystem, PixelShader, &DeferredSubsystem::compositePs>("composite_ps", "pixel_shader"),
         MakeSubsystemFieldDescriptor<DeferredSubsystem, VertexShader, &DeferredSubsystem::compositeVs>("composite_vs", "vertex_shader"),

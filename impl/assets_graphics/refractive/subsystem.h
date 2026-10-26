@@ -30,8 +30,6 @@ class RefractiveSubsystem final : public TypedSubsystem<RefractiveSubsystem>{
 public:
     NWB_DEFINE_ASSET_TYPE("refractive_subsystem")
 
-    static constexpr usize s_FieldCount = 11u;
-
 
 public:
     using TypedSubsystem<RefractiveSubsystem>::TypedSubsystem;
@@ -50,7 +48,7 @@ public:
     Core::Assets::AssetRef<ComputeShader> refractionResolveHwCs;
     Core::Assets::AssetRef<ComputeShader> refractionResolveScreenCs;
 
-    static constexpr SubsystemFieldDescriptor<RefractiveSubsystem> s_Fields[s_FieldCount] = {
+    static constexpr SubsystemFieldDescriptor<RefractiveSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<RefractiveSubsystem, ComputeShader, &RefractiveSubsystem::causticAccumulatorDecayCs>("caustic_accumulator_decay_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<RefractiveSubsystem, ComputeShader, &RefractiveSubsystem::causticGeometryDownsampleCs>("caustic_geometry_downsample_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<RefractiveSubsystem, ClosestHitShader, &RefractiveSubsystem::causticPhotonHwChit>("caustic_photon_hw_chit", "closest_hit_shader"),

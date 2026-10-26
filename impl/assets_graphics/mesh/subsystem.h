@@ -29,8 +29,6 @@ class MeshSubsystem final : public TypedSubsystem<MeshSubsystem>{
 public:
     NWB_DEFINE_ASSET_TYPE("mesh_subsystem")
 
-    static constexpr usize s_FieldCount = 4u;
-
 
 public:
     using TypedSubsystem<MeshSubsystem>::TypedSubsystem;
@@ -42,7 +40,7 @@ public:
     Core::Assets::AssetRef<VertexShader> objectVs;
     Core::Assets::AssetRef<MeshShader> sharedMs;
 
-    static constexpr SubsystemFieldDescriptor<MeshSubsystem> s_Fields[s_FieldCount] = {
+    static constexpr SubsystemFieldDescriptor<MeshSubsystem> s_Fields[] = {
         MakeSubsystemFieldDescriptor<MeshSubsystem, VertexShader, &MeshSubsystem::emulationVs>("emulation_vs", "vertex_shader"),
         MakeSubsystemFieldDescriptor<MeshSubsystem, ComputeShader, &MeshSubsystem::objectDecodeCs>("object_decode_cs", "compute_shader"),
         MakeSubsystemFieldDescriptor<MeshSubsystem, VertexShader, &MeshSubsystem::objectVs>("object_vs", "vertex_shader"),

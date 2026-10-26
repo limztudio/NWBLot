@@ -133,7 +133,7 @@ private:
 
     public:
         // The caller supplies a validated, non-empty ring layout.
-        // Both arrays allocate once and retain their fixed device-lifetime backing, so their exact allocation spans are sufficient for the private persistent arena.
+        // Both arrays allocate once with device-lifetime backing, so their spans fit the persistent arena.
         [[nodiscard]] bool initializeMetadata(const VulkanDetail::AmdBreadcrumbRingLayout& newLayout, const Name& allocationLog){
             const auto expectedSlotCount = TryMultiply<usize>(newLayout.physicalQueueCount, newLayout.slotsPerQueue);
             if(metadata || newLayout.physicalQueueCount == 0u || newLayout.slotsPerQueue == 0u || !expectedSlotCount || *expectedSlotCount != newLayout.totalSlotCount)
@@ -256,7 +256,7 @@ private:
 
 public:
     // The registry owns every active native VkQueue.
-    // Broad CommandQueue calls resolve through the designated primary record for class-based callers; graph recording/submission selects a concrete ID directly.
+    // Broad CommandQueue calls use the primary record; graph recording/submission picks a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
 
     [[nodiscard]] const VkPhysicalDeviceLimits& getPhysicalDeviceLimits()const noexcept{ return m_context.physicalDeviceProperties.limits; }

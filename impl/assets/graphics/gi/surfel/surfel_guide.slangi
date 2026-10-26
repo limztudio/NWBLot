@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Piecewise-constant directional guide in the surfel's local frame. Equal z and azimuth intervals give every cell the same solid angle. The mixed PDF covers both uniform and guided rays.
+// Piecewise-constant guide in the surfel local frame. Equal intervals give equal solid angles; mixed PDF covers both.
 
 
 #include "../constants.h"
@@ -96,7 +96,7 @@ float nwbSurfelGuideInversePdf(const NwbSurfelGuide guide, const uint bin, const
     if(guidedRayCount == 0u)
         return NWB_GI_FULL_TURN_RADIANS;
 
-    // Both ray classes use the same mixture PDF. Multiply its numerator and denominator by rayCount * binCount * guideTotal to avoid the three intermediate divisions.
+    // Both ray classes share the mixture PDF. Scale by rayCount * binCount * guideTotal to skip three divisions.
     const float binWeight = nwbSurfelGuideWeight(guide, bin);
     const float denominator = float(uniformRayCount) * guideTotal + float(guidedRayCount * NWB_SURFEL_GUIDE_BIN_COUNT) * binWeight;
     return NWB_GI_FULL_TURN_RADIANS * float(rayCount) * guideTotal / denominator;

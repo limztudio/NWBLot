@@ -109,7 +109,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     if(filterEligible)
         InterlockedOr(g_NwbReflectionSpatialTileEligible, 1u);
     GroupMemoryBarrierWithGroupSync();
-    // The tile decision is uniform after both barriers. Ineligible tiles only copy their current samples; they cannot consume neighbors, so no halo, position or normal fetch is needed.
+    // Tile decision is uniform after both barriers. Ineligible tiles only copy; no halo/position/normal fetch needed.
     if(g_NwbReflectionSpatialTileEligible == 0u){
         if(insideImage)
             nwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
@@ -158,7 +158,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
         g_NwbReflectionSpatialPositionDepth[tileIndex] = positionDepth;
         g_NwbReflectionSpatialNormal[tileIndex] = normal;
     }
-    // No lane in an active tile returns before the cache barrier. Center and halo writers are disjoint, and every cache entry a surviving lane can read has exactly one cooperative writer.
+    // No active-tile lane returns before the cache barrier. Center/halo writers are disjoint; each readable entry has one writer.
     GroupMemoryBarrierWithGroupSync();
     if(!insideImage)
         return;
@@ -190,7 +190,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             if(x == 0 && y == 0)
                 continue;
             const float spatialExponent = -float(x * x + y * y) / spatialDenominator;
-            // Every other exponent term is nonpositive, so an exactly zero Gaussian cannot contribute. Keep the original combined exponent below; this shortcut adds no epsilon or altered weight rounding.
+            // Nonpositive exponents add nothing. Keep the combined exponent; shortcut adds no epsilon or re-rounding.
             if(exp(spatialExponent) == 0.0)
                 continue;
             const int2 neighborPixel = int2(pixel) + int2(x, y);
@@ -218,7 +218,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             if(!all(isfinite(neighborPosition)))
                 continue;
             const float3 displacement = neighborPosition - position;
-            // Bound the raster FP16 positions componentwise, then test both receiver tangent planes. This is a receiver-edge filter, not a secondary-hit reprojection or motion-vector validation.
+            // Bound FP16 positions componentwise, test both tangent planes: receiver-edge filter, not reprojection.
             const float3 positionUncertainty = (abs(position) + abs(neighborPosition)) * NWB_REFLECTION_SPATIAL_POSITION_RELATIVE_ERROR;
             const float planeTolerance = max(NWB_REFLECTION_SPATIAL_PLANE_TOLERANCE_MIN, max(dot(positionUncertainty, abs(normal)), dot(positionUncertainty, abs(neighborNormal))) + pixelFootprint * NWB_REFLECTION_SPATIAL_PLANE_FOOTPRINT_SCALE);
             const float planeDistance = max(abs(dot(displacement, normal)), abs(dot(displacement, neighborNormal)));

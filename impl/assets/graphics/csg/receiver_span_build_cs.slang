@@ -40,7 +40,7 @@ uint2 nwbCsgReceiverSpanBuildFrameExtent(){
 
 uint nwbCsgReceiverSpanBuildLoadEventCount(const uint2 pixel, const uint eventLayerCount, inout uint inOutFlags){
     const uint eventCount = g_NwbCsgReceiverEventCount.Load(int3(int2(pixel), 0));
-    // The event emit pass keeps counting past the storable layer budget, so a raw count above the budget is exactly the overflow condition; no separate event-flags texture is required.
+    // The emit pass counts past the layer budget, so a raw over-budget count is the overflow condition.
     if(eventCount > eventLayerCount)
         inOutFlags |= NWB_CSG_RECEIVER_SPAN_EVENT_OVERFLOW_FLAG;
 

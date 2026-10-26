@@ -262,7 +262,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         if(avboitCsgClipPipeline){
             return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Name(passPixelShaderDebugName));
         }
-        // AVBOIT pixel shaders are generated for the selected material and use its typed binding and surface/BXDF contract, so load the resolved per-material pass shader at its default variant.
+        // AVBOIT pixel shaders are generated per material with its binding/surface contract; load the resolved pass shader at its default variant.
         return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Name(passPixelShaderDebugName));
     };
 
@@ -337,7 +337,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
         computeDesc.addBindingLayout(m_materialState.m_computeBindingLayout);
-        // The compute-emulation mesh stage shares the same heap-backed source-stream runtime as the mesh-shader path, so it needs the persistent tables before its dispatch as well.
+        // The compute-emulation mesh stage shares the mesh-shader source-stream runtime, so it needs the persistent tables too.
         computeDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         auto computePipelineResult = device.createComputePipeline(computeDesc);
         if(computePipelineResult)

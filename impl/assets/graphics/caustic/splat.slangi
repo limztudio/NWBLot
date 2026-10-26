@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Backend-independent receiver splat. The producer supplies view, push constants, G-buffer, and the shared accumulator below; HW and SW paths then deposit a surviving photon identically.
+// Backend-independent receiver splat. HW and SW deposit surviving photons identically.
 
 
 #include "resolve_binding_slots.h"

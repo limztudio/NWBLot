@@ -104,7 +104,7 @@ public:
 
 
 public:
-    // The device owner attaches after creation and detaches before native destruction. It must stop and join producers and finish required GPU waits first.
+    // Device owner attaches after creation, detaches before destruction; stop/join producers and finish GPU waits first.
     [[nodiscard]] bool attachDevice(Device& device)noexcept;
     [[nodiscard]] bool detachDevice(Device& device)noexcept;
     [[nodiscard]] bool isAttachedTo(const Device& device)const noexcept;
@@ -115,7 +115,7 @@ public:
 
 
 public:
-    // Freezes queue assignment at execution admission using a current physical-queue pressure snapshot, then initializes the caller-owned runtime artifacts for the resulting immutable plan.
+    // Freezes queue assignment at admission from a current pressure snapshot, then inits caller-owned artifacts for the immutable plan.
     // Explicit queue loads in compileOptions override automatic timeline sampling for deterministic tooling and tests.
     [[nodiscard]] bool scheduleGraph(
         const GpuTaskGraph& graph,
@@ -186,8 +186,8 @@ private:
         GpuRecordedGraph& recordedGraph,
         GpuGraphSubmissionTransaction& transaction
     )const;
-    // Records then submits the descriptor-selected ordinary compiler prefix. Without a semantic terminal task, accepted-frontier packets must form one terminal suffix.
-    // The executor rejects a frontier inside its selected prefix before recording and never discards or submits later caller-owned work on the caller's behalf.
+    // Records/submits the selected ordinary prefix. Without a terminal task, frontier packets must form one terminal suffix.
+    // The executor rejects a frontier inside its prefix before recording; it never touches later caller-owned work.
     [[nodiscard]] bool submitGraph(
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
@@ -201,7 +201,7 @@ private:
 
 
 private:
-    // Records/submits one frontier recovery/finalization task (transaction supplies queue waits; no caller token ladder). Failure rejects the unaccepted task.
+    // Records/submits one frontier recovery/finalization task. Failure rejects the unaccepted task.
     [[nodiscard]] bool recordAndSubmitAcceptedFrontierTask(
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
@@ -212,7 +212,7 @@ private:
         GpuGraphSubmissionTransaction& transaction,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Records/submits one late task post-accept: recorded validates the final-state seed, accepted publishes from the token. Rejection stays transaction-owned (no renderer retry path).
+    // Records/submits one late task post-accept: recorded checks the final-state seed, accepted publishes from the token.
     [[nodiscard]] bool recordAndSubmitTask(
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
@@ -240,7 +240,7 @@ private:
         GpuCommandIrCapture* commandIrCapture,
         GpuSubmissionPacketId* outFailedPacket
     )const;
-    // The caller owns the transaction's exclusive SubmissionOperation. This internal path lets the accepted-frontier composite reuse the executor without same-transaction gate reentry.
+    // Caller-owned exclusive SubmissionOperation; this path reuses the executor without same-transaction gate reentry.
     [[nodiscard]] bool recordAndSubmitTaskWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -255,7 +255,7 @@ private:
         GpuGraphSubmissionTransaction& transaction,
         GpuSubmissionPacketId* outFailedPacket
     )const;
-    // Arms one recording attempt, publishes that attempt into the recorded artifact for failure cleanup, then binds its submission transaction while the caller keeps the exclusive operation.
+    // Arms one recording attempt and binds its transaction while the caller keeps the exclusive operation.
     [[nodiscard]] bool prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,

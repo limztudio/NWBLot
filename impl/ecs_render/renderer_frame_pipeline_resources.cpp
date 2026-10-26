@@ -240,14 +240,14 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(scratchArena, m_preparedCsgFrameState, deferredTargets))
         return false;
 
-    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned generation for the frame and retain the prior generation on refresh.
+    // Material owns growth. Once every domain pass prepares, publish one Mesh generation; retain the prior one on refresh.
     const ECSRenderDetail::MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
     if(materialBuffers.valid() && !m_meshSystem.prepareMeshFrameBindings(materialBuffers))
         return false;
     if(hasCsgFrameWork && !materialBuffers.valid())
         return false;
 
-    // All material passes have now established their frame buffers. Create CSG resources once from this renderer-owned prepass so draw paths only consume the prepared layouts and handles.
+    // Create CSG resources once here; draw paths only consume prepared layouts and handles.
     if(hasCsgFrameWork && !m_csgSystem.prepareCsgFrameResources(csgReceiverRangeCount, static_cast<usize>(m_preparedCsgFrameState.cutterCount)))
         return false;
 
@@ -261,12 +261,12 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         return false;
     }
     m_shadowPreparationOutcome.resourcesValid = true;
-    // The shared ray scene already prepares geometry independently of shadow-light count. Reflection borrows its neutral context only after that preflight has selected the current generation.
+    // The ray scene prepares geometry on its own. Reflection borrows neutral context only after that preflight picks a generation.
     const bool reflectionHardwareRequested = m_reflectionSettings.traceMode == ReflectionTraceMode::Hardware || m_reflectionSettings.traceMode == ReflectionTraceMode::Hybrid;
     m_preparedReflectionSceneAvailable = reflectionHardwareRequested && m_raytracingSystem.prepareSceneQueryResources();
     ++m_reflectionFrameIndex;
 
-    // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the render-time graph build only consumes the snapshot and never creates resources.
+    // Refraction loads shaders and creates pipelines in preparation; the graph build only consumes the snapshot.
     const bool opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
     m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
     const bool hasTransparentCsgFrameWork = m_preparedCsgFrameState.hasTransparentStaticWork || m_preparedCsgFrameState.hasTransparentSkinnedWork;
@@ -308,7 +308,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
 
 bool RendererFramePipeline::prepareGpuTimingScopes(){
     auto& device = m_graphics.getDevice();
-    // A timestamp range consumes a begin/end query pair. High-frequency raster/mesh scopes may emit many ranges; the sort and interval-clear scopes each emit two ranges.
+    // A range costs one begin/end pair. Raster scopes emit many; sort and interval-clear scopes each emit two.
     static constexpr u32 s_GpuTimingQueriesPerRange = 2u;
     static constexpr u32 s_GpuTimingQueriesPerTwoRangeScope = 2u * s_GpuTimingQueriesPerRange;
     static constexpr u32 s_GpuTimingRefractionTileScopeQueryBudget = 32u;

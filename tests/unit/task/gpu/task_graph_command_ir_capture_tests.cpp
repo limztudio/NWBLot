@@ -164,7 +164,7 @@ TEST(GpuCommandIrCapture, RollbackPreservesExactMixedRecordPrefixAtRecordBoundar
     EXPECT_EQ(capture.recordCount(), s_ExpectedDualCount);
     EXPECT_EQ(capture.graphGeneration(), task.generation);
     EXPECT_EQ(rolledBackBytes.size(), expectedPrefix.size());
-    // Rollback rewrites the stream header's count/payload fields, while the surviving two POD records remain an exact byte prefix of the original capture.
+    // Rollback rewrites the header count/payload; the two surviving records stay an exact byte prefix of the capture.
     EXPECT_EQ(NWB_MEMCMP(rolledBackBytes.data() + sizeof(Graphics::GpuCommandIrStreamHeader), expectedPrefix.data() + sizeof(Graphics::GpuCommandIrStreamHeader), expectedPrefix.size() - sizeof(Graphics::GpuCommandIrStreamHeader)), 0);
 
     usize cursor = 0u;

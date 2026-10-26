@@ -220,7 +220,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return false;
     const Path& materialBindIncludeRoot = *materialBindIncludeRootResult;
 
-    // Resolve each CSG `eval` virtual path to its absolute source (cross-asset phase; verbatim #include in the generated module, checksum-covered). Runs before EmitCsgShapeModuleIncludes.
+    // Resolve each CSG eval path to its absolute source (verbatim include, checksum-covered). Runs before shape includes.
     for(auto& csgShapeEntry : graphicsMetadata.csgShapeEntries){
         if(csgShapeEntry.evalInclude.empty())
             continue;
@@ -244,7 +244,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return false;
     Path& csgShapeIncludeRoot = *csgShapeIncludeRootResult;
 
-    // Resolve each material `bxdf`/`surface` virtual path to its absolute source (verbatim #include, checksum-covered, mirroring `interface` -> .bind resolution).
+    // Resolve each material bxdf/surface path to its absolute source (verbatim include, checksum-covered).
     static constexpr AStringView s_BxdfSourceLabel = "bxdf";
     static constexpr AStringView s_SurfaceSourceLabel = "surface";
     const auto resolveMaterialVirtualSource = [&context](auto& virtualSource, const AStringView label, const AStringView materialName) -> bool {
@@ -294,7 +294,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         sharedMeshShaderName = meshSubsystemEntries[0u].subsystem.sharedMs.name();
     }
 
-    // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored ones. Before shader prep + ValidateMaterials.
+    // Generate per-surface G-buffer PS (pixel generated, mesh shared), like authored entries. Before shader prep.
     auto& materialCookArena = materialEntries.get_allocator().arena();
     auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, sharedMeshShaderName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedPixelShadersResult)

@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reduced-res to full-res joint-bilateral upsample gated by surface similarity (distance + normal; distance-only misses creases like the Cornell corner).
-// Mirrors caustic stage-2 plus a normal gate; plain bilinear would smear coverage.
+// Reduced-to-full joint-bilateral upsample gated by distance + normal. Mirrors caustic stage-2 plus a normal gate.
 // Output: rgb = normalized HDR irradiance (no [0,1] clamp), a = continuous ambient-blend coverage.
 
 
@@ -46,7 +45,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const int3 fullCoord = int3(int2(pixel), 0);
-    // G-buffer vector attachments are RGBA16F. Keep their fetched transport compact, then widen at the normal and world-distance calculations where filtering precision matters.
+    // G-buffer vectors are RGBA16F. Fetch compact, widen where filter precision matters.
     const half3 rawNormalSample = half3(nwbSurfelUpsampleGbufferNormal().Load(fullCoord).xyz);
     const float3 rawNormal = float3(rawNormalSample);
     if(dot(rawNormal, rawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN){
@@ -57,7 +56,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const half3 centerWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(fullCoord).xyz);
     const float3 centerWorld = float3(centerWorldSample);
 
-    // Edge-stop sigma from this pixel's own world spacing (max of +x/+y for grazing surfaces). A few pixels of tolerance keeps same-surface taps but rejects silhouette jumps.
+    // Sigma from this pixel's own spacing (max of +x/+y for grazing). A few pixels of tolerance keeps same-surface taps.
     const int2 rightFull = int2(min(int(pixel.x) + 1, int(fullWidth) - 1), int(pixel.y));
     const int2 downFull = int2(int(pixel.x), min(int(pixel.y) + 1, int(fullHeight) - 1));
     const half3 rightWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(rightFull, 0)).xyz);
@@ -83,7 +82,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     [unroll] for(int j = 0; j < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++j){
         [unroll] for(int i = 0; i < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++i){
             const int2 tap = int2(clamp(baseTexel.x + i, 0, int(halfWidth) - 1), clamp(baseTexel.y + j, 0, int(halfHeight) - 1));
-            // The resolve target is RGBA16F. Keep its irradiance/coverage payload native-half while it is only transported through this filter; geometry and the weighted accumulation remain FP32 below.
+            // Target is RGBA16F. Keep payload native-half in transport; geometry and accumulation stay FP32.
             const half4 tapValue = half4(nwbSurfelUpsampleHalfIrradiance().Load(int3(tap, 0)));
             // Recover the tap's geometry from the SAME full texel the resolve gathered at (tap * factor, top-left).
             const int2 tapFull = int2(min(uint(tap.x) * factor, fullWidth - 1u), min(uint(tap.y) * factor, fullHeight - 1u));
@@ -100,7 +99,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const float bilinearWeight = (i == 0 ? 1.0 - lerpFrac.x : lerpFrac.x) * (j == 0 ? 1.0 - lerpFrac.y : lerpFrac.y);
             const float weight = nwbSurfelUpsampleGeometryWeight(bilinearWeight, dot(d, d), invTwoSigmaWorldSq);
             const float coveredWeight = nwbSurfelUpsampleCoveredWeight(weight, float(tapValue.a));
-            // Uncovered taps still count toward the compatible surface's weight, so coverage fades across a gap. Their zero irradiance does not dilute the normalized estimate or leak across a crease.
+            // Uncovered taps still count toward weight, so coverage fades across gaps without diluting the estimate.
             compatibleWeightSum += weight;
             coveredWeightSum += coveredWeight;
             irradianceSum += coveredWeight * float3(tapValue.rgb);

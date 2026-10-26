@@ -27,7 +27,7 @@ class RendererRayTracingState;
 
 
 // Hardware TLAS work records from this frozen preflight plan in Shadow Preparation; its static cache becomes valid only after that packet accepts.
-// RayTracingInstanceDesc stores raw BLAS pointers, so the plan retains every BLAS handle plus the selected TLAS and backing generation until Shadow Preparation accepts or discards it.
+// Instance descs hold raw BLAS pointers; the plan retains every BLAS plus TLAS/backing until Shadow Preparation settles.
 class PreparedSceneTlasBuild final : NoCopy{
 public:
     explicit PreparedSceneTlasBuild(Core::Alloc::GlobalArena& arena)noexcept

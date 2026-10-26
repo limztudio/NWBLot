@@ -66,7 +66,7 @@ public:
 
 private:
     void publish()noexcept{
-        // Graph lifecycle completion deliberately precedes the transaction-token commit: the last transaction packet resolves its graph binding only after every graph task is terminal.
+        // Graph completion precedes the token commit: the last packet resolves its binding after every task is terminal.
         m_graph.completePacketSubmissionAcceptance(m_compiledGraph, m_planAccess, m_packet, m_lease);
         m_transaction.commitAcceptedPacket(m_graph, m_compiledGraph, m_packet, m_token, m_nativeSubmissionInfo);
         m_active = false;

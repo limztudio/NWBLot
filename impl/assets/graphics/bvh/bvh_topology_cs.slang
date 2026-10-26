@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Common-prefix length of the augmented keys (Morton + leaf index tie-break for a strict total order). Returns -1 for an out-of-range neighbour, which ends the range search below.
+// Common-prefix length of augmented keys (Morton + index tie-break). -1 for out-of-range neighbours.
 int nwbBvhDelta(const int lhs, const int rhs, const uint primitiveCount){
     if(rhs < 0 || rhs >= (int)primitiveCount)
         return -1;
@@ -44,7 +44,7 @@ int nwbBvhFindSplit(const int first, const int last, const uint primitiveCount){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread per internal node: determine its key range (direction + binary-searched far end), split it, and link the two children, recording each child's parent for the bottom-up fit.
+// One thread per internal node: find its key range, split it, link children, record parents for the fit.
 // The host clears the parent buffer to NWB_BVH_INVALID first, so the root (internal node 0, never a child) keeps no parent.
 [numthreads(NWB_BVH_BUILD_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){

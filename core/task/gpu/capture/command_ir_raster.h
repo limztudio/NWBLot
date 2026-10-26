@@ -234,8 +234,7 @@ struct GpuCommandIrRasterStateOwner{
     usize recordIndex = 0u;
 };
 
-// Sidecar owners never enter the wire.
-// A heap lease and descriptor owner must stay live until native replay records the exact binding; exported streams share these refs with the capture rather than reacquiring them.
+// Sidecar owners never enter the wire. Heap lease and descriptor owner stay live until replay records the binding.
 struct GpuCommandIrRasterHeapOwner{
     GraphicsPipelineHandle pipeline;
     GpuCommandIrOwnerAnchor lease;

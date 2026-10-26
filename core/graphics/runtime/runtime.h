@@ -66,12 +66,11 @@ public:
         // A non-retained Unknown initial state publishes CopyDest; a retained upload requires a concrete initial state.
         CommandQueue::Enum queue = CommandQueue::kCount;
         // Automatic selects one aspect for color, depth-only, and stencil-only formats.
-        // D24S8/D32S8 require the caller to select one concrete aspect because Vulkan copies their depth and stencil planes from independently laid out CPU payloads.
+        // D24S8/D32S8 need one caller-selected aspect; Vulkan copies depth/stencil from separate CPU layouts.
         TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
     };
 
-    // One immutable CPU payload for a texture subresource upload.
-    // uploadTextureBatch() copies every region into graph-owned blobs before native recording, so the caller may release its decoded asset memory when the call returns.
+    // One immutable CPU payload per subresource. Batch copies regions into graph blobs first, so callers may free decoded memory on return.
     // A 3D mip is one region at arraySlice 0 whose depthPitch covers a single Z slice; 2D/cube uploads provide one region per array slice.
     struct TextureUploadRegion{
         const void* data = nullptr;
@@ -162,7 +161,7 @@ public:
     // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
     bool setTransferQueueEnabled(bool enabled)noexcept;
     // Must be configured before device creation.
-    // It may expose every safe extra queue from each active primary family plus one auxiliary family per class when cross-family routing is on; only opted-in tasks may route to them.
+    // May expose extra queues per active family plus one auxiliary family per class when cross-family routing is on.
     bool setSameClassMultiQueueEnabled(bool enabled)noexcept;
     // Extends optional same-class discovery to distinct compatible Vulkan families.
     // Individual graph tasks must still explicitly accept the resulting ownership-transfer route.
@@ -181,11 +180,10 @@ public:
     bool setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept;
     void setPipelineCacheDirectory(const Path& directory);
     bool setFilesystemFactory(const Filesystem::FilesystemFactory& factory);
-    // Keeps the host update/event loop alive while preventing runFrame from recording, submitting, or presenting a new frame, so an external capture can sample the last completed frame.
+    // Holds the update/event loop while runFrame records nothing, so an external capture can sample the last finished frame.
     void setFrameSubmissionSuspended(bool suspended)noexcept{ m_frameSubmissionSuspended = suspended; }
     bool runFrame();
-    // A render pass uses this when an accepted cross-queue release cannot be recovered safely.
-    // The current graphics generation then stops before another pass or presentation can use indeterminate ownership; its owner must tear down and recreate the device/resources before resuming.
+    // A render pass calls this when an accepted cross-queue release is unrecoverable. The generation stops; the owner recreates device/resources.
     void requestDeviceRecreation()const;
     [[nodiscard]] bool isDeviceRecreationRequested()const noexcept{ return m_deviceRecreationRequested; }
     [[nodiscard]] bool updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
@@ -198,12 +196,10 @@ public:
     [[nodiscard]] GraphicsBackend::Device& getDevice()const noexcept;
     [[nodiscard]] GpuTaskScheduler& gpuTasks()const noexcept{ return m_gpuTasks; }
     [[nodiscard]] Expected<GraphicsVector<AdapterInfo>> enumerateAdapters();
-    // Returns identity from the physical device selected for the current logical device, rather than from a later adapter enumeration.
-    // Available only after successful device creation.
+    // Identity comes from the selected physical device, not a later enumeration. Valid after device creation.
     [[nodiscard]] Expected<AdapterInfo> getSelectedAdapterInfo()const;
     [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature)const noexcept;
-    // Resolves the GPU wave/subgroup size, or returns a conservative fallback (64) when the device cannot report it.
-    // Use the returned value to size groupshared reductions and wave-intrinsic shader specializations.
+    // Wave/subgroup size, or 64 when the device cannot report it. Sizes groupshared reductions and wave-intrinsic specializations.
     [[nodiscard]] u32 queryWaveLaneCount()const noexcept;
 
     void addRenderPassToFront(IRenderPass& pass);
@@ -305,8 +301,7 @@ public:
     void displayScaleChanged();
 
     void animate(f64 elapsedTime);
-    // Runs the allocation/submission work that must precede every frame's render-pass preparation.
-    // Call this after the backend has acquired a frame and before render(); direct headless callers use it to establish the same ordering without a swap-chain beginFrame().
+    // Allocation/submission work before each frame's preparation. After acquire, before render(); headless callers use it to order without beginFrame().
     [[nodiscard]] bool prepareFramePreamble();
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> render();
 

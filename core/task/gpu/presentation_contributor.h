@@ -22,8 +22,8 @@ NWB_CORE_BEGIN
 class GpuTaskGraph;
 
 
-// A presentation contributor records the final graphics work that must remain ordered after a renderer's scene output and before the swap-chain submission is signalled.
-// The contributor owns its payload and CPU-side acceptance lifecycle; Graphics only keeps this non-owning registration seam so scene renderers and contributors stay independent.
+// A presentation contributor records final graphics work ordered after scene output and before swap-chain signal.
+// The contributor owns payload and acceptance; Graphics keeps only the non-owning registration seam.
 interface IGpuTaskGraphPresentationContributor{
 public:
     virtual ~IGpuTaskGraphPresentationContributor()noexcept = default;

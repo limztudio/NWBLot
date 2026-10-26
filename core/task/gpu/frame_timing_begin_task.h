@@ -19,8 +19,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Opens a frame timing transaction in the graph's isolated primary-Graphics prelude packet.
-// Both bindings are required: the transaction owns the timing reservation and the device is the live GraphicsRuntime device the prelude records against.
+// Opens a frame timing transaction in the graph's isolated primary-Graphics prelude packet. Both bindings are required.
 struct FrameTimingBeginGraphTask{
     static constexpr GpuTaskCommandRequirements s_CommandRequirements = { GpuQueueCapability::Graphics, true };
 

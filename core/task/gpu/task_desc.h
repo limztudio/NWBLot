@@ -32,8 +32,8 @@ struct GpuTaskExternalStateSource{
     CommandQueue::Enum applicableConsumerQueueClass = CommandQueue::kCount;
 };
 
-// Typed task payloads are stored in graph-owned memory, while these static thunks let the packet recorder invoke them without allocating a type-erased callable per task.
-// Acceptance and discard are deliberately separate from record: a task may only publish CPU-side effects once the containing queue submission is accepted.
+// Task payloads live in graph-owned memory; these static thunks let the recorder invoke them with no per-task callable alloc.
+// Acceptance and discard stay separate from record: CPU-side effects publish only after queue submission is accepted.
 using GpuTaskRecordThunk = bool(*)(const void* payload, CommandList& commandList, const GpuTaskRecordContext& context);
 using GpuTaskAcceptedThunk = void(*)(void* payload, const QueueSubmissionToken& token);
 using GpuTaskDiscardedThunk = void(*)(void* payload);
@@ -65,30 +65,30 @@ struct GpuTaskSchedulingHint{
     bool avoidQueueCrossing = false;
     bool forceSubmissionBoundary = false;
     bool allowPacketMerge = true;
-    // Opt in to sharing the preceding compatible packet instead of creating a new queue submission.
+    // Sharing the preceding compatible packet instead of a new queue submission.
     bool mergeWithPrevious = false;
-    // An explicit immediate successor may keep an accepting packet whole even when that task has direct cross-queue consumers.
-    // Those consumers then wait for the complete merged packet, including packet-local tail work and its final state.
-    // This never changes queue routing and remains opt-in; shared-state tails keep serial recording.
+    // An explicit immediate successor may keep an accepting packet whole despite direct cross-queue consumers.
+    // Those consumers then wait for the full merged packet, tail work and final state included.
+    // Queue routing never changes and shared-state tails keep serial recording.
     bool allowMergeAcrossConsumerFrontier = false;
     // Late recovery/finalization packet: waits latest accepted work on every other queue (submitter derives waits).
     // No incoming deps/state sources/concrete uses; HazardDomains or outgoing edges only.
     bool joinsAcceptedQueueFrontier = false;
-    // Identifies a true partial-submission recovery packet within the broader recovery/finalization frontier class.
-    // Recovery must also join the accepted queue frontier and is counted only after native submission acceptance.
+    // True partial-submission recovery packet in the broader recovery/finalization class.
+    // Recovery also joins the accepted queue frontier and counts only after native submission acceptance.
     bool isRecoverySubmission = false;
     // Recording stays serial unless every task in a packet explicitly opts in.
-    // An opt-in record thunk may run on a worker with other opt-in packets from the same ready frontier, so it must not mutate shared CPU state or rely on thread-affine APIs.
+    // A record thunk may run on a worker beside other opt-in packets from the same frontier: no shared CPU mutation, no thread-affine APIs.
     // Submission remains in compiler order.
     bool allowParallelRecording = false;
-    // Opts this task into deterministic load balancing across physical queues that share the selected queue class and Vulkan family.
-    // The default retains the current one-transport-per-class behavior; callers that opt in accept explicit timeline waits when a producer and consumer land on different queues in that family.
+    // Deterministic load balancing across physical queues sharing the selected queue class and Vulkan family.
+    // Default keeps one-transport-per-class; opt-in callers accept explicit timeline waits when producer and consumer land on different queues.
     bool allowSameClassQueueRouting = false;
-    // When same-class routing finds an equal-cost alternative, prefer a non-primary physical queue.
-    // Opt-in: broad callers keep the primary transport by default; upload/offload work can use this to create real overlap in an otherwise-empty standalone graph.
+    // Prefer a non-primary queue on equal-cost same-class routing.
+    // Broad callers keep the primary transport; upload/offload work can use this for real overlap in an otherwise-empty standalone graph.
     bool preferNonPrimarySameClassQueue = false;
-    // Retains the exact physical queue selected for the last compatible direct dependency.
-    // For explicitly serial same-class chains (e.g. multi-mip uploads): the first task may offload, while later tasks stay with it instead of crossing timelines at every stage.
+    // Keeps the physical queue of the last compatible direct dependency.
+    // For serial same-class chains (e.g. multi-mip uploads): the first task may offload, later tasks stay with it instead of crossing timelines.
     bool preserveSameClassQueueWithDirectDependency = false;
     // Extends physical routing to another Vulkan family.
     // Separately opt-in: exclusive uses cross that boundary through compiler-owned release/acquire pairs.
@@ -96,7 +96,7 @@ struct GpuTaskSchedulingHint{
     bool allowCrossFamilySameClassQueueRouting = false;
     // Enables timing-history routing and bounded calibration for this task.
     // Separate from ordinary same-class routing so measurement stays scoped to a proven-safe subset.
-    // Another Vulkan family additionally requires allowCrossFamilySameClassQueueRouting, preserving a dual opt-in before the compiler plans any ownership-transfer route.
+    // Another family also needs allowCrossFamilySameClassQueueRouting: dual opt-in before the compiler plans an ownership-transfer route.
     bool allowTimingFeedbackRouting = false;
     // Extends timing feedback to another queue class already permitted by the command contract.
     // Never relaxes capabilities or timeline constraints; accepted history only replaces an otherwise legal static placement.
@@ -125,13 +125,12 @@ struct GpuTaskTimingMetadata{
     GpuTaskTimingPolicy::Enum policy = GpuTaskTimingPolicy::None;
 };
 
-// Packet timing identities derive from the first semantic task rather than compiler packet IDs, keeping one stable telemetry key when an equivalent graph recompiles into a new generation.
+// Timing identities derive from the first semantic task, so recompiles into a new generation keep one stable key.
 [[nodiscard]] inline Expected<Name> GpuTaskPacketTimingScopeName(const Name& firstTaskIdentity){
     return DeriveName(firstTaskIdentity, AStringView(".packet"));
 }
 
-// Immutable external ownership source per imported range (later graphs consume disjoint terminal exports per owner).
-// Each source supplies the releasing and first-consumer queues, completion, and release snapshot; acceleration structures use one whole-allocation source.
+// External ownership source per imported range; acceleration structures use one whole-allocation source.
 struct GpuGraphInitialOwnerHandoffSourceDesc{
     GpuTaskResourceRange range;
     GpuPhysicalQueueId sourceQueue;
@@ -143,8 +142,7 @@ struct GpuGraphInitialOwnerHandoffSourceDesc{
     const CommandListResourceStateHandoff* stateSource = nullptr;
 };
 
-// A resource may be metadata-only during the shadow-graph phase, or may retain an imported engine handle through one of GpuTaskGraph's typed import overloads.
-// The latter is the required path before graph recording is enabled.
+// A resource may be metadata-only in the shadow-graph phase, or hold an imported engine handle. The latter is required before recording.
 struct GpuGraphResourceDesc{
     Name identity = s_NameNone;
     AStringView markerLabel;
@@ -216,7 +214,7 @@ public:
 };
 
 // Resource sets retain graph resource IDs, not backend pointers.
-// Their member list is copied into graph-owned storage, which makes dynamic enumerable bindless declarations immutable before compilation and native recording.
+// Members copy into graph-owned storage, freezing bindless declarations before compilation.
 struct GpuGraphResourceSetDesc{
     Name identity = s_NameNone;
     AStringView markerLabel;
@@ -237,7 +235,7 @@ public:
 };
 
 // Pipeline metadata is graph-owned so optional command capture can refer to stable graph IDs instead of backend pointers.
-// Typed import overloads retain the matching engine pipeline handle; importPipeline is metadata-only for analysis/tooling paths that do not record a native pipeline bind yet.
+// Typed imports keep the engine pipeline handle; importPipeline is metadata-only for paths that record no native bind.
 struct GpuGraphPipelineDesc{
     Name identity = s_NameNone;
     AStringView markerLabel;
@@ -329,8 +327,7 @@ public:
     }
 };
 
-// Primitive native copies remain task-level operations: scheduled, packetized, and synchronized by the graph, but record directly to the selected CommandList without a general command IR.
-// The helpers own the resource-use declarations for every region, so callers must leave GpuTaskDesc::resourceUses empty.
+// Native copies stay task-level ops and record straight to the CommandList. Helpers own region declarations; leave resourceUses empty.
 struct GpuCopyBufferTaskRegion{
     GpuGraphResourceId source;
     u64 sourceOffsetBytes = 0u;
@@ -359,8 +356,7 @@ struct GpuCopyTextureTaskDesc{
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
-// Resolve operations are task-level primitives with explicit source/destination state declarations.
-// The helper retains both textures until late recording and records directly through CommandList after queue assignment.
+// Resolve ops keep both textures until late recording, then record via CommandList after queue assignment.
 struct GpuResolveTextureTaskRegion{
     GpuGraphResourceId source;
     TextureSubresourceSet sourceSubresources = s_AllSubresources;
@@ -375,16 +371,14 @@ struct GpuResolveTextureTaskDesc{
 };
 
 
-// Caller bytes are copied into a graph-owned upload blob before declaration.
-// The task records that blob through the existing CommandList staging path, so the blob is not a second persistent GPU upload allocator.
+// Caller bytes copy into a graph-owned upload blob; the task records it through the CommandList staging path.
 // `finalState` describes the task's graph-visible final state after its internal CopyDest write completes.
 struct GpuUploadBufferTaskDesc{
     GpuUploadBlobId source;
     GpuGraphResourceId destination;
     u64 destinationOffsetBytes = 0u;
     ResourceStates::Mask finalState = ResourceStates::CopyDest;
-    // Optional lifecycle output.
-    // Storage must outlive late recording/submission; the helper clears it at declaration and if the task is discarded, then writes the accepted packet token only after submission.
+    // Lifecycle output. Storage must outlive late recording; written only after submission accepts.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -401,7 +395,7 @@ struct GpuUploadTextureTaskDesc{
 };
 
 
-// Primitive clear helpers have the same graph-owned scheduling and lifecycle as copies, while retaining the selected native clear variant in their compact payload.
+// Clear helpers share copy scheduling/lifecycle and keep the native clear variant in their payload.
 // They always write CopyDest state for the target resource.
 struct GpuClearBufferTaskDesc{
     GpuGraphResourceId destination;
@@ -420,8 +414,7 @@ namespace GpuClearTextureTaskValueType{
     };
 };
 
-// A typed clear can bracket its own native command with narrow graph-owned instrumentation.
-// The hooks stay outside command capture/replay: they are recording-local observability, while the clear command remains the portable POD operation captured by the optional IR stream.
+// A typed clear can bracket its command with narrow instrumentation. Hooks stay outside capture/replay; the clear stays the portable POD op.
 using GpuClearTextureTaskRecordHook = bool(*)(void* context, CommandList& commandList, const GpuTaskRecordContext& recordContext);
 using GpuClearTextureTaskDiscardedHook = void(*)(void* context);
 
@@ -437,8 +430,7 @@ struct GpuClearTextureTaskRecordHooks{
 struct GpuClearTextureTaskDesc{
     QueueSubmissionToken* acceptedToken = nullptr;
     GpuGraphResourceId destination;
-    // Optional recording-local hooks.
-    // They bracket the native clear in the same graph task, so a later cross-queue consumer cannot split an instrumentation endpoint away from the command it observes.
+    // Recording-local hooks in the same graph task, so a later consumer cannot split them from the clear.
     GpuClearTextureTaskRecordHooks recordHooks{};
     f32 depthValue = 1.f;
     TextureSubresourceSet subresources = s_AllSubresources;
@@ -453,8 +445,7 @@ struct GpuClearTextureTaskDesc{
 static constexpr usize s_GpuClearTextureTaskDescByteSize = 136u;
 static_assert(sizeof(GpuClearTextureTaskDesc) == s_GpuClearTextureTaskDescByteSize, "GpuClearTextureTaskDesc should keep its compact runtime layout");
 
-// A rectangular unsigned-integer clear keeps the same graph-owned CopyDest/lifecycle contract as the general texture clear, while keeping work-region bounds a whole-image clear cannot give.
-// It is kept deliberately narrow until another renderer path needs a different typed rectangle operation.
+// Rectangular uint clear: same CopyDest/lifecycle contract as the general texture clear, plus work-region bounds.
 struct GpuClearTextureRectUIntTaskDesc{
     GpuGraphResourceId destination;
     TextureSubresourceSet subresources = s_AllSubresources;

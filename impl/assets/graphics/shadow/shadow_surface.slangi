@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shadow trace serves the material-constants accessors from the ray hit via per-invocation globals, so the same hook evaluates here and in the rasterizer (NWB_MESH_MATERIAL_CONTEXT_PROVIDED).
+// Shadow trace serves material accessors via per-hit globals, so the hook runs here and in raster.
 #define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
 #include "../mesh/material_typed_bindings.slangi"
 

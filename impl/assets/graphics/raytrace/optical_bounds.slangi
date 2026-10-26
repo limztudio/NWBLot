@@ -37,7 +37,7 @@ bool nwbOpticalSegmentOutsideBounds(const float3 origin, const float3 normalized
     const float3 magnitude = abs(origin) + abs(normalizedDirection) * maxDistance + max(abs(boundsMin), abs(boundsMax)) + float3(1.0);
     if(!all(isfinite(endpoint)) || !all(isfinite(magnitude)))
         return false;
-    // Eight binary32 epsilons conservatively cover the endpoint product/add, magnitude rounding and outward interval arithmetic, with or without contraction.
+    // Eight binary32 epsilons cover endpoint math, magnitude rounding, and interval arithmetic, with or without contraction.
     // The unit floor also covers flushed subnormal operations.
     // Include operand magnitudes so cancellation at an endpoint cannot erase its arithmetic uncertainty.
     const float3 margin = magnitude * (NWB_OPTICAL_BOUNDS_SEGMENT_EPSILON_SCALE * NWB_FLOAT_EPSILON);

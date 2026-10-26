@@ -22,14 +22,14 @@ struct NwbDielectricInterface{
     bool totalInternalReflection;
 };
 
-// Radiance consumers store half throughput; clamp its interface factor before that storage boundary. Photon power uses the separate FP32 reflected fraction.
+// Consumers store half throughput; clamp the factor before storage. Photon power uses the FP32 fraction.
 static const float NWB_DIELECTRIC_RADIANCE_TRANSMISSION_MAX = 65504.0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Exact unpolarized dielectric Fresnel + Snell. The admitted half IOR range needs FP32 sums/products; photon power excludes the radiance eta-squared factor.
+// Unpolarized Fresnel + Snell. Half IOR needs FP32 math; photon power excludes the eta-squared factor.
 NwbDielectricInterface nwbDielectricTransmit(const float3 direction, const float3 opposingNormal, const half incidentIor, const half transmittedIor){
     NwbDielectricInterface result = (NwbDielectricInterface)0;
     if(incidentIor == transmittedIor){
@@ -55,7 +55,7 @@ NwbDielectricInterface nwbDielectricTransmit(const float3 direction, const float
     return result;
 }
 
-// The authored RGB tint specifies survival over one world unit, matching the existing transparent-material contract. Closed volumes keep this coefficient from their entry boundary.
+// RGB tint is survival over one world unit, per the transparent-material contract. Closed volumes keep it from entry.
 half3 nwbDielectricAbsorptionCoefficient(const half3 unitSurvival){
     return -log(clamp(unitSurvival, half3(half(NWB_ABSORPTION_SURVIVAL_MIN)), half3(1.0h)));
 }

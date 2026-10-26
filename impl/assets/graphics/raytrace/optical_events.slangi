@@ -34,7 +34,7 @@ bool nwbOpticalReplayBootstrap(
     inout NwbOpticalTraceResult result
 ){
     media = (NwbOpticalMedia)0;
-    // Candidate records stay immutable. Sort scalar indices instead of shifting an array-backed struct in place; every crossing keeps its original distance, primitive and orientation together.
+    // Records stay immutable. Sort indices, not structs in place; each crossing keeps distance, primitive, orientation.
     uint eventOrder[NWB_OPTICAL_MAX_CANDIDATE_EVENTS] = { 0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u, };
     [loop] for(uint index = 1u; index < eventCount; ++index){
         uint insertion = index;
@@ -51,7 +51,7 @@ bool nwbOpticalReplayBootstrap(
         const NwbOpticalBootstrapEvent event = events[eventOrder[index]];
         const NwbOpticalBootstrapEvent previous = events[eventOrder[index - 1u]];
         if(event.distance - previous.distance <= tolerance){
-            // Only a coplanar indexed seam may collapse duplicate edge candidates. A same-facing sharp edge still has multiple refraction normals, and an unshared triangle belongs to another shell.
+            // Only a coplanar indexed seam may merge duplicates. Same-facing sharp edges keep multiple normals; unshared triangles belong elsewhere.
             if(
                 event.instance != previous.instance || event.entering != previous.entering
 #if NWB_RT_CSG_ENABLED
@@ -66,7 +66,7 @@ bool nwbOpticalReplayBootstrap(
         }
     }
 
-    // Signed per-instance winding first: origin-exited volumes must not consume the medium cap. Entries-minus-exits for exterior crossings; same-instance shells union until winding hits zero.
+    // Signed per-instance winding first: exterior entries-minus-exits; same-instance shells union until winding hits zero.
     uint activeEventIndices[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
     uint activeEntryIndices[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
     uint activeWindings[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
@@ -130,7 +130,7 @@ bool nwbOpticalReplayBootstrap(
         activeWindings[insertion] = uint(winding);
         ++media.count;
     }
-    // Assemble each ordered medium once, after all scalar-index insertion is finished. No medium struct is moved through its backing array, and only the active homogeneous materials are read.
+    // Assemble each ordered medium once, after insertion ends. No medium moves through its backing array.
     [unroll] for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
         if(index < media.count){
             NwbOpticalInstance optical;

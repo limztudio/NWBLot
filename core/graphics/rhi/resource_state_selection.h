@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Membership for whole-resource state filtering. Entries keep the first input ordinal per kind/pointer identity; resources stay caller-owned. Add before other scratch allocations.
+// Whole-resource state filter. Entries keep the first input ordinal per kind/pointer; resources stay caller-owned.
 class CommandListResourceSelection final : NoCopy{
 public:
     struct Entry{

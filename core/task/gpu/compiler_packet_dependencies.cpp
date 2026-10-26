@@ -209,7 +209,7 @@ namespace GpuTaskGraphCompilerDetail{
         }
 
         // Each state-synchronization consumer group is ordered nearest-producer first.
-        // If an existing or newly added path already joins an older producer into this packet, avoid adding a redundant direct edge while retaining the canonical dependency order.
+        // If a path already joins an older producer into this packet, skip the redundant direct edge but keep canonical order.
         while(resourceStateDependencyIndex < resourceStateDependencies.size() && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID){
             const GpuSubmissionPacketId producerPacketID = resourceStateDependencies[resourceStateDependencyIndex].producer;
             ++resourceStateDependencyIndex;
@@ -240,7 +240,7 @@ namespace GpuTaskGraphCompilerDetail{
         return false;
 
     // Packet dependencies are already constrained to earlier compiler-order packets and remain the authoritative GPU submission order.
-    // Native recording only needs prior packets that export a state snapshot used by a prologue seed, so keep the longest such chain as ready-frontier depth.
+    // Recording needs only prior packets exporting a seed-used snapshot; the longest such chain is the frontier depth.
     for(usize packetIndex = 0u; packetIndex < compiledPlan.packets.size(); ++packetIndex){
         GpuSubmissionPacket& packet = compiledPlan.packets[packetIndex];
         for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){

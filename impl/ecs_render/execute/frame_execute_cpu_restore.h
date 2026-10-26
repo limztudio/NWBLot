@@ -30,7 +30,7 @@ struct DeferredFrameTargets;
 
 
 // CPU-side packet-state restore for rejected frame recordings.
-// Separated from RendererFramePipeline::render(): prefix/shadow/effects restores are per-stage functionality, composed here so render() keeps only the call sites.
+// Stage restores live here so render() keeps only the call sites.
 class FrameExecuteCpuRestore final{
 public:
     struct Snapshot{

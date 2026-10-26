@@ -124,7 +124,7 @@ half3 nwbRefractionCompositeBehindBackground(const int3 texel, const half3 opaqu
     // Transmittances are (0, 1) bounded factors, so half arithmetic is sufficient here.
     const half frontTransmittance = exp(-min(frontExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
     const half backTransmittance = exp(-min(behindExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
-    // AVBOIT weights contain transmittance from fragments in front of the retained primary. Undo that prefix here; the final compositor applies it once. Clamp only the ill-conditioned occluded tail.
+    // Weights hold prefix transmittance ahead of the primary. Undo it here; compositor applies it once.
     return behind / max(frontTransmittance, half(NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN)) + opaque * backTransmittance;
 }
 

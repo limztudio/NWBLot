@@ -20,7 +20,7 @@
 
 #include "binding_slots.h"
 
-// Most shaders skip the TLAS. Give those variants an explicit disabled value: Slang evaluates the right side of `defined(...) && ...` and warns on an undefined identifier.
+// Most shaders skip the TLAS. Default it off: Slang warns when the right side of `defined(...) && ...` names nothing.
 #ifndef NWB_BINDLESS_TLAS
 #define NWB_BINDLESS_TLAS 0
 #endif
@@ -29,7 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Generic uniform-buffer heap alias: the leading uint is at byte 0, uint3 padding starts at byte 16, and the configured std140 layout has a 32-byte extent.
+// Uniform-buffer heap alias: uint at byte 0, uint3 pad at byte 16, 32-byte std140 extent.
 struct NwbBindlessHeapUint{
     uint value;
     uint3 padding;
@@ -92,12 +92,12 @@ struct NwbBindlessHeapUint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Read-only raw slot accessor; centralizes NonUniformResourceIndex (per-mesh slots vary across a wave). Returns the buffer by value for caller-offset loads.
+// Read-only raw accessor; centralizes NonUniformResourceIndex (per-mesh slots vary in a wave). Returns by value.
 ByteAddressBuffer nwbHeapRawBuffer(const uint slot){
     return g_NwbHeapRawBuffers[NonUniformResourceIndex(slot)];
 }
 
-// Deferred/compositor slot buffers are constant across their fullscreen draw. Keep these indices uniform: unlike per-mesh fetches they need no non-uniform-indexing capability.
+// Deferred/compositor slots are constant per fullscreen draw. Keep them uniform: no non-uniform-indexing needed.
 Texture2D<float4> nwbHeapSampledImage2D(const uint slot){
     return g_NwbHeapSampledImages[slot];
 }
@@ -119,7 +119,7 @@ TextureCube<float4> nwbHeapSampledImageCube(const uint slot){
     return g_NwbHeapSampledImageCubes[slot];
 }
 
-// CSG's slot cbuffer is uniform per draw/dispatch, so these lookups stay uniform. Per-invocation storage-image indexing needs NonUniformResourceIndex.
+// CSG's slot cbuffer is uniform per draw/dispatch, so these stay uniform. Per-invocation storage images need NonUniformResourceIndex.
 RWTexture2DArray<float4> nwbHeapStorageImage2DArrayFloat4(const uint slot){
     return g_NwbHeapStorageImage2DArrayFloat4s[slot];
 }

@@ -10,7 +10,7 @@
 
 
 #if NWB_CSG_RAY_STRICT_NORMALS
-// A crossing group can hide an exit/entry while preserving solid membership. Optical transport must reject lost interfaces rather than admit radiance without their Fresnel loss.
+// A crossing group can hide an exit/entry. Transport must reject lost interfaces, not admit them free.
 float nwbCsgRayCollapsedOpticalBoundary(
     __constref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
     const uint crossingCount,

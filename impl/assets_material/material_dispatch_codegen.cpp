@@ -78,7 +78,7 @@ bool AssignMaterialShadingModelIdsImpl(const Span<MaterialCookEntry> materialEnt
         entry.shadingModelId = static_cast<u32>(static_cast<usize>(sourceIt - uniqueSources.begin()));
     }
 
-    // Surface dispatch id per unique `.surface`; explicit-`shaders` opaque takes the no-surface sentinel (not 0) so GI hits the neutral fallback, never an unrelated hook.
+    // Opaque with explicit `shaders` takes the no-surface sentinel (never 0), so GI hits neutral, never a hook.
     Vector<AStringView, ScratchArena> uniqueSurfaces(scratchArena);
     uniqueSurfaces.reserve(materialEntries.size());
     for(const MaterialCookEntry& entry : materialEntries){
@@ -215,8 +215,8 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
 static constexpr AStringView s_ShadowSurfaceFunctionMacro = "nwbMaterialSurface";
 static constexpr AStringView s_ShadowSurfaceModelPrefix = "nwbShadowSurfaceModel";
 
-// Per-interface Slang namespace that isolates each material `.bind` file-scope symbol in the dispatch module (the one TU that concatenates multiple `.bind` files).
-// The project-owned `.surface` fragment stays global so its guarded helper includes retain their normal global ownership; generated aliases expose exactly that surface's bind API.
+// One Slang namespace per interface isolates each `.bind` file-scope symbol in the concatenating TU.
+// The project's `.surface` fragment stays global so its guarded includes keep global ownership; aliases expose that bind API.
 static constexpr AStringView s_ShadowSurfaceBindNamespacePrefix = "nwbShadowBindModel";
 static constexpr AStringView s_ShadowSurfaceIncludeSubDir = "shadow_modules";
 static constexpr AStringView s_ShadowSurfaceModuleSubPath = "shadow/generated/surface_dispatch.slangi";
@@ -474,7 +474,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
     source += "#ifndef NWB_GRAPHICS_SHADOW_GENERATED_SURFACE_DISPATCH_SLANGI\n";
     source += "#define NWB_GRAPHICS_SHADOW_GENERATED_SURFACE_DISPATCH_SLANGI\n\n";
 
-    // Context (NwbShadowHit + accessors + surface contract) comes from the includer's shadow_surface.slangi; emitting it here would force an unresolvable virtual engine/ include path.
+    // Context comes from the includer's shadow_surface.slangi; emitting here would force an unresolvable virtual include.
 
     // Emit each unique `.bind` once in a private namespace with scoped aliases so multiple interfaces do not collide.
     ScratchHashSet<ScratchString> bindAliasSeenSymbols{ 0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena };
@@ -536,7 +536,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         source += "(in);\n";
     }
     // Unknown id: no material surface is available (for example, an explicit opaque-stage material).
-    // Shadow consumes only the neutral optical fields; GI may consume baseColor, where the fixed mid-grey is an explicit no-surface fallback rather than an inferred project-material albedo.
+    // Shadow uses only neutral optical fields; GI may use baseColor, where fixed mid-grey is the no-surface fallback.
     source += s_ShadowSurfaceUnknownFallbackSource;
     source += s_GeneratedSwitchEnd;
     source += s_GeneratedDispatchEnd;

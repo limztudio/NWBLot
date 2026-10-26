@@ -113,7 +113,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     opaqueProduced = false;
     transparentTraceProduced = false;
     opaqueFrameIndex = 0u;
-    // Only the fully prepared soft-transparent route can expose this boundary. Direct, adaptive, and resource-degraded paths retain the established monolithic Shadow Visibility callback.
+    // Only the prepared route exposes this boundary; other paths keep the monolithic Shadow Visibility callback.
     const bool preparedSoftTransparentFoldCandidate =
         rayTracingPlan.softTransparentFoldReady
         && deferredTargets.shadowCoarseTransmittance
@@ -147,13 +147,13 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     m_deferredShadowCombinedWavelet = combinedSoftWavelet;
     const bool combinedSoftTemporal = combinedSoftWavelet && rayTracingPlan.combinedSoftTemporalReady;
     m_deferredShadowCombinedTemporal = combinedSoftTemporal;
-    // The adaptive fallback remains in the monolithic callback, but its raw buffer primitives and acceptance-time diagnostic lifecycle are deterministic from this frozen route.
+    // Adaptive fallback stays in the monolithic callback, but its primitives and diagnostic lifecycle are fixed by this route.
     // A frame with no clear/copy work still owns its tick through the semantic task's accepted hook without gaining empty graph nodes.
     const bool graphOwnedAdaptiveCandidate = !splitSoftTransparentFold && rayTracingPlan.adaptivePlan.enabled;
     GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = graphOwnedAdaptiveCandidate ? rayTracingPlan.adaptivePlan : GraphOwnedAdaptiveShadowPlan{};
-    // The merge pipeline is ready before its retained history has an accepted frame. Bootstrap still publishes the selected output pair, but only usable history may sample with prior geometry.
+    // Merge pipeline may be ready before history has an accepted frame. Bootstrap publishes the pair, but only usable history samples prior geometry.
     const bool softShadowHistoryReadable = rayTracingPlan.softShadowHistoryReadable;
-    // The opaque temporal merge runs before the transparent tail and shares its history selector. Freeze its exact input/output pair while the compiled packet owns the prepared temporal route.
+    // Opaque merge runs before the transparent tail and shares its selector. Freeze its pair while the packet owns the temporal route.
     const bool graphOwnsOpaqueTemporalMergeEntryStates = splitSoftTransparentFold && rayTracingPlan.opaqueTemporalMergeReady;
     const bool opaqueHistoryFrontIsA = rayTracingPlan.historyFrontIsA;
 
@@ -256,7 +256,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     };
     bool optionalResourcesImported =
         (
-            // The retained monolith selects its adaptive fallback only after runtime slot checks. Declare coarse as an output across that whole route, while prepared split callbacks omit it completely.
+            // The monolith picks adaptive fallback after runtime slot checks. Declare coarse across that route; split callbacks omit it.
             splitSoftTransparentFold
             || appendOptionalWriteTexture(deferredTargets.shadowCoarseTransmittance, Name("render.shadow_visibility.coarse_transmittance"), "Shadow Coarse Transmittance")
         )
@@ -434,7 +434,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     bool adaptivePrimitivePrecedesVisibility = false;
     if(graphOwnedAdaptivePlan.enabled){
         // The append counter is private adaptive scratch.
-        // The compiler owns its CopyDest -> UAV handoff before the retained Shadow Visibility callback, which still decides whether the adaptive producer runs.
+        // The compiler owns its CopyDest->UAV handoff before the Shadow Visibility callback, which still gates the adaptive producer.
         Core::GpuTaskSchedulingHint primitiveScheduling;
         primitiveScheduling.cost = Core::GpuTaskCostHint::Tiny;
         primitiveScheduling.forceSubmissionBoundary = false;
@@ -462,7 +462,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
 
 
     // Preparedness is established while Shadow Prepare records, after this graph is declared.
-    // The normal monolithic path begins with an unconditional all-lit clear: real shadow producers overwrite it, while a missing producer keeps the white fallback without a state bridge.
+    // The monolithic path opens with an all-lit clear: real producers overwrite it, a missing one keeps white with no state bridge.
     // Keep this Compute-native clear on the selected Compute packet with Shadow Visibility.
     Core::GpuTaskSchedulingHint allLitClearScheduling;
     allLitClearScheduling.cost = Core::GpuTaskCostHint::Tiny;

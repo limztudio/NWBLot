@@ -251,7 +251,7 @@ namespace GpuTaskGraphCompilerDetail{
             // Acceleration structures retain their whole-resource path.
             const bool alreadyPlannedByTask = resource.type == GpuGraphResourceType::AccelStruct && taskUseHistory.first(use.resource) < useIndex;
             if(alreadyPlannedByTask){
-                // The task thunk owns this local transition, but the declared final state/access must still source later tasks, packet seeds, ownership handoffs, and terminal exports.
+                // The thunk owns this local transition, but the declared final state still sources later tasks, seeds, handoffs, and exports.
                 // Do not emit another packet-boundary barrier for it here.
                 if(!resourceHistory.append(TrackedCompiledResourceState{ .resource = use.resource, .range = (*plannedRange), .task = taskID, .state = use.requiredState, .access = use.access, .queue = compiledTask.queue, }))
                     return false;
@@ -300,13 +300,11 @@ namespace GpuTaskGraphCompilerDetail{
                     }
                     const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
                     const bool hasInitialOwnerStateSeed = !previousState && initialOwnerHandoffSource != nullptr;
-                    // An initial-owner handoff opens the packet with its immutable producer snapshot, which materializes the authoritative native starting state.
-                    // A known graph initial state still needs an explicit marker after the acquire: it can differ from that snapshot and can be a no-op transition whose declared state must survive.
+                    // A handoff opens the packet from its immutable producer snapshot. A known initial state still needs a marker: it may differ, even as a no-op.
                     const bool materializesGraphInitialState = !previousState && resource.initialState != ResourceStates::Unknown;
                     const bool requiresExplicitInitialStateSource = !previousState && !hasInitialOwnerStateSeed && resource.hasBackendResource && resource.initialState == ResourceStates::Unknown && IsReadAccess(use.access);
                     if(!previousState && initialOwnerHandoffSource){
-                        // The descriptor's one selected source has already been proven to cover this fragment.
-                        // Emit only the unseeded fragment range so its immutable snapshot does not overwrite a graph-internal producer's adjacent subresources during packet fan-in.
+                        // Emit only the unseeded fragment so the snapshot never overwrites an internal producer's neighbors at fan-in.
                         if(!AppendCompiledOwnershipTransfer(plan, resource, fragment.range, GpuTaskId{}, taskID, initialOwnerHandoffSource->sourceQueue, compiledTask.queue, GpuOwnershipTransferRoute::ExternalImport))
                             return false;
                         compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{

@@ -10,7 +10,7 @@
 
 
 // Smoke-test-owned deferred lighting BXDF.
-// The engine provides scene-light and visibility/caustic transport, while this project asset owns its BRDF, light loop, and tone-map policy for both deferred and AVBOIT dispatches.
+// The engine provides lights and visibility/caustic transport; this asset owns BRDF, light loop, and tone-map for both paths.
 static const half NWB_SMOKE_LAMBERT_TONEMAP_KNEE = 0.65h;
 static const half NWB_SMOKE_LAMBERT_RIM_EXPONENT = 3.0h;
 static const half NWB_SMOKE_LAMBERT_PRIMARY_SPECULAR_EXPONENT = 72.0h;

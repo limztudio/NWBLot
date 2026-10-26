@@ -178,7 +178,7 @@ bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
         }
     }
     // The selected typed handles stay in sourceCandidate through fan-in.
-    // Release the temporary selection before fan-in reuses the same scratch arena, so repeated operations reclaim every selection allocation in LIFO order.
+    // Release the temporary selection before fan-in reuses the scratch arena, so repeats reclaim in LIFO order.
     if(retainedStates){
         const CommandListResourceStateHandoff* const branches[] = { &sourceCandidate.m_states };
         if(!outCandidate.m_states.buildFanIn(*retainedStates, branches, LengthOf(branches), scratchArena))

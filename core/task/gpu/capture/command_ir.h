@@ -539,7 +539,7 @@ public:
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
 
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
-    // A non-empty capture belongs to exactly one native recording attempt, even when the graph and compiler plan remain unchanged across a rejected retry.
+    // A non-empty capture belongs to one recording attempt, even when graph and plan survive a rejected retry.
     [[nodiscard]] bool beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
     [[nodiscard]] BinaryByteView commandBytes()const;
     [[nodiscard]] Expected<GpuCommandIrOwnedStream> exportOwned(GraphicsArena& arena)const;

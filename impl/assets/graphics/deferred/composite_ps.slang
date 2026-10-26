@@ -39,7 +39,7 @@ struct NwbDeferredCompositePixelOutput{
 
 
 // Surface images commonly expose ColorAttachment and sampled usage but not storage writes.
-// Composite math therefore runs in composite_cs on AsyncCompute, while this tiny Graphics pass samples its linear result into the presentable framebuffer.
+// Composite math runs in composite_cs on AsyncCompute; this Graphics pass samples it for present.
 // SDR uses the attachment's sRGB conversion; HDR10 explicitly converts Rec.709 scene color to Rec.2020/PQ before writing its A2B10G10R10 surface.
 NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     const SamplerState sampler = nwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w);

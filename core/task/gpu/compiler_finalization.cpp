@@ -117,7 +117,7 @@ namespace GpuTaskGraphCompilerDetail{
             const bool performsFinalization = state.state != resource.externalFinalState || (hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue);
             if(performsFinalization){
                 // The selected terminal task owns the external transition/release for this exact fragment.
-                // Any earlier overlapping terminal user that was shadowed by it must finish before that operation; a matching state alone does not otherwise order concurrent read-only packets.
+                // A shadowed earlier terminal user must finish before that op; matching state alone never orders read-only packets.
                 for(usize earlierStateIndex = resourceHistory.first(resource.id); earlierStateIndex != Limit<usize>::s_Max && earlierStateIndex < terminalStateIndex; earlierStateIndex = resourceHistory.next(earlierStateIndex)){
                     const TrackedCompiledResourceState& earlierState = trackedResourceStates[earlierStateIndex];
                     if(!RangesOverlap(resource, earlierState.range, terminalRange))

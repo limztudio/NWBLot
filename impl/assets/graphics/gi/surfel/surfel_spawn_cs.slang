@@ -17,7 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This frame's hash, counters, and free-list are heap entries selected by the common push block. The aliases below keep the allocation logic uncluttered.
+// Hash, counters, and free-list are push-block heap entries. Aliases keep allocation logic clean.
 #define g_NwbSurfelCellHead g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
 #define g_NwbSurfelCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
 #define g_NwbSurfelFreeList g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.freeListHeapSlot]
@@ -116,7 +116,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // Pop a recycled id first (pushes stay quiescent this pass, so no underflow); else capped bump-alloc. On exhaustion release the claim for a later retry.
+    // Pop a recycled id first (no pushes this pass, so no underflow); else capped bump-alloc. Release on exhaustion.
     uint slot = 0u;
     bool allocated = false;
     {

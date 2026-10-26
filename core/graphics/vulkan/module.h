@@ -43,8 +43,7 @@ namespace ObjectTypes{
 class Device;
 typedef Handle<Device> DeviceHandle;
 
-// Canonical native queue construction identity.
-// Enumerate every VkDeviceQueueCreateInfo queue exactly once, including presentation-only queues; scheduler-visible queues reference these states by index.
+// Canonical native queue construction identity. Enumerate every queue once, presentation-only included.
 struct VulkanNativeQueueDesc{
     VkQueue queue = VK_NULL_HANDLE;
     u32 familyIndex = Limit<u32>::s_Max;
@@ -106,7 +105,7 @@ struct DeviceDesc{
     bool drawIndirectFirstInstanceFeatureEnabled = false;
     bool meshShaderFeatureEnabled = false;
     // Enabled feature-chain state for optional ray-tracing capabilities.
-    // Keep this distinct from extension-name presence so runtime feature queries do not advertise an extension whose required feature bit was not enabled.
+    // Distinct from extension-name presence, so queries never advertise an extension whose feature bit stayed off.
     bool accelerationStructureFeatureEnabled = false;
     bool rayTracingPipelineFeatureEnabled = false;
     bool rayQueryFeatureEnabled = false;

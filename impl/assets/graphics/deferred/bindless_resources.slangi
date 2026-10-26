@@ -12,7 +12,7 @@
 #include "../bindless/bindless_heap.slangi"
 
 
-// Matches DeferredBindlessResourceSlots exactly: eleven std140 uint4 lanes in one target-generation constant buffer. Uniform per fullscreen draw, so no NonUniformResourceIndex().
+// Matches the slots struct: eleven std140 uint4 lanes in one generation constant buffer. Uniform per draw.
 struct NwbDeferredBindlessResources{
     uint4 gbufferSlots;     // albedo, normal, world position, depth
     uint4 lightingSlots;    // shadow visibility array, caustic, surfel, sampler
@@ -27,7 +27,7 @@ struct NwbDeferredBindlessResources{
     uint4 refractionSlots1; // resolved radiance, foreground color/extinction, primary full entity identity SRVs
 };
 
-// Fullscreen and compute passes select this 176-byte payload from the global heap through push constants, keeping binding heap-only with no duplication.
+// Fullscreen/compute passes select this 176-byte payload via push constants; binding stays heap-only.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the global UniformBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbHeapDeferredBindlessResources[];

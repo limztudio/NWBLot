@@ -35,7 +35,7 @@ namespace CommandQueue{
     };
 };
 
-// Native recording names the backend queue owning the pool and timeline. IDs are scoped to one device generation; an invalid ID is never an ownership or retirement key.
+// Native recording names the pool/timeline owner queue. IDs scope to one device generation; invalid IDs never key ownership.
 struct GpuPhysicalQueueId{
     u16 index = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
@@ -54,7 +54,7 @@ inline constexpr bool operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysica
     return !(lhs == rhs);
 }
 
-// Completion edge from an accepted submission. `valid()` is false for rejected or empty work; a sync-only submission may still produce a token for dependency forwarding.
+// Completion edge from an accepted submission. False for rejected/empty work; sync-only submits may still forward a token.
 struct QueueSubmissionToken{
     u64 value = 0;
     u16 physicalQueueIndex = Limit<u16>::s_Max;
@@ -129,7 +129,7 @@ struct GpuPhysicalQueueTopology{
     usize queueCount = 0u;
 };
 
-// Current backend-native command storage for one physical queue. Snapshots sample thread-safe counters, so fields may advance during recording/submission.
+// Native command storage for one queue. Snapshots sample thread-safe counters, so fields may advance mid-query.
 // The storage estimate covers client-visible pool and command-buffer handles only, not opaque driver memory or wrapper capacity.
 struct GpuCommandArenaStatistics{
     u64 workerArenaCount = 0u;
@@ -176,7 +176,7 @@ public:
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
-// One recorded begin/end cycle. Query, queue, generation, and reset authorization together stop a stale command buffer from closing or revoking another cycle after reuse.
+// One begin/end cycle. Query, queue, generation, and reset authorization stop a reused buffer from closing another cycle.
 struct TimerQueryRecordingEndpoints{
     bool recordsBegin = false;
     bool recordsEnd = false;
@@ -254,9 +254,9 @@ public:
 };
 
 
-// Final tracked state of one primary list for the next to begin from (scheduler orders producer < consumer). Caller-owned lifetimes: refs stay alive until the consumer opens.
+// Final tracked state of one primary list for the next to begin from. Refs stay alive until the consumer opens.
 
-// It carries both transient and permanent state. UAV-barrier policy stays local to each command list; keepInitialState resources are captured after their close-time restore.
+// Carries transient and permanent state. UAV-barrier policy stays per-list; keepInitialState captures after close-time restore.
 // Before the producer is accepted, this handoff is the only valid cross-list source for that restored native state.
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
@@ -271,7 +271,7 @@ private:
         ArraySlice arraySlice = 0;
         ResourceStates::Mask state = ResourceStates::Unknown;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-        // An invalid ID means concurrently shared (or not yet claimed). Otherwise this is the native queue that last owned the resource; a valid release destination needs a paired acquire.
+        // Invalid ID means shared or unclaimed; otherwise the last owning queue. A valid release target needs a paired acquire.
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
     };
@@ -316,7 +316,7 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
 
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
-    // State snapshots retain raw backend-resource pointers. Preserve the producer Device identity so a stale snapshot is rejected before those pointers are used after recreation.
+    // Snapshots keep raw backend pointers. Keep the producer Device identity so stale snapshots reject after recreation.
     [[nodiscard]] bool validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
         return m_valid && deviceGeneration != 0u && m_deviceGeneration == deviceGeneration;
     }
@@ -335,8 +335,7 @@ public:
     [[nodiscard]] bool buildTextureRangeSubset(const CommandListResourceStateHandoff& source, Texture* texture, TextureSubresourceSet subresources);
     // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges.
     [[nodiscard]] bool buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
-    // Imported exclusive-owner texture handoffs must provide one concrete state for every selected subresource.
-    // Verify exact coverage before a graph lowers its paired acquire, including the source owner and (when distinct) the release destination from the producer's state tracker.
+    // Imported exclusive-owner texture handoffs need one concrete state per selected subresource, with source owner and release target checked.
     [[nodiscard]] bool coversTextureRangeWithOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue)const noexcept;
     // Buffer ownership must cover every byte in the requested range; unrelated intervals may have different owners.
     [[nodiscard]] bool coversBufferWithOwnership(Buffer* buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const noexcept;
@@ -346,7 +345,7 @@ public:
     // Compares immutable snapshot contents rather than the address of a producer-owned snapshot.
     // This is suitable for declaration deduplication across producer-storage retirement and same-address allocator reuse.
     [[nodiscard]] bool equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept;
-    // Exchanges complete snapshot storage without allocating. Both snapshots must use the same arena so each vector stays paired with the allocator that owns storage after the exchange.
+    // Swaps snapshot storage with no alloc. Both snapshots must share one arena.
     [[nodiscard]] bool exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
     [[nodiscard]] bool hasPendingBufferReleases()const noexcept;
     [[nodiscard]] bool empty()const noexcept;

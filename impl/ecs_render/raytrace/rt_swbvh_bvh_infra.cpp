@@ -198,7 +198,7 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     const NotNull<Core::Buffer*> keysBuffer(m_rayTracingState.m_bvhSortKeysBuffer.get());
     const NotNull<Core::Buffer*> payloadBuffer(m_rayTracingState.m_bvhSortPayloadBuffer.get());
 
-    // Sort scratch is allocated for the maximum mesh size. Fence only this dispatch's padded lanes, including sentinel entries that participate in the sorting network.
+    // Sort scratch fits the max mesh. Fence only this dispatch's padded lanes, sentinels included.
     const Core::BufferRange sortRange(0u, static_cast<u64>(paddedCount) * sizeof(u32));
     commandList.setEnableUavBarriersForBuffer(keysBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer.get(), true);

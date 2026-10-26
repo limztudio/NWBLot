@@ -34,7 +34,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.shadowVisibilityFormat)
         .setIsUAV(true)
-        // The graph-owned lagged-history copy may run on a dedicated Transfer family after the graphics/compute producers finish. Keep all three transports shareable rather than aliases.
+        // The lagged-history copy may run on Transfer after producers finish. Keep all three transports shareable.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/shadow/visibility")
     ;
     auto shadowVisibilityResult = m_graphics.createTexture(visibilityDesc);

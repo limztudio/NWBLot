@@ -56,7 +56,7 @@ namespace ECSRenderDetail{
 struct OpaqueCsgReceiverComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The material system, the frame targets, the timing-ticket slot, and the setup readiness flags are required: the receiver emulation always generates against this frame's bindings.
+    // All bindings required: the receiver emulation always generates against this frame's bindings.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;
@@ -88,7 +88,7 @@ public:
 struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The runtime, material system, targets, ticket slot, setup flags, and CSG timing slot are required: emulation always brackets its dispatch with the frame timing.
+    // All bindings required: emulation always brackets its dispatch with the frame timing.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;

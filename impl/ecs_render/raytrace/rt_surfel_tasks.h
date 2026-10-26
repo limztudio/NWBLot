@@ -154,7 +154,7 @@ public:
             }
             return false;
         }
-        // The timestamp endpoint follows in the remaining-GI callback, but this callback's nested marker must close before the packet recorder advances to the graph-owned cell-head clear task.
+        // The endpoint follows in the remaining-GI callback, but this nested marker must close before the recorder advances.
         if(payload.asyncTiming.has_value() && !Core::FinishSplitGpuTimingMarker(&payload.asyncTiming))
             return false;
         return true;

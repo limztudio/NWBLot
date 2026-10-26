@@ -35,7 +35,7 @@ struct MeshletTriangleData{
     u32 positions[s_MeshletTriangleIndexCount] = {};
 };
 
-// CPU cook-scratch record kept for every triangle. It stays in memory, so it uses Float storage; the scoring callers load it into MeshletTriangleVectors.
+// Cook-scratch record per triangle. Stays in memory, so Float storage; callers load it into vectors.
 struct MeshletTriangleCalculation{
     Float4 positions[s_MeshletTriangleIndexCount];
     Float4 centroid;

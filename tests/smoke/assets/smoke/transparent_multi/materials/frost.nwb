@@ -2,7 +2,7 @@ material asset;
 
 // Heterogeneous-interface regression asset.
 // Second surface-authored material in transparent_multi using a distinct interface (frost_surface.bind).
-// Cooking with two distinct .bind interfaces exercises the dispatch's per-interface namespace isolation + the multi-interface dependency path (the cook would otherwise collide/abort).
+// Two distinct .bind interfaces exercise per-interface namespace isolation and the multi-interface path (else collide/abort).
 // Intentionally NOT instantiated by the scene -- its coverage is at cook time, so do not delete it as "unused".
 asset.interface = "project/shaders/frost_surface.bind";
 asset.surface = "project/shaders/frost.surface";

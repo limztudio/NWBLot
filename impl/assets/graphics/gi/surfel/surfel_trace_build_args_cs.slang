@@ -25,7 +25,7 @@
         return;
     const uint bumpTop = g_NwbSurfelBuildArgsCounter[NWB_SURFEL_COUNTER_BUMP_TOP];
     const uint divisor = max(uint(g_NwbSurfelBuildArgsConstants.hashPoolFrameDivisor.w), 1u);
-    // ceil(BUMP_TOP / divisor). Indirect dispatch is not CPU-validated against the device limit, so poolCapacity must stay <= maxComputeWorkGroupCount[0] (>= 65535; default pool is 16384).
+    // poolCapacity must stay <= maxComputeWorkGroupCount[0] (>= 65535; default pool is 16384).
     const uint groups = (bumpTop + divisor - 1u) / divisor;
     g_NwbSurfelBuildArgsOutput[NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_X] = groups;
     g_NwbSurfelBuildArgsOutput[NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_Y] = 1u;

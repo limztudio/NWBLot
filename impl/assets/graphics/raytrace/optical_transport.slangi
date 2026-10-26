@@ -15,11 +15,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The consuming effect supplies terminal illumination. This walker owns neither project selection nor environment assets, reflection outputs, screen caches, or statistics buffers.
+// The effect supplies terminal illumination. The walker owns no project/environment/output/cache/stats state.
 half3 nwbOpticalSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection);
 half3 nwbOpticalEnvironmentRadiance(const float3 direction);
 
-// Reserve one query budget unit before each receiver collection; topology validation or full cutter coverage may reject before issuing a query. Ordinary scenes compile out both lists.
+// Reserve one budget unit before each receiver collection; validation/coverage may reject first. Ordinary scenes drop both lists.
 bool nwbOpticalClosestSurfaceHit(
     const NwbOpticalTraceConfig config,
     const float3 origin,
@@ -73,7 +73,7 @@ bool nwbOpticalClosestSurfaceHit(
     return true;
 }
 
-// Resolve ties around the nearest boundary before changing membership. One committed hit cannot reveal coincident volumes, so a second bounded query is needed. Shared boundaries removed.
+// Resolve ties around the nearest boundary first. One hit cannot reveal coincident volumes, so a second bounded query is needed.
 bool nwbOpticalCheckBoundary(
     const NwbOpticalTraceConfig config,
     const float3 origin,
@@ -199,7 +199,7 @@ bool nwbOpticalCheckBoundary(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is an omitted branch; TIR keeps membership. No tree escapes the budget; miss adds no env.
+// One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is omitted; TIR keeps membership.
 NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const float3 initialOrigin, const float3 initialDirection){
     NwbOpticalTraceResult result = (NwbOpticalTraceResult)0;
     result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;

@@ -22,7 +22,7 @@ NWB_CORE_BEGIN
 
 
 // One absolute device-timestamp range proven comparable across submissions.
-// Queue indices may differ, but every range retains its device generation and exact tick period so consumers can reject stale data before conversion to seconds.
+// Ranges keep device generation and tick period, so consumers reject stale data before converting to seconds.
 struct GpuComparableTimestampRange{
     u64 beginTicks = 0u;
     u64 endTicks = 0u;

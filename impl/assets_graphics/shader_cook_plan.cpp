@@ -398,7 +398,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         if(!materialDependency)
             return MakeUnexpected(Failure{});
         preparedEntry.materialTypedBindingInterface = materialDependency->interfaceName;
-        // Pixel/compute/rgen stages that read the typed .bind (surface hook, incl. the shadow dispatch) receive it when depending on a material interface; the generic mesh shader stays interface-free.
+        // Typed-.bind readers get the hook via interface deps; the generic mesh shader stays interface-free.
         const AStringView preparedEntryArchiveStage = preparedEntry.entry.archiveStage;
         const bool preparedEntryStageReadsTypedMaterial =
             preparedEntryArchiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)

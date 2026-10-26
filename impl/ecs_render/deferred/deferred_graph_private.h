@@ -39,7 +39,7 @@ template<typename Record>
     return record(deferredSystem, targets, commandList);
 }
 
-// The payload overload needs reference bindings: the deferred system, frame targets, and timing ticket are always bound at declaration; missing bindings fail at declaration.
+// The payload overload takes references: deferred system, frame targets, timing ticket; missing bindings fail.
 template<typename Payload, typename Record>
 [[nodiscard]] bool RecordDeferredGraphTask(const Payload& payload, Core::CommandList& commandList, Record&& record)noexcept(noexcept(RecordDeferredGraphTask(payload.deferredSystem, payload.targets, payload.timingTicket, commandList, Forward<Record>(record)))){
     return RecordDeferredGraphTask(payload.deferredSystem, payload.targets, payload.timingTicket, commandList, Forward<Record>(record));

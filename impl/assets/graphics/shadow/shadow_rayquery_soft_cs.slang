@@ -68,7 +68,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // The deferred vector attachments are RGBA16F. Keep the half payload through the fetch and expand only for the ray origin/normal calculations, which must remain FP32 for stable soft-shadow tracing.
+    // Vector attachments are RGBA16F. Keep half through fetch; expand only for FP32 origin/normal math.
     const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.worldPositionSlot).Load(texel).xyz);
     const half3 normalSample = half3(nwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.normalSlot).Load(texel).xyz);
     const float3 worldPosition = float3(worldPositionSample);
@@ -77,7 +77,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float slot = g_NwbSceneLights[i].params.z;
         if(slot < 0.0)
             continue;
-        // Opaque-only jittered samples (per pixel/frame/sample decorrelated); averaging the runtime budget yields the 0..1 coverage the resolve needs. Temporal accumulation carries sampling across frames.
+        // Jittered opaque samples, decorrelated per pixel/frame/sample; averaging the budget gives 0..1 coverage for resolve.
         half3 accum = half3(0.0h, 0.0h, 0.0h);
         [loop] for(uint s = 0u; s < sampleCount; ++s){
             const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbShadowRqSoftPushConstants.frameIndex * NWB_SW_SHADOW_SOFT_SPP + s);

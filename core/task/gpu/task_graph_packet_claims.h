@@ -99,7 +99,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A packet claim is an opaque runtime capability. Only the recorder that acquired it can invoke task thunks, complete native recording, or abandon that exact packet attempt.
+// A packet claim is an opaque capability. Only its acquiring recorder runs thunks, completes, or abandons that attempt.
 class GpuPacketRecordingLease final : NoCopy{
     friend class GpuTaskGraph;
     friend class GpuPacketRecordingAccess;
@@ -141,7 +141,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Authenticates one exact recording claim once, then carries the lexical graph/plan read proof through preflight and barrier/state lowering without repeatedly taking the lifecycle mutex.
+// Checks one recording claim once, then carries the read proof through preflight and lowering without retaking the mutex.
 class GpuPacketRecordingAccess final : NoCopy{
     friend class GpuTaskGraph;
     friend class GpuNativePacketRecorder;
@@ -170,7 +170,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Native submission has the same exclusive ownership rule as recording: cancellation cannot discard payload while Device owns the packet in execute, and only the transaction resolves it.
+// Submission shares recording's exclusive rule: no discard while Device owns the packet; only the transaction resolves it.
 class GpuPacketSubmissionLease final : NoCopy{
     friend class GpuTaskGraph;
     friend class GpuGraphSubmissionTransaction;

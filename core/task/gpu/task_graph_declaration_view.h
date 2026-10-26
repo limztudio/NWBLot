@@ -78,7 +78,7 @@ struct GpuTaskGraphResourceView{
     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     GpuExternalCompletionId initialAvailabilityCompletion;
-    // Typed resource imports own an exact copy of the backend's immutable physical admission facts. Metadata-only resources have no snapshot and retain the logical queue-sharing resolver.
+    // Typed imports copy the backend's admission facts. Metadata-only resources have no snapshot.
     ResourceQueueAdmissionSnapshot queueAdmission;
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
@@ -122,7 +122,7 @@ struct GpuTaskGraphExternalCompletionView{
     QueueSubmissionToken token;
 };
 
-// Graph-declared presentation completion: retained backbuffer in Unknown/Present, exported to Present only. Users reach the producer on its exact queue; producers may skip use for publish.
+// Graph-declared present completion: backbuffer retained in Unknown/Present, exported to Present only.
 struct GpuPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;
@@ -138,7 +138,7 @@ struct GpuTaskGraphTelemetryOptions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Lexical proof that immutable declaration storage cannot be reset or mutated. Compiler/tooling callers acquire a waiting view before any other operation gate.
+// Lexical proof that declaration storage cannot reset or mutate. Compiler/tooling callers wait for a view first.
 class GpuTaskGraphDeclarationReadView final : NoCopy{
     friend class GpuCompiledGraph::ReadView;
     friend class GpuTaskGraph;

@@ -136,7 +136,7 @@ public:
     [[nodiscard]] bool prepareMeshComputeBindingLayout();
     [[nodiscard]] bool createComputeEmulationResources();
     [[nodiscard]] bool createObjectGeometryPipelineResources(MaterialPipelineResources& resources);
-    // Graph-owned draw streams are already gathered, patched, and uploaded before native recording. This consumer deliberately performs no mutable mesh-view or material/CSG buffer updates.
+    // Draw streams are gathered and uploaded before recording. This consumer performs no mesh/material updates.
     void renderPreparedMaterialPass(
         Core::CommandList& commandList,
         Core::Framebuffer* framebuffer,
@@ -152,11 +152,11 @@ public:
         bool materialFrameStatesGraphOwned = false,
         // The graph can also retain the per-mesh source buffer batch selected by the prepared draw stream.
         bool materialGeometryStatesGraphOwned = false,
-        // An immediately preceding graph task generated every regular emulation output. Consume those buffers as Combined vertex/index inputs instead of replaying the local UAV bridge.
+        // A preceding task generated every regular emulation output. Consume them as Combined inputs, not via the local bridge.
         bool emulationOutputEntryStateGraphOwned = false,
         // The producer opens this established pass measure before its dispatches; the prepared raster closes it.
         // A missing measure means the producer intentionally no-op'd, so this consumer must not raster stale data.
-        // AVBOIT may instead freeze a CSG-only alias-free producer. Keep this separate from the regular handoff so a mixed CSG stream cannot suppress its local dispatch/raster interleaving.
+        // AVBOIT may instead freeze a CSG-only alias-free producer. Keep it separate so mixed CSG keeps its interleaving.
         bool csgEmulationOutputEntryStateGraphOwned = false,
         // A matching earlier producer permits raster timing independent of this pass.
         bool emulationOutputReused = false,
@@ -225,7 +225,7 @@ public:
     [[nodiscard]] bool recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem);
     // Graph-only producer half. The graph owns generated output UAV states; this method records only the dispatch.
     void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
-    // Graph-only raster half. The graph must provide each generated output in combined vertex/index state; this records graphics state, heap, push constants, and draws with no transition.
+    // Graph-only raster half. The graph provides each output Combined; this records state, heap, push constants, draws.
     void renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
     // Per-draw generation and rasterization retain the local UAV-to-vertex/index handoff when outputs alias.
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
@@ -235,7 +235,7 @@ public:
     [[nodiscard]] bool materialPassDrawBuffersReady(Span<const InstanceGpuData> instanceData, Span<const u8> materialTypedBytes)const noexcept;
     [[nodiscard]] bool materialPassDrawBuffersReady(usize instanceCount, usize materialTypedByteCount)const noexcept;
     [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const noexcept;
-    // The CSG context descriptor is selected through every instance's heap-slot lane. Graph declaration patches the upload copy before the packet is recorded so every phase keeps the same ABI.
+    // The CSG context descriptor is selected per instance heap-slot lane. Declaration patches the copy before recording.
     void prepareMaterialPassInstanceUploadData(const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, Span<InstanceGpuData> instanceData)noexcept;
     [[nodiscard]] bool prepareMaterialPassResourceBindingsImpl(Span<const MaterialPassDrawItem> drawItems, bool computeEmulation)noexcept;
 

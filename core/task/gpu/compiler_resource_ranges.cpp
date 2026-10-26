@@ -30,7 +30,7 @@ namespace GpuTaskGraphCompilerDetail{
     return access == GpuTaskResourceAccess::Write || access == GpuTaskResourceAccess::ReadWrite;
 }
 
-// Typed imports retain the physical Texture descriptor, so compile-time state planning must use the same finite subresource extent as native recording.
+// Typed imports keep the Texture descriptor, so planning uses the same finite subresource extent as recording.
 // Metadata-only texture declarations intentionally remain symbolic: their dimensions are not known until a later backend import.
 [[nodiscard]] Expected<GpuTaskResourceRange> ResolveTextureRangeForPlanning(const Texture* const texture, const GpuTaskResourceRange& range)noexcept{
     GpuTaskResourceRange result = range;
@@ -163,8 +163,7 @@ static void AppendResourceRangeRemainder(const ResourceRangeBounds& outer, const
     }
 }
 
-// One task owns transitions between its own commands, but only for subresources it declared earlier in that task.
-// A later overlapping range can introduce untouched cells, which still need the packet-boundary state source or declared initial state before recording begins.
+// One task owns transitions between its own declared subresources. Later ranges may add untouched cells needing a boundary source or initial state.
 [[nodiscard]] bool CollectResourceFirstUseRangesWithinTask(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
@@ -337,8 +336,7 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
     return true;
 }
 
-// Terminal graph-to-external exports have no one requested range.
-// Subtract the union of every later declared resource state from each earlier range, leaving only the portions whose final state snapshot still belongs to that earlier task.
+// Terminal exports have no single requested range. Subtract later declared states from each earlier range, keeping only its surviving portions.
 // This uses the same symbolic interval/rectangle partition as inter-task consumer fan-in.
 [[nodiscard]] bool CollectTerminalResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,

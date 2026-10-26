@@ -433,7 +433,7 @@ bool Material::loadBinary(const Span<const u8> binary){
     }
     candidate.m_surfaceDispatchId = *surfaceDispatchIdResult;
 
-    // Optional per-material AVBOIT pixel shaders (transparent materials only): accumulate, occupancy, extinction, each a presence flag plus shader name hash.
+    // Per-material AVBOIT shaders (transparent only): accumulate, occupancy, extinction as flag plus hash.
     const auto readOptionalAvboitPixelShader = [&](const TStringView passLabel) -> Expected<Core::Assets::AssetRef<PixelShader>>{
         u32 hasShader = 0u;
         const auto hasShaderResult = ReadPOD<u32>(binary, cursor);

@@ -12,7 +12,7 @@
 #include "pixel_input.slangi"
 #include "../common/math.slangi"
 
-// Every material pixel shader uses the same heap-backed frame buffers as its mesh/compute producer. Trace and cap-fill paths establish their own material-context route first.
+// Every material pixel shader shares its producer's heap-backed frame buffers. Trace/cap-fill paths set their own context first.
 #include "bindless_heap_mesh.slangi"
 
 
@@ -105,7 +105,7 @@ struct NwbMeshGBufferDrawConstants{
 uint nwbMeshShadingModelId(){
     return (g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
 }
-// The pixel stage reads the same per-draw push constant the mesh stage saw, so a surface hook can load typed .bind constants per-pixel via instance index + byte offset, like mesh runtime.
+// The pixel stage sees the same per-draw push constant as the mesh stage, so surface hooks load typed constants per-pixel like mesh runtime.
 uint nwbMeshInstanceIndex(){
     return g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
 }
@@ -126,12 +126,12 @@ uint nwbMeshFrameViewHeapSlot(){
 }
 #endif
 
-// Material hooks receive the camera-to-surface ray through the same view buffer in every pass. Keep orientation explicit: BXDF view vectors are surface-to-camera, this is incident.
+// Material hooks get the camera-to-surface ray via the shared view buffer. BXDF views are surface-to-camera; this is incident.
 float3 nwbMeshCameraToSurfaceDirection(const float3 worldPosition){
     return nwbSafeNormalize(worldPosition - g_NwbMeshCameraPosition.xyz, float3(0.0, 0.0, 1.0));
 }
 
-// G-buffer write: first three targets smuggle shading-model id + two material BXDF params in their alphas (lighting unpacks them); fourth target carries sanitized F0 + roughness.
+// G-buffer write: first three targets pack model id + two BXDF params in alphas; fourth carries F0 + roughness.
 void nwbWriteMeshGBufferParams(half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1, half4 specularRoughness){
     outGBufferBaseColor = half4(clamp(baseColor, half3(0.0h), half3(1.0h)), half(nwbMeshShadingModelId()));
     outGBufferNormal = half4(nwbGBufferEncodeNormal(normal), half(param0));

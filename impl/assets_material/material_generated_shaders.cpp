@@ -238,7 +238,7 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
             return MakeUnexpected(Failure{});
         }
 
-        // Record the generated PS identity so the CSG clip-variant collector can give it AVBOIT CSG clip variants and the renderer can bind it for the transparent draw, both keyed by the SAME name.
+        // Record the PS identity so the clip collector and the transparent draw share the SAME key.
         (entry.*entryShaderNameField).assign(AStringView(generated.name));
 
         generatedShaders.push_back(Move(generated));

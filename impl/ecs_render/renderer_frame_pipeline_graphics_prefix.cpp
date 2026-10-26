@@ -225,7 +225,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.csgResources = csgResources;
 
     const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
-    // G-buffer and the opaque CSG follow-up both declare the shared material entry batch whenever their stream exists. The selected source-geometry batch is retained and declared below.
+    // G-buffer and the opaque CSG follow-up declare the shared material entry batch. The source-geometry batch is retained below.
     gbufferPayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
     OpaqueUploadChainBuilder opaqueUploadChainBuilder(m_deferredLightingTaskGraph, m_materialSystem, m_csgSystem);
     auto opaqueUploadChainResult = opaqueUploadChainBuilder.declare(
@@ -276,7 +276,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     opaqueCsgIntervalStage.capturePayloads(frameBindings, csgResources, opaqueDrawItems, csgFrameData, instanceData.size(), materialTypedBytes.size(), gbufferPayload.materialDrawBuffersUploaded, gbufferPayload.csgFrameBuffersUploaded, hasOpaqueDrawItems, hasOpaqueCsgFrameWork);
 
 
-    // The G-buffer produces peel/event images, span build consumes its aliases and publishes spans, Combine consumes the aliases and publishes removed-interval images, then Sample takes them.
+    // G-buffer makes peel/event images; span build publishes spans; Combine publishes removed-interval images; Sample takes them.
     // Their native thunks consume graph-owned StorageImage state without staging target transitions.
 
     // The semantic opaque-CSG flag admits this clear before native readiness checks.
@@ -361,8 +361,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
 
 
-    // A generated-vertex buffer is persistent per mesh, so pulling every compute dispatch ahead of raster would be wrong when multiple frozen draw items select the same output.
-    // The plan deliberately enables only the fully alias-free regular opaque case; all other streams keep their established local interleaved handoff.
+    // Generated-vertex buffers persist per mesh, so only the alias-free regular opaque case hoists compute ahead of raster.
     ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload opaqueComputeEmulationPayload{
         m_arena,
         m_materialSystem,
@@ -473,8 +472,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         gbufferResourceUses.push_back(ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     }
     if(hasOpaqueCsgFrameWork){
-        // Peel payloads and receiver-event entries never load their prior values.
-        // Their paired interval ID and event count preserve the sparse-write validity contract after the preceding explicit clears, so only those two resources require ReadWrite access.
+        // Payloads and events never load priors. Interval ID + event count keep sparse-write validity after clears; only they need ReadWrite.
         // Keeping the payloads write-only also permits their first graph use to begin at a fresh texture's native Unknown state.
         gbufferResourceUses.push_back(WriteTextureUse(resources.csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
         gbufferResourceUses.push_back(WriteTextureUse(resources.csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
@@ -591,8 +589,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferScheduling.mergeWithPrevious = true;
 
 
-    // The producer is an explicit immediate predecessor.
-    // Preserve its compiler-owned UAV-to-vertex/index handoff inside the existing primary-Graphics packet even when FrontierSafe sees an earlier cross-queue consumer.
+    // Explicit immediate predecessor. Keep its UAV-to-vertex/index handoff in the primary-Graphics packet despite cross-queue consumers.
     gbufferScheduling.allowMergeAcrossConsumerFrontier = opaqueComputeEmulationOutputStatesGraphOwned || opaqueSharedComputeEmulationOutputStatesGraphOwned || opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned;
     Core::GpuTaskDesc gbufferDesc;
     gbufferDesc
@@ -603,7 +600,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         .setResourceUses(gbufferResourceUses.data(), gbufferResourceUses.size())
         .setResourceSetUses(gbufferMaterialResourceSetUseCount != 0u ? gbufferMaterialResourceSetUses : nullptr, gbufferMaterialResourceSetUseCount)
     ;
-    // The shared-output successors are declared after G-buffer has moved its payload into the graph. Keep their frozen readiness/state bits by value instead of reading a moved payload below.
+    // Successors declare after G-buffer moves its payload. Keep frozen readiness/state bits by value, not from the moved payload.
     const bool opaqueSharedMaterialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
     const bool opaqueSharedMaterialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned;
     const bool opaqueSharedMaterialGeometryStatesGraphOwned = gbufferPayload.materialGeometryStatesGraphOwned;

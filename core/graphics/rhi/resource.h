@@ -71,7 +71,7 @@ struct StagingTextureMapping{
 };
 
 
-// Sharing intent for multi-transport resources. Never exposes queue-family indices; a requested set becomes concurrent sharing only for the distinct families the device created.
+// Sharing intent for multi-transport resources. Hides family indices; a set becomes concurrent sharing only for created families.
 namespace ResourceQueueSharing{
     static constexpr u8 s_ResourceQueueSharingExclusiveBase = 0;
 
@@ -185,7 +185,7 @@ struct TextureDesc{
 
     bool useClearValue = false;
 
-    // If keepInitialState is true, command lists restore each used subresource to initialState before close. The state is known only after submit; earlier consumers must import the handoff.
+    // keepInitialState restores each used subresource to initialState before close. Known only after submit; earlier consumers import the handoff.
     bool keepInitialState = false;
 
 

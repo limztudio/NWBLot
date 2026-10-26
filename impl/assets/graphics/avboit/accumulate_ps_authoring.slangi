@@ -169,7 +169,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     output.accumExtinction = float4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
     output.foregroundColor = float4(0.0);
     output.foregroundExtinction = float4(0.0);
-    // Preserve foreground transparency at its camera pixel. Background resolves separately through the bent path; a cleared capture depth leaves ordinary AVBOIT outputs unchanged.
+    // Preserve foreground transparency at its camera pixel. Background resolves via the bent path separately.
     if(refractionDepth < NWB_SCENE_BACKGROUND_DEPTH && input.position.z < refractionDepth){
         output.foregroundColor = output.accumColor;
         output.foregroundExtinction = output.accumExtinction;

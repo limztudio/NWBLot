@@ -53,7 +53,7 @@ struct NwbCsgSample{
     float3 normal;
 };
 
-// Receiver ranges and cutters are persistent CSG context buffers. Slots are uniform per draw/dispatch, so these aliases use ordinary indexing, not NonUniformResourceIndex().
+// Ranges/cutters are persistent CSG buffers. Slots are uniform per draw/dispatch, so plain indexing.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed views of the global StorageBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> g_NwbHeapCsgReceiverRangeBuffers[];
@@ -99,7 +99,7 @@ uint nwbCsgMeshInstanceIndex(){
 #endif
 }
 
-// All CSG consumers select context from the global heap. Mesh stages inherit it from the receiver record; pixel-only variants use the unused push lane; variants provide the heap slot.
+// All consumers select context from the heap. Mesh stages inherit it; pixel-only variants use the spare push lane.
 uint nwbCsgContextHeapSlot(){
 #if defined(NWB_CSG_CONTEXT_HEAP_SLOT)
     return NWB_CSG_CONTEXT_HEAP_SLOT;

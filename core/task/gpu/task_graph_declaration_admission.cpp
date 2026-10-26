@@ -70,7 +70,7 @@ GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(const GpuTaskGr
 }
 
 void GpuTaskGraphDeclarationReadView::acquire(const GpuTaskGraph& graph)noexcept{
-    // Try-admission reads lifecycle state only; an unpublished mutation observes the read count and rejects first, so neither path waits back on the turnstile.
+    // Try-admission reads lifecycle state only; unpublished mutation rejects first, so neither path waits on the other.
     NothrowScopedLock lock(graph.m_lifecycleMutex);
     if(graph.m_teardownInProgress || graph.m_activeDeclarationAccessCount == Limit<u32>::s_Max || graph.m_activeDeclarationReadCount == Limit<u32>::s_Max || graph.m_activeDeclarationAccessCount != graph.m_activeDeclarationReadCount)
         return;

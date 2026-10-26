@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Always-active terminal leaf for violated invariants that no NWB_FATAL_ASSERT reports first; NWB_ASSERT alone is not enough because it is empty in opt/fin.
+// Always-active terminal leaf for invariants no NWB_FATAL_ASSERT reports; NWB_ASSERT is empty in opt/fin.
 [[noreturn]] inline void TerminateInvariant()noexcept{
     std::abort();
 }

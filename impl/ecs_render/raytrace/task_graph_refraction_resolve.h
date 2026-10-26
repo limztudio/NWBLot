@@ -120,7 +120,7 @@ struct RefractionResolveGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     // The raytracing system and the frame targets are required: the resolve always records against this frame's targets.
-    // The readiness flag and dispatch latches stay optional: the screen fallback route declares no hardware preparation, and only the traced route publishes a dispatch diagnostic.
+    // Readiness and latches stay optional: screen fallback declares no HW prep; only the traced route publishes diagnostics.
     struct Payload{
         RendererRayTracingSystem& system;
         const DeferredFrameTargets& targets;
@@ -135,7 +135,7 @@ public:
     static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         RayTracingRefractionGraphResources resources = payload.resources;
         if(resources.usesHardwareTrace && (!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)){
-            // Shared preparation can accept a nonfatal TLAS miss. Use the prepared screen pipeline, whose inputs are a subset of this task's declared resources, instead of tracing a stale/unbuilt TLAS.
+            // A nonfatal TLAS miss still accepts. Use the screen pipeline (its inputs subset this task's) instead of a stale TLAS.
             resources.pipeline = resources.screenFallbackPipeline;
             resources.densePipeline = resources.denseScreenFallbackPipeline;
             resources.usesHardwareTrace = false;
@@ -146,7 +146,7 @@ public:
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        // Only an accepted packet may publish a dispatch diagnostic. Rejected recording retries leave the latch untouched, and the resource-selection/recording path stays free of renderer state.
+        // Only an accepted packet publishes diagnostics. Rejected retries leave the latch; selection/recording stays stateless.
         const bool usedHardware = payload.resources.usesHardwareTrace && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         if(usedHardware)
             payload.system.confirmRayTraceContextReadSubmission(token);

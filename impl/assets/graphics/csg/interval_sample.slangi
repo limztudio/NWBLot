@@ -82,7 +82,7 @@ void nwbCsgMarkReceiverSurfaceEvent(const float4 rasterPosition, const float3 wo
 
     uint eventIndex;
     InterlockedAdd(g_NwbCsgReceiverEventCount[uint3(pixel, 0u)], 1u, eventIndex);
-    // Overflow is derived downstream from (count > layerCount); the running count keeps incrementing past the storable layer budget, so no separate overflow flag is needed.
+    // Overflow derives downstream from (count > layerCount); the count keeps incrementing, so no flag needed.
     if(eventIndex >= layerCount)
         return;
 
@@ -179,7 +179,7 @@ bool nwbCsgReceiverIntervalPixelDiscard(const float4 rasterPosition, const uint 
 
     const uint2 pixel = uint2(pixelInt);
     const float receiverLinearDepth = length(worldPosition - g_NwbMeshCameraPosition.xyz);
-    // Use only the stable world-scaled tolerance. A screen-space fwidth() term becomes unstable at cut rims and grazing angles, pulsing the accept band frame-to-frame as the mesh animates.
+    // Use only world-scaled tolerance. Screen-space fwidth goes unstable at rims/grazing, pulsing the band per frame.
     const float linearDepthTolerance = abs(worldDistanceTolerance) * NWB_CSG_RECEIVER_INTERVAL_LINEAR_DEPTH_TOLERANCE_SCALE;
     if(nwbCsgReceiverRemovedIntervalPixelDiscardAtPixel(pixel, receiverIndex, receiverLinearDepth, linearDepthTolerance))
         return true;

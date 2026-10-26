@@ -90,7 +90,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     constexpr usize s_IntervalResourceUseCapacity = 20u;
     avboitIntervalResourceUses.reserve(s_IntervalResourceUseCapacity);
     if(avboitPrePayload.transparentCsgStreamsUploaded){
-        // The receiver raster binds the deferred framebuffer with LOAD and disabled writes; declare every attachment so packet state seeding preserves its existing contents.
+        // The receiver raster binds the framebuffer with LOAD, writes off; declare every attachment to preserve contents.
         avboitIntervalResourceUses.push_back(ReadUse(albedo, Core::ResourceStates::RenderTarget));
         avboitIntervalResourceUses.push_back(ReadUse(normal, Core::ResourceStates::RenderTarget));
         avboitIntervalResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::RenderTarget));

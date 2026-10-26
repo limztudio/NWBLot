@@ -163,7 +163,7 @@ bool GpuNativePacketRecorder::recordPacket(
         || !outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess)
     )
         return false;
-    // A capture is one immutable compiled-plan artifact. Reject a stale non-empty capture before opening a packet that happens not to contain a primitive command.
+    // One capture per compiled plan. Reject a stale non-empty capture before opening a packet with no primitive command.
     if(commandIrCapture && commandIrCapture->recordCount() != 0u && (commandIrCapture->graphGeneration() != planAccess.generation() || commandIrCapture->planGeneration() != planAccess.planGeneration()))
         return false;
     if(commandIrCapture && commandIrCapture->recordCount() != 0u && commandIrCapture->recordingAttemptGeneration() != recordingAttemptGeneration)
@@ -313,7 +313,7 @@ bool GpuNativePacketRecorder::recordPacket(
                     break;
                 }
 
-                // The immutable marker made record-time validation mandatory. The imported source is now authoritative, so lower a local copy without asking lowering to seed Unknown.
+                // Record-time validation is mandatory. The imported source is authoritative; lower a local copy without seeding Unknown.
                 GpuCompiledBarrier loweredBarrier = barrier;
                 loweredBarrier.isGraphInitialState = false;
                 recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, loweredBarrier, *commandList);
@@ -496,7 +496,7 @@ bool GpuNativePacketRecorder::recordPacket(
     recordedPacket.recordingSeconds = DurationInSeconds<f64>(recordingEnd, recordingBegin);
     recordedPacket.recordingWorkerDomain = recordingWorkerDomain;
     recordedPacket.recordingWorkerIndex = recordingWorkerIndex;
-    // Publish the slot only after its owned native list is retained. Frontier workers are joined before callers submit, but this order also keeps the slot self-consistent for diagnostic reads.
+    // Publish the slot only after its native list is retained; also keeps it consistent for diagnostic reads.
     graphRecordingOwnership.publish();
     recordedPacket.commandListCount = 1u;
     PacketArtifactPublicationScope artifactPublication(outRecordedGraph, packetID, artifactAccess);

@@ -107,7 +107,7 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
     const Core::GpuGraphResourceId shadowTypedMaterials = *shadowTypedMaterialsResult;
     const Core::GpuGraphResourceId shadowInstances = *shadowInstancesResult;
 
-    // The opaque callback has no temporal or coarse scratch access. Keep its serial writes separate from the unsplit adaptive declaration so a fresh target never becomes a synthetic first read.
+    // The opaque callback has no temporal/coarse access. Keep its writes apart so a fresh target never reads as synthetic-first.
     constexpr usize s_OpaqueResourceUseCapacity = 18u;
     uses.opaque.reserve(s_OpaqueResourceUseCapacity + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
     uses.opaque.push_back(ReadUse(inputs.worldPosition));
@@ -149,7 +149,7 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
     }
 
     uses.opaqueFirstWaveletCount = 0u;
-    // The compiler lowers the opaque trace from UAV to the exact sampled state required by temporal merge or the first wavelet. The first wavelet then publishes half-B for the resolve tail.
+    // The compiler lowers the trace from UAV to the sampled state merge/wavelet needs. First wavelet publishes half-B.
     uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource);
     if(!route.combinedSoftWavelet)
         uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess);
@@ -172,7 +172,7 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
 
     uses.opaqueResolveCount = 0u;
     if(!route.combinedSoftUpsample){
-        // With the current one-wavelet opaque resolve, the tail only samples the first-wavelet half-B result for upsample. Keep a conservative ping-pong declaration if that pass count grows.
+        // One-wavelet resolve samples only first-wavelet half-B. Keep a conservative ping-pong declaration if passes grow.
         if(NWB_SHADOW_RESOLVE_PASS_COUNT == 1u)
             uses.opaqueResolve[uses.opaqueResolveCount++] = ReadUse(shadowSoftHalfB, Core::ResourceStates::ShaderResource);
         else{
@@ -230,7 +230,7 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
     uses.transparentTemporalMergeCount = 0u;
     uses.transparentFirstWaveletCount = 0u;
     if(uses.graphOwnsTransparentTemporalMergeEntryStates){
-        // Selection is frozen with the compiled frame. The merge samples the current front pair and publishes the opposite pair, which the following wavelet receives as graph-owned sampled inputs.
+        // Selection freezes at compile. The merge samples the front pair and publishes the opposite; wavelets sample graph-owned.
         uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource);
         uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource);
         uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource);
@@ -270,7 +270,7 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
     uses.transparentFoldCount = 0u;
     if(route.combinedSoftUpsample)
         uses.transparentFold[uses.transparentFoldCount++] = ReadUse(shadowSoftHalfB, Core::ResourceStates::ShaderResource);
-    // With one RGB wavelet the terminal task only samples half-A before multiplying visibility. Preserve a native ping-pong declaration if the compile-time pass count grows.
+    // One RGB wavelet samples only half-A before multiplying visibility. Keep a ping-pong declaration if passes grow.
     if(NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u)
         uses.transparentFold[uses.transparentFoldCount++] = ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource);
     else{

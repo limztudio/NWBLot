@@ -133,12 +133,11 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
     const bool canReset = commandList.canResetTimerQueryHere();
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
     // Retain pending pools until their result is observable instead of erasing a late GPU sample.
-    // Pools available this frame reset on the device timeline but stay unusable to dynamic-rendering scopes until the caller confirms this command list submitted.
+    // Pools reset this frame stay unusable to dynamic-rendering scopes until the caller confirms this list submitted.
     for(QueryRecord& record : m_queries){
         record.frameResetRecorded = false;
         record.frameResetRecordingQueue = {};
-        // A new frame preamble supersedes any dependency kept from a rejected scope in an older frame.
-        // Inline-reset-capable positions drop that stale dependency if this preamble fails; external-reset-required positions stay unavailable until the new reset is accepted below.
+        // A new preamble supersedes deps kept from a rejected scope in an older frame; inline-capable positions drop it on failure.
         if(record.state == QueryState::Available)
             record.frameResetSubmission = {};
         // An external-reset-required scope must observe this frame's reset, not an earlier frame's.

@@ -444,7 +444,7 @@ bool InitX11Frame(Frame& frame){
     XSelectInput(GetX11Display(frameData), GetX11Window(frameData), s_WindowEventMask);
     XStoreName(GetX11Display(frameData), GetX11Window(frameData), windowTitle.data());
 
-    // Publish the EWMH process id so external process managers can find the top-level window and request a WM_DELETE_WINDOW close, including on headless XWayland where the window is never mapped and PID lookup is key.
+    // Publish _NET_WM_PID so process managers can find the window and close it, even headless on XWayland where PID lookup is key.
     {
         const Atom pidAtom = XInternAtom(GetX11Display(frameData), "_NET_WM_PID", False);
         if(pidAtom != None){

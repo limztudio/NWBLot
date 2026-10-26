@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Test-only view of the full-resolution surfel resolve alpha. Red means covered, green means missing; blue marks the -X face so the checker can assess faces separately.
+// View of the surfel resolve alpha. Red = covered, green = missing, blue = -X face for per-face checks.
 static const float NWB_SMOKE_GI_COVERAGE_PROBE_FACE_NORMAL_THRESHOLD = -0.7;
 
 

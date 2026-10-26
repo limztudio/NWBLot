@@ -96,7 +96,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* outCommandIrCapture = nullptr
     )const;
-    // Records ready frontiers via cpuScheduler; parallel only when every task opts in, else serial (command-IR keeps serial order). Synchronous: submittable on return.
+    // Records ready frontiers via cpuScheduler; parallel only on unanimous opt-in, else serial. Synchronous.
     [[nodiscard]] bool recordPacketRangeInReadyFrontiers(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -161,7 +161,7 @@ private:
 
 private:
     Device& m_device;
-    // Optional because all-None graphs retain the existing recorder path. A timing-aware recorder must outlive every GpuRecordedGraph ticket created through this instance.
+    // Optional; all-None graphs keep the plain recorder path. A timing-aware recorder must outlive its tickets.
     GpuTimingRecorder* m_timingRecorder = nullptr;
 };
 

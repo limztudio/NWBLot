@@ -230,8 +230,7 @@ namespace GpuTaskGraphCompilerDetail{
                 precedingPacketAllowsMerge = precedingPacketMatchesScoredMergeDomain;
             }
             if(precedingPacketAllowsMerge && scoredMergeRequested){
-                // A score applies only to an actual immediate serial chain.
-                // Never use packet coalescing to make an order between unrelated work, and keep Medium/Large work independently accept/recoverable unless its owner asks for an explicit merge.
+                // A score covers only an immediate serial chain. Never order unrelated work by coalescing; Medium/Large stays independent unless merged.
                 const GpuTaskId precedingTask = compiledPlan.packetTasks[precedingPacket.taskOffset + precedingPacket.taskCount - 1u];
                 const bool directlyDependsOnPrecedingTask = __hidden_gpu_task_graph_compiler_packetization::SchedulingConsumersContain(analysis, precedingTask, taskID);
                 const bool eligibleScoredMerge = directlyDependsOnPrecedingTask && task.scheduling.cost <= GpuTaskCostHint::Small && !task.scheduling.allowMergeAcrossConsumerFrontier;

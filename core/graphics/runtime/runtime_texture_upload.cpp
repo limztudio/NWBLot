@@ -217,7 +217,7 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
     const CommandQueue::Enum consumerQueue = __hidden_graphics_texture_upload::ResolveTextureUploadBatchConsumerQueue(device, desc.queue, *totalByteCount, textureDesc);
     GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, *totalByteCount);
     // Existing batch destinations cannot be recreated with a wider sharing contract.
-    // A cross-family producer is therefore valid only when the texture was already created for that broad queue class; same-family offload retains ordinary exclusive sharing.
+    // Cross-family producer needs the texture already created for that queue class; same-family offload keeps exclusive sharing.
     if(sameClassRouting.crossesQueueFamily && !ResourceQueueSharing::IncludesQueueClass(textureDesc.queueSharing, consumerQueue))
         sameClassRouting = {};
     QueueSubmissionToken uploadToken;

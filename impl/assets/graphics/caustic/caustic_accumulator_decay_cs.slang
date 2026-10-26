@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Splat-space temporal EMA decay (pre-splat, per texel): resolve divides by (1-decay) so static brightness holds while motion smooths. No reprojection warp, so no ghosting. Per RGB layer.
+// Splat-space temporal EMA decay per texel, per RGB layer. No warp, so no ghosting.
 
 struct NwbCausticAccumulatorDecayPushConstants{
     uint width;

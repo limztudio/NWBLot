@@ -307,7 +307,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             VectorDoubleGetY(frontierCapacityMsAndPercent)
         );
 
-        // Borrows immutable plan topology + packet slots under the serialization contract; no overlap with recording/reset/recompile, and never the registry (recompile can move the owning plan).
+        // Borrows plan topology + packet slots under the serialization contract; never the registry (recompile can move the plan).
         for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
             const Core::GpuPhysicalQueueInfo& queueInfo = runtimeQueueTopology.queues[queueIndex];
             const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueRuntimeStatistics = physicalQueueRuntimeStatistics[queueIndex];
@@ -405,7 +405,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 __hidden_renderer_frame_pipeline_telemetry::AppendCommandArenaWorkerStatistics(m_frameGraphRendererLabel, directCommandArenaStatistics);
 
             // Recorded packets retain the exact worker domain/index used for native allocation.
-            // Walk the immutable compiled order and reject any identity already seen on this queue; packet counts are small, so this allocation-free pass is preferable to persistent storage.
+            // Walk compiled order, reject identities already seen on this queue; packet counts are small, so no persistent storage.
             for(usize packetIndex = 0u; packetIndex < deferredCompiledPlan.packetCount(); ++packetIndex){
                 const Core::GpuSubmissionPacketId packet = deferredCompiledPlan.packetIdAt(packetIndex);
                 const Core::GpuCompiledPacketView packetView = deferredCompiledPlan.packet(packet);

@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HDR10 carries Rec.2020 primaries with a ST.2084 (PQ) transfer. Scene and UI authoring colors are Rec.709/sRGB, so convert just before the UNORM10 store.
+// HDR10 is Rec.2020/PQ. Authoring colors are Rec.709/sRGB, so convert just before the store.
 #define NWB_HDR10_MASTERING_PEAK_NITS 1000.0
 #define NWB_HDR10_SCENE_REFERENCE_WHITE_NITS 203.0
 #define NWB_HDR10_UI_PAPER_WHITE_NITS 203.0

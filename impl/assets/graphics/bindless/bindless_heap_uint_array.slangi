@@ -21,7 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Own descriptor table instead of aliasing Texture2DArray<float4> at binding 5. Distinct shader image types at one binding are not portable across drivers.
+// Own table, no aliasing at binding 5. Mixed image types at one binding are not portable.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY_UINT, NWB_BINDLESS_HEAP_RESOURCE_SET)]] Texture2DArray<uint> g_NwbHeapSampledImage2DArrayUints[];
 
 

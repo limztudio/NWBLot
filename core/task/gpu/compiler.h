@@ -127,7 +127,7 @@ struct GpuTaskQueueLoad{
 
 struct GpuTaskGraphQueueAssignmentOptions{
     const GpuTaskTimingHistorySnapshot* timingHistory = nullptr;
-    // Scheduler-owned pressure sampled immediately before compilation. Costs use the same relative units as task cost hints and affect only movable routes.
+    // Scheduler pressure sampled just before compile. Same units as cost hints; moves only movable routes.
     const GpuTaskQueueLoad* queueLoads = nullptr;
     usize queueLoadCount = 0u;
     // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an in-progress queue assignment.
@@ -151,7 +151,7 @@ struct GpuTaskGraphCompileOptions{
     GpuTaskGraphQueueAssignmentOptions queueAssignmentOptions;
     GpuTaskGraphPacketTimingEnvelopeOptions packetTimingEnvelope;
     f64 declarationSeconds = 0.0;
-    // Caller-owned declare/build wall time (accepted: finite nonneg kept, else zero). Native recording needs per-task payload + thunk; only metadata tooling may opt out.
+    // Caller declare/build wall time (finite nonneg kept, else zero). Recording needs payload + thunk; only metadata tooling opts out.
     GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
     bool allowMetadataOnlyTasks = false;
 };
@@ -204,9 +204,9 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
     [[nodiscard]] const GpuTaskGraphAnalysisDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
-    // Raw dependency pairs retain direct declarations and hazard reasons for validation and diagnostics, including edges that are transitively redundant for scheduling.
+    // Raw pairs keep direct declarations and hazard reasons for diagnostics, transitively redundant edges included.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& edges()const noexcept{ return m_edges; }
-    // Scheduling consumers use the stable transitive reduction so redundant raw relationships do not add queue crossings, signal frontiers, or packet waits.
+    // Scheduling uses the stable transitive reduction, so redundant raw edges add no crossings, frontiers, or waits.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges()const noexcept{
         return m_schedulingEdges;
     }
@@ -262,7 +262,7 @@ private:
     bool m_valid = false;
 };
 
-// Queue assignment is a separate immutable compile result. Renderer integrations may use it for recording selection; graph core never creates a command list or submits work.
+// Queue assignment is a separate immutable compile result. Graph core never creates a command list or submits work.
 class GpuTaskGraphQueueAssignments final : NoCopy{
     friend class GpuTaskGraphCompiler;
 

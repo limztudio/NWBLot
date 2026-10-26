@@ -41,7 +41,7 @@ inline constexpr f32 s_DirectionalShadowImportanceBoost = 4.0f;
 inline constexpr f32 s_ShadowImportanceDistanceSquaredEpsilon = 1e-4f;
 
 // SceneLightGpuData::params.y carries static_cast<f32>(LightType::Enum) (Directional=0, Point=1, Spot=2).
-// These thresholds decode the integer-typed light type back from its float packing: a half-way bound between adjacent integer values absorbs quantization noise from the float round-trip.
+// params.y packs the light type as float. Half-way bounds absorb float round-trip noise.
 inline constexpr f32 s_LightTypeDirectionalMax = static_cast<f32>(NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX);
 inline constexpr f32 s_LightTypePointMax = static_cast<f32>(NWB_SCENE_LIGHT_TYPE_POINT_MAX);
 
@@ -50,7 +50,7 @@ inline constexpr f32 s_LightTypePointMax = static_cast<f32>(NWB_SCENE_LIGHT_TYPE
 
 
 // Importance heuristic for the bounded shadow-slot pool: radiant power (luminance * intensity) weighted by screen coverage.
-// Directional lights cover the whole frame (and always outrank comparable local lights); local lights are weighted by influence range relative to distance (a squared proxy -- no sqrt).
+// Directionals cover the frame and outrank locals; locals weight by range/distance squared (no sqrt).
 // Higher = more worth a scarce shadow slot.
 inline SIMDVectorSingle ShadowSlotImportance(const SIMDVectorSingle colorIntensity, const SIMDVectorSingle params, const SIMDVectorSingle lightPosition, const SIMDVectorSingle cameraPosition)noexcept{
     const SIMDVectorSingle luminance = Vector3Dot(colorIntensity, VectorSet(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f));
@@ -70,7 +70,7 @@ inline SIMDVectorSingle ShadowSlotImportance(const SIMDVectorSingle colorIntensi
     return VectorMultiply(radiantImportance, VectorMin(coverageSquared, s_SIMDOne));
 }
 
-// Caustic importance: pure radiant power (luminance * intensity), the same proxy ShadowSlotImportance uses, but WITHOUT screen weighting (the budget is aimed at occluders, not the camera).
+// Caustic importance: pure radiant power, no screen weighting (budget targets occluders, not camera).
 // Higher = more worth a scarce caustic slot.
 inline SIMDVectorSingle CausticSlotImportance(const SIMDVectorSingle colorIntensity)noexcept{
     const SIMDVectorSingle luminance = Vector3Dot(colorIntensity, VectorSet(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f));
@@ -102,7 +102,7 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, const u32 maxLights, Scen
         outCausticImportance[i] = VectorGetX(CausticSlotImportance(LoadFloat(src.colorIntensity)));
     }
 
-    // Importance-ranked shadow-slot allocator: hand the pool of NWB_SCENE_SHADOW_SLOT_COUNT slots to the most important lights this frame (slot index -> params.z; lights that miss stay lit).
+    // Importance-ranked shadow slots: most important lights get the pool (slot -> params.z; rest stay lit).
     // Selection over <= NWB_SCENE_MAX_LIGHTS lights stays cheap.
     const u32 lightCount = static_cast<u32>(gatheredCount);
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio);
@@ -155,7 +155,7 @@ inline u32 ResolveCausticLights(const Span<const f32> causticImportance, const u
     if(refractiveInstanceCount == 0u || lightCount == 0u || causticImportance.size() < lightCount)
         return 0u;
 
-    // Importance-ranked caustic-slot allocator (mirrors the shadow-slot selection in ResolveSceneLights): hand each slot to the highest eligible light without one. Point lights never qualify.
+    // Importance-ranked caustic slots (mirrors shadow selection). Highest eligible light per slot; points never qualify.
     u32 assignedCount = 0u;
     for(u32 slot = 0u; slot < NWB_SCENE_CAUSTIC_SLOT_COUNT; ++slot){
         f32 bestImportance = -1.f;

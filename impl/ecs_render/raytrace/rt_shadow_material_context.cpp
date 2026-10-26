@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 
 Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(){
     // The shared graph has already imported this constant buffer and its UniformBuffer descriptor by the time its preparation packet records.
-    // Do not recreate either one here: a recording-time replacement would invalidate the graph's frozen resource identity and the immutable selector snapshot it retains.
+    // Never recreate here: a recording-time replacement would break frozen identity and the selector snapshot.
     if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer)
         return MakeUnexpected(Failure{});
 

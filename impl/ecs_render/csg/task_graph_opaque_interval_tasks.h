@@ -54,7 +54,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags are required: every interval record pass works against this frame's bindings.
+// All bindings required: every interval record pass works against this frame's bindings.
 struct CsgOpaqueIntervalRecordInputs{
     RendererMaterialSystem& materialSystem;
     RendererCsgSystem& csgSystem;
@@ -120,7 +120,7 @@ public:
 struct CsgIntervalSampleGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
-    // The runtime, material/CSG systems, frame targets, timing-ticket slot, and setup flags are required: interval sample rasterizes this frame's CSG pass.
+    // All bindings required: interval sample rasterizes this frame's CSG pass.
     // The compute-emulation timing stays optional: it is bound only when the emulation output is graph-owned.
     struct Payload{
         Core::GraphicsRuntime& graphics;

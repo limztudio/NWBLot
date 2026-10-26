@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The C++ producer materializes the same field list as u32 members. Slang needs the same 15 scalar words; the defaults stay CPU-side and do not participate here.
+// Mirrors the C++ field list as u32. Slang needs the same 15 words; defaults stay CPU-side.
 struct NwbCausticPhotonPushConstants{
 #define NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD(name, defaultValue) uint name;
     NWB_CAUSTIC_PHOTON_PUSH_CONSTANTS_FIELDS(NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD)

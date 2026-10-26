@@ -125,7 +125,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     GpuTaskQueueScoringData scoringData(graph, analysis, schedulingReachability, options, scratchArena);
 
     // Establish every legal route before scoring.
-    // Explicit compatible merge chains share one provisional queue; their command union and external facts constrain the whole chain, while packetization retains its frontier checks.
+    // Compatible merge chains share one provisional queue; packetization still checks frontiers.
     for(const GpuTaskQueuePlacementGroup& group : groups){
         auto& selectedQueue = *MakeNotNull(FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, group));
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){

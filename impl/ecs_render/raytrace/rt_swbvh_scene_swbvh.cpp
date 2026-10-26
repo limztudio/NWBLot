@@ -212,7 +212,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(const auto materialInfoResult = m_materialSystem.findMaterialSurfaceInfo(renderer.material); materialInfoResult){
             materialInfo = materialInfoResult->get();
-            // Software shadow, caustic, and surfel traversal evaluate the same material surface dispatcher as the hardware path. Freeze its sampled textures alongside the scene-BVH material context.
+            // Software paths share the HW material dispatcher. Freeze its sampled textures with the scene-BVH context.
             if(materialInfo->surfaceDispatchId != Limit<u32>::s_Max && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector))
                 return false;
             const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, objectTransformPtr, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges);

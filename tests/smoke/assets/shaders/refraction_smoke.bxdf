@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stable authored colors isolate camera-ray distortion from lighting histories, caustics, and changing shadow noise in the on/off framebuffer comparison.
+// Stable colors isolate camera-ray distortion from lighting, caustics, and shadow noise in the on/off comparison.
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     return surface.baseColor;
 }

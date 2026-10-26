@@ -91,7 +91,7 @@ bool nwbRefractionCachedHit(const float3 position, const NwbRefractionEntry entr
     const float3 opaqueWorld = nwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.z).Load(int3(pixel, 0)).xyz;
     const float3 cameraDelta = position - g_NwbRefractionView.cameraPosition.xyz;
     const float3 opaqueDelta = opaqueWorld - position;
-    // Require both projected depth and world distance. A depth-only comparison becomes permissive in the far field and returns an opaque foreground object's lighting for a hidden RT hit.
+    // Needs depth plus world distance. Depth alone goes lax far away and returns a foreground hit for hidden RT.
     const float maxDistanceSquared = max(NWB_REFRACTION_CACHED_HIT_DISTANCE_MIN * NWB_REFRACTION_CACHED_HIT_DISTANCE_MIN, dot(cameraDelta, cameraDelta) * (NWB_REFRACTION_CACHED_HIT_DISTANCE_SCALE * NWB_REFRACTION_CACHED_HIT_DISTANCE_SCALE));
     if(dot(opaqueDelta, opaqueDelta) > maxDistanceSquared)
         return false;

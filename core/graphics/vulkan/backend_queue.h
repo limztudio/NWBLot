@@ -138,7 +138,7 @@ private:
     void commitCommandBufferStateTransition(TrackedCommandBuffer& commandBuffer, TrackedCommandBufferArenaState::Enum nextState)noexcept;
     void unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
     // Requires m_mutex.
-    // Releases native command-buffer resource/staging references only after the queue timeline has completed their submission, then preserves each worker-affine lease in its own reusable pool.
+    // Needs m_mutex. Releases buffer refs only after the timeline completes them; worker leases pool per worker.
     void collectCompletedCommandBuffers();
     // Default/direct lease zero stays private per command buffer because external callers may record it from unrelated threads.
     // Explicit graph workers use one Vulkan pool shard per physical queue and worker identity.
@@ -174,7 +174,7 @@ private:
     // Successful ALL_COMMANDS waits cover later commands on this exact queue.
     // Zero-valued entries only reserve owned tracking-semaphore identity before the native call; coverage advances solely on acceptance.
     Vector<SubmissionWait, Alloc::GlobalArena> m_acceptedTimelineWaits;
-    // Queue::submit holds m_mutex throughout, so this persistent high-water workspace can be reused without allocation or deallocation after vkQueueSubmit2 accepts the submission.
+    // Queue::submit holds m_mutex throughout, so this workspace reuses without alloc once vkQueueSubmit2 accepts.
     Vector<DescriptorHeapUseCommitTicket, Alloc::GlobalArena> m_submitDescriptorHeapUseCommitTickets;
     Vector<NotNull<TrackedCommandBuffer*>, Alloc::GlobalArena> m_submitValidatedTimerQueryCommandBuffers;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitWaitInfos;

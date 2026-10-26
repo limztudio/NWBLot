@@ -213,7 +213,7 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsRecord{
 };
 
 // Exact native-submission telemetry for one compiler-generated packet.
-// Payloads whose packet table is marked present contain every native submission for every runtime-statistics owner, including an exact empty table when no owner submitted native work.
+// Present packet tables hold every native submission per owner, even an empty table when nobody submitted.
 // Packet generation is the immutable plan generation.
 // Wait counts exclude backend-internal waits outside the graph.
 struct FrameGraphPacketSubmissionStatisticsRecord{

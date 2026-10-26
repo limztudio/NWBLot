@@ -163,7 +163,7 @@ public:
 
         [[nodiscard]] bool operator!=(const Iterator& rhs)const noexcept{ return !(*this == rhs); }
 
-        // Requires a non-end iterator. The view borrows the source path and survives iterator advancement; mutating or destroying the source path invalidates it.
+        // Needs a non-end iterator. The view borrows the source path; mutating or destroying it invalidates the view.
 
 
     public:

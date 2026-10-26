@@ -22,7 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The independent event-data, event-order and event-count diagnostics share only framebuffer bounds and input addressing, leaving their validation/color policy local.
+// Event-data/order/count diagnostics share only bounds and addressing; validation/color policy stays local.
 bool nwbCsgDiagnosticEventBounds(const int2 pixel, out uint eventDataSlot, out uint eventLayers){
     eventDataSlot = g_NwbDeferredBindlessResources.csgPeelSlots.w;
     uint width;

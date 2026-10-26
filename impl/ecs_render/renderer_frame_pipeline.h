@@ -203,7 +203,7 @@ public:
     void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
         if(m_frameLaggedAsyncLightingEnabled == enabled)
             return;
-        // Preserve a one-shot proof when the opt-in mode is turned off: the next accepted normal frame confirms that the renderer returned to its current-frame path instead of merely planning it.
+    // Proof that disabling the mode returned to the current-frame path: set when turning off, cleared by the next accepted normal frame.
         m_laggedLightingCurrentFrameAcceptancePending = m_frameLaggedAsyncLightingEnabled && !enabled;
         if(m_frameLaggedAsyncLightingEnabled && !enabled && m_laggedLightingHistorySubmissionToken.valid()){
             m_laggedLightingHistoryWriterDrainToken = m_laggedLightingHistorySubmissionToken;
@@ -217,7 +217,7 @@ public:
 
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
     [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
-    // Immutable-by-value telemetry for the current deferred graph artifacts. It stays meaningful until the next graph/recording/transaction reset, matching the compiled diagnostic lifetime.
+    // Telemetry for current deferred graph artifacts. Valid until the next graph/recording/transaction reset.
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
 
 
@@ -236,7 +236,7 @@ private:
     void resetDeferredCausticsTaskState()noexcept;
     void resetSharedDeferredFrameTaskState()noexcept;
     void resetGraphicsPrefixTaskState()noexcept;
-    // Accepted cross-frame scratch and producer-return state survives ordinary recording attempts. Reset it only when the imported target/resource generation changes.
+    // Accepted cross-frame state survives ordinary recording attempts. Reset only when the target/resource generation changes.
     void resetTargetGenerationStateHandoffs()noexcept;
     void resetInvalidatedResourceStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
@@ -421,14 +421,14 @@ private:
     // A successful graphics tick can skip renderer execution while telemetry still captures.
     // Keep the exact source frame separate from graph generations so retained prior-frame runtime statistics never look current.
     u64 m_frameGraphSourceFrameIndex = Limit<u64>::s_Max;
-    // FrameGraphBuilder retains labels by view until the capture payload is encoded, so this storage must outlive appendFrameGraph() rather than using its task-graph scratch arena.
+    // Storage must outlive appendFrameGraph(); FrameGraphBuilder keeps labels by view until capture is encoded.
     AString<Core::Alloc::GlobalArena> m_frameGraphRendererLabel;
-    // Optional selector upload. It must merge into Shadow Preparation's first Graphics packet; its acceptance commits the CPU residency bit with the first consumer.
+    // Optional selector upload. Merges into Shadow Preparation's first Graphics packet; acceptance commits the CPU residency bit with the first consumer.
     Core::GpuTaskId m_deferredBindlessSlotsUploadTask;
-    // Immutable descriptor-slot snapshot. It must merge into the same first Graphics packet; later Compute trace consumers inherit Shadow Preparation's handoff rather than an upload frontier.
+    // Descriptor-slot snapshot. Merges into the same first Graphics packet; later Compute trace consumers inherit Shadow Preparation's handoff.
     Core::GpuTaskId m_rayTraceMaterialContextSlotsUploadTask;
     Core::GpuTaskId m_csgTraceContextUploadTask;
-    // Optional refractive-AABB stream. It must merge into that same first Graphics packet; caustic consumers inherit Shadow Preparation's handoff rather than an upload frontier.
+    // Optional refractive-AABB stream. Merges into that same first Graphics packet; caustic consumers inherit Shadow Preparation's handoff.
     Core::GpuTaskId m_causticEmissionTargetsUploadTask;
     // Optional per-frame surfel constant payload; merges into the first Graphics packet alongside Shadow Preparation.
     Core::GpuTaskId m_surfelFrameConstantsUploadTask;
@@ -436,45 +436,44 @@ private:
     Core::GpuTaskId m_shadowInstanceMaterialUploadTask;
     Core::GpuTaskId m_shadowInstanceUploadTask;
     Core::GpuTaskId m_shadowMaterialTypedUploadTask;
-    // Optional CPU-built software scene-BVH pair. Nodes address the companion leaf-instance stream, both must merge into Shadow Preparation's packet before it owns the later handoff.
+    // CPU-built software scene-BVH pair. Both must merge into Shadow Preparation's packet before it owns the later handoff.
     Core::GpuTaskId m_sceneBvhNodesUploadTask;
     Core::GpuTaskId m_sceneBvhInstancesUploadTask;
-    // Optional lagged-history selector upload. It must merge into Deferred Lighting's packet, which already owns history acceptance and the external completion wait for the prior-frame images.
+    // Lagged-history selector upload. Merges into Deferred Lighting's packet, which already owns history acceptance and the prior-frame wait.
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;
     Core::GpuTaskId m_deferredFrameTimingBeginTask;
     Core::GpuTaskId m_deferredShadowPrepareTask;
-    // Pure-software prepared per-mesh builds lower their sentinel clears and callbacks before Shadow Preparation's scene-build/acceptance endpoint. Both bounds must remain in that packet.
+    // Per-mesh software builds lower sentinel clears and callbacks before Shadow Preparation's scene-build endpoint. Both bounds stay in that packet.
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildLastTask;
     Core::GpuTaskId m_deferredShadowPrepareSceneRefitTask;
     Core::GpuTaskId m_sceneBvhRefitInputsUploadTask;
-    // Prepared TLAS/BLAS builds record in Shadow Preparation, while this adjacent state-only callback publishes their AccelStructRead boundaries. It must remain in the same first packet.
+    // TLAS/BLAS builds record in Shadow Preparation; this adjacent callback publishes their AccelStructRead bounds in the same first packet.
     Core::GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
     Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
-    // Attachment LOAD_OP_CLEAR work is attributed to G-buffer timing. Deferred-clear timing belongs only to this opaque-color UAV clear, whose before/after hooks share one graph task.
+    // LOAD_OP_CLEAR work counts as G-buffer timing. Deferred-clear timing covers only this opaque-color UAV clear, whose hooks share one graph task.
     Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
-    // The opaque CSG work-region clear is a two-value typed rectangle chain. Both tasks must remain in one Graphics packet so its first/last hooks retain the existing CSG-clear timing interval.
+    // Opaque CSG work-region clear is a two-value typed rectangle chain. Both tasks stay in one Graphics packet to keep the CSG-clear timing interval.
     Core::GpuTaskId m_graphicsPrefixCsgIntervalClearFirstTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalClearTask;
-    // Pairwise-distinct opaque compute-emulation outputs dispatch before G-buffer rasterization. This producer must share G-buffer's primary packet for the handoff to stay in the range.
+    // Opaque compute-emulation outputs dispatch before G-buffer rasterization. This producer shares G-buffer's primary packet.
     Core::GpuTaskId m_graphicsPrefixOpaqueComputeEmulationTask;
     // Small shared-output regular paths keep dispatch/raster alternation in the same packet.
-    // Retain every phase ID so runtime validation can prove the strict D(A) -> R(A) -> ... packet order, rather than merely proving that the two endpoint callbacks coalesced.
+    // Keep every phase ID so validation can prove the strict D(A) -> R(A) -> ... order, not just endpoint coalescing.
     // The active prefix holds four, six, eight, or ten phases for two through five draws.
     Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount] = {};
     usize m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     // Receiver-surface CSG has its own readiness gate but needs the same packet-local output handoff.
     Core::GpuTaskId m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;
-    // Interval-sample CSG follows Combine and has a separate alias-free output plan.
-    // Its raster consumer remains the existing CSG Interval Sample task, so both IDs must stay in that primary Graphics packet.
+    // Interval-sample CSG follows Combine. Both IDs stay in that primary Graphics packet with the existing CSG Interval Sample consumer.
     Core::GpuTaskId m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask;
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
     Core::GpuTaskId m_graphicsPrefixCsgReceiverSpanTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalCombineTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;
-    // Prepared soft-transparent shadow frames compile opaque production, wavelets, resolve tails, transparent trace, temporal merge, and terminal tail into one packet.
+    // Soft-transparent shadow frames compile opaque production, wavelets, tails, transparent trace, merge, and terminal tail into one packet.
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
@@ -482,22 +481,21 @@ private:
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTemporalMergeTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityDiagnosticsTask;
-    // The adaptive append-counter clear shares the monolithic visibility packet so its CopyDest -> UAV handoff stays graph-owned.
+    // The adaptive append-counter clear shares the monolithic visibility packet to keep its CopyDest -> UAV handoff graph-owned.
     Core::GpuTaskId m_deferredShadowVisibilityAdaptiveCounterClearTask;
-    // The retained monolithic route always clears visibility to all-lit immediately before its callback.
-    // The clear must share that semantic packet so its CopyDest -> UAV handoff and the existing acceptance endpoint stay graph-owned.
+    // The monolithic route clears visibility to all-lit right before its callback, in the same packet to keep handoff and acceptance graph-owned.
     Core::GpuTaskId m_deferredShadowVisibilityAllLitClearTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;
     // The HW/SW caustic producer shares this clear's packet to preserve timing and acceptance.
     Core::GpuTaskId m_deferredCausticIrradianceClearTask;
-    // The temporal accumulator bootstrap is conditional, but when present it must remain in the same packet as the selected caustic producer; that producer commits only on acceptance.
+    // The temporal bootstrap is conditional; when present it stays with the selected caustic producer, which commits only on acceptance.
     Core::GpuTaskId m_deferredCausticAccumulatorBootstrapClearTask;
-    // Non-temporal caustics reset the accumulator every frame through the selected producer packet; the producer commits the matching CPU reset only after that packet accepts.
+    // Non-temporal caustics reset the accumulator each frame via the producer packet; the CPU reset commits after that packet accepts.
     Core::GpuTaskId m_deferredCausticAccumulatorNonTemporalClearTask;
     // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
     Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
-    // Photon, downsample, resolve prepare, wavelets, upsample, and timing close stay in one packet while the compiler owns their handoffs.
+    // Photon, downsample, resolve prepare, wavelets, upsample, and timing close stay in one packet with compiler-owned handoffs.
     Core::GpuTaskId m_deferredCausticPhotonTask;
     Core::GpuTaskId m_deferredCausticGeometryTask;
     Core::GpuTaskId m_deferredCausticResolvePrepareTask;
@@ -507,7 +505,7 @@ private:
     Core::GpuTaskId m_deferredCausticResolveFourthWaveletTask;
     Core::GpuTaskId m_deferredCausticResolveFifthWaveletTask;
     Core::GpuTaskId m_deferredCausticResolveUpsampleTask;
-    // Surfel lifecycle publishes after all four clears accept; stages share one effects packet with compiler-owned handoffs.
+    // Surfel lifecycle publishes after all four clears accept; stages share one effects packet.
     Core::GpuTaskId m_deferredSurfelGiPreparationTask;
     Core::GpuTaskId m_deferredSurfelGiInitializationLifecycleTask;
     Core::GpuTaskId m_deferredSurfelGiSnapshotCopyTask;
@@ -529,21 +527,21 @@ private:
     // The deferred scene output remains separately named because lagged-history copies may begin from it while the overlay finishes on Graphics.
     Core::GpuTaskId m_deferredPresentationOverlayTask;
     Core::GpuTaskId m_deferredPresentTask;
-    // The graph-owned terminal Graphics task records the published frame-timing endpoint and owns the swap-chain signal after Deferred Present and any optional presentation contributor.
+    // Terminal Graphics task: records the frame-timing endpoint and owns the swap-chain signal after Present and any contributor.
     Core::GpuTaskId m_deferredFrameTimingEndTask;
     Core::GpuTaskId m_deferredLaggedLightingHistoryTask;
-    // Recovery stays unrecorded until a later packet rejects. Its graph-owned submission join waits for every latest accepted non-Graphics queue while Graphics order covers the accepted prefix.
+    // Recovery stays unrecorded until a later packet rejects. Its submission join waits for every latest accepted non-Graphics queue.
     Core::GpuTaskId m_deferredFrameRecoveryTask;
     // Imported only while the preceding frame's diagnostic Transfer readback remains in flight.
     Core::GpuExternalCompletionId m_deferredSurfelGiCounterReadbackCompletion;
-    // These are distinct completions even when both refer to the same accepted prior history-copy token: Lighting waits for readable history, while producers wait until the copy stops reading.
+    // Distinct completions even for the same history-copy token: Lighting waits for readable history, producers wait until the copy stops reading.
     Core::GpuExternalCompletionId m_deferredLightingHistoryReadReadyCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryWriterDrainCompletion;
     bool m_deferredShadowCombinedUpsample = false;
     bool m_deferredShadowCombinedWavelet = false;
     bool m_deferredShadowCombinedTemporal = false;
     bool m_deferredCausticProducerDispatched = false;
-    // A partially accepted frame whose recovery packet cannot be submitted is not recoverable by guessing. End this device generation and rebuild resources before rendering resumes.
+    // A partially accepted frame with an unsubmittable recovery packet is not recoverable. End this device generation and rebuild resources.
     bool m_frameRenderRecoveryFailed = false;
     bool m_graphicsPrefixMeshViewSetupReady = false;
     bool m_graphicsPrefixSceneShadingSetupReady = false;
@@ -569,16 +567,16 @@ private:
     u64 m_laggedLightingReportGeneration = 0u;
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
-    // Shadow scratch/history retains accepted packet state across frames on either compiler route. Declaration-owned first-use sources restore the private scratch and its typed backings.
+    // Shadow scratch/history keeps accepted packet state across frames on either compiler route.
     Core::GpuPersistentResourceStateCache m_shadowComputePersistentState;
     Core::GpuPersistentResourceStateCache m_shadowVisibilityReturnState;
-    // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation. Keep only live generations so the next frame's first packet seeds states.
+    // TLAS/BLAS, software-BVH build storage, and trace geometry change inside Shadow Preparation. Keep only live generations.
     Core::GpuPersistentResourceStateCache m_shadowPreparePersistentState;
     // Software caustics retain their temporal scratch on either compiler-selected route.
     // Hardware dispatch-rays caustics retain their temporal accumulator only after the Graphics hardware-caustics packet accepts.
     Core::GpuPersistentResourceStateCache m_causticsComputePersistentState;
     Core::GpuPersistentResourceStateCache m_hardwareCausticAccumulatorPersistentState;
-    // Retain only the accepted cross-queue return state needed when irradiance moves from Graphics lighting back to a Compute-routed caustics packet. Producer/lighting flow is compiler-seeded.
+    // Keep only the accepted cross-queue return state for Graphics lighting back to a Compute-routed caustics packet.
     Core::GpuPersistentResourceStateCache m_causticIrradianceReturnState;
     // Surfel GI retains its field and history on either route; resolved irradiance is consumed directly or snapshotted for lagged lighting.
     Core::GpuPersistentResourceStateCache m_surfelGiComputePersistentState;
@@ -603,9 +601,9 @@ private:
     ReflectionSettings m_reflectionSettings;
     RayTracingRefractionGraphResources m_preparedRefractionResources;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
-    // The newest incomplete accepted same-generation Transfer tail protects live producer writes while declaration resets the normal history-read token. Target recreation clears it with normal state.
+    // Newest incomplete accepted same-generation Transfer tail guards live producer writes while declaration resets the history-read token.
     Core::QueueSubmissionToken m_laggedLightingHistoryWriterDrainToken;
-    // Deferred target creation increments this identity for every target generation. It prevents a recycled slot or allocator address from making a freshly recreated history look accepted.
+    // Target creation bumps this identity per generation, so a recycled slot cannot make recreated history look accepted.
     u64 m_laggedLightingHistoryGeneration = 0u;
     u64 m_laggedLightingHistoryWriterDrainGeneration = 0u;
     // The root composes this aggregate from Deferred, AVBOIT, CSG, and RayTracing resources.

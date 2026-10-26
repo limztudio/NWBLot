@@ -439,7 +439,7 @@ public:
     // Valid only for surface-authored transparent materials; missing means a cook/runtime contract failure.
     // Not a graphics stage: the material has one pixel stage, and this is the transparent-only shader the renderer selects by pass.
     [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitAccumulatePixelShader()const noexcept{ return m_avboitAccumulatePixelShader; }
-    // Occupancy/extinction twins of the accumulate shader, so all three AVBOIT passes read the same surface renderCoverage. Same validity contract as above.
+    // Accumulate twins for AVBOIT passes; same surface renderCoverage and validity as above.
     [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitOccupancyPixelShader()const noexcept{ return m_avboitOccupancyPixelShader; }
 
     [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitExtinctionPixelShader()const noexcept{ return m_avboitExtinctionPixelShader; }

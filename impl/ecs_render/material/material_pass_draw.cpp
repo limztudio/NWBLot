@@ -152,7 +152,7 @@ bool RendererMaterialSystem::setMaterialPassDrawPushConstants(const MaterialPass
         return true;
     }
 
-    // CSG pixel-only variants reuse the otherwise-unused generated-vertex lane as their global context selector. Mesh/compute geometry reads the same selector from its per-instance slot.
+    // Pixel-only CSG variants reuse the unused generated-vertex lane as the context selector; geometry reads it per instance.
     frameHeapSlots.generatedVertex = csgContextHeapSlot;
 
     ECSRenderDetail::SetShaderDrivenPushConstants(context.commandList, mesh.meshletCount, drawItem.instanceIndex, drawItem.materialConstantByteOffset, context.viewportState, frameHeapSlots, dispatchFlags);
@@ -263,7 +263,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(const MaterialPassD
 void RendererMaterialSystem::generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
     if(drawItems.empty())
         return;
-    // This half deliberately has no local output transition. A graph producer must have declared every selected generated-vertex buffer as a UAV before recording it.
+    // No local output transition here. A graph producer must have declared every selected buffer as a UAV first.
     NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
     NWB_ASSERT(context.frameBindings.meshView.buffer);
 

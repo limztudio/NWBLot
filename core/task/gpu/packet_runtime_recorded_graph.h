@@ -61,17 +61,15 @@ struct GpuRecordedPacket{
     // Native recording retains its acquired lists through submission.
     CommandListHandle ownedCommandLists[s_MaxCommandLists] = {};
     CommandList* commandLists[s_MaxCommandLists] = {};
-    // Exact publication identities let reset/destruction revoke an unsubmitted list without touching a later recording that reuses the same retained CommandList object.
+    // Exact identities let reset/destruction revoke an unsubmitted list without touching a later reuse of the same object.
     u64 commandListRecordingLeaseSerials[s_MaxCommandLists] = {};
-    // These fields are written before commandListCount publishes the slot.
-    // They describe the packet after graph lowering so compile tooling can distinguish declared work from recorded native work.
+    // Written before commandListCount publishes the slot. They describe post-lowering packet work for compile tooling.
     u32 taskCount = 0u;
     u32 barrierCount = 0u;
     f64 commandListAcquisitionSeconds = 0.0;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
-    // Monotonic steady-clock endpoints make actual CPU recording overlap observable without exposing Timer in the public packet snapshot.
-    // Both endpoints are published before commandListCount makes the slot visible.
+    // Steady-clock endpoints show real CPU recording overlap. Both publish before commandListCount exposes the slot.
     u64 recordingBeginNanoseconds = 0u;
     u64 recordingEndNanoseconds = 0u;
     f64 recordingSeconds = 0.0;
@@ -82,7 +80,7 @@ struct GpuRecordedPacket{
 };
 
 
-// Snapshot of published packet slots (parallel recording). recordingSeconds sums per-packet spans (slot occupancy, not CPU). Phase counters split acquisition/barriers/callbacks.
+// Snapshot of published packet slots. recordingSeconds sums per-packet spans (slot occupancy, not CPU).
 struct GpuTaskGraphRecordingStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -119,7 +117,7 @@ public:
 };
 
 
-// Immutable native recording telemetry for one physical queue in one recording attempt. Queue identity carries the device generation, so a recreated device cannot alias it.
+// Native recording telemetry for one queue in one attempt. Queue identity carries the device generation.
 struct GpuTaskGraphPhysicalQueueRecordingStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -285,12 +283,12 @@ public:
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
     [[nodiscard]] bool validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
-    // Returns an owned aggregate from packet slots published under artifact admission. The exact plan proof keeps packet metadata alive and rejects an artifact from another compiled object.
+    // Owned aggregate from packet slots under artifact admission. The plan proof guards metadata and rejects foreign artifacts.
     [[nodiscard]] GpuTaskGraphRecordingStatistics recordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
-    // Returns an owned physical-queue aggregate. Invalid/stale queue IDs and a recorded artifact from another exact compiled object return an empty result.
+    // Owned per-queue aggregate. Bad queue IDs or a foreign artifact give an empty result.
     [[nodiscard]] GpuTaskGraphPhysicalQueueRecordingStatistics physicalQueueRecordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] Optional<GpuRecordedPacket> packetSnapshot(const GpuSubmissionPacketId& packet)const noexcept;
-    // Validates this recorded graph against current compiler output and resolves the declared task's packet. The result is that packet's native final state.
+    // Checks this recorded graph against compiler output and resolves the task's packet to its native final state.
     [[nodiscard]] bool hasTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task)const noexcept;
     [[nodiscard]] bool copyTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task, CommandListResourceStateHandoff& outStateSeed)const;
 
@@ -327,7 +325,7 @@ private:
     GraphicsArena& m_arena;
     GlobalUniquePtr<ArtifactStorage> m_activeStorage;
     GlobalUniquePtr<ArtifactStorage> m_candidateStorage;
-    // Submission readers may overlap on independent queues. Conflicting record/submit/reset admission is nonblocking, while destruction alone joins operations that own the artifact.
+    // Readers may overlap on independent queues. Conflicting admission is nonblocking; only destruction joins owners.
     mutable Atomic<u32> m_operationState{ 0u };
 };
 

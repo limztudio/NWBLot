@@ -47,7 +47,7 @@ namespace RendererTaskGraphDetail{
 struct AvboitPreGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
-    // The avboit system, the frame targets, the timing ticket, and the intervals timing slot are required: the pre-pass always records against this frame's ticket.
+    // All bindings required: the pre-pass always records against this frame's ticket.
     struct Payload{
         RendererAvboitSystem& avboitSystem;
         DeferredFrameTargets& targets;
@@ -85,7 +85,7 @@ public:
 struct AvboitOccupancyComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: compute emulation always generates against this frame's bindings.
+    // All bindings required: compute emulation always generates against this frame's bindings.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;
@@ -143,7 +143,7 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
         };
     };
 
-    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: shared emulation always generates against this frame's bindings.
+    // All bindings required: shared emulation always generates against this frame's bindings.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;

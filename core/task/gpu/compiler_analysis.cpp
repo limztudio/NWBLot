@@ -423,7 +423,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
 
     const Timer hazardAnalysisBegin = TimerNow();
     // Process physical resource use in the semantic stable order.
-    // Explicit and version relationships therefore outrank declaration order, while per-resource state emits only the nearest required RAW/WAR/WAW dependencies.
+    // Explicit and version edges outrank declaration order; per-resource state emits only the nearest RAW/WAR/WAW deps.
     usize potentialAccessCount = 0u;
     for(const GpuTaskId task : outAnalysis.m_topologicalOrder)
         potentialAccessCount += graph.taskAt(task.index).resourceUseCount;

@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread per leaf walks to root; the second child to reach a node unions (atomic visit counter, host-cleared). globallycoherent + barrier publish boxes first; parentless root stops.
+// One thread per leaf walks to root; the second child to arrive unions. Barrier publishes boxes; parentless root stops.
 [numthreads(NWB_BVH_BUILD_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint leaf = dispatchThreadID.x;

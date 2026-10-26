@@ -255,7 +255,7 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, c
     payload->destinationResource = clearDesc.destination;
     payload->destination = destinationResource.texture;
     payload->clearDesc = clearDesc;
-    // Capture and lowering keep the same exact graph-declared range rather than an all-subresources alias that would need the original TextureDesc to resolve later.
+    // Capture and lowering keep the exact declared range, not an all-subresources alias needing the TextureDesc later.
     payload->clearDesc.subresources = resolvedSubresources;
 
     const GpuTaskResourceUse resourceUse{ .resource = clearDesc.destination, .range = GpuTaskResourceRange{ .textureSubresources = resolvedSubresources, }, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, };

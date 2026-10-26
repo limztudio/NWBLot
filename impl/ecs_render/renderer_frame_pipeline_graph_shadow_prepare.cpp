@@ -390,7 +390,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
-    // A pure-software per-mesh chain is an explicit immediate predecessor of this endpoint. Keep the complete packet even when later trace consumers form a FrontierSafe frontier.
+    // Software per-mesh chains precede this endpoint. Keep the whole packet even when later consumers form a frontier.
     scheduling.allowMergeAcrossConsumerFrontier = pureSoftwareMeshSwBvhBuildsGraphOwned || m_deferredShadowPrepareSceneRefitTask.valid();
     constexpr usize s_DependencyCount = 1u;
     const Core::GpuTaskExternalStateSource shadowPrepareStateSource{ .states = m_shadowPreparePersistentState.source(), };
@@ -457,7 +457,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         accelStructFinalizeScheduling.forceSubmissionBoundary = false;
         accelStructFinalizeScheduling.allowPacketMerge = true;
         accelStructFinalizeScheduling.mergeWithPrevious = true;
-        // Shadow Preparation has direct later Compute consumers. Keep these Read finalizers in the same packet so those consumers wait on every completed build and its typed backing state together.
+        // Compute consumers follow Shadow Preparation. Keep Read finalizers in the same packet so they wait on every build.
         accelStructFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc accelStructFinalizeDesc;
         accelStructFinalizeDesc
@@ -465,7 +465,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             .setMarkerLabel("Shadow Preparation Accel-Struct Finalize")
             .setScheduling(accelStructFinalizeScheduling)
             .setDependencies(&m_deferredShadowPrepareTask, 1u)
-            // The immutable typed final-state collection expands to the same compiler inputs. Retain the individual declarations when members cannot form a complete unique set.
+            // The typed final-state collection expands to the same inputs. Keep individuals when members form no unique set.
             .setResourceUses(accelStructFinalizeSetGraphOwned ? nullptr : accelStructFinalizeResourceUses.data(), accelStructFinalizeSetGraphOwned ? 0u : accelStructFinalizeResourceUses.size())
             .setResourceSetUses(accelStructFinalizeSetGraphOwned ? &accelStructFinalizeSetUse : nullptr, accelStructFinalizeSetGraphOwned ? 1u : 0u)
         ;

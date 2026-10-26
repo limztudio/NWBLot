@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Producer inputs shared by the software compute kernel and the hardware ray-tracing shaders. The C++ renderer supplies the same emission-target and mesh-view layouts to both backends.
+// Producer inputs shared by SW and HW paths. The renderer supplies the same layouts to both.
 struct NwbCausticEmissionTarget{
     float4 aabbMin;
     float4 aabbMax;

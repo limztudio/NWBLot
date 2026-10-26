@@ -388,7 +388,7 @@ bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmission
     if(!frameAcquired || presentationSemaphore == VK_NULL_HANDLE || presentationSwapChainIndex >= m_presentSemaphores.size() || m_presentSemaphores[presentationSwapChainIndex] != presentationSemaphore)
         return false;
 
-    // Retiring blocks all new presentation claims and lifecycle operations while the queue locks are acquired in their canonical order by the native device join.
+    // Retiring blocks new presentation claims while queue locks join in canonical order.
     m_framePresentationSignalState = FramePresentationSignalState::Retiring;
     m_swapChainLifecycleState = SwapChainLifecycleState::RetiringPresentation;
     presentationLock.unlock();

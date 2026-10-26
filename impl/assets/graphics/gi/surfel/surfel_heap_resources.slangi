@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Heap-only surfel GI resource ABI. Aliases supply the pass-specific element types and access modes. Selector slots are dispatch-uniform push constants, so they use direct table indices.
+// Heap-only surfel GI resource ABI. Selector slots are dispatch-uniform push constants; use direct table indices.
 
 
 #include "surfel_record.slangi"

@@ -24,7 +24,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The shared scene-shading CB + light list are target-generation heap entries. The surfel push block selects the payload itself from the global table, so no local CBV here.
+// Scene-shading CB + light list are generation heap entries. The surfel push block selects the payload, so no local CBV.
 #define g_NwbGiSwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbSurfelHeapPushConstants.deferredResourcesHeapSlot]
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.w
@@ -32,7 +32,7 @@
 // Per-trace scene/material context. Its uniform heap slot is also pushed, selecting the five StorageBuffer aliases without a local selector CBV.
 #define g_NwbGiSwMaterialContextSlots g_NwbHeapSurfelMaterialContextSlotBuffers[g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot]
 
-// The generated evaluator reaches typed words and mesh-instance records through the mesh bindless-frame route before material_typed_bindings.slangi is included below.
+// The evaluator reaches typed words and instance records via the mesh bindless route before the bindings include.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbGiSwMaterialContextSlots.sceneSlots.w;
 }
@@ -50,7 +50,7 @@ uint nwbMeshFrameViewHeapSlot(){
 // Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
 
-// The generated shadow dispatch is also the material-surface evaluator for GI. It reads typed constants and instance storage through the heap-selected context above.
+// The shadow dispatch doubles as the GI surface evaluator. It reads typed constants and instance storage via the context.
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
 
@@ -66,7 +66,7 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../bvh/sw_instance.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 
-// Global heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots; the trace context carries the scene-node slot.
+// Global heap accessors for mesh and scene geometry. Material records carry mesh slots; trace context carries the node slot.
 #include "../bvh/bindless_heap_bvh.slangi"
 
 

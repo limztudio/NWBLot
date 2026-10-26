@@ -71,7 +71,7 @@ void OpaqueCsgIntervalStage::capturePayloads(
     if(!hasOpaqueCsgFrameWork)
         return;
 
-    // The graph owns the producer fence and each preceding producer fence. Normal prefix compilation merges these callbacks with G-buffer; a FrontierSafe boundary retains each timing ticket.
+    // The graph owns the producer fence chain. Normal prefix merges with G-buffer; FrontierSafe keeps each ticket.
     m_receiverSpanPayload.materialDrawBuffersUploaded = materialDrawBuffersUploaded;
     m_receiverSpanPayload.csgFrameBuffersUploaded = csgFrameBuffersUploaded;
     m_receiverSpanPayload.csgResources = csgResources;
@@ -174,7 +174,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
         return MakeUnexpected(Failure{});
     }
 
-    // The CSG interval-sample material stream has a different placement from opaque and receiver CSG work: Combine already completed, and the following Sample callback rasterizes immediately.
+    // Interval-sample material follows Combine immediately, unlike opaque/receiver work. Sample rasterizes right after.
     // That makes pairwise-distinct outputs graph-ownable without excluding earlier regular/receiver aliases.
     const bool opaqueCsgIntervalSampleComputeEmulationPlanCaptured = inputs.hasCsgFrameGpuWork
         && m_intervalSamplePayload.materialFrameStatesGraphOwned
@@ -302,7 +302,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
         opaqueCsgIntervalSampleComputeEmulationScheduling.allowPacketMerge = true;
         opaqueCsgIntervalSampleComputeEmulationScheduling.mergeWithPrevious = true;
         // Combine is the explicit immediate predecessor.
-        // The graph keeps its interval-image UAV handoff across any FrontierSafe split; Sample merges with this producer so its generated-vertex handoff and timing scope stay in one packet.
+        // The interval-image UAV handoff survives FrontierSafe splits; Sample merges so vertex handoff and timing stay together.
         opaqueCsgIntervalSampleComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc opaqueCsgIntervalSampleComputeEmulationDesc;
         opaqueCsgIntervalSampleComputeEmulationDesc

@@ -43,7 +43,7 @@ struct CsgReceiverDrawState{
     u32 cutterCount = 0u;
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
     bool active = false;
-    // Resolved with cutterCount so render-side CSG work can iterate the lookup-owned range directly instead of resolving the receiver component and group again.
+    // cutterCount lets render CSG iterate the lookup range directly, skipping receiver/group resolve.
 };
 
 struct CsgFrameState{

@@ -228,7 +228,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     nativeSubmissionInfo.sameQueueWaitElisionCount = waitStatistics.sameQueueWaitElisionCount;
     nativeSubmissionInfo.mergedTimelineWaitCount = waitStatistics.mergedTimelineWaitCount;
 
-    // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet so the caller can retry it with corrected tokens.
+    // Bad deps or completions are pre-submit input errors. Keep the recorded packet so the caller can retry with fixed tokens.
     GpuPacketSubmissionLease submissionLease;
     if(!transaction.beginPacketSubmission(graph, compiledGraph, packetID, recordedGraph.recordingAttemptGeneration(), submissionLease))
         return false;
@@ -254,8 +254,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         for(u8 commandListIndex = 0u; commandListIndex < recordedPacket->commandListCount; ++commandListIndex)
             graphSubmissionOwnerships[commandListIndex].reset();
     }
-    // Device has released its native Queue locks.
-    // Serialize only the irreversible CPU publication tail; another ordinary packet may enter Vulkan without exposing timing, payload, or transaction state out of order.
+    // Device has released its Queue locks. Serialize only the CPU publication tail; another packet may enter Vulkan meanwhile.
     SubmittingPacketUnwindScope resolutionSubmittingPacketUnwind(graph, transaction, compiledGraph, planAccess);
     PreparedTimingTicketsUnwindScope resolutionPreparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);
     ScopedLock resolutionLock(transaction.m_resolutionMutex);

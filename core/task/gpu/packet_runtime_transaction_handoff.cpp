@@ -343,8 +343,7 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
             if(stateSubset.empty())
                 return false;
         }
-        // Start from a valid, resource-empty base.
-        // This lets buildFanIn verify that independent terminal ranges are actually disjoint (including ownership) rather than treating an earlier branch as the base.
+        // Start empty so buildFanIn proves terminal ranges disjoint (ownership included), not just layered on an earlier branch.
         if(
             !firstSourceStates
             || !candidate.stateMerge.buildResourceSubset(*firstSourceStates, nullptr, 0u, nullptr, 0u, m_externalResourceHandoffBuildScratch)
@@ -391,7 +390,7 @@ bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(const 
             continue;
         if(!latest.queue.valid() || latest.queue.deviceGeneration != m_deviceGeneration || !latest.token.valid() || !latest.token.matchesPhysicalQueue(latest.queue.index, latest.queue.deviceGeneration))
             return false;
-        // The transaction holds one newest accepted token per physical queue, so this cannot duplicate a producer even when a queue accepted several packets before the recovery tail is armed.
+        // One newest token per queue, so no producer duplicates even after several accepts before the recovery tail arms.
         outTokens.push_back(latest.token);
     }
     return true;

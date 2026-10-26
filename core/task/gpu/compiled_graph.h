@@ -43,18 +43,14 @@ struct GpuSubmissionPacket{
     u32 dependencyCount = 0u;
     u32 externalDependencyOffset = 0u;
     u32 externalDependencyCount = 0u;
-    // Compiler-derived ready-frontier depth for native recording.
-    // Packets in one depth have no seed producer relationship, so the runtime may record opted-in packets concurrently while keeping deterministic compile-order submission.
+    // Ready-frontier depth. Same-depth packets share no producer, so opted-in packets may record concurrently in compile order.
     u32 recordingFrontier = 0u;
     GpuPhysicalQueueId queue;
-    // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical queue directly from GpuGraphSubmissionTransaction.
-    // It is a graph runtime policy, not a renderer token ladder.
+    // Late recovery/finalization packets wait for the latest accepted packet on every other queue.
     bool joinsAcceptedQueueFrontier = false;
-    // Exact recovery role within the broader accepted-frontier packet class.
-    // This remains false for ordinary late finalization packets that need the same queue join but do not recover a partially accepted graph.
+    // True only for recovery of a partially accepted graph, not ordinary late finalization.
     bool isRecoverySubmission = false;
-    // Distinguishes compiler-selected envelope membership from task-local PacketOnly/Task policies.
-    // recordsTiming remains the combined native-ticket requirement so existing recording and submission paths stay coherent.
+    // Compiler-selected envelope membership. recordsTiming stays the combined native-ticket requirement.
     bool recordsPacketEnvelopeTiming = false;
     bool recordsTiming = false;
 };
@@ -64,9 +60,7 @@ struct GpuPacketDependency{
     GpuSubmissionPacketId consumer;
 };
 
-// One lexically protected immutable packet plan.
-// Every borrowed array belongs to the compiled graph retained by GpuCompiledGraph::ReadView; callers must not store this value beyond that proof's lifetime.
-// Invalid/stale packet identities return an empty view instead of indexing plan storage in release builds.
+// Immutable packet plan. Borrowed arrays belong to the compiled graph; invalid packet IDs return an empty view.
 struct GpuCompiledPacketView{
     GpuSubmissionPacketId id;
     const GpuSubmissionPacket* plan = nullptr;
@@ -170,8 +164,7 @@ public:
     }
 };
 
-// Immutable presentation completion resolved from a strict typed-texture declaration.
-// It retains the semantic producer/backbuffer pair plus the compiler-owned packet and exact physical queue shared by every backbuffer user before the one native present signal.
+// Presentation completion: producer/backbuffer pair plus the shared compiler packet and queue before the present signal.
 struct GpuCompiledPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;
@@ -186,9 +179,7 @@ public:
 };
 
 
-// One semantic exclusive-ownership movement.
-// Internal moves stay one record even though native lowering emits a release and an acquire barrier; external routes leave the task and packet on the external side invalid.
-// Queue-family indices and sharing intent are captured by value so telemetry never has to reinterpret a later topology or resource declaration.
+// One exclusive-ownership movement. Internal moves stay one record despite lowering to release+acquire; queue indices copy by value.
 namespace GpuOwnershipTransferRoute{
     enum Enum : u8{
         Internal,
@@ -324,13 +315,13 @@ struct GpuTaskGraphCompileStatistics{
     f64 queueAssignmentSeconds = 0.0;
     f64 planningSeconds = 0.0;
     f64 totalSeconds = 0.0;
-    // Declaration structure is retained separately from resourceUseCount above, which remains the final materialized resource-use total after immutable resource-set expansion.
+    // Kept apart from resourceUseCount, which is the final materialized total after resource-set expansion.
     usize resourceSetCount = 0u;
     usize resourceSetMemberCount = 0u;
     usize directResourceUseCount = 0u;
     usize declaredResourceSetUseCount = 0u;
     usize expandedResourceSetMemberUseCount = 0u;
-    // Payload bytes count only the graph-owned payload objects themselves; dynamic payload allocations remain owned by their individual payload types and are deliberately excluded.
+    // Payload bytes cover graph-owned payload objects only; dynamic payload allocs stay with their payload types.
     usize payloadObjectCount = 0u;
     usize payloadObjectBytes = 0u;
     usize uploadBlobCount = 0u;
@@ -348,8 +339,7 @@ public:
 };
 
 
-// Immutable-by-value accepted-plan telemetry for one exact physical queue.
-// Barrier counts belong to the compiled task that lowers them: a cross-queue release belongs to its producer queue, while the matching acquire belongs to its consumer queue.
+// Accepted-plan telemetry for one physical queue. Release barriers belong to the producer queue, acquires to the consumer.
 struct GpuTaskGraphPhysicalQueueCompileStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -423,7 +413,7 @@ private:
 
 
 public:
-    // Runtime entry points take a short nonblocking read claim while deriving packet identities or plan storage before an exact graph attempt provides the immutable-plan lease.
+    // Entry points take a short nonblocking read claim while deriving packet/plan storage before an exact attempt grants the lease.
     // The view is deliberately nonmovable because its address participates in the thread-local lexical proof chain.
     class ReadView final : NoCopy{
         friend class GpuCompiledGraph;

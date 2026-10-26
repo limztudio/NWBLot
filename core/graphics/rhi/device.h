@@ -51,7 +51,7 @@ namespace Feature{
     };
 };
 
-// One opaque binary semaphore signal from a submission-local hook. Only the owning Device may decode it; presentation takes one binary signal while timeline deps stay token-based.
+// One opaque binary semaphore signal from a submission-local hook. Only the owning Device decodes it.
 struct QueueSubmissionNativeSignal{
     Object semaphore = Object(u64{0u});
     u64 value = 0u;
@@ -64,7 +64,7 @@ public:
 // Prepares a submission-local binary signal atomically; exceptions unwind to the application boundary.
 using QueueSubmissionPreSubmitCallback = Expected<QueueSubmissionNativeSignal>(*) (void* context, u64 identity, const GpuPhysicalQueueId& executionQueue);
 
-// Called once after hook preparation with the accepted token (or an invalid one on rejection). Callbacks must resolve one-shot state without throwing or draining Device.
+// Called once after hook preparation with the accepted token (or invalid on rejection). No throw, no Device drain.
 using QueueSubmissionResolvedCallback = bool(*) (void* context, u64 identity, const QueueSubmissionToken& submissionToken)noexcept;
 
 struct QueueSubmissionPreSubmitHook{
@@ -82,12 +82,12 @@ public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
 };
 
-// Local cross-queue dependencies. Same-queue tokens collapse to queue order; prior accepted waits may cover distinct-queue tokens. The caller owns the token array until submit returns.
+// Cross-queue deps. Same-queue tokens collapse to queue order. Caller owns the token array until submit returns.
 struct QueueSubmissionDesc{
     const QueueSubmissionToken* waitTokens = nullptr;
     usize waitTokenCount = 0;
     QueueSubmissionPreSubmitHook preSubmitHook;
-    // Recovery may require an exact queue timeline submission even after earlier work consumed every wait. Normal empty submissions stay no-op unless this is explicit.
+    // Recovery may need an exact queue submission even after earlier work consumed every wait.
     bool forceNativeSubmission = false;
 
 
@@ -123,10 +123,10 @@ struct CommandListParameters{
     // Type of the queue that this command list is to be executed on.
     // Dedicated Compute and Transfer queues expose only the command subsets their Vulkan families support.
     CommandQueue::Enum queueType = CommandQueue::Graphics;
-    // Device resolves queueType to its primary physical queue unless an exact queue is supplied. Explicit packets set it directly, so pools, uploads, handoffs never collapse same-class queues.
+    // Device resolves queueType to its primary queue unless an exact queue is set. Packets set it directly.
     GpuPhysicalQueueId physicalQueue;
     // Worker zero is the ordinary serial/direct lease.
-    // Ready-frontier graph recording combines a stable nonzero CpuTaskScheduler domain with its local nonzero worker index so different pools cannot alias one native arena shard.
+    // Ready-frontier recording pairs a nonzero scheduler domain with its local worker index so pools cannot alias one arena shard.
     // Manual nonzero worker indices may leave the domain at zero when the caller deliberately owns that namespace.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
@@ -169,7 +169,7 @@ typedef GraphicsBackend::Handle<CommandList> CommandListHandle;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Non-owning view into device-lifetime marker history (or the not-found sentinel). Recording may extend history concurrently; the owning GpuCrashTracker must outlive the view.
+// View into device-lifetime marker history (or the not-found sentinel). GpuCrashTracker must outlive the view.
 typedef Pair<bool, AStringView> ResolvedMarker;
 
 class GpuCrashTracker;
@@ -228,14 +228,14 @@ namespace GpuCrashDumpKind{
     };
 };
 
-// A captured GPU crash report (vendor-neutral): the last-executed GPU marker stack and device fault information, formatted as text ready to ship to the crash reporter.
+// Captured GPU crash report: last-executed marker stack and fault info, as text for the crash reporter.
 struct GpuCrashReport{
     AString<Alloc::PersistentArena> context;
     AString<Alloc::PersistentArena> details;
 
     const u8* binaryDump = nullptr;
     usize binaryDumpSize = 0u;
-    // Optional vendor-neutral binary GPU crash dump (e.g. '.nv-gpudmp') next to the text details. Non-owning view; valid only during the DispatchGpuCrash call.
+    // Optional binary crash dump (e.g. '.nv-gpudmp'). View; valid only during DispatchGpuCrash.
     GpuCrashDumpKind::Enum binaryDumpKind = GpuCrashDumpKind::None;
 
 
@@ -246,8 +246,7 @@ public:
     {}
 };
 
-// Process-global sink invoked when the graphics backend captures a GPU crash on device-lost.
-// The application registers a sink (e.g. forwarding to the crash reporter) so the graphics layer stays crash-subsystem-agnostic.
+// Process-global sink for backend GPU-crash capture on device-lost. The app registers it (e.g. forward to crash reporter).
 typedef void(*GpuCrashSink)(void* userData, const GpuCrashReport& report);
 
 void RegisterGpuCrashSink(GpuCrashSink sink, void* userData)noexcept;
@@ -318,7 +317,7 @@ public:
     {}
 };
 
-// Requested/effective encoding for a windowed swap chain. HDR10 uses 10-bit Rec.2020/PQ; scene color stays in linear RGBA16F until final presentation.
+// Windowed swap-chain encoding. HDR10 is 10-bit Rec.2020/PQ; scene color stays linear RGBA16F until present.
 namespace SwapChainOutputMode{
     static constexpr u8 s_SwapChainOutputModeSDRBase = 0;
     enum Enum : u8{
@@ -343,11 +342,11 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool startFullscreen = false;
     bool startBorderless = false;
     bool allowModeSwitch = false;
-    // Opt-in preference: if the current surface cannot expose HDR10, creation continues with the requested SDR format instead of rejecting the device or window.
+    // Without HDR10 on this surface, keep the requested SDR format instead of failing creation.
     bool enableHDR10Output = false;
-    // Opt-in presentation-image readback. Unsupported surfaces keep a normal presentable swap chain and publish swapChainReadbackAvailable=false instead of failing device creation.
+    // Presentation-image readback. Unsupported surfaces keep a presentable swap chain with swapChainReadbackAvailable=false.
     bool enableSwapChainReadback = false;
-    // Native mesh shaders are optional. Windows ARM64 defaults to compute emulation because extension advertisement alone does not qualify mesh-output correctness.
+    // Native mesh shaders are optional. Windows ARM64 defaults to compute emulation: extension advertisement alone does not qualify mesh output.
 #if defined(_WIN32) && (defined(__aarch64__) || defined(_M_ARM64))
     bool enableNativeMeshShaders = false;
 #else
@@ -355,20 +354,20 @@ struct DeviceCreationParameters : public InstanceParameters{
 #endif
     // Best-effort async Compute offload. Combined Graphics+Compute hardware aliases the roles unless a dedicated offload family exists.
     bool enableAsyncComputeLane = true;
-    // Best-effort optional transfer transport. Only a distinct transfer-only Vulkan family becomes CommandQueue::Transfer; copies otherwise use Compute/Graphics queues.
+    // Optional transfer transport. Only a distinct transfer-only Vulkan family becomes CommandQueue::Transfer.
     bool enableTransferQueue = true;
     // Opt-in same-class transports.
-    // The backend registers every safe extra queue from each active primary family and one deterministic alternate family per supported class when cross-family routing is on.
+    // Extra queues from each active primary family plus one alternate family per class when cross-family routing is on.
     // Graph tasks must allow same-class routing before ordinary work leaves the primary transport.
     bool enableSameClassMultiQueue = false;
-    // Permits an auxiliary same-class transport from a different compatible Vulkan family. Tasks must separately opt in before the compiler can route across that ownership boundary.
+    // Auxiliary same-class transport from another compatible family. Tasks opt in before the compiler routes across it.
     bool enableCrossFamilySameClassQueueRouting = false;
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;
 
     GraphicsVector<GraphicsString> requiredBackendDeviceExtensions;
     GraphicsVector<GraphicsString> optionalBackendDeviceExtensions;
-    // VK_EXT_debug_utils identifies validation messages with a signed ID. Keep the suppression list in that native form instead of the retired debug-report callback location token.
+    // VK_EXT_debug_utils uses signed IDs; keep the suppression list in that native form.
     GraphicsVector<i32> ignoredValidationMessageIds;
 
     GpuDescriptorHeapAbi bindlessHeapAbi;

@@ -46,7 +46,7 @@ StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapSwShadowSceneInstanc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Inverse-transpose normal to world space (dot with world->object columns); matches the rasterizer under uniform scale. nwbSafeNormalize guards singular transforms.
+// Inverse-transpose normal to world; matches raster under uniform scale. Guards singular transforms.
 float3 nwbSwShadowTransformNormal(const NwbSwBvhInstance instance, const float3 objectNormal){
     const float3 worldNormal = nwbSwBvhTransformNormal(instance, objectNormal);
     return nwbSafeNormalize(worldNormal, float3(0.0, 0.0, 1.0));

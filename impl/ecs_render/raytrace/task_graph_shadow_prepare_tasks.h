@@ -34,7 +34,7 @@ namespace ECSRenderDetail{
 struct ShadowPrepareGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, true };
 
-    // The raytracing system, the preparation outcome, the frame targets, and the timing ticket are required: the prepare task always preflights shadow resources for this frame.
+    // All bindings required: the prepare task always preflights this frame's shadow resources.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         ShadowPreparationOutcome& outcome;
@@ -59,7 +59,7 @@ public:
 };
 
 
-// Pure-software preparation shares scratch between every frozen mesh build. Keep each sentinel next to its compute callback so a later mesh cannot clear a prior mesh's rendezvous state.
+// Software preparation shares scratch across frozen mesh builds. Keep each sentinel by its callback so meshes never clear each other.
 struct ShadowPrepareSoftwareBvhBuildGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 

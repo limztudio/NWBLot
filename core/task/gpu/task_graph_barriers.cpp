@@ -44,8 +44,7 @@ bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, c
             const ArraySlice arrayEnd = subresources.baseArraySlice + subresources.numArraySlices;
             for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
                 for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-                    // CommandList::open can seed this exact subresource from an external handoff.
-                    // Keep that producer truth, but do not mistake a keep-initial-state descriptor fallback for a packet handoff: the declaration is authoritative when no explicit tracker state exists.
+                    // open() can seed this subresource from a handoff. The declaration wins when no explicit tracker state exists.
                     if(commandList.hasExplicitTextureSubresourceState(resource.texture.get(), arraySlice, mipLevel))
                         continue;
                     commandList.beginTrackingTextureState(resource.texture.get(), TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), barrier.before);
@@ -76,8 +75,7 @@ bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, c
         const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(resource.texture.get());
         if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
-        // A task thunk may transition internally after its declared entry use.
-        // Reapply the compiler-required final state against the native tracker, then retain it even when no Vulkan transition was needed so packet close publishes a complete external handoff.
+        // A thunk may transition past its declared entry use. Reapply the compiler final state and keep it, so close publishes a full handoff.
         commandList.setTextureState(resource.texture.get(), barrier.range.textureSubresources, barrier.after);
         commandList.beginTrackingTextureState(resource.texture.get(), barrier.range.textureSubresources, barrier.after);
         return true;
@@ -166,8 +164,7 @@ bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, c
         if(!resolveOwnershipQueues() || commandList.getResolvedDescription().physicalQueue != destinationQueue->id)
             return false;
 
-        // CommandList::open imports the compiler-selected producer state seed before packet prologue lowering.
-        // That import emits the paired Vulkan acquire barrier with the exact exported layout, so this record is a checked graph-plan marker rather than a second native acquire.
+        // open() already imports the producer seed and emits the paired acquire; this record is a checked plan marker.
         return true;
     }
     default:
@@ -197,8 +194,7 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compil
             if(!resource.texture)
                 return false;
             const TextureDesc& description = resource.texture->getCreationDescription();
-            // Only seed a state that the Vulkan backend will retain exactly at packet close.
-            // Other graph resources must already have an explicit compiler transition or native record-time state before they can become a source.
+            // Seed only a state the backend keeps at packet close; other resources need a compiler transition or record-time state first.
             if(!description.keepInitialState || description.initialState != use.requiredState)
                 continue;
 
@@ -219,8 +215,7 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compil
                 if(!stateMatches)
                     break;
             }
-            // A graph task can establish this state inside its own recording body (for example an upload changes CopyDest back to a texture's retained ShaderResource state).
-            // Only materialize a state that is already present before the task; the record body publishes its own state through the ordinary native tracker.
+            // A task can set this state in its own body (e.g. upload flips CopyDest back to ShaderResource). Only seed what is already there.
             if(!stateMatches)
                 continue;
             commandList.beginTrackingTextureState(resource.texture.get(), subresources, use.requiredState);

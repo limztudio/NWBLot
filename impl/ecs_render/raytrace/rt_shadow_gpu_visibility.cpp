@@ -180,7 +180,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         // Unsplit soft resolve phases retain their internal UAV fence.
         dispatchPrimarySoftShadowResolve(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, splitOpaqueSoftResolve, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates);
         if(splitSoftTransparentFold){
-            // The graph-owned transparent tail records in a later callback, so preserve the normal route's one-shot traversal diagnostic before this opaque producer returns.
+            // The transparent tail records later, so preserve the normal route's one-shot traversal diagnostic first.
             reportSoftwareShadowTraversal(targets);
             return producedFrameIndex;
         }

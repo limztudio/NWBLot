@@ -49,7 +49,7 @@ namespace TextureAssetLoader{
 // Creates, uploads, and registers a static 2D, cube, or 3D texture asset.
 // LDR UASTC uses ASTC 4x4 when available, then BC7, otherwise portable RGBA8.
 // Opaque HDR UASTC uses ASTC HDR 4x4, then BC6H, then RGBA16_FLOAT.
-// HDR textures with constant or companion-stream alpha decode and merge into RGBA16_FLOAT because one sampled-image descriptor owns the complete RGBA result.
+// HDR with flat/companion alpha decodes into RGBA16_FLOAT; one descriptor owns the full RGBA result.
 [[nodiscard]] bool Create(TextureGpuResource& outResource, const Texture& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName);
 
 // Loads a cooked Texture asset through the normal asset manager, then delegates to Create().

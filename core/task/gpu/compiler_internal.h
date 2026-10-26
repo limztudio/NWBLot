@@ -21,10 +21,10 @@ NWB_CORE_BEGIN
 
 class GpuTaskGraphCompiler final : NoCopy{
 public:
-    // Graph validation and hazards stay independent from physical queue policy, so later packet, barrier, recording, and submission stages can consume one validated analysis result.
+    // Validation and hazards stay independent of queue policy, so later stages share one analysis result.
     [[nodiscard]] bool analyze(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysis& outAnalysis)const;
 
-    // This produces only a physical-queue decision. It never creates a command list or changes submission; the scheduler supplies the topology found from its current device.
+    // Queue decision only. No command lists, no submission; the scheduler supplies the device topology.
     [[nodiscard]] bool assignQueues(
         GpuTaskGraphQueueAssignments& outAssignments,
         Alloc::ScratchArena& scratchArena,

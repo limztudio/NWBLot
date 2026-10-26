@@ -84,7 +84,7 @@ public:
 
     [[nodiscard]] usize retainedBufferCount()const noexcept{ return m_buffers.size(); }
 
-    // Replaces the accepted cache with `source` filtered to the supplied live imported resources for resource pruning that removes a runtime generation the prior snapshot referenced.
+    // Replaces the cache with `source` filtered to live imports, for pruning a removed runtime generation.
     [[nodiscard]] bool replaceResourceSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
 
     // Folds a graph packet's final native state into the retained accepted snapshot, then filters the result to the caller's current live resources.

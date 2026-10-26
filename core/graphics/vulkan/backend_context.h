@@ -195,14 +195,14 @@ public:
     // The acquired WSI image stays quarantined until swap-chain or device teardown; an already-resolved frame is a successful no-op.
     [[nodiscard]] bool abandonAcquiredFrame();
     // The return value retains continuation/retirement status.
-    // The output reports native presentation acceptance independently: it can be true even if later synchronization fails, and is false for out-of-date surfaces.
+    // Output reports native present acceptance alone: true even if later sync fails, false for out-of-date surfaces.
     [[nodiscard]] Expected<bool, PresentationFailure> present();
     // Claims the acquired image's completion semaphore for one exact graph packet.
     // A null hook leaves the direct transition-submit path in present() active.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
     // The renderer confirms only the terminal packet token accepted by the graph submission transaction.
     [[nodiscard]] bool confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept;
-    // A hook that reached a rejected or abandoned submission cannot be reused blindly; retire that binary signal before the next frame instead of allowing it to leak into another present.
+    // A hook from a rejected/abandoned submit is unusable; retire its signal before the next frame.
     [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
 
 
@@ -270,7 +270,7 @@ private:
     // Family selected for the optional auxiliary Graphics queue; it differs from the primary only for explicitly enabled cross-family routing.
     i32 m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_computeQueueFamily = s_InvalidQueueFamilyIndex;
-    // Optional offload family is distinct from the required Compute role, which aliases Graphics on universal hardware and remains mandatory on split Graphics-only/Compute-only hardware.
+    // Offload family differs from the Compute role, which aliases Graphics on universal hardware.
     i32 m_asyncComputeQueueFamily = s_InvalidQueueFamilyIndex;
     // Dedicated Compute and Transfer paths may likewise expose one cross-family auxiliary transport.
     // Device registration is opt-in, and task-level scheduling must separately select the resulting route.

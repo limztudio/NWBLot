@@ -144,7 +144,7 @@ bool GraphicsRuntime::runFrame(){
     }
 
     // Do not let a capture hold hide a device-loss/recreation request.
-    // No backend beginFrame, render, or present call is made here, so the last completed frame stays on screen while the platform loop remains responsive.
+    // No backend calls here, so the last finished frame stays on screen while the loop stays responsive.
     if(m_deviceRecreationRequested)
         return false;
 
@@ -211,7 +211,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
     }
 
     // Each task pairs preparation with rendering.
-    // The dependency chain publishes each pass's prepared work before the next pass prepares dependent resources, while main-thread execution preserves platform thread contracts.
+    // Each pass's prepared work publishes before the next pass prepares; main-thread execution keeps platform contracts.
     CpuTaskScope frameTasks(m_cpuScheduler, m_frameTaskProfileLabel);
     const CpuTaskOptions options{ .priority = CpuTaskPriority::Critical, .target = CpuTaskTarget::MainThread, };
     CpuTaskHandle previous;

@@ -14,7 +14,7 @@
 
 #include "sw_shadow_ray.slangi"
 
-// The full-res visibility array the deferred lighting samples: this pass writes the binary opaque mask (later multiplied by the transparent pass), one layer per shadow slot.
+// This pass writes the binary opaque mask, one layer per slot; the transparent pass multiplies on later.
 #define g_NwbSwShadowVisibility nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 
@@ -38,7 +38,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 worldPosition = nwbSwShadowLoadWorldPosition(texel);
     const float3 normal = nwbSwShadowLoadNormal(texel);
 
-    // Trace only the lights that hold a shadow slot (params.z >= 0); write each light's visibility into its own slot layer. Lights without a slot stay at the cleared "all lit" white default.
+    // Trace only slotted lights (params.z >= 0), one layer each. Others stay cleared white.
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
         const float slot = g_NwbSceneLights[i].params.z;

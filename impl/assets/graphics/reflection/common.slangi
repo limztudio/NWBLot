@@ -79,7 +79,7 @@ struct NwbReflectionView{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Candidate allocation and the feedback bound are scheduling inputs. This helper is only for optional counters; disabling writes never changes eligibility, queue contents, or decisions.
+// Counters are optional diagnostics; disabling writes never changes eligibility, queue, or decisions.
 void nwbReflectionRecordDiagnostic(const uint byteOffset, const uint value){
     if(g_NwbReflectionParameters.diagnosticsEnabled != 0u && value != 0u){
         uint previousCount;
@@ -105,7 +105,7 @@ half3 nwbReflectionEnvironment(const float3 direction){
 void nwbReflectionStore(const uint2 pixel, const bool glass, const half3 radiance, const half source){
     // Radiance clamp plus the source tag fit half; widen only at the float4 store.
     const half4 output = half4(max(radiance, half3(0.0h)), source);
-    // Mixed queue lanes select the surface, but each store keeps a uniform descriptor index. This avoids requiring storage-image nonuniform indexing beyond the existing device contract.
+    // Mixed lanes pick the surface, but each store keeps a uniform index. No storage-image nonuniform indexing needed.
     if(glass)
         nwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.glassOutputSlot)[pixel] = float4(output);
     else
@@ -133,7 +133,7 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
         packedNormal = nwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
         if(!isfinite(packedNormal.w) || packedNormal.w <= NWB_REFLECTION_GLASS_IOR_MIN)
             return false;
-        // Glass reflection and transmission share the same optical boundary. Its IOR determines F0, so the two entry terms stay complementary even without an authored opaque-reflection parameter.
+        // Glass reflection and transmission share one boundary. Its IOR sets F0, so entry terms stay complementary.
         const half ior = clamp(half(packedNormal.w), half(1.0h), NWB_REFLECTION_GLASS_IOR_MAX);
         const half ratio = (ior - half(1.0h)) / (ior + half(1.0h));
         f0 = half3(ratio * ratio);
@@ -162,7 +162,7 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     surface.normal = nwbSafeNormalize(glass ? packedNormal.xyz : packedNormal.xyz * 2.0 - 1.0, -incident);
     if(dot(surface.normal, incident) > 0.0)
         surface.normal = -surface.normal;
-    // Project the component-wise FP16 raster-position bound onto the offset normal. Captured glass instead bounds four D32 depth steps, keeping the inverse margin in the final bias below.
+    // Project the FP16 position bound onto the offset normal. Glass bounds four D32 depth steps instead.
     float originUncertainty = dot(abs(surface.position) * NWB_REFLECTION_POSITION_RELATIVE_ERROR, abs(surface.normal));
     if(glass){
         const float nextDepth = min(asfloat(asuint(depth) + NWB_REFLECTION_GLASS_DEPTH_UNCERTAINTY_STEPS), 1.0);
@@ -184,7 +184,7 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     surface.bias = max(NWB_REFLECTION_SURFACE_BIAS_MIN, originUncertainty + length(cameraRay) * NWB_REFLECTION_SURFACE_BIAS_DISTANCE_SCALE);
     if(!isfinite(surface.bias) || !all(isfinite(surface.direction)) || !all(isfinite(surface.weight)) || !all(isfinite(surface.position + surface.normal * surface.bias)))
         return false;
-    // The scheduling upper bound precedes stochastic VNDF outcomes, including zero or rejected samples. A prior frame's actual candidates cannot prove a later sample fits the same queue budget.
+    // The upper bound precedes stochastic VNDF outcomes. A prior frame's candidates cannot prove a later sample fits.
     stableTraceEligible = float(surface.roughness) <= g_NwbReflectionParameters.roughnessCutoff && surface.bias < g_NwbReflectionParameters.maxRayDistance;
     if(!glass && surface.roughness > half(0.0h)){
         const float2 randomSample = nwbReflectionSample2D(pixel, uint2(g_NwbReflectionParameters.sampleBaseX, g_NwbReflectionParameters.sampleBaseY), g_NwbReflectionParameters.samplingSeed);

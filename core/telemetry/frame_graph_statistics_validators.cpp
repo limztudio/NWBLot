@@ -327,7 +327,7 @@ template<typename StatisticsT>
 
     const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
     const FrameGraphSubmissionRuntimeStatistics& ownerSubmission = ownerStatistics.submission;
-    // Submission acceptance and per-queue snapshots visit packets in different orders, so floating duration sums can differ by 1 ULP while counts remain exact.
+    // Acceptance and per-queue snapshots order packets differently, so float sums may differ by 1 ULP; counts stay exact.
     return
         submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
         && submission.acceptedTaskCount <= ownerSubmission.acceptedTaskCount

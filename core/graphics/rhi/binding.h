@@ -124,7 +124,7 @@ namespace BindlessLayoutType{
         Immutable = s_BindlessLayoutTypeImmutableBase, // Must use registerSpaces to define a fixed descriptor type
 
         MutableSrvUavCbv,   // Global non-sampler resource table
-                            // Valid descriptor types: Texture_SRV, Texture_UAV, TypedBuffer_SRV, TypedBuffer_UAV, StructuredBuffer_SRV, StructuredBuffer_UAV, RawBuffer_SRV, RawBuffer_UAV, ConstantBuffer.
+                            // Valid types: Texture_SRV/UAV, TypedBuffer_SRV/UAV, StructuredBuffer_SRV/UAV, RawBuffer_SRV/UAV, ConstantBuffer.
 
         MutableSampler,     // Global sampler table
                             // Valid descriptor types: Sampler

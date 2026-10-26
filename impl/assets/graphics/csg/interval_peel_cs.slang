@@ -20,12 +20,12 @@ struct NwbCsgIntervalPeelEntry{
     uint id;
 };
 
-// The standalone peel dispatch has no mesh draw constants. Its view UniformBuffer slot therefore rides in its own push payload, while b13 remains an intentional local-layout gap.
+// Standalone peel has no mesh constants. Its view slot rides its own push payload; b13 stays a layout gap.
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_VIEW])
 #include "../mesh/bindless_heap_mesh.slangi"
 #include "../mesh/view_ray.slangi"
 
-// The CSG context selects target-generation Texture2DArray UAVs from the StorageImage heap; required formatless-storage-image support permits both float formats.
+// CSG context selects Texture2DArray UAVs from the heap; formatless support permits both float formats.
 #define g_NwbCsgBackCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
 #define g_NwbCsgIntervalId (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))

@@ -47,7 +47,7 @@ struct SceneSwBvhInstanceGpu{
 };
 static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
 
-// The software scene hierarchy and its leaf instances share topology and leaf indices, so preflight freezes them as one batch against the selected storage generation.
+// Scene hierarchy and leaf instances share topology/indices; preflight freezes one batch per storage generation.
 // A fresh capture keeps node and instance bytes together for one graph upload; accepted static-cache reuse keeps only identity, counts, and hash.
 class PreparedSceneBvhUpload final : NoCopy{
 private:

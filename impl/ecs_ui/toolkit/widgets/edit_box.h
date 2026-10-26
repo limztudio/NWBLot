@@ -92,7 +92,7 @@ public:
 
     // Admits matching source bytes and mode-appropriate hard lines with LTR edges. Failure preserves prior geometry.
     [[nodiscard]] bool adoptLayout(TextLayout&& layout);
-    // Call after shaping at the target display scale before arranging painted text; measurement preserves logical line, caret, hit-test, and composition coordinates.
+    // Shape at display scale before arranging; measurement keeps line, caret, hit-test, composition coords.
     [[nodiscard]] bool measure(TextService& text, const DisplayMetrics& display);
     [[nodiscard]] Expected<EditBoxPlacement> arrange(const Rect& bounds, const Insets& padding, const Rect& clip, Point previousScroll, f32 caretWidth = 1.0f, bool revealCaret = true)const noexcept;
     // Uses a caller-reserved content viewport, such as a two-axis scrollbar layout.

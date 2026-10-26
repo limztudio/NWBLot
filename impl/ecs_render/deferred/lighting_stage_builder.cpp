@@ -93,7 +93,7 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
             Core::GpuUploadBufferTaskDesc{
                 .source = laggedBindlessSlotsBlob,
                 .destination = inputs.bindlessSlots,
-                // Automatic-state selector buffers publish Common; Deferred Lighting owns the following ConstantBuffer transition in this same externally gated packet.
+                // Selector buffers publish Common; Deferred Lighting owns the ConstantBuffer transition in this same packet.
                 .finalState = Core::ResourceStates::Common, }
         );
         if(!historySlotsUploadTaskResult){
@@ -117,7 +117,7 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
     const usize lightingExternalDependencyCount = useLaggedLightingHistory ? LengthOf(laggedLightingExternalDependencies) : 0u;
 
     // Active lagged Lighting receives compiler-owned state seeds for its shared prefix inputs while it reads history.
-    // Transparent depth is the explicit exception: the finalizer dependency above orders its temporary AVBOIT DepthRead layout before Lighting samples ShaderResource state.
+    // Transparent depth is the exception: the finalizer above orders its temporary DepthRead layout before Lighting samples it.
     const Core::GpuTaskResourceUse resourceUses[] = {
         ReadTextureUse(inputs.albedo, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
         ReadTextureUse(inputs.normal, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),

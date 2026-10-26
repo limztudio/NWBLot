@@ -37,8 +37,7 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     scratch.externalBaseStateSeed.reset();
     scratch.externalMergedStateSeed.reset();
 
-    // State snapshots include inherited state as well as resources a producer changed.
-    // Keep the base-plus-branches fan-in rule while deriving every filtered branch from declarations: a later source may replace the base, but two sources may not leave incompatible state.
+    // Base-plus-branches fan-in from declarations: a later source may replace the base, two sources may not disagree.
     const auto appendSourceSubset = [&]{
         if(scratch.stateSubsetScratch.empty())
             return true;
@@ -118,8 +117,7 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
                     return false;
                 }
 
-                // A given external producer need not have touched every resource declared by the consumer.
-                // Empty subsets deliberately remain absent instead of manufacturing an initial state; a later source or the compiler's transition supplies the state that actually exists.
+                // Empty subsets stay absent; a later source or the compiler transition supplies the real state.
                 if(!appendSourceSubset())
                     return false;
             }
@@ -172,15 +170,13 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             return false;
         }
 
-        // Unlike an optional task state source, an imported ownership handoff must name every first-use range.
-        // A missing state would leave the acquire marker without the native source layout/owner it is required to import, so reject recording instead of falling back to descriptor creation state.
+        // An imported handoff must name every first-use range; a gap rejects recording instead of using creation state.
         if(scratch.stateSubsetScratch.empty() || !appendSourceSubset())
             return false;
         return appendMergedExternalSource();
     };
 
-    // Resource-owned external handoffs are resolved from compiler markers rather than a renderer packet override.
-    // They are imported before ordinary task sources so the native command list opens with the released ownership and emits the paired acquire before any graph prologue transition.
+    // External handoffs resolve from compiler markers. They import first so the list opens released and emits the acquire before prologue.
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
         if(!compiledTaskView.valid())

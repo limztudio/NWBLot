@@ -19,7 +19,7 @@ float nwbCsgPixelWorldDistanceTolerance(const float3 worldPosition){
     const float3 worldPositionDx = ddx(worldPosition);
     const float3 worldPositionDy = ddy(worldPosition);
     const float footprint = max(length(worldPositionDx), length(worldPositionDy)) * 0.5;
-    // Clamp the screen-derivative footprint. At grazing angles ddx/ddy explode, inflating discard slop and carving thin slivers along silhouettes. Capping keeps the cut crisp.
+    // Clamp the derivative footprint. Grazing ddx/ddy explode and carve slivers; capping keeps the cut crisp.
     return min(footprint, NWB_CSG_RECEIVER_DISCARD_MAX_WORLD_TOLERANCE);
 }
 

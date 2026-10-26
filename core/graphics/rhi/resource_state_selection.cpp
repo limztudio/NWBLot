@@ -113,7 +113,7 @@ bool CommandListResourceSelection::grow()noexcept{
     if(!storage)
         return false;
 
-    // Entries occupy the prefix and survive trivial relocation. Growing moves only the bucket region, rebuilt before publication; reallocate frees its former top block.
+    // Entries pack the prefix and survive moves. Growing moves buckets only, rebuilt before publish; reallocate frees the old top.
     for(usize index = 0u; index < m_size; ++index){
         Entry entry;
         const void* const source = m_storage ? static_cast<const void*>(static_cast<const u8*>(storage) + index * sizeof(Entry)) : &m_inlineEntries[index];

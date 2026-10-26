@@ -25,9 +25,7 @@ namespace GpuTaskGraphBuiltinDetail{
 
 template<typename ResourceDesc>
 [[nodiscard]] inline bool BuiltInTaskCanMaterializeRetainedState(const ResourceDesc& resourceDesc, const ResourceStates::Mask graphInitialState, const ResourceStates::Mask externalFinalState)noexcept{
-    // Retained resources restore to their descriptor state when a native packet closes.
-    // The graph may use a different built-in state when it starts from that descriptor state: compiler-owned barriers establish the primitive state and the packet exports the restored one.
-    // A mismatched declaration has no native source that this helper can prove, and a terminal external state must agree with the close-time restoration before the graph publishes its handoff.
+    // Retained resources restore to descriptor state at packet close. Built-ins may start from a different state via compiler barriers.
     if(!resourceDesc.keepInitialState)
         return true;
     return resourceDesc.initialState != ResourceStates::Unknown && graphInitialState == resourceDesc.initialState && (externalFinalState == ResourceStates::Unknown || externalFinalState == resourceDesc.initialState);

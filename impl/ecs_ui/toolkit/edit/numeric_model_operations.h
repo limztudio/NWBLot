@@ -25,7 +25,7 @@ NWB_IMPL_UI_BEGIN
 namespace NumericEditDetail{
 
 
-// Both numeric models share draft acceptance and bounds handling; parsing, formatting, and value equality remain specific to the integer and floating-point types.
+// Both numeric models share draft and bounds handling; parsing and equality stay type-specific.
 template<typename Value, typename Bounds, typename Canonicalize, typename Changed>
 [[nodiscard]] NumericEditResult CommitDraft(
     Value& value,

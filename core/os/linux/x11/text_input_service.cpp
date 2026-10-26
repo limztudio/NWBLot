@@ -212,7 +212,7 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
     });
 
     m_caretSpot = XPoint{ static_cast<short>(Clamp<i32>(caret.x, s_MinI16, s_MaxI16)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, s_MinI16, s_MaxI16)), };
-    // Send the spot even when it did not move: this IM round trip also drains forwarded-key sync work, which keeps committed text and key events in order.
+    // Always send the spot, even unmoved: this IM round trip also drains forwarded-key sync and keeps text/key order.
     // Callback/no-preedit styles may ignore this optional candidate-window hint.
     const bool unsupported = XSetICValues(m_context, XNPreeditAttributes, m_caretAttributes, nullptr) != nullptr;
     if(unsupported){

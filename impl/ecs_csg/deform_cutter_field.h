@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns cutter classification and per-vertex signed distances with the shared epsilon snap, so walls and caps observe identical distances in preview and commit.
+// Owns cutter classification and per-vertex distances with the shared epsilon snap; walls and caps agree.
 namespace CsgDeformShapeKind{
     enum Enum : u8{
         Invalid,

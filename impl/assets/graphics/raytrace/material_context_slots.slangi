@@ -4,7 +4,7 @@
 
 // Shared slot payload for ray-tracing material context buffers.
 // Matches ECSRenderDetail::RayTraceMaterialContextSlots exactly.
-// The buffers here are all global-heap STORAGE_BUFFER descriptors; each shader binds this tiny cbuffer at its own spare binding and uses the slots to select typed heap aliases.
+// Buffers here are global-heap STORAGE_BUFFERs; each shader binds this cbuffer at a spare binding to select typed aliases.
 
 
 #ifndef NWB_GRAPHICS_RAYTRACE_MATERIAL_CONTEXT_SLOTS_SLANGI

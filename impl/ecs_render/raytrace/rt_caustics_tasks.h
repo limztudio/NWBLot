@@ -51,7 +51,7 @@ static void ConfirmCausticAccumulatorClears(Payload& payload)noexcept(
         payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear();
 }
 
-// A warm accumulator decays before either photon route writes atomic splats. Separate task so the compiler lowers the UAV dependency into the producer callback, not reassertion after decay.
+// A warm accumulator decays before either photon route writes splats. Separate task so the compiler lowers the UAV dep into the producer.
 struct CausticAccumulatorDecayGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -73,14 +73,14 @@ public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
 
-        // Match the producer's existing no-work and failed-shadow behavior. A graph declaration can still keep the accumulator dependency, but no dispatch is issued unless the producer would run.
+        // Match the producer's no-work behavior: keep the dep, but skip dispatch unless the producer would run.
         if(!payload.shadowVisibilityPrepared)
             return true;
         const bool hasWork = payload.hardwareCaustics ? payload.raytracingSystem.hasHwCausticWork(payload.meshView) : payload.raytracingSystem.hasCausticWork(payload.meshView);
         if(!hasWork)
             return true;
 
-        // A prior rejected record can retry this task before its graph transaction gets discarded. Release the incomplete query reservation before starting the retry's one photons interval.
+        // A rejected record may retry before discard. Release the incomplete reservation before the retry's interval.
         Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         payload.causticPhotonTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, payload.graphics.getDevice(), commandList);
@@ -192,7 +192,7 @@ public:
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         payload.causticResolveTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_CausticResolve, payload.graphics.getDevice(), commandList);
         payload.raytracingSystem.dispatchCausticGeometryDownsample(commandList, payload.targets);
-        // The next callback writes the timestamp endpoint on this same primary command list. Close this callback's nested marker now, before the packet recorder advances to the wavelet task marker.
+        // The next callback ends timestamps on this same list. Close this nested marker before the recorder advances.
         return Core::FinishSplitGpuTimingMarker(&payload.causticResolveTiming);
     }
 
@@ -278,7 +278,7 @@ struct CausticResolveGraphTask{
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
-        // Preserve the existing no-producer contract: the graph-owned irradiance clear remains authoritative and no resolve dispatch is emitted when the selected photon producer did not record.
+        // No-producer contract: the graph-owned irradiance clear wins, no resolve dispatch when the producer never recorded.
         if(!payload.causticProducerDispatched){
             Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
             return true;

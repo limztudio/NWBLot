@@ -92,7 +92,7 @@ void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& 
     handle = Core::GpuDescriptorHandle::Invalid();
 }
 
-// Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback on coincident centroids. Node layout matches the per-mesh build.
+// Binned-SAH BVH over indices[lo, hi); node 0 is root. Splits on the min SAH boundary, median on coincident centroids.
 u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, const Span<const u32> instanceLeafCost, const Span<u32> indices, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes){
     const u32 nodeIndex = static_cast<u32>(nodes.size());
     nodes.push_back(SceneBvhNodeCalculation{});
@@ -110,7 +110,7 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
 
     // Primitive counts weight scene-level SAH so high-cost instances influence partitioning.
 
-    // Bounding centroid extent over the slice: the per-axis extent picks which axes are binable (a zero extent axis cannot separate any instances and is skipped).
+    // Centroid extent picks binable axes; a zero-extent axis separates nothing and is skipped.
     SIMDVectorSingle centroidMin = VectorReplicate(s_RayTracingFiniteInfinity);
     SIMDVectorSingle centroidMax = VectorReplicate(-s_RayTracingFiniteInfinity);
     for(u32 i = lo; i < hi; ++i){
@@ -119,7 +119,7 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
         centroidMax = VectorMax(centroidMax, centroid);
     }
 
-    // Per-bin accumulators for a single axis: AABB min/max, instance count, summed leaf cost. s_SceneBvhSahBinCount bins is the standard granularity and keeps the bin grid cache-resident.
+    // Per-axis bins: AABB, count, summed leaf cost. s_SceneBvhSahBinCount bins keeps the grid cache-resident.
     SIMDVectorSingle binMin[s_SceneBvhSahBinCount];
     SIMDVectorSingle binMax[s_SceneBvhSahBinCount];
     f32 binCost[s_SceneBvhSahBinCount];
@@ -156,7 +156,7 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
             ++binCount[b];
         }
 
-        // Right-to-left suffix AABB / count / cost so every boundary's right partition is exact, then sweep left-to-right building the matching left prefix and evaluate the SAH at each one.
+        // Right-to-left suffix stats make every boundary's right side exact; then sweep left building the prefix SAH.
         SIMDVectorSingle suffixMin[s_SceneBvhSahBinCount];
         SIMDVectorSingle suffixMax[s_SceneBvhSahBinCount];
         f32 suffixCost[s_SceneBvhSahBinCount];
@@ -180,7 +180,7 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
         }
 
         // Boundary k splits at bin k: left = bins [0, k), right = bins [k, end).
-        // The parent AABB is the union of every bin (suffix at index 0); the SAH parent-area divisor folds out by comparing costs on the same slice, so the un-normalized cost is minimized directly.
+        // The parent AABB is the bin union (suffix 0); same-slice comparison folds out the divisor, minimizing the raw cost.
         const SIMDVectorSingle parentMin = suffixMin[0u];
         const SIMDVectorSingle parentMax = suffixMax[0u];
         const SIMDVectorSingle parentArea = AabbTests::SurfaceArea(parentMin, parentMax);

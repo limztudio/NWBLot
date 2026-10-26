@@ -141,7 +141,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
             Core::GpuUploadBufferTaskDesc{
                 .source = receiverRangesBlob,
                 .destination = inputs.csgReceiverRanges,
-                // CSG structured buffers restore Common at native packet close; G-buffer owns their transient SRV state exactly like the graph-owned material streams above.
+                // CSG buffers restore Common at packet close; G-buffer owns their transient SRV state like the material streams.
                 .finalState = Core::ResourceStates::Common, }
         );
         if(!csgFrameUploadTaskResult){

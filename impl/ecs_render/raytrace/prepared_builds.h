@@ -20,11 +20,11 @@ NWB_IMPL_BEGIN
 
 
 // Material surface hooks in the shadow, caustic, and GI trace paths select texture assets through typed bindless slots.
-// Keep the exact preflight-resolved handles beside the trace geometry so graph declaration never has to inspect mutable material caches while recording.
+// Keep preflight handles beside trace geometry; declaration never inspects mutable caches while recording.
 using PreparedShadowTraceMaterialSampledTextureVector = Vector< Core::TextureHandle, Core::Alloc::GlobalArena >;
 
 
-// A BLAS build derives its geometry directly from retained buffers. Keep the resolved operation, not a MeshResources pointer: meshes can be replaced or pruned between preflight and record.
+// A BLAS build derives geometry from retained buffers. Keep the resolved op, not a mesh pointer: meshes may prune before record.
 struct PreparedMeshBlasBuild{
     Name meshName = s_NameNone;
     Core::BufferHandle positionBuffer;
@@ -50,7 +50,7 @@ struct PreparedMeshBlasBuild{
 using PreparedMeshBlasBuildVector = Vector< PreparedMeshBlasBuild, Core::Alloc::GlobalArena >;
 
 
-// The software mesh builder shares global sort/payload/counter storage, so one frozen operation retains both its mesh-local inputs/outputs and the exact shared scratch generation.
+// The software builder shares global scratch; one frozen op retains mesh inputs/outputs plus the scratch generation.
 // Never retain MeshResources pointers: runtime geometry can be replaced or pruned between preflight and Shadow Preparation recording.
 struct PreparedMeshSwBvhBuild{
     Name meshName = s_NameNone;
@@ -92,7 +92,7 @@ struct PreparedMeshSwBvhBuild{
 using PreparedMeshSwBvhBuildVector = Vector< PreparedMeshSwBvhBuild, Core::Alloc::GlobalArena >;
 
 
-// The scene-level software traversal consumes one descriptor-table entry per distinct mesh. Retain owning handles so recording consumes the same resources captured during preparation.
+// Scene traversal consumes one descriptor entry per distinct mesh. Own the handles so recording sees preparation's set.
 struct PreparedSceneSwBvhMesh{
     Name meshName = s_NameNone;
     Core::BufferHandle nodeBuffer;

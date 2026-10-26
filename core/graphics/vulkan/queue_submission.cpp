@@ -480,7 +480,7 @@ VkResult Queue::updateLastFinishedID(){
     u64 completedValue = 0;
     const VkResult res = m_context.deviceDispatch.vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
     if(res == VK_SUCCESS)
-        // vkQueueWaitIdle() is a stronger completion fact than a later timeline query. Never let a stale driver value make retired command buffers or descriptor uses appear in flight again.
+        // vkQueueWaitIdle() beats a later timeline query. Never let a stale driver value resurrect retired buffers.
         m_lastFinishedID = Max(m_lastFinishedID, completedValue);
     else if(res == VK_ERROR_DEVICE_LOST)
         m_device.markDeviceLost();
@@ -550,7 +550,7 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList
         return next;
     }
 
-    // Queue submission/timeline retirement holds m_mutex before arriving here. It may take a worker arena lock, but worker recording never takes m_mutex, so the lock order cannot form a cycle.
+    // Submission/retirement holds m_mutex here. Worker recording never takes m_mutex, so no lock cycle.
     ScopedLock lock(workerArena->mutex);
 
     NWB_ASSERT(source.get_allocator() == workerArena->commandBuffersPool.get_allocator());

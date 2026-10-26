@@ -538,7 +538,7 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     const Graphics::GpuTaskId unrelatedSuccessor = *unrelatedSuccessorResult;
     ASSERT_TRUE(unrelatedSuccessor.valid());
 
-    // Keep the direct cross-queue edge from the first task, while sequencing the consumer after the attempted unrelated merge so packet order cannot accidentally make this test pass.
+    // Keep the cross-queue edge while sequencing the consumer after the merge, so packet order cannot fake a pass.
     const Graphics::GpuTaskId consumerDependencies[] = { first, unrelatedSuccessor };
     Graphics::GpuTaskDesc consumerDesc;
     consumerDesc.setIdentity(Name("tests/task_graph/frontier_override_compute_consumer")).setMarkerLabel("Frontier Override Compute Consumer").setDependencies(consumerDependencies, LengthOf(consumerDependencies));

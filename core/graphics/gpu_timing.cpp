@@ -310,7 +310,7 @@ void GpuTimingRecorder::endScope(CommandList& commandList, GpuTimingScope& scope
 
     GpuTimingAccumulator::QueryEndResult::Enum endResult = GpuTimingAccumulator::QueryEndResult::Invalid;
     {
-        // Do not retain this lock while publishing into the ticket: terminal ticket paths take the ticket first and then release or quarantine query ownership through the recorder.
+        // Drop the lock before publishing into the ticket: terminal paths take the ticket first, then release query ownership.
         ScopedLock lock(m_mutex);
         GpuTimingAccumulator* accumulator = findAccumulator(scope);
         if(accumulator)

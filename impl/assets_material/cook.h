@@ -187,7 +187,7 @@ public:
     Span<MaterialCookEntry> materialEntries
 );
 
-// Transparent-pass twin of EmitMaterialPixelShaders: generates each TRANSPARENT `surface` material's AVBOIT accumulate PS (not a material stage shader; name stored on the cooked material).
+// Transparent twin of EmitMaterialPixelShaders: one AVBOIT accumulate PS per TRANSPARENT `surface`.
 // Opaque skipped; explicit-stage transparent rejected (no separate AVBOIT hook in the schema).
 // `surfaceSource` must be an absolute path.
 [[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAccumulatePixelShaders(
@@ -198,7 +198,7 @@ public:
     Span<MaterialCookEntry> materialEntries
 );
 
-// Occupancy/extinction twins of the accumulate PS: same surface.renderCoverage contract, names stored on the cooked material (not stage shaders). `surfaceSource` must already be resolved.
+// Occupancy/extinction twins of the accumulate PS; names stay on the cooked material, not stage shaders.
 [[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOccupancyPixelShaders(
     const Path& cacheDirectory,
     AStringView configurationSafeName,

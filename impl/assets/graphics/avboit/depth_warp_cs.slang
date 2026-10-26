@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Every work buffer is selected from the global heap through the shared target-generation slot payload. Keep the established names below so the warp algorithm stays readable.
+// Every work buffer comes from the global heap via the shared slot payload. Keep names below so the warp stays readable.
 #define g_CoverageWords nwbAvboitCoverageWords()
 #define g_DepthWarp nwbAvboitDepthWarpUav()
 #define g_Control nwbAvboitControlUav()

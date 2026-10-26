@@ -26,11 +26,11 @@ namespace RendererTaskGraphDetail{
 
 
 // Large graph-owned compute effects may use an auxiliary physical queue only when the device-wide same-class policy is enabled.
-// Keep each direct successor on the initially chosen transport: the effect remains one semantic packet while the compiler owns its exact inter-packet waits.
+// Keep each successor on its first transport: one semantic packet while the compiler owns inter-packet waits.
 // Cross-family routing stays separately disabled here until an effect-specific ownership/performance decision promotes it.
 void EnableSameFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling, const bool preserveDirectDependency = true)noexcept;
 
-// A cross-family route remains a second explicit opt-in. The compiler validates every declared resource against its concurrent-sharing contract and lowers paired barriers for any crossing.
+// Cross-family routes stay second opt-in. The compiler checks resources against sharing contracts and lowers paired barriers.
 inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling)noexcept{
     scheduling.allowCrossFamilySameClassQueueRouting = true;
 }

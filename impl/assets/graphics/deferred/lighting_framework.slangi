@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Deferred lighting library: surface inputs + light list + shadow accessor. The pass owns the loop (load surface, dispatch BXDF, apply per-light visibility). Linear transport.
+// Deferred lighting: surface inputs + light list + shadow accessor. Pass owns the loop; linear transport.
 
 
 #include "binding_slots.h"
@@ -21,10 +21,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Scene-shading cbuffer + light list are global-heap entries fetched via the per-frame slot cbuffer; declared below before the scene include so the slot resolves.
+// Scene-shading cbuffer + light list are global-heap entries via the per-frame slot cbuffer; declared before the scene include.
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.w
-// All inputs + selector are global-heap entries: no local descriptor set. Keep the selector macro alive through the cook-generated BXDF module (scene accessors expand there too).
+// Inputs + selector are global-heap entries: no local set. Keep the selector through the cook-generated BXDF module.
 struct NwbDeferredLightingPushConstants{
     uint resourceSlots;
     uint presentationMode;
@@ -47,7 +47,7 @@ bool nwbBxdfPresentationIsHdr10(){
     return nwbDeferredPresentationIsHdr10();
 }
 
-// Authored BXDFs return linear radiance in all harnesses. Display mapping runs once after composition, so reflected samples and fresh hits share one color space.
+// Authored BXDFs return linear radiance. Display maps once after composition; reflected and fresh hits share one space.
 bool nwbBxdfRequiresLinearOutput(){
     return true;
 }
@@ -63,15 +63,15 @@ bool nwbBxdfRequiresLinearOutput(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolved surfel irradiance texture (rgb = indirect, a = coverage). Lighting reads this, not the RW pool: no frames-in-flight race. Cleared to 0 when GI is off.
+// Resolved surfel irradiance (rgb = indirect, a = coverage). Lighting reads this, not the RW pool: no flight race.
 
-// Indirect irradiance for the OPAQUE path: blend the normalized surfel field with hemiAmbient by coverage. The resolve texture is 1:1 with the screen, so sample this pixel.
+// OPAQUE indirect: blend surfel field with hemiAmbient by coverage. Resolve is 1:1 with screen, so sample this pixel.
 half3 nwbBxdfResolvedIndirect(const int2 pixel, float3 normalVector){
     const half4 resolved = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)));
     return lerp(nwbGiHemiAmbient(normalVector), half3(resolved.rgb), saturate(resolved.a));
 }
 
-// NwbBxdfSurface (the BXDF parameter type) is shared with the transparent / AVBOIT accumulate path; it lives in deferred/bxdf_surface.slangi, included above.
+// NwbBxdfSurface is shared with the transparent/AVBOIT path; lives in deferred/bxdf_surface.slangi above.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,7 +81,7 @@ float3 nwbDeferredDecodeNormal(half3 value){
     return nwbSafeNormalize(float3(value) * 2.0 - 1.0, float3(0.0, 0.0, 1.0));
 }
 
-// Unpack the G-buffer at one screen texel into the BXDF surface. Mip-0 Loads match the Graphics point sampler with no implicit derivatives in this Compute shader.
+// Unpack the G-buffer at one texel. Mip-0 Loads match the Graphics point sampler with no derivatives in Compute.
 NwbBxdfSurface nwbBxdfLoadSurface(const int2 pixel){
     const int3 texel = int3(pixel, 0);
     const half4 baseColorSample = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.x).Load(texel));

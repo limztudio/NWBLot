@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-2 adaptive transparent resolve: interpolate where the coarse neighbourhood agrees, re-trace where it disagrees, fold onto the full-res opaque mask. Fallback when edge compaction is off.
+// Stage-2 adaptive resolve: blend where coarse agrees, re-trace where not. Fallback when compaction is off.
 
 
 #include "sw_binding_slots.h"

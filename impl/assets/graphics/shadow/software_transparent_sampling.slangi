@@ -55,7 +55,7 @@ bool nwbSwTransparentSamplingGeometryMatches(const half4 current, const half4 pr
 }
 
 uint nwbSwTransparentSamplingBudget(const bool geometryAccepted, const half3 previousMoments, const uint maximumSamples){
-    // Moments are (0, 1) visibility statistics and the history count caps at 32; the variance gate only compares against small bounded thresholds, so half math is sufficient here.
+    // Moments are (0,1) stats capped at 32 samples; half math is enough for the small threshold checks.
     const half variance = previousMoments.y - previousMoments.x * previousMoments.x;
     // Half moments may round a small nonnegative variance slightly below zero.
     const bool settled = geometryAccepted && all(isfinite(previousMoments))

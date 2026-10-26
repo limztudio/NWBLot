@@ -162,7 +162,7 @@ inline constexpr usize s_ResourceReferenceBytes = sizeof(MaterialResourceReferen
         }
     }
 
-    // Every cooked record must correspond to exactly one resource field. Since duplicate matching records above are rejected, this also excludes stray references to numeric or mutable fields.
+    // Each record maps to one resource field. Dup rejects above also block stray numeric/mutable refs.
     return resourceFieldCount == resourceReferences.size();
 }
 

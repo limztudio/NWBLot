@@ -40,7 +40,7 @@ static const half3 NWB_DEFERRED_REFLECTION_DEBUG_FALLBACK_COLOR = half3(1.0h, 0.
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Composite stays in linear RGBA16F on Compute. The following Graphics present pass handles the swapchain/sRGB boundary, so this dispatch needs no storage-capable surface images.
+// Composite stays linear RGBA16F on Compute. The Graphics present pass handles the swapchain boundary, so no surface images.
 [numthreads(NWB_DEFERRED_COMPOSITE_GROUP_SIZE, NWB_DEFERRED_COMPOSITE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint width;
@@ -51,7 +51,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(pixel.x >= width || pixel.y >= height)
         return;
 
-    // Every composite input is a full-resolution point-sampled target. Use direct mip-0 loads so this Compute shader needs no implicit derivatives or compute-derivative extension.
+    // Every input is full-resolution point-sampled. Direct mip-0 loads need no derivatives or extensions.
     const int3 texel = int3(pixel, 0);
     half3 compositeColor = half3(0.0h);
     half frontTransmittance = half(1.0h);

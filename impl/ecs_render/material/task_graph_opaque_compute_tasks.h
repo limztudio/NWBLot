@@ -38,7 +38,7 @@ namespace ECSRenderDetail{
 struct OpaqueRegularComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The material system, the frame targets, the timing-ticket slot, and the setup readiness flags are required: compute emulation always generates against this frame's bindings.
+    // All bindings required: compute emulation always generates against this frame's bindings.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;
@@ -73,7 +73,7 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         };
     };
 
-    // The material system, frame targets, timing-ticket slot, setup flags, and opaque timing slot are required: shared emulation always brackets its phase with the frame timing.
+    // All bindings required: shared emulation always brackets its phase with the frame timing.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;

@@ -26,7 +26,7 @@ inline constexpr CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
 inline constexpr u32 s_CsgShapeHashFoldShiftBits = 32u;
 
 
-// Canonical built-in cutter names shared by the cooker, the runtime registry, and the CPU deform rebuild, so classification never drifts between duplicated literals.
+// Built-in cutter names shared by cooker, registry, and CPU rebuild; one copy, no drift.
 inline constexpr Name s_CsgPlaneShapeName("engine/csg/plane");
 inline constexpr Name s_CsgBoxShapeName("engine/csg/box");
 inline constexpr Name s_CsgSphereShapeName("engine/csg/sphere");

@@ -52,7 +52,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
     opaqueComputeEmulationScheduling.forceSubmissionBoundary = false;
     opaqueComputeEmulationScheduling.allowPacketMerge = true;
     opaqueComputeEmulationScheduling.mergeWithPrevious = true;
-    // This explicit immediate successor must stay with the preceding Graphics prefix work: CSG clear timing and the G-buffer range require one command list under FrontierSafe packetization.
+    // Stays with the Graphics prefix: CSG-clear timing and the G-buffer range need one list under FrontierSafe.
     opaqueComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc opaqueComputeEmulationDesc;
     opaqueComputeEmulationDesc
@@ -81,7 +81,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     using namespace RendererTaskGraphDetail;
 
     payload.csgResources = csgResources;
-    // The receiver producer is an early part of G-buffer's one Graphics submission; its dispatch timing shares the existing ticket while the receiver raster keeps its own scope in G-buffer.
+    // This producer is early G-buffer submission; dispatch shares its ticket while receiver raster keeps its own scope.
     payload.instanceCount = inputs.instanceCount;
     payload.materialTypedByteCount = inputs.materialTypedByteCount;
     payload.materialDrawBuffersUploaded = inputs.materialDrawBuffersUploaded;
@@ -89,7 +89,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     payload.materialFrameStatesGraphOwned = inputs.materialFrameStatesGraphOwned;
     payload.materialGeometryStatesGraphOwned = inputs.materialGeometryStatesGraphOwned;
 
-    // The compute pipeline shares CSG's clip context. It does not write receiver-event images; those stay G-buffer raster outputs absent from this producer's uses.
+    // The compute pipeline shares CSG's clip context. Receiver-event images stay G-buffer raster outputs, absent here.
     const Core::GpuTaskResourceUse resourceUses[] = {
         ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer),
         ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange),
@@ -113,7 +113,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     opaqueCsgReceiverComputeEmulationScheduling.forceSubmissionBoundary = false;
     opaqueCsgReceiverComputeEmulationScheduling.allowPacketMerge = true;
     opaqueCsgReceiverComputeEmulationScheduling.mergeWithPrevious = true;
-    // This successor stays with G-buffer under FrontierSafe so its compiler-owned output boundary, existing prefix timing ticket, and accepted range all remain one primary Graphics packet.
+    // Stays with G-buffer under FrontierSafe: output boundary, timing ticket, and range stay one Graphics packet.
     opaqueCsgReceiverComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc opaqueCsgReceiverComputeEmulationDesc;
     opaqueCsgReceiverComputeEmulationDesc

@@ -496,7 +496,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
     const auto arena = *arenaResult;
 
     // Each explicit worker owns this native pool shard.
-    // Do not take m_mutex here: submission/timeline retirement remains serialized there, while allocation and reset stay independent for ready-frontier recording workers.
+    // No m_mutex here: submission stays serialized there, while alloc/reset stay independent for recording workers.
     ScopedLock lock(arena->mutex);
 
     if(!arena->commandBuffersPool.empty()){

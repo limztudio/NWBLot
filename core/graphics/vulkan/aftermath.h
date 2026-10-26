@@ -25,7 +25,7 @@ namespace Aftermath{
 
 // NVIDIA Nsight Aftermath GPU crash dump integration.
 // Aftermath collects crash dumps for the whole process, so these entry points are process-global rather than per-device.
-// The runtime loads dynamically, so a vendored SDK adds no hard dependency: everything degrades to inactive when the runtime is missing or the GPU is not NVIDIA.
+// Dynamically loaded; no hard SDK dependency. Missing runtime or non-NVIDIA GPU degrades to inactive.
 
 // Non-owning view into the collected '.nv-gpudmp' bytes.
 // Owned by the Aftermath module and valid until the next dump; on device-lost it stays valid for the crash dispatch.
@@ -48,7 +48,7 @@ void Shutdown();
 
 [[nodiscard]] bool IsActive();
 
-// On device-lost, block (bounded) until Aftermath finishes collecting the crash dump, then return a view of the dump bytes (empty if Aftermath is inactive or produced no dump).
+// On device-lost, block briefly for dump collection. Empty when inactive or no dump.
 [[nodiscard]] GpuCrashDumpView WaitForCrashDump();
 
 

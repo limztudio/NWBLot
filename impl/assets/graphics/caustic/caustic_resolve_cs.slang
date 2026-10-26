@@ -71,7 +71,7 @@ struct NwbCausticResolvePushConstants{
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
 // Groupshared tile for small-dilation wavelet passes.
 groupshared half3  g_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
-// The geometry cache is RGBA16F. Keep sampled world positions compact in LDS and widen only for the edge-stop math; float3 storage would double shared memory with no added precision.
+// Geometry cache is RGBA16F. Keep positions compact in LDS; widen only for the edge-stop math.
 groupshared half3  g_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbCausticResolveTileActive;
@@ -333,7 +333,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             return;
         }
 
-        // The full-res world-position G-buffer is RGBA16F. Retain transport precision and promote only for the distance-based edge stop, matching the half-res geometry cache below.
+        // World-position G-buffer is RGBA16F. Promote only for the distance edge stop, like the half-res cache.
         const float3 centerWorld = float3(nwbCausticResolveWorldAtFull(fullTexel));
         const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
         const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));
@@ -377,7 +377,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const int fw = (int)g_NwbCausticResolvePushConstants.width;
                 const int fh = (int)g_NwbCausticResolvePushConstants.height;
                 const int2 base = int2(texel.x * 2, texel.y * 2);
-                // The uint32 accumulator holds fixed-point photon counts; keep its sum at full precision and convert to half only for the final irradiance divide, preserving small-flux accuracy.
+                // The accumulator holds fixed-point counts; keep full precision, convert to half only at the final divide.
                 float3 flux = float3(0.0, 0.0, 0.0);
                 [unroll] for(int oy = 0; oy < 2; ++oy){
                     [unroll] for(int ox = 0; ox < 2; ++ox){

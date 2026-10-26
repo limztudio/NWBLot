@@ -34,7 +34,7 @@ namespace __hidden_transparent_interval_tasks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Both transparent interval passes inspect the same snapshot and gate on the same framebuffer, draw-buffer, CSG-resource, and material-resource readiness.
+// Both transparent interval passes share one snapshot and gate on the same framebuffer, draw-buffer, CSG, and material readiness.
 struct TransparentIntervalReadiness{
     CsgFrameGpuDataView csgFrameData;
     bool ready = false;

@@ -22,7 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Neutral albedo for an unconsumed miss. A hit without an authored surface gets mid-grey only through the dispatch's explicit no-surface fallback, never by probing a .bind field.
+// Neutral albedo for an unconsumed miss. A surfaceless hit gets mid-grey only via the no-surface fallback.
 #ifndef NWB_GI_SW_TRACE_DEFAULT_ALBEDO
 #define NWB_GI_SW_TRACE_DEFAULT_ALBEDO 0.5h, 0.5h, 0.5h
 #endif
@@ -31,7 +31,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Closest-hit result: the world-space hit point, the geometric face normal (Lambert uses it), and the authored material-surface baseColor for the bounce.
+// Closest-hit result: world-space point, geometric face normal, and authored baseColor for the bounce.
 struct NwbGiTraceHit{
     bool hit;
     float t;

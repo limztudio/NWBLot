@@ -211,13 +211,13 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     if(g_State.requestWriteHandle == INVALID_HANDLE_VALUE)
         return CrashDumpTransportStatus::Failed;
 
-    // Re-entrancy guard: a fault while already inside the transport (e.g. the SEH filter itself faulting) must not re-enter and corrupt the request or self-deadlock on the channel.
+    // Re-entrancy guard: a fault inside the transport (e.g. the SEH filter faulting) must not re-enter or self-deadlock.
     static thread_local bool s_InTransport = false;
     if(s_InTransport)
         return CrashDumpTransportStatus::Failed;
     s_InTransport = true;
 
-    // Serialize concurrent writers: if two threads fault at once, only one owns the single request pipe + ack event; the other bails (its sibling's report is still written).
+    // One writer owns the request pipe + ack event; the other bails (its sibling's report still lands).
     // One async-safe CAS, never blocks.
     u32 expected = 0u;
     if(!g_State.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){

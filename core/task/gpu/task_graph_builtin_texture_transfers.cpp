@@ -259,7 +259,7 @@ Expected<GpuTaskId> GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc,
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;
-            // A resolve source cannot also be a destination in one task: the required states need an explicit inter-task boundary rather than an ambiguous packet prologue.
+            // A resolve source cannot also be a destination in one task; that needs an inter-task boundary.
             if(existing.requiredState != state || existing.access != access)
                 return false;
         }

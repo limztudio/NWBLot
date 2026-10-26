@@ -288,7 +288,7 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
         .regionCount = uploadRegions.size(),
         .acceptedToken = &uploadToken,
         .finalState = Core::ResourceStates::ShaderResource,
-        // The loader has just created the image. Its descriptor state is the post-upload contract, not the native VkImage layout before this batch records its first write.
+        // Descriptor state is the post-upload contract, not the native layout before first write.
         .physicalInitialState = Core::ResourceStates::Unknown,
         .hasPhysicalInitialState = true,
     }

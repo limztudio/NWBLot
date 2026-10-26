@@ -147,8 +147,7 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
             return MakeUnexpected(Failure{});
     }
 
-    // Resource sets are immutable graph data.
-    // Expand them now rather than introducing an opaque aggregate into hazard analysis or barrier lowering; later stages see the same concrete member uses an explicit declaration would supply.
+    // Resource sets are immutable. Expand now so later stages see the same concrete member uses.
     usize expandedResourceUseCount = desc.resourceUseCount;
     const usize remainingResourceUseCapacity = static_cast<usize>(Limit<u32>::s_Max) - m_resourceUses.size();
     if(expandedResourceUseCount > remainingResourceUseCapacity)
@@ -346,8 +345,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
                 return MakeUnexpected(Failure{});
             for(usize previousSourceIndex = 0u; previousSourceIndex < sourceIndex; ++previousSourceIndex){
                 const GpuGraphInitialOwnerHandoffSourceDesc& previousSource = desc.initialOwnerHandoffSources[previousSourceIndex];
-                // One completion binding supplies one physical-queue timeline token at submission.
-                // Reusing it for sources from different queues would make a later graph impossible to submit safely: one acquire would necessarily wait on the wrong producer frontier.
+                // One completion names one queue timeline. Sharing it across queues would wait on the wrong frontier.
                 if(source.completion == previousSource.completion && source.sourceQueue != previousSource.sourceQueue)
                     return MakeUnexpected(Failure{});
                 const bool overlaps = desc.type == GpuGraphResourceType::Texture ? source.range.textureSubresources.overlaps(previousSource.range.textureSubresources) : desc.type == GpuGraphResourceType::AccelStruct

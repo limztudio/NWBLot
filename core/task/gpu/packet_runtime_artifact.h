@@ -22,16 +22,14 @@ NWB_CORE_BEGIN
 class GpuGraphSubmissionTransaction;
 
 
-// One accepted terminal packet that contributes to a graph-to-external resource handoff.
-// Several disjoint texture ranges may be published by different packets; a consumer waits on the returned token frontier before opening the handoff's merged state source.
+// One accepted terminal packet feeding a graph-to-external handoff. Consumers wait on the token frontier before opening the merged state.
 struct GpuTaskGraphExternalResourceHandoffProducer{
     GpuTaskId producerTask;
     GpuPhysicalQueueId sourceQueue;
     QueueSubmissionToken token;
 };
 
-// One exact terminal range contributing to a graph-to-external handoff.
-// A later graph can turn each range into an immutable initial-owner source; direct native consumers normally use the compact `waitTokens` frontier instead.
+// One exact terminal range in a graph-to-external handoff. A later graph may turn each range into an initial-owner source.
 struct GpuTaskGraphExternalResourceHandoffRange{
     GpuTaskResourceRange range;
     GpuTaskId producerTask;
@@ -39,8 +37,7 @@ struct GpuTaskGraphExternalResourceHandoffRange{
     QueueSubmissionToken token;
 };
 
-// Immutable view into one caller-owned GpuTaskGraphExternalResourceHandoffSnapshot.
-// Copying this view does not copy its pointed-to arrays; keep the snapshot alive and externally serialize every read against refill or destruction of that same snapshot.
+// View into a caller-owned snapshot. Copies share the arrays; keep the snapshot alive and serialize reads against refill/destroy.
 struct GpuTaskGraphExternalResourceHandoff{
     u64 planGeneration = 0u;
     GpuGraphResourceId resource;

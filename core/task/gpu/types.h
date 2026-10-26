@@ -84,7 +84,7 @@ namespace GpuTaskHazardType{
     };
 };
 
-// Dependency-edge flags are stored in the existing frame-graph telemetry payload without changing its wire format or the renderer's live scheduling behavior.
+// Edge flags ride in the existing telemetry payload; wire format and scheduling unchanged.
 namespace GpuTaskGraphTelemetryEdgeFlag{
     static constexpr u8 s_GpuTaskGraphTelemetryEdgeFlagNoneBase = 0u;
     enum Mask : u8{
@@ -115,8 +115,7 @@ namespace GpuTaskGraphTelemetryNodeFlag{
 
 
 struct GpuTaskId{
-    // This is globally unique for every live graph generation, rather than only graph-local.
-    // It rejects a handle accidentally carried between two concurrently live graph instances as well as one carried past reset().
+    // Globally unique per live graph generation, so handles cannot leak across live graphs or past reset().
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
 
@@ -168,8 +167,7 @@ inline constexpr bool operator!=(const GpuGraphResourceVersionId& lhs, const Gpu
     return !(lhs == rhs);
 }
 
-// A resource set is a graph-owned immutable collection of imported resources.
-// Task declarations may apply one uniform access contract to every member; the graph freezes that into ordinary per-resource uses before analysis, so sets never become a sync domain.
+// A resource set is a graph-owned immutable collection. One uniform contract on members freezes into per-resource uses; sets never sync.
 struct GpuGraphResourceSetId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
@@ -184,8 +182,7 @@ inline constexpr bool operator==(const GpuGraphResourceSetId& lhs, const GpuGrap
 
 inline constexpr bool operator!=(const GpuGraphResourceSetId& lhs, const GpuGraphResourceSetId& rhs)noexcept{ return !(lhs == rhs); }
 
-// Upload bytes belong to one graph generation just like task/resource handles.
-// The blob is CPU-side ownership only: recording copies it through the existing per-command-buffer staging allocator, after which normal chunk retirement stays responsible for GPU lifetime.
+// Upload bytes belong to one graph generation. Recording copies the blob via the staging allocator; chunk retirement owns GPU lifetime.
 struct GpuUploadBlobId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
@@ -247,8 +244,7 @@ inline constexpr bool operator!=(const GpuExternalCompletionId& lhs, const GpuEx
     return !(lhs == rhs);
 }
 
-// A packet is the compiler-generated unit of native recording and queue submission.
-// Its generation identifies one immutable compiled plan, so recompiling one unchanged graph still invalidates packet-local recording, submission, timing, hook, and capture handles.
+// A packet is the compiler unit of recording and submission. Its generation names one immutable plan; recompile invalidates packet-local handles.
 struct GpuSubmissionPacketId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
@@ -292,8 +288,8 @@ struct GpuTaskResourceUse{
     GpuTaskResourceRange range;
     ResourceStates::Mask requiredState = ResourceStates::Unknown;
     GpuTaskResourceAccess::Enum access = GpuTaskResourceAccess::Read;
-    // The consumer supplies an equivalent externally synchronized state source, so a matching concurrent read may omit a producer seed and its dependency.
-    // The compiler accepts this only for a same-state Read-to-Read handoff on compatible concurrent queues.
+    // The consumer brings an equivalent externally synced state source, so a matching concurrent read may skip the producer seed.
+    // Accepted only for same-state Read-to-Read handoffs on compatible concurrent queues.
     bool hasIndependentStateSource = false;
 };
 
@@ -304,8 +300,7 @@ struct GpuTaskResourceVersionUse{
     GpuTaskResourceVersionRole::Enum role = GpuTaskResourceVersionRole::kCount;
 };
 
-// The range/state/access contract applies to every member of `resourceSet`.
-// Sets keep no independent pseudo-resource: GpuTaskGraph expands them in declaration order into concrete GpuTaskResourceUse records, keeping the normal hazard and barrier machinery.
+// The range/state/access contract covers every member of `resourceSet`. Sets expand in declaration order; no pseudo-resource.
 struct GpuTaskResourceSetUse{
     GpuGraphResourceSetId resourceSet;
     GpuTaskResourceRange range;
@@ -331,8 +326,7 @@ struct GpuTaskExternalDependencyEdge{
 };
 
 
-// A compiled barrier is a graph-level transition or ownership request.
-// It deliberately names only engine resources, states, and resolved physical queues; the packet recorder lowers it through CommandList so the task graph stays free of Vulkan barriers.
+// A compiled barrier names only engine resources, states, and resolved queues; the recorder lowers it via CommandList.
 namespace GpuCompiledBarrierType{
     enum Enum : u8{
         TextureTransition,
@@ -345,12 +339,11 @@ namespace GpuCompiledBarrierType{
         TextureOwnershipAcquire,
         BufferOwnershipRelease,
         BufferOwnershipAcquire,
-        // A terminal imported-resource requirement.
-        // Lowering performs a real transition when needed, then always retains the requested state in the packet snapshot for the external consumer.
+        // Lowering transitions when needed, then keeps the requested state in the packet snapshot for the external consumer.
         TextureStateExport,
         BufferStateExport,
-        // Acceleration structures lower through their typed backing allocations, but remain graph resources in their own right.
-        // These markers let the graph retain/export that backing state and pair queue-family ownership without forcing every caller to import the backing Buffer as a second resource.
+        // Accel structs lower via typed backing allocs but stay graph resources.
+        // These markers retain/export backing state and pair queue ownership without importing the Buffer separately.
         AccelStructOwnershipRelease,
         AccelStructOwnershipAcquire,
         AccelStructStateExport,
@@ -367,9 +360,8 @@ struct GpuCompiledBarrier{
     GpuPhysicalQueueId sourceQueue;
     GpuPhysicalQueueId destinationQueue;
     GpuCompiledBarrierType::Enum type = GpuCompiledBarrierType::TextureTransition;
-    // A first-use marker.
-    // A known graph declaration initializes an otherwise unknown native tracker from `before`.
-    // An Unknown Read/ReadWrite first use instead requires an explicit native source at recording time; an imported packet state handoff stays authoritative when CommandList::open supplied one.
+    // A first-use marker. A known declaration inits an unknown tracker from `before`.
+    // Unknown Read/ReadWrite first use needs a native source at record time; an imported handoff wins when open() gave one.
     bool isGraphInitialState = false;
     // Only the first use of an imported external ownership handoff consumes the descriptor-owned state source.
     // Later graph-internal ownership acquires use their producer packet snapshot instead.
@@ -381,8 +373,7 @@ struct GpuCompiledBarrier{
 static constexpr usize s_GpuCompiledBarrierByteSize = 72u;
 static_assert(sizeof(GpuCompiledBarrier) == s_GpuCompiledBarrierByteSize, "GpuCompiledBarrier should keep its compact runtime layout");
 
-// A packet-state seed names the prior packet that owns the authoritative native state snapshot for one declared resource range.
-// The recorder filters that snapshot to the declared range before opening the consumer command list; no renderer-side fan-in is required for graph-internal edges.
+// A packet-state seed names the prior packet owning the native snapshot for one range. The recorder filters it to the declared range.
 struct GpuPacketStateSeed{
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;

@@ -184,8 +184,7 @@ bool GpuTimingFrameTransaction::prepareForRecovery()noexcept{
     if(!needsRetirement())
         return true;
 
-    // The old endpoint lives only in a packet that will not reach Vulkan, so it is safe for the recovery command list to overwrite the timestamp query's end slot.
-    // The begin reservation remains held throughout.
+    // The old endpoint lives in an unsubmitted packet, so the recovery list may overwrite the end slot; the begin stays held.
     if(m_state == State::BeginAccepted)
         return true;
     if(m_state == State::EndRecorded && m_recorder.prepareDeferredScopeForRecovery(m_scope)){
@@ -236,8 +235,8 @@ GpuTimingMeasure::GpuTimingMeasure(GpuTimingRecorder& recorder, const GpuTimingS
     , m_commandList(commandList)
 {
     // For a normal one-command-list scope, the marker brackets the whole timing range.
-    // A split scope closes the marker before its producer list closes and writes its ending timestamp on the ordered consumer list.
-    // Scope identity is retained separately for timing aggregation; the marker keeps the authored text so release diagnostics never receive a Name hash in place of the original label.
+    // A split scope closes the marker before its producer list closes and stamps the end on the ordered consumer list.
+    // Identity stays separate for aggregation; the marker keeps authored text so release builds never see a Name hash.
     if(!scopeDefinition.valid()){
         NWB_ASSERT(!scopeDefinition.identity && scopeDefinition.markerLabel.empty());
         return;
@@ -252,8 +251,7 @@ GpuTimingMeasure::GpuTimingMeasure(GpuTimingRecorder& recorder, const GpuTimingS
 
 GpuTimingMeasure::~GpuTimingMeasure()noexcept{
     if(UncaughtExceptionCount() != 0){
-        // A split measure may be owned by the caller of a task-graph recording operation and therefore outlive the opening command list during exception unwind.
-        // The command-list recording owner recovers its complete marker stack while that list is still alive; relinquish only this stale token instead of dereferencing the opener.
+        // A split measure may outlive its opening list on unwind; only this stale token relinquishes, never the opener.
         abandonTimingWithoutCallbacks();
         m_marker = {};
         return;

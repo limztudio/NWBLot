@@ -11,7 +11,7 @@
 
 // Global descriptor heap - typed mesh-stream views over the StorageBuffer class.
 // Raster geometry is stored in eleven immutable streams with five different structured element layouts plus four raw byte streams.
-// They all share the StorageBuffer descriptor table: the type/stride below is a shader-side view, exactly like the BVH-node alias in bindless_heap_bvh.slangi.
+// They share the StorageBuffer table: type/stride below is a shader-side view, like the BVH-node alias.
 // Per-draw instance data carries the slot for each mesh-stream ABI position.
 
 

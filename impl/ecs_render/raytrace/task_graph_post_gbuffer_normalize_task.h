@@ -36,7 +36,7 @@ struct PostGbufferNormalizeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
     // The raytracing system and the timing-ticket slot are required: the slot always points at the normalize ticket selected by the graphics prefix.
-    // Async timing and the shadow-visibility task are optional: async timing only spans one packet on the compute route, and the shadow task lookup may be absent when no visibility pass runs.
+    // Async timing and the shadow task are optional: timing spans one packet on the compute route, and no pass means no lookup.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;

@@ -152,7 +152,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
             Core::GpuUploadBufferTaskDesc{
                 .source = sceneShadingBlob,
                 .destination = inputs.sceneShading,
-                // See the light upload above: preserve the resource's automatic Common boundary and let the first declared reader lower its ConstantBuffer transition.
+                // Like the light upload: preserve the automatic Common boundary; the first reader lowers the ConstantBuffer transition.
                 .finalState = Core::ResourceStates::Common, }
         );
         if(!sceneUploadTaskResult2){

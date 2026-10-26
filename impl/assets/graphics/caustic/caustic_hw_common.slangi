@@ -25,7 +25,7 @@
 
 [[vk::push_constant]] ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticHwPushConstants;
 
-// The shared scene-shading CB + light list come from the frame selector payload in the heap. Per-hit dispatch reads the same shadow-owned material buffers as the SW path.
+// Scene-shading CB + light list come from the frame selector payload. Per-hit dispatch reads the shadow material buffers.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed alias of the global UniformBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCausticHwMaterialContextSlots[];
@@ -39,7 +39,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Route the per-hit surface dispatch through the heap-selected typed-word and mesh-instance buffers. The caustic push block selects its own mesh-view heap slot.
+// Route per-hit dispatch through heap-selected typed-word/instance buffers. The push block selects its mesh-view slot.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbCausticHwMaterialContextSlots.sceneSlots.w;
 }
@@ -61,7 +61,7 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Producer inputs share the global heap tables with the trace context and mesh-frame view. Slots are uniform per ray dispatch and ride the photon push block, so no NonUniformResourceIndex.
+// Producer inputs share the global heap tables. Slots are uniform per dispatch and ride the push block.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the global heap descriptor tables.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticHwEmissionTargets[];

@@ -217,13 +217,12 @@ bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
         return false;
     }
     // CommandList staging and graph-owned upload tasks both lower to VkBufferCopy.
-    // The API cannot truthfully report a successful upload for a region Vulkan rejects, so fail before creating either a native command list or a graph packet.
+    // Fail before creating a list or packet: the API cannot report success for a region Vulkan rejects.
     if((desc.destOffsetBytes & (sizeof(u32) - 1u)) != 0u || (desc.dataSize & (sizeof(u32) - 1u)) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload offset and size must be 4-byte aligned"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
         return false;
     }
-    // A retained buffer must publish a concrete state.
-    // Unknown would be restored at native close without a graph-visible final-state contract for the next consumer.
+    // A retained buffer needs a concrete state; Unknown restores at close with no graph-visible contract for the next consumer.
     if(desc.bufferDesc.keepInitialState && desc.bufferDesc.initialState == ResourceStates::Unknown){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up buffer '{}': keep-initial-state uploads require a concrete initial state"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
         return false;
@@ -250,8 +249,7 @@ bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': invalid upload layout"), ConvertString(desc.textureDesc.name.resolvedText()));
         return false;
     }
-    // A retained texture must publish a concrete state.
-    // Leaving it Unknown makes command-list close restore an untracked layout, so no graph task or later consumer can safely describe the uploaded contents.
+    // A retained texture needs a concrete state; Unknown restores an untracked layout no later consumer can describe.
     if(desc.textureDesc.keepInitialState && desc.textureDesc.initialState == ResourceStates::Unknown){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': keep-initial-state uploads require a concrete initial state"), ConvertString(desc.textureDesc.name.resolvedText()));
         return false;

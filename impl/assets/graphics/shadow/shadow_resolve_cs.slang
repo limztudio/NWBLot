@@ -92,7 +92,7 @@ struct NwbShadowResolvePushConstants{
 // Groupshared tile for small-dilation wavelet passes.
 groupshared NwbShadowResolveVisVec g_NwbShadowResolveTileVis[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared half2  g_NwbShadowResolveTileNormal[NWB_SHADOW_RESOLVE_TILE_TEXELS];
-// The half-res geometry cache is RGBA16F. Keep its scalar camera distance as half in LDS, then widen only for the Gaussian term so this tile does not double shared memory on quantized data.
+// Half-res geometry cache is RGBA16F. Keep its distance half in LDS; widen only for the Gaussian.
 groupshared half   g_NwbShadowResolveTileDist[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbShadowResolveTileValid[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 #endif
@@ -263,7 +263,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float guidedEps = NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC * centerDist;
         const float guidedEpsSq = guidedEps * guidedEps;
 
-        // Guidance is identical for every light layer at this pixel. Build the compact 3x3 classification once, then keep the original tap order while each layer loads only its own visibility values.
+        // Geometry identical per light at a pixel: build the 3x3 once, keep tap order, each layer loads its own values.
         uint validTapMask = 0u;
         uint guidedTapMask = 0u;
         float tapCoefficients[NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT];

@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The including pass selects a read-only surfel field through the four macros below. Keeping traversal here stops the live gather and the previous-frame gather from drifting apart.
+// The pass selects a read-only surfel field via the four macros below. Keeping traversal here stops live/prev drift.
 
 
 #ifndef NWB_SURFEL_GATHER_FIELD_POOL
@@ -93,7 +93,7 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
 
     if(totalWeight < half(NWB_SURFEL_GATHER_WEIGHT_EPSILON))
         return false;
-    // Keep the field's normalized irradiance for bounce tracing. Coverage separately fades its visible contribution near support edges, where a tiny weight would hard-cut.
+    // Keep normalized irradiance for bounce tracing. Coverage fades its contribution near support edges.
     outIrradiance = irradianceSum / totalWeight;
     outCoverage = half(nwbSurfelGatherCoverage(float(totalWeight)));
     return true;

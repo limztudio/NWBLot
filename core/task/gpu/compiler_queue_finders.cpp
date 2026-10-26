@@ -20,7 +20,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Queues in one Vulkan family exchange work through a timeline semaphore with no ownership transfer. Cross-family use stays opt-in; planning emits the paired handoff when needed.
+// Same-family queues share work via timeline semaphore, no ownership transfer. Cross-family stays opt-in.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const Span<const u64> prefixQueueCosts,
@@ -170,7 +170,7 @@ namespace GpuTaskGraphCompilerDetail{
         if(!candidateHistory)
             continue;
 
-        // A fresh store may finish calibration with no probe committed as incumbent. The static route is then the baseline, with no prior switch dwell to elapse.
+        // A fresh store may finish calibration with no probe as incumbent; the static route is then the baseline.
         const bool canSwitch = assignmentState ? GpuTaskTimingFeedbackCanSwitch(*incumbentHistory, *candidateHistory, *assignmentState, incumbent.id, candidate.id, frameIndex, policy) : GpuTaskTimingHistoryMeetsMinimumSamples(*incumbentHistory, policy)
                 && GpuTaskTimingHistoryMeetsMinimumSamples(*candidateHistory, policy)
                 && GpuTaskTimingBenefitExceedsHysteresis(*incumbentHistory, *candidateHistory, policy)
@@ -204,7 +204,7 @@ namespace GpuTaskGraphCompilerDetail{
     return result;
 }
 
-// Calibration is bounded and narrower than selection. It visits only legal opted-in routes until each has enough samples, then hysteresis resumes. The incumbent reserves this frame.
+// Calibration is narrower than selection: visits only legal opted-in routes until each has enough samples. Incumbent keeps this frame.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuPhysicalQueueTopology& topology,

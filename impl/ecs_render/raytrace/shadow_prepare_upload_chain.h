@@ -88,7 +88,7 @@ struct ShadowPrepareUploadChain{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The frozen selector, CSG context, caustic emission-target, surfel-constant, shadow material-context, and scene-BVH uploads that precede Shadow Preparation, chained in that order.
+// Frozen selector, context, targets, constants, and scene-BVH uploads precede Shadow Preparation, in that order.
 // Tasks declared before a failure stay in `chain`.
 class ShadowPrepareUploadChainBuilder final : NoCopy{
 public:

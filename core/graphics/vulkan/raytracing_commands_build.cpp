@@ -282,7 +282,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         geometrySignatures[i] = VulkanDetail::MakeAccelStructGeometryBuildSignature(blasScratch.geometries[i], &blasScratch.spheresData[i], &blasScratch.lssData[i], blasScratch.primitiveCounts[i], pGeometries[i].useTransform);
     }
 
-    // OMM update invariants also cover the micromap handle and its index/usage metadata. Those details are not persisted in the AS signature, so this path remains fail-closed.
+    // OMM update details are not in the AS signature, so this path stays fail-closed: micromap geometry updates unsupported.
     if(performUpdate && hasOpacityMicromap){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update BLAS: opacity-micromap geometry updates are unsupported"));
         return;

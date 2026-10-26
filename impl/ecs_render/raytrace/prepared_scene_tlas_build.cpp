@@ -98,7 +98,7 @@ void PreparedSceneTlasBuild::confirm(RendererRayTracingState& state)noexcept{
     }
     else
         state.m_tlasStaticSceneHashValid = false;
-    // This callback follows the accepted persistent-state handoff. A later graph import must use that binding rather than reasserting Common for this backing generation.
+    // This follows the accepted persistent-state handoff. Later imports use that binding, not a fresh Common.
     if(preparedTlasMatchesCurrent){
         state.m_tlasBackingFresh = false;
     }

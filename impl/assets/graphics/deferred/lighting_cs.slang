@@ -3,7 +3,7 @@
 
 
 #include "lighting_framework.slangi"
-// Cook-generated dispatch module: assembled from every material's `bxdf` declaration. Material shading stays at the same surface/BXDF boundary while lighting runs as compute.
+// Cook-generated dispatch module: assembled from every material's `bxdf` declaration; lighting runs as compute.
 #include "deferred/generated/bxdf_dispatch.slangi"
 
 

@@ -203,7 +203,7 @@ Expected<u32> CsgDeformCapBuilder::FillCutCaps(ScratchArena& scratchArena, Vecto
                     ++edgeIndex;
             }
         }
-        // Open boundary chains (e.g. cuts across an open sheet) carry no closable volume loop; they stay viable cap-free. Only a closed but degenerate loop fails viability.
+        // Open chains carry no closable loop; they stay viable cap-free. Only a closed degenerate loop fails.
         if(!CsgDeformCapBuilder::OrderBoundaryLoop(scratchArena, loopEdges, loop))
             continue;
         if(loop.size() < s_MinLoopVertices)

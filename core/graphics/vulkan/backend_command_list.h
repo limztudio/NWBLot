@@ -185,13 +185,12 @@ public:
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && isRecordingUnchecked();
     }
-    // Sticky for the open/close attempt: any failed capability or semantic check invalidates the list; close discards its native buffer and only open starts a fresh attempt.
+    // Sticky per attempt: any failed check invalidates the list; close drops its buffer, only open starts fresh.
     [[nodiscard]] bool commandRecordingFailed()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && commandRecordingFailedUnchecked();
     }
-    // Every open attempt starts a distinct native-buffer lease, including failed attempts.
-    // Packet recorders and replay tooling capture this serial before invoking extensible lowering and reject a thunk that closes or replaces the command buffer while claiming success.
+    // Every open starts a distinct lease. Recorders capture it before lowering; a thunk that swaps the buffer while claiming success is rejected.
     [[nodiscard]] u64 recordingLeaseSerial()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable ? recordingLeaseSerialUnchecked() : 0u;

@@ -138,7 +138,7 @@ struct MaterialPassDrawContext{
 };
 
 
-// Ray tracing gathers refractive emission targets before Deferred ranks the current scene lights. The root module brokers this compact contract so neither feature reaches the other's state.
+// Ray tracing gathers emission targets before Deferred ranks lights. The root module brokers this contract between them.
 struct RayTracingLightingClassificationInput{
     u32 refractiveInstanceCount = 0u;
 };

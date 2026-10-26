@@ -260,7 +260,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
 
     // Same-class routing may use every additional queue exposed by each active primary family.
     // The separate cross-family policy may additionally expose one distinct compatible family for each enabled queue class.
-    // Query family counts here, after physical-device selection and before vkCreateDevice, so no unsupported queue index is placed in the immutable Device registry.
+    // Count families after device pick, before vkCreateDevice, so no bad index lands in the Device registry.
     uint32_t physicalQueueFamilyCount = 0u;
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(physicalQueueFamilyCount, scratchArena);
@@ -321,7 +321,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
             appendSameClassQueue(queueClass, primaryFamily, queueIndex);
     };
 
-    // Preserve the old auxiliary identity when a cross-family route exists: it stays the first non-primary entry, with primary-family extra queues registered after it.
+    // Cross-family auxiliary stays the first non-primary entry; primary-family extras register after it.
     if(createCrossFamilySecondaryGraphicsQueue)
         appendSameClassQueue(CommandQueue::Graphics, m_secondaryGraphicsQueueFamily, s_GraphicsQueueIndex);
     appendPrimaryFamilyQueues(CommandQueue::Graphics, m_graphicsQueueFamily, s_SecondaryGraphicsQueueIndex);

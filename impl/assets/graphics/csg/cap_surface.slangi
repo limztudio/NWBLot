@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The cap-fill draw reuses the ordinary 64-byte mesh push ABI. Its fourth frame-slot word is unused here, so it selects the global CSG context UniformBuffer with no push growth.
+// Cap-fill reuses the 64-byte mesh push ABI. Its spare fourth word selects the global CSG context, no growth.
 struct NwbCsgCapFillPushConstants{
     uint4 dispatch;
     float4 viewportRect;
@@ -67,7 +67,7 @@ NwbMeshSurface nwbCsgCapSurface(const NwbCsgIntervalCapPixel cap, const NwbCsgRe
     hit.meshInstanceIndex = receiver.materialContext.z;
     hit.surfaceDispatchId = receiver.materialContext.x;
     hit.materialConstantByteOffset = receiver.materialContext.y;
-    // A cap has no receiver-triangle UV/color/tangent. Match the non-rasterized surface inputs of the generated dispatcher, while preserving every typed material field and both BXDF params.
+    // A cap has no receiver UV/color/tangent. Match the dispatcher non-rasterized inputs; keep typed fields and BXDF params.
     hit.uv0 = float2(0.0);
     hit.worldNormal = cap.normal;
     hit.worldPosition = cap.worldPosition;

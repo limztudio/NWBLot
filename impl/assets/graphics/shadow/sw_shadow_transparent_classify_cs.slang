@@ -58,7 +58,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 g_NwbSwShadowEdgeList[base + 1u] = i;
             }
             else{
-                // OVERFLOW: this edge will not be traced, so degrade it to the interpolated fallback rather than leaving the un-tinted opaque mask. Near-impossible at the allocated capacity.
+                // OVERFLOW: edge stays untraced; fall back to interp. Near-impossible at this capacity.
                 const half3 interp = nwbSwShadowInterpolateCoarse(coarseLight.samples, coarseLocation.weights);
                 const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
                 g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);

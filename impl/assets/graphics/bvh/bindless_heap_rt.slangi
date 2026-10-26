@@ -11,7 +11,7 @@
 
 // Global descriptor heap -- typed view of the shared ray-tracing per-instance material table.
 // The storage-buffer descriptor table is deliberately reinterpreted here as NwbRtInstanceMaterial records.
-// Every trace backend shares the same CPU-built table, while each pass selects its current descriptor through its local NwbRayTraceMaterialContextSlots cbuffer.
+// Every trace backend shares the same CPU-built table; each pass selects its descriptor via its local slots cbuffer.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

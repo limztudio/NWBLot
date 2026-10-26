@@ -125,7 +125,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importTexture(const TextureHandle& te
 
     GpuGraphResourceDesc resolvedDesc = desc;
     if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown){
-        // The backend preserves managed-fresh descriptor semantics while retaining Unknown for native or partially published textures whose current state is not set by their creation description.
+        // Managed-fresh descriptors keep Unknown for native textures whose state the creation desc never set.
         resolvedDesc.initialState = texture->resolveTaskGraphImportInitialState();
     }
     if(resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive && resolvedDesc.queueSharing != textureDesc.queueSharing)
@@ -389,8 +389,7 @@ void GpuTaskGraph::prepareResourceIndexes(const ResourcePointerKey& pendingPoint
             }
         }
 
-        // Build both tables before publishing either.
-        // Their move construction cannot fail, and both contain only already-published ordinals; an unsuccessful later append may retain capacity without changing lookup.
+        // Build both tables before publishing either. Both hold published ordinals only.
         static_assert(IsNothrowMoveConstructible_V<ImportIdentityIndex>);
         static_assert(IsNothrowMoveConstructible_V<ResourcePointerIndex>);
         m_resourceIdentityIndex.emplace(Move(identities));

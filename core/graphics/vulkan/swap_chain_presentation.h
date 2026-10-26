@@ -92,8 +92,7 @@ inline QueuePresentWaitDisposition::Enum ClassifyQueuePresentWaitDisposition(con
     }
 }
 
-// A never-presented acquired image has no reusable native layout.
-// Its direct command list must transition from Unknown directly instead of seeding the descriptor's retained Present state as if WSI had established it.
+// A never-presented image has no reusable layout. Its list transitions from Unknown, never seeding retained Present as if WSI set it.
 inline DirectPresentTransitionPolicy::Enum ResolveDirectPresentTransitionPolicy(const ResourceStates::Mask nativeInitialState)noexcept{
     if(nativeInitialState == ResourceStates::Unknown)
         return DirectPresentTransitionPolicy::TransitionFromUnknown;

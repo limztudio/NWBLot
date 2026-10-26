@@ -274,7 +274,7 @@ private:
     Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> m_frameDeformationPlans;
     Vector<MeshSkinningLocalBoundsDispatch, Core::Alloc::GlobalArena> m_frameLocalBoundsDispatches;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_frameLiveBuffers;
-    // Frame graph compiler artifacts. Declared once with the system and reset per submission so render() only redeclares into reused storage instead of constructing graph objects.
+    // Compiler artifacts. Declared once, reset per submit; render() only redeclares into reused storage.
     Core::GpuTaskGraph m_frameTaskGraph;
     Core::GpuTaskGraphAnalysis m_frameTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_frameTaskGraphQueueAssignments;

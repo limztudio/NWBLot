@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hash build: live surfels InterlockedExchange into per-cell lists (one integer atomic). Heads CPU-cleared to INVALID before this pass, so linking starts empty.
+// Hash build: live surfels InterlockedExchange into per-cell lists. Heads are CPU-cleared, so linking starts empty.
 
 
 #include "surfel_runtime.slangi"

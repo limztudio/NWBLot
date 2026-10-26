@@ -28,11 +28,11 @@ namespace RayTracingShadowVisibilityTaskDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Both opaque soft-shadow resolve callbacks share one all-lit fallback: clear visibility, realign the UAV state, and retire every owned timing reservation.
+// Both opaque resolve callbacks share one all-lit fallback: clear visibility, realign UAV state, retire timing.
 template<typename PayloadT>
 inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::CommandList& commandList){
     payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
-    // The skipped transparent callbacks still declare this output as UAV. Keep the native state tracker aligned with their no-op graph handoff after the typed fallback clear.
+    // Skipped transparent callbacks still declare this output as UAV. Realign the tracker after the typed fallback clear.
     commandList.setTextureState(payload.targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
     payload.opaqueProduced = false;
@@ -66,7 +66,7 @@ inline void DiscardTransparentSoftShadowResolve(PayloadT& payload){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A prepared soft-transparent frame records production, resolve, trace, and fold as one native packet. Shared state is stack-owned for this transaction; it never survives retry.
+// A prepared frame records production, resolve, trace, fold in one packet. Shared state is stack-owned; never survives retry.
 struct ShadowVisibilityOpaqueGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -128,7 +128,7 @@ public:
         if(!opaqueRecorded){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split opaque soft-shadow producer failed; retaining all-lit visibility"));
             payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
-            // The following graph callbacks declare the output as UAV. Keep the command-list tracker aligned with their declared no-op handoffs even when this fallback only recorded a typed clear.
+            // Later callbacks declare this output as UAV. Realign the tracker after the typed fallback clear.
             commandList.setTextureState(payload.targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
             payload.shadowVisibilityTiming.value().discardTiming();
@@ -275,7 +275,7 @@ public:
 };
 
 
-// The prepared path keeps trace and resolve separate so the graph lowers the transparent output from UAV to shader-read between them. The terminal task owns shared timing and acceptance.
+// The prepared path keeps trace and resolve apart so the graph lowers transparent output from UAV to shader-read.
 struct ShadowTransparentSoftTraceGraphTask{
     // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
@@ -318,7 +318,7 @@ public:
 };
 
 
-// The transparent trace publishes RGB half-resolution visibility. On temporal frames this task freezes the selected history pair, publishes the next pair, and starts the resolve.
+// The transparent trace publishes half-res RGB visibility. On temporal frames it freezes the history pair, publishes the next pair, starts resolve.
 struct ShadowTransparentSoftTemporalMergeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -381,7 +381,7 @@ public:
 };
 
 
-// The transparent trace or temporal merge publishes the first RGB wavelet input. The terminal fold keeps the final upsample plus the established output/acceptance endpoint.
+// Trace or merge publishes the first wavelet input. The terminal fold keeps the final upsample plus output/acceptance.
 struct ShadowTransparentSoftFirstWaveletGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 

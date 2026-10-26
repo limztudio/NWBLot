@@ -35,7 +35,7 @@ namespace ECSRenderDetail{
 struct SceneShadingSetupGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
-    // The deferred system, the timing-ticket slot, and the ready flag are required: setup always uploads scene shading for this frame and publishes readiness.
+    // All bindings required: setup uploads scene shading and publishes readiness.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
         Core::GpuTimingSubmissionTicket*& timingTicket;

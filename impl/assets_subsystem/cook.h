@@ -145,16 +145,9 @@ template<typename SubsystemT>
     const usize fieldCount = subsystem.fieldCount();
     for(usize fieldIndex = 0u; fieldIndex < fieldCount; ++fieldIndex){
         const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(fieldIndex);
-        Name expectedType = s_NameNone;
-        if(!descriptor.expectedAssetTypeText.empty()){
-            const auto parsedType = Name::FromText(descriptor.expectedAssetTypeText);
-            if(!parsedType)
-                return false;
-            expectedType = *parsedType;
-        }
         const usize valueCount = subsystem.fieldValueCount(fieldIndex);
         for(usize elementIndex = 0u; elementIndex < valueCount; ++elementIndex){
-            if(!collector.addAssetDependency(subsystem.fieldValue(fieldIndex, elementIndex), expectedType))
+            if(!collector.addAssetDependency(subsystem.fieldValue(fieldIndex, elementIndex), descriptor.expectedAssetType))
                 return false;
         }
     }

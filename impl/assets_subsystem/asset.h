@@ -26,7 +26,7 @@ using SubsystemAssetRefVector = Core::Assets::AssetVector<Core::Assets::AssetRef
 
 struct SubsystemFieldValueDescriptor{
     AStringView fieldName;
-    AStringView expectedAssetTypeText;
+    Name expectedAssetType = s_NameNone;
     bool isArray = false;
 };
 
@@ -68,7 +68,7 @@ public:
 template<typename SubsystemT>
 struct SubsystemFieldDescriptor{
     AStringView fieldName;
-    AStringView expectedAssetTypeText;
+    Name expectedAssetType = s_NameNone;
     bool isArray = false;
     usize (*count)(const SubsystemT& subsystem)noexcept = nullptr;
     Name (*get)(const SubsystemT& subsystem, usize elementIndex)noexcept = nullptr;
@@ -81,7 +81,7 @@ template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> Su
     static_assert(!TAsset::s_AssetTypeText.empty(), "Subsystem field asset type must define a non-empty s_AssetTypeText");
     return SubsystemFieldDescriptor<SubsystemT>{
         fieldName,
-        TAsset::s_AssetTypeText,
+        TAsset::AssetTypeName(),
         false,
         [](const SubsystemT&)noexcept -> usize{
             return 1u;
@@ -104,7 +104,7 @@ template<typename SubsystemT, typename TAsset, SubsystemAssetRefVector<TAsset> S
     static_assert(!TAsset::s_AssetTypeText.empty(), "Subsystem field asset type must define a non-empty s_AssetTypeText");
     return SubsystemFieldDescriptor<SubsystemT>{
         fieldName,
-        TAsset::s_AssetTypeText,
+        TAsset::AssetTypeName(),
         true,
         [](const SubsystemT& subsystem)noexcept -> usize{
             return (subsystem.*Member).size();
@@ -187,7 +187,7 @@ public:
     [[nodiscard]] virtual SubsystemFieldValueDescriptor fieldDescriptor(const usize index)const noexcept override{
         const auto descriptors = FieldDescriptors();
         NWB_ASSERT(index < descriptors.size());
-        return SubsystemFieldValueDescriptor{ descriptors[index].fieldName, descriptors[index].expectedAssetTypeText, descriptors[index].isArray };
+        return SubsystemFieldValueDescriptor{ descriptors[index].fieldName, descriptors[index].expectedAssetType, descriptors[index].isArray };
     }
 
     [[nodiscard]] virtual usize fieldValueCount(const usize index)const noexcept override{

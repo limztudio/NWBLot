@@ -11,6 +11,8 @@
 #include "cook.h"
 #include "binary_payload.h"
 
+#include <impl/assets_shader/shader_types.h>
+
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
 #include <core/assets/paths.h>
@@ -51,15 +53,21 @@ static bool ExtractMaterialDependencies(const Core::Assets::CookDependencyItemCo
     if(!materialEntry)
         return false;
 
-    Vector<Name, Core::Alloc::ScratchArena> stageShaderNames(context.scratchArena);
-    stageShaderNames.reserve(materialEntry->stageShaders.size());
+    Vector<Pair<Name, Name>, Core::Alloc::ScratchArena> stageShaders(context.scratchArena);
+    stageShaders.reserve(materialEntry->stageShaders.size());
     for(const auto& [shaderType, shaderRef] : materialEntry->stageShaders){
-        static_cast<void>(shaderType);
-        stageShaderNames.push_back(shaderRef.name());
+        const Name expectedShaderType = ShaderAssetTypes::AssetTypeNameFromShaderType(shaderType);
+        if(!expectedShaderType)
+            return false;
+        stageShaders.emplace_back(shaderRef.name(), expectedShaderType);
     }
-    Sort(stageShaderNames.begin(), stageShaderNames.end());
-    for(const Name& shaderName : stageShaderNames){
-        if(!collector.addAssetDependency(shaderName))
+    Sort(stageShaders.begin(), stageShaders.end(), [](const Pair<Name, Name>& lhs, const Pair<Name, Name>& rhs)noexcept{
+        if(lhs.first() != rhs.first())
+            return lhs.first() < rhs.first();
+        return lhs.second() < rhs.second();
+    });
+    for(const Pair<Name, Name>& stageShader : stageShaders){
+        if(!collector.addAssetDependency(stageShader.first(), stageShader.second()))
             return false;
     }
 

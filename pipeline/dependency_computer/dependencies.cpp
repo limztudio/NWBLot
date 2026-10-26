@@ -5,8 +5,6 @@
 #include "dependencies.h"
 #include "provider_catalog.h"
 
-#include <impl/assets_subsystem/asset.h>
-
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_metadata.h>
@@ -163,10 +161,6 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
     public:
         [[nodiscard]] virtual bool addAssetDependency(const Name& virtualPath, const Name& expectedAssetType = s_NameNone)override{
             return m_enqueue(virtualPath, expectedAssetType);
-        }
-
-        [[nodiscard]] virtual bool addSubsystemDependency(const Name& subsystemVirtualPath)override{
-            return m_enqueue(subsystemVirtualPath, Impl::ISubsystem::AssetTypeName());
         }
 
 

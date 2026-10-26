@@ -144,7 +144,7 @@ private:
         const Core::Assets::AssetRef<UiSkin> fallbackSkin = defaultSkin();
         if(!fallbackSkin.valid())
             return {};
-        if(!ref.valid() || ref == fallbackSkin)
+        if(!ref.valid())
             return fallbackSkin;
         return m_activeSceneSubsystems->findSceneAsset<UiSkin>(ref.name());
     }

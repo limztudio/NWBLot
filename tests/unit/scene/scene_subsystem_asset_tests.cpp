@@ -298,10 +298,6 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
     Core::Alloc::GlobalArena globalArena(Name("tests/scene/active_scene_subsystems_global"));
     AssetRegistry registry(arena);
     ASSERT_TRUE(registry.registerCodec(MakeUnique<SubsystemAssetCodec>()));
-    ASSERT_TRUE(registry.registerCodec(MakeUnique<TypedSubsystemAssetCodec<RendererSubsystem>>()));
-    ASSERT_TRUE(registry.registerCodec(MakeUnique<TypedSubsystemAssetCodec<SkinningSubsystem>>()));
-    ASSERT_TRUE(registry.registerCodec(MakeUnique<TypedSubsystemAssetCodec<TransparentSubsystem>>()));
-    ASSERT_TRUE(registry.registerCodec(MakeUnique<TypedSubsystemAssetCodec<UiSubsystem>>()));
     ASSERT_TRUE(registry.registerCodec(MakeUnique<ProjectAssetCodec>()));
     ASSERT_TRUE(registry.registerCodec(MakeUnique<SceneAssetCodec>()));
 

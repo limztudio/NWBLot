@@ -92,7 +92,7 @@ static bool ExtractSceneDependencies(const Core::Assets::CookDependencyItemConte
         return false;
 
     for(const SceneAsset::SubsystemRef& subsystemRef : sceneEntry->subsystems){
-        if(!collector.addSubsystemDependency(subsystemRef.name()))
+        if(!collector.addAssetDependency(subsystemRef.name(), ISubsystem::AssetTypeName()))
             return false;
     }
 

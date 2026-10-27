@@ -1,19 +1,20 @@
-# `.w` ("Wrapper") Language Design Note
+# `adhd` (`.adhd`) Language Design Note
 
 > [!NOTE]
-> Living specification for the `.w` language. `.w` files compile into C++ source code with generated reflection and automatic arena-based memory management.
+> Living specification for the `adhd` language (`.adhd`). `.adhd` files compile into C++ source code with generated reflection and automatic arena-based memory management.
 
 ---
 
 ## 1. Overview & Goals
-- **File Extension**: `.w` (stands for **wrapper**).
-- **Compilation Pipeline**: `.w` source -> `.w` compiler -> generated `.h` / `.cpp` C++ source + reflection tables.
+- **Language Name**: `adhd`
+- **File Extension**: `.adhd`
+- **Compilation Pipeline**: `.adhd` source -> `adhd` compiler -> generated `.h` / `.cpp` C++ source + reflection tables.
 - **Core Guarantees**:
   1. **Zero manual allocator boilerplate**: Every class/component owns a static arena for persistent member allocations; functions use a local `ScratchArena` for temporary allocations.
-  2. **First-class Reflection**: Every `class`, `interface`, member field, and method is reflected for `.nwb` asset cooking, binary serialization, and ECS inspection.
-  3. **SIMD Alignment & Optimal Memory Layout**: All SIMD types are strictly aligned (never unaligned `*U`), and the `.w` compiler automatically reorders class members to minimize padding.
+  2. **First-class Reflection**: Every `class`, `interface`, `enum`, member field, and method is reflected for `.nwb` asset cooking, binary serialization, and ECS inspection.
+  3. **SIMD Alignment & Optimal Memory Layout**: All SIMD types are strictly aligned (never unaligned `*U`), and the `adhd` compiler automatically reorders class members to minimize padding.
   4. **Explicit Mutability & Access**: Mandatory member access determiners (`public`, `private`, `protected`) and parameter passing determiners (`in`, `mut`).
-  5. **Built-in Task Multithreading**: First-class `task` functions integrated with `Core::CpuTaskScheduler`.
+  5. **Built-in Parallel Multithreading**: First-class `parallel_for` and `parallel` blocks integrated with `Core::CpuTaskScheduler`.
 
 ---
 
@@ -30,12 +31,12 @@
 - **`enum`**:
   - Enumerated type declaration (can specify underlying integer type, e.g., `enum Foo : u8`, and automatically gets reflected string/value mapping via `NamedEnumCase`).
 - **No `namespace`, No `static`, & No Nested/Scoped Types (Strictly Top-Level File Scope Only)**:
-  - There is **no `namespace` keyword** in `.w` (the `.w` compiler emits the target C++ namespace wrapper automatically during codegen).
-  - There is **no `static` keyword** in `.w`. Stateless helpers and factory functions are written as **top-level free functions** outside any `class` or `interface`.
-  - Declaring a `class`, `interface`, or `enum` **inside** another `class` or `interface`, or **inside any local scope** (such as a function, method, `task`, or `{ ... }` block), is a compile-time error.
+  - There is **no `namespace` keyword** in `adhd` (the `adhd` compiler emits the target C++ namespace wrapper automatically during codegen).
+  - There is **no `static` keyword** in `adhd`. Stateless helpers and factory functions are written as **top-level free functions** outside any `class` or `interface`.
+  - Declaring a `class`, `interface`, or `enum` **inside** another `class` or `interface`, or **inside any local scope** (such as a function, method, `parallel` block, or `{ ... }` block), is a compile-time error.
   - All `class`, `interface`, `enum`, and free function declarations live strictly at **top-level file scope**.
 - **No Raw Pointers & No `null` (`Optional<T>` / `Expected<T, E>` Only)**:
-  - Raw pointers (`*`), address-of (`&`), arrow (`->`), `new`, `delete`, and `null` / `nullptr` **do not exist** in `.w`.
+  - Raw pointers (`*`), address-of (`&`), arrow (`->`), `new`, `delete`, and `null` / `nullptr` **do not exist** in `adhd`.
   - Every `class` and `interface` variable or parameter (`in` / `mut`) is **guaranteed non-null** (backed by value semantics or `NotNull` in generated C++). Uninitialized `interface` variables are a compile-time error.
   - All member and method access uses `.` syntax (`obj.field`, `obj.method()`, `this.field`).
   - When a value can be absent or an operation can fail, code must explicitly use:
@@ -59,13 +60,13 @@
   - Omitting the determiner is a compile-time error.
 - **Automatic Member Reordering (Padding Reduction)**:
   - Because SIMD types require `alignas(16)` or `alignas(32)` and scalar/container fields have alignments of `32`, `16`, `8`, `4`, `2`, or `1` bytes, authored declaration order could introduce large alignment holes.
-  - The `.w` compiler **automatically reorders member variables** when emitting the C++ class definition (sorting by descending alignment and size, and packing tail/gap slots) to minimize struct padding and cache footprint.
+  - The `adhd` compiler **automatically reorders member variables** when emitting the C++ class definition (sorting by descending alignment and size, and packing tail/gap slots) to minimize struct padding and cache footprint.
   - Generated constructors, initializers, binary serializers, and reflection tables use the compiler's resolved layout transparently so user code can declare members in logical/semantic grouping order without paying a memory penalty.
 - **Constructors, Destructors & Single-Source Field Initialization**:
   - `class` supports custom constructors (`public ClassName(in f32 s)`) and destructors (`public ~ClassName()`).
-  - The `.w` compiler automatically injects the class's static arena into all owning member container initializers (`Vector`, `HashMap`, `String`, etc.) in the generated C++ constructor initializer list.
+  - The `adhd` compiler automatically injects the class's static arena into all owning member container initializers (`Vector`, `HashMap`, `String`, etc.) in the generated C++ constructor initializer list.
   - Inline field default values (`public f32 speed = 1.0f;`) are supported.
-  - **No Double Initialization (Compile-Time Error)**: If a member variable has an inline default initializer (`public f32 speed = 1.0f;`) **and** is also initialized inside a constructor, the `.w` compiler reports a compile-time error. A member must be initialized either inline or in the constructor, never both.
+  - **No Double Initialization (Compile-Time Error)**: If a member variable has an inline default initializer (`public f32 speed = 1.0f;`) **and** is also initialized inside a constructor, the `adhd` compiler reports a compile-time error. A member must be initialized either inline or in the constructor, never both.
 
 ---
 
@@ -77,8 +78,8 @@
       - Mutation of an `in` parameter inside the function is a compile error.
     - **`mut T`**: Mutable in/out reference parameter.
       - Emits `T&`.
-      - Callers do **not** repeat `in` or `mut` at the call site (`step(dt, t);`); the `.w` compiler verifies at the call site that any argument passed to a `mut` parameter is a mutable lvalue (not a literal, temporary, `const`, or `in` parameter).
-- **Role of `const` in `.w` (No C++-Style Type `const`)**:
+      - Callers do **not** repeat `in` or `mut` at the call site (`step(dt, t);`); the `adhd` compiler verifies at the call site that any argument passed to a `mut` parameter is a mutable lvalue (not a literal, temporary, `const`, or `in` parameter).
+- **Role of `const` in `adhd` (No C++-Style Type `const`)**:
   1. **Compile-Time Constant Variables (`const` -> C++ `constexpr`)**:
      - `const u32 MaxBones = 256;` defines a compile-time constant (`constexpr` in generated C++).
   2. **Member Function Suffix (`void foo() const`)**:
@@ -100,22 +101,22 @@
         public void bar(in f32 x);
     }
     ```
-  - Out-of-class implementations use C++ `ClassName::methodName` syntax, either later in the **same `.w` file** or in a **different `.w` file**:
+  - Out-of-class implementations use C++ `ClassName::methodName` syntax, either later in the **same `.adhd` file** or in a **different `.adhd` file**:
     ```cpp
     void Foo::bar(in f32 x) {
         // ...
     }
     ```
-  - **Cross-File Inclusion (C++ Style)**: `.w` files reference declarations from other `.w` files using explicit C++-style `#include` directives.
+  - **Cross-File Inclusion (C++ Style)**: `.adhd` files reference declarations from other `.adhd` files using explicit C++-style `#include` directives.
   - **Codegen Benefit**: Class declarations emit clean `.h` headers while split implementations emit `.cpp` definitions, keeping header dependencies minimal and supporting fast incremental builds.
-  - **Compiler Validation**: The `.w` compiler verifies that the out-of-class `ClassName::methodName` definition matches the declared signature (including `in`/`mut` determiners and return type) and that no declared method is left unimplemented or multiply defined.
+  - **Compiler Validation**: The `adhd` compiler verifies that the out-of-class `ClassName::methodName` definition matches the declared signature (including `in`/`mut` determiners and return type) and that no declared method is left unimplemented or multiply defined.
 
 ---
 
 ## 5. Built-In Types
 
 ### 5.1 Scalar Types
-| `.w` Type | C++ Type (`global/type.h`) | Size / Align | Description |
+| `adhd` Type | C++ Type (`global/type.h`) | Size / Align | Description |
 | :--- | :--- | :--- | :--- |
 | `bool` | `bool` | 1 B | Boolean |
 | `i8` / `u8` | `i8` / `u8` | 1 B | 8-bit signed / unsigned integer |
@@ -128,7 +129,7 @@
 | `void` | `void` | — | Return-only empty type |
 
 ### 5.2 SIMD-Like Types (Strictly Aligned Only)
-- **Rule**: SIMD-like types in `.w` are **always aligned** (`alignas(16)` for 32-bit lane packs, `alignas(32)` for 64-bit lane packs). They are **never** converted to or stored as unaligned `*U` types (`Float2U`, `Float3U`, `Float4U`, `Float33U`, `Float44U`, etc.).
+- **Rule**: SIMD-like types in `adhd` are **always aligned** (`alignas(16)` for 32-bit lane packs, `alignas(32)` for 64-bit lane packs). They are **never** converted to or stored as unaligned `*U` types (`Float2U`, `Float3U`, `Float4U`, `Float33U`, `Float44U`, etc.).
 - **Underlying Aligned Types** (`type_vector_aligned.h`, `type_matrix_storage.h`, `type_register.h`):
   - **16-byte Aligned (`alignas(16)`)**:
     - Vectors: `Float4`, `Int4`, `UInt4`, `Float3Int`, `Float3UInt` (and 2-lane / 3-lane `f32` vectors use 16-byte aligned storage/registers `SIMDVectorSingle`).
@@ -172,10 +173,10 @@ All owning containers are automatically bound to the enclosing class's static ar
 
 ## 6. Arena Memory Management Model
 1. **Per-Class / Per-Component Static Arena**:
-   - Each generated `.w` class defines/binds a dedicated static arena.
+   - Each generated `adhd` class defines/binds a dedicated static arena.
    - All owning container fields and polymorphic `interface` allocations inside the class automatically receive this arena in generated constructors.
 2. **Function-Local Scratch Arena**:
-   - Local containers/strings inside `.w` functions or `task` bodies automatically allocate from a stack-scoped `Core::Alloc::ScratchArena<>` without heap churn.
+   - Local containers/strings inside `adhd` functions or `parallel` blocks automatically allocate from a stack-scoped `Core::Alloc::ScratchArena<>` without heap churn.
 
 ---
 
@@ -215,7 +216,7 @@ All owning containers are automatically bound to the enclosing class's static ar
 ---
 
 ## 8. Preprocessor & Macro System
-- `.w` supports a C/C++-style preprocessor before AST parsing, layout optimization, and reflection generation (no `#pragma` needed in `.w`; the `.w` compiler deduplicates `#include` automatically and emits `#pragma once` in generated C++ headers):
+- `adhd` supports a C/C++-style preprocessor before AST parsing, layout optimization, and reflection generation (no `#pragma` needed in `.adhd`; the `adhd` compiler deduplicates `#include` automatically and emits `#pragma once` in generated C++ headers):
   - **File Inclusion**:
     - `#include "..."` / `#include <...>`
   - **Macro Definitions**:
@@ -226,12 +227,12 @@ All owning containers are automatically bound to the enclosing class's static ar
     - `#if <expr>`, `#ifdef NAME`, `#ifndef NAME`, `#elif <expr>`, `#else`, `#endif`
     - Supports `defined(NAME)`, integer/boolean constant expressions (`&&`, `||`, `!`, `==`, `!=`, `<`, `>`, bitwise ops), and engine build/platform macros (e.g., `NWB_DEBUG`, `NWB_OPTIMIZE`, `NWB_FINAL`).
   - **Interaction with Member Reordering & Reflection**:
-    - Running the preprocessor stage inside the `.w` compiler resolves active `#if` branches and expands `#define` macros before AST construction, allowing the `.w` compiler to reorder the active class members and generate exact reflection tables without layout mismatches.
+    - Running the preprocessor stage inside the `adhd` compiler resolves active `#if` branches and expands `#define` macros before AST construction, allowing the `adhd` compiler to reorder the active class members and generate exact reflection tables without layout mismatches.
 
 ---
 
-## 9. Attribute System (`[...]`) & `.nwb` Reflection Binding
-- C#-style attributes `[...]` can be placed above any **`class`**, **`interface`**, **member variable**, or **function/method**:
+## 9. Attribute System (`[...]`), `.nwb` Reflection Binding & C++ Interop
+- C#-style attributes `[...]` can be placed above any **`class`**, **`interface`**, **member variable**, **function/method**, or **`parallel`** block:
   ```csharp
   [asset("model_component")]
   [serialize]
@@ -252,5 +253,7 @@ All owning containers are automatically bound to the enclosing class's static ar
   2. **Reflection & `.nwb` Asset Connection Attributes** (`class` / `interface` / variable / function):
      - `[reflect]` / `[asset("type_name")]`: Exposes the `class` or `interface` to the reflection registry and connects it directly to `.nwb` authoring, dependency scanning, and cooking.
      - `[transient]`: Marks a member variable as runtime-only (excluded from `[serialize]` and `.nwb` authoring).
-  3. **Function / Task Attributes** (function / method):
-     - `[inline]` / `[noinline]`, `[task]`, or ECS stage/scheduling hooks.
+  3. **Function, Scheduling & C++ Interop Attributes**:
+     - `[inline]` / `[noinline]`
+     - `[core(...)]` / `[priority(...)]` (for `parallel` and `parallel_for`)
+     - `[extern]` / `[cpp("...")]`: Binds an `adhd` declaration to an existing engine C++ function or type.

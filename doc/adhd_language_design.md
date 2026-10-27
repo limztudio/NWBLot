@@ -313,3 +313,47 @@ All owning containers are automatically bound to the enclosing class's static ar
   - Clearly separates `.adhd` `#include`s (parsed by the `adhd` compiler) from C++ `#include`s (emitted into the generated C++ file).
   - Clearly isolates raw C++ engine calls from pure `adhd` code (similar to `unsafe` blocks in Rust/C#).
   - Because `native(in ..., mut ...)` declares which `.adhd` variables are read (`in`) vs. mutated (`mut`), the `adhd` compiler can still enforce `in`/`mut` parameter safety, `const` method rules, and `parallel` data-race checks without needing a full C++ parser inside `{ ... }`.
+
+---
+
+## 11. Templates & Generics (`<T>`, `<T : IInterface>`, `<T, const usize N>`)
+- `adhd` uses Rust-style inline `<...>` type parameters (no `template<typename ...>` keyword prefix):
+  1. **Inline `<T>` Syntax on Classes, Interfaces & Functions**:
+     ```cpp
+     class Pair<T, U> {
+         public T first;
+         public U second;
+         public void reset(in T defaultFirst, in U defaultSecond);
+     }
+
+     void Pair<T, U>::reset(in T defaultFirst, in U defaultSecond) {
+         this.first = defaultFirst;
+         this.second = defaultSecond;
+     }
+
+     void swapValues<T>(mut T a, mut T b) {
+         auto temp = a;
+         a = b;
+         b = temp;
+     }
+     ```
+  2. **Interface Bounds (`<T : IInterface>` & `<T : IFirst + ISecond>`)**:
+     - If a generic class or function invokes methods on `T`, `T` must be constrained by one or more `interface`s (separated by `+`):
+     ```cpp
+     void attach<T : IComponent>(mut Entity entity, in T component) {
+         component.onAttach(entity);
+     }
+
+     class AssetPool<T : IComponent + IValidator> {
+         private Vector<T> items;
+     }
+     ```
+  3. **Compile-Time Constant Parameters (`<T, const usize N>`)**:
+     - Non-type template parameters use `const` (matching `adhd`'s compile-time constant keyword):
+     ```cpp
+     class StaticBatch<T, const usize Capacity> {
+         private FixedVector<T, Capacity> elements;
+     }
+     ```
+  - **Per-Instantiation Member Reordering & Reflection**:
+    - For each concrete instantiation (e.g., `Pair<u8, Float4>`), the `adhd` compiler resolves the concrete sizes and alignments of the template arguments, reorders the instantiated class's members to minimize padding, and generates reflection tables for that concrete instantiation.

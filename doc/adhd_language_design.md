@@ -136,8 +136,8 @@
     - Bitwise: `&`, `|`, `^`, `~`, `<<`, `>>`, `&=`, `|=`, `^=`, `<<=`, `>>=`
     - Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
     - Indexing: `[]`
-  - **Forbidden Operators**:
-    - Unary `*` (dereference), `->` (arrow), unary `&` (address-of), `,` (comma), `&&` / `||` (short-circuit logic), `new` / `delete`, and implicit type-conversion operators (`operator bool()`).
+  - **Forbidden User-Defined Operator Overloads**:
+    - Unary `*` (dereference), `->` (arrow), unary `&` (address-of), `,` (comma), user-defined `&&` / `||` (short-circuit logic—built-in boolean `&&`, `||`, and `!` remain supported in expressions), `new` / `delete`, and implicit type-conversion operators (`operator bool()`).
 
 ---
 
@@ -165,9 +165,11 @@
     - Every local variable **must** have an explicit initial value at the point of declaration (`u32 count = 0;`, `Vector<i32> items(6);`). Declaring an uninitialized variable (`u32 count;`) is a **compile-time error**.
     - Every `class` member variable **must** either declare an inline default value (`public f32 speed = 1.0f;`) or be initialized in the class's constructor(s); leaving any member uninitialized is a **compile-time error**.
   - `auto` is allowed for local variable type deduction (e.g., `auto speed = 1.0f;` or an explicit type `f32 speed = 1.0f;`).
-  - Range-based `for` loops require an explicit `in` or `mut` determiner followed by either `auto` or the explicit element type:
-    - `for(in auto item : list)` or `for(in Foo item : list)` (read-only iteration).
-    - `for(mut auto item : list)` or `for(mut Foo item : list)` (mutable in-place iteration).
+  - **Loops (`for`, `while`, `do-while`, `break`, `continue`)**:
+    - Supports index-based `for(usize i = 0; i < count; ++i)`, range-based `for`, `while(cond) { ... }`, `do { ... } while(cond);`, and `break;` / `continue;` statements.
+    - Range-based `for` loops require an explicit `in` or `mut` determiner followed by either `auto` or the explicit element type:
+      - `for(in auto item : list)` or `for(in Foo item : list)` (read-only iteration).
+      - `for(mut auto item : list)` or `for(mut Foo item : list)` (mutable in-place iteration).
   - **No Ternary Operator (`a ? b : c` Prohibited)**:
     - The conditional ternary operator `a ? b : c` is not allowed in `adhd`; use explicit `if` / `else` statements instead.
   - **Explicit Type Casting (`cast<T>(x)` & `bit_cast<T>(x)` Only — No `dynamic_cast`)**:

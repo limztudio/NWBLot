@@ -18,7 +18,7 @@
 
 ---
 
-## 2. Type Declarations (`class`, `interface`, `enum`) & Inheritance Model
+## 2. Type Declarations (`class`, `interface`, `enum`, `type`) & Inheritance Model
 - **`class` (Concrete Data + Methods, Always `final`)**:
   - Unifies C++ `class` and `struct` into a single `class` keyword.
   - **No `class`-to-`class` inheritance (Rust-style)**: A `class` **cannot** inherit from another `class` (composition over inheritance). Every generated C++ `class` is `final`, allowing direct non-virtual calls and unobstructed compiler member reordering.
@@ -30,6 +30,13 @@
   - Variables or containers typed by an `interface` (e.g., `Vector<IComponent>`) can hold any implementing `class` instance polymorphically, allocated from the owning class/component arena.
 - **`enum`**:
   - Enumerated type declaration (can specify underlying integer type, e.g., `enum Foo : u8`, and automatically gets reflected string/value mapping via `NamedEnumCase`).
+- **`type` (Rust-Style Type Alias)**:
+  - Declares a type alias or generic type alias (lowers to C++ `using` / `template<...> using`):
+    ```rust
+    type EntityId = u64;
+    type CompareFn = Func<bool(in i32, in i32)>;
+    type NameMap<V> = HashMap<Name, V>;
+    ```
 - **No `namespace`, No `static`, & No Nested/Scoped Types (Strictly Top-Level File Scope Only)**:
   - There is **no `namespace` keyword** in `adhd` (the `adhd` compiler emits the target C++ namespace wrapper automatically during codegen).
   - There is **no `static` keyword** in `adhd`. Stateless helpers and factory functions are written as **top-level free functions** outside any `class` or `interface`.

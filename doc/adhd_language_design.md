@@ -263,6 +263,10 @@
   - Direct construction from lanes: e.g., `f32x4(1.0f, 2.0f, 3.0f, 1.0f)`.
   - Single-lane access via `.x`, `.y`, `.z`, `.w` and `.r`, `.g`, `.b`, `.a`.
   - Shader-style multi-lane swizzling (e.g., `v.xyz`, `v.zyx`, `v.xxxx`, `v.xyzw`, `v.rgba`) is supported and lowers directly to `global/simd/vector_swizzle.h`.
+- **Built-In Math & SIMD Intrinsics (No `native` Block Required)**:
+  - Scalar & SIMD vector/matrix intrinsics are available out of the box and lower directly to `global/math.h` and `global/simdmath.h`:
+    - **Scalar & Vector**: `abs`, `min`, `max`, `clamp`, `lerp`, `sqrt`, `rsqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `round`
+    - **SIMD Vector & Matrix**: `dot(a, b)`, `cross(a, b)`, `length(v)`, `lengthSq(v)`, `normalize(v)`, `mul(a, b)`, `transpose(m)`, `inverse(m)`
 
 ### 5.3 Default Containers & Strings
 All owning containers are automatically bound to the enclosing class's static arena (for members) or the active function's `ScratchArena` (for local variables):

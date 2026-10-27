@@ -154,9 +154,9 @@
     - `for(mut auto item : list)` or `for(mut Foo item : list)` (mutable in-place iteration).
   - **No Ternary Operator (`a ? b : c` Prohibited)**:
     - The conditional ternary operator `a ? b : c` is not allowed in `adhd`; use explicit `if` / `else` statements instead.
-  - **Explicit Type Casting (`cast<T>(x)` & `bit_cast<T>(x)` Only)**:
+  - **Explicit Type Casting (`cast<T>(x)` & `bit_cast<T>(x)` Only — No `dynamic_cast`)**:
     - Explicit value conversions must use `cast<T>(x)` (lowers to `static_cast<T>(x)`) and bitwise reinterpretation must use `bit_cast<T>(x)` (lowers to `BitCast<T>(x)` in `global/bit.h`).
-    - Rust-style `x as T` and C-style `(T)x` casts are strictly prohibited.
+    - Rust-style `x as T`, C-style `(T)x` casts, and runtime `dynamic_cast` / `interface`-to-`class` downcasting are strictly prohibited.
   - **`switch` / `case` Statements (Mandatory `break;` & Any Equality-Comparable Type)**:
     - Every `case` (and `default`) branch **must** terminate with `break;` (or `return`); implicit fallthrough is a compile-time error.
     - `switch` accepts not only integers and `enum`s, but **also strings (`String`, `CompactString`, `StringView`, `Name`) and any custom `class` that supports equality comparison (`operator==`)**.

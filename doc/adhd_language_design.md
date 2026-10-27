@@ -104,15 +104,21 @@
       // Optional callback (when a callback may be unset)
       Optional<Func<void(mut TransformComponent)>> onUpdate;
       ```
-  - **Lambdas (`lambda[in ..., mut ...](in ..., mut ...)`)**:
+  - **Lambdas (`lambda[in ..., mut ...](in ..., mut ...)` & `lambda(in ..., mut ...)`)**:
     - Captures and parameters must explicitly specify `in` or `mut` (no implicit `[=]` or `[&]` captures):
       ```cpp
+      // With captures: explicitly state 'in' or 'mut' for each captured variable
       auto filter = lambda[in threshold, mut hitCount](in f32 distance) -> bool {
           if(distance < threshold) {
               ++hitCount;
               return true;
           }
           return false;
+      };
+
+      // Without captures:
+      auto lessThan = lambda(in i32 a, in i32 b) -> bool {
+          return a < b;
       };
       ```
 - **Split Method Declarations & Implementations (C++ Style)**:

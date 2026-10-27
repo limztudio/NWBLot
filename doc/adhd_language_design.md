@@ -452,3 +452,16 @@ All owning containers are automatically bound to the enclosing class's static ar
      ```
   - **Per-Instantiation Member Reordering & Reflection**:
     - For each concrete instantiation (e.g., `Pair<u8, f32x4>`), the `adhd` compiler resolves the concrete sizes and alignments of the template arguments, reorders the instantiated class's members to minimize padding, and generates reflection tables for that concrete instantiation.
+
+---
+
+## 12. Compiler Architecture & Module Split (`core/metascript` vs `pipeline/adhd_compiler`)
+1. **Shared Frontend in `core/metascript` (Used by both `.nwb` and `.adhd`)**:
+   - **Preprocessor**: Evaluates `#include` (with automatic deduplication), `#define`, `#undef`, `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, and `#endif` for both `.nwb` and `.adhd` documents.
+   - **Lexer, Token Set & ParserCursor**: Unified tokenizer (`lexer.h`, `parser_cursor.h`) and diagnostic error tracking (`ParseError`) supporting all tokens used across `.nwb` and `.adhd`.
+   - **`.nwb` Data Evaluation**: `Document` and `Value` remain in `core/metascript` for evaluating `.nwb` asset data.
+2. **`adhd` Compiler in `pipeline/adhd_compiler`**:
+   - Links `nwb_metascript` and consumes the shared `core/metascript` preprocessor, lexer, and cursor.
+   - **`adhd` AST & Semantic Analyzer**: Parses `class`, `interface`, `enum<SizeType>`, `type`, `<T : IInterface>`, `in`/`mut`, `parallel`, `parallel_for`, `native`, and `[...]` attributes, enforcing all `adhd` language rules.
+   - **Member Layout Optimizer**: Reorders `class` member variables by alignment and size to minimize padding.
+   - **C++ & Reflection Code Generator**: Emits `.adhd.h` and `.adhd.cpp` (with `GlobalArena` / `ScratchArena` wiring, `[serialize]` `1`-byte packing, and `[asset("...")]` `.nwb` parsers/dependency extractors).

@@ -179,12 +179,14 @@
     - For non-integral types (strings and custom classes), the `adhd` compiler automatically lowers the `switch` statement into an `if` / `else if` / `else` chain in generated C++.
   - **No Exceptions (`try` / `catch` / `throw` Prohibited)**:
     - Exceptions (`try`, `catch`, `throw`) are not allowed in `adhd`. Fallible functions return `Expected<T, E>`, and all generated `adhd` functions emit `noexcept` in C++.
-  - **Built-In Diagnostics (`assert`, `info`, `error` & `[essential]` Attribute)**:
-    - `adhd` provides built-in `assert`, `info`, and `error` statements (`global/assert.h`, `core/common/log.h`), optionally prefixed with the `[essential]` attribute:
+  - **Built-In Diagnostics (`assert`, `info`, `warning`, `error` & `[essential]` Attribute)**:
+    - `adhd` provides built-in `assert`, `info`, `warning`, and `error` statements (`global/assert.h`, `core/common/log.h`), optionally prefixed with the `[essential]` attribute:
       - `assert(cond);` / `assert(cond, "msg", ...);` -> `NWB_ASSERT` / `NWB_ASSERT_MSG`
       - `[essential] assert(cond);` / `[essential] assert(cond, "msg", ...);` -> `NWB_FATAL_ASSERT` / `NWB_FATAL_ASSERT_MSG`
       - `info("msg", ...);` -> `NWB_LOGGER_INFO`
       - `[essential] info("msg", ...);` -> `NWB_LOGGER_ESSENTIAL_INFO`
+      - `warning("msg", ...);` -> `NWB_LOGGER_WARNING`
+      - `[essential] warning("msg", ...);` -> `NWB_LOGGER_CRITICAL_WARNING`
       - `error("msg", ...);` -> `NWB_LOGGER_ERROR`
       - `[essential] error("msg", ...);` -> `NWB_LOGGER_FATAL`
 - **Function Pointers / Callables (`Func<...>`) & Lambdas**:
@@ -302,6 +304,7 @@ All owning containers are automatically bound to the enclosing class's static ar
   - `Path` (`Path`)
   - `String` (`BasicString<char, ArenaAllocator<...>>`)
   - `CompactString` (`ACompactString`)
+  - **Automatic String Literal (`"..."`) Adaptation**: Programmers write plain `"..."` literals everywhere in `.adhd` (never `NWB_TEXT("...")`). The `adhd` compiler emits narrow `"..."` for `String`, `StringView`, `CompactString`, and `Name`, and automatically wraps `"..."` as `NWB_TEXT("...")` when passed to `assert`, `info`, `warning`, `error`, or `Path`.
 - **Views, Value Wrappers, Callables & References**:
   - `Span<T>`, `StringView` (`AStringView`)
   - `Optional<T>`, `Expected<T, E>`
@@ -421,7 +424,7 @@ All owning containers are automatically bound to the enclosing class's static ar
   3. **Function, Scheduling & Diagnostic Attributes**:
      - `[inline]` / `[noinline]`
      - `[core(...)]` / `[priority(...)]` (for `parallel` and `parallel_for`)
-     - `[essential]` (for `assert`, `info`, and `error`)
+     - `[essential]` (for `assert`, `info`, `warning`, and `error`)
 
 ---
 

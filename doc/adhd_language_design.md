@@ -217,8 +217,9 @@ All owning containers are automatically bound to the enclosing class's static ar
 
 ## 8. Preprocessor & Macro System
 - `adhd` supports a C/C++-style preprocessor before AST parsing, layout optimization, and reflection generation (no `#pragma` needed in `.adhd`; the `adhd` compiler deduplicates `#include` automatically and emits `#pragma once` in generated C++ headers):
-  - **File Inclusion**:
-    - `#include "..."` / `#include <...>`
+  - **File Inclusion (`.adhd` vs C++)**:
+    - Outside `native {}`, `#include "..."` / `#include <...>` includes **`.adhd` files only**.
+    - C++-side `#include` directives must be placed inside a `native { ... }` block.
   - **Macro Definitions**:
     - `#define NAME value` (object-like macros)
     - `#define NAME(a, b) ...` (function-like macros)
@@ -260,8 +261,12 @@ All owning containers are automatically bound to the enclosing class's static ar
 ---
 
 ## 10. C++ Interop (`native { ... }` Blocks)
-- Calling C++ functions or embedding native C++ statements inside `.adhd` **must** always be enclosed in an explicit `native { ... }` block:
+- C++-side `#include` directives, calling C++ functions, or embedding native C++ statements inside `.adhd` **must** always be enclosed in an explicit `native { ... }` block:
   ```cpp
+  native {
+      #include <global/simdmath.h>
+  }
+
   void TransformComponent::applyTranslation(in Float4 delta) {
       native {
           const SIMDVectorSingle current = LoadFloat(this->position.raw);
@@ -271,5 +276,6 @@ All owning containers are automatically bound to the enclosing class's static ar
   }
   ```
 - **Benefits of `native { ... }`**:
+  - Clearly separates `.adhd` `#include`s (parsed by the `adhd` compiler) from C++ `#include`s (emitted into the generated C++ file).
   - Clearly isolates raw C++ engine calls from pure `adhd` code (similar to `unsafe` blocks in Rust/C#).
-  - Everything outside `native { ... }` is 100% validated by the `adhd` compiler (`in`/`mut`, no pointers/null, `this.XXX`, arena rules, and parallel safety), while `native { ... }` passes direct C++ expressions through to the generated C++ output.
+  - Everything outside `native { ... }` is 100% validated by the `adhd` compiler (`in`/`mut`, no pointers/null, `this.XXX`, arena rules, and parallel safety), while `native { ... }` passes direct C++ headers and expressions through to the generated C++ output.

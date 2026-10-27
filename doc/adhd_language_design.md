@@ -74,6 +74,27 @@
   - The `adhd` compiler automatically injects the class's static arena into all owning member container initializers (`Vector`, `HashMap`, `String`, etc.) in the generated C++ constructor initializer list.
   - Inline field default values (`public f32 speed = 1.0f;`) are supported.
   - **No Double Initialization (Compile-Time Error)**: If a member variable has an inline default initializer (`public f32 speed = 1.0f;`) **and** is also initialized inside a constructor, the `adhd` compiler reports a compile-time error. A member must be initialized either inline or in the constructor, never both.
+- **Operator Overloading (Instance Member Methods Only — Never Static/Free)**:
+  - Built-in SIMD (`f32x4`, `f64x4`, `f32x4x4`, etc.), container, and string types natively support arithmetic, comparison, and indexing operators.
+  - User-defined `class` types may overload safe value/math/comparison/indexing operators strictly as **instance member methods** (`this` is always the left-hand side):
+    ```cpp
+    class WeightPair {
+        public f32 a;
+        public f32 b;
+
+        public WeightPair operator+(in WeightPair rhs) const;
+        public bool operator==(in WeightPair rhs) const;
+        public void operator+=(in WeightPair rhs);
+    }
+    ```
+  - **No Free / Static Operator Overloads**: Defining a free or static two-argument operator such as `bool operator==(in A lhs, in B rhs)` is strictly prohibited.
+  - **Allowed Operators**:
+    - Arithmetic: `+`, `-`, `*`, `/`, `%`, `+=`, `-=`, `*=`, `/=`, `%=`
+    - Bitwise: `&`, `|`, `^`, `~`, `<<`, `>>`, `&=`, `|=`, `^=`, `<<=`, `>>=`
+    - Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
+    - Indexing: `[]`
+  - **Forbidden Operators**:
+    - Unary `*` (dereference), `->` (arrow), unary `&` (address-of), `,` (comma), `&&` / `||` (short-circuit logic), `new` / `delete`, and implicit type-conversion operators (`operator bool()`).
 
 ---
 

@@ -77,7 +77,7 @@
       - Mutation of an `in` parameter inside the function is a compile error.
     - **`mut T`**: Mutable in/out reference parameter.
       - Emits `T&`.
-      - Callers (or the compiler) bind a mutable lvalue target.
+      - Callers do **not** repeat `in` or `mut` at the call site (`step(dt, t);`); the `.w` compiler verifies at the call site that any argument passed to a `mut` parameter is a mutable lvalue (not a literal, temporary, `const`, or `in` parameter).
 - **Role of `const` in `.w` (No C++-Style Type `const`)**:
   1. **Compile-Time Constant Variables (`const` -> C++ `constexpr`)**:
      - `const u32 MaxBones = 256;` defines a compile-time constant (`constexpr` in generated C++).

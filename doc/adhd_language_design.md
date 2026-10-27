@@ -206,6 +206,10 @@
   - **32-byte Aligned (`alignas(32)`)**:
     - Vectors: `f64x2` (`Double2`), `f64x3` (`Double3`), `f64x4` (`Double4` / `SIMDVectorDouble`), `i64x4` (`Int64x4`), `u64x4` (`UInt64x4`), `f64x3_i64` (`Double3Int`), `f64x3_u64` (`Double3UInt`).
     - Matrices: `f64x3x3` (`Double33`), `f64x3x4` (`Double34`), `f64x4x4` (`Double44` / `SIMDMatrixDouble`).
+- **SIMD Construction & Shader-Style Swizzling**:
+  - Direct construction from lanes: e.g., `f32x4(1.0f, 2.0f, 3.0f, 1.0f)`.
+  - Single-lane access via `.x`, `.y`, `.z`, `.w` and `.r`, `.g`, `.b`, `.a`.
+  - Shader-style multi-lane swizzling (e.g., `v.xyz`, `v.zyx`, `v.xxxx`, `v.xyzw`, `v.rgba`) is supported and lowers directly to `global/simd/vector_swizzle.h`.
 
 ### 5.3 Default Containers & Strings
 All owning containers are automatically bound to the enclosing class's static arena (for members) or the active function's `ScratchArena` (for local variables):

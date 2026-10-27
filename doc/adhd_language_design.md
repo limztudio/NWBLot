@@ -27,10 +27,20 @@
     - `interface` methods do not use a `virtual` keyword (all `interface` methods are pure virtual by definition).
     - In a `class` implementing an `interface`, every method that implements an `interface` method **must** explicitly specify `override` (`public void execute() override;`, `public u32 id() const override;`).
     - Omitting `override` on a method that implements an `interface` method—or marking a method `override` when it does not match any implemented `interface`—is a compile-time error.
-- **`interface` (Pure Polymorphic Contract)**:
+- **`interface` (Pure Polymorphic Contract — No Heap Boxing)**:
   - Pure interface type (maps to NWBLot's lowercase `interface` convention in `global/compile.h`).
-  - An `interface` contains **method declarations only** (no member variables).
-  - Variables or containers typed by an `interface` (e.g., `Vector<IComponent>`) can hold any implementing `class` instance polymorphically, allocated from the owning class/component arena.
+  - An `interface` contains **method declarations only** (no member variables) and cannot be instantiated by value or heap-boxed (`Box<IBar>` is not used).
+  - `interface` types are used as:
+    1. **Function parameters**: `in Base` (`const Base&`) and `mut Base` (`Base&`).
+    2. **Template bounds**: `<T : Base>` (compile-time monomorphized dispatch).
+    3. **Rebindable non-null references (`in Base` / `mut Base`)**:
+       ```cpp
+       Impl b = Impl();
+       Impl c = Impl();
+       mut Base a = b; // Lowers to NotNull<Base*> a(&b)
+       a = c;          // Rebinds `a` to `c` (a = &c)
+       in Base ro = b; // Lowers to NotNull<const Base*> ro(&b)
+       ```
 - **`enum<SizeType>` (Mandatory Sized Type, NWB-Style `Enum` & `Flag`)**:
   - Every `enum` declaration **must** explicitly specify its underlying integer size via `<SizeType>` (e.g., `enum<u8> Name`).
   - Inside `enum<SizeType> Name`, entries are prefixed with `enum` (ordinal/value enumerators) or `flag` (bitflag enumerators):

@@ -45,7 +45,7 @@
 
 ---
 
-## 3. Member Access Determiners & Compiler Layout Optimization
+## 3. Member Access Determiners, Layout Optimization & Constructors
 - **Mandatory C#-Style Access Determiners**:
   - Every member declaration (field or method) **must** explicitly specify `public`, `private`, or `protected`:
     ```csharp
@@ -61,6 +61,11 @@
   - Because SIMD types require `alignas(16)` or `alignas(32)` and scalar/container fields have alignments of `32`, `16`, `8`, `4`, `2`, or `1` bytes, authored declaration order could introduce large alignment holes.
   - The `.w` compiler **automatically reorders member variables** when emitting the C++ class definition (sorting by descending alignment and size, and packing tail/gap slots) to minimize struct padding and cache footprint.
   - Generated constructors, initializers, binary serializers, and reflection tables use the compiler's resolved layout transparently so user code can declare members in logical/semantic grouping order without paying a memory penalty.
+- **Constructors, Destructors & Single-Source Field Initialization**:
+  - `class` supports custom constructors (`public ClassName(in f32 s)`) and destructors (`public ~ClassName()`).
+  - The `.w` compiler automatically injects the class's static arena into all owning member container initializers (`Vector`, `HashMap`, `String`, etc.) in the generated C++ constructor initializer list.
+  - Inline field default values (`public f32 speed = 1.0f;`) are supported.
+  - **No Double Initialization (Compile-Time Error)**: If a member variable has an inline default initializer (`public f32 speed = 1.0f;`) **and** is also initialized inside a constructor, the `.w` compiler reports a compile-time error. A member must be initialized either inline or in the constructor, never both.
 
 ---
 

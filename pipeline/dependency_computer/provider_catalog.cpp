@@ -40,6 +40,8 @@ inline constexpr Name s_AssetBunchTypeName("asset_bunch");
         return true;
     if(expectedType == Impl::ISubsystem::AssetTypeName() && dependencyRegistry)
         return dependencyRegistry->isSubsystemType(actualType);
+    if(expectedType == Impl::IComponent::AssetTypeName() && dependencyRegistry)
+        return dependencyRegistry->isComponentType(actualType);
     return actualType == expectedType;
 }
 
@@ -282,6 +284,25 @@ Expected<usize> DependencyProviderCatalog::resolve(
                 return MakeUnexpected(Failure{});
             if(!MatchesExpectedAssetType(*documentAssetType, assetType, dependencyRegistry))
                 continue;
+
+            const auto hasComposite = Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);
+            if(!hasComposite)
+                return MakeUnexpected(Failure{});
+            if(*hasComposite){
+                const auto expanded = Assets::AssetsBunchCook::ExpandCompositeAsset(
+                    m_files[index].assetRoot,
+                    m_files[index].virtualRoot,
+                    m_files[index].filePath,
+                    *document,
+                    scratchArena
+                );
+                if(!expanded)
+                    return MakeUnexpected(Failure{});
+                if(!recordMatch(index))
+                    return MakeUnexpected(Failure{});
+                continue;
+            }
+
             if(document->declarations().size() != 1u){
                 NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), ConvertString(virtualPath));
                 return MakeUnexpected(Failure{});
@@ -298,10 +319,16 @@ Expected<usize> DependencyProviderCatalog::resolve(
             const auto hasBunch = HasAssetBunchDeclaration(*document);
             if(!hasBunch)
                 return MakeUnexpected(Failure{});
-            if(!*hasBunch)
+            const auto hasComposite = *hasBunch ? Expected<bool, NameTextError::Enum>(false) : Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);
+            if(!hasComposite)
+                return MakeUnexpected(Failure{});
+            if(!*hasBunch && !*hasComposite)
                 continue;
 
-            const auto expanded = Assets::AssetsBunchCook::ExpandAssetBunch(m_files[index].assetRoot, m_files[index].virtualRoot, m_files[index].filePath, *document, scratchArena);
+            const auto expanded = *hasBunch
+                ? Assets::AssetsBunchCook::ExpandAssetBunch(m_files[index].assetRoot, m_files[index].virtualRoot, m_files[index].filePath, *document, scratchArena)
+                : Assets::AssetsBunchCook::ExpandCompositeAsset(m_files[index].assetRoot, m_files[index].virtualRoot, m_files[index].filePath, *document, scratchArena)
+            ;
             if(!expanded)
                 return MakeUnexpected(Failure{});
 

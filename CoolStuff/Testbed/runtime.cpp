@@ -4,8 +4,6 @@
 
 #include "project.h"
 
-#include <impl/assets_model/asset.h>
-#include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_mesh/skinning/module.h>
@@ -36,9 +34,6 @@ namespace __hidden_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TestbedModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
-using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
-
 static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
 static constexpr f32 s_QuarterTurnFraction = 0.25f;
 static constexpr f32 s_CameraStartDepth = 2.2f;
@@ -61,13 +56,9 @@ static constexpr Float4 s_PointLightPosition = Float4(1.5f, 1.6f, 1.5f);
 static constexpr Float4 s_PointLightColor = Float4(0.6f, 0.74f, 1.0f);
 static constexpr f32 s_PointLightIntensity = 2.0f;
 static constexpr f32 s_PointLightRange = 16.0f; // larger range = gentler distance falloff so it stays comparable to the directional across the scene
-inline constexpr Name s_FemaleModelNickname("female_model");
-inline constexpr Name s_ModelMaterialNickname("skinned_uv_material");
-inline constexpr Name s_GroundPlaneModelNickname("ground_plane_model");
-inline constexpr Name s_GroundPlaneMaterialNickname("white_opaque_material");
 static constexpr TStringView s_DefaultSceneDescription = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
 static constexpr TStringView s_InitWorldFailedText = NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
-static constexpr TStringView s_CharacterInvalidText = NWB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity");
+static constexpr TStringView s_SceneEntitiesInvalidText = NWB_TEXT("ProjectTestbed initialization failed: failed to instantiate scene entities");
 static constexpr TStringView s_StartupSceneText = NWB_TEXT("ProjectTestbed: startup scene created ({})");
 static constexpr TStringView s_ShutdownText = NWB_TEXT("ProjectTestbed: shutdown");
 static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initialization failed";
@@ -163,36 +154,6 @@ static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const 
     ResolveFlyCameraInput(LoadFloat(cameraView.transform->position), angles, moveAxes, mouseDelta, delta, boosted, resolvedRotation, resolvedPosition);
     StoreFloat(resolvedRotation, cameraView.transform->rotation);
     StoreFloat(resolvedPosition, cameraView.transform->position);
-}
-
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateModelEntity(NWB::Core::ECS::World& world, const TestbedModelRef& model, const TestbedMaterialRef& material){
-    auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-    transform.position = Float4(0.0f, 0.0f, 0.0f);
-    transform.scale = Float4(1.0f, 1.0f, 1.0f);
-
-    auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();
-    modelComponent.model = model;
-
-    auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-    renderer.material = material;
-    return entity.id();
-}
-
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateSkinnedCharacterEntity(NWB::Core::ECS::World& world, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
-    const TestbedModelRef model = sceneSubsystems.findSceneAsset<NWB::Impl::Model>(s_FemaleModelNickname);
-    const TestbedMaterialRef material = sceneSubsystems.findSceneAsset<NWB::Impl::Material>(s_ModelMaterialNickname);
-    if(!model.valid() || !material.valid())
-        return {};
-    return CreateModelEntity(world, model, material);
-}
-
-static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
-    const TestbedModelRef model = sceneSubsystems.findSceneAsset<NWB::Impl::Model>(s_GroundPlaneModelNickname);
-    const TestbedMaterialRef material = sceneSubsystems.findSceneAsset<NWB::Impl::Material>(s_GroundPlaneMaterialNickname);
-    NWB_FATAL_ASSERT(model.valid() && material.valid());
-    const auto groundEntity = CreateModelEntity(world, model, material);
-    NWB_FATAL_ASSERT(groundEntity.valid());
 }
 
 
@@ -378,11 +339,10 @@ bool Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mo
 }
 
 bool Project::createDefaultScene(){
-    if(!__hidden_runtime::CreateSkinnedCharacterEntity(*m_world, m_sceneSubsystems).valid()){
-        NWB_LOGGER_ERROR(__hidden_runtime::s_CharacterInvalidText);
+    if(!m_sceneSubsystems.instantiateEntities(*m_world)){
+        NWB_LOGGER_ERROR(__hidden_runtime::s_SceneEntitiesInvalidText);
         return false;
     }
-    __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world, m_sceneSubsystems);
 
     auto uiEntity = m_world->createEntity();
     auto& customUi = uiEntity.addComponent<NWB::Impl::UiPaintComponent>();

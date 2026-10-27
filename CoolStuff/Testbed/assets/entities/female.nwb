@@ -1,0 +1,15 @@
+entity asset;
+
+transform_component transform;
+
+model_component model;
+model.asset = "project/characters/female/model";
+
+renderer_component renderer;
+renderer.material = "project/materials/mat_skinned_uv";
+
+asset.components = [
+    transform,
+    model,
+    renderer
+];

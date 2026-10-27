@@ -39,6 +39,26 @@ static const SubsystemTypeAutoRegistrar* s_RegisteredSubsystemTypesHead = nullpt
     return nullptr;
 }
 
+static void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcept{
+    usize writeIndex = 0u;
+    for(usize readIndex = 0u; readIndex < subsystems.size(); ++readIndex){
+        const ISubsystem::SubsystemRef& candidate = subsystems[readIndex];
+        bool duplicate = false;
+        for(usize prevIndex = 0u; prevIndex < writeIndex; ++prevIndex){
+            if(subsystems[prevIndex].name() == candidate.name()){
+                duplicate = true;
+                break;
+            }
+        }
+        if(!duplicate){
+            if(writeIndex != readIndex)
+                subsystems[writeIndex] = candidate;
+            ++writeIndex;
+        }
+    }
+    subsystems.resize(writeIndex);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,6 +110,25 @@ namespace SubsystemAssetRuntime{
 bool ValidatePayload(const ISubsystem& subsystem){
     if(!subsystem.checkVirtualPath(NWB_TEXT("ISubsystem::validatePayload")))
         return false;
+
+    for(usize i = 0u; i < subsystem.subsystems.size(); ++i){
+        const ISubsystem::SubsystemRef& ref = subsystem.subsystems[i];
+        if(!ref.valid()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' dependent subsystem entry {} must not be empty"),
+                ConvertString(subsystem.virtualPath().resolvedText()),
+                i
+            );
+            return false;
+        }
+        if(ref.name() == subsystem.virtualPath()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' cannot reference itself in 'subsystems'"),
+                ConvertString(subsystem.virtualPath().resolvedText())
+            );
+            return false;
+        }
+    }
 
     const usize count = subsystem.fieldCount();
     if(count == 0u){
@@ -181,14 +220,29 @@ bool LoadBinary(ISubsystem& subsystem, const Span<const u8> binary){
         return false;
     }
 
+    Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
+    if(!Core::Assets::ReadVectorPayload(binary, header.subsystemCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_SubsystemsPayloadLabel, cursor, subsystemHashes))
+        return false;
     if(!Core::Assets::ReadVectorPayload(binary, header.fieldCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_FieldCountsPayloadLabel, cursor, fieldCounts))
         return false;
     if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_AssetsPayloadLabel, cursor, assetHashes))
         return false;
     if(!Core::Assets::ReadCompletePayload(binary, cursor, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext))
         return false;
+
+    subsystem.subsystems.clear();
+    subsystem.subsystems.reserve(subsystemHashes.size());
+    for(const NameHash& subsystemHash : subsystemHashes){
+        const Name subsystemName(subsystemHash);
+        if(!subsystemName){
+            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: subsystem reference must not be empty"));
+            return false;
+        }
+        subsystem.subsystems.push_back(ISubsystem::SubsystemRef(subsystemName));
+    }
+    __hidden_subsystem_runtime::DeduplicateSubsystemRefs(subsystem.subsystems);
 
     u64 totalCount = 0u;
     for(const u64 count : fieldCounts){

@@ -7,8 +7,6 @@
 
 #include "../global.h"
 
-#include <impl/ecs_mesh/runtime/mesh.h>
-
 #include <core/ecs/entity_id.h>
 #include <core/assets/ref.h>
 
@@ -24,6 +22,32 @@ NWB_IMPL_BEGIN
 
 class Mesh;
 class Skin;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RuntimeMeshHandle{
+    u64 value = 0;
+
+
+public:
+    [[nodiscard]] explicit operator bool()const noexcept{ return valid(); }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return value != 0u; }
+
+    void reset()noexcept{ value = 0; }
+};
+
+[[nodiscard]] NWB_INLINE bool operator==(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs)noexcept{
+    return lhs.value == rhs.value;
+}
+
+[[nodiscard]] NWB_INLINE bool operator!=(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs)noexcept{
+    return !(lhs == rhs);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

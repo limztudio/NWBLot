@@ -36,7 +36,9 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] Expected<bool, NameTextError::Enum> HasCompositeAssetDeclarations(const Core::Metascript::Document& doc);
 [[nodiscard]] Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, ScratchArena& scratchArena);
+[[nodiscard]] Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

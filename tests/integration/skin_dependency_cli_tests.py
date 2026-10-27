@@ -48,6 +48,8 @@ SKIN_VERSION = 3
 PROJECT_MAGIC = 0x50524A31
 SCENE_MAGIC = 0x53434E31
 SUBSYSTEM_MAGIC = 0x53554231
+ENTITY_MAGIC = 0x454E5431
+COMPONENT_MAGIC = 0x434D5031
 SAMPLER_MAGIC = 0x53414D31
 NAME_HASH_BYTES = 64
 ATLAS_EXTENT = (256, 256)
@@ -245,6 +247,8 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
     subsystem_manifest = engine_root / "subsystems" / "ui_custom.nwb"
     active_fx_subsystem_manifest = project_root / "subsystems" / "active_fx.nwb"
     inactive_fx_subsystem_manifest = project_root / "subsystems" / "inactive_fx.nwb"
+    hero_entity_manifest = project_root / "entities" / "hero.nwb"
+    unused_entity_manifest = project_root / "entities" / "unused.nwb"
     skin = project_root / LIT_UI / LIT_ATLAS_NWB
     texture = engine_root / LIT_UI / LIT_TEXTURE_NWB
     base_sampler = engine_root / "samplers" / "base.nwb"
@@ -265,15 +269,37 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
     )
     _write_metadata(
         active_fx_subsystem_manifest,
-        'renderer_subsystem asset;\nasset.basic_samplers = [\n    "engine/samplers/active_fx",\n];\n',
+        'renderer_subsystem asset;\nasset.subsystems = [\n    "engine/subsystems/ui_custom",\n    "engine/subsystems/ui_custom",\n];\nasset.basic_samplers = [\n    "engine/samplers/active_fx",\n];\n',
     )
     _write_metadata(
         inactive_fx_subsystem_manifest,
         'renderer_subsystem asset;\nasset.basic_samplers = [\n    "engine/samplers/inactive_fx",\n];\n',
     )
     _write_metadata(
+        hero_entity_manifest,
+        (
+            'entity asset;\n'
+            'transform_component transform;\n'
+            'transform.position = [1.0, 2.0, 3.0];\n'
+            'camera_component camera;\n'
+            'camera.vertical_fov_degrees = 60.0;\n'
+            'light_component light;\n'
+            'light.type = "point";\n'
+            'light.range = 12.0;\n'
+            'asset.components = [\n'
+            '    transform,\n'
+            '    camera,\n'
+            '    light,\n'
+            '];\n'
+        ),
+    )
+    _write_metadata(
+        unused_entity_manifest,
+        'entity asset;\ntransform_component transform;\nasset.components = [\n    transform,\n];\n',
+    )
+    _write_metadata(
         scene_manifest,
-        'scene asset;\nasset.subsystems = ["engine/subsystems/ui_custom", "project/subsystems/active_fx"];\nasset.assets = {\n    "ui_atlas": "project/ui/atlas"\n};\n',
+        'scene asset;\nasset.subsystems = ["engine/subsystems/ui_custom", "project/subsystems/active_fx", "engine/subsystems/ui_custom"];\nasset.entities = ["project/entities/hero"];\nasset.assets = {\n    "ui_atlas": "project/ui/atlas"\n};\n',
     )
     _write_metadata(
         project_manifest,
@@ -282,7 +308,7 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
 
     manifest = fixture / "scene_dependencies.txt"
     helpers.run_command(_dependency_command(args, fixture, roots, [], manifest), fixture)
-    expected_files = [project_manifest, scene_manifest, subsystem_manifest, active_fx_subsystem_manifest, skin, base_sampler, active_feature_sampler, texture]
+    expected_files = [project_manifest, scene_manifest, subsystem_manifest, active_fx_subsystem_manifest, hero_entity_manifest, skin, base_sampler, active_feature_sampler, texture]
     _expect_manifest(manifest, [], expected_files)
 
     packed = fixture / "scene_volume"
@@ -309,8 +335,9 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
         launcher_command.extend([ASSET_ROOT, str(asset_root)])
     helpers.run_command(launcher_command, fixture)
     volume_payloads = helpers.read_volume(packed)
-    if len(volume_payloads) != len(expected_files):
-        raise AssertionError(f"scene-driven cook expected {len(expected_files)} volume entries, got {len(volume_payloads)}")
+    expected_volume_entry_count = len(expected_files) + 3
+    if len(volume_payloads) != expected_volume_entry_count:
+        raise AssertionError(f"scene-driven cook expected {expected_volume_entry_count} volume entries, got {len(volume_payloads)}")
     magic_counts: dict[int, int] = {}
     for payload in volume_payloads.values():
         magic = struct.unpack_from(LIT_UINT32_LITTLE_ENDIAN, payload)[0]
@@ -319,6 +346,8 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
         PROJECT_MAGIC: 1,
         SCENE_MAGIC: 1,
         SUBSYSTEM_MAGIC: 2,
+        ENTITY_MAGIC: 1,
+        COMPONENT_MAGIC: 3,
         SKIN_MAGIC: 1,
         TEXTURE_MAGIC: 1,
         SAMPLER_MAGIC: 2,

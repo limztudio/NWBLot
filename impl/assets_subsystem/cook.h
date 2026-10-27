@@ -142,6 +142,10 @@ template<typename SubsystemT>
         return false;
 
     const SubsystemT& subsystem = subsystemEntry->subsystem;
+    for(const ISubsystem::SubsystemRef& subsystemRef : subsystem.subsystems){
+        if(!collector.addAssetDependency(subsystemRef.name(), ISubsystem::AssetTypeName()))
+            return false;
+    }
     const usize fieldCount = subsystem.fieldCount();
     for(usize fieldIndex = 0u; fieldIndex < fieldCount; ++fieldIndex){
         const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(fieldIndex);

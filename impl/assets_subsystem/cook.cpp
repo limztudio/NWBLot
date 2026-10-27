@@ -36,9 +36,24 @@ bool SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::A
         return false;
 
     const usize fieldCount = subsystem.fieldCount();
+    Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
+    subsystemHashes.reserve(subsystem.subsystems.size());
     fieldCounts.reserve(fieldCount);
+
+    for(const ISubsystem::SubsystemRef& ref : subsystem.subsystems){
+        const NameHash hash = ref.name().hash();
+        bool duplicate = false;
+        for(const NameHash& existingHash : subsystemHashes){
+            if(existingHash == hash){
+                duplicate = true;
+                break;
+            }
+        }
+        if(!duplicate)
+            subsystemHashes.push_back(hash);
+    }
 
     usize totalAssetCount = 0u;
     for(usize i = 0u; i < fieldCount; ++i){
@@ -55,7 +70,11 @@ bool SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::A
     }
 
     usize reserveBytes = sizeof(SubsystemBinaryPayload::SubsystemHeaderBinary);
-    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, fieldCounts) && AddBinaryVectorReserveBytes(reserveBytes, assetHashes);
+    const bool canReserve =
+        AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes)
+        && AddBinaryVectorReserveBytes(reserveBytes, fieldCounts)
+        && AddBinaryVectorReserveBytes(reserveBytes, assetHashes)
+    ;
 
     outBinary.clear();
     if(canReserve)
@@ -63,12 +82,14 @@ bool SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::A
 
     SubsystemBinaryPayload::SubsystemHeaderBinary header;
     header.subsystemTypeHash = subsystem.assetType().hash();
+    header.subsystemCount = static_cast<u64>(subsystemHashes.size());
     header.fieldCount = static_cast<u64>(fieldCounts.size());
     header.assetCount = static_cast<u64>(assetHashes.size());
     AppendPOD(outBinary, header);
 
     return
-        Core::Assets::AppendVectorPayload(outBinary, fieldCounts, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_FieldCountsPayloadLabel)
+        Core::Assets::AppendVectorPayload(outBinary, subsystemHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_SubsystemsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, fieldCounts, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_FieldCountsPayloadLabel)
         && Core::Assets::AppendVectorPayload(outBinary, assetHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_AssetsPayloadLabel)
     ;
 }
@@ -98,6 +119,8 @@ namespace __hidden_subsystem_cook{
 
 
 using namespace Core::Metascript;
+
+static constexpr AStringView s_SubsystemsFieldName = "subsystems";
 
 
 template<typename TAsset>
@@ -137,6 +160,8 @@ template<typename TAsset>
 [[nodiscard]] static bool ValidateSubsystemMetadataFields(const ISubsystem& subsystem, const Path& nwbFilePath, const Value& asset){
     const usize count = subsystem.fieldCount();
     return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, AssetsSubsystemCook::s_SubsystemDiagnosticPrefix, [&subsystem, count](const AStringView fieldName)noexcept{
+        if(fieldName == s_SubsystemsFieldName)
+            return true;
         for(usize i = 0u; i < count; ++i){
             if(fieldName == subsystem.fieldDescriptor(i).fieldName)
                 return true;
@@ -160,6 +185,44 @@ bool AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, co
 
     if(!ValidateSubsystemMetadataFields(outSubsystem, nwbFilePath, asset))
         return false;
+
+    outSubsystem.subsystems.clear();
+    if(const Core::Metascript::Value* const subsystemsValue = asset.findField(s_SubsystemsFieldName)){
+        if(!subsystemsValue->isList()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("{} '{}': '{}' must be a list of strings"),
+                ConvertString(s_SubsystemDiagnosticPrefix),
+                PathToString<tchar>(nwbFilePath),
+                ConvertString(s_SubsystemsFieldName)
+            );
+            return false;
+        }
+        outSubsystem.subsystems.reserve(subsystemsValue->asList().size());
+        for(const Core::Metascript::Value& itemValue : subsystemsValue->asList()){
+            const auto parsedRef = ParseAssetRefString<ISubsystem>(nwbFilePath, itemValue, s_SubsystemsFieldName, scratchArena);
+            if(!parsedRef)
+                return false;
+            if(parsedRef->name() == outSubsystem.virtualPath()){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("{} '{}': '{}' cannot reference subsystem '{}' itself"),
+                    ConvertString(s_SubsystemDiagnosticPrefix),
+                    PathToString<tchar>(nwbFilePath),
+                    ConvertString(s_SubsystemsFieldName),
+                    ConvertString(outSubsystem.virtualPath().resolvedText())
+                );
+                return false;
+            }
+            bool duplicate = false;
+            for(const ISubsystem::SubsystemRef& existing : outSubsystem.subsystems){
+                if(existing.name() == parsedRef->name()){
+                    duplicate = true;
+                    break;
+                }
+            }
+            if(!duplicate)
+                outSubsystem.subsystems.push_back(*parsedRef);
+        }
+    }
 
     const usize count = outSubsystem.fieldCount();
     for(usize i = 0u; i < count; ++i){

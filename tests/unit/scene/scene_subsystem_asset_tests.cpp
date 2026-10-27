@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/components.h>
 #include <impl/assets_graphics/csg/subsystem.h>
 #include <impl/assets_graphics/refractive/subsystem.h>
 #include <impl/assets_graphics/renderer/subsystem.h>
@@ -20,6 +21,7 @@
 #include <global/binary.h>
 
 #include <tests/common/capturing_logger.h>
+#include <tests/common/ecs_test_world.h>
 #include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
@@ -57,15 +59,28 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
     return binary;
 }
 
-[[nodiscard]] static AssetBytes MakeSceneBinary(AssetArena& arena, const Span<const SceneAsset::SubsystemRef> subsystems, const SceneAsset::AssetMap& assets){
+[[nodiscard]] static AssetBytes MakeSceneBinary(
+    AssetArena& arena,
+    const Span<const SceneAsset::SubsystemRef> subsystems,
+    const SceneAsset::AssetMap& assets,
+    const Span<const SceneAsset::EntityRef> entities = {}
+){
     SceneBinaryPayload::SceneHeaderBinary header;
     header.subsystemCount = static_cast<u64>(subsystems.size());
+    header.entityCount = static_cast<u64>(entities.size());
     header.assetCount = static_cast<u64>(assets.size());
 
     AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + subsystems.size() * sizeof(NameHash) + assets.size() * sizeof(SceneBinaryPayload::SceneAssetEntryBinary));
+    binary.reserve(
+        sizeof(header)
+        + subsystems.size() * sizeof(NameHash)
+        + entities.size() * sizeof(NameHash)
+        + assets.size() * sizeof(SceneBinaryPayload::SceneAssetEntryBinary)
+    );
     AppendPOD(binary, header);
     for(const SceneAsset::SubsystemRef& ref : subsystems)
+        AppendPOD(binary, ref.name().hash());
+    for(const SceneAsset::EntityRef& ref : entities)
         AppendPOD(binary, ref.name().hash());
     for(const auto& [nickname, ref] : assets){
         SceneBinaryPayload::SceneAssetEntryBinary entry;
@@ -73,6 +88,31 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
         entry.assetHash = ref.name().hash();
         AppendPOD(binary, entry);
     }
+    return binary;
+}
+
+[[nodiscard]] static AssetBytes MakeEntityBinary(AssetArena& arena, const Span<const EntityAsset::ComponentRef> components){
+    EntityBinaryPayload::EntityHeaderBinary header;
+    header.componentCount = static_cast<u64>(components.size());
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header) + components.size() * sizeof(NameHash));
+    AppendPOD(binary, header);
+    for(const EntityAsset::ComponentRef& ref : components)
+        AppendPOD(binary, ref.name().hash());
+    return binary;
+}
+
+template<typename ComponentT, typename PayloadT>
+[[nodiscard]] static AssetBytes MakeComponentBinary(AssetArena& arena, const PayloadT& payload){
+    ComponentBinaryPayload::ComponentHeaderBinary header;
+    header.componentTypeHash = ComponentT::AssetTypeName().hash();
+    header.payloadByteCount = sizeof(PayloadT);
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header) + sizeof(PayloadT));
+    AppendPOD(binary, header);
+    AppendPOD(binary, payload);
     return binary;
 }
 
@@ -92,6 +132,7 @@ static void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
 
 template<typename SubsystemT>
 [[nodiscard]] static AssetBytes MakeSubsystemBinary(AssetArena& arena, const SubsystemT& subsystem){
+    const usize subsystemCount = subsystem.subsystems.size();
     const usize fieldCount = subsystem.fieldCount();
     u64 totalAssetCount = 0u;
     for(usize i = 0u; i < fieldCount; ++i)
@@ -99,12 +140,20 @@ template<typename SubsystemT>
 
     SubsystemBinaryPayload::SubsystemHeaderBinary header;
     header.subsystemTypeHash = SubsystemT::AssetTypeName().hash();
+    header.subsystemCount = static_cast<u64>(subsystemCount);
     header.fieldCount = static_cast<u64>(fieldCount);
     header.assetCount = totalAssetCount;
 
     AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + fieldCount * sizeof(u64) + static_cast<usize>(totalAssetCount) * sizeof(NameHash));
+    binary.reserve(
+        sizeof(header)
+        + subsystemCount * sizeof(NameHash)
+        + fieldCount * sizeof(u64)
+        + static_cast<usize>(totalAssetCount) * sizeof(NameHash)
+    );
     AppendPOD(binary, header);
+    for(const ISubsystem::SubsystemRef& ref : subsystem.subsystems)
+        AppendPOD(binary, ref.name().hash());
     for(usize i = 0u; i < fieldCount; ++i){
         const u64 valueCount = static_cast<u64>(subsystem.fieldValueCount(i));
         AppendPOD(binary, valueCount);
@@ -313,10 +362,14 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
     PopulateRequiredSubsystemFields(skinningSubsystem);
 
     TransparentSubsystem transparentSubsystem(arena, s_TransparentSubsystemPath);
+    transparentSubsystem.subsystems.push_back(ISubsystem::SubsystemRef("engine/subsystems/renderer"));
+    transparentSubsystem.subsystems.push_back(ISubsystem::SubsystemRef("engine/subsystems/skinning"));
     transparentSubsystem.avboitDepthWarpCs = AssetRef<ComputeShader>("engine/graphics/avboit/depth_warp_cs");
     PopulateRequiredSubsystemFields(transparentSubsystem);
 
     UiSubsystem uiSubsystem(arena, s_UiSubsystemPath);
+    uiSubsystem.subsystems.push_back(ISubsystem::SubsystemRef("engine/subsystems/renderer"));
+    uiSubsystem.subsystems.push_back(ISubsystem::SubsystemRef("engine/subsystems/renderer"));
     uiSubsystem.basicFonts.push_back(AssetRef<FontAtlas>("engine/ui/fonts/default/latin/atlas"));
     uiSubsystem.basicFonts.push_back(AssetRef<FontAtlas>("engine/ui/fonts/default/korean/atlas"));
     uiSubsystem.basicSkin = AssetRef<UiSkin>("engine/ui/skins/default/atlas");
@@ -324,8 +377,8 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
 
     SceneAsset::SubsystemRefVector sceneSubsystems(arena);
     sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/renderer"));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/renderer"));
     sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/ui"));
-    sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/skinning"));
     sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/transparent"));
     SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
     sceneAssets.emplace(Name("cesium_man_model"), SceneAsset::AssetRef("project/characters/cesium_man/model"));
@@ -341,6 +394,7 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
     ASSERT_TRUE(active.loadProjectStartScene(assets));
     EXPECT_TRUE(active.valid());
     EXPECT_EQ(active.scene().name(), Name("project/scenes/main"));
+    EXPECT_EQ(active.subsystemCount(), 4u);
     EXPECT_TRUE(active.hasSubsystem<RendererSubsystem>());
     EXPECT_TRUE(active.hasSubsystem<UiSubsystem>());
     EXPECT_TRUE(active.hasSubsystem<SkinningSubsystem>());
@@ -358,6 +412,8 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
 
     const UiSubsystem* const activeUi = active.findSubsystem<UiSubsystem>();
     ASSERT_NE(activeUi, nullptr);
+    ASSERT_EQ(activeUi->subsystems.size(), 1u);
+    EXPECT_EQ(activeUi->subsystems[0].name(), s_RendererSubsystemPath);
     ASSERT_EQ(activeUi->basicFonts.size(), 2u);
     EXPECT_EQ(activeUi->basicFonts[0].name(), Name("engine/ui/fonts/default/latin/atlas"));
     EXPECT_EQ(activeUi->basicFonts[1].name(), Name("engine/ui/fonts/default/korean/atlas"));
@@ -389,6 +445,104 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
     EXPECT_EQ(active.scene().name(), Name("project/scenes/main"));
     EXPECT_TRUE(active.hasSubsystem<RendererSubsystem>());
     EXPECT_EQ(active.findSceneAsset(Name("cesium_man_model")).name(), Name("project/characters/cesium_man/model"));
+}
+
+TEST(SceneSubsystemAssets, EntityAndComponentAssetsDecodeAndInstantiate){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+
+    AssetArena arena(Name("tests/scene/entity_component_assets"));
+    Core::Alloc::GlobalArena globalArena(Name("tests/scene/entity_component_assets_global"));
+    AssetRegistry registry(arena);
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<SubsystemAssetCodec>()));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<ComponentAssetCodec>()));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<EntityAssetCodec>()));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<ProjectAssetCodec>()));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<SceneAssetCodec>()));
+
+    MapAssetBinarySource source(arena);
+    AssetManager assets(arena, registry, source);
+
+    RendererSubsystem rendererSubsystem(arena, s_RendererSubsystemPath);
+    PopulateRequiredSubsystemFields(rendererSubsystem);
+    source.setBinary(s_RendererSubsystemPath, MakeSubsystemBinary(arena, rendererSubsystem));
+
+    ComponentBinaryPayload::TransformComponentPayloadBinary transformPayload;
+    transformPayload.position = Float4(1.0f, 2.0f, 3.0f, 0.0f);
+    transformPayload.rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    transformPayload.scale = Float4(2.0f, 2.0f, 2.0f, 0.0f);
+    source.setBinary(
+        Name("project/entities/hero/transform"),
+        MakeComponentBinary<TransformComponentAsset>(arena, transformPayload)
+    );
+
+    ComponentBinaryPayload::SingleAssetRefComponentPayloadBinary modelPayload;
+    modelPayload.assetHash = Name("project/characters/female/model").hash();
+    source.setBinary(
+        Name("project/entities/hero/model"),
+        MakeComponentBinary<ModelComponentAsset>(arena, modelPayload)
+    );
+
+    ComponentBinaryPayload::RendererComponentPayloadBinary rendererPayload;
+    rendererPayload.materialHash = Name("project/materials/mat_skinned_uv").hash();
+    rendererPayload.visible = 1u;
+    source.setBinary(
+        Name("project/entities/hero/renderer"),
+        MakeComponentBinary<RendererComponentAsset>(arena, rendererPayload)
+    );
+
+    EntityAsset::ComponentRefVector heroComponents(arena);
+    heroComponents.push_back(EntityAsset::ComponentRef("project/entities/hero/transform"));
+    heroComponents.push_back(EntityAsset::ComponentRef("project/entities/hero/model"));
+    heroComponents.push_back(EntityAsset::ComponentRef("project/entities/hero/renderer"));
+    source.setBinary(Name("project/entities/hero"), MakeEntityBinary(arena, heroComponents));
+
+    SceneAsset::SubsystemRefVector sceneSubsystems(arena);
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/renderer"));
+    SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    SceneAsset::EntityRefVector sceneEntities(arena);
+    sceneEntities.push_back(SceneAsset::EntityRef("project/entities/hero"));
+    source.setBinary(Name("project/scenes/entity_scene"), MakeSceneBinary(arena, sceneSubsystems, sceneAssets, sceneEntities));
+
+    ActiveSceneSubsystems active(globalArena);
+    ASSERT_TRUE(active.loadScene(assets, ActiveSceneSubsystems::SceneRef("project/scenes/entity_scene")));
+    ASSERT_EQ(active.entities().size(), 1u);
+    EXPECT_EQ(active.entities()[0].entity.name(), Name("project/entities/hero"));
+    ASSERT_EQ(active.entities()[0].components.size(), 3u);
+
+    Tests::EcsTestWorld testWorld;
+    ASSERT_TRUE(active.instantiateEntities(testWorld.world));
+
+    usize entityCount = 0u;
+    const auto view = testWorld.world.view<Scene::TransformComponent, ModelComponent, RendererComponent>();
+    for(auto it = view.begin(); it != view.end(); ++it){
+        auto&& [entityId, transform, model, renderer] = *it;
+        EXPECT_TRUE(entityId.valid());
+        EXPECT_FLOAT_EQ(transform.position.x, 1.0f);
+        EXPECT_FLOAT_EQ(transform.position.y, 2.0f);
+        EXPECT_FLOAT_EQ(transform.position.z, 3.0f);
+        EXPECT_FLOAT_EQ(transform.scale.x, 2.0f);
+        EXPECT_EQ(model.model.name(), Name("project/characters/female/model"));
+        EXPECT_EQ(renderer.material.name(), Name("project/materials/mat_skinned_uv"));
+        EXPECT_TRUE(renderer.visible);
+        ++entityCount;
+    }
+    EXPECT_EQ(entityCount, 1u);
+
+    source.setBinary(
+        Name("project/entities/hero/transform_duplicate"),
+        MakeComponentBinary<TransformComponentAsset>(arena, transformPayload)
+    );
+    EntityAsset::ComponentRefVector duplicateComponents(arena);
+    duplicateComponents.push_back(EntityAsset::ComponentRef("project/entities/hero/transform"));
+    duplicateComponents.push_back(EntityAsset::ComponentRef("project/entities/hero/transform_duplicate"));
+    source.setBinary(Name("project/entities/duplicate_comp_entity"), MakeEntityBinary(arena, duplicateComponents));
+
+    SceneAsset::EntityRefVector duplicateSceneEntities(arena);
+    duplicateSceneEntities.push_back(SceneAsset::EntityRef("project/entities/duplicate_comp_entity"));
+    source.setBinary(Name("project/scenes/duplicate_comp_scene"), MakeSceneBinary(arena, sceneSubsystems, sceneAssets, duplicateSceneEntities));
+    EXPECT_FALSE(active.loadScene(assets, ActiveSceneSubsystems::SceneRef("project/scenes/duplicate_comp_scene")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate component type")));
 }
 
 

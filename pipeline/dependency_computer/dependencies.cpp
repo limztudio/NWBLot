@@ -207,9 +207,15 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
         const auto hasBunch = HasAssetBunchDeclaration(*document);
         if(!hasBunch)
             return MakeUnexpected(Failure{});
-        if(*hasBunch){
+        const auto hasComposite = *hasBunch ? Expected<bool, NameTextError::Enum>(false) : Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);
+        if(!hasComposite)
+            return MakeUnexpected(Failure{});
+        if(*hasBunch || *hasComposite){
             const auto& file = files[fileIndex];
-            const auto expandedAssets = Assets::AssetsBunchCook::ExpandAssetBunch(file.assetRoot, file.virtualRoot, file.filePath, *document, scratchArena);
+            const auto expandedAssets = *hasBunch
+                ? Assets::AssetsBunchCook::ExpandAssetBunch(file.assetRoot, file.virtualRoot, file.filePath, *document, scratchArena)
+                : Assets::AssetsBunchCook::ExpandCompositeAsset(file.assetRoot, file.virtualRoot, file.filePath, *document, scratchArena)
+            ;
             if(!expandedAssets)
                 return MakeUnexpected(Failure{});
             for(const Assets::ExpandedAssetMetadata& expanded : *expandedAssets)

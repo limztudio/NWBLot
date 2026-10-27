@@ -5,7 +5,7 @@ target_sources(nwb_assets_scene PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
 )
-target_link_libraries(nwb_assets_scene PUBLIC nwb_assets nwb_assets_subsystem)
+target_link_libraries(nwb_assets_scene PUBLIC nwb_assets nwb_assets_subsystem nwb_ecs nwb_ecs_scene)
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_scene_cook)
@@ -17,7 +17,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     )
-    target_link_libraries(nwb_assets_scene_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_metascript)
+    target_link_libraries(nwb_assets_scene_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_ecs nwb_ecs_scene nwb_metascript)
     target_compile_definitions(nwb_assets_scene_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_scene_volume_entry)

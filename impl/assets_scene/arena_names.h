@@ -23,8 +23,11 @@ namespace AssetsSceneArenaScope{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_EntityLoadBinaryArena("impl/assets_scene/entity_load_binary");
+inline constexpr Name s_EntitySerializeArena("impl/assets_scene/entity_serialize");
 inline constexpr Name s_SceneLoadBinaryArena("impl/assets_scene/scene_load_binary");
 inline constexpr Name s_SceneSerializeArena("impl/assets_scene/scene_serialize");
+inline constexpr Name s_ActiveSceneLoadArena("impl/assets_scene/active_scene_load");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

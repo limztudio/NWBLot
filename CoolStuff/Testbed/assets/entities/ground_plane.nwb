@@ -1,0 +1,15 @@
+entity asset;
+
+transform_component transform;
+
+model_component model;
+model.asset = "project/meshes/ground_plane/model";
+
+renderer_component renderer;
+renderer.material = "project/materials/mat_white_opaque";
+
+asset.components = [
+    transform,
+    model,
+    renderer
+];

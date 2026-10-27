@@ -75,28 +75,33 @@ class CookDependencyRegistry : NoCopy{
 private:
     using ExtractorLookup = CookDependencyMap<Name, NotNull<CookDependencyExtractFunction>>;
     using SubsystemTypeSet = CookDependencySet<Name>;
+    using ComponentTypeSet = CookDependencySet<Name>;
 
 
 public:
     explicit CookDependencyRegistry(CookArena& arena)noexcept
         : m_lookup(0, Hasher<Name>(), EqualTo<Name>(), arena)
         , m_subsystemTypes(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , m_componentTypes(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
 
 
 public:
     bool registerType(const Name& assetType, CookDependencyExtractFunction extractDependencies);
     bool registerSubsystemType(const Name& assetType, CookDependencyExtractFunction extractDependencies);
+    bool registerComponentType(const Name& assetType, CookDependencyExtractFunction extractDependencies);
 
     [[nodiscard]] CookDependencyExtractFunction find(const Name& assetType)const noexcept;
     [[nodiscard]] bool has(const Name& assetType)const noexcept{ return find(assetType) != nullptr; }
     [[nodiscard]] bool isSubsystemType(const Name& assetType)const noexcept;
+    [[nodiscard]] bool isComponentType(const Name& assetType)const noexcept;
     [[nodiscard]] bool extractDependencies(const CookDependencyItemContext& context, ICookDependencyCollector& collector)const;
 
 
 private:
     ExtractorLookup m_lookup;
     SubsystemTypeSet m_subsystemTypes;
+    ComponentTypeSet m_componentTypes;
 };
 
 

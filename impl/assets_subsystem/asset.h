@@ -33,14 +33,24 @@ struct SubsystemFieldValueDescriptor{
 
 interface ISubsystem : Core::Assets::IAsset{
 public:
+    using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
+    using SubsystemRefVector = SubsystemAssetRefVector<ISubsystem>;
+
+
+public:
     NWB_DEFINE_ASSET_TYPE("subsystem")
+
+
+public:
+    SubsystemRefVector subsystems;
 
 
 public:
     virtual ~ISubsystem()noexcept override = 0;
 protected:
-    explicit ISubsystem(const Name& assetType, const Name& virtualPath = s_NameNone)noexcept
+    explicit ISubsystem(Core::Assets::AssetArena& arena, const Name& assetType, const Name& virtualPath = s_NameNone)noexcept
         : Core::Assets::IAsset(assetType, virtualPath)
+        , subsystems(arena)
     {}
     ISubsystem(const ISubsystem&) = default;
     ISubsystem(ISubsystem&&)noexcept = default;
@@ -156,11 +166,11 @@ public:
 
 
 public:
-    explicit TypedSubsystem(Core::Assets::AssetArena&)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName())))
-        : ISubsystem(SubsystemT::AssetTypeName())
+    explicit TypedSubsystem(Core::Assets::AssetArena& arena)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName())))
+        : ISubsystem(arena, SubsystemT::AssetTypeName())
     {}
-    TypedSubsystem(Core::Assets::AssetArena&, const Name& virtualPath)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName())))
-        : ISubsystem(SubsystemT::AssetTypeName(), virtualPath)
+    TypedSubsystem(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName())))
+        : ISubsystem(arena, SubsystemT::AssetTypeName(), virtualPath)
     {}
     TypedSubsystem(const TypedSubsystem&) = default;
     TypedSubsystem(TypedSubsystem&&)noexcept = default;

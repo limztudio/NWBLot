@@ -74,7 +74,7 @@ bool Compiler::compile(
         outResult.unit.includedAdhdFiles.push_back(inc);
 
     const MStringView activeSource(outResult.preprocessedSource.data(), outResult.preprocessedSource.size());
-    ParserCursor cursor(activeSource, arena, scratchArena, outResult.errors, true);
+    ParserCursor cursor(activeSource, arena, scratchArena, outResult.errors);
     DeclParser declParser(cursor, activeSource);
 
     if(!declParser.parseTranslationUnit(outResult.unit))

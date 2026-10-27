@@ -24,7 +24,7 @@ bool ParseAdhdCompilerOptions(
             outOptions.showHelp = true;
             return true;
         }
-        if(arg == "-o" || arg == "--output" || arg == "--output-dir" || arg == "--output-directory"){
+        if(arg == "-o" || arg == "--output-dir"){
             if(i + 1 >= argc){
                 NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: missing argument after '{}'"), ConvertString(arg));
                 return false;

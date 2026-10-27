@@ -123,8 +123,8 @@ TEST(AdhdCompiler, ReordersClassFieldsByDescendingAlignmentAndSize){
 
     static constexpr MStringView s_Source =
         "enum<u8> NodeFlags {\r\n"
-        "    [flag] Active,\r\n"
-        "    [flag] Visible,\r\n"
+        "    flag Active,\r\n"
+        "    flag Visible,\r\n"
         "}\r\n"
         "class TransformNode {\r\n"
         "    public bool dirty = false;\r\n"

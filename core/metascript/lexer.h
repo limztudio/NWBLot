@@ -97,7 +97,7 @@ struct Token{
 
 class Lexer{
 public:
-    explicit Lexer(MStringView source, bool extendedSyntax = false)noexcept;
+    explicit Lexer(MStringView source)noexcept;
 
 
 public:
@@ -129,7 +129,6 @@ private:
     u32 m_errorLine = 1;
     u32 m_errorColumn = 1;
     bool m_hasPendingError = false;
-    bool m_extendedSyntax = false;
 };
 
 

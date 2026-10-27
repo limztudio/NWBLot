@@ -104,8 +104,8 @@ struct TokenDescription{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ParserCursor::ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, const bool extendedSyntax)
-    : m_lexer(source, extendedSyntax)
+ParserCursor::ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors)
+    : m_lexer(source)
     , m_arena(arena)
     , m_scratchArena(scratchArena)
     , m_errors(errors)

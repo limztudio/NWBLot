@@ -259,28 +259,14 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, MVector<ParsedAttribu
         return nullptr;
 
     while(!m_cursor.check(TokenType::RightBrace) && !m_cursor.check(TokenType::EndOfFile)){
-        MVector<ParsedAttribute> entryAttrs(m_cursor.arena());
-        if(m_cursor.check(TokenType::LeftBracket)){
-            AttributeParser attrParser(m_cursor);
-            if(!attrParser.parseSingleBracketList(entryAttrs))
-                return nullptr;
-        }
-
         bool isFlag = false;
-        for(const ParsedAttribute& attr : entryAttrs){
-            if(attr.name == "flag" && attr.arguments.empty()){
-                isFlag = true;
-            }
-            else{
-                m_cursor.error(attr.line, attr.column, "unsupported attribute on enum entry; only '[flag]' is permitted");
-                return nullptr;
-            }
-        }
-
-        if(m_cursor.matchIdentifier("flag"))
+        if(m_cursor.matchIdentifier("flag")){
             isFlag = true;
-        else
-            m_cursor.matchIdentifier("enum");
+        }
+        else if(!m_cursor.matchIdentifier("enum")){
+            m_cursor.error("enum entry must explicitly begin with 'enum' or 'flag'");
+            return nullptr;
+        }
 
         if(!m_cursor.check(TokenType::Identifier)){
             m_cursor.errorExpected("expected enum enumerator name");
@@ -310,7 +296,6 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, MVector<ParsedAttribu
     if(!m_cursor.expect(TokenType::RightBrace, "expected '}' to close enum declaration"))
         return nullptr;
 
-    m_cursor.match(TokenType::Semicolon);
     return decl;
 }
 
@@ -399,7 +384,6 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, MVector<Par
     if(!m_cursor.expect(TokenType::RightBrace, "expected '}' to close interface declaration"))
         return nullptr;
 
-    m_cursor.match(TokenType::Semicolon);
     return decl;
 }
 
@@ -469,7 +453,6 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, MVector<ParsedAttri
     if(!m_cursor.expect(TokenType::RightBrace, "expected '}' to close class declaration"))
         return nullptr;
 
-    m_cursor.match(TokenType::Semicolon);
     return decl;
 }
 

@@ -43,9 +43,8 @@ constexpr usize s_ThreeCharTokenLength = 3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Lexer::Lexer(MStringView source, const bool extendedSyntax)noexcept
+Lexer::Lexer(MStringView source)noexcept
     : m_source(source)
-    , m_extendedSyntax(extendedSyntax)
 {}
 
 
@@ -83,15 +82,15 @@ Token Lexer::next()noexcept{
     case '+':
         if(peekNext() == '=')
             return makeToken(TokenType::PlusEqual, s_CompoundAssignmentTokenLength);
-        if(m_extendedSyntax && peekNext() == '+')
+        if(peekNext() == '+')
             return makeToken(TokenType::PlusPlus, s_CompoundAssignmentTokenLength);
         return makeToken(TokenType::Plus, 1);
     case '-':
         if(peekNext() == '=')
             return makeToken(TokenType::MinusEqual, s_CompoundAssignmentTokenLength);
-        if(m_extendedSyntax && peekNext() == '-')
+        if(peekNext() == '-')
             return makeToken(TokenType::MinusMinus, s_CompoundAssignmentTokenLength);
-        if(m_extendedSyntax && peekNext() == '>')
+        if(peekNext() == '>')
             return makeToken(TokenType::Arrow, s_CompoundAssignmentTokenLength);
         return makeToken(TokenType::Minus, 1);
     case '*':
@@ -102,10 +101,58 @@ Token Lexer::next()noexcept{
         if(peekNext() == '=')
             return makeToken(TokenType::SlashEqual, s_CompoundAssignmentTokenLength);
         return makeToken(TokenType::Slash, 1);
+    case '%':
+        if(peekNext() == '=')
+            return makeToken(TokenType::PercentEqual, s_CompoundAssignmentTokenLength);
+        return makeToken(TokenType::Percent, 1);
     case '=':
-        if(m_extendedSyntax && peekNext() == '=')
+        if(peekNext() == '=')
             return makeToken(TokenType::EqualEqual, s_CompoundAssignmentTokenLength);
         return makeToken(TokenType::Equal, 1);
+    case '!':
+        if(peekNext() == '=')
+            return makeToken(TokenType::BangEqual, s_CompoundAssignmentTokenLength);
+        return makeToken(TokenType::Bang, 1);
+    case '<':
+        if(peekNext() == '<'){
+            if(peekAt(2u) == '=')
+                return makeToken(TokenType::LessLessEqual, s_ThreeCharTokenLength);
+            return makeToken(TokenType::LessLess, s_CompoundAssignmentTokenLength);
+        }
+        if(peekNext() == '=')
+            return makeToken(TokenType::LessEqual, s_CompoundAssignmentTokenLength);
+        return makeToken(TokenType::Less, 1);
+    case '>':
+        if(peekNext() == '>'){
+            if(peekAt(2u) == '=')
+                return makeToken(TokenType::GreaterGreaterEqual, s_ThreeCharTokenLength);
+            return makeToken(TokenType::GreaterGreater, s_CompoundAssignmentTokenLength);
+        }
+        if(peekNext() == '=')
+            return makeToken(TokenType::GreaterEqual, s_CompoundAssignmentTokenLength);
+        return makeToken(TokenType::Greater, 1);
+    case '&':
+        if(peekNext() == '&')
+            return makeToken(TokenType::AmpersandAmpersand, s_CompoundAssignmentTokenLength);
+        if(peekNext() == '=')
+            return makeToken(TokenType::AmpersandEqual, s_CompoundAssignmentTokenLength);
+        return makeToken(TokenType::Ampersand, 1);
+    case '|':
+        if(peekNext() == '|')
+            return makeToken(TokenType::PipePipe, s_CompoundAssignmentTokenLength);
+        if(peekNext() == '=')
+            return makeToken(TokenType::PipeEqual, s_CompoundAssignmentTokenLength);
+        return makeToken(TokenType::Pipe, 1);
+    case '^':
+        if(peekNext() == '=')
+            return makeToken(TokenType::CaretEqual, s_CompoundAssignmentTokenLength);
+        return makeToken(TokenType::Caret, 1);
+    case '~':
+        return makeToken(TokenType::Tilde, 1);
+    case '?':
+        return makeToken(TokenType::Question, 1);
+    case '#':
+        return makeToken(TokenType::Hash, 1);
     case ';':
         return makeToken(TokenType::Semicolon, 1);
     case '.':
@@ -113,7 +160,7 @@ Token Lexer::next()noexcept{
     case ',':
         return makeToken(TokenType::Comma, 1);
     case ':':
-        if(m_extendedSyntax && peekNext() == ':')
+        if(peekNext() == ':')
             return makeToken(TokenType::ColonColon, s_CompoundAssignmentTokenLength);
         return makeToken(TokenType::Colon, 1);
     case '[':
@@ -130,61 +177,6 @@ Token Lexer::next()noexcept{
         return makeToken(TokenType::RightParen, 1);
     default:
         break;
-    }
-
-    if(m_extendedSyntax){
-        switch(c){
-        case '%':
-            if(peekNext() == '=')
-                return makeToken(TokenType::PercentEqual, s_CompoundAssignmentTokenLength);
-            return makeToken(TokenType::Percent, 1);
-        case '!':
-            if(peekNext() == '=')
-                return makeToken(TokenType::BangEqual, s_CompoundAssignmentTokenLength);
-            return makeToken(TokenType::Bang, 1);
-        case '<':
-            if(peekNext() == '<'){
-                if(peekAt(2u) == '=')
-                    return makeToken(TokenType::LessLessEqual, s_ThreeCharTokenLength);
-                return makeToken(TokenType::LessLess, s_CompoundAssignmentTokenLength);
-            }
-            if(peekNext() == '=')
-                return makeToken(TokenType::LessEqual, s_CompoundAssignmentTokenLength);
-            return makeToken(TokenType::Less, 1);
-        case '>':
-            if(peekNext() == '>'){
-                if(peekAt(2u) == '=')
-                    return makeToken(TokenType::GreaterGreaterEqual, s_ThreeCharTokenLength);
-                return makeToken(TokenType::GreaterGreater, s_CompoundAssignmentTokenLength);
-            }
-            if(peekNext() == '=')
-                return makeToken(TokenType::GreaterEqual, s_CompoundAssignmentTokenLength);
-            return makeToken(TokenType::Greater, 1);
-        case '&':
-            if(peekNext() == '&')
-                return makeToken(TokenType::AmpersandAmpersand, s_CompoundAssignmentTokenLength);
-            if(peekNext() == '=')
-                return makeToken(TokenType::AmpersandEqual, s_CompoundAssignmentTokenLength);
-            return makeToken(TokenType::Ampersand, 1);
-        case '|':
-            if(peekNext() == '|')
-                return makeToken(TokenType::PipePipe, s_CompoundAssignmentTokenLength);
-            if(peekNext() == '=')
-                return makeToken(TokenType::PipeEqual, s_CompoundAssignmentTokenLength);
-            return makeToken(TokenType::Pipe, 1);
-        case '^':
-            if(peekNext() == '=')
-                return makeToken(TokenType::CaretEqual, s_CompoundAssignmentTokenLength);
-            return makeToken(TokenType::Caret, 1);
-        case '~':
-            return makeToken(TokenType::Tilde, 1);
-        case '?':
-            return makeToken(TokenType::Question, 1);
-        case '#':
-            return makeToken(TokenType::Hash, 1);
-        default:
-            break;
-        }
     }
 
     {
@@ -278,7 +270,7 @@ Token Lexer::readNumber()noexcept{
     bool isDouble = false;
     bool isFloat = false;
 
-    if(m_extendedSyntax && peek() == '0' && (peekNext() == 'x' || peekNext() == 'X')){
+    if(peek() == '0' && (peekNext() == 'x' || peekNext() == 'X')){
         advance();
         advance();
         if(isAtEnd() || !IsHexDigit(peek()))
@@ -295,7 +287,7 @@ Token Lexer::readNumber()noexcept{
         return tok;
     }
 
-    if(m_extendedSyntax && peek() == '0' && (peekNext() == 'b' || peekNext() == 'B')){
+    if(peek() == '0' && (peekNext() == 'b' || peekNext() == 'B')){
         advance();
         advance();
         if(isAtEnd() || !IsBinaryDigit(peek()))
@@ -336,15 +328,13 @@ Token Lexer::readNumber()noexcept{
             advance();
     }
 
-    if(m_extendedSyntax){
-        if(isDouble && !isAtEnd() && (peek() == 'f' || peek() == 'F')){
-            isFloat = true;
+    if(isDouble && !isAtEnd() && (peek() == 'f' || peek() == 'F')){
+        isFloat = true;
+        advance();
+    }
+    else if(!isDouble){
+        while(!isAtEnd() && (peek() == 'u' || peek() == 'U' || peek() == 'l' || peek() == 'L'))
             advance();
-        }
-        else if(!isDouble){
-            while(!isAtEnd() && (peek() == 'u' || peek() == 'U' || peek() == 'l' || peek() == 'L'))
-                advance();
-        }
     }
 
     Token tok;

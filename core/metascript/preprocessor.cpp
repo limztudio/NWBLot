@@ -49,7 +49,7 @@ constexpr u32 s_MaxMacroExpansionPasses = 16u;
 class ConditionEvaluator{
 public:
     ConditionEvaluator(MStringView text, const Preprocessor::MacroMap& macros, MetaArena& arena, MVector<ParseError>& errors, const u32 line)noexcept
-        : m_lexer(text, true)
+        : m_lexer(text)
         , m_macros(macros)
         , m_arena(arena)
         , m_errors(errors)
@@ -416,7 +416,7 @@ bool Preprocessor::processInternal(const MStringView source, const u32 depth, MS
             if(!expandLineMacros(rawLine, currentLine, expandedLine))
                 return false;
 
-            Lexer scanLexer(expandedLine, true);
+            Lexer scanLexer(expandedLine);
             for(;;){
                 const Token tok = scanLexer.next();
                 if(tok.type == TokenType::EndOfFile || tok.type == TokenType::Error)

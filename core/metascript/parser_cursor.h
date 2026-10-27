@@ -34,7 +34,7 @@ public:
 
 
 public:
-    ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, bool extendedSyntax = false);
+    ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors);
 
 
 public:

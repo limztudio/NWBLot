@@ -455,12 +455,39 @@ All owning containers are automatically bound to the enclosing class's static ar
 
 ---
 
-## 12. Compiler Architecture & Module Split (`core/metascript` & `pipeline/adhd_compiler`)
-1. **Extended Language & Compiler Library in `core/metascript` (`nwb_metascript`)**:
-   - **Preprocessor**: Evaluates `#include` (with automatic deduplication), `#define`, `#undef`, `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, and `#endif` for both `.nwb` and `.adhd` documents.
-   - **Lexer, Token Set & ParserCursor**: Unified tokenizer (`lexer.h`, `parser_cursor.h`), `[...]` attribute parser, and diagnostic error tracking (`ParseError`) shared across `.nwb` and `.adhd`.
-   - **`.nwb` Data Evaluation**: `Document` and `Value` evaluate `.nwb` asset data.
-   - **`adhd` AST, Semantic Validator, Member Layout Optimizer & Code/Reflection Generator**: Implemented directly in `core/metascript` so any library, tool, or unit test can parse, validate, optimize member layout, and generate C++ / reflection from `.adhd` sources.
-2. **CLI Executable in `pipeline/adhd_compiler`**:
-   - Standalone command-line executable target that links `nwb_metascript`.
-   - Invoked by CMake (and build/validation pipelines) to validate `.adhd` files and emit the generated `.adhd.h` and `.adhd.cpp` C++ translation units.
+## 12. Compiler Architecture & Domain-Split Module Layout (`core/metascript` & `pipeline/adhd_compiler`)
+Every source and header file is strictly split by domain responsibility so that no single file becomes monolithic:
+
+1. **Shared Foundation & `.nwb` Evaluation (`core/metascript/`)**:
+   - `lexer.h` / `lexer.cpp`: Unified lexical scanner and token definitions.
+   - `parser_cursor.h` / `parser_cursor.cpp`: Token stream navigation and `ParseError` diagnostics.
+   - `preprocessor.h` / `preprocessor.cpp`: Evaluates `#include` (with automatic deduplication), `#define`, `#undef`, `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, and `#endif` for both `.nwb` and `.adhd`.
+   - `attribute_parser.h` / `attribute_parser.cpp`: Parses single-bracket comma-separated attribute lists (`[asset("..."), serialize]`).
+   - `value.*`, `operation_validator.*`, `expression_parser.*`, `statement_parser.*`, `parser.*`: `.nwb` document data evaluation.
+
+2. **`adhd` Language & Compiler Library (`core/metascript/adhd/`)**:
+   - **AST (`core/metascript/adhd/ast/`)**:
+     - `ast_common.h`: Source spans, attributes, access specifiers, and `in` / `mut` / `const` modifiers.
+     - `ast_types.h`: Scalar, SIMD (`f32x4`, `f32x4x4`), `Func<...>`, `enum<SizeType>`, and template bound (`<T : IBar, const usize N>`) nodes.
+     - `ast_expr.h`: Expressions (`this.XXX`, calls, operators, `cast<T>`, `bit_cast<T>`, `lambda`, vector swizzles).
+     - `ast_stmt.h`: Statements (`if`/`else`, `switch`/`case`, `for`, `parallel_for`, `parallel`, `native`, variable declarations).
+     - `ast_decl.h`: Top-level declarations (`class`, `interface`, `enum`, `type`, free functions, out-of-line `Class::method`).
+   - **Parser (`core/metascript/adhd/parser/`)**:
+     - `type_parser.h` / `type_parser.cpp`: Parses type references, template parameter lists, and `Func<...>` signatures.
+     - `expr_parser.h` / `expr_parser.cpp`: Parses expressions, `lambda`, `cast<T>` / `bit_cast<T>`, and SIMD swizzles.
+     - `stmt_parser.h` / `stmt_parser.cpp`: Parses control flow, `parallel_for`, `parallel` task blocks, and `native` blocks.
+     - `decl_parser.h` / `decl_parser.cpp`: Parses `class`, `interface`, `enum<SizeType>`, `type`, functions, and translation units.
+   - **Semantic Analysis & Layout (`core/metascript/adhd/sema/`)**:
+     - `symbol_table.h` / `symbol_table.cpp`: Top-level symbol registry, interface conformance, and template instantiation table.
+     - `type_checker.h` / `type_checker.cpp`: Enforces no-raw-pointer rules, `in` / `mut` parameters, mandatory `this.XXX`, `enum<SizeType>` arithmetic, swizzle lanes, and `switch`/`case` `break` rules.
+     - `layout_optimizer.h` / `layout_optimizer.cpp`: Computes field alignment/size and reorders `class` members (including per-instantiation templates) to minimize padding.
+     - `parallel_graph.h` / `parallel_graph.cpp`: Validates `parallel name : dep` task DAGs, cycle detection, and `[core(...), priority(...)]` attributes.
+   - **Code & Reflection Generation (`core/metascript/adhd/codegen/`)**:
+     - `header_emitter.h` / `header_emitter.cpp`: Emits `.adhd.h` (`class ... final`, `namespace EnumName`, `NWB_DEFINE_ARENA_ALLOCATOR`, inline templates).
+     - `source_emitter.h` / `source_emitter.cpp`: Emits `.adhd.cpp` method bodies, `ScratchArena<>` injection, `CpuTaskScheduler` lowering for `parallel_for` / `parallel`, and `native` blocks.
+     - `reflection_emitter.h` / `reflection_emitter.cpp`: Emits `[serialize]` 1-byte packed binary serialization, `.nwb` property parsing, `AssetRef<T>` dependency extraction, and `[asset("...")]` registration.
+
+3. **CLI Executable (`pipeline/adhd_compiler/`)**:
+   - `compiler_options.h` / `compiler_options.cpp`: CLI argument parsing (input `.adhd`, include directories, output `.adhd.h` / `.adhd.cpp`, `--validate-only`).
+   - `compiler_driver.h` / `compiler_driver.cpp`: Orchestrates file I/O and invokes the `core/metascript/adhd` pipeline.
+   - `main.cpp`: Standalone executable entry point invoked by CMake and build/validation tools.

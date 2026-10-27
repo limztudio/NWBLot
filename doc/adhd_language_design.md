@@ -455,13 +455,12 @@ All owning containers are automatically bound to the enclosing class's static ar
 
 ---
 
-## 12. Compiler Architecture & Module Split (`core/metascript` vs `pipeline/adhd_compiler`)
-1. **Shared Frontend in `core/metascript` (Used by both `.nwb` and `.adhd`)**:
+## 12. Compiler Architecture & Module Split (`core/metascript` & `pipeline/adhd_compiler`)
+1. **Extended Language & Compiler Library in `core/metascript` (`nwb_metascript`)**:
    - **Preprocessor**: Evaluates `#include` (with automatic deduplication), `#define`, `#undef`, `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, and `#endif` for both `.nwb` and `.adhd` documents.
-   - **Lexer, Token Set & ParserCursor**: Unified tokenizer (`lexer.h`, `parser_cursor.h`) and diagnostic error tracking (`ParseError`) supporting all tokens used across `.nwb` and `.adhd`.
-   - **`.nwb` Data Evaluation**: `Document` and `Value` remain in `core/metascript` for evaluating `.nwb` asset data.
-2. **`adhd` Compiler in `pipeline/adhd_compiler`**:
-   - Links `nwb_metascript` and consumes the shared `core/metascript` preprocessor, lexer, and cursor.
-   - **`adhd` AST & Semantic Analyzer**: Parses `class`, `interface`, `enum<SizeType>`, `type`, `<T : IInterface>`, `in`/`mut`, `parallel`, `parallel_for`, `native`, and `[...]` attributes, enforcing all `adhd` language rules.
-   - **Member Layout Optimizer**: Reorders `class` member variables by alignment and size to minimize padding.
-   - **C++ & Reflection Code Generator**: Emits `.adhd.h` and `.adhd.cpp` (with `GlobalArena` / `ScratchArena` wiring, `[serialize]` `1`-byte packing, and `[asset("...")]` `.nwb` parsers/dependency extractors).
+   - **Lexer, Token Set & ParserCursor**: Unified tokenizer (`lexer.h`, `parser_cursor.h`), `[...]` attribute parser, and diagnostic error tracking (`ParseError`) shared across `.nwb` and `.adhd`.
+   - **`.nwb` Data Evaluation**: `Document` and `Value` evaluate `.nwb` asset data.
+   - **`adhd` AST, Semantic Validator, Member Layout Optimizer & Code/Reflection Generator**: Implemented directly in `core/metascript` so any library, tool, or unit test can parse, validate, optimize member layout, and generate C++ / reflection from `.adhd` sources.
+2. **CLI Executable in `pipeline/adhd_compiler`**:
+   - Standalone command-line executable target that links `nwb_metascript`.
+   - Invoked by CMake (and build/validation pipelines) to validate `.adhd` files and emit the generated `.adhd.h` and `.adhd.cpp` C++ translation units.

@@ -51,8 +51,8 @@
   - Every member declaration (field or method) **must** explicitly specify `public`, `private`, or `protected`:
     ```csharp
     class TransformComponent : IComponent {
-        public Float4 position;
-        public Float4 rotation;
+        public f32x4 position;
+        public f32x4 rotation;
         private u32 dirtyFlags;
         private bool active;
     }
@@ -158,15 +158,15 @@
 | `f64` | `f64` | 8 B | 64-bit IEEE-754 double |
 | `void` | `void` | — | Return-only empty type |
 
-### 5.2 SIMD-Like Types (Strictly Aligned Only)
-- **Rule**: SIMD-like types in `adhd` are **always aligned** (`alignas(16)` for 32-bit lane packs, `alignas(32)` for 64-bit lane packs). They are **never** converted to or stored as unaligned `*U` types (`Float2U`, `Float3U`, `Float4U`, `Float33U`, `Float44U`, etc.).
-- **Underlying Aligned Types** (`type_vector_aligned.h`, `type_matrix_storage.h`, `type_register.h`):
+### 5.2 SIMD-Like Types (Strictly Aligned Only — `f32x4` Naming)
+- **Rule**: SIMD-like types in `adhd` use `<scalar>x<lanes>` naming (e.g., `f32x4`, never `Float4`) and are **always aligned** (`alignas(16)` for 32-bit lane packs, `alignas(32)` for 64-bit lane packs). They are **never** converted to or stored as unaligned `*U` types (`Float2U`, `Float3U`, `Float4U`, `Float33U`, `Float44U`, etc.).
+- **Aligned `adhd` SIMD Types & C++ Lowering** (`type_vector_aligned.h`, `type_matrix_storage.h`, `type_register.h`):
   - **16-byte Aligned (`alignas(16)`)**:
-    - Vectors: `Float4`, `Int4`, `UInt4`, `Float3Int`, `Float3UInt` (and 2-lane / 3-lane `f32` vectors use 16-byte aligned storage/registers `SIMDVectorSingle`).
-    - Matrices: `Float34`, `Float44` / `SIMDMatrix`.
+    - Vectors: `f32x4` (`Float4` / `SIMDVectorSingle`), `i32x4` (`Int4`), `u32x4` (`UInt4`), `f32x3_i32` (`Float3Int`), `f32x3_u32` (`Float3UInt`).
+    - Matrices: `f32x3x4` (`Float34`), `f32x4x4` (`Float44` / `SIMDMatrix`).
   - **32-byte Aligned (`alignas(32)`)**:
-    - Vectors: `Double2`, `Double3`, `Double4`, `Int64x4`, `UInt64x4`, `Double3Int`, `Double3UInt` / `SIMDVectorDouble`.
-    - Matrices: `Double33`, `Double34`, `Double44` / `SIMDMatrixDouble`.
+    - Vectors: `f64x2` (`Double2`), `f64x3` (`Double3`), `f64x4` (`Double4` / `SIMDVectorDouble`), `i64x4` (`Int64x4`), `u64x4` (`UInt64x4`), `f64x3_i64` (`Double3Int`), `f64x3_u64` (`Double3UInt`).
+    - Matrices: `f64x3x3` (`Double33`), `f64x3x4` (`Double34`), `f64x4x4` (`Double44` / `SIMDMatrixDouble`).
 
 ### 5.3 Default Containers & Strings
 All owning containers are automatically bound to the enclosing class's static arena (for members) or the active function's `ScratchArena` (for local variables):
@@ -300,7 +300,7 @@ All owning containers are automatically bound to the enclosing class's static ar
         #include <global/simdmath.h>
     }
 
-    void TransformComponent::applyTranslation(in Float4 delta) {
+    void TransformComponent::applyTranslation(in f32x4 delta) {
         native(in delta, mut pos = this.position) {
             const SIMDVectorSingle current = LoadFloat(pos.raw);
             const SIMDVectorSingle offset  = LoadFloat(delta.raw);
@@ -356,4 +356,4 @@ All owning containers are automatically bound to the enclosing class's static ar
      }
      ```
   - **Per-Instantiation Member Reordering & Reflection**:
-    - For each concrete instantiation (e.g., `Pair<u8, Float4>`), the `adhd` compiler resolves the concrete sizes and alignments of the template arguments, reorders the instantiated class's members to minimize padding, and generates reflection tables for that concrete instantiation.
+    - For each concrete instantiation (e.g., `Pair<u8, f32x4>`), the `adhd` compiler resolves the concrete sizes and alignments of the template arguments, reorders the instantiated class's members to minimize padding, and generates reflection tables for that concrete instantiation.

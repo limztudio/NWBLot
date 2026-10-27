@@ -231,7 +231,7 @@ All owning containers are automatically bound to the enclosing class's static ar
 
 ---
 
-## 9. Attribute System (`[...]`), `.nwb` Reflection Binding & C++ Interop
+## 9. Attribute System (`[...]`) & `.nwb` Reflection Binding
 - C#-style attributes `[...]` can be placed above any **`class`**, **`interface`**, **member variable**, **function/method**, or **`parallel`** block:
   ```csharp
   [asset("model_component")]
@@ -253,7 +253,23 @@ All owning containers are automatically bound to the enclosing class's static ar
   2. **Reflection & `.nwb` Asset Connection Attributes** (`class` / `interface` / variable / function):
      - `[reflect]` / `[asset("type_name")]`: Exposes the `class` or `interface` to the reflection registry and connects it directly to `.nwb` authoring, dependency scanning, and cooking.
      - `[transient]`: Marks a member variable as runtime-only (excluded from `[serialize]` and `.nwb` authoring).
-  3. **Function, Scheduling & C++ Interop Attributes**:
+  3. **Function & Scheduling Attributes**:
      - `[inline]` / `[noinline]`
      - `[core(...)]` / `[priority(...)]` (for `parallel` and `parallel_for`)
-     - `[extern]` / `[cpp("...")]`: Binds an `adhd` declaration to an existing engine C++ function or type.
+
+---
+
+## 10. C++ Interop (`native { ... }` Blocks)
+- Calling C++ functions or embedding native C++ statements inside `.adhd` **must** always be enclosed in an explicit `native { ... }` block:
+  ```cpp
+  void TransformComponent::applyTranslation(in Float4 delta) {
+      native {
+          const SIMDVectorSingle current = LoadFloat(this->position.raw);
+          const SIMDVectorSingle offset  = LoadFloat(delta.raw);
+          StoreFloat(this->position.raw, VectorAdd(current, offset));
+      }
+  }
+  ```
+- **Benefits of `native { ... }`**:
+  - Clearly isolates raw C++ engine calls from pure `adhd` code (similar to `unsafe` blocks in Rust/C#).
+  - Everything outside `native { ... }` is 100% validated by the `adhd` compiler (`in`/`mut`, no pointers/null, `this.XXX`, arena rules, and parallel safety), while `native { ... }` passes direct C++ expressions through to the generated C++ output.

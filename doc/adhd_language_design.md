@@ -28,8 +28,38 @@
   - Pure interface type (maps to NWBLot's lowercase `interface` convention in `global/compile.h`).
   - An `interface` contains **method declarations only** (no member variables).
   - Variables or containers typed by an `interface` (e.g., `Vector<IComponent>`) can hold any implementing `class` instance polymorphically, allocated from the owning class/component arena.
-- **`enum`**:
-  - Enumerated type declaration (can specify underlying integer type, e.g., `enum Foo : u8`, and automatically gets reflected string/value mapping via `NamedEnumCase`).
+- **`enum<SizeType>` (Mandatory Sized Type, NWB-Style `Enum` & `Flag`)**:
+  - Every `enum` declaration **must** explicitly specify its underlying integer size via `<SizeType>` (e.g., `enum<u8> Name`).
+  - Inside `enum<SizeType> Name`, entries are prefixed with `enum` (ordinal/value enumerators) or `flag` (bitflag enumerators):
+    ```cpp
+    enum<u8> Name {
+        enum Foo = 1,
+        flag Bar = 1 << 2,
+    };
+    ```
+  - **C++ Codegen Lowering (NWB Style)**:
+    ```cpp
+    namespace Name {
+        enum Enum : u8 {
+            Foo = 1,
+        };
+        enum Flag : u8 {
+            Bar = 1 << 2,
+        };
+    };
+    ```
+  - **Usage & Sized Operator Interop**:
+    - Variable declaration and scoped access:
+      ```cpp
+      Name var;
+      var::Enum::Foo;
+      var::Flag::Bar;
+      ```
+    - Because the underlying integer size (`u8`, `u32`, etc.) is explicitly specified, all arithmetic, bitwise, and comparison operators (`==`, `!=`, `+=`, `|=`, etc.) work directly with the matching sized integer type:
+      ```cpp
+      u8 counter = 0;
+      counter += Name::Enum::Foo;
+      ```
 - **`type` (Rust-Style Type Alias)**:
   - Declares a type alias or generic type alias (lowers to C++ `using` / `template<...> using`):
     ```rust

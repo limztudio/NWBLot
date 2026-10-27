@@ -243,8 +243,9 @@
 
 ### 5.3 Default Containers & Strings
 All owning containers are automatically bound to the enclosing class's static arena (for members) or the active function's `ScratchArena` (for local variables):
-- **Sequential Containers**:
-  - `Vector<T>`
+- **Sequential Containers** (Option 1 container syntax only; C-style `T[N]` / `new T[N]` is prohibited):
+  - `Array<T, Capacity>` (compile-time fixed size, inline storage via `global/array.h`: e.g., `Array<i32, 6> a;`)
+  - `Vector<T>` (runtime size, arena-allocated: e.g., `Vector<i32> b(6);`)
   - `FixedVector<T, Capacity>`
   - `ParallelVector<T>`
   - `ForwardList<T>`
@@ -385,6 +386,18 @@ All owning containers are automatically bound to the enclosing class's static ar
     }
     ```
   - The `adhd` compiler binds `in` captures as `const` C++ references/values and `mut` captures as mutable C++ references inside the generated C++ block.
+- **Passing Containers / Values as `void*` or `const void*` Inside `native`**:
+  - Because the body of `native(...) { ... }` is raw C++, any contiguous container (`Array<T, N>`, `Vector<T>`, `FixedVector<T, N>`, `Span<T>`, `String`, `CompactString`) captured via `in` or `mut` exposes `.data()` and `.size()`:
+    - `in` capture: `buf.data()` yields `const T*` (implicitly convertible to `const void*`).
+    - `mut` capture: `buf.data()` yields `T*` (implicitly convertible to `void*`).
+    ```cpp
+    Array<i32, 6> a;
+    Vector<i32> b(6);
+    native(in a, mut b) {
+        // b.data() -> i32* (void*), a.data() -> const i32* (const void*)
+        NWB_MEMCPY(b.data(), b.size() * sizeof(i32), a.data(), a.size() * sizeof(i32));
+    }
+    ```
 - **Benefits of `native(in ..., mut ...) { ... }`**:
   - Clearly separates `.adhd` `#include`s (parsed by the `adhd` compiler) from C++ `#include`s (emitted into the generated C++ file).
   - Clearly isolates raw C++ engine calls from pure `adhd` code (similar to `unsafe` blocks in Rust/C#).

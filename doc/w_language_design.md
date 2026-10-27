@@ -88,6 +88,11 @@
 - **Explicit `this.XXX` Inside Method Scope (Both Member Variables & Member Functions)**:
   - Inside a member function body, accessing any **member variable** (`this.position`) or calling any **member function** (`this.update(dt)`) **must** be explicitly qualified with `this.XXX` (using `.` syntax, which compiles to `this->XXX` in C++).
   - Unqualified identifiers inside a method resolve strictly to parameters, local variables, constants, or top-level free functions—never implicitly to members of `this`.
+- **Local Variable Type Deduction (`auto`) & Range-Based `for` Loops**:
+  - `auto` is allowed for local variable type deduction (e.g., `auto speed = 1.0f;` or an explicit type `f32 speed = 1.0f;`).
+  - Range-based `for` loops require an explicit `in` or `mut` determiner followed by either `auto` or the explicit element type:
+    - `for(in auto item : list)` or `for(in Foo item : list)` (read-only iteration).
+    - `for(mut auto item : list)` or `for(mut Foo item : list)` (mutable in-place iteration).
 - **Split Method Declarations & Implementations (C++ Style)**:
   - Methods can be declared inside a `class` without a body:
     ```cpp

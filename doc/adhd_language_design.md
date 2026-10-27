@@ -121,6 +121,9 @@
           return a < b;
       };
       ```
+  - **`Func<...> = lambda` Lowering Rule**:
+    - **Captureless lambdas** (`lambda(in A, in B)`) and free functions lower directly to raw C++ function pointers with zero wrapper overhead.
+    - **Only captured lambdas** (`lambda[in ..., mut ...](...)`) are converted to `InplaceFunction` (`global/inplace_function.h`) when stored in or passed through `Func<...>`.
 - **Split Method Declarations & Implementations (C++ Style)**:
   - Methods can be declared inside a `class` without a body:
     ```cpp

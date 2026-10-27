@@ -299,12 +299,13 @@ All owning containers are automatically bound to the enclosing class's static ar
   - `Queue<T>`
   - `ParallelQueue<T>`
   - `ParallelBlockQueue<T, BlockSize>`
-- **Strings & Identifiers**:
+- **Strings & Identifiers (UTF-8 Exclusively)**:
+  - `adhd` uses **UTF-8 (`char`) exclusively** for all source files, string literals (`"..."`, including `\xHH`, `\uXXXX`, and `\UXXXXXXXX` escapes), and string types (`String` = `AString`, `StringView` = `AStringView`, `CompactString` = `ACompactString`, `Name` = `Core::Common::Name`). There are no `wchar` / `tchar` string types in `.adhd`.
   - `Name` (`Core::Common::Name`)
   - `Path` (`Path`)
   - `String` (`BasicString<char, ArenaAllocator<...>>`)
   - `CompactString` (`ACompactString`)
-  - **Automatic String Literal (`"..."`) Adaptation**: Programmers write plain `"..."` literals everywhere in `.adhd` (never `NWB_TEXT("...")`). The `adhd` compiler emits narrow `"..."` for `String`, `StringView`, `CompactString`, and `Name`, and automatically wraps `"..."` as `NWB_TEXT("...")` when passed to `assert`, `info`, `warning`, `error`, or `Path`.
+  - **Automatic String Literal (`"..."`) & UTF-8 Bridge**: Programmers write plain UTF-8 `"..."` literals everywhere in `.adhd` (never `NWB_TEXT("...")`). The `adhd` compiler emits UTF-8 `"..."` for `String`, `StringView`, `CompactString`, and `Name`, and automatically adapts/converts UTF-8 strings (`NWB_TEXT("...")` / `ConvertString` in `global/basic_string.h`) when passed to `assert`, `info`, `warning`, `error`, or `Path`.
 - **Views, Value Wrappers, Callables & References**:
   - `Span<T>`, `StringView` (`AStringView`)
   - `Optional<T>`, `Expected<T, E>`

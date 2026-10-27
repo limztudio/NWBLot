@@ -179,15 +179,37 @@ All owning containers are automatically bound to the enclosing class's static ar
 
 ---
 
-## 7. Multithreading (`parallel_for`, `task_scope`, `dispatch`)
+## 7. Multithreading (`parallel_for` & `task_scope`)
 - **`parallel_for` (Same Grammar as `for`)**:
   - Supports both range-based (`parallel_for(in auto item : list)` / `parallel_for(mut auto item : list)`) and index-based (`parallel_for(usize i = 0; i < count; ++i)`) loops.
   - Lowers directly to `Core::CpuTaskScheduler::parallelFor(usize begin, usize end, const Func& function)` (`core/task/cpu/scheduler.h`).
-- **`task_scope` & `dispatch`**:
-  - `task_scope { ... }` opens a `Core::CpuTaskScope` and automatically calls `scope.wait()` when exiting the block, guaranteeing that all captured `in`/`mut` variables stay alive for the duration of all dispatched tasks.
-  - Inside `task_scope`, `dispatch func(args...)` submits a task and returns a `TaskHandle`; dependent tasks can chain handles via `dispatch(depTask) nextFunc(args...)`.
+- **`task_scope` (No Separate `dispatch` Keyword Needed)**:
+  - Each `task_scope` block is itself a task node submitted to `Core::CpuTaskScope` / `Core::CpuTaskScheduler`:
+    ```cpp
+    [core(Heavy), priority(Critical)]
+    task_scope cullScope {
+        frustumCull(camera, visibleMeshes);
+    }
+
+    [core(Light), priority(Background)]
+    task_scope audioScope {
+        updateAudio(dt, audioState);
+    }
+
+    // Runs after cullScope finishes; audioScope continues concurrently
+    [core(Heavy)]
+    task_scope lodScope : cullScope {
+        selectLods(camera, visibleMeshes);
+    }
+    ```
+  - **Core & Priority Attributes** (`core/task/cpu/types.h`):
+    - `[core(Heavy | Light | Any | MainThread)]` maps to `CpuTaskCost` (`Heavy`, `Light`, `Any`) and `CpuTaskTarget` (`Worker`, `MainThread`).
+    - `[priority(Critical | Normal | Background)]` maps to `CpuTaskPriority`.
+  - **Dependencies (`task_scope B : A`)**:
+    - Prerequisite scopes must be declared first (`A` before `B : A`), guaranteeing zero dependency cycles by construction and allowing workers to begin executing root scopes immediately.
+    - Active `task_scope`s automatically join before exiting the enclosing function scope (or at an explicit `wait(...)` boundary).
 - **Compile-Time Concurrency Rules**:
-  - Within `parallel_for` or concurrent `dispatch` bodies, shared `mut` container access is restricted to thread-safe containers (`ParallelVector`, `ParallelHashSet`, `ParallelHashMap`, `ParallelQueue`, `ParallelBlockQueue`, `Atomic<T>`) or per-worker disjoint elements/slices (`Span<T>`).
+  - Within `parallel_for` or concurrent `task_scope` bodies, shared `mut` container access is restricted to thread-safe containers (`ParallelVector`, `ParallelHashSet`, `ParallelHashMap`, `ParallelQueue`, `ParallelBlockQueue`, `Atomic<T>`) or per-worker disjoint elements/slices (`Span<T>`).
   - Read-only `in` captures may be shared freely across worker threads.
 
 ---

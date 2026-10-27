@@ -341,20 +341,26 @@ All owning containers are automatically bound to the enclosing class's static ar
 ---
 
 ## 9. Attribute System (`[...]`) & `.nwb` Reflection Binding
-- C#-style attributes `[...]` can be placed above any **`class`**, **`interface`**, **member variable**, **function/method**, or **`parallel`** block:
-  ```csharp
-  [asset("model_component")]
-  [serialize]
-  class ModelComponent : IComponent {
-      public AssetRef<Model> asset;
+- **Single `[...]` Bracket with Comma-Separated Attributes**:
+  - Attributes `[...]` can be placed above any **`class`**, **`interface`**, **member variable**, **function/method**, or **`parallel`** block.
+  - When a declaration has multiple attributes, they **must** be comma-separated inside a single `[...]` bracket (stacked `[...]` `[...]` blocks on the same declaration are prohibited):
+    ```csharp
+    [asset("model_component"), serialize]
+    class ModelComponent : IComponent {
+        public AssetRef<Model> asset;
 
-      [transient]
-      private u32 runtimeHandle;
+        [transient]
+        private u32 runtimeHandle;
 
-      [inline]
-      public void validate(in bool strict);
-  }
-  ```
+        [inline]
+        public void validate(in bool strict);
+    }
+    ```
+- **Automatic `.nwb` & `[serialize]` Codegen**:
+  - When a `class` is marked with `[asset("type_name")]` and/or `[serialize]`, the `adhd` compiler automatically generates:
+    1. `.nwb` property parsing for all `public` (non-`[transient]`) fields,
+    2. Automatic `AssetRef<T>` dependency extraction for `dependency_computer`, and
+    3. `1`-byte-packed binary serialization and deserialization.
 - **Categories of Attributes**:
   1. **Serialization & Layout Attributes**:
      - **Default (No `[serialize]`)**: Follows natural/SIMD alignment (`16`-byte / `32`-byte for SIMD types, natural alignment for scalars) with automatic compiler member reordering to minimize padding.

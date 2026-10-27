@@ -94,6 +94,27 @@
   - Range-based `for` loops require an explicit `in` or `mut` determiner followed by either `auto` or the explicit element type:
     - `for(in auto item : list)` or `for(in Foo item : list)` (read-only iteration).
     - `for(mut auto item : list)` or `for(mut Foo item : list)` (mutable in-place iteration).
+- **Function Pointers / Callables (`Func<...>`) & Lambdas**:
+  - **Non-Null Callable Type (`Func<Ret(in A, mut B)>`)**:
+    - Replaces raw C++ function pointers (`void(*)(int)`):
+      ```cpp
+      // Non-null callable taking (in i32, in i32) and returning bool
+      Func<bool(in i32, in i32)> compare = lessThan;
+
+      // Optional callback (when a callback may be unset)
+      Optional<Func<void(mut TransformComponent)>> onUpdate;
+      ```
+  - **Lambdas (`lambda[in ..., mut ...](in ..., mut ...)`)**:
+    - Captures and parameters must explicitly specify `in` or `mut` (no implicit `[=]` or `[&]` captures):
+      ```cpp
+      auto filter = lambda[in threshold, mut hitCount](in f32 distance) -> bool {
+          if(distance < threshold) {
+              ++hitCount;
+              return true;
+          }
+          return false;
+      };
+      ```
 - **Split Method Declarations & Implementations (C++ Style)**:
   - Methods can be declared inside a `class` without a body:
     ```cpp
@@ -163,9 +184,10 @@ All owning containers are automatically bound to the enclosing class's static ar
   - `Path` (`Path`)
   - `String` (`BasicString<char, ArenaAllocator<...>>`)
   - `CompactString` (`ACompactString`)
-- **Views, Value Wrappers & References**:
+- **Views, Value Wrappers, Callables & References**:
   - `Span<T>`, `StringView` (`AStringView`)
   - `Optional<T>`, `Expected<T, E>`
+  - `Func<Ret(in A, mut B)>` (non-null function pointer / callable; use `Optional<Func<...>>` when a callback may be unset)
   - `AssetRef<T>` (`Core::Assets::AssetRef<T>`)
   - `Atomic<T>`
 

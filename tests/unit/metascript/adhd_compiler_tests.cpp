@@ -317,6 +317,77 @@ TEST(AdhdCompiler, InfersFuncCaptureStorageAndLowersParallelAndDiagnostics){
     EXPECT_NE(cppView.find("NWB_ASSERT_MSG((counter > 0), NWB_TEXT(\"counter must be positive\"))"), MStringView::npos);
 }
 
+TEST(AdhdCompiler, SupportsEnumFlagKeywordsBitwiseOperatorsAndSimdLowering){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "enum<u32> RenderMask {\r\n"
+        "    enum None = 0,\r\n"
+        "    flag Opaque = 1 << 0,\r\n"
+        "    flag Shadow = 1 << 1,\r\n"
+        "}\r\n"
+        "[reflect, asset(\"material_def\")]\r\n"
+        "class MaterialDef {\r\n"
+        "    public f32x4 baseColor = f32x4(1.0f, 1.0f, 1.0f, 1.0f);\r\n"
+        "    public AssetRef<TextureAsset> albedoMap = AssetRef<TextureAsset>();\r\n"
+        "    public RenderMask mask = RenderMask::Opaque;\r\n"
+        "    public RenderMask operator|(in RenderMask extra) const {\r\n"
+        "        return this.mask | extra;\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult result(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/render/material_def.adhd", arena.arena, result, nullptr, "NWB::CustomRender"));
+
+    const MStringView hdrView(result.generatedHeader.data(), result.generatedHeader.size());
+    const MStringView cppView(result.generatedSource.data(), result.generatedSource.size());
+    EXPECT_NE(hdrView.find("namespace NWB::CustomRender"), MStringView::npos);
+    EXPECT_NE(hdrView.find("using Flag = Enum;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("Float4 baseColor = Float4("), MStringView::npos);
+    EXPECT_NE(hdrView.find("assetDependencyFieldCount()"), MStringView::npos);
+    EXPECT_NE(cppView.find("return \"albedoMap\";"), MStringView::npos);
+
+    static constexpr MStringView s_FreeOpSource =
+        "u32 operator+(in u32 a, in u32 b) {\r\n"
+        "    return a + b;\r\n"
+        "}\r\n";
+    CompileResult freeOpResult(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_FreeOpSource, "impl/render/bad_op.adhd", arena.arena, freeOpResult));
+}
+
+TEST(AdhdCompiler, EnforcesMutCallSiteAndParallelConcurrencySafety){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_MutLiteralCall =
+        "void increment(mut u32 target) {\r\n"
+        "    target += 1;\r\n"
+        "}\r\n"
+        "void caller(in u32 inputVal) {\r\n"
+        "    increment(inputVal);\r\n"
+        "}\r\n";
+    CompileResult mutRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MutLiteralCall, "impl/test_mut.adhd", arena.arena, mutRes));
+
+    static constexpr MStringView s_UnsafeParallelVector =
+        "void gatherBad(mut Vector<u32> outItems) {\r\n"
+        "    parallel_for(u32 i = 0; i < 16; ++i) {\r\n"
+        "        outItems.push_back(i);\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult unsafeParRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_UnsafeParallelVector, "impl/test_par_bad.adhd", arena.arena, unsafeParRes));
+
+    static constexpr MStringView s_SafeParallelVector =
+        "void gatherGood(mut ParallelVector<u32> outItems, mut Vector<u32> indexedOut) {\r\n"
+        "    parallel_for(u32 i = 0; i < 16; ++i) {\r\n"
+        "        outItems.push_back(i);\r\n"
+        "        indexedOut[i] = i;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult safeParRes(arena.arena);
+    EXPECT_TRUE(Compiler::compile(s_SafeParallelVector, "impl/test_par_good.adhd", arena.arena, safeParRes));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

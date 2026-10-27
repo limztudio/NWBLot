@@ -31,7 +31,7 @@ MString SourceEmitter::emitSource(
     out.append("#include \"");
     out.append(headerIncludePath.data(), headerIncludePath.size());
     out.append("\"\r\n\r\n");
-    out.append("#include <core/common/assert.h>\r\n");
+    out.append("#include <global/assert.h>\r\n");
     out.append("#include <core/common/log.h>\r\n\r\n\r\n");
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
 
@@ -85,7 +85,7 @@ MString SourceEmitter::emitSource(
             }
         }
 
-        if(classDecl->isSerialize || classDecl->isReflect)
+        if(classDecl->isSerialize || classDecl->isReflect || !classDecl->assetTypeName.empty())
             reflectionEmitter.emitClassReflectionDefinitions(out, *classDecl);
     }
 
@@ -449,18 +449,18 @@ void SourceEmitter::emitStmt(
         switch(stmt.diagnosticKind){
         case DiagnosticKind::Assert:
             if(stmt.arguments.size() > 1u)
-                out.append(stmt.isEssential ? "NWB_ESSENTIAL_ASSERT_MSG(" : "NWB_ASSERT_MSG(");
+                out.append(stmt.isEssential ? "NWB_FATAL_ASSERT_MSG(" : "NWB_ASSERT_MSG(");
             else
-                out.append(stmt.isEssential ? "NWB_ESSENTIAL_ASSERT(" : "NWB_ASSERT(");
+                out.append(stmt.isEssential ? "NWB_FATAL_ASSERT(" : "NWB_ASSERT(");
             break;
         case DiagnosticKind::Info:
             out.append(stmt.isEssential ? "NWB_LOGGER_ESSENTIAL_INFO(" : "NWB_LOGGER_INFO(");
             break;
         case DiagnosticKind::Warning:
-            out.append(stmt.isEssential ? "NWB_LOGGER_ESSENTIAL_WARNING(" : "NWB_LOGGER_WARNING(");
+            out.append(stmt.isEssential ? "NWB_LOGGER_CRITICAL_WARNING(" : "NWB_LOGGER_WARNING(");
             break;
         case DiagnosticKind::Error:
-            out.append(stmt.isEssential ? "NWB_LOGGER_ESSENTIAL_ERROR(" : "NWB_LOGGER_ERROR(");
+            out.append(stmt.isEssential ? "NWB_LOGGER_FATAL(" : "NWB_LOGGER_ERROR(");
             break;
         }
         for(usize i = 0u; i < stmt.arguments.size(); ++i){
@@ -537,8 +537,16 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         break;
     }
     case ExprKind::Call:{
-        if(expr.lhs)
-            emitExpr(out, *expr.lhs);
+        if(expr.lhs){
+            if(expr.lhs->kind == ExprKind::Identifier){
+                TypeRef maybeType(m_arena);
+                maybeType.name = expr.lhs->text;
+                m_headerEmitter.emitTypeCpp(out, maybeType);
+            }
+            else{
+                emitExpr(out, *expr.lhs);
+            }
+        }
         if(!expr.callTemplateArgs.empty()){
             out.push_back('<');
             for(usize i = 0u; i < expr.callTemplateArgs.size(); ++i){

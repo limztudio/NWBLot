@@ -89,6 +89,7 @@ private:
     SymbolTable& m_symbols;
     LayoutOptimizer m_layoutOptimizer;
     ParallelGraphValidator m_parallelValidator;
+    u32 m_parallelDepth = 0u;
 };
 
 

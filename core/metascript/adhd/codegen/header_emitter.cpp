@@ -59,6 +59,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
     out.append("#pragma once\r\n\r\n\r\n");
     out.append("#include <global/global.h>\r\n");
+    out.append("#include <global/simdmath.h>\r\n");
     out.append("#include <global/inplace_function.h>\r\n");
     out.append("#include <global/not_null.h>\r\n");
     out.append("#include <core/alloc/global.h>\r\n");
@@ -199,6 +200,23 @@ void HeaderEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         out.append("ACompactString");
         return;
     }
+    if(name == "f32x4"){ out.append("Float4"); return; }
+    if(name == "i32x4"){ out.append("Int4"); return; }
+    if(name == "u32x4"){ out.append("UInt4"); return; }
+    if(name == "f32x3_i32"){ out.append("Float3Int"); return; }
+    if(name == "f32x3_u32"){ out.append("Float3UInt"); return; }
+    if(name == "f32x3x4"){ out.append("Float34"); return; }
+    if(name == "f32x4x4"){ out.append("Float44"); return; }
+    if(name == "f64x2"){ out.append("Double2"); return; }
+    if(name == "f64x3"){ out.append("Double3"); return; }
+    if(name == "f64x4"){ out.append("Double4"); return; }
+    if(name == "i64x4"){ out.append("Int64x4"); return; }
+    if(name == "u64x4"){ out.append("UInt64x4"); return; }
+    if(name == "f64x3_i64"){ out.append("Double3Int"); return; }
+    if(name == "f64x3_u64"){ out.append("Double3UInt"); return; }
+    if(name == "f64x3x3"){ out.append("Double33"); return; }
+    if(name == "f64x3x4"){ out.append("Double34"); return; }
+    if(name == "f64x4x4"){ out.append("Double44"); return; }
 
     if(m_symbols.findEnum(name)){
         out.append(name.data(), name.size());
@@ -296,6 +314,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
 
     out.append("    };\r\n");
     if(hasFlags){
+        out.append("    using Flag = Enum;\r\n");
         out.append("    [[nodiscard]] constexpr Enum operator|(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<");
         out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
         out.append(">(a) | static_cast<");
@@ -443,7 +462,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         out.append(";\r\n");
     }
 
-    if(decl.isSerialize || decl.isReflect){
+    if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
         out.append("\r\n");
         reflectionEmitter.emitClassReflectionDeclarations(out, decl);
     }

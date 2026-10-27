@@ -28,9 +28,11 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
         out.append("    [[nodiscard]] bool deserializeBinary(const u8* inBuffer, usize bufferSize)noexcept;\r\n");
     }
 
-    if(decl.isReflect){
+    if(decl.isReflect || !decl.assetTypeName.empty()){
         out.append("    [[nodiscard]] static constexpr usize reflectedFieldCount()noexcept;\r\n");
         out.append("    [[nodiscard]] static AStringView reflectedFieldName(usize index)noexcept;\r\n");
+        out.append("    [[nodiscard]] static constexpr usize assetDependencyFieldCount()noexcept;\r\n");
+        out.append("    [[nodiscard]] static AStringView assetDependencyFieldName(usize index)noexcept;\r\n");
     }
 }
 
@@ -81,11 +83,15 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
         out.append("    return true;\r\n}\r\n\r\n");
     }
 
-    if(decl.isReflect){
+    if(decl.isReflect || !decl.assetTypeName.empty()){
         usize nonTransientCount = 0u;
+        usize assetRefCount = 0u;
         for(const FieldDecl* field : decl.fields){
-            if(field && !field->isTransient)
+            if(field && !field->isTransient){
                 ++nonTransientCount;
+                if(field->type && field->type->name == "AssetRef")
+                    ++assetRefCount;
+            }
         }
 
         out.append("constexpr usize ");
@@ -116,6 +122,51 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
                 continue;
             out.append("    if(index == ");
             usize v = currentIdx++;
+            if(v == 0u){
+                out.push_back('0');
+            }
+            else{
+                usize bIdx = 0u;
+                while(v > 0u && bIdx < sizeof(buf)){
+                    buf[bIdx++] = static_cast<char>('0' + (v % 10u));
+                    v /= 10u;
+                }
+                while(bIdx > 0u)
+                    out.push_back(buf[--bIdx]);
+            }
+            out.append("u)\r\n        return \"");
+            out.append(field->name.data(), field->name.size());
+            out.append("\";\r\n");
+        }
+        out.append("    return {};\r\n}\r\n\r\n");
+
+        out.append("constexpr usize ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("::assetDependencyFieldCount()noexcept{\r\n    return ");
+        usize depIdx = 0u;
+        usize depVal = assetRefCount;
+        if(depVal == 0u){
+            out.push_back('0');
+        }
+        else{
+            while(depVal > 0u && depIdx < sizeof(buf)){
+                buf[depIdx++] = static_cast<char>('0' + (depVal % 10u));
+                depVal /= 10u;
+            }
+            while(depIdx > 0u)
+                out.push_back(buf[--depIdx]);
+        }
+        out.append("u;\r\n}\r\n\r\n");
+
+        out.append("AStringView ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("::assetDependencyFieldName(const usize index)noexcept{\r\n");
+        usize currentDepIdx = 0u;
+        for(const FieldDecl* field : decl.fields){
+            if(!field || field->isTransient || !field->type || field->type->name != "AssetRef")
+                continue;
+            out.append("    if(index == ");
+            usize v = currentDepIdx++;
             if(v == 0u){
                 out.push_back('0');
             }

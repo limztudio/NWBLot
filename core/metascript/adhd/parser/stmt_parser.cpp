@@ -63,6 +63,10 @@ Stmt* StmtParser::parseStatement(){
         m_cursor.error("'static' variables are prohibited in adhd");
         return nullptr;
     }
+    if(m_cursor.checkIdentifier("class") || m_cursor.checkIdentifier("struct") || m_cursor.checkIdentifier("interface") || m_cursor.checkIdentifier("enum") || m_cursor.checkIdentifier("union")){
+        m_cursor.error("local or nested type declarations are prohibited in adhd; declare types at top-level file scope");
+        return nullptr;
+    }
 
     if(m_cursor.matchIdentifier("if")){
         if(!attributes.empty()){

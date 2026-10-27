@@ -34,6 +34,20 @@ namespace __hidden_adhd_type_checker{
         || op == TokenType::GreaterGreaterEqual;
 }
 
+[[nodiscard]] bool IsNonThreadSafeContainer(const MStringView typeName)noexcept{
+    return typeName == "Vector"
+        || typeName == "FixedVector"
+        || typeName == "ForwardList"
+        || typeName == "List"
+        || typeName == "Deque"
+        || typeName == "Set"
+        || typeName == "HashSet"
+        || typeName == "Map"
+        || typeName == "HashMap"
+        || typeName == "Queue"
+        || typeName == "String";
+}
+
 [[nodiscard]] bool CheckSwizzlePattern(const MStringView text, const u32 maxLanes, bool& outIsPattern, bool& outValidLanes)noexcept{
     outIsPattern = false;
     outValidLanes = true;
@@ -210,6 +224,36 @@ bool TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError
             ok = false;
             continue;
         }
+
+        if(matched->isConst != ool->isConst){
+            reportError(errors, ool->span, "out-of-line method 'const' qualifier does not match class declaration");
+            ok = false;
+            continue;
+        }
+
+        if(!matched->isConstructor && !matched->isDestructor){
+            const MStringView declRet = matched->returnType ? matched->returnType->name : MStringView("void");
+            const MStringView oolRet = ool->returnType ? ool->returnType->name : MStringView("void");
+            if(declRet != oolRet){
+                reportError(errors, ool->span, "out-of-line method return type does not match class declaration");
+                ok = false;
+                continue;
+            }
+        }
+
+        bool paramsMatch = true;
+        for(usize pIdx = 0u; pIdx < matched->params.size(); ++pIdx){
+            const ParamDecl& declP = matched->params[pIdx];
+            const ParamDecl& oolP = ool->params[pIdx];
+            if(declP.mode != oolP.mode || (declP.type && oolP.type && declP.type->name != oolP.type->name)){
+                reportError(errors, oolP.span, "out-of-line parameter 'in'/'mut' mode or type does not match class declaration");
+                ok = false;
+                paramsMatch = false;
+                break;
+            }
+        }
+        if(!paramsMatch)
+            continue;
 
         if(matched->hasBody){
             reportError(errors, ool->span, "method already has an inline body in class declaration");
@@ -434,10 +478,16 @@ bool TypeChecker::checkStatement(
     bool ok = true;
 
     switch(stmt.kind){
-    case StmtKind::Block:
-    case StmtKind::ParallelBlock:{
+    case StmtKind::Block:{
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
+        break;
+    }
+    case StmtKind::ParallelBlock:{
+        ++m_parallelDepth;
+        if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
+            ok = false;
+        --m_parallelDepth;
         break;
     }
     case StmtKind::VarDecl:{
@@ -513,6 +563,7 @@ bool TypeChecker::checkStatement(
     }
     case StmtKind::ForRange:
     case StmtKind::ParallelForRange:{
+        const bool isPar = (stmt.kind == StmtKind::ParallelForRange);
         if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, stmt.rangeMode == ParamPassingMode::Mut, errors))
             ok = false;
         const usize saved = scope.size();
@@ -523,14 +574,19 @@ bool TypeChecker::checkStatement(
         loopVar.isConst = (stmt.rangeMode == ParamPassingMode::In);
         loopVar.isParam = true;
         scope.push_back(loopVar);
+        if(isPar)
+            ++m_parallelDepth;
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
+        if(isPar)
+            --m_parallelDepth;
         while(scope.size() > saved)
             scope.pop_back();
         break;
     }
     case StmtKind::ForIndex:
     case StmtKind::ParallelForIndex:{
+        const bool isPar = (stmt.kind == StmtKind::ParallelForIndex);
         const usize saved = scope.size();
         if(stmt.initStmt && !checkStatement(ownerClass, method, *stmt.initStmt, scope, errors))
             ok = false;
@@ -538,8 +594,12 @@ bool TypeChecker::checkStatement(
             ok = false;
         if(stmt.stepExpr && !checkExpr(ownerClass, method, *stmt.stepExpr, scope, false, errors))
             ok = false;
+        if(isPar)
+            ++m_parallelDepth;
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
+        if(isPar)
+            --m_parallelDepth;
         while(scope.size() > saved)
             scope.pop_back();
         break;
@@ -590,6 +650,17 @@ bool TypeChecker::checkExpr(
     bool ok = true;
 
     switch(expr.kind){
+    case ExprKind::IntegerLiteral:
+    case ExprKind::FloatLiteral:
+    case ExprKind::DoubleLiteral:
+    case ExprKind::BoolLiteral:
+    case ExprKind::StringLiteral:{
+        if(isMutationTarget){
+            reportError(errors, expr.span, "cannot pass literal or temporary to a 'mut' target");
+            ok = false;
+        }
+        break;
+    }
     case ExprKind::Identifier:{
         const ScopedVarInfo* local = findScopedVar(scope, expr.text);
         if(local){
@@ -600,6 +671,10 @@ bool TypeChecker::checkExpr(
                 }
                 else if(local->isConst){
                     reportError(errors, expr.span, "cannot mutate 'const' variable");
+                    ok = false;
+                }
+                else if(m_parallelDepth > 0u && local->type && __hidden_adhd_type_checker::IsNonThreadSafeContainer(local->type->name)){
+                    reportError(errors, expr.span, "shared 'mut' access to non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers or disjoint element indexing");
                     ok = false;
                 }
             }
@@ -618,9 +693,19 @@ bool TypeChecker::checkExpr(
             ok = false;
             break;
         }
-        if(isMutationTarget && method.isConst){
-            reportError(errors, expr.span, "cannot mutate 'this.member' inside a 'const' method");
-            ok = false;
+        if(isMutationTarget){
+            if(method.isConst){
+                reportError(errors, expr.span, "cannot mutate 'this.member' inside a 'const' method");
+                ok = false;
+            }
+            else if(m_parallelDepth > 0u){
+                if(const FieldDecl* field = findClassField(*ownerClass, expr.text)){
+                    if(field->type && __hidden_adhd_type_checker::IsNonThreadSafeContainer(field->type->name)){
+                        reportError(errors, expr.span, "shared 'mut' access to non-thread-safe member container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers or disjoint element indexing");
+                        ok = false;
+                    }
+                }
+            }
         }
         break;
     }
@@ -648,8 +733,11 @@ bool TypeChecker::checkExpr(
         break;
     }
     case ExprKind::Index:{
+        const u32 savedParallelDepth = m_parallelDepth;
+        m_parallelDepth = 0u;
         if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, isMutationTarget, errors))
             ok = false;
+        m_parallelDepth = savedParallelDepth;
         if(expr.rhs && !checkExpr(ownerClass, method, *expr.rhs, scope, false, errors))
             ok = false;
         break;
@@ -657,8 +745,35 @@ bool TypeChecker::checkExpr(
     case ExprKind::Call:{
         if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, false, errors))
             ok = false;
-        for(Expr* arg : expr.arguments){
-            if(arg && !checkExpr(ownerClass, method, *arg, scope, false, errors))
+
+        const MethodDecl* targetCallable = nullptr;
+        if(expr.lhs){
+            if(expr.lhs->kind == ExprKind::Identifier)
+                targetCallable = m_symbols.findFreeFunction(expr.lhs->text);
+            else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass)
+                targetCallable = findClassMethod(*ownerClass, expr.lhs->text);
+            else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
+                const MStringView objType = inferExprTypeName(ownerClass, *expr.lhs->lhs, scope);
+                if(const ClassDecl* targetCls = m_symbols.findClass(objType))
+                    targetCallable = findClassMethod(*targetCls, expr.lhs->text);
+                else if(__hidden_adhd_type_checker::IsNonThreadSafeContainer(objType) && m_parallelDepth > 0u){
+                    const MStringView mName = expr.lhs->text;
+                    if(mName == "push_back" || mName == "emplace_back" || mName == "pop_back" || mName == "clear" || mName == "insert" || mName == "erase" || mName == "resize"){
+                        reportError(errors, expr.span, "mutating non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers");
+                        ok = false;
+                    }
+                }
+            }
+        }
+
+        for(usize i = 0u; i < expr.arguments.size(); ++i){
+            Expr* arg = expr.arguments[i];
+            if(!arg)
+                continue;
+            const bool paramIsMut = targetCallable
+                && i < targetCallable->params.size()
+                && targetCallable->params[i].mode == ParamPassingMode::Mut;
+            if(!checkExpr(ownerClass, method, *arg, scope, paramIsMut, errors))
                 ok = false;
         }
         break;

@@ -51,6 +51,19 @@ bool ParseAdhdCompilerOptions(
             outOptions.inputFiles.push_back(MString(val.data(), val.size(), arena));
             continue;
         }
+        if(arg == "--namespace"){
+            if(i + 1 >= argc){
+                NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: missing argument after '--namespace'"));
+                return false;
+            }
+            const MStringView val(argv[++i]);
+            outOptions.customNamespace = MString(val.data(), val.size(), arena);
+            continue;
+        }
+        if(arg == "--validate-only"){
+            outOptions.validateOnly = true;
+            continue;
+        }
         if(!arg.empty() && arg[0] != '-'){
             outOptions.inputFiles.push_back(MString(arg.data(), arg.size(), arena));
             continue;
@@ -67,8 +80,8 @@ bool ParseAdhdCompilerOptions(
         NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: at least one .adhd input file is required"));
         return false;
     }
-    if(outOptions.outputDirectory.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: '--output-dir' ('-o') is required"));
+    if(!outOptions.validateOnly && outOptions.outputDirectory.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: '--output-dir' ('-o') is required unless '--validate-only' is specified"));
         return false;
     }
 

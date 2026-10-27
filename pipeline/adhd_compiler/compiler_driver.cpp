@@ -104,13 +104,15 @@ bool RunAdhdCompilerDriver(
     using namespace NWB::Core::Metascript;
 
     const Path<MetaArena> outDir(arena, AStringView(options.outputDirectory.data(), options.outputDirectory.size()));
-    if(!EnsureDirectories(outDir)){
+    if(!options.validateOnly && !EnsureDirectories(outDir)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("adhd_compiler: failed to create output directory '{}'"),
             ConvertString(AStringView(options.outputDirectory.data(), options.outputDirectory.size()))
         );
         return false;
     }
+
+    const MStringView customNs(options.customNamespace.data(), options.customNamespace.size());
 
     for(const MString& inputPathText : options.inputFiles){
         const MStringView inputView(inputPathText.data(), inputPathText.size());
@@ -134,7 +136,8 @@ bool RunAdhdCompilerDriver(
             inputView,
             arena,
             result,
-            &resolver
+            &resolver,
+            customNs
         )){
             for(const ParseError& err : result.errors){
                 NWB_LOGGER_ERROR(
@@ -147,6 +150,9 @@ bool RunAdhdCompilerDriver(
             }
             return false;
         }
+
+        if(options.validateOnly)
+            continue;
 
         const MString stem = __hidden_adhd_compiler_driver::ExtractFileStem(inputView, arena);
 

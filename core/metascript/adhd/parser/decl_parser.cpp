@@ -277,6 +277,11 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, MVector<ParsedAttribu
             }
         }
 
+        if(m_cursor.matchIdentifier("flag"))
+            isFlag = true;
+        else
+            m_cursor.matchIdentifier("enum");
+
         if(!m_cursor.check(TokenType::Identifier)){
             m_cursor.errorExpected("expected enum enumerator name");
             return nullptr;
@@ -805,6 +810,11 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     if(!decl->returnType)
         return nullptr;
 
+    if(m_cursor.checkIdentifier("operator")){
+        m_cursor.error("free operator overloads are prohibited in adhd; overload operators as instance member methods on a class");
+        return nullptr;
+    }
+
     if(!m_cursor.check(TokenType::Identifier)){
         m_cursor.errorExpected("expected function or class name");
         return nullptr;
@@ -945,6 +955,17 @@ bool DeclParser::parseOperatorName(MStringView& outOpName){
     case TokenType::StarEqual:
     case TokenType::SlashEqual:
     case TokenType::PercentEqual:
+    case TokenType::Ampersand:
+    case TokenType::Pipe:
+    case TokenType::Caret:
+    case TokenType::Tilde:
+    case TokenType::LessLess:
+    case TokenType::GreaterGreater:
+    case TokenType::AmpersandEqual:
+    case TokenType::PipeEqual:
+    case TokenType::CaretEqual:
+    case TokenType::LessLessEqual:
+    case TokenType::GreaterGreaterEqual:
     case TokenType::EqualEqual:
     case TokenType::BangEqual:
     case TokenType::Less:

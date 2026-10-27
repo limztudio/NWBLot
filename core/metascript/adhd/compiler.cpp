@@ -56,7 +56,8 @@ bool Compiler::compile(
     const MStringView virtualFilePath,
     MetaArena& arena,
     CompileResult& outResult,
-    IIncludeResolver* includeResolver
+    IIncludeResolver* includeResolver,
+    const MStringView customNamespace
 ){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
 
@@ -83,7 +84,9 @@ bool Compiler::compile(
     if(!typeChecker.checkTranslationUnit(outResult.unit, outResult.errors))
         return false;
 
-    const MString namespacePath = deriveNamespaceFromPath(virtualFilePath, arena);
+    const MString namespacePath = customNamespace.empty()
+        ? deriveNamespaceFromPath(virtualFilePath, arena)
+        : MString(customNamespace.data(), customNamespace.size(), arena);
     const MString headerFilename = deriveHeaderFilename(virtualFilePath, arena);
 
     HeaderEmitter headerEmitter(arena, outResult.symbols);

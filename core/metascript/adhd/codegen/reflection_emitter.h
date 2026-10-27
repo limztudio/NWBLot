@@ -27,6 +27,7 @@ public:
 public:
     void emitClassReflectionDeclarations(MString& out, const ClassDecl& decl)const;
     void emitClassReflectionDefinitions(MString& out, const ClassDecl& decl)const;
+    void emitInlineClassReflection(MString& out, const ClassDecl& decl, const MVector<FieldDecl*>& fields)const;
 
 
 private:

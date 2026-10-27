@@ -64,10 +64,6 @@ bool ParseAdhdCompilerOptions(
             outOptions.validateOnly = true;
             continue;
         }
-        if(!arg.empty() && arg[0] != '-'){
-            outOptions.inputFiles.push_back(MString(arg.data(), arg.size(), arena));
-            continue;
-        }
 
         NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: unknown command line option '{}'"), ConvertString(arg));
         return false;

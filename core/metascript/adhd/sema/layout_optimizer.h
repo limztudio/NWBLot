@@ -32,6 +32,7 @@ public:
 
 private:
     [[nodiscard]] bool computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors);
+    void collectTemplateInstantiationsInStmt(const Stmt& stmt, TranslationUnit& unit);
     void collectTemplateInstantiationsInType(const TypeRef& type, TranslationUnit& unit);
     void instantiateClassTemplate(const ClassDecl& templateDecl, const MVector<TypeArg>& templateArgs, TranslationUnit& unit);
     void reportError(MVector<ParseError>& errors, SourceSpan span, MStringView message)const;
@@ -40,6 +41,7 @@ private:
 private:
     MetaArena& m_arena;
     const SymbolTable& m_symbols;
+    const TranslationUnit* m_unit = nullptr;
 };
 
 

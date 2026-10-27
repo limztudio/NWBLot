@@ -92,10 +92,16 @@ private:
     );
     [[nodiscard]] MStringView inferExprTypeName(
         ClassDecl* ownerClass,
+        const MethodDecl* method,
         const Expr& expr,
         const MVector<ScopedVarInfo>& scope
     )const noexcept;
 
+    [[nodiscard]] static const TemplateParamDecl* findTemplateParam(
+        const ClassDecl* ownerClass,
+        const MethodDecl* method,
+        MStringView name
+    )noexcept;
     [[nodiscard]] static const ScopedVarInfo* findScopedVar(const MVector<ScopedVarInfo>& scope, MStringView name)noexcept;
     [[nodiscard]] static const FieldDecl* findClassField(const ClassDecl& classDecl, MStringView name)noexcept;
     [[nodiscard]] static const MethodDecl* findClassMethod(const ClassDecl& classDecl, MStringView name)noexcept;

@@ -110,6 +110,7 @@ TypeRef* SubstituteTemplateType(
 
 
 bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
+    m_unit = &unit;
     bool ok = true;
     for(ClassDecl* classDecl : unit.classes){
         for(const FieldDecl* f : classDecl->fields){
@@ -126,20 +127,8 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
                     collectTemplateInstantiationsInType(*p.type, unit);
             }
             for(const Stmt* s : m->body){
-                if(!s)
-                    continue;
-                if(s->kind == StmtKind::VarDecl && s->varType)
-                    collectTemplateInstantiationsInType(*s->varType, unit);
-                if(s->initStmt && s->initStmt->varType)
-                    collectTemplateInstantiationsInType(*s->initStmt->varType, unit);
-                for(const Stmt* sub : s->statements){
-                    if(sub && sub->kind == StmtKind::VarDecl && sub->varType)
-                        collectTemplateInstantiationsInType(*sub->varType, unit);
-                }
-                for(const Stmt* sub : s->elseStatements){
-                    if(sub && sub->kind == StmtKind::VarDecl && sub->varType)
-                        collectTemplateInstantiationsInType(*sub->varType, unit);
-                }
+                if(s)
+                    collectTemplateInstantiationsInStmt(*s, unit);
             }
         }
     }
@@ -153,20 +142,8 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
                 collectTemplateInstantiationsInType(*p.type, unit);
         }
         for(const Stmt* s : fn->body){
-            if(!s)
-                continue;
-            if(s->kind == StmtKind::VarDecl && s->varType)
-                collectTemplateInstantiationsInType(*s->varType, unit);
-            if(s->initStmt && s->initStmt->varType)
-                collectTemplateInstantiationsInType(*s->initStmt->varType, unit);
-            for(const Stmt* sub : s->statements){
-                if(sub && sub->kind == StmtKind::VarDecl && sub->varType)
-                    collectTemplateInstantiationsInType(*sub->varType, unit);
-            }
-            for(const Stmt* sub : s->elseStatements){
-                if(sub && sub->kind == StmtKind::VarDecl && sub->varType)
-                    collectTemplateInstantiationsInType(*sub->varType, unit);
-            }
+            if(s)
+                collectTemplateInstantiationsInStmt(*s, unit);
         }
     }
     for(ClassDecl* classDecl : unit.classes){
@@ -174,6 +151,27 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
             ok = false;
     }
     return ok;
+}
+
+void LayoutOptimizer::collectTemplateInstantiationsInStmt(const Stmt& stmt, TranslationUnit& unit){
+    if(stmt.varType)
+        collectTemplateInstantiationsInType(*stmt.varType, unit);
+    if(stmt.initStmt)
+        collectTemplateInstantiationsInStmt(*stmt.initStmt, unit);
+    for(const Stmt* sub : stmt.statements){
+        if(sub)
+            collectTemplateInstantiationsInStmt(*sub, unit);
+    }
+    for(const Stmt* sub : stmt.elseStatements){
+        if(sub)
+            collectTemplateInstantiationsInStmt(*sub, unit);
+    }
+    for(const SwitchCase& sc : stmt.switchCases){
+        for(const Stmt* sub : sc.statements){
+            if(sub)
+                collectTemplateInstantiationsInStmt(*sub, unit);
+        }
+    }
 }
 
 void LayoutOptimizer::collectTemplateInstantiationsInType(const TypeRef& type, TranslationUnit& unit){
@@ -295,8 +293,18 @@ bool LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
     const MStringView name = type.name;
 
     if(const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(name)){
-        if(aliasDecl->aliasedType)
+        if(aliasDecl->aliasedType){
+            if(!aliasDecl->templateParams.empty() && !type.templateArgs.empty()){
+                const TypeRef* resolvedAlias = __hidden_adhd_layout_optimizer::SubstituteTemplateType(
+                    *aliasDecl->aliasedType,
+                    aliasDecl->templateParams,
+                    type.templateArgs,
+                    m_arena
+                );
+                return resolveTypeSizeAndAlign(*resolvedAlias, outSize, outAlign);
+            }
             return resolveTypeSizeAndAlign(*aliasDecl->aliasedType, outSize, outAlign);
+        }
     }
 
     if(name == "bool" || name == "i8" || name == "u8"){
@@ -426,6 +434,26 @@ bool LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
     }
 
     if(const ClassDecl* classDecl = m_symbols.findClass(name)){
+        if(!type.templateArgs.empty() && m_unit){
+            for(const ClassTemplateInstantiation* inst : m_unit->templateInstantiations){
+                if(!inst || inst->templateDecl != classDecl || inst->templateArgs.size() != type.templateArgs.size())
+                    continue;
+                bool sameArgs = true;
+                for(usize i = 0u; i < type.templateArgs.size(); ++i){
+                    const MStringView lhsName = inst->templateArgs[i].type ? inst->templateArgs[i].type->name : inst->templateArgs[i].constantText;
+                    const MStringView rhsName = type.templateArgs[i].type ? type.templateArgs[i].type->name : type.templateArgs[i].constantText;
+                    if(lhsName != rhsName){
+                        sameArgs = false;
+                        break;
+                    }
+                }
+                if(sameArgs){
+                    outSize = inst->totalSize;
+                    outAlign = inst->totalAlign;
+                    return true;
+                }
+            }
+        }
         outSize = classDecl->totalSize;
         outAlign = classDecl->totalAlign;
         return true;

@@ -728,7 +728,7 @@ bool TypeChecker::checkStatement(
         if(stmt.expr){
             if(!checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
                 ok = false;
-            const MStringView subjectType = inferExprTypeName(ownerClass, *stmt.expr, scope);
+            const MStringView subjectType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
             if(SymbolTable::isStringSwitchType(subjectType)){
                 stmt.lowerSwitchToIfChain = true;
             }
@@ -936,7 +936,7 @@ bool TypeChecker::checkExpr(
                 expr.lhs->derefNotNull = false;
                 expr.isPointerMemberAccess = true;
             }
-            const MStringView baseType = inferExprTypeName(ownerClass, *expr.lhs, scope);
+            const MStringView baseType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
             u32 simdLanes = 4u;
             if(SymbolTable::isSimdVectorType(baseType, simdLanes)){
                 bool isSwizzlePattern = false;
@@ -987,13 +987,25 @@ bool TypeChecker::checkExpr(
                 }
             }
             else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
-                const MStringView objType = inferExprTypeName(ownerClass, *expr.lhs->lhs, scope);
+                const MStringView objType = inferExprTypeName(ownerClass, &method, *expr.lhs->lhs, scope);
                 const MStringView mName = expr.lhs->text;
                 const bool isMutatingContainerOp = (mName == "push_back" || mName == "emplace_back" || mName == "pop_back" || mName == "clear" || mName == "insert" || mName == "erase" || mName == "resize");
                 if(const ClassDecl* targetCls = m_symbols.findClass(objType))
                     targetCallable = findClassMethod(*targetCls, mName);
                 else if(m_symbols.findInterface(objType))
                     targetCallable = m_symbols.findInterfaceMethod(objType, mName);
+                else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, objType)){
+                    for(const MStringView& boundName : tp->interfaceBounds){
+                        if(const MethodDecl* boundMethod = m_symbols.findInterfaceMethod(boundName, mName)){
+                            targetCallable = boundMethod;
+                            break;
+                        }
+                    }
+                    if(!targetCallable){
+                        reportError(errors, expr.span, "method call on template parameter requires a matching interface bound ('<T : IInterface>')");
+                        ok = false;
+                    }
+                }
                 else if(__hidden_adhd_type_checker::IsNonThreadSafeContainer(objType) && m_parallelDepth > 0u && isMutatingContainerOp){
                     reportError(errors, expr.span, "mutating non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers");
                     ok = false;
@@ -1076,7 +1088,7 @@ bool TypeChecker::checkExpr(
         if(expr.lhs){
             if(!checkExpr(ownerClass, method, *expr.lhs, scope, false, errors))
                 ok = false;
-            const MStringView srcType = inferExprTypeName(ownerClass, *expr.lhs, scope);
+            const MStringView srcType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
             if(!srcType.empty() && m_symbols.findInterface(srcType)){
                 reportError(errors, expr.span, "downcasting from an 'interface' type is prohibited in adhd");
                 ok = false;
@@ -1122,6 +1134,7 @@ bool TypeChecker::checkExpr(
 
 MStringView TypeChecker::inferExprTypeName(
     ClassDecl* ownerClass,
+    const MethodDecl* method,
     const Expr& expr,
     const MVector<ScopedVarInfo>& scope
 )const noexcept{
@@ -1138,7 +1151,7 @@ MStringView TypeChecker::inferExprTypeName(
         }
     }
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
-        const MStringView lhsType = inferExprTypeName(ownerClass, *expr.lhs, scope);
+        const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
         if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
             if(const FieldDecl* field = findClassField(*cls, expr.text)){
                 if(field->type)
@@ -1163,7 +1176,7 @@ MStringView TypeChecker::inferExprTypeName(
             }
         }
         else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
-            const MStringView lhsType = inferExprTypeName(ownerClass, *expr.lhs->lhs, scope);
+            const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs->lhs, scope);
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
                 if(const MethodDecl* m = findClassMethod(*cls, expr.lhs->text)){
                     if(m->returnType)
@@ -1174,6 +1187,14 @@ MStringView TypeChecker::inferExprTypeName(
                 if(const MethodDecl* m = m_symbols.findInterfaceMethod(lhsType, expr.lhs->text)){
                     if(m->returnType)
                         return m->returnType->name;
+                }
+            }
+            else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, method, lhsType)){
+                for(const MStringView& boundName : tp->interfaceBounds){
+                    if(const MethodDecl* m = m_symbols.findInterfaceMethod(boundName, expr.lhs->text)){
+                        if(m->returnType)
+                            return m->returnType->name;
+                    }
                 }
             }
         }
@@ -1189,6 +1210,26 @@ MStringView TypeChecker::inferExprTypeName(
         return "StringView";
     }
     return {};
+}
+
+const TemplateParamDecl* TypeChecker::findTemplateParam(
+    const ClassDecl* ownerClass,
+    const MethodDecl* method,
+    const MStringView name
+)noexcept{
+    if(method){
+        for(const TemplateParamDecl& tp : method->templateParams){
+            if(!tp.isConstValue && tp.name == name)
+                return &tp;
+        }
+    }
+    if(ownerClass){
+        for(const TemplateParamDecl& tp : ownerClass->templateParams){
+            if(!tp.isConstValue && tp.name == name)
+                return &tp;
+        }
+    }
+    return nullptr;
 }
 
 const ScopedVarInfo* TypeChecker::findScopedVar(const MVector<ScopedVarInfo>& scope, const MStringView name)noexcept{

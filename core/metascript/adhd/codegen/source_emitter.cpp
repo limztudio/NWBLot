@@ -64,7 +64,6 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
     if(name == "max") return "::Max";
     if(name == "abs") return "::Abs";
     if(name == "clamp") return "::Clamp";
-    if(name == "saturate") return "::Saturate";
     if(name == "floor") return "::Floor";
     if(name == "ceil") return "::Ceil";
     if(name == "round") return "::Truncate";
@@ -82,13 +81,6 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
     if(name == "sin") return "::Sin";
     if(name == "cos") return "::Cos";
     if(name == "tan") return "::Tan";
-    if(name == "asin") return "::ASin";
-    if(name == "acos") return "::ACos";
-    if(name == "atan") return "::ATan";
-    if(name == "atan2") return "::ATan2";
-    if(name == "exp") return "::Exp";
-    if(name == "log") return "::Log";
-    if(name == "pow") return "::Pow";
     return {};
 }
 
@@ -173,7 +165,7 @@ MString SourceEmitter::emitSource(
             }
         }
 
-        if(classDecl->isSerialize || classDecl->isReflect || !classDecl->assetTypeName.empty())
+        if(classDecl->templateParams.empty() && (classDecl->isSerialize || classDecl->isReflect || !classDecl->assetTypeName.empty()))
             reflectionEmitter.emitClassReflectionDefinitions(out, *classDecl);
     }
 

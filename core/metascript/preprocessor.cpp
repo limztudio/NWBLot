@@ -583,6 +583,12 @@ bool Preprocessor::handleInclude(const MStringView rest, const u32 line, const u
     }
 
     const MStringView includePath = rest.substr(1u, closePos - 1u);
+    const bool hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
+    const bool hasNwbExt = includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
+    if(!hasAdhdExt && !hasNwbExt){
+        m_errors.push_back(ParseError{line, 1u, MString("outside 'native { ... }', '#include' may only include '.adhd' or '.nwb' files; place C++ '#include' directives inside a 'native' block", m_arena)});
+        return false;
+    }
     if(m_includedSet.find(includePath) != m_includedSet.end())
         return true;
     if(!m_includeResolver){

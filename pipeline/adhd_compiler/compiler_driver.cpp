@@ -38,9 +38,9 @@ public:
     )override{
         using namespace NWB::Core::Metascript;
 
-        MString relPath(includePath.data(), includePath.size(), arena);
-        if(relPath.size() < 5u || MStringView(relPath.data() + relPath.size() - 5u, 5u) != ".adhd")
-            relPath.append(".adhd");
+        if(includePath.size() <= 5u || includePath.substr(includePath.size() - 5u) != ".adhd")
+            return false;
+        const MString relPath(includePath.data(), includePath.size(), arena);
 
         if(!isAngleBracket){
             const auto candidate = ResolveAbsolutePath(arena, m_currentFileDir, MStringView(relPath.data(), relPath.size()));

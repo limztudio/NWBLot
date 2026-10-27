@@ -530,6 +530,52 @@ TEST(AdhdCompiler, SupportsCustomClassSwitchEnumVarScopeAndConstSafety){
     EXPECT_FALSE(Compiler::compile(s_ConstViolationSource, "impl/bad_const.adhd", arena.arena, constRes));
 }
 
+TEST(AdhdCompiler, EnforcesTemplateBoundMethodCallsAndEmitsInstantiationReflection){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ValidSource =
+        "interface IComponent {\r\n"
+        "    void step(in f32 dt);\r\n"
+        "    u32 id() const;\r\n"
+        "}\r\n"
+        "class Converter {\r\n"
+        "    private Vector<i32> m_buffer(8);\r\n"
+        "    public Out convert<Out>(in u32 x) const {\r\n"
+        "        return cast<Out>(x);\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "u32 runBounded<T : IComponent>(mut T comp, in Converter conv, in f32 dt) {\r\n"
+        "    comp.step(dt);\r\n"
+        "    return conv.convert<u32>(comp.id());\r\n"
+        "}\r\n";
+
+    CompileResult validRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_ValidSource, "impl/bounded_call.adhd", arena.arena, validRes));
+    const MStringView hdrView(validRes.generatedHeader.data(), validRes.generatedHeader.size());
+    EXPECT_NE(hdrView.find("m_buffer{8, s_ClassArena};"), MStringView::npos);
+    EXPECT_NE(hdrView.find("conv.convert<u32>(comp.id())"), MStringView::npos);
+
+    static constexpr MStringView s_UnboundedMethodCall =
+        "void badUnbounded<T>(mut T comp) {\r\n"
+        "    comp.step(1.0f);\r\n"
+        "}\r\n";
+    CompileResult unboundedRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_UnboundedMethodCall, "impl/bad_unbounded.adhd", arena.arena, unboundedRes));
+
+    static constexpr MStringView s_CStyleArraySource =
+        "void badArray() {\r\n"
+        "    i32 values[4] = 0;\r\n"
+        "}\r\n";
+    CompileResult cArrayRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_CStyleArraySource, "impl/bad_array.adhd", arena.arena, cArrayRes));
+
+    static constexpr MStringView s_CppIncludeOutsideNative =
+        "#include <vector>\r\n"
+        "void nop() {}\r\n";
+    CompileResult cppIncRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_CppIncludeOutsideNative, "impl/bad_inc.adhd", arena.arena, cppIncRes));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

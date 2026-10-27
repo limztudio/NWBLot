@@ -53,7 +53,6 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     out.reserve(4096u);
 
     SourceEmitter sourceEmitter(m_arena, m_symbols, *this);
-    ReflectionEmitter reflectionEmitter(m_symbols);
 
     out.append("// limztudio@gmail.com\r\n");
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
@@ -66,8 +65,11 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     out.append("#include <core/alloc/scratch.h>\r\n");
 
     for(const MString& inc : unit.includedAdhdFiles){
+        MStringView incView(inc.data(), inc.size());
+        if(incView.size() > 5u && incView.substr(incView.size() - 5u) == ".adhd")
+            incView = incView.substr(0u, incView.size() - 5u);
         out.append("#include \"");
-        out.append(inc.data(), inc.size());
+        out.append(incView.data(), incView.size());
         out.append(".adhd.h\"\r\n");
     }
 
@@ -472,6 +474,11 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
                 if(field->ctorArgs[i])
                     sourceEmitter.emitExpr(out, *field->ctorArgs[i]);
             }
+            if(field->usesClassArena){
+                if(!field->ctorArgs.empty())
+                    out.append(", ");
+                out.append("s_ClassArena");
+            }
             out.push_back('}');
         }
         else if(field->usesClassArena){
@@ -483,7 +490,10 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
 
     if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
         out.append("\r\n");
-        reflectionEmitter.emitClassReflectionDeclarations(out, decl);
+        if(decl.templateParams.empty())
+            reflectionEmitter.emitClassReflectionDeclarations(out, decl);
+        else
+            reflectionEmitter.emitInlineClassReflection(out, decl, decl.fields);
     }
 
     out.append("};\r\n");
@@ -621,6 +631,11 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
                 if(field->ctorArgs[i])
                     sourceEmitter.emitExpr(out, *field->ctorArgs[i]);
             }
+            if(field->usesClassArena){
+                if(!field->ctorArgs.empty())
+                    out.append(", ");
+                out.append("s_ClassArena");
+            }
             out.push_back('}');
         }
         else if(field->usesClassArena){
@@ -629,10 +644,8 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
         out.append(";\r\n");
     }
 
-    if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
-        out.append("\r\n");
-        reflectionEmitter.emitClassReflectionDeclarations(out, decl);
-    }
+    out.append("\r\n");
+    reflectionEmitter.emitInlineClassReflection(out, decl, inst.orderedFields);
 
     out.append("};\r\n");
     if(decl.isSerialize)

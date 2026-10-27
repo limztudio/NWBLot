@@ -90,6 +90,13 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
                 out.append(field->name.data(), field->name.size());
                 out.append(" = Float4(static_cast<f32>(__f->asList()[0].toDouble()), static_cast<f32>(__f->asList()[1].toDouble()), static_cast<f32>(__f->asList()[2].toDouble()), static_cast<f32>(__f->asList()[3].toDouble()));\r\n");
             }
+            else if(tname == "AssetRef"){
+                out.append("        if(const auto* __f = inMap.findField(\"");
+                out.append(field->name.data(), field->name.size());
+                out.append("\"); __f && __f->isString()) this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(".virtualPath = ::NWB::Core::Common::Name(__f->asString());\r\n");
+            }
             else if(m_symbols.findEnum(tname)){
                 out.append("        if(const auto* __f = inMap.findField(\"");
                 out.append(field->name.data(), field->name.size());
@@ -99,10 +106,246 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
                 out.append(tname.data(), tname.size());
                 out.append("::Enum>(__f->asInteger());\r\n");
             }
+            else if(const ClassDecl* nestedCls = m_symbols.findClass(tname); nestedCls && (nestedCls->isSerialize || nestedCls->isReflect || !nestedCls->assetTypeName.empty() || !nestedCls->templateParams.empty())){
+                out.append("        if(const auto* __f = inMap.findField(\"");
+                out.append(field->name.data(), field->name.size());
+                out.append("\"); __f && __f->isMap() && !this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(".deserializeNwb(*__f)) return false;\r\n");
+            }
         }
         out.append("        return true;\r\n");
         out.append("    }\r\n");
     }
+}
+
+void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl& decl, const MVector<FieldDecl*>& fields)const{
+    char buf[32];
+    out.append("public:\r\n");
+
+    if(!decl.assetTypeName.empty()){
+        out.append("    inline static constexpr AStringView s_AssetTypeName = \"");
+        out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
+        out.append("\";\r\n");
+    }
+
+    if(decl.isSerialize){
+        out.append("    [[nodiscard]] usize serializeBinary(u8* outBuffer, const usize bufferCapacity)const noexcept{\r\n");
+        out.append("        usize offset = 0u;\r\n");
+        for(const FieldDecl* field : fields){
+            if(!field || field->isTransient)
+                continue;
+            out.append("        if(offset + sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(") > bufferCapacity)\r\n            return 0u;\r\n");
+            out.append("        NWB_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(", sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("));\r\n");
+            out.append("        offset += sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(");\r\n");
+        }
+        out.append("        return offset;\r\n    }\r\n");
+
+        out.append("    [[nodiscard]] bool deserializeBinary(const u8* inBuffer, const usize bufferSize)noexcept{\r\n");
+        out.append("        usize offset = 0u;\r\n");
+        for(const FieldDecl* field : fields){
+            if(!field || field->isTransient)
+                continue;
+            out.append("        if(offset + sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(") > bufferSize)\r\n            return false;\r\n");
+            out.append("        NWB_MEMCPY(&this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(", sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("), inBuffer + offset, sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("));\r\n");
+            out.append("        offset += sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(");\r\n");
+        }
+        out.append("        return true;\r\n    }\r\n");
+    }
+
+    usize nonTransientCount = 0u;
+    usize assetRefCount = 0u;
+    for(const FieldDecl* field : fields){
+        if(field && !field->isTransient){
+            ++nonTransientCount;
+            if(field->type && field->type->name == "AssetRef")
+                ++assetRefCount;
+        }
+    }
+
+    out.append("    [[nodiscard]] static constexpr usize reflectedFieldCount()noexcept{ return ");
+    usize val = nonTransientCount;
+    if(val == 0u){
+        out.push_back('0');
+    }
+    else{
+        usize idx = 0u;
+        while(val > 0u && idx < sizeof(buf)){
+            buf[idx++] = static_cast<char>('0' + (val % 10u));
+            val /= 10u;
+        }
+        while(idx > 0u)
+            out.push_back(buf[--idx]);
+    }
+    out.append("u; }\r\n");
+
+    out.append("    [[nodiscard]] static AStringView reflectedFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
+    usize currentIdx = 0u;
+    for(const FieldDecl* field : fields){
+        if(!field || field->isTransient)
+            continue;
+        out.append("        if(index == ");
+        usize v = currentIdx++;
+        if(v == 0u){
+            out.push_back('0');
+        }
+        else{
+            usize bIdx = 0u;
+            while(v > 0u && bIdx < sizeof(buf)){
+                buf[bIdx++] = static_cast<char>('0' + (v % 10u));
+                v /= 10u;
+            }
+            while(bIdx > 0u)
+                out.push_back(buf[--bIdx]);
+        }
+        out.append("u) return \"");
+        out.append(field->name.data(), field->name.size());
+        out.append("\";\r\n");
+    }
+    out.append("        return {};\r\n    }\r\n");
+
+    out.append("    [[nodiscard]] static constexpr usize assetDependencyFieldCount()noexcept{ return ");
+    usize depVal = assetRefCount;
+    if(depVal == 0u){
+        out.push_back('0');
+    }
+    else{
+        usize depIdx = 0u;
+        while(depVal > 0u && depIdx < sizeof(buf)){
+            buf[depIdx++] = static_cast<char>('0' + (depVal % 10u));
+            depVal /= 10u;
+        }
+        while(depIdx > 0u)
+            out.push_back(buf[--depIdx]);
+    }
+    out.append("u; }\r\n");
+
+    out.append("    [[nodiscard]] static AStringView assetDependencyFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
+    usize currentDepIdx = 0u;
+    for(const FieldDecl* field : fields){
+        if(!field || field->isTransient || !field->type || field->type->name != "AssetRef")
+            continue;
+        out.append("        if(index == ");
+        usize v = currentDepIdx++;
+        if(v == 0u){
+            out.push_back('0');
+        }
+        else{
+            usize bIdx = 0u;
+            while(v > 0u && bIdx < sizeof(buf)){
+                buf[bIdx++] = static_cast<char>('0' + (v % 10u));
+                v /= 10u;
+            }
+            while(bIdx > 0u)
+                out.push_back(buf[--bIdx]);
+        }
+        out.append("u) return \"");
+        out.append(field->name.data(), field->name.size());
+        out.append("\";\r\n");
+    }
+    out.append("        return {};\r\n    }\r\n");
+
+    out.append("    template<typename NwbValue>\r\n");
+    out.append("    [[nodiscard]] bool deserializeNwb(const NwbValue& inMap)noexcept{\r\n");
+    out.append("        if(!inMap.isMap())\r\n");
+    out.append("            return false;\r\n");
+    for(const FieldDecl* field : fields){
+        if(!field || field->isTransient || field->access != AccessSpecifier::Public || !field->type)
+            continue;
+        const MStringView tname = field->type->name;
+        if(tname == "bool"){
+            out.append("        if(const auto* __f = inMap.findField(\"");
+            out.append(field->name.data(), field->name.size());
+            out.append("\"); __f && __f->isNumeric()) this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(" = (__f->asInteger() != 0);\r\n");
+        }
+        else if(tname == "i8" || tname == "u8" || tname == "i16" || tname == "u16"
+            || tname == "i32" || tname == "u32" || tname == "i64" || tname == "u64"
+            || tname == "isize" || tname == "usize")
+        {
+            out.append("        if(const auto* __f = inMap.findField(\"");
+            out.append(field->name.data(), field->name.size());
+            out.append("\"); __f && __f->isNumeric()) this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(" = static_cast<");
+            out.append(tname.data(), tname.size());
+            out.append(">(__f->asInteger());\r\n");
+        }
+        else if(tname == "f32" || tname == "f64"){
+            out.append("        if(const auto* __f = inMap.findField(\"");
+            out.append(field->name.data(), field->name.size());
+            out.append("\"); __f && __f->isNumeric()) this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(" = static_cast<");
+            out.append(tname.data(), tname.size());
+            out.append(">(__f->toDouble());\r\n");
+        }
+        else if(tname == "String" || tname == "CompactString"){
+            out.append("        if(const auto* __f = inMap.findField(\"");
+            out.append(field->name.data(), field->name.size());
+            out.append("\"); __f && __f->isString()) this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".assign(__f->asString());\r\n");
+        }
+        else if(tname == "Name"){
+            out.append("        if(const auto* __f = inMap.findField(\"");
+            out.append(field->name.data(), field->name.size());
+            out.append("\"); __f && __f->isString()) this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(" = ::NWB::Core::Common::Name(__f->asString());\r\n");
+        }
+        else if(tname == "AssetRef"){
+            out.append("        if(const auto* __f = inMap.findField(\"");
+            out.append(field->name.data(), field->name.size());
+            out.append("\"); __f && __f->isString()) this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".virtualPath = ::NWB::Core::Common::Name(__f->asString());\r\n");
+        }
+        else if(tname == "f32x4"){
+            out.append("        if(const auto* __f = inMap.findField(\"");
+            out.append(field->name.data(), field->name.size());
+            out.append("\"); __f && __f->isList() && __f->asList().size() == 4u) this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(" = Float4(static_cast<f32>(__f->asList()[0].toDouble()), static_cast<f32>(__f->asList()[1].toDouble()), static_cast<f32>(__f->asList()[2].toDouble()), static_cast<f32>(__f->asList()[3].toDouble()));\r\n");
+        }
+        else if(m_symbols.findEnum(tname)){
+            out.append("        if(const auto* __f = inMap.findField(\"");
+            out.append(field->name.data(), field->name.size());
+            out.append("\"); __f && __f->isNumeric()) this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(" = static_cast<");
+            out.append(tname.data(), tname.size());
+            out.append("::Enum>(__f->asInteger());\r\n");
+        }
+        else if(const ClassDecl* nestedCls = m_symbols.findClass(tname); nestedCls && (nestedCls->isSerialize || nestedCls->isReflect || !nestedCls->assetTypeName.empty() || !nestedCls->templateParams.empty())){
+            out.append("        if(const auto* __f = inMap.findField(\"");
+            out.append(field->name.data(), field->name.size());
+            out.append("\"); __f && __f->isMap() && !this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".deserializeNwb(*__f)) return false;\r\n");
+        }
+    }
+    out.append("        return true;\r\n");
+    out.append("    }\r\n");
 }
 
 void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const ClassDecl& decl)const{

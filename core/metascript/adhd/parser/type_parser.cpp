@@ -141,6 +141,10 @@ TypeRef* TypeParser::parseType(const bool allowRefMode, const bool allowAuto){
         m_cursor.error("C++ reference syntax ('&') is prohibited in adhd; use 'in' or 'mut'");
         return nullptr;
     }
+    if(m_cursor.check(TokenType::LeftBracket)){
+        m_cursor.error("C-style array types ('T[N]') are prohibited in adhd; use 'Array<T, N>' or 'Vector<T>'");
+        return nullptr;
+    }
 
     return type;
 }

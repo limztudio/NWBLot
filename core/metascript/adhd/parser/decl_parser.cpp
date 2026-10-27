@@ -628,6 +628,10 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.error("C-style bitfields are prohibited in adhd; use 'enum<SizeType>' with 'flag'");
         return false;
     }
+    if(m_cursor.check(TokenType::LeftBracket)){
+        m_cursor.error("C-style arrays ('T name[N]') are prohibited in adhd; use 'Array<T, N>' or 'Vector<T>'");
+        return false;
+    }
 
     MVector<TemplateParamDecl> methodTemplateParams(m_cursor.arena());
     if(m_cursor.check(TokenType::Less)){
@@ -900,6 +904,10 @@ bool DeclParser::parseParamList(MVector<ParamDecl>& outParams){
             param.name = m_cursor.current().text;
             m_cursor.advance();
 
+            if(m_cursor.check(TokenType::LeftBracket)){
+                m_cursor.error("C-style arrays ('T name[N]') are prohibited in adhd; use 'Array<T, N>' or 'Span<T>'");
+                return false;
+            }
             if(m_cursor.check(TokenType::Equal)){
                 m_cursor.error("default parameter arguments are prohibited in adhd");
                 return false;

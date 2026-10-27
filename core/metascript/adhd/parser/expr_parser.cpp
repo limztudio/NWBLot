@@ -380,6 +380,23 @@ Expr* ExprParser::parsePostfix(){
             continue;
         }
 
+        if(m_cursor.check(TokenType::Less)){
+            const ParserCursor::Checkpoint cp = m_cursor.save();
+            MVector<TypeArg> targs(m_cursor.arena());
+            if(m_typeParser.parseTypeArgList(targs) && m_cursor.check(TokenType::LeftParen)){
+                Expr* callNode = AllocateAstNode<Expr>(m_cursor.arena());
+                callNode->kind = ExprKind::Call;
+                callNode->lhs = expr;
+                callNode->callTemplateArgs = Move(targs);
+                callNode->span = expr->span;
+                if(!parseArgumentList(callNode->arguments))
+                    return nullptr;
+                expr = callNode;
+                continue;
+            }
+            m_cursor.restore(cp);
+        }
+
         if(m_cursor.check(TokenType::LeftParen)){
             Expr* callNode = AllocateAstNode<Expr>(m_cursor.arena());
             callNode->kind = ExprKind::Call;
@@ -562,27 +579,6 @@ Expr* ExprParser::parsePrimary(){
                 m_cursor.advance();
             }
             return scopeNode;
-        }
-
-        if(m_cursor.check(TokenType::Less)){
-            const ParserCursor::Checkpoint cp = m_cursor.save();
-            MVector<TypeArg> targs(m_cursor.arena());
-            if(m_typeParser.parseTypeArgList(targs) && m_cursor.check(TokenType::LeftParen)){
-                Expr* callee = AllocateAstNode<Expr>(m_cursor.arena());
-                callee->kind = ExprKind::Identifier;
-                callee->text = tok.text;
-                callee->span = span;
-
-                Expr* callNode = AllocateAstNode<Expr>(m_cursor.arena());
-                callNode->kind = ExprKind::Call;
-                callNode->lhs = callee;
-                callNode->callTemplateArgs = Move(targs);
-                callNode->span = span;
-                if(!parseArgumentList(callNode->arguments))
-                    return nullptr;
-                return callNode;
-            }
-            m_cursor.restore(cp);
         }
 
         Expr* idNode = AllocateAstNode<Expr>(m_cursor.arena());

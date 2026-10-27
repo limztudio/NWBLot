@@ -752,6 +752,11 @@ Stmt* StmtParser::parseVarDeclAfterType(TypeRef* varType, const SourceSpan span)
     const MStringView varName = m_cursor.current().text;
     m_cursor.advance();
 
+    if(m_cursor.check(TokenType::LeftBracket)){
+        m_cursor.error(span.line, span.column, "C-style arrays ('T name[N]') are prohibited in adhd; use 'Array<T, N>' or 'Vector<T>'");
+        return nullptr;
+    }
+
     Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
     stmt->kind = StmtKind::VarDecl;
     stmt->varType = varType;

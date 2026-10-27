@@ -50,9 +50,15 @@ public:
 
 class Preprocessor{
 public:
+    struct IncludedByteRange{
+        usize startOffset = 0u;
+        usize endOffset = 0u;
+    };
+
     using MacroMap = MStringMap<PreprocessorMacro>;
     using IncludedSet = MStringMap<bool>;
     using IncludedList = MVector<MString>;
+    using IncludedRangeList = MVector<IncludedByteRange>;
 
 
 public:
@@ -67,6 +73,7 @@ public:
     [[nodiscard]] bool process(MStringView source, MString& outProcessed);
 
     [[nodiscard]] const IncludedList& includedFiles()const noexcept{ return m_includedFiles; }
+    [[nodiscard]] bool isOffsetInIncludedRange(usize offset)const noexcept;
 
 
 private:
@@ -97,6 +104,7 @@ private:
     MacroMap m_macros;
     IncludedSet m_includedSet;
     IncludedList m_includedFiles;
+    IncludedRangeList m_includedByteRanges;
 };
 
 

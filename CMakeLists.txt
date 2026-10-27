@@ -95,7 +95,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         list(APPEND _nwb_linux_targets logserver)
     endif()
     if(TARGET nwb_asset_builder)
-        list(APPEND _nwb_linux_targets dependency_computer asset_builder asset_gatherer)
+        list(APPEND _nwb_linux_targets dependency_computer asset_builder asset_gatherer adhd_compiler)
     endif()
 
     string(JOIN ", " _nwb_linux_targets_text ${_nwb_linux_targets})

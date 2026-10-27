@@ -102,6 +102,7 @@ struct Stmt{
     bool isEssential = false;
     bool lowerSwitchToIfChain = false;
     bool usesScratchArena = false;
+    bool isImported = false;
 
 
 public:

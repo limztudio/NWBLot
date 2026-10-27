@@ -14,6 +14,37 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_reflection_emitter{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendUnsigned(MString& out, usize value){
+    char buf[32];
+    usize idx = 0u;
+    if(value == 0u){
+        out.push_back('0');
+        return;
+    }
+    while(value > 0u && idx < sizeof(buf)){
+        buf[idx++] = static_cast<char>('0' + (value % 10u));
+        value /= 10u;
+    }
+    while(idx > 0u)
+        out.push_back(buf[--idx]);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const ClassDecl& decl)const{
     out.append("public:\r\n");
 
@@ -38,7 +69,6 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
 }
 
 void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl& decl, const MVector<FieldDecl*>& fields)const{
-    char buf[32];
     out.append("public:\r\n");
 
     if(!decl.assetTypeName.empty()){
@@ -100,19 +130,7 @@ void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl&
     }
 
     out.append("    [[nodiscard]] static constexpr usize reflectedFieldCount()noexcept{ return ");
-    usize val = nonTransientCount;
-    if(val == 0u){
-        out.push_back('0');
-    }
-    else{
-        usize idx = 0u;
-        while(val > 0u && idx < sizeof(buf)){
-            buf[idx++] = static_cast<char>('0' + (val % 10u));
-            val /= 10u;
-        }
-        while(idx > 0u)
-            out.push_back(buf[--idx]);
-    }
+    __hidden_adhd_reflection_emitter::AppendUnsigned(out, nonTransientCount);
     out.append("u; }\r\n");
 
     out.append("    [[nodiscard]] static AStringView reflectedFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
@@ -121,19 +139,7 @@ void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl&
         if(!field || field->isTransient)
             continue;
         out.append("        if(index == ");
-        usize v = currentIdx++;
-        if(v == 0u){
-            out.push_back('0');
-        }
-        else{
-            usize bIdx = 0u;
-            while(v > 0u && bIdx < sizeof(buf)){
-                buf[bIdx++] = static_cast<char>('0' + (v % 10u));
-                v /= 10u;
-            }
-            while(bIdx > 0u)
-                out.push_back(buf[--bIdx]);
-        }
+        __hidden_adhd_reflection_emitter::AppendUnsigned(out, currentIdx++);
         out.append("u) return \"");
         out.append(field->name.data(), field->name.size());
         out.append("\";\r\n");
@@ -141,19 +147,7 @@ void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl&
     out.append("        return {};\r\n    }\r\n");
 
     out.append("    [[nodiscard]] static constexpr usize assetDependencyFieldCount()noexcept{ return ");
-    usize depVal = assetRefCount;
-    if(depVal == 0u){
-        out.push_back('0');
-    }
-    else{
-        usize depIdx = 0u;
-        while(depVal > 0u && depIdx < sizeof(buf)){
-            buf[depIdx++] = static_cast<char>('0' + (depVal % 10u));
-            depVal /= 10u;
-        }
-        while(depIdx > 0u)
-            out.push_back(buf[--depIdx]);
-    }
+    __hidden_adhd_reflection_emitter::AppendUnsigned(out, assetRefCount);
     out.append("u; }\r\n");
 
     out.append("    [[nodiscard]] static AStringView assetDependencyFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
@@ -162,19 +156,7 @@ void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl&
         if(!field || field->isTransient || !field->type || field->type->name != "AssetRef")
             continue;
         out.append("        if(index == ");
-        usize v = currentDepIdx++;
-        if(v == 0u){
-            out.push_back('0');
-        }
-        else{
-            usize bIdx = 0u;
-            while(v > 0u && bIdx < sizeof(buf)){
-                buf[bIdx++] = static_cast<char>('0' + (v % 10u));
-                v /= 10u;
-            }
-            while(bIdx > 0u)
-                out.push_back(buf[--bIdx]);
-        }
+        __hidden_adhd_reflection_emitter::AppendUnsigned(out, currentDepIdx++);
         out.append("u) return \"");
         out.append(field->name.data(), field->name.size());
         out.append("\";\r\n");
@@ -331,20 +313,7 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
         out.append("constexpr usize ");
         out.append(decl.name.data(), decl.name.size());
         out.append("::reflectedFieldCount()noexcept{\r\n    return ");
-        char buf[32];
-        usize idx = 0u;
-        usize val = nonTransientCount;
-        if(val == 0u){
-            out.push_back('0');
-        }
-        else{
-            while(val > 0u && idx < sizeof(buf)){
-                buf[idx++] = static_cast<char>('0' + (val % 10u));
-                val /= 10u;
-            }
-            while(idx > 0u)
-                out.push_back(buf[--idx]);
-        }
+        __hidden_adhd_reflection_emitter::AppendUnsigned(out, nonTransientCount);
         out.append("u;\r\n}\r\n\r\n");
 
         out.append("AStringView ");
@@ -355,19 +324,7 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
             if(!field || field->isTransient)
                 continue;
             out.append("    if(index == ");
-            usize v = currentIdx++;
-            if(v == 0u){
-                out.push_back('0');
-            }
-            else{
-                usize bIdx = 0u;
-                while(v > 0u && bIdx < sizeof(buf)){
-                    buf[bIdx++] = static_cast<char>('0' + (v % 10u));
-                    v /= 10u;
-                }
-                while(bIdx > 0u)
-                    out.push_back(buf[--bIdx]);
-            }
+            __hidden_adhd_reflection_emitter::AppendUnsigned(out, currentIdx++);
             out.append("u)\r\n        return \"");
             out.append(field->name.data(), field->name.size());
             out.append("\";\r\n");
@@ -377,19 +334,7 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
         out.append("constexpr usize ");
         out.append(decl.name.data(), decl.name.size());
         out.append("::assetDependencyFieldCount()noexcept{\r\n    return ");
-        usize depIdx = 0u;
-        usize depVal = assetRefCount;
-        if(depVal == 0u){
-            out.push_back('0');
-        }
-        else{
-            while(depVal > 0u && depIdx < sizeof(buf)){
-                buf[depIdx++] = static_cast<char>('0' + (depVal % 10u));
-                depVal /= 10u;
-            }
-            while(depIdx > 0u)
-                out.push_back(buf[--depIdx]);
-        }
+        __hidden_adhd_reflection_emitter::AppendUnsigned(out, assetRefCount);
         out.append("u;\r\n}\r\n\r\n");
 
         out.append("AStringView ");
@@ -400,19 +345,7 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
             if(!field || field->isTransient || !field->type || field->type->name != "AssetRef")
                 continue;
             out.append("    if(index == ");
-            usize v = currentDepIdx++;
-            if(v == 0u){
-                out.push_back('0');
-            }
-            else{
-                usize bIdx = 0u;
-                while(v > 0u && bIdx < sizeof(buf)){
-                    buf[bIdx++] = static_cast<char>('0' + (v % 10u));
-                    v /= 10u;
-                }
-                while(bIdx > 0u)
-                    out.push_back(buf[--bIdx]);
-            }
+            __hidden_adhd_reflection_emitter::AppendUnsigned(out, currentDepIdx++);
             out.append("u)\r\n        return \"");
             out.append(field->name.data(), field->name.size());
             out.append("\";\r\n");

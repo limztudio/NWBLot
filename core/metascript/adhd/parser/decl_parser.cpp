@@ -44,6 +44,36 @@ namespace __hidden_adhd_decl_parser{
     return false;
 }
 
+[[nodiscard]] bool ValidateMemberOperatorArity(
+    const MStringView opName,
+    const usize paramCount,
+    MStringView& outErrorMsg
+)noexcept{
+    if((opName == "*" || opName == "&") && paramCount == 0u){
+        outErrorMsg = "unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd";
+        return false;
+    }
+    if(opName == "~"){
+        if(paramCount != 0u){
+            outErrorMsg = "member 'operator~' cannot take parameters";
+            return false;
+        }
+        return true;
+    }
+    if(opName == "+" || opName == "-"){
+        if(paramCount > 1u){
+            outErrorMsg = "member 'operator+' and 'operator-' may take at most 1 parameter";
+            return false;
+        }
+        return true;
+    }
+    if(paramCount != 1u){
+        outErrorMsg = "binary or indexing member operator overload must take exactly 1 parameter";
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -62,7 +92,20 @@ bool DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
     return !m_cursor.failed();
 }
 
+bool DeclParser::isCurrentTokenImported()const noexcept{
+    if(!m_preprocessor || m_activeSource.empty() || m_cursor.current().text.empty())
+        return false;
+    const MChar* base = m_activeSource.data();
+    const MChar* tokPtr = m_cursor.current().text.data();
+    if(tokPtr < base || tokPtr >= base + m_activeSource.size())
+        return false;
+    const usize offset = static_cast<usize>(tokPtr - base);
+    return m_preprocessor->isOffsetInIncludedRange(offset);
+}
+
 bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
+    const bool isImported = isCurrentTokenImported();
+
     MVector<ParsedAttribute> attributes(m_cursor.arena());
     if(m_cursor.check(TokenType::LeftBracket)){
         AttributeParser attrParser(m_cursor);
@@ -101,7 +144,8 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         MStringView code;
         if(!m_stmtParser.parseRawNativeBlock(code))
             return false;
-        outUnit.topLevelNativeBlocks.push_back(code);
+        if(!isImported)
+            outUnit.topLevelNativeBlocks.push_back(code);
         return true;
     }
 
@@ -133,6 +177,7 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         stmt->name = name;
         stmt->expr = expr;
         stmt->isConst = true;
+        stmt->isImported = isImported;
         stmt->span = span;
         outUnit.globalConstants.push_back(stmt);
         return true;
@@ -142,6 +187,7 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         TypeAliasDecl* aliasDecl = parseTypeAlias(span, attributes);
         if(!aliasDecl)
             return false;
+        aliasDecl->isImported = isImported;
         outUnit.typeAliases.push_back(aliasDecl);
         return true;
     }
@@ -150,6 +196,7 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         EnumDecl* enumDecl = parseEnumDecl(span, attributes);
         if(!enumDecl)
             return false;
+        enumDecl->isImported = isImported;
         outUnit.enums.push_back(enumDecl);
         return true;
     }
@@ -158,6 +205,7 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         InterfaceDecl* ifaceDecl = parseInterfaceDecl(span, attributes);
         if(!ifaceDecl)
             return false;
+        ifaceDecl->isImported = isImported;
         outUnit.interfaces.push_back(ifaceDecl);
         return true;
     }
@@ -166,6 +214,9 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         ClassDecl* classDecl = parseClassDecl(span, attributes);
         if(!classDecl)
             return false;
+        classDecl->isImported = isImported;
+        for(MethodDecl* m : classDecl->methods)
+            m->isImported = isImported;
         outUnit.classes.push_back(classDecl);
         return true;
     }
@@ -173,6 +224,7 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     MethodDecl* callable = parseFreeOrOutOfLineCallable(span, attributes);
     if(!callable)
         return false;
+    callable->isImported = isImported;
 
     if(callable->ownerClassName.empty())
         outUnit.freeFunctions.push_back(callable);
@@ -605,8 +657,9 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
 
         if(!parseParamList(method->params))
             return false;
-        if((opName == "*" || opName == "&") && method->params.empty()){
-            m_cursor.error("unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd");
+        MStringView opErr;
+        if(!__hidden_adhd_decl_parser::ValidateMemberOperatorArity(opName, method->params.size(), opErr)){
+            m_cursor.error(span.line, span.column, opErr);
             return false;
         }
 
@@ -881,12 +934,19 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
 
     if(!parseParamList(decl->params))
         return nullptr;
-    if(decl->isOperator && (decl->name == "*" || decl->name == "&") && decl->params.empty()){
-        m_cursor.error("unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd");
-        return nullptr;
+    if(decl->isOperator){
+        MStringView opErr;
+        if(!__hidden_adhd_decl_parser::ValidateMemberOperatorArity(decl->name, decl->params.size(), opErr)){
+            m_cursor.error(span.line, span.column, opErr);
+            return nullptr;
+        }
     }
 
     while(m_cursor.checkIdentifier("const") || m_cursor.checkIdentifier("override")){
+        if(decl->ownerClassName.empty()){
+            m_cursor.error(span.line, span.column, "'const' and 'override' qualifiers are only permitted on class methods, not free functions");
+            return nullptr;
+        }
         if(m_cursor.matchIdentifier("const"))
             decl->isConst = true;
         else if(m_cursor.matchIdentifier("override"))

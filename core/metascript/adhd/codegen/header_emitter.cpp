@@ -38,6 +38,25 @@ void AppendUnsigned(MString& out, usize value){
         out.push_back(buf[--idx]);
 }
 
+[[nodiscard]] const Expr* FindConstructorFieldAssignment(const MVector<Stmt*>& stmts, const MStringView fieldName)noexcept{
+    for(const Stmt* stmt : stmts){
+        if(!stmt)
+            continue;
+        if(stmt->kind == StmtKind::ExprStmt
+            && stmt->expr
+            && stmt->expr->kind == ExprKind::Binary
+            && stmt->expr->op == TokenType::Equal
+            && stmt->expr->lhs
+            && stmt->expr->lhs->kind == ExprKind::ThisMember
+            && stmt->expr->lhs->text == fieldName
+            && stmt->expr->rhs)
+        {
+            return stmt->expr->rhs;
+        }
+    }
+    return nullptr;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -89,9 +108,11 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         out.append("{\r\n\r\n\r\n");
     }
 
+    bool emittedGlobalConst = false;
     for(const Stmt* c : unit.globalConstants){
-        if(!c || !c->varType)
+        if(!c || c->isImported || !c->varType)
             continue;
+        emittedGlobalConst = true;
         out.append("inline constexpr ");
         emitTypeCpp(out, *c->varType);
         out.push_back(' ');
@@ -101,28 +122,29 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             sourceEmitter.emitExpr(out, *c->expr);
         out.append(";\r\n");
     }
-    if(!unit.globalConstants.empty())
+    if(emittedGlobalConst)
         out.append("\r\n\r\n");
 
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
-        if(aliasDecl)
+        if(aliasDecl && !aliasDecl->isImported)
             emitTypeAliasDecl(out, *aliasDecl);
     }
 
     for(const EnumDecl* enumDecl : unit.enums){
-        if(enumDecl)
+        if(enumDecl && !enumDecl->isImported)
             emitEnumDecl(out, *enumDecl);
     }
 
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
-        if(ifaceDecl)
+        if(ifaceDecl && !ifaceDecl->isImported)
             emitInterfaceDecl(out, *ifaceDecl);
     }
 
     for(const ClassDecl* classDecl : unit.classes){
         if(!classDecl)
             continue;
-        emitClassDecl(out, *classDecl);
+        if(!classDecl->isImported)
+            emitClassDecl(out, *classDecl);
         for(const ClassTemplateInstantiation* inst : unit.templateInstantiations){
             if(inst && inst->templateDecl == classDecl)
                 emitClassTemplateSpecialization(out, *inst);
@@ -130,7 +152,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     }
 
     for(const MethodDecl* fn : unit.freeFunctions){
-        if(!fn)
+        if(!fn || fn->isImported)
             continue;
         const bool emitInlineBody = fn->isInline || !fn->templateParams.empty();
         emitTemplateHeaderCpp(out, fn->templateParams);
@@ -144,7 +166,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         emitMethodSignature(out, nullptr, *fn, false);
         if(emitInlineBody && fn->hasBody){
             out.append("{\r\n");
-            sourceEmitter.emitMethodBodyBlock(out, nullptr, *fn, 1u);
+            sourceEmitter.emitMethodBodyBlock(out, *fn, 1u);
             out.append("}\r\n\r\n");
         }
         else{
@@ -166,6 +188,19 @@ void HeaderEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         if(type.refMode == ParamPassingMode::In)
             out.append("const ");
         out.append(type.name.data(), type.name.size());
+        if(!type.templateArgs.empty()){
+            out.push_back('<');
+            for(usize i = 0u; i < type.templateArgs.size(); ++i){
+                if(i > 0u)
+                    out.append(", ");
+                const TypeArg& arg = type.templateArgs[i];
+                if(arg.isConstant || !arg.constantText.empty())
+                    out.append(arg.constantText.data(), arg.constantText.size());
+                else if(arg.type)
+                    emitTypeCpp(out, *arg.type);
+            }
+            out.push_back('>');
+        }
         out.append("*>");
         return;
     }
@@ -448,8 +483,10 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
 
         emitMethodSignature(out, &decl, *method, true);
         if(emitInlineBody && method->hasBody){
+            if(method->isConstructor)
+                emitConstructorNotNullInitializers(out, decl.orderedFields, *method);
             out.append("{\r\n");
-            sourceEmitter.emitMethodBodyBlock(out, &decl, *method, 2u);
+            sourceEmitter.emitMethodBodyBlock(out, *method, 2u);
             out.append("    }\r\n");
         }
         else{
@@ -475,8 +512,15 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         out.append(field->name.data(), field->name.size());
 
         if(field->defaultExpr){
-            out.append(" = ");
-            sourceEmitter.emitExpr(out, *field->defaultExpr);
+            if(field->type->refMode != ParamPassingMode::None){
+                out.append(" = ::MakeNotNull(&(");
+                sourceEmitter.emitExpr(out, *field->defaultExpr);
+                out.append("))");
+            }
+            else{
+                out.append(" = ");
+                sourceEmitter.emitExpr(out, *field->defaultExpr);
+            }
         }
         else if(field->hasCtorInit){
             out.push_back('{');
@@ -606,8 +650,10 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
 
         emitMethodSignature(out, &decl, *method, true);
         if(method->hasBody){
+            if(method->isConstructor)
+                emitConstructorNotNullInitializers(out, inst.orderedFields, *method);
             out.append("{\r\n");
-            sourceEmitter.emitMethodBodyBlock(out, &decl, *method, 2u);
+            sourceEmitter.emitMethodBodyBlock(out, *method, 2u);
             out.append("    }\r\n");
         }
         else{
@@ -632,8 +678,15 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
         out.push_back(' ');
         out.append(field->name.data(), field->name.size());
         if(field->defaultExpr){
-            out.append(" = ");
-            sourceEmitter.emitExpr(out, *field->defaultExpr);
+            if(field->type->refMode != ParamPassingMode::None){
+                out.append(" = ::MakeNotNull(&(");
+                sourceEmitter.emitExpr(out, *field->defaultExpr);
+                out.append("))");
+            }
+            else{
+                out.append(" = ");
+                sourceEmitter.emitExpr(out, *field->defaultExpr);
+            }
         }
         else if(field->hasCtorInit){
             out.push_back('{');
@@ -708,6 +761,31 @@ void HeaderEmitter::emitMethodSignature(
         out.append("noexcept");
     if(isDeclarationInClass && method.isOverride)
         out.append(" override");
+}
+
+void HeaderEmitter::emitConstructorNotNullInitializers(
+    MString& out,
+    const MVector<FieldDecl*>& orderedFields,
+    const MethodDecl& ctor
+)const{
+    if(!ctor.isConstructor || !ctor.hasBody)
+        return;
+
+    SourceEmitter sourceEmitter(m_arena, m_symbols, *this);
+    bool firstInit = true;
+    for(const FieldDecl* field : orderedFields){
+        if(!field || !field->type || field->type->refMode == ParamPassingMode::None || field->defaultExpr || field->hasCtorInit)
+            continue;
+        const Expr* rhs = __hidden_adhd_header_emitter::FindConstructorFieldAssignment(ctor.body, field->name);
+        if(!rhs)
+            continue;
+        out.append(firstInit ? " : " : ", ");
+        firstInit = false;
+        out.append(field->name.data(), field->name.size());
+        out.append("(::MakeNotNull(&(");
+        sourceEmitter.emitExpr(out, *rhs);
+        out.append(")))");
+    }
 }
 
 bool HeaderEmitter::isSmallValueType(const MStringView typeName, const SymbolTable& symbols)noexcept{

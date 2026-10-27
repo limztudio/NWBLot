@@ -331,6 +331,7 @@ Preprocessor::Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, 
     , m_macros(0, MStringHash(), MStringEqual(), arena)
     , m_includedSet(0, MStringHash(), MStringEqual(), arena)
     , m_includedFiles(arena)
+    , m_includedByteRanges(arena)
 {
 #if defined(NWB_DEBUG) && NWB_DEBUG
     defineObjectMacro("NWB_DEBUG", "1");
@@ -363,9 +364,18 @@ bool Preprocessor::isMacroDefined(const MStringView name)const noexcept{
     return m_macros.find(name) != m_macros.end();
 }
 
+bool Preprocessor::isOffsetInIncludedRange(const usize offset)const noexcept{
+    for(const IncludedByteRange& range : m_includedByteRanges){
+        if(offset >= range.startOffset && offset < range.endOffset)
+            return true;
+    }
+    return false;
+}
+
 bool Preprocessor::process(const MStringView source, MString& outProcessed){
     outProcessed.clear();
     outProcessed.reserve(source.size());
+    m_includedByteRanges.clear();
     return processInternal(source, 0u, outProcessed);
 }
 
@@ -610,7 +620,12 @@ bool Preprocessor::handleInclude(const MStringView rest, const u32 line, const u
     m_includedSet.emplace(MString(resolvedKey.data(), resolvedKey.size(), m_arena), true);
     m_includedFiles.push_back(MString(includePath.data(), includePath.size(), m_arena));
 
-    return processInternal(content, depth + 1u, outProcessed);
+    const usize startOffset = outProcessed.size();
+    if(!processInternal(content, depth + 1u, outProcessed))
+        return false;
+    if(depth == 0u)
+        m_includedByteRanges.push_back(IncludedByteRange{startOffset, outProcessed.size()});
+    return true;
 }
 
 bool Preprocessor::handleDefine(const MStringView rest, const u32 line){

@@ -113,6 +113,12 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
     m_unit = &unit;
     bool ok = true;
     for(ClassDecl* classDecl : unit.classes){
+        if(!computeClassLayout(*classDecl, errors))
+            ok = false;
+    }
+    if(!ok)
+        return false;
+    for(ClassDecl* classDecl : unit.classes){
         for(const FieldDecl* f : classDecl->fields){
             if(f && f->type)
                 collectTemplateInstantiationsInType(*f->type, unit);
@@ -234,6 +240,7 @@ void LayoutOptimizer::instantiateClassTemplate(
             m_arena
         );
         clonedField->type = resolvedType;
+        collectTemplateInstantiationsInType(*resolvedType, unit);
 
         usize fieldSize = 8u;
         usize fieldAlign = 8u;
@@ -277,17 +284,17 @@ void LayoutOptimizer::instantiateClassTemplate(
     unit.templateInstantiations.push_back(inst);
 }
 
-bool LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSize, usize& outAlign)const noexcept{
+void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSize, usize& outAlign)const noexcept{
     if(type.refMode != ParamPassingMode::None){
         outSize = 8u;
         outAlign = 8u;
-        return true;
+        return;
     }
 
     if(type.isFuncType){
         outSize = (type.inferredCaptureBytes == 0u) ? 8u : (type.inferredCaptureBytes + 8u);
         outAlign = 8u;
-        return true;
+        return;
     }
 
     const MStringView name = type.name;
@@ -301,91 +308,95 @@ bool LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
                     type.templateArgs,
                     m_arena
                 );
-                return resolveTypeSizeAndAlign(*resolvedAlias, outSize, outAlign);
+                resolveTypeSizeAndAlign(*resolvedAlias, outSize, outAlign);
+                return;
             }
-            return resolveTypeSizeAndAlign(*aliasDecl->aliasedType, outSize, outAlign);
+            resolveTypeSizeAndAlign(*aliasDecl->aliasedType, outSize, outAlign);
+            return;
         }
     }
 
     if(name == "bool" || name == "i8" || name == "u8"){
         outSize = 1u;
         outAlign = 1u;
-        return true;
+        return;
     }
     if(name == "i16" || name == "u16"){
         outSize = 2u;
         outAlign = 2u;
-        return true;
+        return;
     }
     if(name == "i32" || name == "u32" || name == "f32"){
         outSize = 4u;
         outAlign = 4u;
-        return true;
+        return;
     }
     if(name == "i64" || name == "u64" || name == "isize" || name == "usize" || name == "f64"){
         outSize = 8u;
         outAlign = 8u;
-        return true;
+        return;
     }
 
     if(name == "f32x4" || name == "i32x4" || name == "u32x4" || name == "f32x3_i32" || name == "f32x3_u32" || name == "f64x2"){
         outSize = 16u;
         outAlign = 16u;
-        return true;
+        return;
     }
     if(name == "f32x3x4"){
         outSize = 48u;
         outAlign = 16u;
-        return true;
+        return;
     }
     if(name == "f32x4x4"){
         outSize = 64u;
         outAlign = 16u;
-        return true;
+        return;
     }
     if(name == "f64x3" || name == "f64x4" || name == "i64x4" || name == "u64x4" || name == "f64x3_i64" || name == "f64x3_u64"){
         outSize = 32u;
         outAlign = 32u;
-        return true;
+        return;
     }
     if(name == "f64x3x3" || name == "f64x3x4"){
         outSize = 96u;
         outAlign = 32u;
-        return true;
+        return;
     }
     if(name == "f64x4x4"){
         outSize = 128u;
         outAlign = 32u;
-        return true;
+        return;
     }
 
     if(name == "Name" || name == "AssetRef"){
         outSize = 8u;
         outAlign = 8u;
-        return true;
+        return;
     }
     if(name == "StringView" || name == "Span"){
         outSize = 16u;
         outAlign = 8u;
-        return true;
+        return;
     }
     if(name == "String" || name == "Path"){
         outSize = 32u;
         outAlign = 8u;
-        return true;
+        return;
     }
     if(name == "CompactString"){
         outSize = 64u;
         outAlign = 8u;
-        return true;
+        return;
     }
 
     if(name == "Atomic"){
-        if(!type.templateArgs.empty() && type.templateArgs[0].type)
-            return resolveTypeSizeAndAlign(*type.templateArgs[0].type, outSize, outAlign);
+        if(!type.templateArgs.empty() && type.templateArgs[0].type){
+            resolveTypeSizeAndAlign(*type.templateArgs[0].type, outSize, outAlign);
+            return;
+        }
         outSize = 8u;
         outAlign = 8u;
-        return true;
+        return;
     }
 
     if(name == "Optional"){
@@ -395,17 +406,17 @@ bool LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
             resolveTypeSizeAndAlign(*type.templateArgs[0].type, innerSize, innerAlign);
             outAlign = innerAlign;
             outSize = __hidden_adhd_layout_optimizer::AlignUp(innerSize + 1u, innerAlign);
-            return true;
+            return;
         }
         outSize = 16u;
         outAlign = 8u;
-        return true;
+        return;
     }
 
     if(name == "Expected"){
         outSize = 24u;
         outAlign = 8u;
-        return true;
+        return;
     }
 
     if(name == "Array"){
@@ -418,19 +429,19 @@ bool LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
             count = __hidden_adhd_layout_optimizer::ParseUnsignedConstant(type.templateArgs[1].constantText, m_symbols);
         outSize = elemSize * count;
         outAlign = elemAlign;
-        return true;
+        return;
     }
 
     if(SymbolTable::isArenaBackedContainer(name)){
         outSize = 32u;
         outAlign = 8u;
-        return true;
+        return;
     }
 
     if(const EnumDecl* enumDecl = m_symbols.findEnum(name)){
         outSize = enumDecl->underlyingSize;
         outAlign = enumDecl->underlyingAlign;
-        return true;
+        return;
     }
 
     if(const ClassDecl* classDecl = m_symbols.findClass(name)){
@@ -450,18 +461,17 @@ bool LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
                 if(sameArgs){
                     outSize = inst->totalSize;
                     outAlign = inst->totalAlign;
-                    return true;
+                    return;
                 }
             }
         }
         outSize = classDecl->totalSize;
         outAlign = classDecl->totalAlign;
-        return true;
+        return;
     }
 
     outSize = 8u;
     outAlign = 8u;
-    return true;
 }
 
 bool LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors){

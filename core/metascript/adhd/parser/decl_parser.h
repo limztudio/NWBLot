@@ -7,6 +7,8 @@
 
 #include "stmt_parser.h"
 
+#include <core/metascript/preprocessor.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,11 +21,17 @@ NWB_ADHD_BEGIN
 
 class DeclParser{
 public:
-    explicit DeclParser(ParserCursor& cursor)noexcept
+    explicit DeclParser(
+        ParserCursor& cursor,
+        const MStringView activeSource = {},
+        const Preprocessor* preprocessor = nullptr
+    )noexcept
         : m_cursor(cursor)
         , m_typeParser(cursor)
         , m_exprParser(cursor, m_typeParser)
         , m_stmtParser(cursor, m_typeParser, m_exprParser)
+        , m_activeSource(activeSource)
+        , m_preprocessor(preprocessor)
     {
         m_exprParser.setStmtParser(&m_stmtParser);
     }
@@ -43,6 +51,7 @@ private:
     [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, const MVector<ParsedAttribute>& attributes);
     [[nodiscard]] bool parseParamList(MVector<ParamDecl>& outParams);
     [[nodiscard]] bool parseOperatorName(MStringView& outOpName);
+    [[nodiscard]] bool isCurrentTokenImported()const noexcept;
 
 
 private:
@@ -50,6 +59,8 @@ private:
     TypeParser m_typeParser;
     ExprParser m_exprParser;
     StmtParser m_stmtParser;
+    MStringView m_activeSource;
+    const Preprocessor* m_preprocessor = nullptr;
 };
 
 

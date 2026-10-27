@@ -27,7 +27,7 @@ public:
 
 public:
     [[nodiscard]] bool optimizeTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors);
-    bool resolveTypeSizeAndAlign(const TypeRef& type, usize& outSize, usize& outAlign)const noexcept;
+    void resolveTypeSizeAndAlign(const TypeRef& type, usize& outSize, usize& outAlign)const noexcept;
 
 
 private:

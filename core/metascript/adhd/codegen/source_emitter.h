@@ -33,12 +33,12 @@ public:
         MStringView namespacePath
     )const;
 
-    void emitMethodBodyBlock(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, u32 indent)const;
+    void emitMethodBodyBlock(MString& out, const MethodDecl& method, u32 indent)const;
     void emitExpr(MString& out, const Expr& expr)const;
 
 
 private:
-    void emitStmt(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, const Stmt& stmt, u32 indent)const;
+    void emitStmt(MString& out, const Stmt& stmt, u32 indent)const;
     void emitIndent(MString& out, u32 indent)const;
 
 

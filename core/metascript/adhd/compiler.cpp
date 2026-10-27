@@ -70,7 +70,7 @@ bool Compiler::compile(
 
     const MStringView activeSource(outResult.preprocessedSource.data(), outResult.preprocessedSource.size());
     ParserCursor cursor(activeSource, arena, scratchArena, outResult.errors);
-    DeclParser declParser(cursor);
+    DeclParser declParser(cursor, activeSource, &preprocessor);
 
     if(!declParser.parseTranslationUnit(outResult.unit))
         return false;

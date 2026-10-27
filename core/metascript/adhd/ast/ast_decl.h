@@ -35,6 +35,7 @@ struct EnumDecl{
     SourceSpan span;
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
+    bool isImported = false;
 
 
 public:
@@ -52,6 +53,7 @@ struct TypeAliasDecl{
     MVector<TemplateParamDecl> templateParams;
     TypeRef* aliasedType = nullptr;
     SourceSpan span;
+    bool isImported = false;
 
 
 public:
@@ -109,6 +111,7 @@ struct MethodDecl{
     bool isNoInline = false;
     bool usesScratchArena = false;
     bool usesTaskScope = false;
+    bool isImported = false;
 
 
 public:
@@ -129,6 +132,7 @@ struct InterfaceDecl{
     MVector<MStringView> baseInterfaces;
     MVector<MethodDecl*> methods;
     SourceSpan span;
+    bool isImported = false;
 
 
 public:
@@ -157,6 +161,7 @@ struct ClassDecl{
     bool isSerialize = false;
     bool isReflect = false;
     bool needsClassArena = false;
+    bool isImported = false;
 
 
 public:

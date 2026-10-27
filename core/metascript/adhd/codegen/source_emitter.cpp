@@ -126,71 +126,29 @@ MString SourceEmitter::emitSource(
 
         if(classDecl->templateParams.empty()){
             for(const MethodDecl* method : classDecl->methods){
-                if(!method || !method->hasBody || method->isInline || !method->templateParams.empty())
+                if(!method || method->isImported || !method->hasBody || method->isInline || !method->templateParams.empty())
                     continue;
 
-                if(!method->isConstructor && !method->isDestructor){
-                    if(method->returnType)
-                        m_headerEmitter.emitTypeCpp(out, *method->returnType);
-                    else
-                        out.append("void");
-                    out.push_back(' ');
-                }
-
-                out.append(classDecl->name.data(), classDecl->name.size());
-                out.append("::");
-                if(method->isDestructor)
-                    out.push_back('~');
-                if(method->isOperator)
-                    out.append("operator");
-                out.append(method->name.data(), method->name.size());
-
-                out.push_back('(');
-                for(usize i = 0u; i < method->params.size(); ++i){
-                    if(i > 0u)
-                        out.append(", ");
-                    const ParamDecl& p = method->params[i];
-                    if(p.type)
-                        m_headerEmitter.emitParamTypeCpp(out, p.mode, *p.type);
-                    out.push_back(' ');
-                    out.append(p.name.data(), p.name.size());
-                }
-                out.push_back(')');
-                if(method->isConst)
-                    out.append("const noexcept{\r\n");
-                else
-                    out.append("noexcept{\r\n");
-                emitMethodBodyBlock(out, classDecl, *method, 1u);
+                m_headerEmitter.emitMethodSignature(out, classDecl, *method, false);
+                if(method->isConstructor)
+                    m_headerEmitter.emitConstructorNotNullInitializers(out, classDecl->orderedFields, *method);
+                out.append("{\r\n");
+                emitMethodBodyBlock(out, *method, 1u);
                 out.append("}\r\n\r\n");
             }
         }
 
-        if(classDecl->templateParams.empty() && (classDecl->isSerialize || classDecl->isReflect || !classDecl->assetTypeName.empty()))
+        if(!classDecl->isImported && classDecl->templateParams.empty() && (classDecl->isSerialize || classDecl->isReflect || !classDecl->assetTypeName.empty()))
             reflectionEmitter.emitClassReflectionDefinitions(out, *classDecl);
     }
 
     for(const MethodDecl* fn : unit.freeFunctions){
-        if(!fn || !fn->hasBody || fn->isInline || !fn->templateParams.empty())
+        if(!fn || fn->isImported || !fn->hasBody || fn->isInline || !fn->templateParams.empty())
             continue;
 
-        if(fn->returnType)
-            m_headerEmitter.emitTypeCpp(out, *fn->returnType);
-        else
-            out.append("void");
-        out.push_back(' ');
-        out.append(fn->name.data(), fn->name.size());
-        out.push_back('(');
-        for(usize i = 0u; i < fn->params.size(); ++i){
-            if(i > 0u)
-                out.append(", ");
-            const ParamDecl& p = fn->params[i];
-            if(p.type)
-                m_headerEmitter.emitParamTypeCpp(out, p.mode, *p.type);
-            out.push_back(' ');
-            out.append(p.name.data(), p.name.size());
-        }
-        out.append(")noexcept{\r\n");
-        emitMethodBodyBlock(out, nullptr, *fn, 1u);
+        m_headerEmitter.emitMethodSignature(out, nullptr, *fn, false);
+        out.append("{\r\n");
+        emitMethodBodyBlock(out, *fn, 1u);
         out.append("}\r\n\r\n");
     }
 
@@ -204,7 +162,6 @@ MString SourceEmitter::emitSource(
 
 void SourceEmitter::emitMethodBodyBlock(
     MString& out,
-    const ClassDecl* ownerClass,
     const MethodDecl& method,
     const u32 indent
 )const{
@@ -223,14 +180,12 @@ void SourceEmitter::emitMethodBodyBlock(
 
     for(const Stmt* stmt : method.body){
         if(stmt)
-            emitStmt(out, ownerClass, method, *stmt, indent);
+            emitStmt(out, *stmt, indent);
     }
 }
 
 void SourceEmitter::emitStmt(
     MString& out,
-    const ClassDecl* ownerClass,
-    const MethodDecl& method,
     const Stmt& stmt,
     const u32 indent
 )const{
@@ -240,7 +195,7 @@ void SourceEmitter::emitStmt(
         out.append("{\r\n");
         for(const Stmt* child : stmt.statements){
             if(child)
-                emitStmt(out, ownerClass, method, *child, indent + 1u);
+                emitStmt(out, *child, indent + 1u);
         }
         emitIndent(out, indent);
         out.append("}\r\n");
@@ -325,7 +280,7 @@ void SourceEmitter::emitStmt(
         out.append("){\r\n");
         for(const Stmt* child : stmt.statements){
             if(child)
-                emitStmt(out, ownerClass, method, *child, indent + 1u);
+                emitStmt(out, *child, indent + 1u);
         }
         emitIndent(out, indent);
         out.append("}\r\n");
@@ -334,7 +289,7 @@ void SourceEmitter::emitStmt(
             out.append("else{\r\n");
             for(const Stmt* child : stmt.elseStatements){
                 if(child)
-                    emitStmt(out, ownerClass, method, *child, indent + 1u);
+                    emitStmt(out, *child, indent + 1u);
             }
             emitIndent(out, indent);
             out.append("}\r\n");
@@ -361,7 +316,7 @@ void SourceEmitter::emitStmt(
                 }
                 for(const Stmt* child : sc.statements){
                     if(child && child->kind != StmtKind::Break)
-                        emitStmt(out, ownerClass, method, *child, indent + 1u);
+                        emitStmt(out, *child, indent + 1u);
                 }
                 emitIndent(out, indent);
                 out.append("}\r\n");
@@ -386,7 +341,7 @@ void SourceEmitter::emitStmt(
                 }
                 for(const Stmt* child : sc.statements){
                     if(child)
-                        emitStmt(out, ownerClass, method, *child, indent + 1u);
+                        emitStmt(out, *child, indent + 1u);
                 }
                 emitIndent(out, indent);
                 out.append("}\r\n");
@@ -413,7 +368,7 @@ void SourceEmitter::emitStmt(
         out.append("){\r\n");
         for(const Stmt* child : stmt.statements){
             if(child)
-                emitStmt(out, ownerClass, method, *child, indent + 1u);
+                emitStmt(out, *child, indent + 1u);
         }
         emitIndent(out, indent);
         out.append("}\r\n");
@@ -440,7 +395,7 @@ void SourceEmitter::emitStmt(
         out.append(")[__adhd_idx];\r\n");
         for(const Stmt* child : stmt.statements){
             if(child)
-                emitStmt(out, ownerClass, method, *child, indent + 1u);
+                emitStmt(out, *child, indent + 1u);
         }
         emitIndent(out, indent);
         out.append("}, ");
@@ -468,7 +423,7 @@ void SourceEmitter::emitStmt(
         out.append("){\r\n");
         for(const Stmt* child : stmt.statements){
             if(child)
-                emitStmt(out, ownerClass, method, *child, indent + 1u);
+                emitStmt(out, *child, indent + 1u);
         }
         emitIndent(out, indent);
         out.append("}\r\n");
@@ -501,7 +456,7 @@ void SourceEmitter::emitStmt(
         }
         for(const Stmt* child : stmt.statements){
             if(child)
-                emitStmt(out, ownerClass, method, *child, indent + 1u);
+                emitStmt(out, *child, indent + 1u);
         }
         emitIndent(out, indent);
         out.append("}, ");
@@ -517,7 +472,7 @@ void SourceEmitter::emitStmt(
         out.append("){\r\n");
         for(const Stmt* child : stmt.statements){
             if(child)
-                emitStmt(out, ownerClass, method, *child, indent + 1u);
+                emitStmt(out, *child, indent + 1u);
         }
         emitIndent(out, indent);
         out.append("}\r\n");
@@ -528,7 +483,7 @@ void SourceEmitter::emitStmt(
         out.append("do{\r\n");
         for(const Stmt* child : stmt.statements){
             if(child)
-                emitStmt(out, ownerClass, method, *child, indent + 1u);
+                emitStmt(out, *child, indent + 1u);
         }
         emitIndent(out, indent);
         out.append("}while(");
@@ -557,7 +512,7 @@ void SourceEmitter::emitStmt(
         out.append(" = __adhd_task_scope.submit([&]()noexcept{\r\n");
         for(const Stmt* child : stmt.statements){
             if(child)
-                emitStmt(out, ownerClass, method, *child, indent + 1u);
+                emitStmt(out, *child, indent + 1u);
         }
         emitIndent(out, indent);
         out.append("}, ");
@@ -726,8 +681,15 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         break;
     }
     case ExprKind::ThisMember:{
-        out.append("this->");
-        out.append(expr.text.data(), expr.text.size());
+        if(expr.derefNotNull){
+            out.append("(*this->");
+            out.append(expr.text.data(), expr.text.size());
+            out.push_back(')');
+        }
+        else{
+            out.append("this->");
+            out.append(expr.text.data(), expr.text.size());
+        }
         break;
     }
     case ExprKind::MemberAccess:{
@@ -884,10 +846,9 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         else
             out.append("void");
         out.append("{\r\n");
-        MethodDecl dummyMethod(m_arena);
         for(const Stmt* s : expr.lambdaBody){
             if(s)
-                emitStmt(out, nullptr, dummyMethod, *s, 2u);
+                emitStmt(out, *s, 2u);
         }
         out.append("    }");
         break;

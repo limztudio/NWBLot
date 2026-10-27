@@ -49,6 +49,19 @@ public:
     )override{
         ++resolveCallCount;
         outResolvedKey = MString(includePath.data(), includePath.size(), arena);
+        if(includePath == "shared_service.adhd"){
+            static constexpr MStringView s_ServiceHeader =
+                "interface IStore<T> {\r\n"
+                "    void put(in T value);\r\n"
+                "}\r\n"
+                "[reflect]\r\n"
+                "class SharedService {\r\n"
+                "    private i32 m_total = 0;\r\n"
+                "    public i32 accumulate(in i32 delta);\r\n"
+                "}\r\n";
+            outContent = MString(s_ServiceHeader.data(), s_ServiceHeader.size(), arena);
+            return true;
+        }
         static constexpr MStringView s_HeaderCode = "const u32 kSharedLimit = 16;\r\n";
         outContent = MString(s_HeaderCode.data(), s_HeaderCode.size(), arena);
         return true;
@@ -600,6 +613,70 @@ TEST(AdhdCompiler, EnforcesTemplateBoundMethodCallsAndEmitsInstantiationReflecti
         "}\r\n";
     CompileResult mismatchOverrideRes(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_MismatchedOverrideConst, "impl/bad_override_sig.adhd", arena.arena, mismatchOverrideRes));
+}
+
+TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumAndOperatorChecks){
+    AdhdTestArena arena;
+    MockIncludeResolver resolver;
+
+    static constexpr MStringView s_SplitImplSource =
+        "#include \"shared_service.adhd\"\r\n"
+        "class StoreClient {\r\n"
+        "    private mut IStore<i32> m_store;\r\n"
+        "    public StoreClient(mut IStore<i32> store) {\r\n"
+        "        this.m_store = store;\r\n"
+        "    }\r\n"
+        "    public void push(in i32 v) {\r\n"
+        "        this.m_store.put(v);\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "i32 SharedService::accumulate(in i32 delta) {\r\n"
+        "    this.m_total += delta;\r\n"
+        "    return this.m_total;\r\n"
+        "}\r\n";
+
+    CompileResult splitRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_SplitImplSource, "impl/service/shared_service_impl.adhd", arena.arena, splitRes, &resolver));
+    const MStringView hdrView(splitRes.generatedHeader.data(), splitRes.generatedHeader.size());
+    const MStringView cppView(splitRes.generatedSource.data(), splitRes.generatedSource.size());
+    EXPECT_NE(hdrView.find("#include \"shared_service.adhd.h\""), MStringView::npos);
+    EXPECT_EQ(hdrView.find("class SharedService final"), MStringView::npos);
+    EXPECT_NE(hdrView.find("::NotNull<IStore<i32>*> m_store;"), MStringView::npos);
+    EXPECT_NE(cppView.find("StoreClient::StoreClient(IStore<i32>& store)noexcept : m_store(::MakeNotNull(&(store)))"), MStringView::npos);
+    EXPECT_NE(cppView.find("this->m_store->put(v);"), MStringView::npos);
+    EXPECT_NE(cppView.find("i32 SharedService::accumulate(const i32 delta)noexcept"), MStringView::npos);
+    EXPECT_EQ(cppView.find("SharedService::reflectedFieldCount"), MStringView::npos);
+
+    static constexpr MStringView s_MismatchedEnumFlagScope =
+        "enum<u8> Mode {\r\n"
+        "    enum Idle = 0,\r\n"
+        "    flag Active,\r\n"
+        "}\r\n"
+        "u8 badScope() {\r\n"
+        "    return Mode::Flag::Idle;\r\n"
+        "}\r\n";
+    CompileResult badEnumScopeRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MismatchedEnumFlagScope, "impl/bad_enum_scope.adhd", arena.arena, badEnumScopeRes));
+
+    static constexpr MStringView s_InvalidOperatorArity =
+        "class Mask {\r\n"
+        "    public u32 bits = 0;\r\n"
+        "    public Mask operator~(in Mask other) const {\r\n"
+        "        return Mask();\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badOpArityRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_InvalidOperatorArity, "impl/bad_op_arity.adhd", arena.arena, badOpArityRes));
+
+    static constexpr MStringView s_MismatchedTemplateArgOverride =
+        "interface IBatch {\r\n"
+        "    void process(in Span<i32> items);\r\n"
+        "}\r\n"
+        "class BadBatch : IBatch {\r\n"
+        "    public void process(in Span<f32> items) override {}\r\n"
+        "}\r\n";
+    CompileResult badTemplateOverrideRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MismatchedTemplateArgOverride, "impl/bad_tpl_override.adhd", arena.arena, badTemplateOverrideRes));
 }
 
 

@@ -78,19 +78,6 @@ if (_NWB_USE_TINYXML2_TARGET)
 endif()
 nwb_disable_vendor_warnings(isa_decoder)
 
-# Dynamic Library
-add_library(isa_decoder_dynamic SHARED ${ALL_CPP})
-target_include_directories(isa_decoder_dynamic PRIVATE
-    ${SRC_DIR}/common
-    ${TINYXML_DIR}
-    PUBLIC
-    ${INC_DIR}
-)
-if (_NWB_USE_TINYXML2_TARGET)
-    target_link_libraries(isa_decoder_dynamic PRIVATE nwb::tinyxml2)
-endif()
-nwb_disable_vendor_warnings(isa_decoder_dynamic)
-
 # install public headers
 install(DIRECTORY ${INC_DIR}/amdisa DESTINATION include COMPONENT dev)
 
@@ -98,12 +85,6 @@ install(TARGETS isa_decoder EXPORT isa_decoderTargets
         ARCHIVE DESTINATION lib COMPONENT binary
         LIBRARY DESTINATION lib COMPONENT binary
 )
-install(TARGETS isa_decoder_dynamic EXPORT isa_decoder_dynamicTargets
-
-        ARCHIVE DESTINATION lib COMPONENT binary
-        LIBRARY DESTINATION lib COMPONENT binary
-)
-
 
 # Group these projects under an Examples folder.
-set_target_properties(isa_decoder isa_decoder_dynamic PROPERTIES FOLDER "libs")
+set_target_properties(isa_decoder PROPERTIES FOLDER "libs")

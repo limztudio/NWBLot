@@ -64,6 +64,7 @@ foreach(_nwb_engine_static_vendor_target
     nwb_vendor_zlib
     nwb_vendor_freetype
     nwb_vendor_harfbuzz
+    nwb_vendor_wmi
 )
     nwb_match_engine_runtime(${_nwb_engine_static_vendor_target})
 endforeach()

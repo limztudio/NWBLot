@@ -198,8 +198,11 @@ local gzFile gz_open(const void *path, int fd, const char *mode) {
 
     /* save the path name for error messages */
 #ifdef WIDECHAR
-    if (fd == -2)
+    if (fd == -2) {
         len = wcstombs(NULL, path, 0);
+        if (len == (z_size_t)-1)
+            len = 0;            /* not representable in the current locale */
+    }
     else
 #endif
         len = strlen((const char *)path);
@@ -210,9 +213,7 @@ local gzFile gz_open(const void *path, int fd, const char *mode) {
     }
 #ifdef WIDECHAR
     if (fd == -2) {
-        if (len)
-            wcstombs(state->path, path, len + 1);
-        else
+        if (len == 0 || wcstombs(state->path, path, len + 1) != len)
             *(state->path) = 0;
     }
     else
@@ -303,7 +304,7 @@ gzFile ZEXPORT gzdopen(int fd, const char *mode) {
     char *path;         /* identifier for error messages */
     gzFile gz;
 
-    if (fd == -1 || (path = (char *)malloc(7 + 3 * sizeof(int))) == NULL)
+    if (fd < 0 || (path = (char *)malloc(7 + 3 * sizeof(int))) == NULL)
         return NULL;
 #if !defined(NO_snprintf) && !defined(NO_vsnprintf)
     if (snprintf(path, 7 + 3 * sizeof(int), "<fd:%d>", fd) < 0) {
@@ -565,10 +566,6 @@ void ZLIB_INTERNAL gz_error(gz_statep state, int err, const char *msg) {
             free(state->msg);
         state->msg = NULL;
     }
-
-    /* if fatal, set state->x.have to 0 so that the gzgetc() macro fails */
-    if (err != Z_OK && err != Z_BUF_ERROR && !state->again)
-        state->x.have = 0;
 
     /* set error code, and if no message, then done */
     state->err = err;

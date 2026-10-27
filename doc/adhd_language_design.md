@@ -112,6 +112,7 @@
   - Because SIMD types require `alignas(16)` or `alignas(32)` and scalar/container fields have alignments of `32`, `16`, `8`, `4`, `2`, or `1` bytes, authored declaration order could introduce large alignment holes.
   - The `adhd` compiler **automatically reorders member variables** when emitting the C++ class definition (sorting by descending alignment and size, and packing tail/gap slots) to minimize struct padding and cache footprint.
   - Generated constructors, initializers, binary serializers, and reflection tables use the compiler's resolved layout transparently so user code can declare members in logical/semantic grouping order without paying a memory penalty.
+  - **No C-Style Bitfields**: C-style bitfield members (`u8 a : 3;`) are prohibited because their layout is compiler/ABI-dependent; use `enum<SizeType>` with `flag` entries instead.
 - **Constructors, Destructors & Single-Source Field Initialization**:
   - `class` supports custom constructors (`public ClassName(in f32 s)`) and destructors (`public ~ClassName()`).
   - The `adhd` compiler automatically injects the class's static arena into all owning member container initializers (`Vector`, `HashMap`, `String`, etc.) in the generated C++ constructor initializer list.
@@ -150,6 +151,7 @@
     - **`mut T`**: Mutable in/out reference parameter.
       - Emits `T&`.
       - Callers do **not** repeat `in` or `mut` at the call site (`step(dt, t);`); the `adhd` compiler verifies at the call site that any argument passed to a `mut` parameter is a mutable lvalue (not a literal, temporary, `const`, or `in` parameter).
+  - **No Default Parameter Arguments**: Function and method parameters cannot declare default values (`void foo(in f32 speed = 1.0f)` is a compile-time error); use explicit function/method overloads instead.
 - **Role of `const` in `adhd` (No C++-Style Type `const`)**:
   1. **Compile-Time Constant Variables (`const` -> C++ `constexpr`)**:
      - `const u32 MaxBones = 256;` defines a compile-time constant (`constexpr` in generated C++).

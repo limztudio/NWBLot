@@ -16,6 +16,82 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_source_emitter{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendUnsigned(MString& out, usize value){
+    char buf[32];
+    usize idx = 0u;
+    if(value == 0u){
+        out.push_back('0');
+        return;
+    }
+    while(value > 0u && idx < sizeof(buf)){
+        buf[idx++] = static_cast<char>('0' + (value % 10u));
+        value /= 10u;
+    }
+    while(idx > 0u)
+        out.push_back(buf[--idx]);
+}
+
+void AppendTaskOptions(MString& out, const Stmt& stmt){
+    out.append("::NWB::Core::CpuTaskOptions{{}, ::NWB::Core::CpuTaskCost::");
+    switch(stmt.parallelCore){
+    case ParallelCoreKind::Heavy: out.append("Heavy"); break;
+    case ParallelCoreKind::Light: out.append("Light"); break;
+    case ParallelCoreKind::Any:
+    case ParallelCoreKind::MainThread: out.append("Any"); break;
+    }
+    out.append(", ::NWB::Core::CpuTaskPriority::");
+    switch(stmt.parallelPriority){
+    case ParallelPriorityKind::Critical: out.append("Critical"); break;
+    case ParallelPriorityKind::Normal: out.append("Normal"); break;
+    case ParallelPriorityKind::Background: out.append("Background"); break;
+    }
+    out.append(", ::NWB::Core::CpuTaskTarget::");
+    if(stmt.parallelCore == ParallelCoreKind::MainThread)
+        out.append("MainThread");
+    else
+        out.append("Worker");
+    out.push_back('}');
+}
+
+[[nodiscard]] MStringView MapBuiltinMathFunction(const MStringView name)noexcept{
+    if(name == "min") return "::Min";
+    if(name == "max") return "::Max";
+    if(name == "abs") return "::Abs";
+    if(name == "clamp") return "::Clamp";
+    if(name == "saturate") return "::Saturate";
+    if(name == "floor") return "::Floor";
+    if(name == "ceil") return "::Ceil";
+    if(name == "round") return "::Truncate";
+    if(name == "sqrt") return "::Sqrt";
+    if(name == "sin") return "::Sin";
+    if(name == "cos") return "::Cos";
+    if(name == "tan") return "::Tan";
+    if(name == "asin") return "::ASin";
+    if(name == "acos") return "::ACos";
+    if(name == "atan") return "::ATan";
+    if(name == "atan2") return "::ATan2";
+    if(name == "exp") return "::Exp";
+    if(name == "log") return "::Log";
+    if(name == "pow") return "::Pow";
+    return {};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 MString SourceEmitter::emitSource(
     const TranslationUnit& unit,
     const MStringView headerIncludePath,
@@ -32,7 +108,8 @@ MString SourceEmitter::emitSource(
     out.append(headerIncludePath.data(), headerIncludePath.size());
     out.append("\"\r\n\r\n");
     out.append("#include <global/assert.h>\r\n");
-    out.append("#include <core/common/log.h>\r\n\r\n\r\n");
+    out.append("#include <core/common/log.h>\r\n");
+    out.append("#include <core/task/cpu/scheduler.h>\r\n\r\n\r\n");
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
 
     if(!namespacePath.empty()){
@@ -78,8 +155,9 @@ MString SourceEmitter::emitSource(
                 }
                 out.push_back(')');
                 if(method->isConst)
-                    out.append("const");
-                out.append("{\r\n");
+                    out.append("const noexcept{\r\n");
+                else
+                    out.append("noexcept{\r\n");
                 emitMethodBodyBlock(out, classDecl, *method, 1u);
                 out.append("}\r\n\r\n");
             }
@@ -109,7 +187,7 @@ MString SourceEmitter::emitSource(
             out.push_back(' ');
             out.append(p.name.data(), p.name.size());
         }
-        out.append("){\r\n");
+        out.append(")noexcept{\r\n");
         emitMethodBodyBlock(out, nullptr, *fn, 1u);
         out.append("}\r\n\r\n");
     }
@@ -131,6 +209,14 @@ void SourceEmitter::emitMethodBodyBlock(
     if(method.usesScratchArena){
         emitIndent(out, indent);
         out.append("::NWB::Core::Alloc::ScratchArena<> __adhd_scratch;\r\n");
+    }
+    if(method.usesTaskScope){
+        emitIndent(out, indent);
+        out.append("static ::NWB::Core::CpuTaskScheduler s_AdhdTaskScheduler;\r\n");
+        emitIndent(out, indent);
+        out.append("::NWB::Core::CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler);\r\n");
+        emitIndent(out, indent);
+        out.append("::NWB::ScopeExit __adhd_scope_join([&__adhd_task_scope]()noexcept{ __adhd_task_scope.wait(); });\r\n");
     }
 
     for(const Stmt* stmt : method.body){
@@ -308,11 +394,8 @@ void SourceEmitter::emitStmt(
         }
         break;
     }
-    case StmtKind::ForRange:
-    case StmtKind::ParallelForRange:{
+    case StmtKind::ForRange:{
         emitIndent(out, indent);
-        if(stmt.kind == StmtKind::ParallelForRange)
-            out.append("/* parallel_for */ ");
         out.append("for(");
         if(stmt.rangeMode == ParamPassingMode::In)
             out.append("const ");
@@ -334,11 +417,37 @@ void SourceEmitter::emitStmt(
         out.append("}\r\n");
         break;
     }
-    case StmtKind::ForIndex:
-    case StmtKind::ParallelForIndex:{
+    case StmtKind::ParallelForRange:{
         emitIndent(out, indent);
-        if(stmt.kind == StmtKind::ParallelForIndex)
-            out.append("/* parallel_for */ ");
+        out.append("(void)__adhd_task_scope.parallelFor(0u, (");
+        if(stmt.expr)
+            emitExpr(out, *stmt.expr);
+        out.append(").size(), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
+        emitIndent(out, indent + 1u);
+        if(stmt.rangeMode == ParamPassingMode::In)
+            out.append("const ");
+        if(stmt.varType)
+            m_headerEmitter.emitTypeCpp(out, *stmt.varType);
+        else
+            out.append("auto");
+        out.append("& ");
+        out.append(stmt.name.data(), stmt.name.size());
+        out.append(" = (");
+        if(stmt.expr)
+            emitExpr(out, *stmt.expr);
+        out.append(")[__adhd_idx];\r\n");
+        for(const Stmt* child : stmt.statements){
+            if(child)
+                emitStmt(out, ownerClass, method, *child, indent + 1u);
+        }
+        emitIndent(out, indent);
+        out.append("}, ");
+        __hidden_adhd_source_emitter::AppendTaskOptions(out, stmt);
+        out.append(");\r\n");
+        break;
+    }
+    case StmtKind::ForIndex:{
+        emitIndent(out, indent);
         out.append("for(");
         if(stmt.initStmt && stmt.initStmt->varType){
             m_headerEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
@@ -361,6 +470,41 @@ void SourceEmitter::emitStmt(
         }
         emitIndent(out, indent);
         out.append("}\r\n");
+        break;
+    }
+    case StmtKind::ParallelForIndex:{
+        emitIndent(out, indent);
+        out.append("(void)__adhd_task_scope.parallelFor(static_cast<usize>(");
+        if(stmt.initStmt && stmt.initStmt->expr)
+            emitExpr(out, *stmt.initStmt->expr);
+        else
+            out.append("0u");
+        out.append("), static_cast<usize>(");
+        if(stmt.condition && stmt.condition->kind == ExprKind::Binary && stmt.condition->rhs)
+            emitExpr(out, *stmt.condition->rhs);
+        else if(stmt.condition)
+            emitExpr(out, *stmt.condition);
+        else
+            out.append("0u");
+        out.append("), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
+        if(stmt.initStmt && stmt.initStmt->varType){
+            emitIndent(out, indent + 1u);
+            out.append("const ");
+            m_headerEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
+            out.push_back(' ');
+            out.append(stmt.initStmt->name.data(), stmt.initStmt->name.size());
+            out.append(" = static_cast<");
+            m_headerEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
+            out.append(">(__adhd_idx);\r\n");
+        }
+        for(const Stmt* child : stmt.statements){
+            if(child)
+                emitStmt(out, ownerClass, method, *child, indent + 1u);
+        }
+        emitIndent(out, indent);
+        out.append("}, ");
+        __hidden_adhd_source_emitter::AppendTaskOptions(out, stmt);
+        out.append(");\r\n");
         break;
     }
     case StmtKind::While:{
@@ -392,32 +536,56 @@ void SourceEmitter::emitStmt(
         break;
     }
     case StmtKind::ParallelBlock:{
-        emitIndent(out, indent);
-        out.append("/* parallel ");
-        out.append(stmt.name.data(), stmt.name.size());
         if(!stmt.parallelDependencies.empty()){
-            out.append(" : ");
+            emitIndent(out, indent);
+            out.append("const ::NWB::Core::CpuTaskHandle __adhd_deps_");
+            out.append(stmt.name.data(), stmt.name.size());
+            out.append("[] = { ");
             for(usize i = 0u; i < stmt.parallelDependencies.size(); ++i){
                 if(i > 0u)
                     out.append(", ");
+                out.append("__adhd_task_");
                 out.append(stmt.parallelDependencies[i].data(), stmt.parallelDependencies[i].size());
             }
+            out.append(" };\r\n");
         }
-        out.append(" */{\r\n");
+        emitIndent(out, indent);
+        out.append("const auto __adhd_submit_");
+        out.append(stmt.name.data(), stmt.name.size());
+        out.append(" = __adhd_task_scope.submit([&]()noexcept{\r\n");
         for(const Stmt* child : stmt.statements){
             if(child)
                 emitStmt(out, ownerClass, method, *child, indent + 1u);
         }
         emitIndent(out, indent);
-        out.append("}\r\n");
+        out.append("}, ");
+        __hidden_adhd_source_emitter::AppendTaskOptions(out, stmt);
+        if(!stmt.parallelDependencies.empty()){
+            out.append(", __adhd_deps_");
+            out.append(stmt.name.data(), stmt.name.size());
+            out.append(", ");
+            __hidden_adhd_source_emitter::AppendUnsigned(out, stmt.parallelDependencies.size());
+            out.push_back('u');
+        }
+        out.append(");\r\n");
+        emitIndent(out, indent);
+        out.append("const ::NWB::Core::CpuTaskHandle __adhd_task_");
+        out.append(stmt.name.data(), stmt.name.size());
+        out.append(" = __adhd_submit_");
+        out.append(stmt.name.data(), stmt.name.size());
+        out.append(".hasValue() ? *__adhd_submit_");
+        out.append(stmt.name.data(), stmt.name.size());
+        out.append(" : ::NWB::Core::CpuTaskHandle{};\r\n");
         break;
     }
     case StmtKind::ParallelCall:{
         emitIndent(out, indent);
-        out.append("/* parallel call */ ");
+        out.append("(void)__adhd_task_scope.submit([=]()noexcept{ ");
         if(stmt.expr)
             emitExpr(out, *stmt.expr);
-        out.append(";\r\n");
+        out.append("; }, ");
+        __hidden_adhd_source_emitter::AppendTaskOptions(out, stmt);
+        out.append(");\r\n");
         break;
     }
     case StmtKind::NativeBlock:{
@@ -539,9 +707,15 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     case ExprKind::Call:{
         if(expr.lhs){
             if(expr.lhs->kind == ExprKind::Identifier){
-                TypeRef maybeType(m_arena);
-                maybeType.name = expr.lhs->text;
-                m_headerEmitter.emitTypeCpp(out, maybeType);
+                const MStringView mappedMath = __hidden_adhd_source_emitter::MapBuiltinMathFunction(expr.lhs->text);
+                if(!mappedMath.empty()){
+                    out.append(mappedMath.data(), mappedMath.size());
+                }
+                else{
+                    TypeRef maybeType(m_arena);
+                    maybeType.name = expr.lhs->text;
+                    m_headerEmitter.emitTypeCpp(out, maybeType);
+                }
             }
             else{
                 emitExpr(out, *expr.lhs);
@@ -642,7 +816,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
             out.push_back(' ');
             out.append(p.name.data(), p.name.size());
         }
-        out.append(") -> ");
+        out.append(")noexcept -> ");
         if(expr.lambdaReturnType)
             m_headerEmitter.emitTypeCpp(out, *expr.lambdaReturnType);
         else

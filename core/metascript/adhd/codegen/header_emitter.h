@@ -38,6 +38,7 @@ private:
     void emitTypeAliasDecl(MString& out, const TypeAliasDecl& decl)const;
     void emitInterfaceDecl(MString& out, const InterfaceDecl& decl)const;
     void emitClassDecl(MString& out, const ClassDecl& decl)const;
+    void emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const;
     void emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, bool isDeclarationInClass)const;
     [[nodiscard]] static bool isSmallValueType(MStringView typeName, const SymbolTable& symbols)noexcept;
 

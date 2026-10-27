@@ -32,6 +32,8 @@ public:
 
 private:
     [[nodiscard]] bool computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors);
+    void collectTemplateInstantiationsInType(const TypeRef& type, TranslationUnit& unit);
+    void instantiateClassTemplate(const ClassDecl& templateDecl, const MVector<TypeArg>& templateArgs, TranslationUnit& unit);
     void reportError(MVector<ParseError>& errors, SourceSpan span, MStringView message)const;
 
 

@@ -118,8 +118,13 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     }
 
     for(const ClassDecl* classDecl : unit.classes){
-        if(classDecl)
-            emitClassDecl(out, *classDecl);
+        if(!classDecl)
+            continue;
+        emitClassDecl(out, *classDecl);
+        for(const ClassTemplateInstantiation* inst : unit.templateInstantiations){
+            if(inst && inst->templateDecl == classDecl)
+                emitClassTemplateSpecialization(out, *inst);
+        }
     }
 
     for(const MethodDecl* fn : unit.freeFunctions){
@@ -313,8 +318,8 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     }
 
     out.append("    };\r\n");
+    out.append("    using Flag = Enum;\r\n");
     if(hasFlags){
-        out.append("    using Flag = Enum;\r\n");
         out.append("    [[nodiscard]] constexpr Enum operator|(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<");
         out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
         out.append(">(a) | static_cast<");
@@ -475,6 +480,56 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     out.append("\r\n");
 }
 
+void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const{
+    if(!inst.templateDecl)
+        return;
+
+    const ClassDecl& decl = *inst.templateDecl;
+    SourceEmitter sourceEmitter(m_arena, m_symbols, *this);
+
+    if(decl.isSerialize)
+        out.append("#pragma pack(push, 1)\r\n");
+
+    out.append("template<>\r\nclass ");
+    out.append(decl.name.data(), decl.name.size());
+    out.push_back('<');
+    for(usize i = 0u; i < inst.templateArgs.size(); ++i){
+        if(i > 0u)
+            out.append(", ");
+        const TypeArg& arg = inst.templateArgs[i];
+        if(arg.isConstant || !arg.constantText.empty())
+            out.append(arg.constantText.data(), arg.constantText.size());
+        else if(arg.type)
+            emitTypeCpp(out, *arg.type);
+    }
+    out.append("> final{\r\n");
+
+    for(const FieldDecl* field : inst.orderedFields){
+        if(!field || !field->type)
+            continue;
+        if(field->access == AccessSpecifier::Public)
+            out.append("public:\r\n    ");
+        else if(field->access == AccessSpecifier::Protected)
+            out.append("protected:\r\n    ");
+        else
+            out.append("private:\r\n    ");
+
+        emitTypeCpp(out, *field->type);
+        out.push_back(' ');
+        out.append(field->name.data(), field->name.size());
+        if(field->defaultExpr){
+            out.append(" = ");
+            sourceEmitter.emitExpr(out, *field->defaultExpr);
+        }
+        out.append(";\r\n");
+    }
+
+    out.append("};\r\n");
+    if(decl.isSerialize)
+        out.append("#pragma pack(pop)\r\n");
+    out.append("\r\n");
+}
+
 void HeaderEmitter::emitMethodSignature(
     MString& out,
     const ClassDecl* ownerClass,
@@ -513,7 +568,9 @@ void HeaderEmitter::emitMethodSignature(
     out.push_back(')');
 
     if(method.isConst)
-        out.append("const");
+        out.append("const noexcept");
+    else
+        out.append("noexcept");
     if(isDeclarationInClass && method.isOverride)
         out.append(" override");
 }

@@ -313,6 +313,9 @@ TEST(AdhdCompiler, InfersFuncCaptureStorageAndLowersParallelAndDiagnostics){
     const MStringView cppView(result.generatedSource.data(), result.generatedSource.size());
     EXPECT_NE(cppView.find("InplaceFunction<0u,"), MStringView::npos);
     EXPECT_NE(cppView.find("InplaceFunction<64u,"), MStringView::npos);
+    EXPECT_NE(cppView.find("__adhd_task_scope.submit("), MStringView::npos);
+    EXPECT_NE(cppView.find("::NWB::Core::CpuTaskCost::Heavy"), MStringView::npos);
+    EXPECT_NE(cppView.find("::NWB::Core::CpuTaskPriority::Critical"), MStringView::npos);
     EXPECT_NE(cppView.find("NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT(\"Fast mode active\"))"), MStringView::npos);
     EXPECT_NE(cppView.find("NWB_ASSERT_MSG((counter > 0), NWB_TEXT(\"counter must be positive\"))"), MStringView::npos);
 }
@@ -326,26 +329,42 @@ TEST(AdhdCompiler, SupportsEnumFlagKeywordsBitwiseOperatorsAndSimdLowering){
         "    flag Opaque = 1 << 0,\r\n"
         "    flag Shadow = 1 << 1,\r\n"
         "}\r\n"
+        "class Pair<T, U> {\r\n"
+        "    public T first = 0;\r\n"
+        "    public U second = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "}\r\n"
         "[reflect, asset(\"material_def\")]\r\n"
         "class MaterialDef {\r\n"
         "    public f32x4 baseColor = f32x4(1.0f, 1.0f, 1.0f, 1.0f);\r\n"
         "    public AssetRef<TextureAsset> albedoMap = AssetRef<TextureAsset>();\r\n"
+        "    public Pair<u8, f32x4> packedPair = Pair<u8, f32x4>();\r\n"
         "    public RenderMask mask = RenderMask::Opaque;\r\n"
         "    public RenderMask operator|(in RenderMask extra) const {\r\n"
         "        return this.mask | extra;\r\n"
         "    }\r\n"
+        "    public f32 saturateWeight(in f32 w) const;\r\n"
+        "}\r\n"
+        "f32 MaterialDef::saturateWeight(in f32 w) const {\r\n"
+        "    return clamp(w, 0.0f, 1.0f);\r\n"
         "}\r\n";
 
     CompileResult result(arena.arena);
     ASSERT_TRUE(Compiler::compile(s_Source, "impl/render/material_def.adhd", arena.arena, result, nullptr, "NWB::CustomRender"));
+    ASSERT_EQ(result.unit.templateInstantiations.size(), 1u);
+    ASSERT_EQ(result.unit.templateInstantiations[0]->orderedFields.size(), 2u);
+    EXPECT_EQ(result.unit.templateInstantiations[0]->orderedFields[0]->name, "second");
+    EXPECT_EQ(result.unit.templateInstantiations[0]->orderedFields[1]->name, "first");
 
     const MStringView hdrView(result.generatedHeader.data(), result.generatedHeader.size());
     const MStringView cppView(result.generatedSource.data(), result.generatedSource.size());
     EXPECT_NE(hdrView.find("namespace NWB::CustomRender"), MStringView::npos);
     EXPECT_NE(hdrView.find("using Flag = Enum;"), MStringView::npos);
     EXPECT_NE(hdrView.find("Float4 baseColor = Float4("), MStringView::npos);
+    EXPECT_NE(hdrView.find("template<>\r\nclass Pair<u8, Float4> final"), MStringView::npos);
     EXPECT_NE(hdrView.find("assetDependencyFieldCount()"), MStringView::npos);
+    EXPECT_NE(hdrView.find("deserializeNwb("), MStringView::npos);
     EXPECT_NE(cppView.find("return \"albedoMap\";"), MStringView::npos);
+    EXPECT_NE(cppView.find("::Clamp(w, 0.0f, 1.0f)"), MStringView::npos);
 
     static constexpr MStringView s_FreeOpSource =
         "u32 operator+(in u32 a, in u32 b) {\r\n"
@@ -353,6 +372,14 @@ TEST(AdhdCompiler, SupportsEnumFlagKeywordsBitwiseOperatorsAndSimdLowering){
         "}\r\n";
     CompileResult freeOpResult(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_FreeOpSource, "impl/render/bad_op.adhd", arena.arena, freeOpResult));
+
+    static constexpr MStringView s_UnimplementedMethodSource =
+        "class Incomplete {\r\n"
+        "    public u32 x = 0;\r\n"
+        "    public void missingBody(in u32 v);\r\n"
+        "}\r\n";
+    CompileResult unimplResult(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_UnimplementedMethodSource, "impl/render/incomplete.adhd", arena.arena, unimplResult));
 }
 
 TEST(AdhdCompiler, EnforcesMutCallSiteAndParallelConcurrencySafety){

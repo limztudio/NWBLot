@@ -187,6 +187,25 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ClassTemplateInstantiation{
+    const ClassDecl* templateDecl = nullptr;
+    MVector<TypeArg> templateArgs;
+    MVector<FieldDecl*> orderedFields;
+    usize totalSize = 1u;
+    usize totalAlign = 1u;
+
+
+public:
+    explicit ClassTemplateInstantiation(MetaArena& arena)noexcept
+        : templateArgs(arena)
+        , orderedFields(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct TranslationUnit{
     MVector<MStringView> topLevelNativeBlocks;
     MVector<MString> includedAdhdFiles;
@@ -195,6 +214,7 @@ struct TranslationUnit{
     MVector<EnumDecl*> enums;
     MVector<InterfaceDecl*> interfaces;
     MVector<ClassDecl*> classes;
+    MVector<ClassTemplateInstantiation*> templateInstantiations;
     MVector<MethodDecl*> freeFunctions;
     MVector<MethodDecl*> outOfLineMethods;
 
@@ -208,6 +228,7 @@ public:
         , enums(arena)
         , interfaces(arena)
         , classes(arena)
+        , templateInstantiations(arena)
         , freeFunctions(arena)
         , outOfLineMethods(arena)
     {}

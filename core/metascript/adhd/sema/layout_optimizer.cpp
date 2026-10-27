@@ -59,10 +59,148 @@ namespace __hidden_adhd_layout_optimizer{
 bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
     bool ok = true;
     for(ClassDecl* classDecl : unit.classes){
+        for(const FieldDecl* f : classDecl->fields){
+            if(f && f->type)
+                collectTemplateInstantiationsInType(*f->type, unit);
+        }
+        for(const MethodDecl* m : classDecl->methods){
+            if(!m)
+                continue;
+            if(m->returnType)
+                collectTemplateInstantiationsInType(*m->returnType, unit);
+            for(const ParamDecl& p : m->params){
+                if(p.type)
+                    collectTemplateInstantiationsInType(*p.type, unit);
+            }
+            for(const Stmt* s : m->body){
+                if(s && s->kind == StmtKind::VarDecl && s->varType)
+                    collectTemplateInstantiationsInType(*s->varType, unit);
+            }
+        }
+    }
+    for(const MethodDecl* fn : unit.freeFunctions){
+        if(!fn)
+            continue;
+        if(fn->returnType)
+            collectTemplateInstantiationsInType(*fn->returnType, unit);
+        for(const ParamDecl& p : fn->params){
+            if(p.type)
+                collectTemplateInstantiationsInType(*p.type, unit);
+        }
+        for(const Stmt* s : fn->body){
+            if(s && s->kind == StmtKind::VarDecl && s->varType)
+                collectTemplateInstantiationsInType(*s->varType, unit);
+        }
+    }
+    for(ClassDecl* classDecl : unit.classes){
         if(!computeClassLayout(*classDecl, errors))
             ok = false;
     }
     return ok;
+}
+
+void LayoutOptimizer::collectTemplateInstantiationsInType(const TypeRef& type, TranslationUnit& unit){
+    for(const TypeArg& arg : type.templateArgs){
+        if(arg.type)
+            collectTemplateInstantiationsInType(*arg.type, unit);
+    }
+    if(const ClassDecl* cls = m_symbols.findClass(type.name)){
+        if(!cls->templateParams.empty() && type.templateArgs.size() == cls->templateParams.size())
+            instantiateClassTemplate(*cls, type.templateArgs, unit);
+    }
+}
+
+void LayoutOptimizer::instantiateClassTemplate(
+    const ClassDecl& templateDecl,
+    const MVector<TypeArg>& templateArgs,
+    TranslationUnit& unit
+){
+    for(const ClassTemplateInstantiation* existing : unit.templateInstantiations){
+        if(existing->templateDecl != &templateDecl || existing->templateArgs.size() != templateArgs.size())
+            continue;
+        bool sameArgs = true;
+        for(usize i = 0u; i < templateArgs.size(); ++i){
+            const MStringView lhsName = existing->templateArgs[i].type ? existing->templateArgs[i].type->name : existing->templateArgs[i].constantText;
+            const MStringView rhsName = templateArgs[i].type ? templateArgs[i].type->name : templateArgs[i].constantText;
+            if(lhsName != rhsName){
+                sameArgs = false;
+                break;
+            }
+        }
+        if(sameArgs)
+            return;
+    }
+
+    ClassTemplateInstantiation* inst = AllocateAstNode<ClassTemplateInstantiation>(m_arena);
+    inst->templateDecl = &templateDecl;
+    for(const TypeArg& targ : templateArgs)
+        inst->templateArgs.push_back(targ);
+
+    for(const FieldDecl* origField : templateDecl.fields){
+        if(!origField || !origField->type)
+            continue;
+
+        FieldDecl* clonedField = AllocateAstNode<FieldDecl>(m_arena);
+        clonedField->access = origField->access;
+        clonedField->name = origField->name;
+        clonedField->defaultExpr = origField->defaultExpr;
+        clonedField->span = origField->span;
+        clonedField->originalIndex = origField->originalIndex;
+        clonedField->hasCtorInit = origField->hasCtorInit;
+        clonedField->usesClassArena = origField->usesClassArena;
+        clonedField->isTransient = origField->isTransient;
+        for(Expr* arg : origField->ctorArgs)
+            clonedField->ctorArgs.push_back(arg);
+
+        TypeRef* resolvedType = origField->type;
+        for(usize p = 0u; p < templateDecl.templateParams.size(); ++p){
+            if(origField->type->name == templateDecl.templateParams[p].name && templateArgs[p].type){
+                resolvedType = templateArgs[p].type;
+                break;
+            }
+        }
+        clonedField->type = resolvedType;
+
+        usize fieldSize = 8u;
+        usize fieldAlign = 8u;
+        resolveTypeSizeAndAlign(*resolvedType, fieldSize, fieldAlign);
+        clonedField->resolvedSize = fieldSize;
+        clonedField->resolvedAlign = templateDecl.isSerialize ? 1u : fieldAlign;
+        inst->orderedFields.push_back(clonedField);
+    }
+
+    if(!templateDecl.isSerialize){
+        for(usize i = 1u; i < inst->orderedFields.size(); ++i){
+            FieldDecl* key = inst->orderedFields[i];
+            usize j = i;
+            while(j > 0u){
+                const FieldDecl* prev = inst->orderedFields[j - 1u];
+                const bool keyBeforePrev = (key->resolvedAlign > prev->resolvedAlign)
+                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize > prev->resolvedSize)
+                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize == prev->resolvedSize && key->originalIndex < prev->originalIndex);
+                if(!keyBeforePrev)
+                    break;
+                inst->orderedFields[j] = inst->orderedFields[j - 1u];
+                --j;
+            }
+            inst->orderedFields[j] = key;
+        }
+    }
+
+    usize currentOffset = templateDecl.implementedInterfaces.empty() ? 0u : 8u;
+    usize maxAlign = templateDecl.isSerialize ? 1u : (templateDecl.implementedInterfaces.empty() ? 1u : 8u);
+    for(FieldDecl* field : inst->orderedFields){
+        const usize align = templateDecl.isSerialize ? 1u : field->resolvedAlign;
+        if(align > maxAlign)
+            maxAlign = align;
+        currentOffset = __hidden_adhd_layout_optimizer::AlignUp(currentOffset, align);
+        field->resolvedOffset = currentOffset;
+        currentOffset += field->resolvedSize;
+    }
+
+    inst->totalAlign = maxAlign;
+    inst->totalSize = currentOffset == 0u ? 1u : __hidden_adhd_layout_optimizer::AlignUp(currentOffset, maxAlign);
+    unit.templateInstantiations.push_back(inst);
 }
 
 bool LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSize, usize& outAlign)const noexcept{

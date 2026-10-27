@@ -183,6 +183,11 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
     }
 
     for(MethodDecl* fn : unit.freeFunctions){
+        if(!fn->hasBody){
+            reportError(errors, fn->span, "declared function has no implementation body");
+            ok = false;
+            continue;
+        }
         if(!m_parallelValidator.validateMethod(*fn, errors))
             ok = false;
         if(!checkMethodBody(nullptr, *fn, errors))
@@ -358,6 +363,11 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
     }
 
     for(MethodDecl* m : classDecl.methods){
+        if(!m->hasBody){
+            reportError(errors, m->span, "declared class method has no implementation body");
+            ok = false;
+            continue;
+        }
         if(!m_parallelValidator.validateMethod(*m, errors))
             ok = false;
         if(!checkMethodBody(&classDecl, *m, errors))
@@ -484,6 +494,7 @@ bool TypeChecker::checkStatement(
         break;
     }
     case StmtKind::ParallelBlock:{
+        method.usesTaskScope = true;
         ++m_parallelDepth;
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
@@ -526,10 +537,17 @@ bool TypeChecker::checkStatement(
         break;
     }
     case StmtKind::ExprStmt:
-    case StmtKind::Return:
-    case StmtKind::ParallelCall:{
+    case StmtKind::Return:{
         if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
             ok = false;
+        break;
+    }
+    case StmtKind::ParallelCall:{
+        method.usesTaskScope = true;
+        ++m_parallelDepth;
+        if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
+            ok = false;
+        --m_parallelDepth;
         break;
     }
     case StmtKind::If:{
@@ -564,6 +582,8 @@ bool TypeChecker::checkStatement(
     case StmtKind::ForRange:
     case StmtKind::ParallelForRange:{
         const bool isPar = (stmt.kind == StmtKind::ParallelForRange);
+        if(isPar)
+            method.usesTaskScope = true;
         if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, stmt.rangeMode == ParamPassingMode::Mut, errors))
             ok = false;
         const usize saved = scope.size();
@@ -587,6 +607,8 @@ bool TypeChecker::checkStatement(
     case StmtKind::ForIndex:
     case StmtKind::ParallelForIndex:{
         const bool isPar = (stmt.kind == StmtKind::ParallelForIndex);
+        if(isPar)
+            method.usesTaskScope = true;
         const usize saved = scope.size();
         if(stmt.initStmt && !checkStatement(ownerClass, method, *stmt.initStmt, scope, errors))
             ok = false;

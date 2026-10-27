@@ -49,6 +49,7 @@ private:
     [[nodiscard]] ClassDecl* parseClassDecl(SourceSpan span, const MVector<ParsedAttribute>& attributes);
     [[nodiscard]] bool parseClassMember(ClassDecl& classDecl);
     [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, const MVector<ParsedAttribute>& attributes);
+    [[nodiscard]] bool applyCallableAttributes(const MVector<ParsedAttribute>& attributes, SourceSpan span, MethodDecl& decl);
     [[nodiscard]] bool parseParamList(MVector<ParamDecl>& outParams);
     [[nodiscard]] bool parseOperatorName(MStringView& outOpName);
     [[nodiscard]] bool isCurrentTokenImported()const noexcept;

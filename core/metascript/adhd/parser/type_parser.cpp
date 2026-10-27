@@ -14,40 +14,6 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_type_parser{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] bool IsKnownBuiltinOrTypeIdentifier(const MStringView name)noexcept{
-    return name == "bool" || name == "i8" || name == "u8" || name == "i16" || name == "u16"
-        || name == "i32" || name == "u32" || name == "i64" || name == "u64" || name == "isize" || name == "usize"
-        || name == "f32" || name == "f64" || name == "void"
-        || name == "f32x4" || name == "i32x4" || name == "u32x4" || name == "f32x3_i32" || name == "f32x3_u32"
-        || name == "f32x3x4" || name == "f32x4x4"
-        || name == "f64x2" || name == "f64x3" || name == "f64x4" || name == "i64x4" || name == "u64x4"
-        || name == "f64x3_i64" || name == "f64x3_u64" || name == "f64x3x3" || name == "f64x3x4" || name == "f64x4x4"
-        || name == "Array" || name == "Vector" || name == "FixedVector" || name == "ParallelVector"
-        || name == "ForwardList" || name == "List" || name == "Deque"
-        || name == "Set" || name == "HashSet" || name == "ParallelHashSet"
-        || name == "Map" || name == "HashMap" || name == "ParallelHashMap"
-        || name == "Queue" || name == "ParallelQueue" || name == "ParallelBlockQueue"
-        || name == "Name" || name == "Path" || name == "String" || name == "CompactString"
-        || name == "Span" || name == "StringView" || name == "Optional" || name == "Expected"
-        || name == "Func" || name == "AssetRef" || name == "Atomic";
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 TypeRef* TypeParser::parseType(const bool allowRefMode, const bool allowAuto){
     ParamPassingMode::Enum refMode = ParamPassingMode::None;
     const SourceSpan startSpan{m_cursor.current().line, m_cursor.current().column};
@@ -162,7 +128,6 @@ bool TypeParser::parseTemplateParamList(MVector<TemplateParamDecl>& outParams){
         param.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
 
         if(m_cursor.matchIdentifier("const")){
-            param.isConstValue = true;
             param.constValueType = parseType(false, false);
             if(!param.constValueType)
                 return false;
@@ -217,28 +182,13 @@ bool TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
     for(;;){
         TypeArg arg;
         if(m_cursor.check(TokenType::IntegerLiteral)){
-            arg.isConstant = true;
             arg.constantText = m_cursor.current().text;
             m_cursor.advance();
         }
         else{
-            const bool looksLikeConstantIdentifier = (outArgs.size() >= 1u)
-                && m_cursor.check(TokenType::Identifier)
-                && !__hidden_adhd_type_parser::IsKnownBuiltinOrTypeIdentifier(m_cursor.current().text)
-                && !m_cursor.checkIdentifier("in")
-                && !m_cursor.checkIdentifier("mut");
-
-            TypeRef* parsedType = parseType(true, false);
-            if(!parsedType)
+            arg.type = parseType(true, false);
+            if(!arg.type)
                 return false;
-
-            if(looksLikeConstantIdentifier && parsedType->templateArgs.empty() && parsedType->refMode == ParamPassingMode::None){
-                arg.type = parsedType;
-                arg.constantText = parsedType->name;
-            }
-            else{
-                arg.type = parsedType;
-            }
         }
 
         outArgs.push_back(arg);

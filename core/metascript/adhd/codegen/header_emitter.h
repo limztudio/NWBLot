@@ -30,7 +30,7 @@ public:
 
     void emitTypeCpp(MString& out, const TypeRef& type)const;
     void emitTypeArgListCpp(MString& out, const MVector<TypeArg>& args)const;
-    void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type)const;
+    void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, bool topLevelConst = true)const;
     void emitTemplateHeaderCpp(MString& out, const MVector<TemplateParamDecl>& params)const;
     void emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, bool isDeclarationInClass)const;
     void emitConstructorNotNullInitializers(MString& out, const MVector<FieldDecl*>& orderedFields, const MethodDecl& ctor)const;
@@ -42,6 +42,7 @@ private:
     void emitInterfaceDecl(MString& out, const InterfaceDecl& decl)const;
     void emitClassDecl(MString& out, const ClassDecl& decl)const;
     void emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const;
+    void emitClassMethodsCpp(MString& out, const ClassDecl& decl, const MVector<FieldDecl*>& orderedFields, bool forceInlineBody)const;
     void emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& orderedFields)const;
     [[nodiscard]] static bool isSmallValueType(MStringView typeName, const SymbolTable& symbols)noexcept;
 

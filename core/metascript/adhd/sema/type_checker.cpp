@@ -179,9 +179,7 @@ void CollectAssignedThisMembers(const MVector<Stmt*>& stmts, MVector<MStringView
     for(usize i = 0u; i < a->templateArgs.size(); ++i){
         const TypeArg& ta = a->templateArgs[i];
         const TypeArg& tb = b->templateArgs[i];
-        if(ta.isConstant != tb.isConstant || ta.constantText != tb.constantText)
-            return false;
-        if(!AreTypeRefsEquivalent(ta.type, tb.type))
+        if(ta.constantText != tb.constantText || !AreTypeRefsEquivalent(ta.type, tb.type))
             return false;
     }
     if(a->isFuncType){
@@ -229,6 +227,20 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
 
     if(!linkOutOfLineMethods(unit, errors))
         ok = false;
+
+    for(const EnumDecl* enumDecl : unit.enums){
+        if(!enumDecl)
+            continue;
+        for(usize i = 0u; i < enumDecl->entries.size(); ++i){
+            for(usize j = 0u; j < i; ++j){
+                if(enumDecl->entries[j].name == enumDecl->entries[i].name){
+                    reportError(errors, enumDecl->entries[i].span, "duplicate enumerator name in enum");
+                    ok = false;
+                    break;
+                }
+            }
+        }
+    }
 
     for(TypeAliasDecl* aliasDecl : unit.typeAliases){
         if(!checkTemplateParamBounds(aliasDecl->templateParams, errors))
@@ -410,11 +422,27 @@ bool TypeChecker::checkTemplateArgBounds(
     MVector<ParseError>& errors
 ){
     bool ok = true;
+    if(args.size() != params.size()){
+        reportError(errors, span, "template argument count does not match template parameter list");
+        ok = false;
+    }
     const usize count = params.size() < args.size() ? params.size() : args.size();
     for(usize i = 0u; i < count; ++i){
         const TemplateParamDecl& param = params[i];
         const TypeArg& arg = args[i];
-        if(param.interfaceBounds.empty() || !arg.type)
+        if(param.constValueType){
+            if(arg.type){
+                reportError(errors, span, "expected constant value argument for template value parameter");
+                ok = false;
+            }
+            continue;
+        }
+        if(!arg.type){
+            reportError(errors, span, "expected type argument for template type parameter");
+            ok = false;
+            continue;
+        }
+        if(param.interfaceBounds.empty())
             continue;
 
         const MStringView argTypeName = arg.type->name;
@@ -713,8 +741,13 @@ bool TypeChecker::checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVe
     if(!method.hasBody)
         return true;
 
+    bool ok = true;
     MVector<ScopedVarInfo> scope(m_arena);
     for(const ParamDecl& param : method.params){
+        if(!param.name.empty() && findScopedVar(scope, param.name)){
+            reportError(errors, param.span, "duplicate parameter name");
+            ok = false;
+        }
         ScopedVarInfo info;
         info.name = param.name;
         info.type = param.type;
@@ -724,7 +757,9 @@ bool TypeChecker::checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVe
         scope.push_back(info);
     }
 
-    return checkStatementList(ownerClass, method, method.body, scope, errors);
+    if(!checkStatementList(ownerClass, method, method.body, scope, errors))
+        ok = false;
+    return ok;
 }
 
 bool TypeChecker::checkStatementList(
@@ -796,6 +831,10 @@ bool TypeChecker::checkStatement(
         break;
     }
     case StmtKind::VarDecl:{
+        if(!stmt.name.empty() && findScopedVar(scope, stmt.name)){
+            reportError(errors, stmt.span, "duplicate variable or parameter name in scope");
+            ok = false;
+        }
         if(stmt.varType){
             if(!checkTypeRef(*stmt.varType, ownerClass, &method, errors))
                 ok = false;
@@ -1506,13 +1545,13 @@ const TemplateParamDecl* TypeChecker::findTemplateParam(
 )noexcept{
     if(method){
         for(const TemplateParamDecl& tp : method->templateParams){
-            if(!tp.isConstValue && tp.name == name)
+            if(!tp.constValueType && tp.name == name)
                 return &tp;
         }
     }
     if(ownerClass){
         for(const TemplateParamDecl& tp : ownerClass->templateParams){
-            if(!tp.isConstValue && tp.name == name)
+            if(!tp.constValueType && tp.name == name)
                 return &tp;
         }
     }
@@ -1544,7 +1583,7 @@ const MethodDecl* TypeChecker::findClassMethod(const ClassDecl& classDecl, const
 }
 
 void TypeChecker::reportError(MVector<ParseError>& errors, const SourceSpan span, const MStringView message)const{
-    errors.push_back(ParseError{span.line, span.column, MString(message.data(), message.size(), m_arena)});
+    ReportAdhdDiagnostic(m_arena, errors, span, message);
 }
 
 

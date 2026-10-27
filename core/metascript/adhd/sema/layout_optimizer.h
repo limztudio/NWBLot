@@ -36,7 +36,6 @@ private:
     void collectTemplateInstantiationsInExpr(const Expr& expr, TranslationUnit& unit);
     void collectTemplateInstantiationsInType(const TypeRef& type, TranslationUnit& unit);
     void instantiateClassTemplate(const ClassDecl& templateDecl, const MVector<TypeArg>& templateArgs, TranslationUnit& unit);
-    void reportError(MVector<ParseError>& errors, SourceSpan span, MStringView message)const;
 
 
 private:

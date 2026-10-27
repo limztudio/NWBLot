@@ -715,6 +715,40 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "}\r\n";
     CompileResult ifaceValRetRes(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_InterfaceMethodByValueReturn, "impl/bad_iface_ret.adhd", arena.arena, ifaceValRetRes));
+
+    static constexpr MStringView s_FuncAndSimdParamAbiSource =
+        "void dispatchSample(in Func<i32(in i32)> fn, in f32x4 tint) {\r\n"
+        "}\r\n";
+    CompileResult abiRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_FuncAndSimdParamAbiSource, "impl/param_abi.adhd", arena.arena, abiRes));
+    EXPECT_NE(MStringView(abiRes.generatedHeader.data(), abiRes.generatedHeader.size()).find("InplaceFunction<0u, i32(i32)>"), MStringView::npos);
+    EXPECT_NE(MStringView(abiRes.generatedHeader.data(), abiRes.generatedHeader.size()).find("const Float4& tint"), MStringView::npos);
+
+    static constexpr MStringView s_TemplateArgCountMismatchSource =
+        "class Pair<T, U> {\r\n"
+        "    public T first = 0;\r\n"
+        "    public U second = 0;\r\n"
+        "}\r\n"
+        "void badPairUse() {\r\n"
+        "    Pair<u8> p;\r\n"
+        "}\r\n";
+    CompileResult badTplArityRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_TemplateArgCountMismatchSource, "impl/bad_tpl_arity.adhd", arena.arena, badTplArityRes));
+
+    static constexpr MStringView s_DuplicateEnumeratorSource =
+        "enum DupMode : u8 {\r\n"
+        "    enum Alpha,\r\n"
+        "    enum Alpha\r\n"
+        "}\r\n";
+    CompileResult dupEnumRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DuplicateEnumeratorSource, "impl/dup_enum.adhd", arena.arena, dupEnumRes));
+
+    static constexpr MStringView s_DuplicateLocalVarSource =
+        "void badScope(in u32 x) {\r\n"
+        "    u32 x = 1u;\r\n"
+        "}\r\n";
+    CompileResult dupLocalRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DuplicateLocalVarSource, "impl/dup_local.adhd", arena.arena, dupLocalRes));
 }
 
 

@@ -54,7 +54,7 @@ TypeRef* SubstituteTemplateType(
 ){
     const usize count = templateParams.size() < templateArgs.size() ? templateParams.size() : templateArgs.size();
     for(usize p = 0u; p < count; ++p){
-        if(!templateParams[p].isConstValue && origType.name == templateParams[p].name && origType.templateArgs.empty() && templateArgs[p].type)
+        if(!templateParams[p].constValueType && origType.name == templateParams[p].name && origType.templateArgs.empty() && templateArgs[p].type)
             return templateArgs[p].type;
     }
 
@@ -82,10 +82,9 @@ TypeRef* SubstituteTemplateType(
         if(arg.type){
             bool matchedConstParam = false;
             for(usize p = 0u; p < count; ++p){
-                if(templateParams[p].isConstValue && arg.type->name == templateParams[p].name){
+                if(templateParams[p].constValueType && arg.type->name == templateParams[p].name){
                     subArg.type = nullptr;
-                    subArg.isConstant = true;
-                    subArg.constantText = templateArgs[p].constantText;
+                    subArg.constantText = templateArgs[p].type ? templateArgs[p].type->name : templateArgs[p].constantText;
                     matchedConstParam = true;
                     break;
                 }
@@ -95,9 +94,8 @@ TypeRef* SubstituteTemplateType(
         }
         else if(!arg.constantText.empty()){
             for(usize p = 0u; p < count; ++p){
-                if(templateParams[p].isConstValue && arg.constantText == templateParams[p].name){
-                    subArg.constantText = templateArgs[p].constantText;
-                    subArg.isConstant = true;
+                if(templateParams[p].constValueType && arg.constantText == templateParams[p].name){
+                    subArg.constantText = templateArgs[p].type ? templateArgs[p].type->name : templateArgs[p].constantText;
                     break;
                 }
             }
@@ -515,8 +513,10 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
         usize count = 1u;
         if(!type.templateArgs.empty() && type.templateArgs[0].type)
             resolveTypeSizeAndAlign(*type.templateArgs[0].type, elemSize, elemAlign);
-        if(type.templateArgs.size() >= 2u)
-            count = __hidden_adhd_layout_optimizer::ParseUnsignedConstant(type.templateArgs[1].constantText, m_symbols);
+        if(type.templateArgs.size() >= 2u){
+            const MStringView countText = type.templateArgs[1].type ? type.templateArgs[1].type->name : type.templateArgs[1].constantText;
+            count = __hidden_adhd_layout_optimizer::ParseUnsignedConstant(countText, m_symbols);
+        }
         outSize = elemSize * count;
         outAlign = elemAlign;
         return;
@@ -555,7 +555,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
 
 bool LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors){
     if(classDecl.isSerialize && !classDecl.implementedInterfaces.empty()){
-        reportError(errors, classDecl.span, "'[serialize]' class cannot implement an interface (virtual table pointers cannot be binary serialized)");
+        ReportAdhdDiagnostic(m_arena, errors, classDecl.span, "'[serialize]' class cannot implement an interface (virtual table pointers cannot be binary serialized)");
         return false;
     }
 
@@ -577,11 +577,11 @@ bool LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseErro
 
         if(classDecl.isSerialize && !field->isTransient){
             if(field->type->refMode != ParamPassingMode::None){
-                reportError(errors, field->span, "'[serialize]' class cannot contain non-transient 'in'/'mut' reference members");
+                ReportAdhdDiagnostic(m_arena, errors, field->span, "'[serialize]' class cannot contain non-transient 'in'/'mut' reference members");
                 return false;
             }
             if(SymbolTable::isArenaBackedContainer(field->type->name) || field->type->name == "String" || field->type->name == "StringView" || field->type->name == "Span"){
-                reportError(errors, field->span, "'[serialize]' class cannot contain non-transient dynamic heap or view members; mark with '[transient]' or use fixed-size types");
+                ReportAdhdDiagnostic(m_arena, errors, field->span, "'[serialize]' class cannot contain non-transient dynamic heap or view members; mark with '[transient]' or use fixed-size types");
                 return false;
             }
             field->resolvedSize = fieldSize;
@@ -603,10 +603,6 @@ bool LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseErro
         classDecl.totalAlign
     );
     return true;
-}
-
-void LayoutOptimizer::reportError(MVector<ParseError>& errors, const SourceSpan span, const MStringView message)const{
-    errors.push_back(ParseError{span.line, span.column, MString(message.data(), message.size(), m_arena)});
 }
 
 

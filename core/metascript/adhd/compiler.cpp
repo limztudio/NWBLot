@@ -132,15 +132,7 @@ MString Compiler::deriveNamespaceFromPath(const MStringView virtualFilePath, Met
 }
 
 MString Compiler::deriveHeaderFilename(const MStringView virtualFilePath, MetaArena& arena){
-    usize fileStart = 0u;
-    for(usize i = 0u; i < virtualFilePath.size(); ++i){
-        if(virtualFilePath[i] == '/' || virtualFilePath[i] == '\\')
-            fileStart = i + 1u;
-    }
-
-    MStringView base = virtualFilePath.substr(fileStart);
-    if(base.size() > 5u && base.substr(base.size() - 5u) == ".adhd")
-        base = base.substr(0u, base.size() - 5u);
+    const MStringView base = ExtractAdhdFileStem(virtualFilePath);
 
     MString out(arena);
     if(base.empty())

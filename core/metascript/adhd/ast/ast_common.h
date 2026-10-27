@@ -117,6 +117,25 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
         out.push_back(buf[--idx]);
 }
 
+[[nodiscard]] constexpr MStringView StripAdhdExtension(const MStringView path)noexcept{
+    if(path.size() > 5u && path.substr(path.size() - 5u) == ".adhd")
+        return path.substr(0u, path.size() - 5u);
+    return path;
+}
+
+[[nodiscard]] constexpr MStringView ExtractAdhdFileStem(const MStringView path)noexcept{
+    usize fileStart = 0u;
+    for(usize i = 0u; i < path.size(); ++i){
+        if(path[i] == '/' || path[i] == '\\')
+            fileStart = i + 1u;
+    }
+    return StripAdhdExtension(path.substr(fileStart));
+}
+
+inline void ReportAdhdDiagnostic(MetaArena& arena, MVector<ParseError>& errors, const SourceSpan span, const MStringView message){
+    errors.push_back(ParseError{span.line, span.column, MString(message.data(), message.size(), arena)});
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

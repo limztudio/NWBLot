@@ -68,25 +68,6 @@ private:
     const NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString>& m_includeDirs;
 };
 
-[[nodiscard]] NWB::Core::Metascript::MString ExtractFileStem(
-    const NWB::Core::Metascript::MStringView pathText,
-    NWB::Core::Metascript::MetaArena& arena
-){
-    using namespace NWB::Core::Metascript;
-
-    usize start = 0u;
-    for(usize i = 0u; i < pathText.size(); ++i){
-        if(pathText[i] == '/' || pathText[i] == '\\')
-            start = i + 1u;
-    }
-
-    MStringView name = pathText.substr(start);
-    if(name.size() > 5u && name.substr(name.size() - 5u) == ".adhd")
-        name = name.substr(0u, name.size() - 5u);
-
-    return MString(name.data(), name.size(), arena);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -154,7 +135,7 @@ bool RunAdhdCompilerDriver(
         if(options.validateOnly)
             continue;
 
-        const MString stem = __hidden_adhd_compiler_driver::ExtractFileStem(inputView, arena);
+        const MStringView stem = Adhd::ExtractAdhdFileStem(inputView);
 
         MString headerRel(stem.data(), stem.size(), arena);
         headerRel.append(".adhd.h");

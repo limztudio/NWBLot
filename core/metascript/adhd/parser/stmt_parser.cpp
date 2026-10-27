@@ -218,6 +218,17 @@ bool StmtParser::parseRawNativeBlock(MStringView& outCode){
     return false;
 }
 
+bool StmtParser::parseScopedBodyStatements(MVector<Stmt*>& outStatements){
+    if(m_cursor.check(TokenType::LeftBrace))
+        return parseBlockStatements(outStatements);
+
+    Stmt* bodyStmt = parseStatement();
+    if(!bodyStmt)
+        return false;
+    outStatements.push_back(bodyStmt);
+    return true;
+}
+
 Stmt* StmtParser::parseIfStatement(const SourceSpan span){
     if(!m_cursor.expect(TokenType::LeftParen, "expected '(' after 'if'"))
         return nullptr;
@@ -234,28 +245,12 @@ Stmt* StmtParser::parseIfStatement(const SourceSpan span){
     stmt->condition = cond;
     stmt->span = span;
 
-    if(m_cursor.check(TokenType::LeftBrace)){
-        if(!parseBlockStatements(stmt->statements))
-            return nullptr;
-    }
-    else{
-        Stmt* thenStmt = parseStatement();
-        if(!thenStmt)
-            return nullptr;
-        stmt->statements.push_back(thenStmt);
-    }
+    if(!parseScopedBodyStatements(stmt->statements))
+        return nullptr;
 
     if(m_cursor.matchIdentifier("else")){
-        if(m_cursor.check(TokenType::LeftBrace)){
-            if(!parseBlockStatements(stmt->elseStatements))
-                return nullptr;
-        }
-        else{
-            Stmt* elseStmt = parseStatement();
-            if(!elseStmt)
-                return nullptr;
-            stmt->elseStatements.push_back(elseStmt);
-        }
+        if(!parseScopedBodyStatements(stmt->elseStatements))
+            return nullptr;
     }
 
     return stmt;
@@ -393,16 +388,8 @@ Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const bool isPara
         stmt->parallelCore = coreKind;
         stmt->parallelPriority = priorityKind;
 
-        if(m_cursor.check(TokenType::LeftBrace)){
-            if(!parseBlockStatements(stmt->statements))
-                return nullptr;
-        }
-        else{
-            Stmt* bodyStmt = parseStatement();
-            if(!bodyStmt)
-                return nullptr;
-            stmt->statements.push_back(bodyStmt);
-        }
+        if(!parseScopedBodyStatements(stmt->statements))
+            return nullptr;
         return stmt;
     }
 
@@ -462,16 +449,8 @@ Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const bool isPara
     stmt->parallelCore = coreKind;
     stmt->parallelPriority = priorityKind;
 
-    if(m_cursor.check(TokenType::LeftBrace)){
-        if(!parseBlockStatements(stmt->statements))
-            return nullptr;
-    }
-    else{
-        Stmt* bodyStmt = parseStatement();
-        if(!bodyStmt)
-            return nullptr;
-        stmt->statements.push_back(bodyStmt);
-    }
+    if(!parseScopedBodyStatements(stmt->statements))
+        return nullptr;
 
     return stmt;
 }
@@ -492,16 +471,8 @@ Stmt* StmtParser::parseWhileStatement(const SourceSpan span){
     stmt->condition = cond;
     stmt->span = span;
 
-    if(m_cursor.check(TokenType::LeftBrace)){
-        if(!parseBlockStatements(stmt->statements))
-            return nullptr;
-    }
-    else{
-        Stmt* bodyStmt = parseStatement();
-        if(!bodyStmt)
-            return nullptr;
-        stmt->statements.push_back(bodyStmt);
-    }
+    if(!parseScopedBodyStatements(stmt->statements))
+        return nullptr;
 
     return stmt;
 }
@@ -511,16 +482,8 @@ Stmt* StmtParser::parseDoWhileStatement(const SourceSpan span){
     stmt->kind = StmtKind::DoWhile;
     stmt->span = span;
 
-    if(m_cursor.check(TokenType::LeftBrace)){
-        if(!parseBlockStatements(stmt->statements))
-            return nullptr;
-    }
-    else{
-        Stmt* bodyStmt = parseStatement();
-        if(!bodyStmt)
-            return nullptr;
-        stmt->statements.push_back(bodyStmt);
-    }
+    if(!parseScopedBodyStatements(stmt->statements))
+        return nullptr;
 
     if(!m_cursor.matchIdentifier("while")){
         m_cursor.errorExpected("expected 'while' after 'do' body");

@@ -18,8 +18,8 @@ bool SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
     bool ok = true;
 
     for(EnumDecl* decl : unit.enums){
-        if(findEnum(decl->name) || findInterface(decl->name) || findClass(decl->name) || findTypeAlias(decl->name)){
-            reportError(errors, decl->span, "duplicate type symbol name");
+        if(hasTypeSymbol(decl->name)){
+            ReportAdhdDiagnostic(m_arena, errors, decl->span, "duplicate type symbol name");
             ok = false;
             continue;
         }
@@ -27,8 +27,8 @@ bool SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
     }
 
     for(InterfaceDecl* decl : unit.interfaces){
-        if(findEnum(decl->name) || findInterface(decl->name) || findClass(decl->name) || findTypeAlias(decl->name)){
-            reportError(errors, decl->span, "duplicate type symbol name");
+        if(hasTypeSymbol(decl->name)){
+            ReportAdhdDiagnostic(m_arena, errors, decl->span, "duplicate type symbol name");
             ok = false;
             continue;
         }
@@ -36,8 +36,8 @@ bool SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
     }
 
     for(ClassDecl* decl : unit.classes){
-        if(findEnum(decl->name) || findInterface(decl->name) || findClass(decl->name) || findTypeAlias(decl->name)){
-            reportError(errors, decl->span, "duplicate type symbol name");
+        if(hasTypeSymbol(decl->name)){
+            ReportAdhdDiagnostic(m_arena, errors, decl->span, "duplicate type symbol name");
             ok = false;
             continue;
         }
@@ -45,8 +45,8 @@ bool SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
     }
 
     for(TypeAliasDecl* decl : unit.typeAliases){
-        if(findEnum(decl->name) || findInterface(decl->name) || findClass(decl->name) || findTypeAlias(decl->name)){
-            reportError(errors, decl->span, "duplicate type symbol name");
+        if(hasTypeSymbol(decl->name)){
+            ReportAdhdDiagnostic(m_arena, errors, decl->span, "duplicate type symbol name");
             ok = false;
             continue;
         }
@@ -58,7 +58,7 @@ bool SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
 
     for(Stmt* c : unit.globalConstants){
         if(findGlobalConstant(c->name)){
-            reportError(errors, c->span, "duplicate file-level 'const' name");
+            ReportAdhdDiagnostic(m_arena, errors, c->span, "duplicate file-level 'const' name");
             ok = false;
             continue;
         }
@@ -192,8 +192,11 @@ bool SymbolTable::isStringSwitchType(const MStringView typeName)noexcept{
         || typeName == "Name";
 }
 
-void SymbolTable::reportError(MVector<ParseError>& errors, const SourceSpan span, const MStringView message)const{
-    errors.push_back(ParseError{span.line, span.column, MString(message.data(), message.size(), m_arena)});
+bool SymbolTable::hasTypeSymbol(const MStringView name)const noexcept{
+    return findEnum(name) != nullptr
+        || findInterface(name) != nullptr
+        || findClass(name) != nullptr
+        || findTypeAlias(name) != nullptr;
 }
 
 

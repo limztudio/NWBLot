@@ -154,31 +154,10 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
             m_cursor.error(span.line, span.column, "attributes are not permitted on file-level 'const' declarations");
             return false;
         }
-        TypeRef* constType = m_typeParser.parseType(false, false);
-        if(!constType)
+        Stmt* stmt = m_stmtParser.parseConstDeclaration(span);
+        if(!stmt)
             return false;
-        if(!m_cursor.check(TokenType::Identifier)){
-            m_cursor.errorExpected("expected constant name");
-            return false;
-        }
-        const MStringView name = m_cursor.current().text;
-        m_cursor.advance();
-        if(!m_cursor.expect(TokenType::Equal, "expected '=' in file-level 'const' declaration"))
-            return false;
-        Expr* expr = m_exprParser.parseExpression();
-        if(!expr)
-            return false;
-        if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after file-level 'const' declaration"))
-            return false;
-
-        Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
-        stmt->kind = StmtKind::VarDecl;
-        stmt->varType = constType;
-        stmt->name = name;
-        stmt->expr = expr;
-        stmt->isConst = true;
         stmt->isImported = isImported;
-        stmt->span = span;
         outUnit.globalConstants.push_back(stmt);
         return true;
     }
@@ -526,19 +505,6 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
 
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
 
-    if(m_cursor.checkIdentifier("class") || m_cursor.checkIdentifier("struct") || m_cursor.checkIdentifier("interface") || m_cursor.checkIdentifier("enum") || m_cursor.checkIdentifier("union")){
-        m_cursor.error("nested type declarations inside a class are prohibited in adhd");
-        return false;
-    }
-    if(m_cursor.checkIdentifier("static")){
-        m_cursor.error("'static' members are prohibited in adhd");
-        return false;
-    }
-    if(m_cursor.checkIdentifier("virtual")){
-        m_cursor.error("'virtual' is prohibited in adhd; declare contracts in an 'interface' and mark implementations with 'override'");
-        return false;
-    }
-
     AccessSpecifier::Enum access = AccessSpecifier::None;
     if(m_cursor.matchIdentifier("public"))
         access = AccessSpecifier::Public;
@@ -546,16 +512,11 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
         access = AccessSpecifier::Private;
     else if(m_cursor.matchIdentifier("protected"))
         access = AccessSpecifier::Protected;
-    else{
-        m_cursor.error("every class member in adhd must explicitly specify 'public', 'private', or 'protected'");
-        return false;
-    }
 
-    if(m_cursor.check(TokenType::Colon)){
+    if(access != AccessSpecifier::None && m_cursor.check(TokenType::Colon)){
         m_cursor.error("C++-style 'public:' section labels are prohibited in adhd; write the access specifier on each member");
         return false;
     }
-
     if(m_cursor.checkIdentifier("static")){
         m_cursor.error("'static' members are prohibited in adhd");
         return false;
@@ -566,6 +527,10 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
     }
     if(m_cursor.checkIdentifier("class") || m_cursor.checkIdentifier("struct") || m_cursor.checkIdentifier("interface") || m_cursor.checkIdentifier("enum") || m_cursor.checkIdentifier("union")){
         m_cursor.error("nested type declarations inside a class are prohibited in adhd");
+        return false;
+    }
+    if(access == AccessSpecifier::None){
+        m_cursor.error("every class member in adhd must explicitly specify 'public', 'private', or 'protected'");
         return false;
     }
 
@@ -724,22 +689,8 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
             method->name = memberName;
             method->span = span;
 
-            for(const ParsedAttribute& attr : attributes){
-                if(attr.name == "inline" && attr.arguments.empty())
-                    method->isInline = true;
-                else if(attr.name == "noinline" && attr.arguments.empty())
-                    method->isNoInline = true;
-                else if(attr.name == "reflect" && attr.arguments.empty())
-                    continue;
-                else{
-                    m_cursor.error(attr.line, attr.column, "unsupported attribute on method; expected 'inline', 'noinline', or 'reflect'");
-                    return false;
-                }
-            }
-            if(method->isInline && method->isNoInline){
-                m_cursor.error(span.line, span.column, "method cannot be marked both '[inline]' and '[noinline]'");
+            if(!applyCallableAttributes(attributes, span, *method))
                 return false;
-            }
 
             if(!parseParamList(method->params))
                 return false;
@@ -807,22 +758,8 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     MethodDecl* decl = AllocateAstNode<MethodDecl>(m_cursor.arena());
     decl->span = span;
 
-    for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "inline" && attr.arguments.empty())
-            decl->isInline = true;
-        else if(attr.name == "noinline" && attr.arguments.empty())
-            decl->isNoInline = true;
-        else if(attr.name == "reflect" && attr.arguments.empty())
-            continue;
-        else{
-            m_cursor.error(attr.line, attr.column, "unsupported attribute on function; expected 'inline', 'noinline', or 'reflect'");
-            return nullptr;
-        }
-    }
-    if(decl->isInline && decl->isNoInline){
-        m_cursor.error(span.line, span.column, "function cannot be marked both '[inline]' and '[noinline]'");
+    if(!applyCallableAttributes(attributes, span, *decl))
         return nullptr;
-    }
 
     if(m_cursor.check(TokenType::Identifier)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
@@ -962,6 +899,30 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
         return nullptr;
 
     return decl;
+}
+
+bool DeclParser::applyCallableAttributes(
+    const MVector<ParsedAttribute>& attributes,
+    const SourceSpan span,
+    MethodDecl& decl
+){
+    for(const ParsedAttribute& attr : attributes){
+        if(attr.name == "inline" && attr.arguments.empty())
+            decl.isInline = true;
+        else if(attr.name == "noinline" && attr.arguments.empty())
+            decl.isNoInline = true;
+        else if(attr.name == "reflect" && attr.arguments.empty())
+            continue;
+        else{
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on callable; expected 'inline', 'noinline', or 'reflect'");
+            return false;
+        }
+    }
+    if(decl.isInline && decl.isNoInline){
+        m_cursor.error(span.line, span.column, "callable cannot be marked both '[inline]' and '[noinline]'");
+        return false;
+    }
+    return true;
 }
 
 bool DeclParser::parseParamList(MVector<ParamDecl>& outParams){

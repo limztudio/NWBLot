@@ -26,7 +26,6 @@ struct TypeRef;
 struct TypeArg{
     TypeRef* type = nullptr;
     MStringView constantText;
-    bool isConstant = false;
 };
 
 
@@ -70,7 +69,6 @@ struct TemplateParamDecl{
     TypeRef* constValueType = nullptr;
     MVector<MStringView> interfaceBounds;
     SourceSpan span;
-    bool isConstValue = false;
 
 
 public:

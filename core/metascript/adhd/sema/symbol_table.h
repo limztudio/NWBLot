@@ -49,7 +49,7 @@ public:
 
 
 private:
-    void reportError(MVector<ParseError>& errors, SourceSpan span, MStringView message)const;
+    [[nodiscard]] bool hasTypeSymbol(MStringView name)const noexcept;
 
 
 private:

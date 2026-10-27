@@ -25,12 +25,11 @@ public:
 
 
 public:
-    [[nodiscard]] bool validateMethod(MethodDecl& method, MVector<ParseError>& errors);
+    [[nodiscard]] bool validateMethod(const MethodDecl& method, MVector<ParseError>& errors);
 
 
 private:
-    [[nodiscard]] bool validateBlock(MVector<Stmt*>& statements, bool& outUsesTaskScope, MVector<ParseError>& errors);
-    void reportError(MVector<ParseError>& errors, SourceSpan span, MStringView message)const;
+    [[nodiscard]] bool validateBlock(const MVector<Stmt*>& statements, MVector<ParseError>& errors);
 
 
 private:

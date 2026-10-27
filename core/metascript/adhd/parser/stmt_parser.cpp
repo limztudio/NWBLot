@@ -85,10 +85,10 @@ Stmt* StmtParser::parseStatement(){
     }
 
     if(m_cursor.matchIdentifier("for"))
-        return parseForOrParallelFor(span, false, Move(attributes));
+        return parseForOrParallelFor(span, false, attributes);
 
     if(m_cursor.matchIdentifier("parallel_for"))
-        return parseForOrParallelFor(span, true, Move(attributes));
+        return parseForOrParallelFor(span, true, attributes);
 
     if(m_cursor.matchIdentifier("while")){
         if(!attributes.empty()){
@@ -133,7 +133,7 @@ Stmt* StmtParser::parseStatement(){
     }
 
     if(m_cursor.matchIdentifier("parallel"))
-        return parseParallelStatement(span, Move(attributes));
+        return parseParallelStatement(span, attributes);
 
     if(m_cursor.matchIdentifier("native")){
         if(!attributes.empty()){
@@ -144,13 +144,13 @@ Stmt* StmtParser::parseStatement(){
     }
 
     if(m_cursor.matchIdentifier("assert"))
-        return parseDiagnosticStatement(span, DiagnosticKind::Assert, Move(attributes));
+        return parseDiagnosticStatement(span, DiagnosticKind::Assert, attributes);
     if(m_cursor.matchIdentifier("info"))
-        return parseDiagnosticStatement(span, DiagnosticKind::Info, Move(attributes));
+        return parseDiagnosticStatement(span, DiagnosticKind::Info, attributes);
     if(m_cursor.matchIdentifier("warning"))
-        return parseDiagnosticStatement(span, DiagnosticKind::Warning, Move(attributes));
+        return parseDiagnosticStatement(span, DiagnosticKind::Warning, attributes);
     if(m_cursor.matchIdentifier("error"))
-        return parseDiagnosticStatement(span, DiagnosticKind::Error, Move(attributes));
+        return parseDiagnosticStatement(span, DiagnosticKind::Error, attributes);
 
     if(m_cursor.matchIdentifier("const")){
         if(!attributes.empty()){
@@ -341,7 +341,7 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
     return stmt;
 }
 
-Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const bool isParallel, MVector<ParsedAttribute>&& attributes){
+Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const bool isParallel, const MVector<ParsedAttribute>& attributes){
     ParallelCoreKind::Enum coreKind = ParallelCoreKind::Any;
     ParallelPriorityKind::Enum priorityKind = ParallelPriorityKind::Normal;
     if(isParallel){
@@ -386,7 +386,6 @@ Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const bool isPara
         Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
         stmt->kind = isParallel ? StmtKind::ParallelForRange : StmtKind::ForRange;
         stmt->span = span;
-        stmt->attributes = Move(attributes);
         stmt->rangeMode = rangeMode;
         stmt->varType = elemType;
         stmt->name = varName;
@@ -457,7 +456,6 @@ Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const bool isPara
     Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
     stmt->kind = isParallel ? StmtKind::ParallelForIndex : StmtKind::ForIndex;
     stmt->span = span;
-    stmt->attributes = Move(attributes);
     stmt->initStmt = initStmt;
     stmt->condition = condExpr;
     stmt->stepExpr = stepExpr;
@@ -561,7 +559,7 @@ Stmt* StmtParser::parseReturnStatement(const SourceSpan span){
     return stmt;
 }
 
-Stmt* StmtParser::parseParallelStatement(const SourceSpan span, MVector<ParsedAttribute>&& attributes){
+Stmt* StmtParser::parseParallelStatement(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
     ParallelCoreKind::Enum coreKind = ParallelCoreKind::Any;
     ParallelPriorityKind::Enum priorityKind = ParallelPriorityKind::Normal;
     if(!applySchedulingAttributes(attributes, coreKind, priorityKind))
@@ -582,7 +580,6 @@ Stmt* StmtParser::parseParallelStatement(const SourceSpan span, MVector<ParsedAt
             stmt->kind = StmtKind::ParallelBlock;
             stmt->name = maybeTaskName;
             stmt->span = span;
-            stmt->attributes = Move(attributes);
             stmt->parallelCore = coreKind;
             stmt->parallelPriority = priorityKind;
 
@@ -620,7 +617,6 @@ Stmt* StmtParser::parseParallelStatement(const SourceSpan span, MVector<ParsedAt
     stmt->kind = StmtKind::ParallelCall;
     stmt->expr = callExpr;
     stmt->span = span;
-    stmt->attributes = Move(attributes);
     stmt->parallelCore = coreKind;
     stmt->parallelPriority = priorityKind;
     return stmt;
@@ -683,7 +679,7 @@ Stmt* StmtParser::parseNativeStatement(const SourceSpan span){
     return stmt;
 }
 
-Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const DiagnosticKind::Enum kind, MVector<ParsedAttribute>&& attributes){
+Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const DiagnosticKind::Enum kind, const MVector<ParsedAttribute>& attributes){
     bool isEssential = false;
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "essential" && attr.arguments.empty()){
@@ -699,7 +695,6 @@ Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const Diagnost
     stmt->kind = StmtKind::Diagnostic;
     stmt->diagnosticKind = kind;
     stmt->isEssential = isEssential;
-    stmt->attributes = Move(attributes);
     stmt->span = span;
 
     if(!m_exprParser.parseArgumentList(stmt->arguments))

@@ -92,6 +92,7 @@ struct Expr{
     bool isPointerMemberAccess = false;
     bool isNotNullRebind = false;
     bool derefNotNull = false;
+    bool isMutArg = false;
 
 
 public:

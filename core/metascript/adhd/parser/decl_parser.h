@@ -35,12 +35,12 @@ public:
 
 private:
     [[nodiscard]] bool parseTopLevelDeclaration(TranslationUnit& outUnit);
-    [[nodiscard]] TypeAliasDecl* parseTypeAlias(SourceSpan span, MVector<ParsedAttribute>&& attributes);
-    [[nodiscard]] EnumDecl* parseEnumDecl(SourceSpan span, MVector<ParsedAttribute>&& attributes);
-    [[nodiscard]] InterfaceDecl* parseInterfaceDecl(SourceSpan span, MVector<ParsedAttribute>&& attributes);
-    [[nodiscard]] ClassDecl* parseClassDecl(SourceSpan span, MVector<ParsedAttribute>&& attributes);
+    [[nodiscard]] TypeAliasDecl* parseTypeAlias(SourceSpan span, const MVector<ParsedAttribute>& attributes);
+    [[nodiscard]] EnumDecl* parseEnumDecl(SourceSpan span, const MVector<ParsedAttribute>& attributes);
+    [[nodiscard]] InterfaceDecl* parseInterfaceDecl(SourceSpan span, const MVector<ParsedAttribute>& attributes);
+    [[nodiscard]] ClassDecl* parseClassDecl(SourceSpan span, const MVector<ParsedAttribute>& attributes);
     [[nodiscard]] bool parseClassMember(ClassDecl& classDecl);
-    [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, MVector<ParsedAttribute>&& attributes);
+    [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, const MVector<ParsedAttribute>& attributes);
     [[nodiscard]] bool parseParamList(MVector<ParamDecl>& outParams);
     [[nodiscard]] bool parseOperatorName(MStringView& outOpName);
 

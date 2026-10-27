@@ -21,6 +21,7 @@ NWB_ADHD_BEGIN
 struct ScopedVarInfo{
     MStringView name;
     TypeRef* type = nullptr;
+    const Expr* lambdaExpr = nullptr;
     ParamPassingMode::Enum mode = ParamPassingMode::None;
     bool isConst = false;
     bool isParam = false;

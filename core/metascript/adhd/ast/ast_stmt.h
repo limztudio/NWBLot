@@ -75,7 +75,6 @@ struct NativeBinding{
 struct Stmt{
     StmtKind::Enum kind = StmtKind::Block;
     SourceSpan span;
-    MVector<ParsedAttribute> attributes;
 
     MVector<Stmt*> statements;
     MVector<Stmt*> elseStatements;
@@ -107,8 +106,7 @@ struct Stmt{
 
 public:
     explicit Stmt(MetaArena& arena)noexcept
-        : attributes(arena)
-        , statements(arena)
+        : statements(arena)
         , elseStatements(arena)
         , arguments(arena)
         , switchCases(arena)

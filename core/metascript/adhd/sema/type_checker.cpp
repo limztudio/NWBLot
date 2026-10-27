@@ -192,8 +192,14 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
     for(MethodDecl* fn : unit.freeFunctions){
         if(!checkTemplateParamBounds(fn->templateParams, errors))
             ok = false;
-        if(fn->returnType && !checkTypeRef(*fn->returnType, nullptr, fn, errors))
-            ok = false;
+        if(fn->returnType){
+            if(!checkTypeRef(*fn->returnType, nullptr, fn, errors))
+                ok = false;
+            if(fn->returnType->refMode == ParamPassingMode::None && m_symbols.findInterface(fn->returnType->name)){
+                reportError(errors, fn->span, "cannot return an 'interface' type by value");
+                ok = false;
+            }
+        }
         for(const ParamDecl& p : fn->params){
             if(p.type && !checkTypeRef(*p.type, nullptr, fn, errors))
                 ok = false;
@@ -451,9 +457,34 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
             reportError(errors, classDecl.span, "class does not implement required interface method");
             ok = false;
         }
-        else if(!impl->isOverride){
-            reportError(errors, impl->span, "method implementing an interface contract must be explicitly marked 'override'");
-            ok = false;
+        else{
+            if(!impl->isOverride){
+                reportError(errors, impl->span, "method implementing an interface contract must be explicitly marked 'override'");
+                ok = false;
+            }
+            if(impl->access != AccessSpecifier::Public){
+                reportError(errors, impl->span, "method implementing an interface contract must be 'public'");
+                ok = false;
+            }
+            if(impl->isConst != req->isConst){
+                reportError(errors, impl->span, "override method 'const' qualifier does not match interface contract");
+                ok = false;
+            }
+            const MStringView implRet = impl->returnType ? impl->returnType->name : MStringView("void");
+            const MStringView reqRet = req->returnType ? req->returnType->name : MStringView("void");
+            if(implRet != reqRet){
+                reportError(errors, impl->span, "override method return type does not match interface contract");
+                ok = false;
+            }
+            for(usize pIdx = 0u; pIdx < req->params.size(); ++pIdx){
+                const ParamDecl& implP = impl->params[pIdx];
+                const ParamDecl& reqP = req->params[pIdx];
+                if(implP.mode != reqP.mode || (implP.type && reqP.type && implP.type->name != reqP.type->name)){
+                    reportError(errors, implP.span, "override method parameter 'in'/'mut' mode or type does not match interface contract");
+                    ok = false;
+                    break;
+                }
+            }
         }
     }
 
@@ -487,8 +518,14 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
     }
 
     for(FieldDecl* field : classDecl.fields){
-        if(field->type && !checkTypeRef(*field->type, &classDecl, nullptr, errors))
-            ok = false;
+        if(field->type){
+            if(!checkTypeRef(*field->type, &classDecl, nullptr, errors))
+                ok = false;
+            if(field->type->refMode == ParamPassingMode::None && m_symbols.findInterface(field->type->name)){
+                reportError(errors, field->span, "class member of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored by value");
+                ok = false;
+            }
+        }
         if(field->type && field->type->isFuncType && field->defaultExpr && field->defaultExpr->kind == ExprKind::Lambda)
             field->type->inferredCaptureBytes = field->defaultExpr->lambdaCaptures.empty() ? 0u : 64u;
 
@@ -503,8 +540,14 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
     for(MethodDecl* m : classDecl.methods){
         if(!checkTemplateParamBounds(m->templateParams, errors))
             ok = false;
-        if(m->returnType && !checkTypeRef(*m->returnType, &classDecl, m, errors))
-            ok = false;
+        if(m->returnType){
+            if(!checkTypeRef(*m->returnType, &classDecl, m, errors))
+                ok = false;
+            if(m->returnType->refMode == ParamPassingMode::None && m_symbols.findInterface(m->returnType->name)){
+                reportError(errors, m->span, "cannot return an 'interface' type by value");
+                ok = false;
+            }
+        }
         for(const ParamDecl& p : m->params){
             if(p.type && !checkTypeRef(*p.type, &classDecl, m, errors))
                 ok = false;
@@ -651,6 +694,21 @@ bool TypeChecker::checkStatement(
         if(stmt.varType){
             if(!checkTypeRef(*stmt.varType, ownerClass, &method, errors))
                 ok = false;
+            if(m_symbols.findInterface(stmt.varType->name)){
+                if(stmt.varType->refMode == ParamPassingMode::None){
+                    reportError(errors, stmt.span, "local variable of 'interface' type must specify 'in' or 'mut'; interfaces cannot be instantiated by value");
+                    ok = false;
+                }
+                else if(stmt.expr){
+                    const MStringView rhsType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
+                    if(const ClassDecl* rhsCls = m_symbols.findClass(rhsType)){
+                        if(!classImplementsInterface(*rhsCls, stmt.varType->name)){
+                            reportError(errors, stmt.span, "cannot bind concrete class to interface reference: class does not implement the interface");
+                            ok = false;
+                        }
+                    }
+                }
+            }
             if(SymbolTable::isArenaBackedContainer(stmt.varType->name)){
                 stmt.usesScratchArena = true;
                 method.usesScratchArena = true;
@@ -694,8 +752,10 @@ bool TypeChecker::checkStatement(
         info.mode = stmt.varType ? stmt.varType->refMode : ParamPassingMode::None;
         info.isConst = stmt.isConst || (stmt.varType && stmt.varType->refMode == ParamPassingMode::In);
         info.isParam = false;
-        if(stmt.expr && stmt.expr->kind == ExprKind::Lambda)
+        if(stmt.expr && stmt.expr->kind == ExprKind::Lambda){
+            info.lambdaExpr = stmt.expr;
             info.lambdaCaptureBytes = stmt.expr->lambdaCaptures.empty() ? 0u : 64u;
+        }
         else if(stmt.varType && stmt.varType->isFuncType)
             info.lambdaCaptureBytes = stmt.varType->inferredCaptureBytes;
         scope.push_back(info);
@@ -969,9 +1029,16 @@ bool TypeChecker::checkExpr(
             ok = false;
 
         const MethodDecl* targetCallable = nullptr;
+        const ScopedVarInfo* localCallable = nullptr;
         if(expr.lhs){
             if(expr.lhs->kind == ExprKind::Identifier){
+                if(m_symbols.findInterface(expr.lhs->text)){
+                    reportError(errors, expr.span, "cannot instantiate an 'interface' type directly");
+                    ok = false;
+                }
                 targetCallable = m_symbols.findFreeFunction(expr.lhs->text);
+                if(!targetCallable)
+                    localCallable = findScopedVar(scope, expr.lhs->text);
                 if(expr.lhs->text == "Path"){
                     for(Expr* arg : expr.arguments){
                         if(arg && arg->kind == ExprKind::StringLiteral)
@@ -1033,11 +1100,37 @@ bool TypeChecker::checkExpr(
             Expr* arg = expr.arguments[i];
             if(!arg)
                 continue;
-            const bool paramIsMut = targetCallable
-                && i < targetCallable->params.size()
-                && targetCallable->params[i].mode == ParamPassingMode::Mut;
+            bool paramIsMut = false;
+            MStringView expectedParamType;
+            if(targetCallable && i < targetCallable->params.size()){
+                paramIsMut = (targetCallable->params[i].mode == ParamPassingMode::Mut);
+                if(targetCallable->params[i].type)
+                    expectedParamType = targetCallable->params[i].type->name;
+            }
+            else if(localCallable){
+                if(localCallable->type && localCallable->type->isFuncType && i < localCallable->type->funcParams.size()){
+                    paramIsMut = (localCallable->type->funcParams[i].mode == ParamPassingMode::Mut);
+                    if(localCallable->type->funcParams[i].type)
+                        expectedParamType = localCallable->type->funcParams[i].type->name;
+                }
+                else if(localCallable->lambdaExpr && i < localCallable->lambdaExpr->lambdaParams.size()){
+                    paramIsMut = (localCallable->lambdaExpr->lambdaParams[i].mode == ParamPassingMode::Mut);
+                    if(localCallable->lambdaExpr->lambdaParams[i].type)
+                        expectedParamType = localCallable->lambdaExpr->lambdaParams[i].type->name;
+                }
+            }
+            arg->isMutArg = paramIsMut;
             if(!checkExpr(ownerClass, method, *arg, scope, paramIsMut, errors))
                 ok = false;
+            if(!expectedParamType.empty() && m_symbols.findInterface(expectedParamType)){
+                const MStringView argType = inferExprTypeName(ownerClass, &method, *arg, scope);
+                if(const ClassDecl* argCls = m_symbols.findClass(argType)){
+                    if(!classImplementsInterface(*argCls, expectedParamType)){
+                        reportError(errors, arg->span, "cannot pass concrete class to interface parameter: class does not implement the interface");
+                        ok = false;
+                    }
+                }
+            }
         }
         break;
     }
@@ -1057,6 +1150,15 @@ bool TypeChecker::checkExpr(
                 if(expr.lhs->derefNotNull && m_symbols.findInterface(local->type->name)){
                     expr.lhs->derefNotNull = false;
                     expr.isNotNullRebind = true;
+                    if(expr.rhs){
+                        const MStringView rhsType = inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
+                        if(const ClassDecl* rhsCls = m_symbols.findClass(rhsType)){
+                            if(!classImplementsInterface(*rhsCls, local->type->name)){
+                                reportError(errors, expr.span, "cannot rebind interface reference to concrete class that does not implement the interface");
+                                ok = false;
+                            }
+                        }
+                    }
                 }
                 if(local->type->isFuncType && expr.rhs){
                     if(expr.rhs->kind == ExprKind::Lambda && !expr.rhs->lambdaCaptures.empty()){

@@ -574,6 +574,32 @@ TEST(AdhdCompiler, EnforcesTemplateBoundMethodCallsAndEmitsInstantiationReflecti
         "void nop() {}\r\n";
     CompileResult cppIncRes(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_CppIncludeOutsideNative, "impl/bad_inc.adhd", arena.arena, cppIncRes));
+
+    static constexpr MStringView s_ByValueInterfaceVar =
+        "interface IComponent {\r\n"
+        "    void step(in f32 dt);\r\n"
+        "}\r\n"
+        "class Comp : IComponent {\r\n"
+        "    public void step(in f32 dt) override {}\r\n"
+        "}\r\n"
+        "void badByValue() {\r\n"
+        "    Comp c = Comp();\r\n"
+        "    IComponent val = c;\r\n"
+        "}\r\n";
+    CompileResult byValIfaceRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_ByValueInterfaceVar, "impl/bad_val_iface.adhd", arena.arena, byValIfaceRes));
+
+    static constexpr MStringView s_MismatchedOverrideConst =
+        "interface IComponent {\r\n"
+        "    u32 id() const;\r\n"
+        "}\r\n"
+        "class BadComp : IComponent {\r\n"
+        "    public u32 id() override {\r\n"
+        "        return 0;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult mismatchOverrideRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MismatchedOverrideConst, "impl/bad_override_sig.adhd", arena.arena, mismatchOverrideRes));
 }
 
 

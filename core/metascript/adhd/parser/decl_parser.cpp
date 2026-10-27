@@ -139,7 +139,7 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     if(m_cursor.matchIdentifier("type")){
-        TypeAliasDecl* aliasDecl = parseTypeAlias(span, Move(attributes));
+        TypeAliasDecl* aliasDecl = parseTypeAlias(span, attributes);
         if(!aliasDecl)
             return false;
         outUnit.typeAliases.push_back(aliasDecl);
@@ -147,7 +147,7 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     if(m_cursor.matchIdentifier("enum")){
-        EnumDecl* enumDecl = parseEnumDecl(span, Move(attributes));
+        EnumDecl* enumDecl = parseEnumDecl(span, attributes);
         if(!enumDecl)
             return false;
         outUnit.enums.push_back(enumDecl);
@@ -155,7 +155,7 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     if(m_cursor.matchIdentifier("interface")){
-        InterfaceDecl* ifaceDecl = parseInterfaceDecl(span, Move(attributes));
+        InterfaceDecl* ifaceDecl = parseInterfaceDecl(span, attributes);
         if(!ifaceDecl)
             return false;
         outUnit.interfaces.push_back(ifaceDecl);
@@ -163,14 +163,14 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     if(m_cursor.matchIdentifier("class")){
-        ClassDecl* classDecl = parseClassDecl(span, Move(attributes));
+        ClassDecl* classDecl = parseClassDecl(span, attributes);
         if(!classDecl)
             return false;
         outUnit.classes.push_back(classDecl);
         return true;
     }
 
-    MethodDecl* callable = parseFreeOrOutOfLineCallable(span, Move(attributes));
+    MethodDecl* callable = parseFreeOrOutOfLineCallable(span, attributes);
     if(!callable)
         return false;
 
@@ -182,7 +182,11 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     return true;
 }
 
-TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, MVector<ParsedAttribute>&& attributes){
+TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
+    if(!attributes.empty()){
+        m_cursor.error(span.line, span.column, "attributes are not permitted on 'type' alias declarations");
+        return nullptr;
+    }
     if(!m_cursor.check(TokenType::Identifier)){
         m_cursor.errorExpected("expected alias name after 'type'");
         return nullptr;
@@ -190,7 +194,6 @@ TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, MVector<ParsedA
 
     TypeAliasDecl* decl = AllocateAstNode<TypeAliasDecl>(m_cursor.arena());
     decl->name = m_cursor.current().text;
-    decl->attributes = Move(attributes);
     decl->span = span;
     m_cursor.advance();
 
@@ -212,7 +215,13 @@ TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, MVector<ParsedA
     return decl;
 }
 
-EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, MVector<ParsedAttribute>&& attributes){
+EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
+    for(const ParsedAttribute& attr : attributes){
+        if(attr.name != "reflect" || !attr.arguments.empty()){
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on 'enum'; only '[reflect]' is permitted");
+            return nullptr;
+        }
+    }
     if(!m_cursor.match(TokenType::Less)){
         m_cursor.error("'enum' must explicitly specify an integer size type: 'enum<u8|u16|u32|u64|i8|i16|i32|i64>'");
         return nullptr;
@@ -245,7 +254,6 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, MVector<ParsedAttribu
     decl->sizeTypeName = sizeTypeName;
     decl->underlyingSize = underlyingSize;
     decl->underlyingAlign = underlyingAlign;
-    decl->attributes = Move(attributes);
     decl->span = span;
     m_cursor.advance();
 
@@ -293,7 +301,15 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, MVector<ParsedAttribu
     return decl;
 }
 
-InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, MVector<ParsedAttribute>&& attributes){
+InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
+    for(const ParsedAttribute& attr : attributes){
+        if(attr.name == "reflect" && attr.arguments.empty())
+            continue;
+        if(attr.name == "asset" && attr.arguments.size() == 1u && attr.arguments[0].kind == TokenType::StringLiteral)
+            continue;
+        m_cursor.error(attr.line, attr.column, "unsupported attribute on 'interface'; expected 'reflect' or 'asset(\"...\")'");
+        return nullptr;
+    }
     if(!m_cursor.check(TokenType::Identifier)){
         m_cursor.errorExpected("expected interface name");
         return nullptr;
@@ -301,7 +317,6 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, MVector<Par
 
     InterfaceDecl* decl = AllocateAstNode<InterfaceDecl>(m_cursor.arena());
     decl->name = m_cursor.current().text;
-    decl->attributes = Move(attributes);
     decl->span = span;
     m_cursor.advance();
 
@@ -381,7 +396,7 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, MVector<Par
     return decl;
 }
 
-ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, MVector<ParsedAttribute>&& attributes){
+ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
     if(!m_cursor.check(TokenType::Identifier)){
         m_cursor.errorExpected("expected class name");
         return nullptr;
@@ -412,7 +427,6 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, MVector<ParsedAttri
             return nullptr;
         }
     }
-    decl->attributes = Move(attributes);
 
     if(m_cursor.check(TokenType::Less)){
         if(!m_typeParser.parseTemplateParamList(decl->templateParams))
@@ -515,7 +529,6 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
         dtor->ownerClassName = classDecl.name;
         dtor->name = classDecl.name;
         dtor->isDestructor = true;
-        dtor->attributes = Move(attributes);
         dtor->span = span;
 
         if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for destructor"))
@@ -544,7 +557,6 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
             ctor->ownerClassName = classDecl.name;
             ctor->name = classDecl.name;
             ctor->isConstructor = true;
-            ctor->attributes = Move(attributes);
             ctor->span = span;
 
             if(!parseParamList(ctor->params))
@@ -589,7 +601,6 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
         method->returnType = memberType;
         method->name = opName;
         method->isOperator = true;
-        method->attributes = Move(attributes);
         method->span = span;
 
         if(!parseParamList(method->params))
@@ -665,8 +676,17 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
                     method->isInline = true;
                 else if(attr.name == "noinline" && attr.arguments.empty())
                     method->isNoInline = true;
+                else if(attr.name == "reflect" && attr.arguments.empty())
+                    continue;
+                else{
+                    m_cursor.error(attr.line, attr.column, "unsupported attribute on method; expected 'inline', 'noinline', or 'reflect'");
+                    return false;
+                }
             }
-            method->attributes = Move(attributes);
+            if(method->isInline && method->isNoInline){
+                m_cursor.error(span.line, span.column, "method cannot be marked both '[inline]' and '[noinline]'");
+                return false;
+            }
 
             if(!parseParamList(method->params))
                 return false;
@@ -701,8 +721,13 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "transient" && attr.arguments.empty())
             field->isTransient = true;
+        else if(attr.name == "reflect" && attr.arguments.empty())
+            continue;
+        else{
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on field; expected 'transient' or 'reflect'");
+            return false;
+        }
     }
-    field->attributes = Move(attributes);
 
     if(m_cursor.match(TokenType::Equal)){
         field->defaultExpr = m_exprParser.parseExpression();
@@ -724,7 +749,7 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
 
 MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     const SourceSpan span,
-    MVector<ParsedAttribute>&& attributes
+    const MVector<ParsedAttribute>& attributes
 ){
     MethodDecl* decl = AllocateAstNode<MethodDecl>(m_cursor.arena());
     decl->span = span;
@@ -734,16 +759,25 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
             decl->isInline = true;
         else if(attr.name == "noinline" && attr.arguments.empty())
             decl->isNoInline = true;
+        else if(attr.name == "reflect" && attr.arguments.empty())
+            continue;
+        else{
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on function; expected 'inline', 'noinline', or 'reflect'");
+            return nullptr;
+        }
     }
-    decl->attributes = Move(attributes);
+    if(decl->isInline && decl->isNoInline){
+        m_cursor.error(span.line, span.column, "function cannot be marked both '[inline]' and '[noinline]'");
+        return nullptr;
+    }
 
     if(m_cursor.check(TokenType::Identifier)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         const MStringView maybeClass = m_cursor.current().text;
         m_cursor.advance();
 
-        MVector<TypeArg> ownerTypeArgs(m_cursor.arena());
         if(m_cursor.check(TokenType::Less)){
+            MVector<TypeArg> ownerTypeArgs(m_cursor.arena());
             (void)m_typeParser.parseTypeArgList(ownerTypeArgs);
         }
 
@@ -755,7 +789,6 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
                 }
                 m_cursor.advance();
                 decl->ownerClassName = maybeClass;
-                decl->ownerTemplateArgs = Move(ownerTypeArgs);
                 decl->name = maybeClass;
                 decl->isDestructor = true;
                 if(!m_cursor.expect(TokenType::LeftParen, "expected '(' in out-of-line destructor"))
@@ -771,7 +804,6 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
             if(m_cursor.checkIdentifier(maybeClass)){
                 m_cursor.advance();
                 decl->ownerClassName = maybeClass;
-                decl->ownerTemplateArgs = Move(ownerTypeArgs);
                 decl->name = maybeClass;
                 decl->isConstructor = true;
                 if(!parseParamList(decl->params))
@@ -809,10 +841,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     if(m_cursor.check(TokenType::Less)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         MVector<TypeArg> maybeOwnerArgs(m_cursor.arena());
-        if(m_typeParser.parseTypeArgList(maybeOwnerArgs) && m_cursor.check(TokenType::ColonColon)){
-            decl->ownerTemplateArgs = Move(maybeOwnerArgs);
-        }
-        else{
+        if(!m_typeParser.parseTypeArgList(maybeOwnerArgs) || !m_cursor.check(TokenType::ColonColon)){
             m_cursor.restore(cp);
             if(!m_typeParser.parseTemplateParamList(decl->templateParams))
                 return nullptr;

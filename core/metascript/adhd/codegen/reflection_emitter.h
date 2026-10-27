@@ -31,6 +31,10 @@ public:
 
 
 private:
+    void emitDeserializeNwbMethod(MString& out, const MVector<FieldDecl*>& fields)const;
+
+
+private:
     const SymbolTable& m_symbols;
 };
 

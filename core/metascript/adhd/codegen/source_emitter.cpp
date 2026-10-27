@@ -581,13 +581,56 @@ void SourceEmitter::emitStmt(
         break;
     }
     case StmtKind::ParallelCall:{
-        emitIndent(out, indent);
-        out.append("(void)__adhd_task_scope.submit([=]()noexcept{ ");
-        if(stmt.expr)
-            emitExpr(out, *stmt.expr);
-        out.append("; }, ");
-        __hidden_adhd_source_emitter::AppendTaskOptions(out, stmt);
-        out.append(");\r\n");
+        if(stmt.expr && stmt.expr->kind == ExprKind::Call && !stmt.expr->arguments.empty()){
+            emitIndent(out, indent);
+            out.append("{\r\n");
+            for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
+                const Expr* arg = stmt.expr->arguments[i];
+                emitIndent(out, indent + 1u);
+                if(arg && arg->isMutArg)
+                    out.append("auto& __adhd_arg_");
+                else
+                    out.append("const auto __adhd_arg_");
+                __hidden_adhd_source_emitter::AppendUnsigned(out, i);
+                out.append(" = (");
+                if(arg)
+                    emitExpr(out, *arg);
+                out.append(");\r\n");
+            }
+            emitIndent(out, indent + 1u);
+            out.append("(void)__adhd_task_scope.submit([&");
+            for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
+                const Expr* arg = stmt.expr->arguments[i];
+                if(!arg || !arg->isMutArg){
+                    out.append(", __adhd_arg_");
+                    __hidden_adhd_source_emitter::AppendUnsigned(out, i);
+                }
+            }
+            out.append("]()noexcept{ ");
+            if(stmt.expr->lhs)
+                emitExpr(out, *stmt.expr->lhs);
+            out.push_back('(');
+            for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
+                if(i > 0u)
+                    out.append(", ");
+                out.append("__adhd_arg_");
+                __hidden_adhd_source_emitter::AppendUnsigned(out, i);
+            }
+            out.append("); }, ");
+            __hidden_adhd_source_emitter::AppendTaskOptions(out, stmt);
+            out.append(");\r\n");
+            emitIndent(out, indent);
+            out.append("}\r\n");
+        }
+        else{
+            emitIndent(out, indent);
+            out.append("(void)__adhd_task_scope.submit([=]()noexcept{ ");
+            if(stmt.expr)
+                emitExpr(out, *stmt.expr);
+            out.append("; }, ");
+            __hidden_adhd_source_emitter::AppendTaskOptions(out, stmt);
+            out.append(");\r\n");
+        }
         break;
     }
     case StmtKind::NativeBlock:{

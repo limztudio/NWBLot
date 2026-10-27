@@ -32,7 +32,6 @@ struct EnumDecl{
     MStringView name;
     MStringView sizeTypeName;
     MVector<EnumEntry> entries;
-    MVector<ParsedAttribute> attributes;
     SourceSpan span;
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
@@ -41,7 +40,6 @@ struct EnumDecl{
 public:
     explicit EnumDecl(MetaArena& arena)noexcept
         : entries(arena)
-        , attributes(arena)
     {}
 };
 
@@ -53,14 +51,12 @@ struct TypeAliasDecl{
     MStringView name;
     MVector<TemplateParamDecl> templateParams;
     TypeRef* aliasedType = nullptr;
-    MVector<ParsedAttribute> attributes;
     SourceSpan span;
 
 
 public:
     explicit TypeAliasDecl(MetaArena& arena)noexcept
         : templateParams(arena)
-        , attributes(arena)
     {}
 };
 
@@ -74,7 +70,6 @@ struct FieldDecl{
     MStringView name;
     Expr* defaultExpr = nullptr;
     MVector<Expr*> ctorArgs;
-    MVector<ParsedAttribute> attributes;
     SourceSpan span;
     usize resolvedSize = 0u;
     usize resolvedAlign = 1u;
@@ -88,7 +83,6 @@ struct FieldDecl{
 public:
     explicit FieldDecl(MetaArena& arena)noexcept
         : ctorArgs(arena)
-        , attributes(arena)
     {}
 };
 
@@ -99,13 +93,11 @@ public:
 struct MethodDecl{
     AccessSpecifier::Enum access = AccessSpecifier::None;
     MStringView ownerClassName;
-    MVector<TypeArg> ownerTemplateArgs;
     MVector<TemplateParamDecl> templateParams;
     TypeRef* returnType = nullptr;
     MStringView name;
     MVector<ParamDecl> params;
     MVector<Stmt*> body;
-    MVector<ParsedAttribute> attributes;
     SourceSpan span;
     bool hasBody = false;
     bool isConst = false;
@@ -121,11 +113,9 @@ struct MethodDecl{
 
 public:
     explicit MethodDecl(MetaArena& arena)noexcept
-        : ownerTemplateArgs(arena)
-        , templateParams(arena)
+        : templateParams(arena)
         , params(arena)
         , body(arena)
-        , attributes(arena)
     {}
 };
 
@@ -138,7 +128,6 @@ struct InterfaceDecl{
     MVector<TemplateParamDecl> templateParams;
     MVector<MStringView> baseInterfaces;
     MVector<MethodDecl*> methods;
-    MVector<ParsedAttribute> attributes;
     SourceSpan span;
 
 
@@ -147,7 +136,6 @@ public:
         : templateParams(arena)
         , baseInterfaces(arena)
         , methods(arena)
-        , attributes(arena)
     {}
 };
 
@@ -162,7 +150,6 @@ struct ClassDecl{
     MVector<FieldDecl*> fields;
     MVector<FieldDecl*> orderedFields;
     MVector<MethodDecl*> methods;
-    MVector<ParsedAttribute> attributes;
     MStringView assetTypeName;
     SourceSpan span;
     usize totalSize = 1u;
@@ -179,7 +166,6 @@ public:
         , fields(arena)
         , orderedFields(arena)
         , methods(arena)
-        , attributes(arena)
     {}
 };
 

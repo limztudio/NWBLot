@@ -344,6 +344,18 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         out.append("    constexpr Enum& operator&=(Enum& a, const Enum b)noexcept{ a = (a & b); return a; }\r\n");
         out.append("    constexpr Enum& operator^=(Enum& a, const Enum b)noexcept{ a = (a ^ b); return a; }\r\n");
     }
+    out.append("    [[nodiscard]] constexpr usize reflectedEnumeratorCount()noexcept{ return ");
+    __hidden_adhd_header_emitter::AppendUnsigned(out, decl.entries.size());
+    out.append("u; }\r\n");
+    out.append("    [[nodiscard]] constexpr AStringView reflectedEnumeratorName([[maybe_unused]] const usize index)noexcept{\r\n");
+    for(usize i = 0u; i < decl.entries.size(); ++i){
+        out.append("        if(index == ");
+        __hidden_adhd_header_emitter::AppendUnsigned(out, i);
+        out.append("u) return \"");
+        out.append(decl.entries[i].name.data(), decl.entries[i].name.size());
+        out.append("\";\r\n");
+    }
+    out.append("        return {};\r\n    }\r\n");
     out.append("};\r\n\r\n");
 }
 

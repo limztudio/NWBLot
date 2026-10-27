@@ -147,7 +147,10 @@
 - **Explicit `this.XXX` Inside Method Scope (Both Member Variables & Member Functions)**:
   - Inside a member function body, accessing any **member variable** (`this.position`) or calling any **member function** (`this.update(dt)`) **must** be explicitly qualified with `this.XXX` (using `.` syntax, which compiles to `this->XXX` in C++).
   - Unqualified identifiers inside a method resolve strictly to parameters, local variables, constants, or top-level free functions—never implicitly to members of `this`.
-- **Local Variable Type Deduction (`auto`), Range-Based `for` Loops & Control Flow**:
+- **Local Variable Type Deduction (`auto`), Mandatory Initialization, Range-Based `for` Loops & Control Flow**:
+  - **Mandatory Initialization (No Uninitialized Variables)**:
+    - Every local variable **must** have an explicit initial value at the point of declaration (`u32 count = 0;`, `Vector<i32> items(6);`). Declaring an uninitialized variable (`u32 count;`) is a **compile-time error**.
+    - Every `class` member variable **must** either declare an inline default value (`public f32 speed = 1.0f;`) or be initialized in the class's constructor(s); leaving any member uninitialized is a **compile-time error**.
   - `auto` is allowed for local variable type deduction (e.g., `auto speed = 1.0f;` or an explicit type `f32 speed = 1.0f;`).
   - Range-based `for` loops require an explicit `in` or `mut` determiner followed by either `auto` or the explicit element type:
     - `for(in auto item : list)` or `for(in Foo item : list)` (read-only iteration).
@@ -324,6 +327,21 @@ All owning containers are automatically bound to the enclosing class's static ar
   - **Dependencies (`parallel B : A`)**:
     - Prerequisite `parallel` blocks must be declared first (`A` before `B : A`), guaranteeing zero dependency cycles by construction and allowing workers to begin executing root tasks immediately.
     - Active `parallel` blocks automatically join before exiting the enclosing function scope (or at an explicit `wait(...)` boundary).
+  - **`parallel` Callable Dispatch (`parallel funcWithParam(args...);`)**:
+    - Inside a `for` loop or function body, `parallel` can directly dispatch a `lambda` or function call with arguments (without a task name or `: dep` clause):
+      ```cpp
+      for(usize i = 0; i < count; ++i) {
+          u32 offset = cast<u32>(i * 64);
+
+          auto funcWithParam = lambda[mut results](in usize index, in u32 chunkOffset) -> void {
+              processChunk(index, chunkOffset, results);
+          };
+
+          [core(Heavy), priority(Normal)]
+          parallel funcWithParam(i, offset);
+      }
+      ```
+    - **Loop-Safe Argument Evaluation**: `in` arguments are evaluated immediately on the submitting thread and captured **by value** into the `Core::CpuTaskScope::submit(...)` closure (preventing loop-counter data races), while `mut` arguments and `[mut ...]` captures are bound by reference.
 - **Compile-Time Concurrency Rules**:
   - Within `parallel_for` or concurrent `parallel` bodies, shared `mut` container access is restricted to thread-safe containers (`ParallelVector`, `ParallelHashSet`, `ParallelHashMap`, `ParallelQueue`, `ParallelBlockQueue`, `Atomic<T>`) or per-worker disjoint elements/slices (`Span<T>`).
   - Read-only `in` captures may be shared freely across worker threads.

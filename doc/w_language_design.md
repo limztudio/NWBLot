@@ -179,11 +179,15 @@ All owning containers are automatically bound to the enclosing class's static ar
 
 ---
 
-## 7. Multithreading (`task`)
-- **`task` Functions**:
-  - Language-level `task` declarations compile into jobs submitted to `Core::CpuTaskScheduler` / `Core::CpuTaskScope` (`schedule`, `parallelFor`).
+## 7. Multithreading (`parallel_for`, `task_scope`, `dispatch`)
+- **`parallel_for` (Same Grammar as `for`)**:
+  - Supports both range-based (`parallel_for(in auto item : list)` / `parallel_for(mut auto item : list)`) and index-based (`parallel_for(usize i = 0; i < count; ++i)`) loops.
+  - Lowers directly to `Core::CpuTaskScheduler::parallelFor(usize begin, usize end, const Func& function)` (`core/task/cpu/scheduler.h`).
+- **`task_scope` & `dispatch`**:
+  - `task_scope { ... }` opens a `Core::CpuTaskScope` and automatically calls `scope.wait()` when exiting the block, guaranteeing that all captured `in`/`mut` variables stay alive for the duration of all dispatched tasks.
+  - Inside `task_scope`, `dispatch func(args...)` submits a task and returns a `TaskHandle`; dependent tasks can chain handles via `dispatch(depTask) nextFunc(args...)`.
 - **Compile-Time Concurrency Rules**:
-  - Within parallel `task` bodies, shared `mut` container access is restricted to thread-safe containers (`ParallelVector`, `ParallelHashSet`, `ParallelHashMap`, `ParallelQueue`, `ParallelBlockQueue`, `Atomic<T>`) or per-worker disjoint slices (`Span<T>`).
+  - Within `parallel_for` or concurrent `dispatch` bodies, shared `mut` container access is restricted to thread-safe containers (`ParallelVector`, `ParallelHashSet`, `ParallelHashMap`, `ParallelQueue`, `ParallelBlockQueue`, `Atomic<T>`) or per-worker disjoint elements/slices (`Span<T>`).
   - Read-only `in` captures may be shared freely across worker threads.
 
 ---

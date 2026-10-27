@@ -404,7 +404,7 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
             return nullptr;
         }
 
-        if(!parseParamList(method->params))
+        if(!m_typeParser.parseParamList(method->params))
             return nullptr;
 
         if(m_cursor.matchIdentifier("const"))
@@ -576,7 +576,7 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
             ctor->isConstructor = true;
             ctor->span = span;
 
-            if(!parseParamList(ctor->params))
+            if(!m_typeParser.parseParamList(ctor->params))
                 return false;
 
             if(m_cursor.check(TokenType::Colon)){
@@ -620,7 +620,7 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
         method->isOperator = true;
         method->span = span;
 
-        if(!parseParamList(method->params))
+        if(!m_typeParser.parseParamList(method->params))
             return false;
         MStringView opErr;
         if(!__hidden_adhd_decl_parser::ValidateMemberOperatorArity(opName, method->params.size(), opErr)){
@@ -692,7 +692,7 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
             if(!applyCallableAttributes(attributes, span, *method))
                 return false;
 
-            if(!parseParamList(method->params))
+            if(!m_typeParser.parseParamList(method->params))
                 return false;
 
             while(m_cursor.checkIdentifier("const") || m_cursor.checkIdentifier("override")){
@@ -796,7 +796,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
                 decl->ownerClassName = maybeClass;
                 decl->name = maybeClass;
                 decl->isConstructor = true;
-                if(!parseParamList(decl->params))
+                if(!m_typeParser.parseParamList(decl->params))
                     return nullptr;
                 if(m_cursor.check(TokenType::Colon)){
                     m_cursor.error("C++ constructor initializer lists are prohibited in adhd; initialize 'this.member' inside the constructor body");
@@ -869,7 +869,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
         return nullptr;
     }
 
-    if(!parseParamList(decl->params))
+    if(!m_typeParser.parseParamList(decl->params))
         return nullptr;
     if(decl->isOperator){
         MStringView opErr;
@@ -923,56 +923,6 @@ bool DeclParser::applyCallableAttributes(
         return false;
     }
     return true;
-}
-
-bool DeclParser::parseParamList(MVector<ParamDecl>& outParams){
-    if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for parameter list"))
-        return false;
-
-    if(!m_cursor.check(TokenType::RightParen)){
-        for(;;){
-            ParamDecl param;
-            param.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
-
-            if(m_cursor.matchIdentifier("in"))
-                param.mode = ParamPassingMode::In;
-            else if(m_cursor.matchIdentifier("mut"))
-                param.mode = ParamPassingMode::Mut;
-            else{
-                m_cursor.error("every parameter in adhd must explicitly specify 'in' or 'mut'");
-                return false;
-            }
-
-            param.type = m_typeParser.parseType(false, false);
-            if(!param.type)
-                return false;
-
-            if(!m_cursor.check(TokenType::Identifier)){
-                m_cursor.errorExpected("expected parameter name");
-                return false;
-            }
-            param.name = m_cursor.current().text;
-            m_cursor.advance();
-
-            if(m_cursor.check(TokenType::LeftBracket)){
-                m_cursor.error("C-style arrays ('T name[N]') are prohibited in adhd; use 'Array<T, N>' or 'Span<T>'");
-                return false;
-            }
-            if(m_cursor.check(TokenType::Equal)){
-                m_cursor.error("default parameter arguments are prohibited in adhd");
-                return false;
-            }
-
-            outParams.push_back(param);
-
-            if(m_cursor.check(TokenType::RightParen))
-                break;
-            if(!m_cursor.expect(TokenType::Comma, "expected ',' or ')' in parameter list"))
-                return false;
-        }
-    }
-
-    return m_cursor.expect(TokenType::RightParen, "expected ')' after parameter list");
 }
 
 bool DeclParser::parseOperatorName(MStringView& outOpName){

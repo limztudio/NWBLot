@@ -58,7 +58,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
 
     SourceEmitter sourceEmitter(m_arena, m_symbols, *this);
 
-    out.append("// limztudio@gmail.com\r\n");
+    out.append(s_AdhdGeneratedFileBanner.data(), s_AdhdGeneratedFileBanner.size());
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
     out.append("#pragma once\r\n\r\n\r\n");
     out.append("#include <global/global.h>\r\n");
@@ -202,35 +202,10 @@ void HeaderEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     }
 
     const MStringView name = type.name;
-    if(name == "String"){
-        out.append("AString");
+    if(const MStringView mappedBuiltin = SymbolTable::mapBuiltinCppType(name); !mappedBuiltin.empty()){
+        out.append(mappedBuiltin.data(), mappedBuiltin.size());
         return;
     }
-    if(name == "StringView"){
-        out.append("AStringView");
-        return;
-    }
-    if(name == "CompactString"){
-        out.append("ACompactString");
-        return;
-    }
-    if(name == "f32x4"){ out.append("Float4"); return; }
-    if(name == "i32x4"){ out.append("Int4"); return; }
-    if(name == "u32x4"){ out.append("UInt4"); return; }
-    if(name == "f32x3_i32"){ out.append("Float3Int"); return; }
-    if(name == "f32x3_u32"){ out.append("Float3UInt"); return; }
-    if(name == "f32x3x4"){ out.append("Float34"); return; }
-    if(name == "f32x4x4"){ out.append("Float44"); return; }
-    if(name == "f64x2"){ out.append("Double2"); return; }
-    if(name == "f64x3"){ out.append("Double3"); return; }
-    if(name == "f64x4"){ out.append("Double4"); return; }
-    if(name == "i64x4"){ out.append("Int64x4"); return; }
-    if(name == "u64x4"){ out.append("UInt64x4"); return; }
-    if(name == "f64x3_i64"){ out.append("Double3Int"); return; }
-    if(name == "f64x3_u64"){ out.append("Double3UInt"); return; }
-    if(name == "f64x3x3"){ out.append("Double33"); return; }
-    if(name == "f64x3x4"){ out.append("Double34"); return; }
-    if(name == "f64x4x4"){ out.append("Double44"); return; }
 
     if(m_symbols.findEnum(name)){
         out.append(name.data(), name.size());

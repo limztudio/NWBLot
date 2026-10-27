@@ -13,6 +13,7 @@
 
 #define NWB_ADHD_BEGIN NWB_METASCRIPT_BEGIN namespace Adhd{
 #define NWB_ADHD_END }; NWB_METASCRIPT_END
+#define NWB_ADHD_COMPILER_VERSION "1.0.0"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -131,6 +132,9 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
     }
     return StripAdhdExtension(path.substr(fileStart));
 }
+
+inline constexpr MStringView s_AdhdCompilerVersion = NWB_ADHD_COMPILER_VERSION;
+inline constexpr MStringView s_AdhdGeneratedFileBanner = "// Compiled by ADHD Compiler " NWB_ADHD_COMPILER_VERSION "\r\n";
 
 inline void ReportAdhdDiagnostic(MetaArena& arena, MVector<ParseError>& errors, const SourceSpan span, const MStringView message){
     errors.push_back(ParseError{span.line, span.column, MString(message.data(), message.size(), arena)});

@@ -114,7 +114,11 @@ private:
     SymbolTable& m_symbols;
     LayoutOptimizer m_layoutOptimizer;
     ParallelGraphValidator m_parallelValidator;
+    const TypeRef* m_activeLambdaReturnType = nullptr;
     u32 m_parallelDepth = 0u;
+    u32 m_loopDepth = 0u;
+    u32 m_switchDepth = 0u;
+    bool m_inLambda = false;
 };
 
 

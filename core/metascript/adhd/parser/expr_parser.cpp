@@ -36,6 +36,25 @@ namespace __hidden_adhd_expr_parser{
         || type == TokenType::GreaterGreaterEqual;
 }
 
+[[nodiscard]] Expr* MakeBinaryExpr(MetaArena& arena, const Token& opTok, Expr* lhs, Expr* rhs){
+    Expr* node = AllocateAstNode<Expr>(arena);
+    node->kind = ExprKind::Binary;
+    node->op = opTok.type;
+    node->text = opTok.text;
+    node->lhs = lhs;
+    node->rhs = rhs;
+    node->span = SourceSpan{opTok.line, opTok.column};
+    return node;
+}
+
+[[nodiscard]] Expr* MakeTokenExpr(MetaArena& arena, const ExprKind::Enum kind, const Token& tok, const SourceSpan span){
+    Expr* node = AllocateAstNode<Expr>(arena);
+    node->kind = kind;
+    node->text = tok.text;
+    node->span = span;
+    return node;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -97,14 +116,7 @@ Expr* ExprParser::parseAssignment(){
         if(!rhs)
             return nullptr;
 
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = lhs;
-        node->rhs = rhs;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        return node;
+        return __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, lhs, rhs);
     }
 
     return lhs;
@@ -118,14 +130,7 @@ Expr* ExprParser::parseLogicalOr(){
         Expr* right = parseLogicalAnd();
         if(!right)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = left;
-        node->rhs = right;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        left = node;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
     }
     return left;
 }
@@ -138,14 +143,7 @@ Expr* ExprParser::parseLogicalAnd(){
         Expr* right = parseBitwiseOr();
         if(!right)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = left;
-        node->rhs = right;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        left = node;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
     }
     return left;
 }
@@ -158,14 +156,7 @@ Expr* ExprParser::parseBitwiseOr(){
         Expr* right = parseBitwiseXor();
         if(!right)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = left;
-        node->rhs = right;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        left = node;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
     }
     return left;
 }
@@ -178,14 +169,7 @@ Expr* ExprParser::parseBitwiseXor(){
         Expr* right = parseBitwiseAnd();
         if(!right)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = left;
-        node->rhs = right;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        left = node;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
     }
     return left;
 }
@@ -198,14 +182,7 @@ Expr* ExprParser::parseBitwiseAnd(){
         Expr* right = parseEquality();
         if(!right)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = left;
-        node->rhs = right;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        left = node;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
     }
     return left;
 }
@@ -218,14 +195,7 @@ Expr* ExprParser::parseEquality(){
         Expr* right = parseRelational();
         if(!right)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = left;
-        node->rhs = right;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        left = node;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
     }
     return left;
 }
@@ -238,14 +208,7 @@ Expr* ExprParser::parseRelational(){
         Expr* right = parseShift();
         if(!right)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = left;
-        node->rhs = right;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        left = node;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
     }
     return left;
 }
@@ -258,14 +221,7 @@ Expr* ExprParser::parseShift(){
         Expr* right = parseAdditive();
         if(!right)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = left;
-        node->rhs = right;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        left = node;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
     }
     return left;
 }
@@ -278,14 +234,7 @@ Expr* ExprParser::parseAdditive(){
         Expr* right = parseMultiplicative();
         if(!right)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = left;
-        node->rhs = right;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        left = node;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
     }
     return left;
 }
@@ -298,14 +247,7 @@ Expr* ExprParser::parseMultiplicative(){
         Expr* right = parseUnary();
         if(!right)
             return nullptr;
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::Binary;
-        node->op = opTok.type;
-        node->text = opTok.text;
-        node->lhs = left;
-        node->rhs = right;
-        node->span = SourceSpan{opTok.line, opTok.column};
-        left = node;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
     }
     return left;
 }
@@ -434,38 +376,22 @@ Expr* ExprParser::parsePrimary(){
 
     if(tok.type == TokenType::IntegerLiteral){
         m_cursor.advance();
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::IntegerLiteral;
-        node->text = tok.text;
-        node->span = span;
-        return node;
+        return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::IntegerLiteral, tok, span);
     }
 
     if(tok.type == TokenType::FloatLiteral){
         m_cursor.advance();
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::FloatLiteral;
-        node->text = tok.text;
-        node->span = span;
-        return node;
+        return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::FloatLiteral, tok, span);
     }
 
     if(tok.type == TokenType::DoubleLiteral){
         m_cursor.advance();
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::DoubleLiteral;
-        node->text = tok.text;
-        node->span = span;
-        return node;
+        return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::DoubleLiteral, tok, span);
     }
 
     if(tok.type == TokenType::StringLiteral){
         m_cursor.advance();
-        Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-        node->kind = ExprKind::StringLiteral;
-        node->text = tok.text;
-        node->span = span;
-        return node;
+        return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::StringLiteral, tok, span);
     }
 
     if(m_cursor.match(TokenType::LeftParen)){
@@ -581,11 +507,7 @@ Expr* ExprParser::parsePrimary(){
             return scopeNode;
         }
 
-        Expr* idNode = AllocateAstNode<Expr>(m_cursor.arena());
-        idNode->kind = ExprKind::Identifier;
-        idNode->text = tok.text;
-        idNode->span = span;
-        return idNode;
+        return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::Identifier, tok, span);
     }
 
     m_cursor.errorExpected("expected expression");
@@ -630,48 +552,7 @@ Expr* ExprParser::parseLambda(const SourceSpan span){
             return nullptr;
     }
 
-    if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for lambda parameter list"))
-        return nullptr;
-
-    if(!m_cursor.check(TokenType::RightParen)){
-        for(;;){
-            ParamDecl param;
-            param.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
-            if(m_cursor.matchIdentifier("in"))
-                param.mode = ParamPassingMode::In;
-            else if(m_cursor.matchIdentifier("mut"))
-                param.mode = ParamPassingMode::Mut;
-            else{
-                m_cursor.error("lambda parameter must explicitly specify 'in' or 'mut'");
-                return nullptr;
-            }
-
-            param.type = m_typeParser.parseType(false, false);
-            if(!param.type)
-                return nullptr;
-
-            if(!m_cursor.check(TokenType::Identifier)){
-                m_cursor.errorExpected("expected parameter name in lambda");
-                return nullptr;
-            }
-            param.name = m_cursor.current().text;
-            m_cursor.advance();
-
-            if(m_cursor.check(TokenType::Equal)){
-                m_cursor.error("default parameter arguments are prohibited in adhd");
-                return nullptr;
-            }
-
-            node->lambdaParams.push_back(param);
-
-            if(m_cursor.check(TokenType::RightParen))
-                break;
-            if(!m_cursor.expect(TokenType::Comma, "expected ',' or ')' in lambda parameter list"))
-                return nullptr;
-        }
-    }
-
-    if(!m_cursor.expect(TokenType::RightParen, "expected ')' after lambda parameters"))
+    if(!m_typeParser.parseParamList(node->lambdaParams))
         return nullptr;
 
     if(!m_cursor.expect(TokenType::Arrow, "expected '-> ReturnType' after lambda parameters"))

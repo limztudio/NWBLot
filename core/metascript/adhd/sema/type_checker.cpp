@@ -824,10 +824,16 @@ bool TypeChecker::checkStatement(
     }
     case StmtKind::ParallelBlock:{
         method.usesTaskScope = true;
+        const u32 savedLoop = m_loopDepth;
+        const u32 savedSwitch = m_switchDepth;
+        m_loopDepth = 0u;
+        m_switchDepth = 0u;
         ++m_parallelDepth;
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
         --m_parallelDepth;
+        m_loopDepth = savedLoop;
+        m_switchDepth = savedSwitch;
         break;
     }
     case StmtKind::VarDecl:{
@@ -905,10 +911,42 @@ bool TypeChecker::checkStatement(
         scope.push_back(info);
         break;
     }
-    case StmtKind::ExprStmt:
-    case StmtKind::Return:{
+    case StmtKind::ExprStmt:{
         if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
             ok = false;
+        break;
+    }
+    case StmtKind::Return:{
+        if(m_parallelDepth > 0u && !m_inLambda){
+            reportError(errors, stmt.span, "'return' cannot be used inside a 'parallel' or 'parallel_for' construct");
+            ok = false;
+        }
+        const TypeRef* activeRetType = m_inLambda ? m_activeLambdaReturnType : method.returnType;
+        const bool isVoidLike = (!m_inLambda && (method.isConstructor || method.isDestructor)) || !activeRetType || activeRetType->name == "void";
+        if(isVoidLike && stmt.expr){
+            reportError(errors, stmt.span, "cannot return a value from a 'void' function, constructor, or destructor");
+            ok = false;
+        }
+        else if(!isVoidLike && !stmt.expr){
+            reportError(errors, stmt.span, "non-void function must return a value");
+            ok = false;
+        }
+        if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
+            ok = false;
+        break;
+    }
+    case StmtKind::Break:{
+        if(m_loopDepth == 0u && m_switchDepth == 0u){
+            reportError(errors, stmt.span, "'break' cannot be used outside of a sequential loop or 'switch'");
+            ok = false;
+        }
+        break;
+    }
+    case StmtKind::Continue:{
+        if(m_loopDepth == 0u){
+            reportError(errors, stmt.span, "'continue' cannot be used outside of a sequential loop");
+            ok = false;
+        }
         break;
     }
     case StmtKind::ParallelCall:{
@@ -951,6 +989,7 @@ bool TypeChecker::checkStatement(
                 stmt.lowerSwitchToIfChain = true;
             }
         }
+        ++m_switchDepth;
         for(SwitchCase& sc : stmt.switchCases){
             if(sc.matchExpr){
                 if(!checkExpr(ownerClass, method, *sc.matchExpr, scope, false, errors))
@@ -961,6 +1000,7 @@ bool TypeChecker::checkStatement(
             if(!checkStatementList(ownerClass, method, sc.statements, scope, errors))
                 ok = false;
         }
+        --m_switchDepth;
         break;
     }
     case StmtKind::ForRange:
@@ -978,12 +1018,22 @@ bool TypeChecker::checkStatement(
         loopVar.isConst = (stmt.rangeMode == ParamPassingMode::In);
         loopVar.isParam = true;
         scope.push_back(loopVar);
-        if(isPar)
+        const u32 savedLoop = m_loopDepth;
+        const u32 savedSwitch = m_switchDepth;
+        if(isPar){
+            m_loopDepth = 0u;
+            m_switchDepth = 0u;
             ++m_parallelDepth;
+        }
+        else{
+            ++m_loopDepth;
+        }
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
         if(isPar)
             --m_parallelDepth;
+        m_loopDepth = savedLoop;
+        m_switchDepth = savedSwitch;
         while(scope.size() > saved)
             scope.pop_back();
         break;
@@ -1000,12 +1050,22 @@ bool TypeChecker::checkStatement(
             ok = false;
         if(stmt.stepExpr && !checkExpr(ownerClass, method, *stmt.stepExpr, scope, false, errors))
             ok = false;
-        if(isPar)
+        const u32 savedLoop = m_loopDepth;
+        const u32 savedSwitch = m_switchDepth;
+        if(isPar){
+            m_loopDepth = 0u;
+            m_switchDepth = 0u;
             ++m_parallelDepth;
+        }
+        else{
+            ++m_loopDepth;
+        }
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
         if(isPar)
             --m_parallelDepth;
+        m_loopDepth = savedLoop;
+        m_switchDepth = savedSwitch;
         while(scope.size() > saved)
             scope.pop_back();
         break;
@@ -1014,8 +1074,10 @@ bool TypeChecker::checkStatement(
     case StmtKind::DoWhile:{
         if(stmt.condition && !checkExpr(ownerClass, method, *stmt.condition, scope, false, errors))
             ok = false;
+        ++m_loopDepth;
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
+        --m_loopDepth;
         break;
     }
     case StmtKind::NativeBlock:{
@@ -1447,8 +1509,20 @@ bool TypeChecker::checkExpr(
             paramVar.isParam = true;
             lambdaScope.push_back(paramVar);
         }
+        const bool savedInLambda = m_inLambda;
+        const TypeRef* savedLambdaRet = m_activeLambdaReturnType;
+        const u32 savedLoop = m_loopDepth;
+        const u32 savedSwitch = m_switchDepth;
+        m_inLambda = true;
+        m_activeLambdaReturnType = expr.lambdaReturnType;
+        m_loopDepth = 0u;
+        m_switchDepth = 0u;
         if(!checkStatementList(ownerClass, method, expr.lambdaBody, lambdaScope, errors))
             ok = false;
+        m_inLambda = savedInLambda;
+        m_activeLambdaReturnType = savedLambdaRet;
+        m_loopDepth = savedLoop;
+        m_switchDepth = savedSwitch;
         break;
     }
     default:

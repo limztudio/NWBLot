@@ -123,6 +123,28 @@ void EmitFieldNameLookupBody(
     out.append("return {};\r\n");
 }
 
+void EmitAssetTypeNameDecl(MString& out, const ClassDecl& decl){
+    if(!decl.assetTypeName.empty()){
+        out.append("    inline static constexpr AStringView s_AssetTypeName = \"");
+        out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
+        out.append("\";\r\n");
+    }
+}
+
+void EmitReflectedCountMethod(MString& out, const MStringView methodName, const usize count){
+    out.append("    [[nodiscard]] static constexpr usize ");
+    out.append(methodName.data(), methodName.size());
+    out.append("()noexcept{ return ");
+    AppendAdhdUnsigned(out, count);
+    out.append("u; }\r\n");
+}
+
+void EmitNwbFieldFindPrefix(MString& out, const MStringView fieldName){
+    out.append("        if(const auto* __f = inMap.findField(\"");
+    out.append(fieldName.data(), fieldName.size());
+    out.append("\"); __f && ");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -134,13 +156,10 @@ void EmitFieldNameLookupBody(
 
 
 void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const ClassDecl& decl)const{
-    out.append("public:\r\n");
+    using namespace __hidden_adhd_reflection_emitter;
 
-    if(!decl.assetTypeName.empty()){
-        out.append("    inline static constexpr AStringView s_AssetTypeName = \"");
-        out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
-        out.append("\";\r\n");
-    }
+    out.append("public:\r\n");
+    EmitAssetTypeNameDecl(out, decl);
 
     if(decl.isSerialize){
         out.append("    [[nodiscard]] usize serializeBinary(u8* outBuffer, usize bufferCapacity)const noexcept;\r\n");
@@ -148,9 +167,13 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
     }
 
     if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
-        out.append("    [[nodiscard]] static constexpr usize reflectedFieldCount()noexcept;\r\n");
+        usize nonTransientCount = 0u;
+        usize assetRefCount = 0u;
+        CountReflectedFields(decl.fields, nonTransientCount, assetRefCount);
+
+        EmitReflectedCountMethod(out, "reflectedFieldCount", nonTransientCount);
         out.append("    [[nodiscard]] static AStringView reflectedFieldName(usize index)noexcept;\r\n");
-        out.append("    [[nodiscard]] static constexpr usize assetDependencyFieldCount()noexcept;\r\n");
+        EmitReflectedCountMethod(out, "assetDependencyFieldCount", assetRefCount);
         out.append("    [[nodiscard]] static AStringView assetDependencyFieldName(usize index)noexcept;\r\n");
         emitDeserializeNwbMethod(out, decl.fields);
     }
@@ -160,12 +183,7 @@ void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl&
     using namespace __hidden_adhd_reflection_emitter;
 
     out.append("public:\r\n");
-
-    if(!decl.assetTypeName.empty()){
-        out.append("    inline static constexpr AStringView s_AssetTypeName = \"");
-        out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
-        out.append("\";\r\n");
-    }
+    EmitAssetTypeNameDecl(out, decl);
 
     if(decl.isSerialize){
         out.append("    [[nodiscard]] usize serializeBinary(u8* outBuffer, const usize bufferCapacity)const noexcept{\r\n");
@@ -181,18 +199,12 @@ void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl&
     usize assetRefCount = 0u;
     CountReflectedFields(fields, nonTransientCount, assetRefCount);
 
-    out.append("    [[nodiscard]] static constexpr usize reflectedFieldCount()noexcept{ return ");
-    AppendAdhdUnsigned(out, nonTransientCount);
-    out.append("u; }\r\n");
-
+    EmitReflectedCountMethod(out, "reflectedFieldCount", nonTransientCount);
     out.append("    [[nodiscard]] static AStringView reflectedFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
     EmitFieldNameLookupBody(out, fields, false, "        ");
     out.append("    }\r\n");
 
-    out.append("    [[nodiscard]] static constexpr usize assetDependencyFieldCount()noexcept{ return ");
-    AppendAdhdUnsigned(out, assetRefCount);
-    out.append("u; }\r\n");
-
+    EmitReflectedCountMethod(out, "assetDependencyFieldCount", assetRefCount);
     out.append("    [[nodiscard]] static AStringView assetDependencyFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
     EmitFieldNameLookupBody(out, fields, true, "        ");
     out.append("    }\r\n");
@@ -208,11 +220,11 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
     for(const FieldDecl* field : fields){
         if(!field || field->isTransient || field->access != AccessSpecifier::Public || !field->type)
             continue;
+        using namespace __hidden_adhd_reflection_emitter;
         const MStringView tname = field->type->name;
         if(tname == "bool"){
-            out.append("        if(const auto* __f = inMap.findField(\"");
-            out.append(field->name.data(), field->name.size());
-            out.append("\"); __f && __f->isNumeric()) this->");
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isNumeric()) this->");
             out.append(field->name.data(), field->name.size());
             out.append(" = (__f->asInteger() != 0);\r\n");
         }
@@ -220,64 +232,73 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
             || tname == "i32" || tname == "u32" || tname == "i64" || tname == "u64"
             || tname == "isize" || tname == "usize")
         {
-            out.append("        if(const auto* __f = inMap.findField(\"");
-            out.append(field->name.data(), field->name.size());
-            out.append("\"); __f && __f->isNumeric()) this->");
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isNumeric()) this->");
             out.append(field->name.data(), field->name.size());
             out.append(" = static_cast<");
             out.append(tname.data(), tname.size());
             out.append(">(__f->asInteger());\r\n");
         }
         else if(tname == "f32" || tname == "f64"){
-            out.append("        if(const auto* __f = inMap.findField(\"");
-            out.append(field->name.data(), field->name.size());
-            out.append("\"); __f && __f->isNumeric()) this->");
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isNumeric()) this->");
             out.append(field->name.data(), field->name.size());
             out.append(" = static_cast<");
             out.append(tname.data(), tname.size());
             out.append(">(__f->toDouble());\r\n");
         }
         else if(tname == "String" || tname == "CompactString"){
-            out.append("        if(const auto* __f = inMap.findField(\"");
-            out.append(field->name.data(), field->name.size());
-            out.append("\"); __f && __f->isString()) this->");
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isString()) this->");
             out.append(field->name.data(), field->name.size());
             out.append(".assign(__f->asString());\r\n");
         }
         else if(tname == "Name"){
-            out.append("        if(const auto* __f = inMap.findField(\"");
-            out.append(field->name.data(), field->name.size());
-            out.append("\"); __f && __f->isString()) this->");
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isString()) this->");
             out.append(field->name.data(), field->name.size());
             out.append(" = ::NWB::Core::Common::Name(__f->asString());\r\n");
         }
         else if(tname == "AssetRef"){
-            out.append("        if(const auto* __f = inMap.findField(\"");
-            out.append(field->name.data(), field->name.size());
-            out.append("\"); __f && __f->isString()) this->");
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isString()) this->");
             out.append(field->name.data(), field->name.size());
             out.append(".virtualPath = ::NWB::Core::Common::Name(__f->asString());\r\n");
         }
-        else if(tname == "f32x4"){
-            out.append("        if(const auto* __f = inMap.findField(\"");
+        else if(u32 simdLanes = 0u; SymbolTable::isSimdVectorType(tname, simdLanes) && simdLanes >= 2u && simdLanes <= 4u){
+            const MStringView cppVecType = SymbolTable::mapBuiltinCppType(tname);
+            const MStringView laneScalar = tname.substr(0u, 3u);
+            const bool isIntLane = (tname[0] == 'i' || tname[0] == 'u');
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isList() && __f->asList().size() == ");
+            AppendAdhdUnsigned(out, simdLanes);
+            out.append("u) this->");
             out.append(field->name.data(), field->name.size());
-            out.append("\"); __f && __f->isList() && __f->asList().size() == 4u) this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(" = Float4(static_cast<f32>(__f->asList()[0].toDouble()), static_cast<f32>(__f->asList()[1].toDouble()), static_cast<f32>(__f->asList()[2].toDouble()), static_cast<f32>(__f->asList()[3].toDouble()));\r\n");
+            out.append(" = ");
+            out.append(cppVecType.data(), cppVecType.size());
+            out.push_back('(');
+            for(u32 lane = 0u; lane < simdLanes; ++lane){
+                if(lane > 0u)
+                    out.append(", ");
+                out.append("static_cast<");
+                out.append(laneScalar.data(), laneScalar.size());
+                out.append(">(__f->asList()[");
+                AppendAdhdUnsigned(out, lane);
+                out.append(isIntLane ? "].asInteger())" : "].toDouble())");
+            }
+            out.append(");\r\n");
         }
         else if(m_symbols.findEnum(tname)){
-            out.append("        if(const auto* __f = inMap.findField(\"");
-            out.append(field->name.data(), field->name.size());
-            out.append("\"); __f && __f->isNumeric()) this->");
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isNumeric()) this->");
             out.append(field->name.data(), field->name.size());
             out.append(" = static_cast<");
             out.append(tname.data(), tname.size());
             out.append("::Enum>(__f->asInteger());\r\n");
         }
         else if(const ClassDecl* nestedCls = m_symbols.findClass(tname); nestedCls && (nestedCls->isSerialize || nestedCls->isReflect || !nestedCls->assetTypeName.empty() || !nestedCls->templateParams.empty())){
-            out.append("        if(const auto* __f = inMap.findField(\"");
-            out.append(field->name.data(), field->name.size());
-            out.append("\"); __f && __f->isMap() && !this->");
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isMap() && !this->");
             out.append(field->name.data(), field->name.size());
             out.append(".deserializeNwb(*__f)) return false;\r\n");
         }
@@ -304,27 +325,11 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
     }
 
     if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
-        usize nonTransientCount = 0u;
-        usize assetRefCount = 0u;
-        CountReflectedFields(decl.fields, nonTransientCount, assetRefCount);
-
-        out.append("constexpr usize ");
-        out.append(decl.name.data(), decl.name.size());
-        out.append("::reflectedFieldCount()noexcept{\r\n    return ");
-        AppendAdhdUnsigned(out, nonTransientCount);
-        out.append("u;\r\n}\r\n\r\n");
-
         out.append("AStringView ");
         out.append(decl.name.data(), decl.name.size());
         out.append("::reflectedFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
         EmitFieldNameLookupBody(out, decl.fields, false, "    ");
         out.append("}\r\n\r\n");
-
-        out.append("constexpr usize ");
-        out.append(decl.name.data(), decl.name.size());
-        out.append("::assetDependencyFieldCount()noexcept{\r\n    return ");
-        AppendAdhdUnsigned(out, assetRefCount);
-        out.append("u;\r\n}\r\n\r\n");
 
         out.append("AStringView ");
         out.append(decl.name.data(), decl.name.size());

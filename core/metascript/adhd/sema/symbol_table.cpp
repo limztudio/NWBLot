@@ -192,6 +192,30 @@ bool SymbolTable::isStringSwitchType(const MStringView typeName)noexcept{
         || typeName == "Name";
 }
 
+MStringView SymbolTable::mapBuiltinCppType(const MStringView typeName)noexcept{
+    if(typeName == "String") return "AString";
+    if(typeName == "StringView") return "AStringView";
+    if(typeName == "CompactString") return "ACompactString";
+    if(typeName == "f32x4") return "Float4";
+    if(typeName == "i32x4") return "Int4";
+    if(typeName == "u32x4") return "UInt4";
+    if(typeName == "f32x3_i32") return "Float3Int";
+    if(typeName == "f32x3_u32") return "Float3UInt";
+    if(typeName == "f32x3x4") return "Float34";
+    if(typeName == "f32x4x4") return "Float44";
+    if(typeName == "f64x2") return "Double2";
+    if(typeName == "f64x3") return "Double3";
+    if(typeName == "f64x4") return "Double4";
+    if(typeName == "i64x4") return "Int64x4";
+    if(typeName == "u64x4") return "UInt64x4";
+    if(typeName == "f64x3_i64") return "Double3Int";
+    if(typeName == "f64x3_u64") return "Double3UInt";
+    if(typeName == "f64x3x3") return "Double33";
+    if(typeName == "f64x3x4") return "Double34";
+    if(typeName == "f64x4x4") return "Double44";
+    return {};
+}
+
 bool SymbolTable::hasTypeSymbol(const MStringView name)const noexcept{
     return findEnum(name) != nullptr
         || findInterface(name) != nullptr

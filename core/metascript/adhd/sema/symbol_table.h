@@ -46,6 +46,7 @@ public:
     [[nodiscard]] static bool isArenaBackedContainer(MStringView typeName)noexcept;
     [[nodiscard]] static bool isSimdVectorType(MStringView typeName, u32& outLanes)noexcept;
     [[nodiscard]] static bool isStringSwitchType(MStringView typeName)noexcept;
+    [[nodiscard]] static MStringView mapBuiltinCppType(MStringView typeName)noexcept;
 
 
 private:

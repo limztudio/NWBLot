@@ -28,6 +28,7 @@ public:
     [[nodiscard]] TypeRef* parseType(bool allowRefMode = false, bool allowAuto = false);
     [[nodiscard]] bool parseTemplateParamList(MVector<TemplateParamDecl>& outParams);
     [[nodiscard]] bool parseTypeArgList(MVector<TypeArg>& outArgs);
+    [[nodiscard]] bool parseParamList(MVector<ParamDecl>& outParams);
 
 
 private:

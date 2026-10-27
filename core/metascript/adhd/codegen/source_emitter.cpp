@@ -89,7 +89,7 @@ MString SourceEmitter::emitSource(
 
     ReflectionEmitter reflectionEmitter(m_symbols);
 
-    out.append("// limztudio@gmail.com\r\n");
+    out.append(s_AdhdGeneratedFileBanner.data(), s_AdhdGeneratedFileBanner.size());
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
     out.append("#include \"");
     out.append(headerIncludePath.data(), headerIncludePath.size());
@@ -422,8 +422,11 @@ void SourceEmitter::emitStmt(
         else
             out.append("0u");
         out.append("), static_cast<usize>(");
-        if(stmt.condition && stmt.condition->kind == ExprKind::Binary && stmt.condition->rhs)
+        if(stmt.condition && stmt.condition->kind == ExprKind::Binary && stmt.condition->rhs){
             emitExpr(out, *stmt.condition->rhs);
+            if(stmt.condition->op == TokenType::LessEqual)
+                out.append(" + 1u");
+        }
         else if(stmt.condition)
             emitExpr(out, *stmt.condition);
         else

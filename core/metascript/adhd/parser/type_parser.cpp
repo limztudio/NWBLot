@@ -202,6 +202,56 @@ bool TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
     return expectClosingAngle();
 }
 
+bool TypeParser::parseParamList(MVector<ParamDecl>& outParams){
+    if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for parameter list"))
+        return false;
+
+    if(!m_cursor.check(TokenType::RightParen)){
+        for(;;){
+            ParamDecl param;
+            param.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
+
+            if(m_cursor.matchIdentifier("in"))
+                param.mode = ParamPassingMode::In;
+            else if(m_cursor.matchIdentifier("mut"))
+                param.mode = ParamPassingMode::Mut;
+            else{
+                m_cursor.error("every parameter in adhd must explicitly specify 'in' or 'mut'");
+                return false;
+            }
+
+            param.type = parseType(false, false);
+            if(!param.type)
+                return false;
+
+            if(!m_cursor.check(TokenType::Identifier)){
+                m_cursor.errorExpected("expected parameter name");
+                return false;
+            }
+            param.name = m_cursor.current().text;
+            m_cursor.advance();
+
+            if(m_cursor.check(TokenType::LeftBracket)){
+                m_cursor.error("C-style arrays ('T name[N]') are prohibited in adhd; use 'Array<T, N>' or 'Span<T>'");
+                return false;
+            }
+            if(m_cursor.check(TokenType::Equal)){
+                m_cursor.error("default parameter arguments are prohibited in adhd");
+                return false;
+            }
+
+            outParams.push_back(param);
+
+            if(m_cursor.check(TokenType::RightParen))
+                break;
+            if(!m_cursor.expect(TokenType::Comma, "expected ',' or ')' in parameter list"))
+                return false;
+        }
+    }
+
+    return m_cursor.expect(TokenType::RightParen, "expected ')' after parameter list");
+}
+
 bool TypeParser::expectClosingAngle(){
     if(m_pendingRightAngles > 0u){
         --m_pendingRightAngles;

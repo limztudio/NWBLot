@@ -723,6 +723,8 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
     ASSERT_TRUE(Compiler::compile(s_FuncAndSimdParamAbiSource, "impl/param_abi.adhd", arena.arena, abiRes));
     EXPECT_NE(MStringView(abiRes.generatedHeader.data(), abiRes.generatedHeader.size()).find("InplaceFunction<0u, i32(i32)>"), MStringView::npos);
     EXPECT_NE(MStringView(abiRes.generatedHeader.data(), abiRes.generatedHeader.size()).find("const Float4& tint"), MStringView::npos);
+    EXPECT_EQ(MStringView(abiRes.generatedHeader.data(), abiRes.generatedHeader.size()).find("// Compiled by ADHD Compiler 1.0.0\r\n"), 0u);
+    EXPECT_EQ(MStringView(abiRes.generatedSource.data(), abiRes.generatedSource.size()).find("// Compiled by ADHD Compiler 1.0.0\r\n"), 0u);
 
     static constexpr MStringView s_TemplateArgCountMismatchSource =
         "class Pair<T, U> {\r\n"
@@ -749,6 +751,49 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "}\r\n";
     CompileResult dupLocalRes(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_DuplicateLocalVarSource, "impl/dup_local.adhd", arena.arena, dupLocalRes));
+
+    static constexpr MStringView s_SimdNwbAndParallelInclusiveSource =
+        "[reflect]\r\n"
+        "class BoundsAsset {\r\n"
+        "    public f64x3 extent = f64x3(1.0, 2.0, 3.0);\r\n"
+        "    public i32x4 tile = i32x4(0, 0, 1, 1);\r\n"
+        "}\r\n"
+        "void runInclusive() {\r\n"
+        "    parallel_for (u32 i = 0u; i <= 7u; ++i) {\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult simdNwbRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_SimdNwbAndParallelInclusiveSource, "impl/bounds_asset.adhd", arena.arena, simdNwbRes));
+    const MStringView boundsHdr(simdNwbRes.generatedHeader.data(), simdNwbRes.generatedHeader.size());
+    const MStringView boundsCpp(simdNwbRes.generatedSource.data(), simdNwbRes.generatedSource.size());
+    EXPECT_NE(boundsHdr.find("static constexpr usize reflectedFieldCount()noexcept{ return 2u; }"), MStringView::npos);
+    EXPECT_NE(boundsHdr.find("Double3(static_cast<f64>"), MStringView::npos);
+    EXPECT_NE(boundsHdr.find("Int4(static_cast<i32>"), MStringView::npos);
+    EXPECT_NE(boundsCpp.find("static_cast<usize>(7u + 1u)"), MStringView::npos);
+
+    static constexpr MStringView s_BreakOutsideLoopSource =
+        "void badBreak() {\r\n"
+        "    break;\r\n"
+        "}\r\n";
+    CompileResult badBreakRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BreakOutsideLoopSource, "impl/bad_break.adhd", arena.arena, badBreakRes));
+
+    static constexpr MStringView s_ReturnInParallelSource =
+        "u32 badParReturn() {\r\n"
+        "    parallel_for (u32 i = 0u; i < 4u; ++i) {\r\n"
+        "        return i;\r\n"
+        "    }\r\n"
+        "    return 0u;\r\n"
+        "}\r\n";
+    CompileResult badParRetRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_ReturnInParallelSource, "impl/bad_par_ret.adhd", arena.arena, badParRetRes));
+
+    static constexpr MStringView s_VoidReturnValueSource =
+        "void badVoidRet() {\r\n"
+        "    return 42;\r\n"
+        "}\r\n";
+    CompileResult badVoidRetRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_VoidReturnValueSource, "impl/bad_void_ret.adhd", arena.arena, badVoidRetRes));
 }
 
 

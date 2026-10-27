@@ -1,0 +1,224 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "ast_stmt.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct EnumEntry{
+    MStringView name;
+    Expr* valueExpr = nullptr;
+    SourceSpan span;
+    bool isFlag = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct EnumDecl{
+    MStringView name;
+    MStringView sizeTypeName;
+    MVector<EnumEntry> entries;
+    MVector<ParsedAttribute> attributes;
+    SourceSpan span;
+    usize underlyingSize = 1u;
+    usize underlyingAlign = 1u;
+
+
+public:
+    explicit EnumDecl(MetaArena& arena)noexcept
+        : entries(arena)
+        , attributes(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct TypeAliasDecl{
+    MStringView name;
+    MVector<TemplateParamDecl> templateParams;
+    TypeRef* aliasedType = nullptr;
+    MVector<ParsedAttribute> attributes;
+    SourceSpan span;
+
+
+public:
+    explicit TypeAliasDecl(MetaArena& arena)noexcept
+        : templateParams(arena)
+        , attributes(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct FieldDecl{
+    AccessSpecifier::Enum access = AccessSpecifier::None;
+    TypeRef* type = nullptr;
+    MStringView name;
+    Expr* defaultExpr = nullptr;
+    MVector<Expr*> ctorArgs;
+    MVector<ParsedAttribute> attributes;
+    SourceSpan span;
+    usize resolvedSize = 0u;
+    usize resolvedAlign = 1u;
+    usize resolvedOffset = 0u;
+    usize originalIndex = 0u;
+    bool hasCtorInit = false;
+    bool usesClassArena = false;
+    bool isTransient = false;
+
+
+public:
+    explicit FieldDecl(MetaArena& arena)noexcept
+        : ctorArgs(arena)
+        , attributes(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MethodDecl{
+    AccessSpecifier::Enum access = AccessSpecifier::None;
+    MStringView ownerClassName;
+    MVector<TypeArg> ownerTemplateArgs;
+    MVector<TemplateParamDecl> templateParams;
+    TypeRef* returnType = nullptr;
+    MStringView name;
+    MVector<ParamDecl> params;
+    MVector<Stmt*> body;
+    MVector<ParsedAttribute> attributes;
+    SourceSpan span;
+    bool hasBody = false;
+    bool isConst = false;
+    bool isOverride = false;
+    bool isConstructor = false;
+    bool isDestructor = false;
+    bool isOperator = false;
+    bool isInline = false;
+    bool isNoInline = false;
+    bool usesScratchArena = false;
+    bool usesTaskScope = false;
+
+
+public:
+    explicit MethodDecl(MetaArena& arena)noexcept
+        : ownerTemplateArgs(arena)
+        , templateParams(arena)
+        , params(arena)
+        , body(arena)
+        , attributes(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct InterfaceDecl{
+    MStringView name;
+    MVector<TemplateParamDecl> templateParams;
+    MVector<MStringView> baseInterfaces;
+    MVector<MethodDecl*> methods;
+    MVector<ParsedAttribute> attributes;
+    SourceSpan span;
+
+
+public:
+    explicit InterfaceDecl(MetaArena& arena)noexcept
+        : templateParams(arena)
+        , baseInterfaces(arena)
+        , methods(arena)
+        , attributes(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ClassDecl{
+    MStringView name;
+    MVector<TemplateParamDecl> templateParams;
+    MVector<MStringView> implementedInterfaces;
+    MVector<FieldDecl*> fields;
+    MVector<FieldDecl*> orderedFields;
+    MVector<MethodDecl*> methods;
+    MVector<ParsedAttribute> attributes;
+    MStringView assetTypeName;
+    SourceSpan span;
+    usize totalSize = 1u;
+    usize totalAlign = 1u;
+    bool isSerialize = false;
+    bool isReflect = false;
+    bool needsClassArena = false;
+
+
+public:
+    explicit ClassDecl(MetaArena& arena)noexcept
+        : templateParams(arena)
+        , implementedInterfaces(arena)
+        , fields(arena)
+        , orderedFields(arena)
+        , methods(arena)
+        , attributes(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct TranslationUnit{
+    MVector<MStringView> topLevelNativeBlocks;
+    MVector<MString> includedAdhdFiles;
+    MVector<Stmt*> globalConstants;
+    MVector<TypeAliasDecl*> typeAliases;
+    MVector<EnumDecl*> enums;
+    MVector<InterfaceDecl*> interfaces;
+    MVector<ClassDecl*> classes;
+    MVector<MethodDecl*> freeFunctions;
+    MVector<MethodDecl*> outOfLineMethods;
+
+
+public:
+    explicit TranslationUnit(MetaArena& arena)noexcept
+        : topLevelNativeBlocks(arena)
+        , includedAdhdFiles(arena)
+        , globalConstants(arena)
+        , typeAliases(arena)
+        , enums(arena)
+        , interfaces(arena)
+        , classes(arena)
+        , freeFunctions(arena)
+        , outOfLineMethods(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

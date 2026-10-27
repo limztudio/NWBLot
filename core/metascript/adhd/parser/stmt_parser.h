@@ -1,0 +1,66 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "expr_parser.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class StmtParser{
+public:
+    StmtParser(ParserCursor& cursor, TypeParser& typeParser, ExprParser& exprParser, MStringView rawSource)noexcept
+        : m_cursor(cursor)
+        , m_typeParser(typeParser)
+        , m_exprParser(exprParser)
+        , m_rawSource(rawSource)
+    {}
+
+
+public:
+    [[nodiscard]] bool parseBlockStatements(MVector<Stmt*>& outStatements);
+    [[nodiscard]] Stmt* parseStatement();
+    [[nodiscard]] bool parseRawNativeBlock(MStringView& outCode);
+
+
+private:
+    [[nodiscard]] Stmt* parseIfStatement(SourceSpan span);
+    [[nodiscard]] Stmt* parseSwitchStatement(SourceSpan span);
+    [[nodiscard]] Stmt* parseForOrParallelFor(SourceSpan span, bool isParallel, MVector<ParsedAttribute>&& attributes);
+    [[nodiscard]] Stmt* parseWhileStatement(SourceSpan span);
+    [[nodiscard]] Stmt* parseDoWhileStatement(SourceSpan span);
+    [[nodiscard]] Stmt* parseReturnStatement(SourceSpan span);
+    [[nodiscard]] Stmt* parseParallelStatement(SourceSpan span, MVector<ParsedAttribute>&& attributes);
+    [[nodiscard]] Stmt* parseNativeStatement(SourceSpan span);
+    [[nodiscard]] Stmt* parseDiagnosticStatement(SourceSpan span, DiagnosticKind::Enum kind, MVector<ParsedAttribute>&& attributes);
+    [[nodiscard]] Stmt* parseConstDeclaration(SourceSpan span);
+    [[nodiscard]] Stmt* parseVarDeclAfterType(TypeRef* varType, SourceSpan span);
+    [[nodiscard]] bool applySchedulingAttributes(const MVector<ParsedAttribute>& attributes, ParallelCoreKind::Enum& outCore, ParallelPriorityKind::Enum& outPriority);
+
+
+private:
+    ParserCursor& m_cursor;
+    TypeParser& m_typeParser;
+    ExprParser& m_exprParser;
+    MStringView m_rawSource;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

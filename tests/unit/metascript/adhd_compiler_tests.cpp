@@ -1,0 +1,328 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/metascript/adhd/compiler.h>
+#include <core/metascript/parser.h>
+
+#include <global/inplace_function.h>
+
+#include <tests/common/test_context.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_adhd_compiler_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AdhdTestArenaTag{};
+using AdhdTestArena = NWB::Tests::TestArena<AdhdTestArenaTag>;
+
+using NWB::Core::Metascript::Adhd::Compiler;
+using NWB::Core::Metascript::Adhd::CompileResult;
+using NWB::Core::Metascript::MString;
+using NWB::Core::Metascript::MStringView;
+using NWB::Core::Metascript::MetaArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MockIncludeResolver final : public NWB::Core::Metascript::IIncludeResolver{
+public:
+    u32 resolveCallCount = 0u;
+
+
+public:
+    [[nodiscard]] bool resolveInclude(
+        const MStringView includePath,
+        const bool,
+        MetaArena& arena,
+        MString& outResolvedKey,
+        MString& outContent
+    )override{
+        ++resolveCallCount;
+        outResolvedKey = MString(includePath.data(), includePath.size(), arena);
+        static constexpr MStringView s_HeaderCode = "const u32 kSharedLimit = 16;\r\n";
+        outContent = MString(s_HeaderCode.data(), s_HeaderCode.size(), arena);
+        return true;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(AdhdInplaceFunction, StatelessZeroByteAndStatefulTrampolines){
+    using StatelessFn = InplaceFunction<0u, i32(i32, i32)>;
+    static_assert(sizeof(StatelessFn) == sizeof(void*), "Stateless InplaceFunction<0> must be 1 pointer wide");
+
+    StatelessFn addFn([](const i32 a, const i32 b) -> i32{ return a + b; });
+    ASSERT_TRUE(static_cast<bool>(addFn));
+    EXPECT_EQ(addFn(10, 22), 32);
+
+    const StatelessFn copiedStateless = addFn;
+    EXPECT_EQ(copiedStateless(5, 7), 12);
+
+    i32(*rawPtr)(i32, i32) = addFn.rawFn();
+    ASSERT_NE(rawPtr, nullptr);
+    EXPECT_EQ(rawPtr(3, 4), 7);
+
+    auto cFirst = addFn.cTrampolineFirst();
+    EXPECT_EQ(cFirst(addFn.userData(), 8, 9), 17);
+
+    i32 accumulator = 100;
+    InplaceFunction<64u, i32(i32)> statefulFn([&accumulator](const i32 delta) -> i32{
+        accumulator += delta;
+        return accumulator;
+    });
+    ASSERT_TRUE(static_cast<bool>(statefulFn));
+    EXPECT_EQ(statefulFn(15), 115);
+
+    auto statefulTrampoline = statefulFn.cTrampolineLast();
+    EXPECT_EQ(statefulTrampoline(10, statefulFn.userData()), 125);
+}
+
+TEST(AdhdPreprocessor, DeduplicatesIncludesAndSupportsMacrosInNwbAndAdhd){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_NwbSource =
+        "#define ASSET_SCALE 4\r\n"
+        "#if ASSET_SCALE == 4\r\n"
+        "number scale = ASSET_SCALE;\r\n"
+        "#endif\r\n";
+
+    NWB::Core::Metascript::Document doc(arena.arena);
+    ASSERT_TRUE(doc.parse(s_NwbSource));
+    ASSERT_EQ(doc.declarations().size(), 1u);
+    ASSERT_NE(doc.findVariable("scale"), nullptr);
+    EXPECT_EQ(doc.findVariable("scale")->asInteger(), 4);
+
+    MockIncludeResolver resolver;
+    static constexpr MStringView s_AdhdSource =
+        "#include \"shared_defs.adhd\"\r\n"
+        "#include \"shared_defs.adhd\"\r\n"
+        "#define MUL_ADD(a, b, c) ((a) * (b) + (c))\r\n"
+        "u32 compute(in u32 x) {\r\n"
+        "    return MUL_ADD(x, 2, kSharedLimit);\r\n"
+        "}\r\n";
+
+    CompileResult result(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_AdhdSource, "impl/math/compute.adhd", arena.arena, result, &resolver));
+    EXPECT_EQ(resolver.resolveCallCount, 1u);
+}
+
+TEST(AdhdCompiler, ReordersClassFieldsByDescendingAlignmentAndSize){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "enum<u8> NodeFlags {\r\n"
+        "    [flag] Active,\r\n"
+        "    [flag] Visible,\r\n"
+        "}\r\n"
+        "class TransformNode {\r\n"
+        "    public bool dirty = false;\r\n"
+        "    public u32 entityId = 0;\r\n"
+        "    public f32x4 translation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "    public u64 handle = 0;\r\n"
+        "    public NodeFlags flags = NodeFlags::Active;\r\n"
+        "    public u16 layer = 1;\r\n"
+        "}\r\n";
+
+    CompileResult result(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/scene/transform_node.adhd", arena.arena, result));
+    ASSERT_EQ(result.unit.classes.size(), 1u);
+
+    const auto* cls = result.unit.classes[0];
+    ASSERT_EQ(cls->orderedFields.size(), 6u);
+    EXPECT_EQ(cls->orderedFields[0]->name, "translation");
+    EXPECT_EQ(cls->orderedFields[0]->resolvedAlign, 16u);
+    EXPECT_EQ(cls->orderedFields[1]->name, "handle");
+    EXPECT_EQ(cls->orderedFields[1]->resolvedAlign, 8u);
+    EXPECT_EQ(cls->orderedFields[2]->name, "entityId");
+    EXPECT_EQ(cls->orderedFields[2]->resolvedAlign, 4u);
+    EXPECT_EQ(cls->orderedFields[3]->name, "layer");
+    EXPECT_EQ(cls->orderedFields[3]->resolvedAlign, 2u);
+    EXPECT_EQ(cls->orderedFields[4]->name, "dirty");
+    EXPECT_EQ(cls->orderedFields[4]->resolvedAlign, 1u);
+    EXPECT_EQ(cls->orderedFields[5]->name, "flags");
+    EXPECT_EQ(cls->orderedFields[5]->resolvedAlign, 1u);
+}
+
+TEST(AdhdCompiler, SerializeClassPacksTightlyInSourceOrder){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "[serialize, asset(\"mesh_header\")]\r\n"
+        "class BinaryHeader {\r\n"
+        "    public u8 magic = 1;\r\n"
+        "    public u32 version = 2;\r\n"
+        "    public u16 flags = 3;\r\n"
+        "}\r\n";
+
+    CompileResult result(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/assets/binary_header.adhd", arena.arena, result));
+    ASSERT_EQ(result.unit.classes.size(), 1u);
+
+    const auto* cls = result.unit.classes[0];
+    EXPECT_TRUE(cls->isSerialize);
+    EXPECT_EQ(cls->totalAlign, 1u);
+    EXPECT_EQ(cls->totalSize, 7u);
+    ASSERT_EQ(cls->orderedFields.size(), 3u);
+    EXPECT_EQ(cls->orderedFields[0]->name, "magic");
+    EXPECT_EQ(cls->orderedFields[0]->resolvedOffset, 0u);
+    EXPECT_EQ(cls->orderedFields[1]->name, "version");
+    EXPECT_EQ(cls->orderedFields[1]->resolvedOffset, 1u);
+    EXPECT_EQ(cls->orderedFields[2]->name, "flags");
+    EXPECT_EQ(cls->orderedFields[2]->resolvedOffset, 5u);
+}
+
+TEST(AdhdCompiler, EnforcesInterfaceOverrideAndFinalClasses){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ValidSource =
+        "interface ITask {\r\n"
+        "    void execute(in f32 dt);\r\n"
+        "}\r\n"
+        "class PhysicsTask : ITask {\r\n"
+        "    private f32 scale = 1.0f;\r\n"
+        "    public void execute(in f32 dt) override {\r\n"
+        "        this.scale = dt;\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult validRes(arena.arena);
+    EXPECT_TRUE(Compiler::compile(s_ValidSource, "impl/task/physics_task.adhd", arena.arena, validRes));
+
+    static constexpr MStringView s_MissingOverrideSource =
+        "interface ITask {\r\n"
+        "    void execute(in f32 dt);\r\n"
+        "}\r\n"
+        "class BadTask : ITask {\r\n"
+        "    public void execute(in f32 dt) {\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult missingOverrideRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MissingOverrideSource, "impl/task/bad_task.adhd", arena.arena, missingOverrideRes));
+
+    static constexpr MStringView s_ClassInheritanceSource =
+        "class BaseClass {\r\n"
+        "    public u32 x = 0;\r\n"
+        "}\r\n"
+        "class DerivedClass : BaseClass {\r\n"
+        "    public u32 y = 1;\r\n"
+        "}\r\n";
+
+    CompileResult classInheritRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_ClassInheritanceSource, "impl/task/derived.adhd", arena.arena, classInheritRes));
+}
+
+TEST(AdhdCompiler, EnforcesMandatoryInitializationAndProhibitions){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_UninitLocal =
+        "void testFn(in u32 a) {\r\n"
+        "    u32 count;\r\n"
+        "}\r\n";
+    CompileResult res1(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_UninitLocal, "impl/test.adhd", arena.arena, res1));
+
+    static constexpr MStringView s_DoubleInitCtor =
+        "class DoubleInit {\r\n"
+        "    private u32 value = 10;\r\n"
+        "    public DoubleInit(in u32 v) {\r\n"
+        "        this.value = v;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult res2(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DoubleInitCtor, "impl/test.adhd", arena.arena, res2));
+
+    static constexpr MStringView s_BitfieldClass =
+        "class BitfieldBad {\r\n"
+        "    public u32 flag : 1;\r\n"
+        "}\r\n";
+    CompileResult res3(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BitfieldClass, "impl/test.adhd", arena.arena, res3));
+
+    static constexpr MStringView s_DefaultArgFn =
+        "void badFn(in u32 x = 5) {\r\n"
+        "}\r\n";
+    CompileResult res4(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DefaultArgFn, "impl/test.adhd", arena.arena, res4));
+
+    static constexpr MStringView s_MoveCall =
+        "void consume(in u32 x) {}\r\n"
+        "void caller(in u32 a) {\r\n"
+        "    u32 local = a;\r\n"
+        "    consume(Move(local));\r\n"
+        "}\r\n";
+    CompileResult res5(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MoveCall, "impl/test.adhd", arena.arena, res5));
+
+    static constexpr MStringView s_MutateInParam =
+        "void badMutate(in u32 a) {\r\n"
+        "    a = 10;\r\n"
+        "}\r\n";
+    CompileResult res6(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MutateInParam, "impl/test.adhd", arena.arena, res6));
+}
+
+TEST(AdhdCompiler, InfersFuncCaptureStorageAndLowersParallelAndDiagnostics){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "void runFrame(in StringView mode, mut u32 counter) {\r\n"
+        "    Func<i32(in i32)> stateless = lambda(in i32 x) -> i32 {\r\n"
+        "        return x + 1;\r\n"
+        "    };\r\n"
+        "    Func<void(in u32)> stateful = lambda[mut counter](in u32 step) -> void {\r\n"
+        "        counter += step;\r\n"
+        "    };\r\n"
+        "    [core(Heavy), priority(Critical)]\r\n"
+        "    parallel TaskA {\r\n"
+        "        counter += 1;\r\n"
+        "    }\r\n"
+        "    parallel TaskB : TaskA {\r\n"
+        "        counter += 2;\r\n"
+        "    }\r\n"
+        "    for(u32 i = 0; i < 4; ++i) {\r\n"
+        "        [core(Light), priority(Normal)]\r\n"
+        "        parallel stateful(i);\r\n"
+        "    }\r\n"
+        "    switch(mode) {\r\n"
+        "    case \"fast\":\r\n"
+        "        [essential]\r\n"
+        "        info(\"Fast mode active\");\r\n"
+        "        break;\r\n"
+        "    default:\r\n"
+        "        assert(counter > 0, \"counter must be positive\");\r\n"
+        "        break;\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult result(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/frame/runner.adhd", arena.arena, result));
+
+    const MStringView cppView(result.generatedSource.data(), result.generatedSource.size());
+    EXPECT_NE(cppView.find("InplaceFunction<0u,"), MStringView::npos);
+    EXPECT_NE(cppView.find("InplaceFunction<64u,"), MStringView::npos);
+    EXPECT_NE(cppView.find("NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT(\"Fast mode active\"))"), MStringView::npos);
+    EXPECT_NE(cppView.find("NWB_ASSERT_MSG((counter > 0), NWB_TEXT(\"counter must be positive\"))"), MStringView::npos);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

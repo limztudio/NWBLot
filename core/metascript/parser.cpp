@@ -5,6 +5,7 @@
 #include "parser.h"
 
 #include "arena_names.h"
+#include "preprocessor.h"
 #include "statement_parser.h"
 
 
@@ -45,18 +46,29 @@ Document::Document(MetaArena& arena)
 {}
 
 
-bool Document::parse(MStringView source){
+bool Document::parse(MStringView source, IIncludeResolver* includeResolver){
     m_errors.clear();
     m_variables.clear();
     m_declarations.clear();
     m_structs.clear();
 
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch, __hidden_metascript_parser::s_ParserScratchArenaBytes);
+    if(source.find('#') != MStringView::npos){
+        PreprocessorOptions options;
+        options.includeResolver = includeResolver;
+        Preprocessor preprocessor(m_arena, scratchArena, m_errors, options);
+        MString processed(m_arena);
+        if(!preprocessor.process(source, processed))
+            return false;
+        StatementParser parser(MStringView(processed.data(), processed.size()), m_arena, scratchArena, m_errors, m_variables, m_declarations, m_structs);
+        return parser.parseInto();
+    }
+
     StatementParser parser(source, m_arena, scratchArena, m_errors, m_variables, m_declarations, m_structs);
     return parser.parseInto();
 }
 
-bool Document::parse(IMetaReader& reader){
+bool Document::parse(IMetaReader& reader, IIncludeResolver* includeResolver){
     m_errors.clear();
     m_variables.clear();
     m_declarations.clear();
@@ -82,7 +94,19 @@ bool Document::parse(IMetaReader& reader){
         buffer.append(chunk, *bytesRead);
     }
 
-    StatementParser parser(MStringView(buffer.data(), buffer.size()), m_arena, scratchArena, m_errors, m_variables, m_declarations, m_structs);
+    const MStringView rawView(buffer.data(), buffer.size());
+    if(rawView.find('#') != MStringView::npos){
+        PreprocessorOptions options;
+        options.includeResolver = includeResolver;
+        Preprocessor preprocessor(m_arena, scratchArena, m_errors, options);
+        MString processed(m_arena);
+        if(!preprocessor.process(rawView, processed))
+            return false;
+        StatementParser parser(MStringView(processed.data(), processed.size()), m_arena, scratchArena, m_errors, m_variables, m_declarations, m_structs);
+        return parser.parseInto();
+    }
+
+    StatementParser parser(rawView, m_arena, scratchArena, m_errors, m_variables, m_declarations, m_structs);
     return parser.parseInto();
 }
 

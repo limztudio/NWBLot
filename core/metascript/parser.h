@@ -18,6 +18,12 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+interface IIncludeResolver;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct ParseError{
     u32 line = 0;
     u32 column = 0;
@@ -62,8 +68,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool parse(MStringView source);
-    [[nodiscard]] bool parse(IMetaReader& reader);
+    [[nodiscard]] bool parse(MStringView source, IIncludeResolver* includeResolver = nullptr);
+    [[nodiscard]] bool parse(IMetaReader& reader, IIncludeResolver* includeResolver = nullptr);
 
     [[nodiscard]] const Value* findVariable(MStringView name)const noexcept;
     [[nodiscard]] Value* findVariable(MStringView name)noexcept;

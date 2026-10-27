@@ -1,0 +1,59 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "header_emitter.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SourceEmitter{
+public:
+    SourceEmitter(MetaArena& arena, const SymbolTable& symbols, const HeaderEmitter& headerEmitter)noexcept
+        : m_arena(arena)
+        , m_symbols(symbols)
+        , m_headerEmitter(headerEmitter)
+    {}
+
+
+public:
+    [[nodiscard]] MString emitSource(
+        const TranslationUnit& unit,
+        MStringView headerIncludePath,
+        MStringView namespacePath
+    )const;
+
+    void emitMethodBodyBlock(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, u32 indent)const;
+    void emitExpr(MString& out, const Expr& expr)const;
+
+
+private:
+    void emitStmt(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, const Stmt& stmt, u32 indent)const;
+    void emitIndent(MString& out, u32 indent)const;
+
+
+private:
+    MetaArena& m_arena;
+    const SymbolTable& m_symbols;
+    const HeaderEmitter& m_headerEmitter;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -23,22 +23,51 @@ namespace TokenType{
         Identifier = s_TokenTypeIdentifierBase,
         IntegerLiteral,
         DoubleLiteral,
+        FloatLiteral,
         StringLiteral,
 
         Plus,
         Minus,
         Star,
         Slash,
+        Percent,
         PlusEqual,
         MinusEqual,
         StarEqual,
         SlashEqual,
+        PercentEqual,
+        PlusPlus,
+        MinusMinus,
+        Arrow,
         Equal,
+        EqualEqual,
+        BangEqual,
+        Less,
+        LessEqual,
+        Greater,
+        GreaterEqual,
+        Ampersand,
+        AmpersandEqual,
+        AmpersandAmpersand,
+        Pipe,
+        PipeEqual,
+        PipePipe,
+        Caret,
+        CaretEqual,
+        Tilde,
+        Bang,
+        Question,
+        LessLess,
+        LessLessEqual,
+        GreaterGreater,
+        GreaterGreaterEqual,
 
         Semicolon,
         Dot,
         Comma,
         Colon,
+        ColonColon,
+        Hash,
         LeftBracket,
         RightBracket,
         LeftBrace,
@@ -68,7 +97,7 @@ struct Token{
 
 class Lexer{
 public:
-    Lexer(MStringView source)noexcept;
+    explicit Lexer(MStringView source, bool extendedSyntax = false)noexcept;
 
 
 public:
@@ -86,6 +115,7 @@ private:
 
     [[nodiscard]] MChar peek()const noexcept;
     [[nodiscard]] MChar peekNext()const noexcept;
+    [[nodiscard]] MChar peekAt(usize offset)const noexcept;
     MChar advance()noexcept;
     [[nodiscard]] bool isAtEnd()const noexcept{ return m_current >= m_source.size(); }
 
@@ -99,6 +129,7 @@ private:
     u32 m_errorLine = 1;
     u32 m_errorColumn = 1;
     bool m_hasPendingError = false;
+    bool m_extendedSyntax = false;
 };
 
 

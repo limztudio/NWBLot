@@ -38,21 +38,50 @@ struct TokenDescription{
     switch(token.type){
     case TokenType::Identifier: return { "identifier '", token.text, "'" };
     case TokenType::IntegerLiteral:
-    case TokenType::DoubleLiteral: return { "number '", token.text, "'" };
+    case TokenType::DoubleLiteral:
+    case TokenType::FloatLiteral: return { "number '", token.text, "'" };
     case TokenType::StringLiteral: return { "string literal", {}, {} };
     case TokenType::Plus: return { "'+'", {}, {} };
     case TokenType::Minus: return { "'-'", {}, {} };
     case TokenType::Star: return { "'*'", {}, {} };
     case TokenType::Slash: return { "'/'", {}, {} };
+    case TokenType::Percent: return { "'%'", {}, {} };
     case TokenType::PlusEqual: return { "'+='", {}, {} };
     case TokenType::MinusEqual: return { "'-='", {}, {} };
     case TokenType::StarEqual: return { "'*='", {}, {} };
     case TokenType::SlashEqual: return { "'/='", {}, {} };
+    case TokenType::PercentEqual: return { "'%='", {}, {} };
+    case TokenType::PlusPlus: return { "'++'", {}, {} };
+    case TokenType::MinusMinus: return { "'--'", {}, {} };
+    case TokenType::Arrow: return { "'->'", {}, {} };
     case TokenType::Equal: return { "'='", {}, {} };
+    case TokenType::EqualEqual: return { "'=='", {}, {} };
+    case TokenType::BangEqual: return { "'!='", {}, {} };
+    case TokenType::Less: return { "'<'", {}, {} };
+    case TokenType::LessEqual: return { "'<='", {}, {} };
+    case TokenType::Greater: return { "'>'", {}, {} };
+    case TokenType::GreaterEqual: return { "'>='", {}, {} };
+    case TokenType::Ampersand: return { "'&'", {}, {} };
+    case TokenType::AmpersandEqual: return { "'&='", {}, {} };
+    case TokenType::AmpersandAmpersand: return { "'&&'", {}, {} };
+    case TokenType::Pipe: return { "'|'", {}, {} };
+    case TokenType::PipeEqual: return { "'|='", {}, {} };
+    case TokenType::PipePipe: return { "'||'", {}, {} };
+    case TokenType::Caret: return { "'^'", {}, {} };
+    case TokenType::CaretEqual: return { "'^='", {}, {} };
+    case TokenType::Tilde: return { "'~'", {}, {} };
+    case TokenType::Bang: return { "'!'", {}, {} };
+    case TokenType::Question: return { "'?'", {}, {} };
+    case TokenType::LessLess: return { "'<<'", {}, {} };
+    case TokenType::LessLessEqual: return { "'<<='", {}, {} };
+    case TokenType::GreaterGreater: return { "'>>'", {}, {} };
+    case TokenType::GreaterGreaterEqual: return { "'>>='", {}, {} };
     case TokenType::Semicolon: return { "';'", {}, {} };
     case TokenType::Dot: return { "'.'", {}, {} };
     case TokenType::Comma: return { "','", {}, {} };
     case TokenType::Colon: return { "':'", {}, {} };
+    case TokenType::ColonColon: return { "'::'", {}, {} };
+    case TokenType::Hash: return { "'#'", {}, {} };
     case TokenType::LeftBracket: return { "'['", {}, {} };
     case TokenType::RightBracket: return { "']'", {}, {} };
     case TokenType::LeftBrace: return { "'{'", {}, {} };
@@ -75,8 +104,8 @@ struct TokenDescription{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ParserCursor::ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors)
-    : m_lexer(source)
+ParserCursor::ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, const bool extendedSyntax)
+    : m_lexer(source, extendedSyntax)
     , m_arena(arena)
     , m_scratchArena(scratchArena)
     , m_errors(errors)
@@ -84,6 +113,20 @@ ParserCursor::ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchA
     advance();
 }
 
+
+bool ParserCursor::match(const TokenType::Enum type){
+    if(m_current.type != type)
+        return false;
+    advance();
+    return true;
+}
+
+bool ParserCursor::matchIdentifier(const MStringView text){
+    if(m_current.type != TokenType::Identifier || m_current.text != text)
+        return false;
+    advance();
+    return true;
+}
 
 void ParserCursor::advance(){
     m_current = m_lexer.next();

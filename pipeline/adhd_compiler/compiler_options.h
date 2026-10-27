@@ -1,0 +1,42 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <core/metascript/adhd/compiler.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AdhdCompilerOptions{
+    NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString> inputFiles;
+    NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString> includeDirectories;
+    NWB::Core::Metascript::MString outputDirectory;
+    bool showHelp = false;
+
+
+public:
+    explicit AdhdCompilerOptions(NWB::Core::Metascript::MetaArena& arena)noexcept
+        : inputFiles(arena)
+        , includeDirectories(arena)
+        , outputDirectory(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool ParseAdhdCompilerOptions(
+    int argc,
+    char** argv,
+    NWB::Core::Metascript::MetaArena& arena,
+    AdhdCompilerOptions& outOptions
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

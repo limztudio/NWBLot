@@ -199,6 +199,16 @@ using IsConstructible = std::is_constructible<T, Args...>;
 template<class T, class... Args>
 inline constexpr bool IsConstructible_V = std::is_constructible_v<T, Args...>;
 
+template<class T>
+using IsCopyConstructible = std::is_copy_constructible<T>;
+template<class T>
+inline constexpr bool IsCopyConstructible_V = std::is_copy_constructible_v<T>;
+
+template<class T>
+using IsNothrowCopyConstructible = std::is_nothrow_copy_constructible<T>;
+template<class T>
+inline constexpr bool IsNothrowCopyConstructible_V = std::is_nothrow_copy_constructible_v<T>;
+
 template<class T, class... Args>
 using IsNothrowConstructible = std::is_nothrow_constructible<T, Args...>;
 template<class T, class... Args>
@@ -218,6 +228,11 @@ template<class Func, class... Args>
 using IsInvocable = std::is_invocable<Func, Args...>;
 template<class Func, class... Args>
 inline constexpr bool IsInvocable_V = std::is_invocable_v<Func, Args...>;
+
+template<typename R, typename Func, typename... Args>
+using IsInvocableR = std::is_invocable_r<R, Func, Args...>;
+template<typename R, typename Func, typename... Args>
+inline constexpr bool IsInvocableR_V = std::is_invocable_r_v<R, Func, Args...>;
 
 template<typename Func, typename... Args>
 inline constexpr bool IsNothrowInvocable_V = std::is_nothrow_invocable_v<Func, Args...>;

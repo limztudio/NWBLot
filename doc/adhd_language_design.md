@@ -260,22 +260,25 @@ All owning containers are automatically bound to the enclosing class's static ar
 
 ---
 
-## 10. C++ Interop (`native { ... }` Blocks)
-- C++-side `#include` directives, calling C++ functions, or embedding native C++ statements inside `.adhd` **must** always be enclosed in an explicit `native { ... }` block:
-  ```cpp
-  native {
-      #include <global/simdmath.h>
-  }
+## 10. C++ Interop (`native` & `native(in ..., mut ...)` Blocks)
+- C++-side `#include` directives, calling C++ functions, or embedding native C++ statements inside `.adhd` **must** always be enclosed in an explicit `native` block.
+- **Passing `.adhd` Variables / Members into `native` (`native(in ..., mut ...)` Capture List)**:
+  - When a `native` block inside a function accesses `.adhd` variables or `this.XXX` members, they are explicitly bound in the `native(...)` header using `in` or `mut`:
+    ```cpp
+    native {
+        #include <global/simdmath.h>
+    }
 
-  void TransformComponent::applyTranslation(in Float4 delta) {
-      native {
-          const SIMDVectorSingle current = LoadFloat(this->position.raw);
-          const SIMDVectorSingle offset  = LoadFloat(delta.raw);
-          StoreFloat(this->position.raw, VectorAdd(current, offset));
-      }
-  }
-  ```
-- **Benefits of `native { ... }`**:
+    void TransformComponent::applyTranslation(in Float4 delta) {
+        native(in delta, mut pos = this.position) {
+            const SIMDVectorSingle current = LoadFloat(pos.raw);
+            const SIMDVectorSingle offset  = LoadFloat(delta.raw);
+            StoreFloat(pos.raw, VectorAdd(current, offset));
+        }
+    }
+    ```
+  - The `adhd` compiler binds `in` captures as `const` C++ references/values and `mut` captures as mutable C++ references inside the generated C++ block.
+- **Benefits of `native(in ..., mut ...) { ... }`**:
   - Clearly separates `.adhd` `#include`s (parsed by the `adhd` compiler) from C++ `#include`s (emitted into the generated C++ file).
   - Clearly isolates raw C++ engine calls from pure `adhd` code (similar to `unsafe` blocks in Rust/C#).
-  - Everything outside `native { ... }` is 100% validated by the `adhd` compiler (`in`/`mut`, no pointers/null, `this.XXX`, arena rules, and parallel safety), while `native { ... }` passes direct C++ headers and expressions through to the generated C++ output.
+  - Because `native(in ..., mut ...)` declares which `.adhd` variables are read (`in`) vs. mutated (`mut`), the `adhd` compiler can still enforce `in`/`mut` parameter safety, `const` method rules, and `parallel` data-race checks without needing a full C++ parser inside `{ ... }`.

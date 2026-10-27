@@ -275,12 +275,15 @@ All owning containers are automatically bound to the enclosing class's static ar
 
 ---
 
-## 6. Arena Memory Management Model
+## 6. Arena Memory Management Model (Zero Manual Configuration)
 1. **Per-Class / Per-Component Static Arena**:
-   - Each generated `adhd` class defines/binds a dedicated static arena.
+   - Each generated `adhd` class defines/binds a dedicated static `Core::Alloc::GlobalArena` named after the class.
    - All owning container fields and polymorphic `interface` allocations inside the class automatically receive this arena in generated constructors.
-2. **Function-Local Scratch Arena**:
+2. **Automatic Cache Alignment for Parallel Containers**:
+   - `ParallelVector`, `ParallelHashSet`, `ParallelHashMap`, `ParallelQueue`, and `ParallelBlockQueue` automatically use `ContainerDetail::ArenaCacheAlignedAllocator` (`global/containers.h`) by default, while standard containers use `ContainerDetail::ArenaAllocator`.
+3. **Function-Local Scratch Arena**:
    - Local containers/strings inside `adhd` functions or `parallel` blocks automatically allocate from a stack-scoped `Core::Alloc::ScratchArena<>` without heap churn.
+   - Because arenas scale and align automatically (`alignof(T)` and cache-aligned for `Parallel*`), no user-facing arena customization attribute is required.
 
 ---
 

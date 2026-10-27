@@ -190,9 +190,16 @@
           return a < b;
       };
       ```
-  - **`Func<...> = lambda` Lowering Rule**:
-    - **Captureless lambdas** (`lambda(in A, in B)`) and free functions lower directly to raw C++ function pointers with zero wrapper overhead.
-    - **Only captured lambdas** (`lambda[in ..., mut ...](...)`) are converted to `InplaceFunction` (`global/inplace_function.h`) when stored in or passed through `Func<...>`.
+  - **Extended `InplaceFunction<InlineStorageSize, Signature = void()>` & Automatic Compiler `Func<...>` Lowering**:
+    - `global/inplace_function.h` is extended to `template<usize InlineStorageSize, typename Signature = void()> class InplaceFunction` (copyable when captures are copyable, `const`-invocable via `operator()(Args...) const`, with a `0`-byte specialization `InplaceFunction<0, Ret(Args...)>`).
+    - Programmers only write `Func<Ret(in A, mut B)>` in `.adhd`; the compiler automatically chooses the lowering based on capture flow analysis:
+      1. **Stateless Path (No Captures Flow In)**: Lowers to `InplaceFunction<0, Ret(Args...)>` (`8` bytes, copyable, zero wrapper overhead, and implicitly convertible to a raw C function pointer `Ret(*)(Args...) noexcept`).
+      2. **Stateful Path (Captures Flow In)**: When a `lambda[in ..., mut ...](...)` flows into `Func<...>`, the compiler lowers it to `InplaceFunction<64, Ret(Args...)>`.
+    - **Primitive Scalar `in` ABI Rule**: Primitive scalars (`bool`, `i8`..`u64`, `isize`, `usize`, `f32`, `f64`) lower `in` to pass-by-value (`u32`, `f32`) while non-scalars (`f32x4`, `class`, `String`) lower `in` to `const T&`, so `Func<...>` signatures match C/C++ function pointer ABIs directly.
+  - **No `Move` Keyword (Rust-Style Borrowing & Automatic Last-Use Move)**:
+    - Like Rust, `adhd` has **no `Move(x)` or rvalue reference (`T&&`) syntax**.
+    - Function parameters strictly use `in` (read-only borrow) or `mut` (mutable borrow).
+    - Whenever a local variable is transferred by value at its last use, the `adhd` compiler automatically emits `Move(...)` in the generated C++.
 - **Split Method Declarations & Implementations (C++ Style)**:
   - Methods can be declared inside a `class` without a body:
     ```cpp
@@ -404,6 +411,16 @@ All owning containers are automatically bound to the enclosing class's static ar
         NWB_MEMCPY(b.data(), b.size() * sizeof(i32), a.data(), a.size() * sizeof(i32));
     }
     ```
+- **Passing Callbacks (`Func<...>`) into `native`**:
+  - **Stateless `Func<...>` (`InplaceFunction<0, Ret(Args...)>`)**: Implicitly converts to a raw C function pointer `Ret(*)(Args...) noexcept`, so `cb` can be passed directly to both C function pointer APIs (`c_api(cb)`) and C++ callable APIs (`cpp_api(cb)`).
+  - **Stateful `Func<...>` (`InplaceFunction<64, Ret(Args...)>`)**:
+    - Passes directly to C++ callable APIs (`cpp_api(cb)`) without needing `Move(cb)`.
+    - For C APIs that expect `(callback, void* userData)`, `InplaceFunction` provides `.cTrampolineLast()` (`Ret(*)(Args..., void*) noexcept`), `.cTrampolineFirst()` (`Ret(*)(void*, Args...) noexcept`), and `.userData()` (`void*`):
+      ```cpp
+      native(in cb) {
+          c_api_with_userdata(cb.cTrampolineLast(), cb.userData());
+      }
+      ```
 - **Benefits of `native(in ..., mut ...) { ... }`**:
   - Clearly separates `.adhd` `#include`s (parsed by the `adhd` compiler) from C++ `#include`s (emitted into the generated C++ file).
   - Clearly isolates raw C++ engine calls from pure `adhd` code (similar to `unsafe` blocks in Rust/C#).
@@ -488,6 +505,12 @@ Every source and header file is strictly split by domain responsibility so that 
      - `reflection_emitter.h` / `reflection_emitter.cpp`: Emits `[serialize]` 1-byte packed binary serialization, `.nwb` property parsing, `AssetRef<T>` dependency extraction, and `[asset("...")]` registration.
 
 3. **CLI Executable (`pipeline/adhd_compiler/`)**:
-   - `compiler_options.h` / `compiler_options.cpp`: CLI argument parsing (input `.adhd`, include directories, output `.adhd.h` / `.adhd.cpp`, `--validate-only`).
+   - `compiler_options.h` / `compiler_options.cpp`: CLI argument parsing (input `.adhd`, include directories, output `.adhd.h` / `.adhd.cpp`, `--namespace`, `--validate-only`).
    - `compiler_driver.h` / `compiler_driver.cpp`: Orchestrates file I/O and invokes the `core/metascript/adhd` pipeline.
    - `main.cpp`: Standalone executable entry point invoked by CMake and build/validation tools.
+
+4. **Build & C++ Integration Rules**:
+   - **CLI / CMake Namespace (`--namespace`)**: Since `.adhd` has no `namespace` keyword, the generated C++ declarations are wrapped in the C++ namespace passed via `--namespace <ns>` (defaulting to `NWB`).
+   - **Cross-File `#include "other.adhd"`**: The compiler parses included `.adhd` files (with automatic deduplication) to resolve `interface` methods, `enum<SizeType>` sizes, and exact `sizeof` / `alignof` of embedded `class` types during member layout optimization, and emits `#include "other.adhd.h"` in the generated header.
+   - **No Positional Aggregate Init (`Foo{a, b}`)**: Because `layout_optimizer` reorders class fields automatically, classes are constructed via constructors (`Foo(a, b)`) or default construction + named member assignment (`Foo f; f.x = ...;`).
+   - **CMake Helper (`nwb_target_adhd_sources`)**: Runs `nwb_adhd_compiler` per `.adhd` source, emits `.adhd.h` / `.adhd.cpp` into the target's generated build directory, and attaches the generated C++ sources and include paths to the target.

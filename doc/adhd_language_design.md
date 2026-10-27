@@ -179,6 +179,14 @@
     - For non-integral types (strings and custom classes), the `adhd` compiler automatically lowers the `switch` statement into an `if` / `else if` / `else` chain in generated C++.
   - **No Exceptions (`try` / `catch` / `throw` Prohibited)**:
     - Exceptions (`try`, `catch`, `throw`) are not allowed in `adhd`. Fallible functions return `Expected<T, E>`, and all generated `adhd` functions emit `noexcept` in C++.
+  - **Built-In Diagnostics (`assert`, `info`, `error` & `[essential]` Attribute)**:
+    - `adhd` provides built-in `assert`, `info`, and `error` statements (`global/assert.h`, `core/common/log.h`), optionally prefixed with the `[essential]` attribute:
+      - `assert(cond);` / `assert(cond, "msg", ...);` -> `NWB_ASSERT` / `NWB_ASSERT_MSG`
+      - `[essential] assert(cond);` / `[essential] assert(cond, "msg", ...);` -> `NWB_FATAL_ASSERT` / `NWB_FATAL_ASSERT_MSG`
+      - `info("msg", ...);` -> `NWB_LOGGER_INFO`
+      - `[essential] info("msg", ...);` -> `NWB_LOGGER_ESSENTIAL_INFO`
+      - `error("msg", ...);` -> `NWB_LOGGER_ERROR`
+      - `[essential] error("msg", ...);` -> `NWB_LOGGER_FATAL`
 - **Function Pointers / Callables (`Func<...>`) & Lambdas**:
   - **Non-Null Callable Type (`Func<Ret(in A, mut B)>`)**:
     - Replaces raw C++ function pointers (`void(*)(int)`):
@@ -410,9 +418,10 @@ All owning containers are automatically bound to the enclosing class's static ar
   2. **Reflection & `.nwb` Asset Connection Attributes** (`class` / `interface` / variable / function):
      - `[reflect]` / `[asset("type_name")]`: Exposes the `class` or `interface` to the reflection registry and connects it directly to `.nwb` authoring, dependency scanning, and cooking.
      - `[transient]`: Marks a member variable as runtime-only (excluded from `[serialize]` and `.nwb` authoring).
-  3. **Function & Scheduling Attributes**:
+  3. **Function, Scheduling & Diagnostic Attributes**:
      - `[inline]` / `[noinline]`
      - `[core(...)]` / `[priority(...)]` (for `parallel` and `parallel_for`)
+     - `[essential]` (for `assert`, `info`, and `error`)
 
 ---
 

@@ -23,21 +23,6 @@ namespace __hidden_adhd_header_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendUnsigned(MString& out, usize value){
-    char buf[32];
-    usize idx = 0u;
-    if(value == 0u){
-        out.push_back('0');
-        return;
-    }
-    while(value > 0u && idx < sizeof(buf)){
-        buf[idx++] = static_cast<char>('0' + (value % 10u));
-        value /= 10u;
-    }
-    while(idx > 0u)
-        out.push_back(buf[--idx]);
-}
-
 [[nodiscard]] const Expr* FindConstructorFieldAssignment(const MVector<Stmt*>& stmts, const MStringView fieldName)noexcept{
     for(const Stmt* stmt : stmts){
         if(!stmt)
@@ -188,19 +173,8 @@ void HeaderEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         if(type.refMode == ParamPassingMode::In)
             out.append("const ");
         out.append(type.name.data(), type.name.size());
-        if(!type.templateArgs.empty()){
-            out.push_back('<');
-            for(usize i = 0u; i < type.templateArgs.size(); ++i){
-                if(i > 0u)
-                    out.append(", ");
-                const TypeArg& arg = type.templateArgs[i];
-                if(arg.isConstant || !arg.constantText.empty())
-                    out.append(arg.constantText.data(), arg.constantText.size());
-                else if(arg.type)
-                    emitTypeCpp(out, *arg.type);
-            }
-            out.push_back('>');
-        }
+        if(!type.templateArgs.empty())
+            emitTypeArgListCpp(out, type.templateArgs);
         out.append("*>");
         return;
     }
@@ -212,7 +186,7 @@ void HeaderEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
 
     if(type.isFuncType){
         out.append("::InplaceFunction<");
-        __hidden_adhd_header_emitter::AppendUnsigned(out, type.inferredCaptureBytes);
+        AppendAdhdUnsigned(out, type.inferredCaptureBytes);
         out.append("u, ");
         if(type.funcReturnType)
             emitTypeCpp(out, *type.funcReturnType);
@@ -267,19 +241,22 @@ void HeaderEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     }
 
     out.append(name.data(), name.size());
-    if(!type.templateArgs.empty()){
-        out.push_back('<');
-        for(usize i = 0u; i < type.templateArgs.size(); ++i){
-            if(i > 0u)
-                out.append(", ");
-            const TypeArg& arg = type.templateArgs[i];
-            if(arg.isConstant || !arg.constantText.empty())
-                out.append(arg.constantText.data(), arg.constantText.size());
-            else if(arg.type)
-                emitTypeCpp(out, *arg.type);
-        }
-        out.push_back('>');
+    if(!type.templateArgs.empty())
+        emitTypeArgListCpp(out, type.templateArgs);
+}
+
+void HeaderEmitter::emitTypeArgListCpp(MString& out, const MVector<TypeArg>& args)const{
+    out.push_back('<');
+    for(usize i = 0u; i < args.size(); ++i){
+        if(i > 0u)
+            out.append(", ");
+        const TypeArg& arg = args[i];
+        if(arg.isConstant || !arg.constantText.empty())
+            out.append(arg.constantText.data(), arg.constantText.size());
+        else if(arg.type)
+            emitTypeCpp(out, *arg.type);
     }
+    out.push_back('>');
 }
 
 void HeaderEmitter::emitParamTypeCpp(MString& out, const ParamPassingMode::Enum mode, const TypeRef& type)const{
@@ -346,7 +323,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
             out.append(" = (static_cast<");
             out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
             out.append(">(1) << ");
-            __hidden_adhd_header_emitter::AppendUnsigned(out, flagBitIndex++);
+            AppendAdhdUnsigned(out, flagBitIndex++);
             out.push_back(')');
         }
         out.append(",\r\n");
@@ -380,12 +357,12 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         out.append("    constexpr Enum& operator^=(Enum& a, const Enum b)noexcept{ a = (a ^ b); return a; }\r\n");
     }
     out.append("    [[nodiscard]] constexpr usize reflectedEnumeratorCount()noexcept{ return ");
-    __hidden_adhd_header_emitter::AppendUnsigned(out, decl.entries.size());
+    AppendAdhdUnsigned(out, decl.entries.size());
     out.append("u; }\r\n");
     out.append("    [[nodiscard]] constexpr AStringView reflectedEnumeratorName([[maybe_unused]] const usize index)noexcept{\r\n");
     for(usize i = 0u; i < decl.entries.size(); ++i){
         out.append("        if(index == ");
-        __hidden_adhd_header_emitter::AppendUnsigned(out, i);
+        AppendAdhdUnsigned(out, i);
         out.append("u) return \"");
         out.append(decl.entries[i].name.data(), decl.entries[i].name.size());
         out.append("\";\r\n");
@@ -497,52 +474,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     if(!decl.orderedFields.empty())
         out.append("\r\n");
 
-    for(const FieldDecl* field : decl.orderedFields){
-        if(!field || !field->type)
-            continue;
-        if(field->access == AccessSpecifier::Public)
-            out.append("public:\r\n    ");
-        else if(field->access == AccessSpecifier::Protected)
-            out.append("protected:\r\n    ");
-        else
-            out.append("private:\r\n    [[maybe_unused]] ");
-
-        emitTypeCpp(out, *field->type);
-        out.push_back(' ');
-        out.append(field->name.data(), field->name.size());
-
-        if(field->defaultExpr){
-            if(field->type->refMode != ParamPassingMode::None){
-                out.append(" = ::MakeNotNull(&(");
-                sourceEmitter.emitExpr(out, *field->defaultExpr);
-                out.append("))");
-            }
-            else{
-                out.append(" = ");
-                sourceEmitter.emitExpr(out, *field->defaultExpr);
-            }
-        }
-        else if(field->hasCtorInit){
-            out.push_back('{');
-            for(usize i = 0u; i < field->ctorArgs.size(); ++i){
-                if(i > 0u)
-                    out.append(", ");
-                if(field->ctorArgs[i])
-                    sourceEmitter.emitExpr(out, *field->ctorArgs[i]);
-            }
-            if(field->usesClassArena){
-                if(!field->ctorArgs.empty())
-                    out.append(", ");
-                out.append("s_ClassArena");
-            }
-            out.push_back('}');
-        }
-        else if(field->usesClassArena){
-            out.append("{s_ClassArena}");
-        }
-
-        out.append(";\r\n");
-    }
+    emitClassFieldsCpp(out, decl.orderedFields);
 
     if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
         out.append("\r\n");
@@ -573,17 +505,8 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
 
     out.append("template<>\r\nclass ");
     out.append(decl.name.data(), decl.name.size());
-    out.push_back('<');
-    for(usize i = 0u; i < inst.templateArgs.size(); ++i){
-        if(i > 0u)
-            out.append(", ");
-        const TypeArg& arg = inst.templateArgs[i];
-        if(arg.isConstant || !arg.constantText.empty())
-            out.append(arg.constantText.data(), arg.constantText.size());
-        else if(arg.type)
-            emitTypeCpp(out, *arg.type);
-    }
-    out.append("> final");
+    emitTypeArgListCpp(out, inst.templateArgs);
+    out.append(" final");
 
     if(!decl.implementedInterfaces.empty()){
         out.append(" : ");
@@ -664,7 +587,20 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
     if(!inst.orderedFields.empty() && !decl.methods.empty())
         out.append("\r\n");
 
-    for(const FieldDecl* field : inst.orderedFields){
+    emitClassFieldsCpp(out, inst.orderedFields);
+
+    out.append("\r\n");
+    reflectionEmitter.emitInlineClassReflection(out, decl, inst.orderedFields);
+
+    out.append("};\r\n");
+    if(decl.isSerialize)
+        out.append("#pragma pack(pop)\r\n");
+    out.append("\r\n");
+}
+
+void HeaderEmitter::emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& orderedFields)const{
+    SourceEmitter sourceEmitter(m_arena, m_symbols, *this);
+    for(const FieldDecl* field : orderedFields){
         if(!field || !field->type)
             continue;
         if(field->access == AccessSpecifier::Public)
@@ -708,14 +644,6 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
         }
         out.append(";\r\n");
     }
-
-    out.append("\r\n");
-    reflectionEmitter.emitInlineClassReflection(out, decl, inst.orderedFields);
-
-    out.append("};\r\n");
-    if(decl.isSerialize)
-        out.append("#pragma pack(pop)\r\n");
-    out.append("\r\n");
 }
 
 void HeaderEmitter::emitMethodSignature(

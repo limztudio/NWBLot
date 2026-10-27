@@ -58,17 +58,25 @@ TypeRef* SubstituteTemplateType(
             return templateArgs[p].type;
     }
 
-    if(origType.templateArgs.empty())
+    if(origType.templateArgs.empty() && !origType.isFuncType)
         return const_cast<TypeRef*>(&origType);
 
     TypeRef* cloned = AllocateAstNode<TypeRef>(arena);
     cloned->name = origType.name;
     cloned->refMode = origType.refMode;
-    cloned->funcReturnType = origType.funcReturnType;
+    cloned->funcReturnType = origType.funcReturnType
+        ? SubstituteTemplateType(*origType.funcReturnType, templateParams, templateArgs, arena)
+        : nullptr;
     cloned->inferredCaptureBytes = origType.inferredCaptureBytes;
     cloned->span = origType.span;
     cloned->isFuncType = origType.isFuncType;
     cloned->isAuto = origType.isAuto;
+    for(const FuncParamType& fp : origType.funcParams){
+        FuncParamType subFp = fp;
+        if(fp.type)
+            subFp.type = SubstituteTemplateType(*fp.type, templateParams, templateArgs, arena);
+        cloned->funcParams.push_back(subFp);
+    }
     for(const TypeArg& arg : origType.templateArgs){
         TypeArg subArg = arg;
         if(arg.type){
@@ -99,6 +107,58 @@ TypeRef* SubstituteTemplateType(
     return cloned;
 }
 
+[[nodiscard]] bool AreTemplateArgListsEqual(const MVector<TypeArg>& a, const MVector<TypeArg>& b)noexcept{
+    if(a.size() != b.size())
+        return false;
+    for(usize i = 0u; i < a.size(); ++i){
+        const MStringView lhsName = a[i].type ? a[i].type->name : a[i].constantText;
+        const MStringView rhsName = b[i].type ? b[i].type->name : b[i].constantText;
+        if(lhsName != rhsName)
+            return false;
+    }
+    return true;
+}
+
+void SortAndPackFields(
+    MVector<FieldDecl*>& orderedFields,
+    const bool isSerialize,
+    const bool hasInterfaces,
+    usize& outTotalSize,
+    usize& outTotalAlign
+)noexcept{
+    if(!isSerialize){
+        for(usize i = 1u; i < orderedFields.size(); ++i){
+            FieldDecl* key = orderedFields[i];
+            usize j = i;
+            while(j > 0u){
+                const FieldDecl* prev = orderedFields[j - 1u];
+                const bool keyBeforePrev = (key->resolvedAlign > prev->resolvedAlign)
+                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize > prev->resolvedSize)
+                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize == prev->resolvedSize && key->originalIndex < prev->originalIndex);
+                if(!keyBeforePrev)
+                    break;
+                orderedFields[j] = orderedFields[j - 1u];
+                --j;
+            }
+            orderedFields[j] = key;
+        }
+    }
+
+    usize currentOffset = hasInterfaces ? 8u : 0u;
+    usize maxAlign = isSerialize ? 1u : (hasInterfaces ? 8u : 1u);
+    for(FieldDecl* field : orderedFields){
+        const usize align = isSerialize ? 1u : field->resolvedAlign;
+        if(align > maxAlign)
+            maxAlign = align;
+        currentOffset = AlignUp(currentOffset, align);
+        field->resolvedOffset = currentOffset;
+        currentOffset += field->resolvedSize;
+    }
+
+    outTotalAlign = maxAlign;
+    outTotalSize = currentOffset == 0u ? 1u : AlignUp(currentOffset, maxAlign);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -120,8 +180,16 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
         return false;
     for(ClassDecl* classDecl : unit.classes){
         for(const FieldDecl* f : classDecl->fields){
-            if(f && f->type)
+            if(!f)
+                continue;
+            if(f->type)
                 collectTemplateInstantiationsInType(*f->type, unit);
+            if(f->defaultExpr)
+                collectTemplateInstantiationsInExpr(*f->defaultExpr, unit);
+            for(const Expr* arg : f->ctorArgs){
+                if(arg)
+                    collectTemplateInstantiationsInExpr(*arg, unit);
+            }
         }
         for(const MethodDecl* m : classDecl->methods){
             if(!m)
@@ -162,6 +230,20 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
 void LayoutOptimizer::collectTemplateInstantiationsInStmt(const Stmt& stmt, TranslationUnit& unit){
     if(stmt.varType)
         collectTemplateInstantiationsInType(*stmt.varType, unit);
+    if(stmt.expr)
+        collectTemplateInstantiationsInExpr(*stmt.expr, unit);
+    if(stmt.condition)
+        collectTemplateInstantiationsInExpr(*stmt.condition, unit);
+    if(stmt.stepExpr)
+        collectTemplateInstantiationsInExpr(*stmt.stepExpr, unit);
+    for(const Expr* arg : stmt.arguments){
+        if(arg)
+            collectTemplateInstantiationsInExpr(*arg, unit);
+    }
+    for(const NativeBinding& nb : stmt.nativeBindings){
+        if(nb.sourceExpr)
+            collectTemplateInstantiationsInExpr(*nb.sourceExpr, unit);
+    }
     if(stmt.initStmt)
         collectTemplateInstantiationsInStmt(*stmt.initStmt, unit);
     for(const Stmt* sub : stmt.statements){
@@ -173,6 +255,8 @@ void LayoutOptimizer::collectTemplateInstantiationsInStmt(const Stmt& stmt, Tran
             collectTemplateInstantiationsInStmt(*sub, unit);
     }
     for(const SwitchCase& sc : stmt.switchCases){
+        if(sc.matchExpr)
+            collectTemplateInstantiationsInExpr(*sc.matchExpr, unit);
         for(const Stmt* sub : sc.statements){
             if(sub)
                 collectTemplateInstantiationsInStmt(*sub, unit);
@@ -180,7 +264,48 @@ void LayoutOptimizer::collectTemplateInstantiationsInStmt(const Stmt& stmt, Tran
     }
 }
 
+void LayoutOptimizer::collectTemplateInstantiationsInExpr(const Expr& expr, TranslationUnit& unit){
+    if(expr.targetType)
+        collectTemplateInstantiationsInType(*expr.targetType, unit);
+    for(const TypeArg& targ : expr.callTemplateArgs){
+        if(targ.type)
+            collectTemplateInstantiationsInType(*targ.type, unit);
+    }
+    if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier && !expr.callTemplateArgs.empty()){
+        if(const ClassDecl* cls = m_symbols.findClass(expr.lhs->text)){
+            if(!cls->templateParams.empty() && expr.callTemplateArgs.size() == cls->templateParams.size())
+                instantiateClassTemplate(*cls, expr.callTemplateArgs, unit);
+        }
+    }
+    if(expr.lhs)
+        collectTemplateInstantiationsInExpr(*expr.lhs, unit);
+    if(expr.rhs)
+        collectTemplateInstantiationsInExpr(*expr.rhs, unit);
+    for(const Expr* arg : expr.arguments){
+        if(arg)
+            collectTemplateInstantiationsInExpr(*arg, unit);
+    }
+    if(expr.lambdaReturnType)
+        collectTemplateInstantiationsInType(*expr.lambdaReturnType, unit);
+    for(const ParamDecl& p : expr.lambdaParams){
+        if(p.type)
+            collectTemplateInstantiationsInType(*p.type, unit);
+    }
+    for(const Stmt* s : expr.lambdaBody){
+        if(s)
+            collectTemplateInstantiationsInStmt(*s, unit);
+    }
+}
+
 void LayoutOptimizer::collectTemplateInstantiationsInType(const TypeRef& type, TranslationUnit& unit){
+    if(type.isFuncType){
+        if(type.funcReturnType)
+            collectTemplateInstantiationsInType(*type.funcReturnType, unit);
+        for(const FuncParamType& fp : type.funcParams){
+            if(fp.type)
+                collectTemplateInstantiationsInType(*fp.type, unit);
+        }
+    }
     for(const TypeArg& arg : type.templateArgs){
         if(arg.type)
             collectTemplateInstantiationsInType(*arg.type, unit);
@@ -197,18 +322,7 @@ void LayoutOptimizer::instantiateClassTemplate(
     TranslationUnit& unit
 ){
     for(const ClassTemplateInstantiation* existing : unit.templateInstantiations){
-        if(existing->templateDecl != &templateDecl || existing->templateArgs.size() != templateArgs.size())
-            continue;
-        bool sameArgs = true;
-        for(usize i = 0u; i < templateArgs.size(); ++i){
-            const MStringView lhsName = existing->templateArgs[i].type ? existing->templateArgs[i].type->name : existing->templateArgs[i].constantText;
-            const MStringView rhsName = templateArgs[i].type ? templateArgs[i].type->name : templateArgs[i].constantText;
-            if(lhsName != rhsName){
-                sameArgs = false;
-                break;
-            }
-        }
-        if(sameArgs)
+        if(existing->templateDecl == &templateDecl && __hidden_adhd_layout_optimizer::AreTemplateArgListsEqual(existing->templateArgs, templateArgs))
             return;
     }
 
@@ -250,37 +364,13 @@ void LayoutOptimizer::instantiateClassTemplate(
         inst->orderedFields.push_back(clonedField);
     }
 
-    if(!templateDecl.isSerialize){
-        for(usize i = 1u; i < inst->orderedFields.size(); ++i){
-            FieldDecl* key = inst->orderedFields[i];
-            usize j = i;
-            while(j > 0u){
-                const FieldDecl* prev = inst->orderedFields[j - 1u];
-                const bool keyBeforePrev = (key->resolvedAlign > prev->resolvedAlign)
-                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize > prev->resolvedSize)
-                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize == prev->resolvedSize && key->originalIndex < prev->originalIndex);
-                if(!keyBeforePrev)
-                    break;
-                inst->orderedFields[j] = inst->orderedFields[j - 1u];
-                --j;
-            }
-            inst->orderedFields[j] = key;
-        }
-    }
-
-    usize currentOffset = templateDecl.implementedInterfaces.empty() ? 0u : 8u;
-    usize maxAlign = templateDecl.isSerialize ? 1u : (templateDecl.implementedInterfaces.empty() ? 1u : 8u);
-    for(FieldDecl* field : inst->orderedFields){
-        const usize align = templateDecl.isSerialize ? 1u : field->resolvedAlign;
-        if(align > maxAlign)
-            maxAlign = align;
-        currentOffset = __hidden_adhd_layout_optimizer::AlignUp(currentOffset, align);
-        field->resolvedOffset = currentOffset;
-        currentOffset += field->resolvedSize;
-    }
-
-    inst->totalAlign = maxAlign;
-    inst->totalSize = currentOffset == 0u ? 1u : __hidden_adhd_layout_optimizer::AlignUp(currentOffset, maxAlign);
+    __hidden_adhd_layout_optimizer::SortAndPackFields(
+        inst->orderedFields,
+        templateDecl.isSerialize,
+        !templateDecl.implementedInterfaces.empty(),
+        inst->totalSize,
+        inst->totalAlign
+    );
     unit.templateInstantiations.push_back(inst);
 }
 
@@ -447,18 +537,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
     if(const ClassDecl* classDecl = m_symbols.findClass(name)){
         if(!type.templateArgs.empty() && m_unit){
             for(const ClassTemplateInstantiation* inst : m_unit->templateInstantiations){
-                if(!inst || inst->templateDecl != classDecl || inst->templateArgs.size() != type.templateArgs.size())
-                    continue;
-                bool sameArgs = true;
-                for(usize i = 0u; i < type.templateArgs.size(); ++i){
-                    const MStringView lhsName = inst->templateArgs[i].type ? inst->templateArgs[i].type->name : inst->templateArgs[i].constantText;
-                    const MStringView rhsName = type.templateArgs[i].type ? type.templateArgs[i].type->name : type.templateArgs[i].constantText;
-                    if(lhsName != rhsName){
-                        sameArgs = false;
-                        break;
-                    }
-                }
-                if(sameArgs){
+                if(inst && inst->templateDecl == classDecl && __hidden_adhd_layout_optimizer::AreTemplateArgListsEqual(inst->templateArgs, type.templateArgs)){
                     outSize = inst->totalSize;
                     outAlign = inst->totalAlign;
                     return;
@@ -516,41 +595,13 @@ bool LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseErro
         classDecl.orderedFields.push_back(field);
     }
 
-    if(!classDecl.isSerialize){
-        for(usize i = 1u; i < classDecl.orderedFields.size(); ++i){
-            FieldDecl* key = classDecl.orderedFields[i];
-            usize j = i;
-            while(j > 0u){
-                const FieldDecl* prev = classDecl.orderedFields[j - 1u];
-                const bool keyBeforePrev = (key->resolvedAlign > prev->resolvedAlign)
-                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize > prev->resolvedSize)
-                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize == prev->resolvedSize && key->originalIndex < prev->originalIndex);
-                if(!keyBeforePrev)
-                    break;
-                classDecl.orderedFields[j] = classDecl.orderedFields[j - 1u];
-                --j;
-            }
-            classDecl.orderedFields[j] = key;
-        }
-    }
-
-    usize currentOffset = 0u;
-    usize maxAlign = classDecl.isSerialize ? 1u : (classDecl.implementedInterfaces.empty() ? 1u : 8u);
-
-    if(!classDecl.implementedInterfaces.empty())
-        currentOffset = 8u;
-
-    for(FieldDecl* field : classDecl.orderedFields){
-        const usize align = classDecl.isSerialize ? 1u : field->resolvedAlign;
-        if(align > maxAlign)
-            maxAlign = align;
-        currentOffset = __hidden_adhd_layout_optimizer::AlignUp(currentOffset, align);
-        field->resolvedOffset = currentOffset;
-        currentOffset += field->resolvedSize;
-    }
-
-    classDecl.totalAlign = maxAlign;
-    classDecl.totalSize = currentOffset == 0u ? 1u : __hidden_adhd_layout_optimizer::AlignUp(currentOffset, maxAlign);
+    __hidden_adhd_layout_optimizer::SortAndPackFields(
+        classDecl.orderedFields,
+        classDecl.isSerialize,
+        !classDecl.implementedInterfaces.empty(),
+        classDecl.totalSize,
+        classDecl.totalAlign
+    );
     return true;
 }
 

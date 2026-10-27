@@ -677,6 +677,44 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "}\r\n";
     CompileResult badTemplateOverrideRes(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_MismatchedTemplateArgOverride, "impl/bad_tpl_override.adhd", arena.arena, badTemplateOverrideRes));
+
+    static constexpr MStringView s_ExprLevelTemplateInstantiation =
+        "class Pair<T, U> {\r\n"
+        "    public T first = 0;\r\n"
+        "    public U second = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "}\r\n"
+        "void makeAutoPair() {\r\n"
+        "    auto p = Pair<u8, f32x4>();\r\n"
+        "}\r\n";
+    CompileResult exprInstRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_ExprLevelTemplateInstantiation, "impl/auto_pair.adhd", arena.arena, exprInstRes));
+    ASSERT_EQ(exprInstRes.unit.templateInstantiations.size(), 1u);
+    EXPECT_EQ(exprInstRes.unit.templateInstantiations[0]->orderedFields[0]->name, "second");
+
+    static constexpr MStringView s_DuplicateFieldSource =
+        "class DupClass {\r\n"
+        "    public u32 value = 0;\r\n"
+        "    private u32 value = 1;\r\n"
+        "}\r\n";
+    CompileResult dupFieldRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DuplicateFieldSource, "impl/dup_field.adhd", arena.arena, dupFieldRes));
+
+    static constexpr MStringView s_UnknownThisMemberSource =
+        "class KnownClass {\r\n"
+        "    public u32 count = 0;\r\n"
+        "    public u32 readBad() const {\r\n"
+        "        return this.missingField;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult unknownThisRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_UnknownThisMemberSource, "impl/unknown_this.adhd", arena.arena, unknownThisRes));
+
+    static constexpr MStringView s_InterfaceMethodByValueReturn =
+        "interface IFactory {\r\n"
+        "    IFactory cloneSelf();\r\n"
+        "}\r\n";
+    CompileResult ifaceValRetRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_InterfaceMethodByValueReturn, "impl/bad_iface_ret.adhd", arena.arena, ifaceValRetRes));
 }
 
 

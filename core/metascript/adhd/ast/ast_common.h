@@ -102,6 +102,21 @@ template<typename T>
     return ::new(mem) T(arena);
 }
 
+inline void AppendAdhdUnsigned(MString& out, usize value){
+    char buf[32];
+    usize idx = 0u;
+    if(value == 0u){
+        out.push_back('0');
+        return;
+    }
+    while(value > 0u && idx < sizeof(buf)){
+        buf[idx++] = static_cast<char>('0' + (value % 10u));
+        value /= 10u;
+    }
+    while(idx > 0u)
+        out.push_back(buf[--idx]);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

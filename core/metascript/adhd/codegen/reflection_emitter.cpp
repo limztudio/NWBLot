@@ -20,19 +20,107 @@ namespace __hidden_adhd_reflection_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendUnsigned(MString& out, usize value){
-    char buf[32];
-    usize idx = 0u;
-    if(value == 0u){
-        out.push_back('0');
-        return;
+void CountReflectedFields(
+    const MVector<FieldDecl*>& fields,
+    usize& outNonTransientCount,
+    usize& outAssetRefCount
+)noexcept{
+    outNonTransientCount = 0u;
+    outAssetRefCount = 0u;
+    for(const FieldDecl* field : fields){
+        if(field && !field->isTransient){
+            ++outNonTransientCount;
+            if(field->type && field->type->name == "AssetRef")
+                ++outAssetRefCount;
+        }
     }
-    while(value > 0u && idx < sizeof(buf)){
-        buf[idx++] = static_cast<char>('0' + (value % 10u));
-        value /= 10u;
+}
+
+void EmitSerializeBinaryBody(
+    MString& out,
+    const MVector<FieldDecl*>& fields,
+    const MStringView indent
+){
+    out.append(indent.data(), indent.size());
+    out.append("usize offset = 0u;\r\n");
+    for(const FieldDecl* field : fields){
+        if(!field || field->isTransient)
+            continue;
+        out.append(indent.data(), indent.size());
+        out.append("if(offset + sizeof(this->");
+        out.append(field->name.data(), field->name.size());
+        out.append(") > bufferCapacity)\r\n");
+        out.append(indent.data(), indent.size());
+        out.append("    return 0u;\r\n");
+        out.append(indent.data(), indent.size());
+        out.append("NWB_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
+        out.append(field->name.data(), field->name.size());
+        out.append(", sizeof(this->");
+        out.append(field->name.data(), field->name.size());
+        out.append("));\r\n");
+        out.append(indent.data(), indent.size());
+        out.append("offset += sizeof(this->");
+        out.append(field->name.data(), field->name.size());
+        out.append(");\r\n");
     }
-    while(idx > 0u)
-        out.push_back(buf[--idx]);
+    out.append(indent.data(), indent.size());
+    out.append("return offset;\r\n");
+}
+
+void EmitDeserializeBinaryBody(
+    MString& out,
+    const MVector<FieldDecl*>& fields,
+    const MStringView indent
+){
+    out.append(indent.data(), indent.size());
+    out.append("usize offset = 0u;\r\n");
+    for(const FieldDecl* field : fields){
+        if(!field || field->isTransient)
+            continue;
+        out.append(indent.data(), indent.size());
+        out.append("if(offset + sizeof(this->");
+        out.append(field->name.data(), field->name.size());
+        out.append(") > bufferSize)\r\n");
+        out.append(indent.data(), indent.size());
+        out.append("    return false;\r\n");
+        out.append(indent.data(), indent.size());
+        out.append("NWB_MEMCPY(&this->");
+        out.append(field->name.data(), field->name.size());
+        out.append(", sizeof(this->");
+        out.append(field->name.data(), field->name.size());
+        out.append("), inBuffer + offset, sizeof(this->");
+        out.append(field->name.data(), field->name.size());
+        out.append("));\r\n");
+        out.append(indent.data(), indent.size());
+        out.append("offset += sizeof(this->");
+        out.append(field->name.data(), field->name.size());
+        out.append(");\r\n");
+    }
+    out.append(indent.data(), indent.size());
+    out.append("return true;\r\n");
+}
+
+void EmitFieldNameLookupBody(
+    MString& out,
+    const MVector<FieldDecl*>& fields,
+    const bool assetRefOnly,
+    const MStringView indent
+){
+    usize currentIdx = 0u;
+    for(const FieldDecl* field : fields){
+        if(!field || field->isTransient)
+            continue;
+        if(assetRefOnly && (!field->type || field->type->name != "AssetRef"))
+            continue;
+        out.append(indent.data(), indent.size());
+        out.append("if(index == ");
+        AppendAdhdUnsigned(out, currentIdx++);
+        out.append("u) return \"");
+        out.append(field->name.data(), field->name.size());
+        out.append("\";\r\n");
+    }
+    out.append(indent.data(), indent.size());
+    out.append("return {};\r\n");
 }
 
 
@@ -69,6 +157,8 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
 }
 
 void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl& decl, const MVector<FieldDecl*>& fields)const{
+    using namespace __hidden_adhd_reflection_emitter;
+
     out.append("public:\r\n");
 
     if(!decl.assetTypeName.empty()){
@@ -79,89 +169,33 @@ void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl&
 
     if(decl.isSerialize){
         out.append("    [[nodiscard]] usize serializeBinary(u8* outBuffer, const usize bufferCapacity)const noexcept{\r\n");
-        out.append("        usize offset = 0u;\r\n");
-        for(const FieldDecl* field : fields){
-            if(!field || field->isTransient)
-                continue;
-            out.append("        if(offset + sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(") > bufferCapacity)\r\n            return 0u;\r\n");
-            out.append("        NWB_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(", sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append("));\r\n");
-            out.append("        offset += sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(");\r\n");
-        }
-        out.append("        return offset;\r\n    }\r\n");
+        EmitSerializeBinaryBody(out, fields, "        ");
+        out.append("    }\r\n");
 
         out.append("    [[nodiscard]] bool deserializeBinary(const u8* inBuffer, const usize bufferSize)noexcept{\r\n");
-        out.append("        usize offset = 0u;\r\n");
-        for(const FieldDecl* field : fields){
-            if(!field || field->isTransient)
-                continue;
-            out.append("        if(offset + sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(") > bufferSize)\r\n            return false;\r\n");
-            out.append("        NWB_MEMCPY(&this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(", sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append("), inBuffer + offset, sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append("));\r\n");
-            out.append("        offset += sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(");\r\n");
-        }
-        out.append("        return true;\r\n    }\r\n");
+        EmitDeserializeBinaryBody(out, fields, "        ");
+        out.append("    }\r\n");
     }
 
     usize nonTransientCount = 0u;
     usize assetRefCount = 0u;
-    for(const FieldDecl* field : fields){
-        if(field && !field->isTransient){
-            ++nonTransientCount;
-            if(field->type && field->type->name == "AssetRef")
-                ++assetRefCount;
-        }
-    }
+    CountReflectedFields(fields, nonTransientCount, assetRefCount);
 
     out.append("    [[nodiscard]] static constexpr usize reflectedFieldCount()noexcept{ return ");
-    __hidden_adhd_reflection_emitter::AppendUnsigned(out, nonTransientCount);
+    AppendAdhdUnsigned(out, nonTransientCount);
     out.append("u; }\r\n");
 
     out.append("    [[nodiscard]] static AStringView reflectedFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
-    usize currentIdx = 0u;
-    for(const FieldDecl* field : fields){
-        if(!field || field->isTransient)
-            continue;
-        out.append("        if(index == ");
-        __hidden_adhd_reflection_emitter::AppendUnsigned(out, currentIdx++);
-        out.append("u) return \"");
-        out.append(field->name.data(), field->name.size());
-        out.append("\";\r\n");
-    }
-    out.append("        return {};\r\n    }\r\n");
+    EmitFieldNameLookupBody(out, fields, false, "        ");
+    out.append("    }\r\n");
 
     out.append("    [[nodiscard]] static constexpr usize assetDependencyFieldCount()noexcept{ return ");
-    __hidden_adhd_reflection_emitter::AppendUnsigned(out, assetRefCount);
+    AppendAdhdUnsigned(out, assetRefCount);
     out.append("u; }\r\n");
 
     out.append("    [[nodiscard]] static AStringView assetDependencyFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
-    usize currentDepIdx = 0u;
-    for(const FieldDecl* field : fields){
-        if(!field || field->isTransient || !field->type || field->type->name != "AssetRef")
-            continue;
-        out.append("        if(index == ");
-        __hidden_adhd_reflection_emitter::AppendUnsigned(out, currentDepIdx++);
-        out.append("u) return \"");
-        out.append(field->name.data(), field->name.size());
-        out.append("\";\r\n");
-    }
-    out.append("        return {};\r\n    }\r\n");
+    EmitFieldNameLookupBody(out, fields, true, "        ");
+    out.append("    }\r\n");
 
     emitDeserializeNwbMethod(out, fields);
 }
@@ -253,104 +287,50 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
 }
 
 void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const ClassDecl& decl)const{
+    using namespace __hidden_adhd_reflection_emitter;
+
     if(decl.isSerialize){
         out.append("usize ");
         out.append(decl.name.data(), decl.name.size());
         out.append("::serializeBinary(u8* outBuffer, const usize bufferCapacity)const noexcept{\r\n");
-        out.append("    usize offset = 0u;\r\n");
-        for(const FieldDecl* field : decl.fields){
-            if(!field || field->isTransient)
-                continue;
-            out.append("    if(offset + sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(") > bufferCapacity)\r\n        return 0u;\r\n");
-            out.append("    NWB_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(", sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append("));\r\n");
-            out.append("    offset += sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(");\r\n");
-        }
-        out.append("    return offset;\r\n}\r\n\r\n");
+        EmitSerializeBinaryBody(out, decl.fields, "    ");
+        out.append("}\r\n\r\n");
 
         out.append("bool ");
         out.append(decl.name.data(), decl.name.size());
         out.append("::deserializeBinary(const u8* inBuffer, const usize bufferSize)noexcept{\r\n");
-        out.append("    usize offset = 0u;\r\n");
-        for(const FieldDecl* field : decl.fields){
-            if(!field || field->isTransient)
-                continue;
-            out.append("    if(offset + sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(") > bufferSize)\r\n        return false;\r\n");
-            out.append("    NWB_MEMCPY(&this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(", sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append("), inBuffer + offset, sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append("));\r\n");
-            out.append("    offset += sizeof(this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(");\r\n");
-        }
-        out.append("    return true;\r\n}\r\n\r\n");
+        EmitDeserializeBinaryBody(out, decl.fields, "    ");
+        out.append("}\r\n\r\n");
     }
 
     if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
         usize nonTransientCount = 0u;
         usize assetRefCount = 0u;
-        for(const FieldDecl* field : decl.fields){
-            if(field && !field->isTransient){
-                ++nonTransientCount;
-                if(field->type && field->type->name == "AssetRef")
-                    ++assetRefCount;
-            }
-        }
+        CountReflectedFields(decl.fields, nonTransientCount, assetRefCount);
 
         out.append("constexpr usize ");
         out.append(decl.name.data(), decl.name.size());
         out.append("::reflectedFieldCount()noexcept{\r\n    return ");
-        __hidden_adhd_reflection_emitter::AppendUnsigned(out, nonTransientCount);
+        AppendAdhdUnsigned(out, nonTransientCount);
         out.append("u;\r\n}\r\n\r\n");
 
         out.append("AStringView ");
         out.append(decl.name.data(), decl.name.size());
         out.append("::reflectedFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
-        usize currentIdx = 0u;
-        for(const FieldDecl* field : decl.fields){
-            if(!field || field->isTransient)
-                continue;
-            out.append("    if(index == ");
-            __hidden_adhd_reflection_emitter::AppendUnsigned(out, currentIdx++);
-            out.append("u)\r\n        return \"");
-            out.append(field->name.data(), field->name.size());
-            out.append("\";\r\n");
-        }
-        out.append("    return {};\r\n}\r\n\r\n");
+        EmitFieldNameLookupBody(out, decl.fields, false, "    ");
+        out.append("}\r\n\r\n");
 
         out.append("constexpr usize ");
         out.append(decl.name.data(), decl.name.size());
         out.append("::assetDependencyFieldCount()noexcept{\r\n    return ");
-        __hidden_adhd_reflection_emitter::AppendUnsigned(out, assetRefCount);
+        AppendAdhdUnsigned(out, assetRefCount);
         out.append("u;\r\n}\r\n\r\n");
 
         out.append("AStringView ");
         out.append(decl.name.data(), decl.name.size());
         out.append("::assetDependencyFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
-        usize currentDepIdx = 0u;
-        for(const FieldDecl* field : decl.fields){
-            if(!field || field->isTransient || !field->type || field->type->name != "AssetRef")
-                continue;
-            out.append("    if(index == ");
-            __hidden_adhd_reflection_emitter::AppendUnsigned(out, currentDepIdx++);
-            out.append("u)\r\n        return \"");
-            out.append(field->name.data(), field->name.size());
-            out.append("\";\r\n");
-        }
-        out.append("    return {};\r\n}\r\n\r\n");
+        EmitFieldNameLookupBody(out, decl.fields, true, "    ");
+        out.append("}\r\n\r\n");
     }
 }
 

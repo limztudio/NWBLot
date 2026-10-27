@@ -353,8 +353,6 @@ bool TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError
         matched->body = ool->body;
         if(!ool->isImported)
             matched->isImported = false;
-        ool->access = matched->access;
-        ool->isOverride = matched->isOverride;
     }
 
     return ok;
@@ -458,6 +456,20 @@ bool TypeChecker::checkTypeRef(
     MVector<ParseError>& errors
 ){
     bool ok = true;
+    if(typeRef.isFuncType){
+        if(typeRef.funcReturnType){
+            if(!checkTypeRef(*typeRef.funcReturnType, enclosingClass, enclosingMethod, errors))
+                ok = false;
+            if(typeRef.funcReturnType->refMode == ParamPassingMode::None && m_symbols.findInterface(typeRef.funcReturnType->name)){
+                reportError(errors, typeRef.span, "cannot return an 'interface' type by value");
+                ok = false;
+            }
+        }
+        for(const FuncParamType& fp : typeRef.funcParams){
+            if(fp.type && !checkTypeRef(*fp.type, enclosingClass, enclosingMethod, errors))
+                ok = false;
+        }
+    }
     if(!typeRef.templateArgs.empty()){
         if(const ClassDecl* targetCls = m_symbols.findClass(typeRef.name)){
             if(!checkTemplateArgBounds(targetCls->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
@@ -490,6 +502,24 @@ bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& 
         else if(!m_symbols.findInterface(baseName)){
             reportError(errors, iface.span, "unknown base interface name");
             ok = false;
+        }
+    }
+    for(MethodDecl* m : iface.methods){
+        if(!m)
+            continue;
+        if(!checkTemplateParamBounds(m->templateParams, errors))
+            ok = false;
+        if(m->returnType){
+            if(!checkTypeRef(*m->returnType, nullptr, m, errors))
+                ok = false;
+            if(m->returnType->refMode == ParamPassingMode::None && m_symbols.findInterface(m->returnType->name)){
+                reportError(errors, m->span, "cannot return an 'interface' type by value");
+                ok = false;
+            }
+        }
+        for(const ParamDecl& p : m->params){
+            if(p.type && !checkTypeRef(*p.type, nullptr, m, errors))
+                ok = false;
         }
     }
     return ok;
@@ -578,7 +608,17 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
         }
     }
 
-    for(FieldDecl* field : classDecl.fields){
+    for(usize i = 0u; i < classDecl.fields.size(); ++i){
+        FieldDecl* field = classDecl.fields[i];
+        if(!field)
+            continue;
+        for(usize j = 0u; j < i; ++j){
+            if(classDecl.fields[j] && classDecl.fields[j]->name == field->name){
+                reportError(errors, field->span, "duplicate class member field name");
+                ok = false;
+                break;
+            }
+        }
         if(field->type){
             if(!checkTypeRef(*field->type, &classDecl, nullptr, errors))
                 ok = false;
@@ -1024,6 +1064,12 @@ bool TypeChecker::checkExpr(
             break;
         }
         const FieldDecl* field = findClassField(*ownerClass, expr.text);
+        const MethodDecl* memberMethod = findClassMethod(*ownerClass, expr.text);
+        if(!field && !memberMethod){
+            reportError(errors, expr.span, "unknown member on 'this'");
+            ok = false;
+            break;
+        }
         if(field && field->type && field->type->refMode != ParamPassingMode::None)
             expr.derefNotNull = true;
 
@@ -1191,9 +1237,17 @@ bool TypeChecker::checkExpr(
             }
         }
 
-        if(targetCallable && !expr.callTemplateArgs.empty()){
-            if(!checkTemplateArgBounds(targetCallable->templateParams, expr.callTemplateArgs, ownerClass, &method, expr.span, errors))
-                ok = false;
+        if(!expr.callTemplateArgs.empty()){
+            if(targetCallable){
+                if(!checkTemplateArgBounds(targetCallable->templateParams, expr.callTemplateArgs, ownerClass, &method, expr.span, errors))
+                    ok = false;
+            }
+            else if(expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+                if(const ClassDecl* targetCls = m_symbols.findClass(expr.lhs->text)){
+                    if(!checkTemplateArgBounds(targetCls->templateParams, expr.callTemplateArgs, ownerClass, &method, expr.span, errors))
+                        ok = false;
+                }
+            }
         }
         for(const TypeArg& targ : expr.callTemplateArgs){
             if(targ.type && !checkTypeRef(*targ.type, ownerClass, &method, errors))
@@ -1320,6 +1374,14 @@ bool TypeChecker::checkExpr(
         break;
     }
     case ExprKind::Lambda:{
+        if(expr.lambdaReturnType){
+            if(!checkTypeRef(*expr.lambdaReturnType, ownerClass, &method, errors))
+                ok = false;
+            if(expr.lambdaReturnType->refMode == ParamPassingMode::None && m_symbols.findInterface(expr.lambdaReturnType->name)){
+                reportError(errors, expr.span, "cannot return an 'interface' type by value");
+                ok = false;
+            }
+        }
         MVector<ScopedVarInfo> lambdaScope(m_arena);
         for(const LambdaCapture& cap : expr.lambdaCaptures){
             const ScopedVarInfo* outer = findScopedVar(scope, cap.name);
@@ -1336,6 +1398,8 @@ bool TypeChecker::checkExpr(
             lambdaScope.push_back(capVar);
         }
         for(const ParamDecl& p : expr.lambdaParams){
+            if(p.type && !checkTypeRef(*p.type, ownerClass, &method, errors))
+                ok = false;
             ScopedVarInfo paramVar;
             paramVar.name = p.name;
             paramVar.type = p.type;

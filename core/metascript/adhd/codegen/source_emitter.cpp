@@ -22,21 +22,6 @@ namespace __hidden_adhd_source_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendUnsigned(MString& out, usize value){
-    char buf[32];
-    usize idx = 0u;
-    if(value == 0u){
-        out.push_back('0');
-        return;
-    }
-    while(value > 0u && idx < sizeof(buf)){
-        buf[idx++] = static_cast<char>('0' + (value % 10u));
-        value /= 10u;
-    }
-    while(idx > 0u)
-        out.push_back(buf[--idx]);
-}
-
 void AppendTaskOptions(MString& out, const Stmt& stmt){
     out.append("::NWB::Core::CpuTaskOptions{{}, ::NWB::Core::CpuTaskCost::");
     switch(stmt.parallelCore){
@@ -521,7 +506,7 @@ void SourceEmitter::emitStmt(
             out.append(", __adhd_deps_");
             out.append(stmt.name.data(), stmt.name.size());
             out.append(", ");
-            __hidden_adhd_source_emitter::AppendUnsigned(out, stmt.parallelDependencies.size());
+            AppendAdhdUnsigned(out, stmt.parallelDependencies.size());
             out.push_back('u');
         }
         out.append(");\r\n");
@@ -546,7 +531,7 @@ void SourceEmitter::emitStmt(
                     out.append("auto& __adhd_arg_");
                 else
                     out.append("const auto __adhd_arg_");
-                __hidden_adhd_source_emitter::AppendUnsigned(out, i);
+                AppendAdhdUnsigned(out, i);
                 out.append(" = (");
                 if(arg)
                     emitExpr(out, *arg);
@@ -558,7 +543,7 @@ void SourceEmitter::emitStmt(
                 const Expr* arg = stmt.expr->arguments[i];
                 if(!arg || !arg->isMutArg){
                     out.append(", __adhd_arg_");
-                    __hidden_adhd_source_emitter::AppendUnsigned(out, i);
+                    AppendAdhdUnsigned(out, i);
                 }
             }
             out.append("]()noexcept{ ");
@@ -569,7 +554,7 @@ void SourceEmitter::emitStmt(
                 if(i > 0u)
                     out.append(", ");
                 out.append("__adhd_arg_");
-                __hidden_adhd_source_emitter::AppendUnsigned(out, i);
+                AppendAdhdUnsigned(out, i);
             }
             out.append("); }, ");
             __hidden_adhd_source_emitter::AppendTaskOptions(out, stmt);
@@ -738,19 +723,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
                 emitExpr(out, *expr.lhs);
             }
         }
-        if(!expr.callTemplateArgs.empty()){
-            out.push_back('<');
-            for(usize i = 0u; i < expr.callTemplateArgs.size(); ++i){
-                if(i > 0u)
-                    out.append(", ");
-                const TypeArg& targ = expr.callTemplateArgs[i];
-                if(targ.isConstant || !targ.constantText.empty())
-                    out.append(targ.constantText.data(), targ.constantText.size());
-                else if(targ.type)
-                    m_headerEmitter.emitTypeCpp(out, *targ.type);
-            }
-            out.push_back('>');
-        }
+        if(!expr.callTemplateArgs.empty())
+            m_headerEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
         out.push_back('(');
         for(usize i = 0u; i < expr.arguments.size(); ++i){
             if(i > 0u)

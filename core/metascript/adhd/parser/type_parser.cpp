@@ -99,7 +99,6 @@ TypeRef* TypeParser::parseType(const bool allowRefMode, const bool allowAuto){
         if(!m_cursor.check(TokenType::RightParen)){
             for(;;){
                 FuncParamType param;
-                param.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
                 if(m_cursor.matchIdentifier("in"))
                     param.mode = ParamPassingMode::In;
                 else if(m_cursor.matchIdentifier("mut"))

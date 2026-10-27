@@ -20,8 +20,6 @@ NWB_METASCRIPT_BEGIN
 struct ParsedAttributeArg{
     MStringView text;
     TokenType::Enum kind = TokenType::Identifier;
-    u32 line = 1;
-    u32 column = 1;
 };
 
 

@@ -67,7 +67,7 @@ bool AttributeParser::parseAttributeItem(MVector<ParsedAttribute>& outAttributes
                     m_cursor.errorExpected("expected attribute argument (string, identifier, or integer)");
                     return false;
                 }
-                attr.arguments.push_back(ParsedAttributeArg{tok.text, tok.type, tok.line, tok.column});
+                attr.arguments.push_back(ParsedAttributeArg{tok.text, tok.type});
                 m_cursor.advance();
 
                 if(m_cursor.check(TokenType::RightParen))

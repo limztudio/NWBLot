@@ -36,7 +36,6 @@ struct TypeArg{
 struct FuncParamType{
     ParamPassingMode::Enum mode = ParamPassingMode::None;
     TypeRef* type = nullptr;
-    SourceSpan span;
 };
 
 

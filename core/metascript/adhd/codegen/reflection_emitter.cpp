@@ -168,7 +168,7 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
 
         out.append("AStringView ");
         out.append(decl.name.data(), decl.name.size());
-        out.append("::reflectedFieldName(const usize index)noexcept{\r\n");
+        out.append("::reflectedFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
         usize currentIdx = 0u;
         for(const FieldDecl* field : decl.fields){
             if(!field || field->isTransient)
@@ -213,7 +213,7 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
 
         out.append("AStringView ");
         out.append(decl.name.data(), decl.name.size());
-        out.append("::assetDependencyFieldName(const usize index)noexcept{\r\n");
+        out.append("::assetDependencyFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
         usize currentDepIdx = 0u;
         for(const FieldDecl* field : decl.fields){
             if(!field || field->isTransient || !field->type || field->type->name != "AssetRef")

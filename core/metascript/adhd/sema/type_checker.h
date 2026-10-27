@@ -46,6 +46,23 @@ public:
 
 private:
     [[nodiscard]] bool linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>& errors);
+    [[nodiscard]] bool checkTemplateParamBounds(const MVector<TemplateParamDecl>& params, MVector<ParseError>& errors);
+    [[nodiscard]] bool checkTemplateArgBounds(
+        const MVector<TemplateParamDecl>& params,
+        const MVector<TypeArg>& args,
+        const ClassDecl* enclosingClass,
+        const MethodDecl* enclosingMethod,
+        SourceSpan span,
+        MVector<ParseError>& errors
+    );
+    [[nodiscard]] bool checkTypeRef(
+        const TypeRef& typeRef,
+        const ClassDecl* enclosingClass,
+        const MethodDecl* enclosingMethod,
+        MVector<ParseError>& errors
+    );
+    [[nodiscard]] bool classImplementsInterface(const ClassDecl& cls, MStringView requiredIface)const noexcept;
+    [[nodiscard]] bool interfaceInheritsFrom(const InterfaceDecl& iface, MStringView requiredIface)const noexcept;
     [[nodiscard]] bool checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors);
     [[nodiscard]] bool checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors);
     [[nodiscard]] bool checkConstructorInitialization(ClassDecl& classDecl, MethodDecl& ctor, MVector<ParseError>& errors);

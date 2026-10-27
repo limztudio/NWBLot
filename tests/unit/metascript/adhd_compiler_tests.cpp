@@ -415,6 +415,63 @@ TEST(AdhdCompiler, EnforcesMutCallSiteAndParallelConcurrencySafety){
     EXPECT_TRUE(Compiler::compile(s_SafeParallelVector, "impl/test_par_good.adhd", arena.arena, safeParRes));
 }
 
+TEST(AdhdCompiler, ValidatesTemplateInterfaceBoundsAndRebindableInterfaceReferences){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ValidSource =
+        "interface ITask {\r\n"
+        "    void execute(in f32 dt);\r\n"
+        "}\r\n"
+        "class PhysicsTask : ITask {\r\n"
+        "    private f32 m_accum = 0.0f;\r\n"
+        "    public void execute(in f32 dt) override {\r\n"
+        "        this.m_accum += dt;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "class RenderTask : ITask {\r\n"
+        "    private f32 m_time = 0.0f;\r\n"
+        "    public void execute(in f32 dt) override {\r\n"
+        "        this.m_time += dt;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "class TaskRunner<T : ITask> {\r\n"
+        "    public T task = T();\r\n"
+        "}\r\n"
+        "void dispatchAll(in f32 dt) {\r\n"
+        "    TaskRunner<PhysicsTask> runner = TaskRunner<PhysicsTask>();\r\n"
+        "    PhysicsTask a = PhysicsTask();\r\n"
+        "    RenderTask b = RenderTask();\r\n"
+        "    mut ITask active = a;\r\n"
+        "    active.execute(dt);\r\n"
+        "    active = b;\r\n"
+        "    active.execute(dt);\r\n"
+        "}\r\n";
+
+    CompileResult validRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_ValidSource, "impl/task_runner.adhd", arena.arena, validRes));
+    const MStringView cppView(validRes.generatedSource.data(), validRes.generatedSource.size());
+    EXPECT_NE(cppView.find("::NotNull<ITask*> active = ::MakeNotNull(&(a));"), MStringView::npos);
+    EXPECT_NE(cppView.find("active->execute(dt);"), MStringView::npos);
+    EXPECT_NE(cppView.find("(active = ::MakeNotNull(&(b)));"), MStringView::npos);
+
+    static constexpr MStringView s_InvalidBoundArgSource =
+        "interface ITask {\r\n"
+        "    void execute(in f32 dt);\r\n"
+        "}\r\n"
+        "class PlainData {\r\n"
+        "    public u32 value = 0;\r\n"
+        "}\r\n"
+        "class TaskRunner<T : ITask> {\r\n"
+        "    public T task = T();\r\n"
+        "}\r\n"
+        "void badUse() {\r\n"
+        "    TaskRunner<PlainData> runner = TaskRunner<PlainData>();\r\n"
+        "}\r\n";
+
+    CompileResult invalidBoundRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_InvalidBoundArgSource, "impl/bad_bound.adhd", arena.arena, invalidBoundRes));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

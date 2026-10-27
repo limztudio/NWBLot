@@ -90,6 +90,9 @@ struct Expr{
     bool isSwizzle = false;
     bool moveAtLastUse = false;
     bool adaptToTChar = false;
+    bool isPointerMemberAccess = false;
+    bool isNotNullRebind = false;
+    bool derefNotNull = false;
 
 
 public:

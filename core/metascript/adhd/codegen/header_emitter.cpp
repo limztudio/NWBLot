@@ -160,7 +160,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
 
 void HeaderEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     if(type.refMode != ParamPassingMode::None){
-        out.append("::NWB::NotNull<");
+        out.append("::NotNull<");
         if(type.refMode == ParamPassingMode::In)
             out.append("const ");
         out.append(type.name.data(), type.name.size());
@@ -174,7 +174,7 @@ void HeaderEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     }
 
     if(type.isFuncType){
-        out.append("::NWB::InplaceFunction<");
+        out.append("::InplaceFunction<");
         __hidden_adhd_header_emitter::AppendUnsigned(out, type.inferredCaptureBytes);
         out.append("u, ");
         if(type.funcReturnType)
@@ -440,7 +440,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         else if(field->access == AccessSpecifier::Protected)
             out.append("protected:\r\n    ");
         else
-            out.append("private:\r\n    ");
+            out.append("private:\r\n    [[maybe_unused]] ");
 
         emitTypeCpp(out, *field->type);
         out.push_back(' ');
@@ -486,6 +486,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
 
     const ClassDecl& decl = *inst.templateDecl;
     SourceEmitter sourceEmitter(m_arena, m_symbols, *this);
+    ReflectionEmitter reflectionEmitter(m_arena, m_symbols, *this);
 
     if(decl.isSerialize)
         out.append("#pragma pack(push, 1)\r\n");
@@ -502,7 +503,81 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
         else if(arg.type)
             emitTypeCpp(out, *arg.type);
     }
-    out.append("> final{\r\n");
+    out.append("> final");
+
+    if(!decl.implementedInterfaces.empty()){
+        out.append(" : ");
+        for(usize i = 0u; i < decl.implementedInterfaces.size(); ++i){
+            if(i > 0u)
+                out.append(", ");
+            out.append("public ");
+            out.append(decl.implementedInterfaces[i].data(), decl.implementedInterfaces[i].size());
+        }
+    }
+    out.append("{\r\n");
+
+    const usize aliasCount = decl.templateParams.size() < inst.templateArgs.size()
+        ? decl.templateParams.size()
+        : inst.templateArgs.size();
+    if(aliasCount > 0u){
+        out.append("private:\r\n");
+        for(usize i = 0u; i < aliasCount; ++i){
+            const TemplateParamDecl& param = decl.templateParams[i];
+            const TypeArg& arg = inst.templateArgs[i];
+            if(param.isConstValue && param.constValueType){
+                out.append("    static constexpr ");
+                emitTypeCpp(out, *param.constValueType);
+                out.push_back(' ');
+                out.append(param.name.data(), param.name.size());
+                out.append(" = ");
+                out.append(arg.constantText.data(), arg.constantText.size());
+                out.append(";\r\n");
+            }
+            else if(arg.type){
+                out.append("    using ");
+                out.append(param.name.data(), param.name.size());
+                out.append(" = ");
+                emitTypeCpp(out, *arg.type);
+                out.append(";\r\n");
+            }
+        }
+        out.append("\r\n");
+    }
+
+    if(decl.needsClassArena){
+        out.append("private:\r\n");
+        out.append("    inline static ::NWB::Core::Alloc::GlobalArena s_ClassArena{65536};\r\n\r\n");
+    }
+
+    for(const MethodDecl* method : decl.methods){
+        if(!method)
+            continue;
+        if(method->access == AccessSpecifier::Public)
+            out.append("public:\r\n    ");
+        else if(method->access == AccessSpecifier::Protected)
+            out.append("protected:\r\n    ");
+        else
+            out.append("private:\r\n    ");
+
+        emitTemplateHeaderCpp(out, method->templateParams);
+        if(method->isInline)
+            out.append("NWB_FORCE_INLINE ");
+        else if(method->isNoInline)
+            out.append("NWB_NO_INLINE ");
+
+        emitMethodSignature(out, &decl, *method, true);
+        if(method->hasBody){
+            out.append("{\r\n");
+            sourceEmitter.emitMethodBodyBlock(out, &decl, *method, 2u);
+            out.append("    }\r\n");
+        }
+        else{
+            out.append(";\r\n");
+        }
+    }
+
+    if(!inst.orderedFields.empty() && !decl.methods.empty())
+        out.append("\r\n");
 
     for(const FieldDecl* field : inst.orderedFields){
         if(!field || !field->type)
@@ -512,7 +587,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
         else if(field->access == AccessSpecifier::Protected)
             out.append("protected:\r\n    ");
         else
-            out.append("private:\r\n    ");
+            out.append("private:\r\n    [[maybe_unused]] ");
 
         emitTypeCpp(out, *field->type);
         out.push_back(' ');
@@ -521,7 +596,25 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
             out.append(" = ");
             sourceEmitter.emitExpr(out, *field->defaultExpr);
         }
+        else if(field->hasCtorInit){
+            out.push_back('{');
+            for(usize i = 0u; i < field->ctorArgs.size(); ++i){
+                if(i > 0u)
+                    out.append(", ");
+                if(field->ctorArgs[i])
+                    sourceEmitter.emitExpr(out, *field->ctorArgs[i]);
+            }
+            out.push_back('}');
+        }
+        else if(field->usesClassArena){
+            out.append("{s_ClassArena}");
+        }
         out.append(";\r\n");
+    }
+
+    if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
+        out.append("\r\n");
+        reflectionEmitter.emitClassReflectionDeclarations(out, decl);
     }
 
     out.append("};\r\n");

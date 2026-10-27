@@ -69,6 +69,16 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
     if(name == "ceil") return "::Ceil";
     if(name == "round") return "::Truncate";
     if(name == "sqrt") return "::Sqrt";
+    if(name == "rsqrt") return "::VectorReciprocalSqrt";
+    if(name == "lerp") return "::VectorLerp";
+    if(name == "dot") return "::Vector4Dot";
+    if(name == "cross") return "::Vector3Cross";
+    if(name == "length") return "::Vector4Length";
+    if(name == "lengthSq") return "::Vector4LengthSq";
+    if(name == "normalize") return "::Vector4Normalize";
+    if(name == "mul") return "::MatrixMultiply";
+    if(name == "transpose") return "::MatrixTranspose";
+    if(name == "inverse") return "::MatrixInverse";
     if(name == "sin") return "::Sin";
     if(name == "cos") return "::Cos";
     if(name == "tan") return "::Tan";
@@ -216,7 +226,7 @@ void SourceEmitter::emitMethodBodyBlock(
         emitIndent(out, indent);
         out.append("::NWB::Core::CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler);\r\n");
         emitIndent(out, indent);
-        out.append("::NWB::ScopeExit __adhd_scope_join([&__adhd_task_scope]()noexcept{ __adhd_task_scope.wait(); });\r\n");
+        out.append("::ScopeExit __adhd_scope_join([&__adhd_task_scope]()noexcept{ __adhd_task_scope.wait(); });\r\n");
     }
 
     for(const Stmt* stmt : method.body){
@@ -256,7 +266,7 @@ void SourceEmitter::emitStmt(
         out.append(stmt.name.data(), stmt.name.size());
 
         if(stmt.varType && stmt.varType->refMode != ParamPassingMode::None && stmt.expr){
-            out.append(" = ::NWB::MakeNotNull(&(");
+            out.append(" = ::MakeNotNull(&(");
             emitExpr(out, *stmt.expr);
             out.append("));\r\n");
         }
@@ -569,11 +579,11 @@ void SourceEmitter::emitStmt(
         }
         out.append(");\r\n");
         emitIndent(out, indent);
-        out.append("const ::NWB::Core::CpuTaskHandle __adhd_task_");
+        out.append("[[maybe_unused]] const ::NWB::Core::CpuTaskHandle __adhd_task_");
         out.append(stmt.name.data(), stmt.name.size());
         out.append(" = __adhd_submit_");
         out.append(stmt.name.data(), stmt.name.size());
-        out.append(".hasValue() ? *__adhd_submit_");
+        out.append(".has_value() ? *__adhd_submit_");
         out.append(stmt.name.data(), stmt.name.size());
         out.append(" : ::NWB::Core::CpuTaskHandle{};\r\n");
         break;
@@ -645,7 +655,7 @@ void SourceEmitter::emitStmt(
 
 void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     if(expr.moveAtLastUse){
-        out.append("::NWB::Move(");
+        out.append("::Move(");
         out.append(expr.text.data(), expr.text.size());
         out.push_back(')');
         return;
@@ -657,7 +667,14 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     case ExprKind::DoubleLiteral:
     case ExprKind::BoolLiteral:
     case ExprKind::Identifier:{
-        out.append(expr.text.data(), expr.text.size());
+        if(expr.derefNotNull){
+            out.append("(*");
+            out.append(expr.text.data(), expr.text.size());
+            out.push_back(')');
+        }
+        else{
+            out.append(expr.text.data(), expr.text.size());
+        }
         break;
     }
     case ExprKind::StringLiteral:{
@@ -681,7 +698,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     case ExprKind::MemberAccess:{
         if(expr.lhs)
             emitExpr(out, *expr.lhs);
-        out.push_back('.');
+        if(expr.isPointerMemberAccess)
+            out.append("->");
+        else
+            out.push_back('.');
         out.append(expr.text.data(), expr.text.size());
         if(expr.isSwizzle)
             out.append("()");
@@ -758,6 +778,16 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         break;
     }
     case ExprKind::Binary:{
+        if(expr.isNotNullRebind){
+            out.push_back('(');
+            if(expr.lhs)
+                emitExpr(out, *expr.lhs);
+            out.append(" = ::MakeNotNull(&(");
+            if(expr.rhs)
+                emitExpr(out, *expr.rhs);
+            out.append(")))");
+            break;
+        }
         out.push_back('(');
         if(expr.lhs)
             emitExpr(out, *expr.lhs);
@@ -780,7 +810,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         break;
     }
     case ExprKind::BitCast:{
-        out.append("::NWB::BitCast<");
+        out.append("::BitCast<");
         if(expr.targetType)
             m_headerEmitter.emitTypeCpp(out, *expr.targetType);
         out.append(">(");

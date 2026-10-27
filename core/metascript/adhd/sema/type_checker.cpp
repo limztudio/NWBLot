@@ -172,6 +172,13 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
     if(!linkOutOfLineMethods(unit, errors))
         ok = false;
 
+    for(TypeAliasDecl* aliasDecl : unit.typeAliases){
+        if(!checkTemplateParamBounds(aliasDecl->templateParams, errors))
+            ok = false;
+        if(aliasDecl->aliasedType && !checkTypeRef(*aliasDecl->aliasedType, nullptr, nullptr, errors))
+            ok = false;
+    }
+
     for(InterfaceDecl* iface : unit.interfaces){
         if(!checkInterfaceDecl(*iface, errors))
             ok = false;
@@ -183,6 +190,14 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
     }
 
     for(MethodDecl* fn : unit.freeFunctions){
+        if(!checkTemplateParamBounds(fn->templateParams, errors))
+            ok = false;
+        if(fn->returnType && !checkTypeRef(*fn->returnType, nullptr, fn, errors))
+            ok = false;
+        for(const ParamDecl& p : fn->params){
+            if(p.type && !checkTypeRef(*p.type, nullptr, fn, errors))
+                ok = false;
+        }
         if(!fn->hasBody){
             reportError(errors, fn->span, "declared function has no implementation body");
             ok = false;
@@ -275,8 +290,128 @@ bool TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError
     return ok;
 }
 
-bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors){
+bool TypeChecker::checkTemplateParamBounds(const MVector<TemplateParamDecl>& params, MVector<ParseError>& errors){
     bool ok = true;
+    for(const TemplateParamDecl& param : params){
+        for(const MStringView& boundName : param.interfaceBounds){
+            if(m_symbols.findClass(boundName)){
+                reportError(errors, param.span, "template parameter bound must be an 'interface', not a concrete 'class'");
+                ok = false;
+            }
+            else if(!m_symbols.findInterface(boundName)){
+                reportError(errors, param.span, "unknown interface bound on template parameter");
+                ok = false;
+            }
+        }
+    }
+    return ok;
+}
+
+bool TypeChecker::interfaceInheritsFrom(const InterfaceDecl& iface, const MStringView requiredIface)const noexcept{
+    if(iface.name == requiredIface)
+        return true;
+    for(const MStringView& baseName : iface.baseInterfaces){
+        if(baseName == requiredIface)
+            return true;
+        if(const InterfaceDecl* baseDecl = m_symbols.findInterface(baseName)){
+            if(interfaceInheritsFrom(*baseDecl, requiredIface))
+                return true;
+        }
+    }
+    return false;
+}
+
+bool TypeChecker::classImplementsInterface(const ClassDecl& cls, const MStringView requiredIface)const noexcept{
+    for(const MStringView& implName : cls.implementedInterfaces){
+        if(implName == requiredIface)
+            return true;
+        if(const InterfaceDecl* ifaceDecl = m_symbols.findInterface(implName)){
+            if(interfaceInheritsFrom(*ifaceDecl, requiredIface))
+                return true;
+        }
+    }
+    return false;
+}
+
+bool TypeChecker::checkTemplateArgBounds(
+    const MVector<TemplateParamDecl>& params,
+    const MVector<TypeArg>& args,
+    const ClassDecl* enclosingClass,
+    const MethodDecl* enclosingMethod,
+    const SourceSpan span,
+    MVector<ParseError>& errors
+){
+    bool ok = true;
+    const usize count = params.size() < args.size() ? params.size() : args.size();
+    for(usize i = 0u; i < count; ++i){
+        const TemplateParamDecl& param = params[i];
+        const TypeArg& arg = args[i];
+        if(param.interfaceBounds.empty() || !arg.type)
+            continue;
+
+        const MStringView argTypeName = arg.type->name;
+        bool isDependentParam = false;
+        if(enclosingClass){
+            for(const TemplateParamDecl& tp : enclosingClass->templateParams){
+                if(tp.name == argTypeName){
+                    isDependentParam = true;
+                    break;
+                }
+            }
+        }
+        if(!isDependentParam && enclosingMethod){
+            for(const TemplateParamDecl& tp : enclosingMethod->templateParams){
+                if(tp.name == argTypeName){
+                    isDependentParam = true;
+                    break;
+                }
+            }
+        }
+        if(isDependentParam)
+            continue;
+
+        const ClassDecl* argClass = m_symbols.findClass(argTypeName);
+        for(const MStringView& boundName : param.interfaceBounds){
+            if(!argClass || !classImplementsInterface(*argClass, boundName)){
+                reportError(errors, span, "template type argument does not implement required interface bound");
+                ok = false;
+            }
+        }
+    }
+    return ok;
+}
+
+bool TypeChecker::checkTypeRef(
+    const TypeRef& typeRef,
+    const ClassDecl* enclosingClass,
+    const MethodDecl* enclosingMethod,
+    MVector<ParseError>& errors
+){
+    bool ok = true;
+    if(!typeRef.templateArgs.empty()){
+        if(const ClassDecl* targetCls = m_symbols.findClass(typeRef.name)){
+            if(!checkTemplateArgBounds(targetCls->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
+                ok = false;
+        }
+        else if(const InterfaceDecl* targetIface = m_symbols.findInterface(typeRef.name)){
+            if(!checkTemplateArgBounds(targetIface->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
+                ok = false;
+        }
+        else if(const TypeAliasDecl* targetAlias = m_symbols.findTypeAlias(typeRef.name)){
+            if(!checkTemplateArgBounds(targetAlias->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
+                ok = false;
+        }
+
+        for(const TypeArg& targ : typeRef.templateArgs){
+            if(targ.type && !checkTypeRef(*targ.type, enclosingClass, enclosingMethod, errors))
+                ok = false;
+        }
+    }
+    return ok;
+}
+
+bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors){
+    bool ok = checkTemplateParamBounds(iface.templateParams, errors);
     for(const MStringView& baseName : iface.baseInterfaces){
         if(m_symbols.findClass(baseName)){
             reportError(errors, iface.span, "'interface' cannot inherit from a concrete 'class'");
@@ -291,7 +426,7 @@ bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& 
 }
 
 bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors){
-    bool ok = true;
+    bool ok = checkTemplateParamBounds(classDecl.templateParams, errors);
 
     MVector<MethodDecl*> requiredInterfaceMethods(m_arena);
     for(const MStringView& ifaceName : classDecl.implementedInterfaces){
@@ -351,6 +486,8 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
     }
 
     for(FieldDecl* field : classDecl.fields){
+        if(field->type && !checkTypeRef(*field->type, &classDecl, nullptr, errors))
+            ok = false;
         if(field->type && field->type->isFuncType && field->defaultExpr && field->defaultExpr->kind == ExprKind::Lambda)
             field->type->inferredCaptureBytes = field->defaultExpr->lambdaCaptures.empty() ? 0u : 64u;
 
@@ -363,6 +500,14 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
     }
 
     for(MethodDecl* m : classDecl.methods){
+        if(!checkTemplateParamBounds(m->templateParams, errors))
+            ok = false;
+        if(m->returnType && !checkTypeRef(*m->returnType, &classDecl, m, errors))
+            ok = false;
+        for(const ParamDecl& p : m->params){
+            if(p.type && !checkTypeRef(*p.type, &classDecl, m, errors))
+                ok = false;
+        }
         if(!m->hasBody){
             reportError(errors, m->span, "declared class method has no implementation body");
             ok = false;
@@ -503,6 +648,8 @@ bool TypeChecker::checkStatement(
     }
     case StmtKind::VarDecl:{
         if(stmt.varType){
+            if(!checkTypeRef(*stmt.varType, ownerClass, &method, errors))
+                ok = false;
             if(SymbolTable::isArenaBackedContainer(stmt.varType->name)){
                 stmt.usesScratchArena = true;
                 method.usesScratchArena = true;
@@ -686,6 +833,9 @@ bool TypeChecker::checkExpr(
     case ExprKind::Identifier:{
         const ScopedVarInfo* local = findScopedVar(scope, expr.text);
         if(local){
+            if(!local->isParam && local->mode != ParamPassingMode::None)
+                expr.derefNotNull = true;
+
             if(isMutationTarget){
                 if(local->mode == ParamPassingMode::In){
                     reportError(errors, expr.span, "cannot mutate 'in' parameter or read-only borrow");
@@ -736,6 +886,10 @@ bool TypeChecker::checkExpr(
             ok = false;
 
         if(expr.lhs){
+            if(expr.lhs->derefNotNull){
+                expr.lhs->derefNotNull = false;
+                expr.isPointerMemberAccess = true;
+            }
             const MStringView baseType = inferExprTypeName(ownerClass, *expr.lhs, scope);
             u32 simdLanes = 4u;
             if(SymbolTable::isSimdVectorType(baseType, simdLanes)){
@@ -778,6 +932,8 @@ bool TypeChecker::checkExpr(
                 const MStringView objType = inferExprTypeName(ownerClass, *expr.lhs->lhs, scope);
                 if(const ClassDecl* targetCls = m_symbols.findClass(objType))
                     targetCallable = findClassMethod(*targetCls, expr.lhs->text);
+                else if(m_symbols.findInterface(objType))
+                    targetCallable = m_symbols.findInterfaceMethod(objType, expr.lhs->text);
                 else if(__hidden_adhd_type_checker::IsNonThreadSafeContainer(objType) && m_parallelDepth > 0u){
                     const MStringView mName = expr.lhs->text;
                     if(mName == "push_back" || mName == "emplace_back" || mName == "pop_back" || mName == "clear" || mName == "insert" || mName == "erase" || mName == "resize"){
@@ -786,6 +942,15 @@ bool TypeChecker::checkExpr(
                     }
                 }
             }
+        }
+
+        if(targetCallable && !expr.callTemplateArgs.empty()){
+            if(!checkTemplateArgBounds(targetCallable->templateParams, expr.callTemplateArgs, ownerClass, &method, expr.span, errors))
+                ok = false;
+        }
+        for(const TypeArg& targ : expr.callTemplateArgs){
+            if(targ.type && !checkTypeRef(*targ.type, ownerClass, &method, errors))
+                ok = false;
         }
 
         for(usize i = 0u; i < expr.arguments.size(); ++i){
@@ -810,6 +975,13 @@ bool TypeChecker::checkExpr(
         const bool isAssign = __hidden_adhd_type_checker::IsCompoundOrSimpleAssignment(expr.op);
         if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, isAssign, errors))
             ok = false;
+        if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::Identifier && expr.lhs->derefNotNull){
+            const ScopedVarInfo* local = findScopedVar(scope, expr.lhs->text);
+            if(local && local->type && m_symbols.findInterface(local->type->name)){
+                expr.lhs->derefNotNull = false;
+                expr.isNotNullRebind = true;
+            }
+        }
         if(expr.rhs && !checkExpr(ownerClass, method, *expr.rhs, scope, false, errors))
             ok = false;
         break;

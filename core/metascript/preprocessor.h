@@ -48,16 +48,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PreprocessorOptions{
-    IIncludeResolver* includeResolver = nullptr;
-    bool preserveNativeIncludeDirectives = true;
-    bool expandIncludedFilesInline = true;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class Preprocessor{
 public:
     using MacroMap = MStringMap<PreprocessorMacro>;
@@ -66,7 +56,7 @@ public:
 
 
 public:
-    Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, PreprocessorOptions options = {});
+    Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, IIncludeResolver* includeResolver = nullptr);
 
 
 public:
@@ -77,7 +67,6 @@ public:
     [[nodiscard]] bool process(MStringView source, MString& outProcessed);
 
     [[nodiscard]] const IncludedList& includedFiles()const noexcept{ return m_includedFiles; }
-    [[nodiscard]] const MacroMap& macros()const noexcept{ return m_macros; }
 
 
 private:
@@ -104,7 +93,7 @@ private:
     MetaArena& m_arena;
     Alloc::ScratchArena& m_scratchArena;
     MVector<ParseError>& m_errors;
-    PreprocessorOptions m_options;
+    IIncludeResolver* m_includeResolver = nullptr;
     MacroMap m_macros;
     IncludedSet m_includedSet;
     IncludedList m_includedFiles;

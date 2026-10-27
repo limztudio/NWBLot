@@ -110,7 +110,7 @@ MString SourceEmitter::emitSource(
     MString out(m_arena);
     out.reserve(4096u);
 
-    ReflectionEmitter reflectionEmitter(m_arena, m_symbols, m_headerEmitter);
+    ReflectionEmitter reflectionEmitter(m_symbols);
 
     out.append("// limztudio@gmail.com\r\n");
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
@@ -825,10 +825,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
             if(i > 0u)
                 out.append(", ");
             const LambdaCapture& cap = expr.lambdaCaptures[i];
-            if(cap.isThis){
-                out.append("this");
-            }
-            else if(cap.mode == ParamPassingMode::Mut){
+            if(cap.mode == ParamPassingMode::Mut){
                 out.push_back('&');
                 out.append(cap.name.data(), cap.name.size());
             }

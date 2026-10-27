@@ -61,12 +61,7 @@ bool Compiler::compile(
 ){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
 
-    PreprocessorOptions ppOpts;
-    ppOpts.includeResolver = includeResolver;
-    ppOpts.preserveNativeIncludeDirectives = true;
-    ppOpts.expandIncludedFilesInline = (includeResolver != nullptr);
-
-    Preprocessor preprocessor(arena, scratchArena, outResult.errors, ppOpts);
+    Preprocessor preprocessor(arena, scratchArena, outResult.errors, includeResolver);
     if(!preprocessor.process(source, outResult.preprocessedSource))
         return false;
 

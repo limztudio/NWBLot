@@ -28,7 +28,7 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
         out.append("    [[nodiscard]] bool deserializeBinary(const u8* inBuffer, usize bufferSize)noexcept;\r\n");
     }
 
-    if(decl.isReflect || !decl.assetTypeName.empty()){
+    if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
         out.append("    [[nodiscard]] static constexpr usize reflectedFieldCount()noexcept;\r\n");
         out.append("    [[nodiscard]] static AStringView reflectedFieldName(usize index)noexcept;\r\n");
         out.append("    [[nodiscard]] static constexpr usize assetDependencyFieldCount()noexcept;\r\n");
@@ -83,6 +83,22 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
                 out.append(field->name.data(), field->name.size());
                 out.append(" = ::NWB::Core::Common::Name(__f->asString());\r\n");
             }
+            else if(tname == "f32x4"){
+                out.append("        if(const auto* __f = inMap.findField(\"");
+                out.append(field->name.data(), field->name.size());
+                out.append("\"); __f && __f->isList() && __f->asList().size() == 4u) this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(" = Float4(static_cast<f32>(__f->asList()[0].toDouble()), static_cast<f32>(__f->asList()[1].toDouble()), static_cast<f32>(__f->asList()[2].toDouble()), static_cast<f32>(__f->asList()[3].toDouble()));\r\n");
+            }
+            else if(m_symbols.findEnum(tname)){
+                out.append("        if(const auto* __f = inMap.findField(\"");
+                out.append(field->name.data(), field->name.size());
+                out.append("\"); __f && __f->isNumeric()) this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(" = static_cast<");
+                out.append(tname.data(), tname.size());
+                out.append("::Enum>(__f->asInteger());\r\n");
+            }
         }
         out.append("        return true;\r\n");
         out.append("    }\r\n");
@@ -136,7 +152,7 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
         out.append("    return true;\r\n}\r\n\r\n");
     }
 
-    if(decl.isReflect || !decl.assetTypeName.empty()){
+    if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
         usize nonTransientCount = 0u;
         usize assetRefCount = 0u;
         for(const FieldDecl* field : decl.fields){

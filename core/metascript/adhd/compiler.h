@@ -41,8 +41,6 @@ public:
         , generatedSource(arena)
         , errors(arena)
     {}
-
-    [[nodiscard]] bool valid()const noexcept{ return errors.empty(); }
 };
 
 

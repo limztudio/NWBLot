@@ -323,11 +323,11 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Preprocessor::Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, PreprocessorOptions options)
+Preprocessor::Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, IIncludeResolver* includeResolver)
     : m_arena(arena)
     , m_scratchArena(scratchArena)
     , m_errors(errors)
-    , m_options(options)
+    , m_includeResolver(includeResolver)
     , m_macros(0, MStringHash(), MStringEqual(), arena)
     , m_includedSet(0, MStringHash(), MStringEqual(), arena)
     , m_includedFiles(arena)
@@ -399,7 +399,7 @@ bool Preprocessor::processInternal(const MStringView source, const u32 depth, MS
 
         if(!trimmed.empty() && trimmed[0] == '#'){
             const MStringView afterHash = TrimAsciiWhitespace(trimmed.substr(1u));
-            const bool isNativeInclude = m_options.preserveNativeIncludeDirectives && (nativeBraceDepth > 0u) && afterHash.starts_with("include");
+            const bool isNativeInclude = (nativeBraceDepth > 0u) && afterHash.starts_with("include");
             if(isNativeInclude){
                 if(isActive)
                     outProcessed.append(rawLine.data(), rawLine.size());
@@ -585,14 +585,14 @@ bool Preprocessor::handleInclude(const MStringView rest, const u32 line, const u
     const MStringView includePath = rest.substr(1u, closePos - 1u);
     if(m_includedSet.find(includePath) != m_includedSet.end())
         return true;
-    if(!m_options.includeResolver){
+    if(!m_includeResolver){
         m_errors.push_back(ParseError{line, 1u, MString("#include is not available without an include resolver", m_arena)});
         return false;
     }
 
     MString resolvedKey(m_arena);
     MString content(m_arena);
-    if(!m_options.includeResolver->resolveInclude(includePath, openChar == '<', m_arena, resolvedKey, content)){
+    if(!m_includeResolver->resolveInclude(includePath, openChar == '<', m_arena, resolvedKey, content)){
         m_errors.push_back(ParseError{line, 1u, MString("failed to resolve #include file", m_arena)});
         return false;
     }
@@ -602,12 +602,9 @@ bool Preprocessor::handleInclude(const MStringView rest, const u32 line, const u
 
     m_includedSet.emplace(MString(includePath.data(), includePath.size(), m_arena), true);
     m_includedSet.emplace(MString(resolvedKey.data(), resolvedKey.size(), m_arena), true);
-    m_includedFiles.push_back(MString( includePath.data(), includePath.size(), m_arena));
+    m_includedFiles.push_back(MString(includePath.data(), includePath.size(), m_arena));
 
-    if(m_options.expandIncludedFilesInline)
-        return processInternal(content, depth + 1u, outProcessed);
-
-    return true;
+    return processInternal(content, depth + 1u, outProcessed);
 }
 
 bool Preprocessor::handleDefine(const MStringView rest, const u32 line){

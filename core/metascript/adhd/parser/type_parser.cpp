@@ -113,9 +113,6 @@ TypeRef* TypeParser::parseType(const bool allowRefMode, const bool allowAuto){
                 if(!param.type)
                     return nullptr;
 
-                if(m_cursor.check(TokenType::Identifier))
-                    m_cursor.advance();
-
                 type->funcParams.push_back(param);
 
                 if(m_cursor.check(TokenType::RightParen))

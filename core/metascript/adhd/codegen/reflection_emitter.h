@@ -19,12 +19,18 @@ NWB_ADHD_BEGIN
 
 class ReflectionEmitter{
 public:
-    ReflectionEmitter(MetaArena&, const SymbolTable&, const HeaderEmitter&)noexcept{}
+    explicit ReflectionEmitter(const SymbolTable& symbols)noexcept
+        : m_symbols(symbols)
+    {}
 
 
 public:
     void emitClassReflectionDeclarations(MString& out, const ClassDecl& decl)const;
     void emitClassReflectionDefinitions(MString& out, const ClassDecl& decl)const;
+
+
+private:
+    const SymbolTable& m_symbols;
 };
 
 

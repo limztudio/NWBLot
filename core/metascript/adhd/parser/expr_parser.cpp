@@ -615,18 +615,12 @@ Expr* ExprParser::parseLambda(const SourceSpan span){
                     return nullptr;
                 }
 
-                if(m_cursor.matchIdentifier("this")){
-                    cap.isThis = true;
-                    cap.name = "this";
-                }
-                else if(m_cursor.check(TokenType::Identifier)){
-                    cap.name = m_cursor.current().text;
-                    m_cursor.advance();
-                }
-                else{
+                if(!m_cursor.check(TokenType::Identifier)){
                     m_cursor.errorExpected("expected captured variable name after 'in'/'mut'");
                     return nullptr;
                 }
+                cap.name = m_cursor.current().text;
+                m_cursor.advance();
 
                 node->lambdaCaptures.push_back(cap);
 

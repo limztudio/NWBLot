@@ -46,6 +46,59 @@ namespace __hidden_adhd_layout_optimizer{
     return val > 0u ? val : 1u;
 }
 
+TypeRef* SubstituteTemplateType(
+    const TypeRef& origType,
+    const MVector<TemplateParamDecl>& templateParams,
+    const MVector<TypeArg>& templateArgs,
+    MetaArena& arena
+){
+    const usize count = templateParams.size() < templateArgs.size() ? templateParams.size() : templateArgs.size();
+    for(usize p = 0u; p < count; ++p){
+        if(!templateParams[p].isConstValue && origType.name == templateParams[p].name && origType.templateArgs.empty() && templateArgs[p].type)
+            return templateArgs[p].type;
+    }
+
+    if(origType.templateArgs.empty())
+        return const_cast<TypeRef*>(&origType);
+
+    TypeRef* cloned = AllocateAstNode<TypeRef>(arena);
+    cloned->name = origType.name;
+    cloned->refMode = origType.refMode;
+    cloned->funcReturnType = origType.funcReturnType;
+    cloned->inferredCaptureBytes = origType.inferredCaptureBytes;
+    cloned->span = origType.span;
+    cloned->isFuncType = origType.isFuncType;
+    cloned->isAuto = origType.isAuto;
+    for(const TypeArg& arg : origType.templateArgs){
+        TypeArg subArg = arg;
+        if(arg.type){
+            bool matchedConstParam = false;
+            for(usize p = 0u; p < count; ++p){
+                if(templateParams[p].isConstValue && arg.type->name == templateParams[p].name){
+                    subArg.type = nullptr;
+                    subArg.isConstant = true;
+                    subArg.constantText = templateArgs[p].constantText;
+                    matchedConstParam = true;
+                    break;
+                }
+            }
+            if(!matchedConstParam)
+                subArg.type = SubstituteTemplateType(*arg.type, templateParams, templateArgs, arena);
+        }
+        else if(!arg.constantText.empty()){
+            for(usize p = 0u; p < count; ++p){
+                if(templateParams[p].isConstValue && arg.constantText == templateParams[p].name){
+                    subArg.constantText = templateArgs[p].constantText;
+                    subArg.isConstant = true;
+                    break;
+                }
+            }
+        }
+        cloned->templateArgs.push_back(subArg);
+    }
+    return cloned;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -73,8 +126,20 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
                     collectTemplateInstantiationsInType(*p.type, unit);
             }
             for(const Stmt* s : m->body){
-                if(s && s->kind == StmtKind::VarDecl && s->varType)
+                if(!s)
+                    continue;
+                if(s->kind == StmtKind::VarDecl && s->varType)
                     collectTemplateInstantiationsInType(*s->varType, unit);
+                if(s->initStmt && s->initStmt->varType)
+                    collectTemplateInstantiationsInType(*s->initStmt->varType, unit);
+                for(const Stmt* sub : s->statements){
+                    if(sub && sub->kind == StmtKind::VarDecl && sub->varType)
+                        collectTemplateInstantiationsInType(*sub->varType, unit);
+                }
+                for(const Stmt* sub : s->elseStatements){
+                    if(sub && sub->kind == StmtKind::VarDecl && sub->varType)
+                        collectTemplateInstantiationsInType(*sub->varType, unit);
+                }
             }
         }
     }
@@ -88,8 +153,20 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
                 collectTemplateInstantiationsInType(*p.type, unit);
         }
         for(const Stmt* s : fn->body){
-            if(s && s->kind == StmtKind::VarDecl && s->varType)
+            if(!s)
+                continue;
+            if(s->kind == StmtKind::VarDecl && s->varType)
                 collectTemplateInstantiationsInType(*s->varType, unit);
+            if(s->initStmt && s->initStmt->varType)
+                collectTemplateInstantiationsInType(*s->initStmt->varType, unit);
+            for(const Stmt* sub : s->statements){
+                if(sub && sub->kind == StmtKind::VarDecl && sub->varType)
+                    collectTemplateInstantiationsInType(*sub->varType, unit);
+            }
+            for(const Stmt* sub : s->elseStatements){
+                if(sub && sub->kind == StmtKind::VarDecl && sub->varType)
+                    collectTemplateInstantiationsInType(*sub->varType, unit);
+            }
         }
     }
     for(ClassDecl* classDecl : unit.classes){
@@ -152,13 +229,12 @@ void LayoutOptimizer::instantiateClassTemplate(
         for(Expr* arg : origField->ctorArgs)
             clonedField->ctorArgs.push_back(arg);
 
-        TypeRef* resolvedType = origField->type;
-        for(usize p = 0u; p < templateDecl.templateParams.size(); ++p){
-            if(origField->type->name == templateDecl.templateParams[p].name && templateArgs[p].type){
-                resolvedType = templateArgs[p].type;
-                break;
-            }
-        }
+        TypeRef* resolvedType = __hidden_adhd_layout_optimizer::SubstituteTemplateType(
+            *origField->type,
+            templateDecl.templateParams,
+            templateArgs,
+            m_arena
+        );
         clonedField->type = resolvedType;
 
         usize fieldSize = 8u;

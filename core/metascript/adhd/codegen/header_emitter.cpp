@@ -53,7 +53,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     out.reserve(4096u);
 
     SourceEmitter sourceEmitter(m_arena, m_symbols, *this);
-    ReflectionEmitter reflectionEmitter(m_arena, m_symbols, *this);
+    ReflectionEmitter reflectionEmitter(m_symbols);
 
     out.append("// limztudio@gmail.com\r\n");
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
@@ -386,7 +386,7 @@ void HeaderEmitter::emitInterfaceDecl(MString& out, const InterfaceDecl& decl)co
 
 void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     SourceEmitter sourceEmitter(m_arena, m_symbols, *this);
-    ReflectionEmitter reflectionEmitter(m_arena, m_symbols, *this);
+    ReflectionEmitter reflectionEmitter(m_symbols);
 
     if(decl.isSerialize)
         out.append("#pragma pack(push, 1)\r\n");
@@ -500,7 +500,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
 
     const ClassDecl& decl = *inst.templateDecl;
     SourceEmitter sourceEmitter(m_arena, m_symbols, *this);
-    ReflectionEmitter reflectionEmitter(m_arena, m_symbols, *this);
+    ReflectionEmitter reflectionEmitter(m_symbols);
 
     if(decl.isSerialize)
         out.append("#pragma pack(push, 1)\r\n");

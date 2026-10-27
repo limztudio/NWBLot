@@ -53,7 +53,6 @@ struct LambdaCapture{
     ParamPassingMode::Enum mode = ParamPassingMode::None;
     MStringView name;
     SourceSpan span;
-    bool isThis = false;
 };
 
 

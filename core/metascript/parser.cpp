@@ -54,9 +54,7 @@ bool Document::parse(MStringView source, IIncludeResolver* includeResolver){
 
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch, __hidden_metascript_parser::s_ParserScratchArenaBytes);
     if(source.find('#') != MStringView::npos){
-        PreprocessorOptions options;
-        options.includeResolver = includeResolver;
-        Preprocessor preprocessor(m_arena, scratchArena, m_errors, options);
+        Preprocessor preprocessor(m_arena, scratchArena, m_errors, includeResolver);
         MString processed(m_arena);
         if(!preprocessor.process(source, processed))
             return false;
@@ -96,9 +94,7 @@ bool Document::parse(IMetaReader& reader, IIncludeResolver* includeResolver){
 
     const MStringView rawView(buffer.data(), buffer.size());
     if(rawView.find('#') != MStringView::npos){
-        PreprocessorOptions options;
-        options.includeResolver = includeResolver;
-        Preprocessor preprocessor(m_arena, scratchArena, m_errors, options);
+        Preprocessor preprocessor(m_arena, scratchArena, m_errors, includeResolver);
         MString processed(m_arena);
         if(!preprocessor.process(rawView, processed))
             return false;

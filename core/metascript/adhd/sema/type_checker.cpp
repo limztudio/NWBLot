@@ -1087,20 +1087,18 @@ bool TypeChecker::checkExpr(
     case ExprKind::Lambda:{
         MVector<ScopedVarInfo> lambdaScope(m_arena);
         for(const LambdaCapture& cap : expr.lambdaCaptures){
-            if(!cap.isThis){
-                const ScopedVarInfo* outer = findScopedVar(scope, cap.name);
-                if(outer && cap.mode == ParamPassingMode::Mut && (outer->mode == ParamPassingMode::In || outer->isConst)){
-                    reportError(errors, cap.span, "cannot capture 'in' or 'const' variable as 'mut' in lambda");
-                    ok = false;
-                }
-                ScopedVarInfo capVar;
-                capVar.name = cap.name;
-                capVar.type = outer ? outer->type : nullptr;
-                capVar.mode = cap.mode;
-                capVar.isConst = (cap.mode == ParamPassingMode::In);
-                capVar.isParam = true;
-                lambdaScope.push_back(capVar);
+            const ScopedVarInfo* outer = findScopedVar(scope, cap.name);
+            if(outer && cap.mode == ParamPassingMode::Mut && (outer->mode == ParamPassingMode::In || outer->isConst)){
+                reportError(errors, cap.span, "cannot capture 'in' or 'const' variable as 'mut' in lambda");
+                ok = false;
             }
+            ScopedVarInfo capVar;
+            capVar.name = cap.name;
+            capVar.type = outer ? outer->type : nullptr;
+            capVar.mode = cap.mode;
+            capVar.isConst = (cap.mode == ParamPassingMode::In);
+            capVar.isParam = true;
+            lambdaScope.push_back(capVar);
         }
         for(const ParamDecl& p : expr.lambdaParams){
             ScopedVarInfo paramVar;

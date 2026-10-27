@@ -74,6 +74,7 @@ struct Expr{
     ExprKind::Enum kind = ExprKind::Identifier;
     SourceSpan span;
     MStringView text;
+    MStringView resolvedSimdType;
     Expr* lhs = nullptr;
     Expr* rhs = nullptr;
     TypeRef* targetType = nullptr;

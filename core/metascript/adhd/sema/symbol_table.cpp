@@ -185,6 +185,19 @@ bool SymbolTable::isSimdVectorType(const MStringView typeName, u32& outLanes)noe
     return false;
 }
 
+bool SymbolTable::isSimdMatrixType(const MStringView typeName)noexcept{
+    return typeName == "f32x3x4"
+        || typeName == "f32x4x4"
+        || typeName == "f64x3x3"
+        || typeName == "f64x3x4"
+        || typeName == "f64x4x4";
+}
+
+bool SymbolTable::isSimdType(const MStringView typeName)noexcept{
+    u32 lanes = 0u;
+    return isSimdVectorType(typeName, lanes) || isSimdMatrixType(typeName);
+}
+
 bool SymbolTable::isStringSwitchType(const MStringView typeName)noexcept{
     return typeName == "String"
         || typeName == "StringView"

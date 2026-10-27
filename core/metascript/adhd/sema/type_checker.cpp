@@ -890,6 +890,10 @@ bool TypeChecker::checkStatement(
             const bool isMutRefBinding = stmt.varType && stmt.varType->refMode == ParamPassingMode::Mut;
             if(!checkExpr(ownerClass, method, *stmt.expr, scope, isMutRefBinding, errors))
                 ok = false;
+            if(stmt.varType && stmt.varType->isAuto && !stmt.expr->resolvedSimdType.empty()){
+                stmt.varType->isAuto = false;
+                stmt.varType->name = stmt.expr->resolvedSimdType;
+            }
         }
         for(Expr* arg : stmt.arguments){
             if(arg && !checkExpr(ownerClass, method, *arg, scope, false, errors))
@@ -1010,6 +1014,28 @@ bool TypeChecker::checkStatement(
             method.usesTaskScope = true;
         if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, stmt.rangeMode == ParamPassingMode::Mut, errors))
             ok = false;
+        if(stmt.varType){
+            if(stmt.varType->isAuto && stmt.expr){
+                const TypeRef* containerType = nullptr;
+                if(stmt.expr->kind == ExprKind::Identifier){
+                    if(const ScopedVarInfo* local = findScopedVar(scope, stmt.expr->text))
+                        containerType = local->type;
+                }
+                else if(stmt.expr->kind == ExprKind::ThisMember && ownerClass){
+                    if(const FieldDecl* field = findClassField(*ownerClass, stmt.expr->text))
+                        containerType = field->type;
+                }
+                if(containerType && !containerType->templateArgs.empty() && containerType->templateArgs[0].type){
+                    const TypeRef& elemType = *containerType->templateArgs[0].type;
+                    if(elemType.templateArgs.empty() && !elemType.isFuncType && SymbolTable::isSimdType(elemType.name)){
+                        stmt.varType->isAuto = false;
+                        stmt.varType->name = elemType.name;
+                    }
+                }
+            }
+            if(!checkTypeRef(*stmt.varType, ownerClass, &method, errors))
+                ok = false;
+        }
         const usize saved = scope.size();
         ScopedVarInfo loopVar;
         loopVar.name = stmt.name;
@@ -1529,6 +1555,10 @@ bool TypeChecker::checkExpr(
         break;
     }
 
+    const MStringView inferredType = inferExprTypeName(ownerClass, &method, expr, scope);
+    if(SymbolTable::isSimdType(inferredType))
+        expr.resolvedSimdType = inferredType;
+
     return ok;
 }
 
@@ -1552,6 +1582,15 @@ MStringView TypeChecker::inferExprTypeName(
     }
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
         const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
+        u32 simdLanes = 0u;
+        if(SymbolTable::isSimdVectorType(lhsType, simdLanes) && expr.text.size() == 1u){
+            const MChar c = expr.text[0];
+            if((c == 'w' || c == 'a') && (lhsType == "f32x3_i32" || lhsType == "f32x3_u32" || lhsType == "f64x3_i64" || lhsType == "f64x3_u64"))
+                return lhsType.substr(6u);
+            return lhsType.substr(0u, 3u);
+        }
+        if(expr.isSwizzle)
+            return lhsType;
         if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
             if(const FieldDecl* field = findClassField(*cls, expr.text)){
                 if(field->type)
@@ -1559,14 +1598,76 @@ MStringView TypeChecker::inferExprTypeName(
             }
         }
     }
+    else if(expr.kind == ExprKind::Index && expr.lhs){
+        const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
+        u32 simdLanes = 0u;
+        if(SymbolTable::isSimdVectorType(lhsType, simdLanes))
+            return lhsType.substr(0u, 3u);
+    }
+    else if(expr.kind == ExprKind::Unary && expr.lhs){
+        if(expr.op == TokenType::Bang)
+            return "bool";
+        return inferExprTypeName(ownerClass, method, *expr.lhs, scope);
+    }
+    else if(expr.kind == ExprKind::Binary){
+        if(expr.op == TokenType::EqualEqual || expr.op == TokenType::BangEqual
+            || expr.op == TokenType::Less || expr.op == TokenType::LessEqual
+            || expr.op == TokenType::Greater || expr.op == TokenType::GreaterEqual
+            || expr.op == TokenType::AmpersandAmpersand || expr.op == TokenType::PipePipe)
+        {
+            return "bool";
+        }
+        const MStringView lhsT = expr.lhs ? inferExprTypeName(ownerClass, method, *expr.lhs, scope) : MStringView{};
+        const MStringView rhsT = expr.rhs ? inferExprTypeName(ownerClass, method, *expr.rhs, scope) : MStringView{};
+        if(SymbolTable::isSimdType(lhsT))
+            return lhsT;
+        if(SymbolTable::isSimdType(rhsT))
+            return rhsT;
+        return !lhsT.empty() ? lhsT : rhsT;
+    }
     else if(expr.kind == ExprKind::Call && expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier){
-            u32 dummyLanes = 0u;
-            if(m_symbols.findClass(expr.lhs->text) || SymbolTable::isSimdVectorType(expr.lhs->text, dummyLanes))
+            if(m_symbols.findClass(expr.lhs->text) || SymbolTable::isSimdType(expr.lhs->text))
                 return expr.lhs->text;
             if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text)){
                 if(fn->returnType)
                     return fn->returnType->name;
+            }
+            if(!expr.arguments.empty() && expr.arguments[0]){
+                const MStringView fnName = expr.lhs->text;
+                if(fnName == "dot" || fnName == "length" || fnName == "lengthSq"){
+                    const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
+                    u32 simdLanes = 0u;
+                    if(SymbolTable::isSimdVectorType(argType, simdLanes))
+                        return argType.substr(0u, 3u);
+                    return argType;
+                }
+                if(fnName == "mul"){
+                    const MStringView lhsT = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
+                    if(expr.arguments.size() == 2u && expr.arguments[1]){
+                        const MStringView rhsT = inferExprTypeName(ownerClass, method, *expr.arguments[1], scope);
+                        u32 rhsLanes = 0u;
+                        if(SymbolTable::isSimdMatrixType(lhsT) && SymbolTable::isSimdVectorType(rhsT, rhsLanes))
+                            return rhsT;
+                    }
+                    return lhsT;
+                }
+                if(fnName == "min" || fnName == "max" || fnName == "abs" || fnName == "clamp"
+                    || fnName == "lerp" || fnName == "sqrt" || fnName == "rsqrt"
+                    || fnName == "floor" || fnName == "ceil" || fnName == "round"
+                    || fnName == "sin" || fnName == "cos" || fnName == "tan"
+                    || fnName == "cross" || fnName == "normalize"
+                    || fnName == "transpose" || fnName == "inverse")
+                {
+                    for(const Expr* arg : expr.arguments){
+                        if(!arg)
+                            continue;
+                        const MStringView argT = inferExprTypeName(ownerClass, method, *arg, scope);
+                        if(SymbolTable::isSimdType(argT))
+                            return argT;
+                    }
+                    return inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
+                }
             }
         }
         else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){

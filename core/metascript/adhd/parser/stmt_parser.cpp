@@ -675,7 +675,7 @@ Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const Diagnost
 }
 
 Stmt* StmtParser::parseConstDeclaration(const SourceSpan span){
-    TypeRef* varType = m_typeParser.parseType(false, false);
+    TypeRef* varType = m_typeParser.parseType(false, true);
     if(!varType)
         return nullptr;
 
@@ -686,23 +686,35 @@ Stmt* StmtParser::parseConstDeclaration(const SourceSpan span){
     const MStringView name = m_cursor.current().text;
     m_cursor.advance();
 
-    if(!m_cursor.expect(TokenType::Equal, "expected '=' to initialize 'const' value"))
-        return nullptr;
-
-    Expr* initExpr = m_exprParser.parseExpression();
-    if(!initExpr)
-        return nullptr;
-
-    if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after 'const' declaration"))
-        return nullptr;
-
     Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
     stmt->kind = StmtKind::VarDecl;
     stmt->varType = varType;
     stmt->name = name;
-    stmt->expr = initExpr;
     stmt->isConst = true;
     stmt->span = span;
+
+    if(m_cursor.match(TokenType::Equal)){
+        stmt->expr = m_exprParser.parseExpression();
+        if(!stmt->expr)
+            return nullptr;
+    }
+    else if(m_cursor.check(TokenType::LeftParen)){
+        if(varType->isAuto){
+            m_cursor.error(span.line, span.column, "'auto' constant must be initialized with '= expr'");
+            return nullptr;
+        }
+        stmt->isCtorInit = true;
+        if(!m_exprParser.parseArgumentList(stmt->arguments))
+            return nullptr;
+    }
+    else{
+        m_cursor.errorExpected("expected '=' or '(' to initialize 'const' value");
+        return nullptr;
+    }
+
+    if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after 'const' declaration"))
+        return nullptr;
+
     return stmt;
 }
 

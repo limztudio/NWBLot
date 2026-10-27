@@ -796,6 +796,85 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
     EXPECT_FALSE(Compiler::compile(s_VoidReturnValueSource, "impl/bad_void_ret.adhd", arena.arena, badVoidRetRes));
 }
 
+TEST(AdhdCompiler, OptimizesSimdMathWithBlockScopedLoadStoreAndFmaLowering){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_SimdSource =
+        "class TransformBody {\r\n"
+        "    private f32x4 position = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "    public f32 integrate(in f32x4 velocity, in f32x4 accel, in f32 dt, in u32 steps) {\r\n"
+        "        f32x4 step = velocity * f32x4(dt, dt, dt, 0.0f) + accel * dt;\r\n"
+        "        const f32x4 offset(1.0f, 2.0f, 3.0f, 0.0f);\r\n"
+        "        step.w = 1.0f;\r\n"
+        "        const f32x4 invStep = 1.0f / step;\r\n"
+        "        const f32x4 dir = normalize(step.zyxw);\r\n"
+        "        const f32x4 dir3 = normalize(step.xyz);\r\n"
+        "        for (u32 i = 0u; i < steps; ++i) {\r\n"
+        "            if (i == 0u) {\r\n"
+        "                this.position += dir * step;\r\n"
+        "            } else {\r\n"
+        "                this.position += offset * dt;\r\n"
+        "            }\r\n"
+        "        }\r\n"
+        "        return dot(this.position.xyz, dir3.xyz) + this.position.x + invStep[0u];\r\n"
+        "    }\r\n"
+        "    public f32x4 transformBatch(mut Span<f32x4> points, in f32x4x4 m0, in f32x4x4 m1, in f32x4 bias) const {\r\n"
+        "        const f32x4x4 combinedT = transpose(mul(m0, m1));\r\n"
+        "        parallel_for (mut auto pt : points) {\r\n"
+        "            pt = mul(combinedT, pt) + bias;\r\n"
+        "        }\r\n"
+        "        return mul(combinedT, bias);\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult simdRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_SimdSource, "impl/physics/transform_body.adhd", arena.arena, simdRes));
+    const MStringView cppView(simdRes.generatedSource.data(), simdRes.generatedSource.size());
+
+    EXPECT_NE(cppView.find("const ::SIMDVectorSingle __adhd_simd_velocity = ::LoadFloat(velocity);"), MStringView::npos);
+    EXPECT_NE(cppView.find("const ::SIMDVectorSingle __adhd_simd_accel = ::LoadFloat(accel);"), MStringView::npos);
+    EXPECT_NE(cppView.find("::SIMDVectorSingle __adhd_simd_this_position = ::LoadFloat(this->position);"), MStringView::npos);
+    EXPECT_NE(cppView.find("::SIMDVectorSingle __adhd_simd_step = ::VectorMultiplyAdd(__adhd_simd_velocity, ::VectorSet(dt, dt, dt, 0.0f), ::VectorScale(__adhd_simd_accel, dt));"), MStringView::npos);
+    EXPECT_NE(cppView.find("const ::SIMDVectorSingle __adhd_simd_offset = ::VectorSet(1.0f, 2.0f, 3.0f, 0.0f);"), MStringView::npos);
+    EXPECT_NE(cppView.find("__adhd_simd_step = ::VectorSetW(__adhd_simd_step, 1.0f);"), MStringView::npos);
+    EXPECT_NE(cppView.find("const ::SIMDVectorSingle __adhd_simd_invStep = ::VectorReciprocal(__adhd_simd_step);"), MStringView::npos);
+    EXPECT_NE(cppView.find("const ::SIMDVectorSingle __adhd_simd_dir = ::Vector4Normalize(::VectorSwizzle<2u, 1u, 0u, 3u>(__adhd_simd_step));"), MStringView::npos);
+    EXPECT_NE(cppView.find("const ::SIMDVectorSingle __adhd_simd_dir3 = ::Vector3Normalize(__adhd_simd_step);"), MStringView::npos);
+    EXPECT_NE(cppView.find("__adhd_simd_this_position = ::VectorMultiplyAdd(__adhd_simd_dir, __adhd_simd_step, __adhd_simd_this_position);"), MStringView::npos);
+    EXPECT_NE(cppView.find("__adhd_simd_this_position = ::VectorMultiplyAdd(__adhd_simd_offset, ::VectorReplicate(dt), __adhd_simd_this_position);"), MStringView::npos);
+    EXPECT_NE(cppView.find("::StoreFloat(__adhd_simd_this_position, this->position);"), MStringView::npos);
+    EXPECT_NE(cppView.find("::VectorGetX(::Vector3Dot(__adhd_simd_this_position, __adhd_simd_dir3))"), MStringView::npos);
+    EXPECT_NE(cppView.find("::VectorGetByIndex(__adhd_simd_invStep, static_cast<usize>(0u))"), MStringView::npos);
+
+    EXPECT_NE(cppView.find("const ::SIMDMatrix __adhd_simd_combinedT = ::MatrixMultiplyTranspose(__adhd_simd_m0, __adhd_simd_m1);"), MStringView::npos);
+    EXPECT_NE(cppView.find("__adhd_simd_pt = ::VectorAdd(::Vector4Transform(__adhd_simd_pt, __adhd_simd_combinedT), __adhd_simd_bias);"), MStringView::npos);
+    EXPECT_NE(cppView.find("::StoreFloat(__adhd_simd_pt, pt);"), MStringView::npos);
+
+    usize posLoadCount = 0u;
+    usize searchPos = 0u;
+    while((searchPos = cppView.find("::LoadFloat(this->position)", searchPos)) != MStringView::npos){
+        ++posLoadCount;
+        searchPos += 27u;
+    }
+    EXPECT_EQ(posLoadCount, 1u);
+
+    usize posStoreCount = 0u;
+    searchPos = 0u;
+    while((searchPos = cppView.find("::StoreFloat(__adhd_simd_this_position, this->position)", searchPos)) != MStringView::npos){
+        ++posStoreCount;
+        searchPos += 55u;
+    }
+    EXPECT_EQ(posStoreCount, 1u);
+
+    usize biasLoadCount = 0u;
+    searchPos = 0u;
+    while((searchPos = cppView.find("::LoadFloat(bias)", searchPos)) != MStringView::npos){
+        ++biasLoadCount;
+        searchPos += 17u;
+    }
+    EXPECT_EQ(biasLoadCount, 1u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

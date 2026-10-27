@@ -23,7 +23,10 @@
   - Unifies C++ `class` and `struct` into a single `class` keyword.
   - **No `class`-to-`class` inheritance (Rust-style)**: A `class` **cannot** inherit from another `class` (composition over inheritance). Every generated C++ `class` is `final`, allowing direct non-virtual calls and unobstructed compiler member reordering.
   - A `class` may implement one or more `interface`s (`class ModelComponent : IComponent`).
-  - No `virtual` or `override` keywords are needed; implementing an `interface` is satisfied by providing methods with matching signatures.
+  - **Mandatory `override` on Implemented `interface` Methods (No `virtual` Keyword)**:
+    - `interface` methods do not use a `virtual` keyword (all `interface` methods are pure virtual by definition).
+    - In a `class` implementing an `interface`, every method that implements an `interface` method **must** explicitly specify `override` (`public void execute() override;`, `public u32 id() const override;`).
+    - Omitting `override` on a method that implements an `interface` method—or marking a method `override` when it does not match any implemented `interface`—is a compile-time error.
 - **`interface` (Pure Polymorphic Contract)**:
   - Pure interface type (maps to NWBLot's lowercase `interface` convention in `global/compile.h`).
   - An `interface` contains **method declarations only** (no member variables).

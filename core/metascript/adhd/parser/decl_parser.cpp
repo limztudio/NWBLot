@@ -170,13 +170,7 @@ bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         return true;
     }
 
-    MVector<TemplateParamDecl> templateParams(m_cursor.arena());
-    if(m_cursor.check(TokenType::Less)){
-        if(!m_typeParser.parseTemplateParamList(templateParams))
-            return false;
-    }
-
-    MethodDecl* callable = parseFreeOrOutOfLineCallable(span, Move(attributes), Move(templateParams));
+    MethodDecl* callable = parseFreeOrOutOfLineCallable(span, Move(attributes));
     if(!callable)
         return false;
 
@@ -575,10 +569,9 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.restore(cp);
     }
 
-    MVector<TemplateParamDecl> methodTemplateParams(m_cursor.arena());
-    if(m_cursor.check(TokenType::Less)){
-        if(!m_typeParser.parseTemplateParamList(methodTemplateParams))
-            return false;
+    if(m_cursor.checkIdentifier("operator")){
+        m_cursor.error("implicit type-conversion operators are prohibited in adhd; use 'cast<T>(x)' or an explicit named method");
+        return false;
     }
 
     TypeRef* memberType = m_typeParser.parseType(true, false);
@@ -593,7 +586,6 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
         MethodDecl* method = AllocateAstNode<MethodDecl>(m_cursor.arena());
         method->access = access;
         method->ownerClassName = classDecl.name;
-        method->templateParams = Move(methodTemplateParams);
         method->returnType = memberType;
         method->name = opName;
         method->isOperator = true;
@@ -602,6 +594,10 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
 
         if(!parseParamList(method->params))
             return false;
+        if((opName == "*" || opName == "&") && method->params.empty()){
+            m_cursor.error("unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd");
+            return false;
+        }
 
         if(m_cursor.matchIdentifier("const"))
             method->isConst = true;
@@ -629,13 +625,18 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
     m_cursor.advance();
 
     if(m_cursor.check(TokenType::Colon)){
-        m_cursor.error("C-style bitfields are prohibited in adhd; use 'enum<SizeType>' with '[flag]'");
+        m_cursor.error("C-style bitfields are prohibited in adhd; use 'enum<SizeType>' with 'flag'");
         return false;
     }
 
-    if(!methodTemplateParams.empty() && !m_cursor.check(TokenType::LeftParen)){
-        m_cursor.error("data members cannot be templated");
-        return false;
+    MVector<TemplateParamDecl> methodTemplateParams(m_cursor.arena());
+    if(m_cursor.check(TokenType::Less)){
+        if(!m_typeParser.parseTemplateParamList(methodTemplateParams))
+            return false;
+        if(!m_cursor.check(TokenType::LeftParen)){
+            m_cursor.error("data members cannot be templated");
+            return false;
+        }
     }
 
     if(m_cursor.check(TokenType::LeftParen)){
@@ -719,12 +720,10 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
 
 MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     const SourceSpan span,
-    MVector<ParsedAttribute>&& attributes,
-    MVector<TemplateParamDecl>&& templateParams
+    MVector<ParsedAttribute>&& attributes
 ){
     MethodDecl* decl = AllocateAstNode<MethodDecl>(m_cursor.arena());
     decl->span = span;
-    decl->templateParams = Move(templateParams);
 
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "inline" && attr.arguments.empty())
@@ -740,10 +739,8 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
         m_cursor.advance();
 
         MVector<TypeArg> ownerTypeArgs(m_cursor.arena());
-        bool hasOwnerArgs = false;
         if(m_cursor.check(TokenType::Less)){
-            if(m_typeParser.parseTypeArgList(ownerTypeArgs))
-                hasOwnerArgs = true;
+            (void)m_typeParser.parseTypeArgList(ownerTypeArgs);
         }
 
         if(m_cursor.match(TokenType::ColonColon)){
@@ -785,7 +782,6 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
                 return decl;
             }
         }
-        (void)hasOwnerArgs;
         m_cursor.restore(cp);
     }
 
@@ -831,6 +827,10 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
         else if(m_cursor.check(TokenType::Identifier)){
             decl->name = m_cursor.current().text;
             m_cursor.advance();
+            if(m_cursor.check(TokenType::Less)){
+                if(!m_typeParser.parseTemplateParamList(decl->templateParams))
+                    return nullptr;
+            }
         }
         else{
             m_cursor.errorExpected("expected method name after '::'");
@@ -848,6 +848,10 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
 
     if(!parseParamList(decl->params))
         return nullptr;
+    if(decl->isOperator && (decl->name == "*" || decl->name == "&") && decl->params.empty()){
+        m_cursor.error("unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd");
+        return nullptr;
+    }
 
     while(m_cursor.checkIdentifier("const") || m_cursor.checkIdentifier("override")){
         if(m_cursor.matchIdentifier("const"))

@@ -24,6 +24,7 @@ struct ScopedVarInfo{
     ParamPassingMode::Enum mode = ParamPassingMode::None;
     bool isConst = false;
     bool isParam = false;
+    u32 lambdaCaptureBytes = 0u;
 };
 
 

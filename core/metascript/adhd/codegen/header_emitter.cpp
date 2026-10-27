@@ -330,6 +330,17 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         out.append(">(a) & static_cast<");
         out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
         out.append(">(b)); }\r\n");
+        out.append("    [[nodiscard]] constexpr Enum operator^(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<");
+        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+        out.append(">(a) ^ static_cast<");
+        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+        out.append(">(b)); }\r\n");
+        out.append("    [[nodiscard]] constexpr Enum operator~(const Enum a)noexcept{ return static_cast<Enum>(~static_cast<");
+        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+        out.append(">(a)); }\r\n");
+        out.append("    constexpr Enum& operator|=(Enum& a, const Enum b)noexcept{ a = (a | b); return a; }\r\n");
+        out.append("    constexpr Enum& operator&=(Enum& a, const Enum b)noexcept{ a = (a & b); return a; }\r\n");
+        out.append("    constexpr Enum& operator^=(Enum& a, const Enum b)noexcept{ a = (a ^ b); return a; }\r\n");
     }
     out.append("};\r\n\r\n");
 }
@@ -411,7 +422,10 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         else
             out.append("private:\r\n    ");
 
-        emitTemplateHeaderCpp(out, method->templateParams);
+        if(!method->templateParams.empty()){
+            emitTemplateHeaderCpp(out, method->templateParams);
+            out.append("    ");
+        }
         const bool emitInlineBody = method->isInline || !decl.templateParams.empty() || !method->templateParams.empty();
         if(method->isInline)
             out.append("NWB_FORCE_INLINE ");
@@ -559,7 +573,10 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
         else
             out.append("private:\r\n    ");
 
-        emitTemplateHeaderCpp(out, method->templateParams);
+        if(!method->templateParams.empty()){
+            emitTemplateHeaderCpp(out, method->templateParams);
+            out.append("    ");
+        }
         if(method->isInline)
             out.append("NWB_FORCE_INLINE ");
         else if(method->isNoInline)

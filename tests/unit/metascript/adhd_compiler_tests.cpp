@@ -470,6 +470,64 @@ TEST(AdhdCompiler, ValidatesTemplateInterfaceBoundsAndRebindableInterfaceReferen
 
     CompileResult invalidBoundRes(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_InvalidBoundArgSource, "impl/bad_bound.adhd", arena.arena, invalidBoundRes));
+
+    static constexpr MStringView s_DowncastInterfaceSource =
+        "interface ITask {\r\n"
+        "    void execute(in f32 dt);\r\n"
+        "}\r\n"
+        "class PhysicsTask : ITask {\r\n"
+        "    public void execute(in f32 dt) override {}\r\n"
+        "}\r\n"
+        "void badDowncast(in ITask task) {\r\n"
+        "    PhysicsTask p = cast<PhysicsTask>(task);\r\n"
+        "}\r\n";
+    CompileResult downcastRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DowncastInterfaceSource, "impl/bad_downcast.adhd", arena.arena, downcastRes));
+}
+
+TEST(AdhdCompiler, SupportsCustomClassSwitchEnumVarScopeAndConstSafety){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ValidSource =
+        "enum<u8> Mode {\r\n"
+        "    enum Idle = 0,\r\n"
+        "    flag Active = 1 << 0,\r\n"
+        "}\r\n"
+        "class TagKey {\r\n"
+        "    public u32 id = 0;\r\n"
+        "    public bool operator==(in TagKey rhs) const {\r\n"
+        "        return this.id == rhs.id;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "u32 matchKey(in TagKey key, in TagKey target) {\r\n"
+        "    Mode m = Mode::Enum::Idle;\r\n"
+        "    u8 bits = m::Flag::Active;\r\n"
+        "    switch(key) {\r\n"
+        "    case target:\r\n"
+        "        return cast<u32>(bits);\r\n"
+        "    default:\r\n"
+        "        return 0;\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult validRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_ValidSource, "impl/tag_switch.adhd", arena.arena, validRes));
+    const MStringView cppView(validRes.generatedSource.data(), validRes.generatedSource.size());
+    EXPECT_NE(cppView.find("Mode::Flag::Active"), MStringView::npos);
+    EXPECT_NE(cppView.find("if(key == target){"), MStringView::npos);
+
+    static constexpr MStringView s_ConstViolationSource =
+        "class Counter {\r\n"
+        "    private u32 count = 0;\r\n"
+        "    public void bump() {\r\n"
+        "        this.count += 1;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "void badConstCall(in Counter c) {\r\n"
+        "    c.bump();\r\n"
+        "}\r\n";
+    CompileResult constRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_ConstViolationSource, "impl/bad_const.adhd", arena.arena, constRes));
 }
 
 

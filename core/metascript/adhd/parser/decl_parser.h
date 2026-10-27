@@ -19,11 +19,11 @@ NWB_ADHD_BEGIN
 
 class DeclParser{
 public:
-    DeclParser(ParserCursor& cursor, MStringView rawSource)noexcept
+    explicit DeclParser(ParserCursor& cursor)noexcept
         : m_cursor(cursor)
         , m_typeParser(cursor)
         , m_exprParser(cursor, m_typeParser)
-        , m_stmtParser(cursor, m_typeParser, m_exprParser, rawSource)
+        , m_stmtParser(cursor, m_typeParser, m_exprParser)
     {
         m_exprParser.setStmtParser(&m_stmtParser);
     }
@@ -40,11 +40,7 @@ private:
     [[nodiscard]] InterfaceDecl* parseInterfaceDecl(SourceSpan span, MVector<ParsedAttribute>&& attributes);
     [[nodiscard]] ClassDecl* parseClassDecl(SourceSpan span, MVector<ParsedAttribute>&& attributes);
     [[nodiscard]] bool parseClassMember(ClassDecl& classDecl);
-    [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(
-        SourceSpan span,
-        MVector<ParsedAttribute>&& attributes,
-        MVector<TemplateParamDecl>&& templateParams
-    );
+    [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, MVector<ParsedAttribute>&& attributes);
     [[nodiscard]] bool parseParamList(MVector<ParamDecl>& outParams);
     [[nodiscard]] bool parseOperatorName(MStringView& outOpName);
 

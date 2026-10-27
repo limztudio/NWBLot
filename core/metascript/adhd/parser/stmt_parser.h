@@ -19,11 +19,10 @@ NWB_ADHD_BEGIN
 
 class StmtParser{
 public:
-    StmtParser(ParserCursor& cursor, TypeParser& typeParser, ExprParser& exprParser, MStringView rawSource)noexcept
+    StmtParser(ParserCursor& cursor, TypeParser& typeParser, ExprParser& exprParser)noexcept
         : m_cursor(cursor)
         , m_typeParser(typeParser)
         , m_exprParser(exprParser)
-        , m_rawSource(rawSource)
     {}
 
 
@@ -52,7 +51,6 @@ private:
     ParserCursor& m_cursor;
     TypeParser& m_typeParser;
     ExprParser& m_exprParser;
-    MStringView m_rawSource;
 };
 
 

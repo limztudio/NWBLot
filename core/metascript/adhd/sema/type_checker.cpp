@@ -281,6 +281,7 @@ bool TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError
             continue;
         }
 
+        matched->params = ool->params;
         matched->hasBody = true;
         matched->body = ool->body;
         ool->access = matched->access;
@@ -654,12 +655,25 @@ bool TypeChecker::checkStatement(
                 stmt.usesScratchArena = true;
                 method.usesScratchArena = true;
             }
-            if(stmt.varType->isFuncType && stmt.expr && stmt.expr->kind == ExprKind::Lambda)
-                stmt.varType->inferredCaptureBytes = stmt.expr->lambdaCaptures.empty() ? 0u : 64u;
-            if(stmt.varType->name == "Path" && stmt.isCtorInit){
-                for(Expr* arg : stmt.arguments){
-                    if(arg && arg->kind == ExprKind::StringLiteral)
-                        arg->adaptToTChar = true;
+            if(stmt.varType->isFuncType && stmt.expr){
+                if(stmt.expr->kind == ExprKind::Lambda){
+                    stmt.varType->inferredCaptureBytes = stmt.expr->lambdaCaptures.empty() ? 0u : 64u;
+                }
+                else if(stmt.expr->kind == ExprKind::Identifier){
+                    if(const ScopedVarInfo* rhsVar = findScopedVar(scope, stmt.expr->text)){
+                        if(rhsVar->lambdaCaptureBytes > 0u || (rhsVar->type && rhsVar->type->inferredCaptureBytes > 0u))
+                            stmt.varType->inferredCaptureBytes = 64u;
+                    }
+                }
+            }
+            if(stmt.varType->name == "Path"){
+                if(stmt.expr && stmt.expr->kind == ExprKind::StringLiteral)
+                    stmt.expr->adaptToTChar = true;
+                if(stmt.isCtorInit){
+                    for(Expr* arg : stmt.arguments){
+                        if(arg && arg->kind == ExprKind::StringLiteral)
+                            arg->adaptToTChar = true;
+                    }
                 }
             }
         }
@@ -680,6 +694,10 @@ bool TypeChecker::checkStatement(
         info.mode = stmt.varType ? stmt.varType->refMode : ParamPassingMode::None;
         info.isConst = stmt.isConst || (stmt.varType && stmt.varType->refMode == ParamPassingMode::In);
         info.isParam = false;
+        if(stmt.expr && stmt.expr->kind == ExprKind::Lambda)
+            info.lambdaCaptureBytes = stmt.expr->lambdaCaptures.empty() ? 0u : 64u;
+        else if(stmt.varType && stmt.varType->isFuncType)
+            info.lambdaCaptureBytes = stmt.varType->inferredCaptureBytes;
         scope.push_back(info);
         break;
     }
@@ -711,8 +729,23 @@ bool TypeChecker::checkStatement(
             if(!checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
                 ok = false;
             const MStringView subjectType = inferExprTypeName(ownerClass, *stmt.expr, scope);
-            if(SymbolTable::isStringSwitchType(subjectType))
+            if(SymbolTable::isStringSwitchType(subjectType)){
                 stmt.lowerSwitchToIfChain = true;
+            }
+            else if(const ClassDecl* switchCls = m_symbols.findClass(subjectType)){
+                bool hasEq = false;
+                for(const MethodDecl* m : switchCls->methods){
+                    if(m && m->isOperator && m->name == "=="){
+                        hasEq = true;
+                        break;
+                    }
+                }
+                if(!hasEq){
+                    reportError(errors, stmt.span, "switch on custom class requires 'operator==' to be defined on the class");
+                    ok = false;
+                }
+                stmt.lowerSwitchToIfChain = true;
+            }
         }
         for(SwitchCase& sc : stmt.switchCases){
             if(sc.matchExpr){
@@ -795,8 +828,8 @@ bool TypeChecker::checkStatement(
                 continue;
             if(!checkExpr(ownerClass, method, *arg, scope, false, errors))
                 ok = false;
-            const bool isMessageArg = (stmt.diagnosticKind == DiagnosticKind::Assert) ? (i == 1u) : (i == 0u);
-            if(isMessageArg && arg->kind == ExprKind::StringLiteral)
+            const bool isAfterCond = (stmt.diagnosticKind != DiagnosticKind::Assert) || (i >= 1u);
+            if(isAfterCond && arg->kind == ExprKind::StringLiteral)
                 arg->adaptToTChar = true;
         }
         break;
@@ -881,6 +914,19 @@ bool TypeChecker::checkExpr(
         }
         break;
     }
+    case ExprKind::ScopeAccess:{
+        if(isMutationTarget){
+            reportError(errors, expr.span, "cannot mutate or pass scope-qualified constant/enumerator to a 'mut' target");
+            ok = false;
+        }
+        if(!expr.scopeChain.empty()){
+            if(const ScopedVarInfo* local = findScopedVar(scope, expr.scopeChain[0])){
+                if(local->type && m_symbols.findEnum(local->type->name))
+                    expr.scopeChain[0] = local->type->name;
+            }
+        }
+        break;
+    }
     case ExprKind::MemberAccess:{
         if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, isMutationTarget, errors))
             ok = false;
@@ -924,22 +970,40 @@ bool TypeChecker::checkExpr(
 
         const MethodDecl* targetCallable = nullptr;
         if(expr.lhs){
-            if(expr.lhs->kind == ExprKind::Identifier)
+            if(expr.lhs->kind == ExprKind::Identifier){
                 targetCallable = m_symbols.findFreeFunction(expr.lhs->text);
-            else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass)
+                if(expr.lhs->text == "Path"){
+                    for(Expr* arg : expr.arguments){
+                        if(arg && arg->kind == ExprKind::StringLiteral)
+                            arg->adaptToTChar = true;
+                    }
+                }
+            }
+            else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
                 targetCallable = findClassMethod(*ownerClass, expr.lhs->text);
+                if(method.isConst && targetCallable && !targetCallable->isConst){
+                    reportError(errors, expr.span, "cannot call non-'const' method on 'this' inside a 'const' method");
+                    ok = false;
+                }
+            }
             else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
                 const MStringView objType = inferExprTypeName(ownerClass, *expr.lhs->lhs, scope);
+                const MStringView mName = expr.lhs->text;
+                const bool isMutatingContainerOp = (mName == "push_back" || mName == "emplace_back" || mName == "pop_back" || mName == "clear" || mName == "insert" || mName == "erase" || mName == "resize");
                 if(const ClassDecl* targetCls = m_symbols.findClass(objType))
-                    targetCallable = findClassMethod(*targetCls, expr.lhs->text);
+                    targetCallable = findClassMethod(*targetCls, mName);
                 else if(m_symbols.findInterface(objType))
-                    targetCallable = m_symbols.findInterfaceMethod(objType, expr.lhs->text);
-                else if(__hidden_adhd_type_checker::IsNonThreadSafeContainer(objType) && m_parallelDepth > 0u){
-                    const MStringView mName = expr.lhs->text;
-                    if(mName == "push_back" || mName == "emplace_back" || mName == "pop_back" || mName == "clear" || mName == "insert" || mName == "erase" || mName == "resize"){
-                        reportError(errors, expr.span, "mutating non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers");
+                    targetCallable = m_symbols.findInterfaceMethod(objType, mName);
+                else if(__hidden_adhd_type_checker::IsNonThreadSafeContainer(objType) && m_parallelDepth > 0u && isMutatingContainerOp){
+                    reportError(errors, expr.span, "mutating non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers");
+                    ok = false;
+                }
+
+                if((targetCallable && !targetCallable->isConst) || isMutatingContainerOp){
+                    const bool savedDeref = expr.lhs->lhs->derefNotNull;
+                    if(!checkExpr(ownerClass, method, *expr.lhs->lhs, scope, true, errors))
                         ok = false;
-                    }
+                    expr.lhs->lhs->derefNotNull = savedDeref;
                 }
             }
         }
@@ -975,11 +1039,24 @@ bool TypeChecker::checkExpr(
         const bool isAssign = __hidden_adhd_type_checker::IsCompoundOrSimpleAssignment(expr.op);
         if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, isAssign, errors))
             ok = false;
-        if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::Identifier && expr.lhs->derefNotNull){
+        if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
             const ScopedVarInfo* local = findScopedVar(scope, expr.lhs->text);
-            if(local && local->type && m_symbols.findInterface(local->type->name)){
-                expr.lhs->derefNotNull = false;
-                expr.isNotNullRebind = true;
+            if(local && local->type){
+                if(expr.lhs->derefNotNull && m_symbols.findInterface(local->type->name)){
+                    expr.lhs->derefNotNull = false;
+                    expr.isNotNullRebind = true;
+                }
+                if(local->type->isFuncType && expr.rhs){
+                    if(expr.rhs->kind == ExprKind::Lambda && !expr.rhs->lambdaCaptures.empty()){
+                        local->type->inferredCaptureBytes = 64u;
+                    }
+                    else if(expr.rhs->kind == ExprKind::Identifier){
+                        if(const ScopedVarInfo* rhsVar = findScopedVar(scope, expr.rhs->text)){
+                            if(rhsVar->lambdaCaptureBytes > 0u || (rhsVar->type && rhsVar->type->inferredCaptureBytes > 0u))
+                                local->type->inferredCaptureBytes = 64u;
+                        }
+                    }
+                }
             }
         }
         if(expr.rhs && !checkExpr(ownerClass, method, *expr.rhs, scope, false, errors))
@@ -988,8 +1065,23 @@ bool TypeChecker::checkExpr(
     }
     case ExprKind::Cast:
     case ExprKind::BitCast:{
-        if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, false, errors))
-            ok = false;
+        if(expr.targetType){
+            if(!checkTypeRef(*expr.targetType, ownerClass, &method, errors))
+                ok = false;
+            if(m_symbols.findInterface(expr.targetType->name)){
+                reportError(errors, expr.span, "casting to an 'interface' type is prohibited in adhd");
+                ok = false;
+            }
+        }
+        if(expr.lhs){
+            if(!checkExpr(ownerClass, method, *expr.lhs, scope, false, errors))
+                ok = false;
+            const MStringView srcType = inferExprTypeName(ownerClass, *expr.lhs, scope);
+            if(!srcType.empty() && m_symbols.findInterface(srcType)){
+                reportError(errors, expr.span, "downcasting from an 'interface' type is prohibited in adhd");
+                ok = false;
+            }
+        }
         break;
     }
     case ExprKind::Lambda:{
@@ -1046,6 +1138,54 @@ MStringView TypeChecker::inferExprTypeName(
             if(field->type)
                 return field->type->name;
         }
+    }
+    else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
+        const MStringView lhsType = inferExprTypeName(ownerClass, *expr.lhs, scope);
+        if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
+            if(const FieldDecl* field = findClassField(*cls, expr.text)){
+                if(field->type)
+                    return field->type->name;
+            }
+        }
+    }
+    else if(expr.kind == ExprKind::Call && expr.lhs){
+        if(expr.lhs->kind == ExprKind::Identifier){
+            u32 dummyLanes = 0u;
+            if(m_symbols.findClass(expr.lhs->text) || SymbolTable::isSimdVectorType(expr.lhs->text, dummyLanes))
+                return expr.lhs->text;
+            if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text)){
+                if(fn->returnType)
+                    return fn->returnType->name;
+            }
+        }
+        else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
+            if(const MethodDecl* m = findClassMethod(*ownerClass, expr.lhs->text)){
+                if(m->returnType)
+                    return m->returnType->name;
+            }
+        }
+        else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
+            const MStringView lhsType = inferExprTypeName(ownerClass, *expr.lhs->lhs, scope);
+            if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
+                if(const MethodDecl* m = findClassMethod(*cls, expr.lhs->text)){
+                    if(m->returnType)
+                        return m->returnType->name;
+                }
+            }
+            else if(m_symbols.findInterface(lhsType)){
+                if(const MethodDecl* m = m_symbols.findInterfaceMethod(lhsType, expr.lhs->text)){
+                    if(m->returnType)
+                        return m->returnType->name;
+                }
+            }
+        }
+    }
+    else if((expr.kind == ExprKind::Cast || expr.kind == ExprKind::BitCast) && expr.targetType){
+        return expr.targetType->name;
+    }
+    else if(expr.kind == ExprKind::ScopeAccess && !expr.scopeChain.empty()){
+        if(m_symbols.findEnum(expr.scopeChain[0]))
+            return expr.scopeChain[0];
     }
     else if(expr.kind == ExprKind::StringLiteral){
         return "StringView";

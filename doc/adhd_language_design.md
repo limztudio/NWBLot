@@ -127,6 +127,10 @@
   - **Explicit Type Casting (`cast<T>(x)` & `bit_cast<T>(x)` Only)**:
     - Explicit value conversions must use `cast<T>(x)` (lowers to `static_cast<T>(x)`) and bitwise reinterpretation must use `bit_cast<T>(x)` (lowers to `BitCast<T>(x)` in `global/bit.h`).
     - Rust-style `x as T` and C-style `(T)x` casts are strictly prohibited.
+  - **`switch` / `case` Statements (Mandatory `break;` & Any Equality-Comparable Type)**:
+    - Every `case` (and `default`) branch **must** terminate with `break;` (or `return`); implicit fallthrough is a compile-time error.
+    - `switch` accepts not only integers and `enum`s, but **also strings (`String`, `CompactString`, `StringView`, `Name`) and any custom `class` that supports equality comparison (`operator==`)**.
+    - For non-integral types (strings and custom classes), the `adhd` compiler automatically lowers the `switch` statement into an `if` / `else if` / `else` chain in generated C++.
 - **Function Pointers / Callables (`Func<...>`) & Lambdas**:
   - **Non-Null Callable Type (`Func<Ret(in A, mut B)>`)**:
     - Replaces raw C++ function pointers (`void(*)(int)`):

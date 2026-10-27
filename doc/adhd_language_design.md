@@ -131,6 +131,8 @@
     - Every `case` (and `default`) branch **must** terminate with `break;` (or `return`); implicit fallthrough is a compile-time error.
     - `switch` accepts not only integers and `enum`s, but **also strings (`String`, `CompactString`, `StringView`, `Name`) and any custom `class` that supports equality comparison (`operator==`)**.
     - For non-integral types (strings and custom classes), the `adhd` compiler automatically lowers the `switch` statement into an `if` / `else if` / `else` chain in generated C++.
+  - **No Exceptions (`try` / `catch` / `throw` Prohibited)**:
+    - Exceptions (`try`, `catch`, `throw`) are not allowed in `adhd`. Fallible functions return `Expected<T, E>`, and all generated `adhd` functions emit `noexcept` in C++.
 - **Function Pointers / Callables (`Func<...>`) & Lambdas**:
   - **Non-Null Callable Type (`Func<Ret(in A, mut B)>`)**:
     - Replaces raw C++ function pointers (`void(*)(int)`):

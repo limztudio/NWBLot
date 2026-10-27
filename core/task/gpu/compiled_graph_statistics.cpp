@@ -106,11 +106,11 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
             ++statistics.payloadObjectCount;
             statistics.payloadObjectBytes += task.payloadObjectSize;
         }
-        NWB_ASSERT(compiledTask.packetizationDecision < GpuTaskPacketizationDecision::kCount);
+        NWB_ASSERT(compiledTask.packetizationDecision < GpuTaskPacketizationDecision::Count);
         ++statistics.packetizationDecisionCounts[compiledTask.packetizationDecision];
 
         auto& queue = *MakeNotNull(queueInfo(compiledTask.queue));
-        NWB_ASSERT(queue.queueClass < CommandQueue::kCount);
+        NWB_ASSERT(queue.queueClass < CommandQueue::Count);
         ++statistics.taskCountByQueueClass[queue.queueClass];
         auto& physical = m_physicalQueueCompileStatistics[static_cast<usize>(&queue - m_queueTopology.data())];
         ++physical.taskCount;
@@ -128,7 +128,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         statistics.recordingFrontierCount = Max(statistics.recordingFrontierCount, static_cast<usize>(packet.recordingFrontier) + 1u);
 
         auto& queue = *MakeNotNull(queueInfo(packet.queue));
-        NWB_ASSERT(queue.queueClass < CommandQueue::kCount);
+        NWB_ASSERT(queue.queueClass < CommandQueue::Count);
         ++statistics.packetCountByQueueClass[queue.queueClass];
         auto& physical = m_physicalQueueCompileStatistics[static_cast<usize>(&queue - m_queueTopology.data())];
         ++physical.packetCount;
@@ -194,12 +194,12 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
     resources.reserve(Min(graph.resourceCount(), m_ownershipTransfers.size()));
     const auto statisticsForQueue = [&](const GpuPhysicalQueueId& id)noexcept -> GpuTaskGraphPhysicalQueueCompileStatistics&{
         auto& queue = *MakeNotNull(queueInfo(id));
-        NWB_ASSERT(queue.queueClass < CommandQueue::kCount);
+        NWB_ASSERT(queue.queueClass < CommandQueue::Count);
         return m_physicalQueueCompileStatistics[static_cast<usize>(&queue - m_queueTopology.data())];
     };
     statistics.logicalOwnershipTransferCount = m_ownershipTransfers.size();
     for(const GpuCompiledOwnershipTransfer& transfer : m_ownershipTransfers){
-        NWB_ASSERT(transfer.route < GpuOwnershipTransferRoute::kCount);
+        NWB_ASSERT(transfer.route < GpuOwnershipTransferRoute::Count);
         ++statistics.logicalOwnershipTransferCountByRoute[transfer.route];
         if(transfer.concurrentSharingCouldAvoid)
             ++statistics.concurrentSharingCouldAvoidTransferCount;
@@ -236,7 +236,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
     }
     for(usize queueIndex = 0u; queueIndex < m_physicalQueueCompileStatistics.size(); ++queueIndex){
         GpuTaskGraphPhysicalQueueCompileStatistics& physical = m_physicalQueueCompileStatistics[queueIndex];
-        NWB_ASSERT(physical.queueClass < CommandQueue::kCount);
+        NWB_ASSERT(physical.queueClass < CommandQueue::Count);
         for(const GpuCompiledOwnershipTransfer& transfer : m_ownershipTransfers){
             if(!transfer.concurrentSharingCouldAvoid || (transfer.sourceQueue != physical.queue && transfer.destinationQueue != physical.queue))
                 continue;

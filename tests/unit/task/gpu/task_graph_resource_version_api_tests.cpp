@@ -314,7 +314,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         BufferRange(0u, 64u),
         BufferRange(0u, 64u),
         Graphics::GpuTaskResourceAccess::Read,
-        Graphics::GpuTaskResourceVersionRole::kCount
+        Graphics::GpuTaskResourceVersionRole::Count
     );
     ExpectInvalidBoundUse(
         Name("tests/task_graph_resource_version/imported_root_producer"),

@@ -174,9 +174,9 @@ bool GpuTaskGraphCompiler::assignQueues(
             const GpuPhysicalQueueInfo* queue = nullptr;
             GpuQueueAssignmentScore score;
         };
-        Candidate candidates[CommandQueue::kCount] = {};
+        Candidate candidates[CommandQueue::Count] = {};
         usize candidateCount = 0u;
-        for(u8 queueClassValue = 0u; queueClassValue < CommandQueue::kCount; ++queueClassValue){
+        for(u8 queueClassValue = 0u; queueClassValue < CommandQueue::Count; ++queueClassValue){
             Candidate& candidate = candidates[queueClassValue];
             candidate.queue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, group, static_cast<CommandQueue::Enum>(queueClassValue));
             if(candidate.queue){

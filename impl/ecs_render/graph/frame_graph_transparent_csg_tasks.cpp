@@ -153,13 +153,13 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
         && avboitCsgReceiverSpanPayload.csgFrameBuffersUploaded
     ;
     const bool avboitCsgIntervalCombineGraphOwned = avboitCsgReceiverSpanGraphOwned && avboitCsgIntervalCombinePayload.transparentCsgSnapshot.captured && avboitCsgIntervalCombinePayload.csgFrameBuffersUploaded;
-    const auto mAvboitSystemTaskGraphStageMPreTaskResult = m_graph.addTask<AvboitPreGraphTask>(avboitIntervalDesc, Move(avboitPrePayload));
-    if(!mAvboitSystemTaskGraphStageMPreTaskResult){
+    const auto preTaskResult = m_graph.addTask<AvboitPreGraphTask>(avboitIntervalDesc, Move(avboitPrePayload));
+    if(!preTaskResult){
         m_avboitSystem.taskGraphStage().m_preTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval graph task"));
         return MakeUnexpected(Failure{});
     }
-    m_avboitSystem.taskGraphStage().m_preTask = *mAvboitSystemTaskGraphStageMPreTaskResult;
+    m_avboitSystem.taskGraphStage().m_preTask = *preTaskResult;
 
     Core::GpuTaskId avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_preTask;
     bool avboitIntervalOutputsGraphOwned = false;
@@ -185,13 +185,13 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
             .setDependencies(&m_avboitSystem.taskGraphStage().m_preTask, 1u)
             .setResourceUses(avboitIntervalSpanResourceUses, LengthOf(avboitIntervalSpanResourceUses))
         ;
-        const auto mAvboitSystemTaskGraphStageMCsgReceiverSpanTaskResult = m_graph.addTask< ECSRenderDetail::AvboitCsgReceiverSpanGraphTask >(avboitIntervalSpanDesc, Move(avboitCsgReceiverSpanPayload));
-        if(!mAvboitSystemTaskGraphStageMCsgReceiverSpanTaskResult){
+        const auto csgReceiverSpanTaskResult = m_graph.addTask< ECSRenderDetail::AvboitCsgReceiverSpanGraphTask >(avboitIntervalSpanDesc, Move(avboitCsgReceiverSpanPayload));
+        if(!csgReceiverSpanTaskResult){
             m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG receiver-span graph task"));
             return MakeUnexpected(Failure{});
         }
-        m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask = *mAvboitSystemTaskGraphStageMCsgReceiverSpanTaskResult;
+        m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask = *csgReceiverSpanTaskResult;
         avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask;
     }
     if(avboitCsgIntervalCombineGraphOwned){
@@ -221,13 +221,13 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
             .setDependencies(&avboitIntervalCompletionTask, 1u)
             .setResourceUses(avboitIntervalCombineResourceUses, LengthOf(avboitIntervalCombineResourceUses))
         ;
-        const auto mAvboitSystemTaskGraphStageMCsgIntervalCombineTaskResult = m_graph.addTask< ECSRenderDetail::AvboitCsgIntervalCombineGraphTask >(avboitIntervalCombineDesc, Move(avboitCsgIntervalCombinePayload));
-        if(!mAvboitSystemTaskGraphStageMCsgIntervalCombineTaskResult){
+        const auto csgIntervalCombineTaskResult = m_graph.addTask< ECSRenderDetail::AvboitCsgIntervalCombineGraphTask >(avboitIntervalCombineDesc, Move(avboitCsgIntervalCombinePayload));
+        if(!csgIntervalCombineTaskResult){
             m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval-combine graph task"));
             return MakeUnexpected(Failure{});
         }
-        m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask = *mAvboitSystemTaskGraphStageMCsgIntervalCombineTaskResult;
+        m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask = *csgIntervalCombineTaskResult;
         avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask;
         avboitIntervalOutputsGraphOwned = true;
     }

@@ -27,7 +27,7 @@ namespace GpuTaskCostHint{
         Medium,
         Large,
 
-        kCount,
+        Count,
     };
 };
 
@@ -38,7 +38,7 @@ namespace GpuGraphResourceType{
         AccelStruct,
         HazardDomain,
 
-        kCount,
+        Count,
     };
 };
 
@@ -48,7 +48,7 @@ namespace GpuTaskResourceAccess{
         Write,
         ReadWrite,
 
-        kCount,
+        Count,
     };
 };
 
@@ -57,7 +57,7 @@ namespace GpuGraphResourceVersionOrigin{
         TaskProduced,
         ImportedRoot,
 
-        kCount,
+        Count,
     };
 };
 
@@ -66,7 +66,7 @@ namespace GpuTaskResourceVersionRole{
         Produce,
         Consume,
 
-        kCount,
+        Count,
     };
 };
 
@@ -80,7 +80,7 @@ namespace GpuTaskHazardType{
         VersionDependency,
         VersionLifetime,
 
-        kCount,
+        Count,
     };
 };
 
@@ -208,7 +208,7 @@ namespace GpuGraphPipelineType{
         Meshlet,
         RayTracing,
 
-        kCount,
+        Count,
     };
 };
 
@@ -297,7 +297,7 @@ struct GpuTaskResourceUse{
 // Every version declaration remains distinct even when multiple declarations name the same physical range.
 struct GpuTaskResourceVersionUse{
     GpuGraphResourceVersionId version;
-    GpuTaskResourceVersionRole::Enum role = GpuTaskResourceVersionRole::kCount;
+    GpuTaskResourceVersionRole::Enum role = GpuTaskResourceVersionRole::Count;
 };
 
 // The range/state/access contract covers every member of `resourceSet`. Sets expand in declaration order; no pseudo-resource.
@@ -348,7 +348,7 @@ namespace GpuCompiledBarrierType{
         AccelStructOwnershipAcquire,
         AccelStructStateExport,
 
-        kCount,
+        Count,
     };
 };
 

@@ -18,7 +18,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_log_client{
+namespace __hidden_logger_client{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,7 +68,7 @@ bool Client::GlobalInit()noexcept{
 
     curlResult = curl_global_init(CURL_GLOBAL_ALL);
     if(curlResult != CURLE_OK){
-        __hidden_log_client::CaptureInitializationFailure("curl_global_init", curlResult);
+        __hidden_logger_client::CaptureInitializationFailure("curl_global_init", curlResult);
         return false;
     }
 
@@ -114,11 +114,11 @@ bool Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
 
 bool Client::internalInit(const AStringView url){
     m_messageUrl = url;
-    m_telemetryUrl = __hidden_log_client::UrlWithEndpoint(BaseType::arena(), url, s_TelemetryUploadEndpoint);
+    m_telemetryUrl = __hidden_logger_client::UrlWithEndpoint(BaseType::arena(), url, s_TelemetryUploadEndpoint);
 
     m_curl = curl_easy_init();
     if(!m_curl){
-        __hidden_log_client::CaptureInitializationFailure("curl_easy_init", CURLE_FAILED_INIT);
+        __hidden_logger_client::CaptureInitializationFailure("curl_easy_init", CURLE_FAILED_INIT);
         return false;
     }
 
@@ -127,25 +127,25 @@ bool Client::internalInit(const AStringView url){
 
     curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_POST, 1);
     if(curlResult != CURLE_OK){
-        __hidden_log_client::CaptureInitializationFailure("CURLOPT_POST", curlResult);
+        __hidden_logger_client::CaptureInitializationFailure("CURLOPT_POST", curlResult);
         return false;
     }
 
     curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_NOSIGNAL, 1L);
     if(curlResult != CURLE_OK){
-        __hidden_log_client::CaptureInitializationFailure("CURLOPT_NOSIGNAL", curlResult);
+        __hidden_logger_client::CaptureInitializationFailure("CURLOPT_NOSIGNAL", curlResult);
         return false;
     }
 
-    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_CONNECTTIMEOUT_MS, __hidden_log_client::s_ConnectTimeoutMs);
+    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_CONNECTTIMEOUT_MS, __hidden_logger_client::s_ConnectTimeoutMs);
     if(curlResult != CURLE_OK){
-        __hidden_log_client::CaptureInitializationFailure("CURLOPT_CONNECTTIMEOUT_MS", curlResult);
+        __hidden_logger_client::CaptureInitializationFailure("CURLOPT_CONNECTTIMEOUT_MS", curlResult);
         return false;
     }
 
-    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_TIMEOUT_MS, __hidden_log_client::s_RequestTimeoutMs);
+    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_TIMEOUT_MS, __hidden_logger_client::s_RequestTimeoutMs);
     if(curlResult != CURLE_OK){
-        __hidden_log_client::CaptureInitializationFailure("CURLOPT_TIMEOUT_MS", curlResult);
+        __hidden_logger_client::CaptureInitializationFailure("CURLOPT_TIMEOUT_MS", curlResult);
         return false;
     }
 
@@ -189,7 +189,7 @@ bool Client::internalUpdate(){
         if(this->m_exit.load(MemoryOrder::acquire))
             return false;
 
-        SleepMS(__hidden_log_client::s_RetrySleepMs);
+        SleepMS(__hidden_logger_client::s_RetrySleepMs);
         if(this->m_exit.load(MemoryOrder::acquire))
             return false;
 

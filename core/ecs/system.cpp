@@ -18,7 +18,7 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_system{
+namespace __hidden_ecs_system{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,7 +114,7 @@ void SystemScheduler::rebuild(){
     for(usize systemIndex = 0u; systemIndex < systemCount; ++systemIndex){
         DependencyList predecessors(m_arena);
         for(usize predecessorIndex = 0u; predecessorIndex < systemIndex; ++predecessorIndex){
-            if(__hidden_system::SystemsConflict(m_allSystems[predecessorIndex]->m_access, m_allSystems[systemIndex]->m_access))
+            if(__hidden_ecs_system::SystemsConflict(m_allSystems[predecessorIndex]->m_access, m_allSystems[systemIndex]->m_access))
                 predecessors.push_back(predecessorIndex);
         }
         m_dependencies.push_back(Move(predecessors));

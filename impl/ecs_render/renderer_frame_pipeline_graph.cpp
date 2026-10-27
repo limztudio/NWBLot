@@ -352,37 +352,37 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(useLaggedLightingHistory){
         Core::GpuExternalCompletionDesc lightingHistoryReadReadyDesc;
         lightingHistoryReadReadyDesc.setIdentity(Name("render.deferred_lighting.lagged_history_read_ready")).setMarkerLabel("Lagged Lighting History Read Ready").setToken(laggedLightingHistoryReadReadyToken);
-        const auto mDeferredLightingHistoryReadReadyCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(lightingHistoryReadReadyDesc);
-        if(!mDeferredLightingHistoryReadReadyCompletionResult){
+        const auto deferredLightingHistoryReadReadyCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(lightingHistoryReadReadyDesc);
+        if(!deferredLightingHistoryReadReadyCompletionResult){
             m_deferredLightingHistoryReadReadyCompletion = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import lagged-lighting history read-ready completion"));
             return;
         }
-        m_deferredLightingHistoryReadReadyCompletion = *mDeferredLightingHistoryReadReadyCompletionResult;
+        m_deferredLightingHistoryReadReadyCompletion = *deferredLightingHistoryReadReadyCompletionResult;
     }
 
     if(features.laggedLightingHistoryWriterWaitPending){
         Core::GpuExternalCompletionDesc lightingHistoryWriterDrainDesc;
         lightingHistoryWriterDrainDesc.setIdentity(Name("render.deferred_lighting.lagged_history_writer_drain")).setMarkerLabel("Lagged Lighting History Writer Drain").setToken(laggedLightingHistoryWriterDrainToken);
-        const auto mDeferredLightingHistoryWriterDrainCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(lightingHistoryWriterDrainDesc);
-        if(!mDeferredLightingHistoryWriterDrainCompletionResult){
+        const auto deferredLightingHistoryWriterDrainCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(lightingHistoryWriterDrainDesc);
+        if(!deferredLightingHistoryWriterDrainCompletionResult){
             m_deferredLightingHistoryWriterDrainCompletion = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import lagged-lighting history writer-drain completion"));
             return;
         }
-        m_deferredLightingHistoryWriterDrainCompletion = *mDeferredLightingHistoryWriterDrainCompletionResult;
+        m_deferredLightingHistoryWriterDrainCompletion = *deferredLightingHistoryWriterDrainCompletionResult;
     }
 
     if(m_raytracingSystem.hasSurfelWork() && rayTracingSurfelResources.countReadbackSubmissionToken.valid()){
         Core::GpuExternalCompletionDesc surfelCounterReadbackCompletionDesc;
         surfelCounterReadbackCompletionDesc.setIdentity(Name("render.surfel_gi.counter_readback_complete")).setMarkerLabel("Surfel Counter Readback Complete").setToken(surfelCounterReadbackCompletionToken);
-        const auto mDeferredSurfelGiCounterReadbackCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(surfelCounterReadbackCompletionDesc);
-        if(!mDeferredSurfelGiCounterReadbackCompletionResult){
+        const auto deferredSurfelGiCounterReadbackCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(surfelCounterReadbackCompletionDesc);
+        if(!deferredSurfelGiCounterReadbackCompletionResult){
             m_deferredSurfelGiCounterReadbackCompletion = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel counter-readback completion"));
             return;
         }
-        m_deferredSurfelGiCounterReadbackCompletion = *mDeferredSurfelGiCounterReadbackCompletionResult;
+        m_deferredSurfelGiCounterReadbackCompletion = *deferredSurfelGiCounterReadbackCompletionResult;
     }
 
 

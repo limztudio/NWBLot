@@ -139,7 +139,7 @@ struct GpuTaskGraphResourceStatePlan{
 [[nodiscard]] bool IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept;
 [[nodiscard]] u64 QueueCostWeight(GpuTaskCostHint::Enum cost)noexcept;
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueId& queue)noexcept;
+[[nodiscard]] const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(const GpuPhysicalQueueTopology& topology, const GpuPhysicalQueueId& queueID)noexcept;
 
 [[nodiscard]] bool IsLegalQueueAssignmentCandidate(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& candidate)noexcept;
 
@@ -188,7 +188,7 @@ private:
 struct GpuTaskQueueScoringData{
     Vector<u64, Alloc::ScratchArena> m_taskCosts;
     Vector<u8, Alloc::ScratchArena> m_taskCostGroups;
-    Array<u64, GpuTaskCostHint::kCount> m_costGroupWeights;
+    Array<u64, GpuTaskCostHint::Count> m_costGroupWeights;
     Vector<usize, Alloc::ScratchArena> m_ownershipEdgeOffsets;
     Vector<NotNull<const GpuTaskDependencyEdge*>, Alloc::ScratchArena> m_ownershipEdges;
     Vector<GpuTaskQueueLoad, Alloc::ScratchArena> m_assignedQueueLoads;
@@ -252,7 +252,7 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskQueuePlacementGroup& group,
-    CommandQueue::Enum requiredClass = CommandQueue::kCount
+    CommandQueue::Enum requiredClass = CommandQueue::Count
 )noexcept;
 
 [[nodiscard]] GpuQueueAssignmentScore BuildQueuePlacementGroupScore(

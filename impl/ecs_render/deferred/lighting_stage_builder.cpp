@@ -145,12 +145,12 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
         .setExternalDependencies(lightingExternalDependencies, lightingExternalDependencyCount)
         .setResourceUses(resourceUses, LengthOf(resourceUses))
     ;
-    const auto resultLightingTaskResult = m_deferredSystem.declareDeferredLightingTask(m_graph, desc, useLaggedLightingHistory, deferredTargets, timingTicket);
-    if(!resultLightingTaskResult){
+    const auto lightingTaskResult = m_deferredSystem.declareDeferredLightingTask(m_graph, desc, useLaggedLightingHistory, deferredTargets, timingTicket);
+    if(!lightingTaskResult){
         result.lightingTask = {};
         return MakeUnexpected(Failure{});
     }
-    result.lightingTask = *resultLightingTaskResult;
+    result.lightingTask = *lightingTaskResult;
     result.historySlotsUploadTask = historySlotsUploadTask;
     return result;
 }

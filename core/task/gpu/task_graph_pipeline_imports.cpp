@@ -72,7 +72,7 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::importPipeline(const GpuGraphPipeline
     if(!mutation.valid())
         return MakeUnexpected(Failure{});
 
-    if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphPipelineType::kCount)
+    if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphPipelineType::Count)
         return MakeUnexpected(Failure{});
 
     const u32 pipelineIndex = findPipelineIdentity(desc.identity);
@@ -241,7 +241,7 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::appendPipeline(const GpuGraphPipeline
     if(!mutation.valid())
         return MakeUnexpected(Failure{});
 
-    if(!desc.identity || desc.markerLabel.empty() || desc.markerLabel.size() > Limit<u32>::s_Max || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size() || desc.type >= GpuGraphPipelineType::kCount || m_pipelines.size() >= Limit<u32>::s_Max)
+    if(!desc.identity || desc.markerLabel.empty() || desc.markerLabel.size() > Limit<u32>::s_Max || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size() || desc.type >= GpuGraphPipelineType::Count || m_pipelines.size() >= Limit<u32>::s_Max)
         return MakeUnexpected(Failure{});
 
     GpuGraphPipelineNode pipeline;

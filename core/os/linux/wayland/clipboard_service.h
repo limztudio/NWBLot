@@ -86,7 +86,7 @@ private:
     static void OnOfferAction(void* data, wl_data_offer* offer, u32 action)noexcept;
     static void OnSourceTarget(void* data, wl_data_source* source, const char* mime)noexcept;
     static void OnSourceSend(void* data, wl_data_source* source, const char* mime, int fd);
-    static void OnSourceCancelled(void* data, wl_data_source* source)noexcept;
+    static void OnSourceCancelled(void* data, wl_data_source* native)noexcept;
     static void OnSourceDrop(void* data, wl_data_source* source)noexcept;
     static void OnSourceFinished(void* data, wl_data_source* source)noexcept;
     static void OnSourceAction(void* data, wl_data_source* source, u32 action)noexcept;
@@ -95,7 +95,7 @@ private:
     static void OnPrimarySelection(void* data, zwp_primary_selection_device_v1* device, zwp_primary_selection_offer_v1* offer)noexcept;
     static void OnPrimaryMime(void* data, zwp_primary_selection_offer_v1* offer, const char* mime)noexcept;
     static void OnPrimarySend(void* data, zwp_primary_selection_source_v1* source, const char* mime, int fd);
-    static void OnPrimaryCancelled(void* data, zwp_primary_selection_source_v1* source)noexcept;
+    static void OnPrimaryCancelled(void* data, zwp_primary_selection_source_v1* native)noexcept;
 #endif
 
 

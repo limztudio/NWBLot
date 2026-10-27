@@ -35,7 +35,7 @@ namespace ResourceType{
         RayTracingAccelStruct,
         PushConstants,
 
-        kCount
+        Count
     };
 };
 

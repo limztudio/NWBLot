@@ -364,7 +364,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         .setResourceUses(hardwarePhotonResourceUses.data(), hardwarePhotonResourceUses.size())
         .setResourceSetUses(hardwarePhotonResourceSetUseCount != 0u ? hardwarePhotonResourceSetUses : nullptr, hardwarePhotonResourceSetUseCount)
     ;
-    const auto resultCausticPhotonTaskResult = m_raytracingSystem.declareHardwareCausticsTask(
+    const auto causticPhotonTaskResult = m_raytracingSystem.declareHardwareCausticsTask(
         m_graph,
         hardwarePhotonDesc,
         (*inputs.lightingResources),
@@ -377,12 +377,12 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         *inputs.photonTiming,
         *inputs.producerDispatched
     );
-    if(!resultCausticPhotonTaskResult){
+    if(!causticPhotonTaskResult){
         result.causticPhotonTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics photon graph task"));
         return MakeUnexpected(Failure{});
     }
-    result.causticPhotonTask = *resultCausticPhotonTaskResult;
+    result.causticPhotonTask = *causticPhotonTaskResult;
 
     Core::GpuTaskSchedulingHint hardwareGeometryScheduling = hardwareCausticsScheduling;
     hardwareGeometryScheduling.mergeWithPrevious = true;
@@ -394,13 +394,13 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         .setDependencies(&result.causticPhotonTask, 1u)
         .setResourceUses(hardwareGeometryResourceUses, LengthOf(hardwareGeometryResourceUses))
     ;
-    const auto resultCausticGeometryTaskResult = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_graph, hardwareGeometryDesc, *inputs.producerDispatched, (*inputs.targets), (*inputs.timingTicket), *inputs.resolveTiming);
-    if(!resultCausticGeometryTaskResult){
+    const auto causticGeometryTaskResult = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_graph, hardwareGeometryDesc, *inputs.producerDispatched, (*inputs.targets), (*inputs.timingTicket), *inputs.resolveTiming);
+    if(!causticGeometryTaskResult){
         result.causticGeometryTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task"));
         return MakeUnexpected(Failure{});
     }
-    result.causticGeometryTask = *resultCausticGeometryTaskResult;
+    result.causticGeometryTask = *causticGeometryTaskResult;
 
     HardwareCausticsResolveChainBuilder resolveChainBuilder(m_graph, m_raytracingSystem);
     HardwareCausticsResolveChainInputs resolveChainInputs(*inputs.targets, *inputs.producerDispatched, *inputs.timingTicket, *inputs.resolveTiming);

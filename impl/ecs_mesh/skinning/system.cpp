@@ -35,7 +35,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_system{
+namespace __hidden_skinning_system{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -217,7 +217,7 @@ Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS
     if(const SkinnedMeshBindingComponent* binding = m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
         runtimeMesh = binding->runtimeMesh;
     const MeshSkinningRuntimeInstance* const instance = runtimeMesh.valid() ? m_runtimeMeshCache.findInstance(runtimeMesh) : nullptr;
-    return BuildSkinnedRuntimeMeshDesc(entity, runtimeMesh, instance, __hidden_system::s_RuntimeSkinningMeshletFrustumCullingEnabled, __hidden_system::s_RuntimeSkinningMeshletConeCullingEnabled);
+    return BuildSkinnedRuntimeMeshDesc(entity, runtimeMesh, instance, __hidden_skinning_system::s_RuntimeSkinningMeshletFrustumCullingEnabled, __hidden_skinning_system::s_RuntimeSkinningMeshletConeCullingEnabled);
 }
 
 bool MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const noexcept{

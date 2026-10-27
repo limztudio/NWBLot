@@ -133,7 +133,7 @@ private:
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
-        GpuSubmissionPacketId packet,
+        GpuSubmissionPacketId packetID,
         u64 recordingWorkerDomain = 0u,
         u32 recordingWorkerIndex = 0u
     )const;
@@ -153,7 +153,7 @@ private:
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuPacketRecordingAccess& recordingAccess,
-        GpuSubmissionPacketId packet,
+        GpuSubmissionPacketId packetID,
         Alloc::ScratchArena& stateFanInScratchArena,
         const CommandListResourceStateHandoff* initialStates
     )const;

@@ -174,7 +174,7 @@ TEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots)
 TEST(EcsGraphics, FrameGraphPacketSubmissionStatisticsRejectsInvalidQueueOrOwner){
     const NWB::Core::GpuTaskGraphPacketSubmissionStatistics statistics = MakeValidPacketSubmissionStatistics();
     NWB::Core::GpuTaskGraphPacketSubmissionStatistics invalid = statistics;
-    invalid.queueClass = NWB::Core::CommandQueue::kCount;
+    invalid.queueClass = NWB::Core::CommandQueue::Count;
     EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(invalid, 4u)));
     EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(statistics, Limit<u32>::s_Max)));
 }

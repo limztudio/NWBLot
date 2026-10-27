@@ -99,7 +99,7 @@ TEST(PresentationReceipt, InvalidTokensAndImageStatesNeverPublishEvidence){
     variants[0u].availabilityCompletion.value = 0u;
     variants[1u].availabilityCompletion.physicalQueueIndex = Limit<u16>::s_Max;
     variants[2u].availabilityCompletion.deviceGeneration = 0u;
-    variants[3u].availabilityCompletion.queue = Core::CommandQueue::kCount;
+    variants[3u].availabilityCompletion.queue = Core::CommandQueue::Count;
     variants[4u].index = Limit<u32>::s_Max;
     variants[5u].nativeInitialState = Core::ResourceStates::ShaderResource;
     variants[6u] = {};

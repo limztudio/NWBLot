@@ -405,7 +405,7 @@ TEST(GpuTaskGraph, RejectsInvalidGraphOwnedTimingPolicy){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskTimingMetadata invalidTiming;
-    invalidTiming.policy = static_cast<Graphics::GpuTaskTimingPolicy::Enum>(Graphics::GpuTaskTimingPolicy::kCount);
+    invalidTiming.policy = static_cast<Graphics::GpuTaskTimingPolicy::Enum>(Graphics::GpuTaskTimingPolicy::Count);
     const auto taskResult = AddTaskWithCommands(graph, Name("tests/task_graph/timing_policy_invalid"), "Timing Policy Invalid", {}, {}, invalidTiming);
     ASSERT_TRUE(taskResult);
     const Graphics::GpuTaskId task = *taskResult;

@@ -330,7 +330,7 @@ public:
             if(!aliasesText(view)){
                 if(view.empty())
                     return *this;
-                if(isAbsoluteView(view)){
+                if(IsAbsoluteView(view)){
                     m_text.assign(view.data(), view.size());
                     return *this;
                 }
@@ -343,7 +343,7 @@ public:
             if(!aliasesText(view)){
                 if(view.empty())
                     return *this;
-                if(isAbsoluteView(view)){
+                if(IsAbsoluteView(view)){
                     m_text.assign(view.data(), view.size());
                     return *this;
                 }
@@ -393,7 +393,7 @@ public:
     }
 
     [[nodiscard]] bool isAbsolute()const noexcept{
-        return isAbsoluteView(native());
+        return IsAbsoluteView(native());
     }
 
     [[nodiscard]] bool hasFilename()const noexcept{
@@ -586,7 +586,7 @@ public:
 
 
 private:
-    [[nodiscard]] static bool isAbsoluteView(const native_string_view text)noexcept{
+    [[nodiscard]] static bool IsAbsoluteView(const native_string_view text)noexcept{
         if(text.empty())
             return false;
 

@@ -442,35 +442,35 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
             feedbackPrevious = *feedbackPreviousResult;
     }
     ReflectionGraphResult result;
-    const auto resultOpaqueRadianceResult = ImportTexture(graph, resources.opaqueRadiance);
-    const auto resultGlassRadianceResult = ImportTexture(graph, resources.glassRadiance);
-    const auto resultFrameParametersResult = ImportBuffer(graph, resources.frameParameters);
-    const auto resultCountersResult = ImportBuffer(graph, resources.counters);
+    const auto opaqueRadianceResult = ImportTexture(graph, resources.opaqueRadiance);
+    const auto glassRadianceResult = ImportTexture(graph, resources.glassRadiance);
+    const auto frameParametersResult = ImportBuffer(graph, resources.frameParameters);
+    const auto countersResult = ImportBuffer(graph, resources.counters);
     const auto queueResult = ImportBuffer(graph, resources.queue);
     const auto argsResult = ImportBuffer(graph, resources.indirectArgs);
-    if(!resultOpaqueRadianceResult || !resultGlassRadianceResult || !resultFrameParametersResult || !resultCountersResult || !queueResult || !argsResult){
-        if(resultOpaqueRadianceResult)
-            result.opaqueRadiance = *resultOpaqueRadianceResult;
+    if(!opaqueRadianceResult || !glassRadianceResult || !frameParametersResult || !countersResult || !queueResult || !argsResult){
+        if(opaqueRadianceResult)
+            result.opaqueRadiance = *opaqueRadianceResult;
         else
             result.opaqueRadiance = {};
-        if(resultGlassRadianceResult)
-            result.glassRadiance = *resultGlassRadianceResult;
+        if(glassRadianceResult)
+            result.glassRadiance = *glassRadianceResult;
         else
             result.glassRadiance = {};
-        if(resultFrameParametersResult)
-            result.frameParameters = *resultFrameParametersResult;
+        if(frameParametersResult)
+            result.frameParameters = *frameParametersResult;
         else
             result.frameParameters = {};
-        if(resultCountersResult)
-            result.counters = *resultCountersResult;
+        if(countersResult)
+            result.counters = *countersResult;
         else
             result.counters = {};
         return MakeUnexpected(Failure{});
     }
-    result.opaqueRadiance = *resultOpaqueRadianceResult;
-    result.glassRadiance = *resultGlassRadianceResult;
-    result.frameParameters = *resultFrameParametersResult;
-    result.counters = *resultCountersResult;
+    result.opaqueRadiance = *opaqueRadianceResult;
+    result.glassRadiance = *glassRadianceResult;
+    result.frameParameters = *frameParametersResult;
+    result.counters = *countersResult;
     const Core::GpuGraphResourceId queue = *queueResult;
     const Core::GpuGraphResourceId args = *argsResult;
 
@@ -520,7 +520,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
             };
             Core::GpuTaskDesc depthDesc = TaskDesc(destination.taskIdentity, "Reflection Depth Reduce", dependency);
             depthDesc.setResourceUses(depthUses, LengthOf(depthUses));
-            depthDesc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
+            depthDesc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
             const auto dependencyResult3 = graph.addTask<DepthReduceTask>(depthDesc, DepthReduceTask::Payload{graphics, pyramid.pipeline, parameters});
             if(!dependencyResult3){
                 dependency = {};
@@ -540,7 +540,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     const auto appendDispatch = [&](const Name identity, const AStringView label, const DispatchStage::Enum stage){
         Core::GpuTaskDesc dispatchDesc = TaskDesc(identity, label, dependency);
         dispatchDesc.setResourceUses(uses.data(), uses.size());
-        dispatchDesc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
+        dispatchDesc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
         if(stage == DispatchStage::Hardware)
             dispatchDesc.setResourceSetUses(inputs.hardwareSetReads.data(), inputs.hardwareSetReads.size());
         ReflectionFeedbackReservation dispatchFeedback(nullptr, {});
@@ -620,7 +620,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
                 scheduling.allowPacketMerge = false;
                 sliceDesc.setScheduling(scheduling).setResourceUses(uses.data(), uses.size());
                 sliceDesc.setResourceSetUses(inputs.hardwareSetReads.data(), inputs.hardwareSetReads.size());
-                sliceDesc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
+                sliceDesc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
                 const auto dependencyResult4 = graph.addTask<CsgHardwareSliceTask>(sliceDesc, CsgHardwareSliceTask::Payload{ graphics, inputs.raytracingSystem, dispatch, slice, sliceCount, inputs.hardwarePreparationReady, inputs.hardwareDispatchLogged, });
                 if(!dependencyResult4){
                     dependency = {};

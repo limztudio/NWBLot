@@ -212,14 +212,14 @@ public:
     void setResourceStatesForFramebuffer(Framebuffer& framebuffer);
     void commitBarriers();
 
-    void setTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, bool forceMemoryDependency = false);
-    void setBufferState(Buffer* buffer, ResourceStates::Mask stateBits, bool forceMemoryDependency = false, BufferRange range = s_EntireBuffer);
-    void setAccelStructState(RayTracingAccelStruct* as, ResourceStates::Mask stateBits, bool forceMemoryDependency = false);
+    void setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, bool forceMemoryDependency = false);
+    void setBufferState(Buffer* bufferResource, ResourceStates::Mask stateBits, bool forceMemoryDependency = false, BufferRange range = s_EntireBuffer);
+    void setAccelStructState(RayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits, bool forceMemoryDependency = false);
     // Exports an exclusive resource to an ordered physical consumer queue.
-    void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue);
-    void releaseBufferOwnership(Buffer* buffer, CommandQueue::Enum destinationQueue, BufferRange range = s_EntireBuffer);
-    void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId destinationQueue);
-    void releaseBufferOwnership(Buffer* buffer, GpuPhysicalQueueId destinationQueue, BufferRange range = s_EntireBuffer);
+    void releaseTextureOwnership(Texture* textureResource, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue);
+    void releaseBufferOwnership(Buffer* bufferResource, CommandQueue::Enum destinationQueue, BufferRange range = s_EntireBuffer);
+    void releaseTextureOwnership(Texture* textureResource, TextureSubresourceSet subresources, GpuPhysicalQueueId destinationQueue);
+    void releaseBufferOwnership(Buffer* bufferResource, GpuPhysicalQueueId destinationQueue, BufferRange range = s_EntireBuffer);
 
     void setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits);
     void setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
@@ -272,11 +272,11 @@ public:
 
     void setRayTracingState(const RayTracingState& state);
     void dispatchRays(const RayTracingDispatchRaysArguments& args);
-    void buildBottomLevelAccelStruct(RayTracingAccelStruct* as, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
-    void buildTopLevelAccelStruct(RayTracingAccelStruct* as, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
-    void buildOpacityMicromap(RayTracingOpacityMicromap* omm, const RayTracingOpacityMicromapDesc& desc);
-    void buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* as, Buffer* instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
-    void executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc);
+    void buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* geometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
+    void buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* instances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
+    void buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc);
+    void buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* accelStructResource, Buffer* instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
+    void executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc);
     void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs);
 
     [[nodiscard]] bool resetTimerQuery(TimerQuery& query);
@@ -355,8 +355,8 @@ private:
     [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, TStringView operationName);
     [[nodiscard]] bool validateRenderPassBegin(Framebuffer& framebuffer, const RenderPassParameters& params, TStringView operationName);
     [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, TStringView operationName);
-    [[nodiscard]] bool validateViewportState(const ViewportState& viewport, TStringView operationName);
-    [[nodiscard]] bool validateTextureForGpuState(Texture* texture, ResourceStates::Mask requiredState, TStringView operationName, VkImageUsageFlags requiredUsage = 0u);
+    [[nodiscard]] bool validateViewportState(const ViewportState& viewportState, TStringView operationName);
+    [[nodiscard]] bool validateTextureForGpuState(Texture* texture, ResourceStates::Mask requiredState, TStringView operationName, VkImageUsageFlags explicitRequiredUsage = 0u);
     [[nodiscard]] bool validateBufferForGpuState(Buffer* buffer, ResourceStates::Mask requiredState, TStringView operationName, VkBufferUsageFlags explicitRequiredUsage = 0u);
     [[nodiscard]] bool validateGraphicsState(const GraphicsState& state);
     [[nodiscard]] bool validateMeshletState(const MeshletState& state);
@@ -388,7 +388,7 @@ private:
     void bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const RayTracingPipeline& pipeline, GpuDescriptorHandle accelStructHandle);
     void bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, VkPipelineBindPoint bindPoint, const PipelineBindingState& pipelineBindings, GpuDescriptorHandle accelStructHandle, TStringView operationName);
     void ensureDescriptorBuffersBound(DescriptorBufferManager& manager, const DescriptorBufferManager::BindingSnapshot& snapshot);
-    void setViewportState(const ViewportState& viewport);
+    void setViewportState(const ViewportState& viewportState);
 
     bool beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params);
     void endDynamicRendering();

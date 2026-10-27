@@ -294,7 +294,7 @@ NWB_COMMON_END
 
 #define NWB_LOGGER_IGNORE_MESSAGE(...)                                                                                         \
     do{                                                                                                                        \
-        [[maybe_unused]] constexpr auto nwbIgnoredLoggerMessageSize =                                                          \
+        [[maybe_unused]] constexpr auto s_NwbIgnoredLoggerMessageSize =                                                          \
             sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0));                                        \
     }while(false)
 #define NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type) ::NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategory ## Type

@@ -78,7 +78,7 @@ void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Sh
                 addDependency(previousLayer + offset);
         }
         Graphics::GpuTaskSchedulingHint scheduling;
-        scheduling.cost = static_cast<Graphics::GpuTaskCostHint::Enum>(taskIndex % Graphics::GpuTaskCostHint::kCount);
+        scheduling.cost = static_cast<Graphics::GpuTaskCostHint::Enum>(taskIndex % Graphics::GpuTaskCostHint::Count);
         scheduling.mergeWithPrevious = shape == Shape::MergedPairs && taskIndex % 2u != 0u;
         const bool graphicsTask = shape == Shape::MergedPairs ? (taskIndex / 2u) % 2u == 0u : taskIndex % 2u == 0u;
         char identityText[32u] = {};

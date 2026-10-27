@@ -143,7 +143,7 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
         return MakeUnexpected(Failure{});
 
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
-        if(!desc.externalStateSources[sourceIndex].states || !desc.externalStateSources[sourceIndex].states->valid() || desc.externalStateSources[sourceIndex].applicableConsumerQueueClass > CommandQueue::kCount)
+        if(!desc.externalStateSources[sourceIndex].states || !desc.externalStateSources[sourceIndex].states->valid() || desc.externalStateSources[sourceIndex].applicableConsumerQueueClass > CommandQueue::Count)
             return MakeUnexpected(Failure{});
     }
 
@@ -295,7 +295,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         || desc.markerLabel.empty()
         || desc.markerLabel.size() > Limit<u32>::s_Max
         || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
-        || desc.type >= GpuGraphResourceType::kCount
+        || desc.type >= GpuGraphResourceType::Count
         || !ResourceQueueSharing::IsValid(desc.queueSharing)
         || (queueAdmission && (!queueAdmission->valid() || queueAdmission->admittedQueueClasses != desc.queueSharing || queueFamilyIndexCount > static_cast<usize>(Limit<u32>::s_Max) - m_queueFamilyIndices.size()))
         || (desc.initialAvailabilityCompletion.valid() && (desc.type == GpuGraphResourceType::HazardDomain || !validExternalCompletion(desc.initialAvailabilityCompletion)))

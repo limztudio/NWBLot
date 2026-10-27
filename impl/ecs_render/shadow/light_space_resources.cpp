@@ -321,7 +321,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
             opaque[view] = Move(*opaqueResult);
         else
             opaque[view].reset();
-        attachment.setReadOnly(true);
+        attachment.setIsReadOnly(true);
         auto transparentResult = device.createFramebuffer(Core::FramebufferDesc{}.setDepthAttachment(attachment));
         if(transparentResult)
             transparent[view] = Move(*transparentResult);

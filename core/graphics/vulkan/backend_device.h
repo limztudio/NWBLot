@@ -186,15 +186,15 @@ public:
     [[nodiscard]] Expected<MemoryRequirements> getTextureMemoryRequirements(Texture& texture);
     bool bindTextureMemory(Texture& texture, Heap& heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
-    [[nodiscard]] bool isTextureReadyForGpuUse(Texture* texture, VkImageUsageFlags requiredUsage = 0u)const noexcept;
+    [[nodiscard]] bool isTextureReadyForGpuUse(Texture* textureResource, VkImageUsageFlags requiredUsage = 0u)const noexcept;
     // The caller owns native binding and lifetime and must provide exact immutable creation provenance.
     // Only one live Texture wrapper may name a VkImage per Device.
-    [[nodiscard]] Expected<TextureHandle> createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc, const NativeTextureProvenance& nativeProvenance);
+    [[nodiscard]] Expected<TextureHandle> createHandleForNativeTexture(ObjectType objectType, Object nativeTextureHandle, const TextureDesc& desc, const NativeTextureProvenance& nativeProvenance);
     [[nodiscard]] Expected<StagingTextureHandle> createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
-    Expected<StagingTextureMapping> mapStagingTexture(StagingTexture& tex, const TextureSlice& slice, CpuAccessMode::Enum);
-    void unmapStagingTexture(StagingTexture& tex);
+    Expected<StagingTextureMapping> mapStagingTexture(StagingTexture& staging, const TextureSlice& slice, CpuAccessMode::Enum requestedAccess);
+    void unmapStagingTexture(StagingTexture& staging);
     [[nodiscard]] Expected<BufferHandle> createBuffer(const BufferDesc& d);
-    [[nodiscard]] Expected<void*> mapBuffer(Buffer& buffer, CpuAccessMode::Enum);
+    [[nodiscard]] Expected<void*> mapBuffer(Buffer& buffer, CpuAccessMode::Enum requestedAccess);
     void unmapBuffer(Buffer& buffer);
     [[nodiscard]] Expected<MemoryRequirements> getBufferMemoryRequirements(Buffer& buffer);
     bool bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
@@ -202,10 +202,10 @@ public:
     // Native wrappers trust caller-managed binding.
     // Managed ordinary buffers require their VMA allocation, while managed virtual buffers require a retained, device-owned bound Heap allocation.
     // CPU mapping is irrelevant.
-    [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* buffer, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
+    [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* bufferResource, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
     // The caller owns native binding and lifetime and must provide the exact immutable creation provenance.
     // Only one live Buffer wrapper may name a VkBuffer per Device.
-    [[nodiscard]] Expected<BufferHandle> createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc, const NativeBufferProvenance& nativeProvenance);
+    [[nodiscard]] Expected<BufferHandle> createHandleForNativeBuffer(ObjectType objectType, Object nativeBufferHandle, const BufferDesc& desc, const NativeBufferProvenance& nativeProvenance);
     [[nodiscard]] Expected<ShaderHandle> createShader(const ShaderDesc& d, const void* binary, usize binarySize);
     [[nodiscard]] Expected<ShaderHandle> createShaderSpecialization(Shader& baseShader, const ShaderSpecialization* constants, u32 numConstants);
     [[nodiscard]] Expected<ShaderLibraryHandle> createShaderLibrary(const void* binary, usize binarySize);
@@ -229,23 +229,23 @@ public:
     [[nodiscard]] Expected<BindingLayoutHandle> createBindlessLayout(const BindlessLayoutDesc& desc);
     [[nodiscard]] Expected<RayTracingOpacityMicromapHandle> createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc);
     [[nodiscard]] Expected<RayTracingAccelStructHandle> createAccelStruct(const RayTracingAccelStructDesc& desc);
-    [[nodiscard]] Expected<MemoryRequirements> getAccelStructMemoryRequirements(RayTracingAccelStruct& as);
+    [[nodiscard]] Expected<MemoryRequirements> getAccelStructMemoryRequirements(RayTracingAccelStruct& accelerationStructure);
     [[nodiscard]] Expected<RayTracingClusterOperationSizeInfo> getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
-    bool bindAccelStructMemory(RayTracingAccelStruct& as, Heap& heap, u64 offset);
+    bool bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, Heap& heap, u64 offset);
     // Structural readiness deliberately allows an unbuilt acceleration structure to remain a legal build target.
-    [[nodiscard]] bool isAccelStructReadyForGpuUse(RayTracingAccelStruct* as)const noexcept;
+    [[nodiscard]] bool isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResource)const noexcept;
     [[nodiscard]] Expected<CommandListHandle> createCommandList(const CommandListParameters& params = CommandListParameters());
     // Cross-queue dependencies are immutable submission-local token edges.
-    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc);
-    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* pCommandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* commandLists, usize numCommandLists, CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc);
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
 
 
 private:
-    void prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* pCommandLists, usize numCommandLists, bool graphSubmissionAuthorized);
-    void finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* pCommandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, u64 submittedID, bool submissionAccepted);
-    [[nodiscard]] Expected<QueueSubmissionReceipt> executeGraphCommandLists(CommandList* const* pCommandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
+    void prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, bool graphSubmissionAuthorized);
+    void finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, u64 submittedID, bool submissionAccepted);
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeGraphCommandLists(CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandListsInternal(
-        CommandList* const* pCommandLists,
+        CommandList* const* commandLists,
         usize numCommandLists,
         const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionDesc& submitDesc,
@@ -290,7 +290,7 @@ public:
     }
 
     void quarantineDevice()noexcept{ m_deviceQuarantined.store(true, MemoryOrder::release); }
-    [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queue)const noexcept;
+    [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queueType)const noexcept;
     [[nodiscard]] u32 getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] bool usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const noexcept{
         return UsesConcurrentQueueSharing(sharing, m_context);
@@ -434,10 +434,10 @@ private:
     GraphicsVector<NotNull<NativeQueueState*>> m_nativeQueueStates;
     GraphicsVector<NotNull<Queue*>> m_physicalQueues;
     GraphicsVector<GpuPhysicalQueueInfo> m_physicalQueueInfos;
-    Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};
-    Array<bool, static_cast<u32>(CommandQueue::kCount)> m_explicitPrimaryQueues = {};
+    Array<Queue*, static_cast<u32>(CommandQueue::Count)> m_primaryQueues = {};
+    Array<bool, static_cast<u32>(CommandQueue::Count)> m_explicitPrimaryQueues = {};
     // Only block-compressed entries are populated; all are resolved before the device is exposed.
-    Array<FormatSupport::Mask, static_cast<usize>(Format::kCount)> m_compressedFormatSupport = {};
+    Array<FormatSupport::Mask, static_cast<usize>(Format::Count)> m_compressedFormatSupport = {};
 
     UploadManager m_uploadManager;
     UploadManager m_scratchManager;

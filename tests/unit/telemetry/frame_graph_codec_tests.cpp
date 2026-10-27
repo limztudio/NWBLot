@@ -209,7 +209,7 @@ TEST(Telemetry, FrameGraphCompiledTaskPayloadRejectsMalformedRecords){
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 909u, nodes, edges, payload));
     NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
-    first.packetizationDecision = Telemetry::FrameGraphTaskPacketizationDecision::kCount;
+    first.packetizationDecision = Telemetry::FrameGraphTaskPacketizationDecision::Count;
     NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
     EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
 

@@ -265,13 +265,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             .setResourceUses(occupancyComputeEmulationResourceUses, occupancyComputeEmulationResourceUseCount)
             .setResourceSetUses(occupancyComputeEmulationResourceSetUses, occupancyComputeEmulationResourceSetUseCount)
         ;
-        const auto mAvboitSystemTaskGraphStageMOccupancyComputeEmulationTaskResult = m_graph.addTask< AvboitOccupancyComputeEmulationGraphTask >(occupancyComputeEmulationDesc, Move(computeEmulationPayload));
-        if(!mAvboitSystemTaskGraphStageMOccupancyComputeEmulationTaskResult){
+        const auto occupancyComputeEmulationTaskResult = m_graph.addTask< AvboitOccupancyComputeEmulationGraphTask >(occupancyComputeEmulationDesc, Move(computeEmulationPayload));
+        if(!occupancyComputeEmulationTaskResult){
             m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Occupancy compute-emulation producer"));
             return MakeUnexpected(Failure{});
         }
-        m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask = *mAvboitSystemTaskGraphStageMOccupancyComputeEmulationTaskResult;
+        m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask = *occupancyComputeEmulationTaskResult;
         occupancyDependency = m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask;
         avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
     }
@@ -378,7 +378,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         const Span<const Core::GpuTaskResourceSetUse> occupancyMaterialResourceSetUseSpan(occupancyMaterialResourceSetUses, occupancyMaterialResourceSetUseCount);
         for(usize phaseIndex = 0u; phaseIndex < occupancySharedComputeEmulationPhaseCount; ++phaseIndex){
             const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
-            const auto mAvboitSystemTaskGraphStageMOccupancySharedComputeEmulationTasksPhaseIndexResult = addOccupancySharedComputeEmulationPhase(
+            const auto occupancySharedComputeEmulationTaskResult = addOccupancySharedComputeEmulationPhase(
                 occupancySharedComputeEmulationPhaseIdentities[phaseIndex],
                 occupancySharedComputeEmulationPhaseMarkers[phaseIndex],
                 occupancySharedComputeEmulationDependency,
@@ -389,12 +389,12 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
                 isRasterPhase ? Span<const Core::GpuTaskResourceUse>(occupancySharedRasterResourceUses) : Span<const Core::GpuTaskResourceUse>(occupancySharedGenerateResourceUses),
                 occupancyMaterialResourceSetUseSpan
             );
-            if(!mAvboitSystemTaskGraphStageMOccupancySharedComputeEmulationTasksPhaseIndexResult){
+            if(!occupancySharedComputeEmulationTaskResult){
                 m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex] = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Occupancy shared compute-emulation phase"));
                 return MakeUnexpected(Failure{});
             }
-            m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex] = *mAvboitSystemTaskGraphStageMOccupancySharedComputeEmulationTasksPhaseIndexResult;
+            m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex] = *occupancySharedComputeEmulationTaskResult;
             occupancySharedComputeEmulationDependency = m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex];
         }
         m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTaskCount = occupancySharedComputeEmulationPhaseCount;
@@ -413,13 +413,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             .setResourceUses(avboitPreResourceUses.data(), avboitPreResourceUses.size())
             .setResourceSetUses(occupancyMaterialResourceSetUseCount != 0u ? occupancyMaterialResourceSetUses : nullptr, occupancyMaterialResourceSetUseCount)
         ;
-        const auto mAvboitSystemTaskGraphStageMOccupancyTaskResult = m_graph.addTask<AvboitOccupancyGraphTask>(avboitOccupancyDesc, Move(occupancyPayload));
-        if(!mAvboitSystemTaskGraphStageMOccupancyTaskResult){
+        const auto occupancyTaskResult = m_graph.addTask<AvboitOccupancyGraphTask>(avboitOccupancyDesc, Move(occupancyPayload));
+        if(!occupancyTaskResult){
             m_avboitSystem.taskGraphStage().m_occupancyTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
             return MakeUnexpected(Failure{});
         }
-        m_avboitSystem.taskGraphStage().m_occupancyTask = *mAvboitSystemTaskGraphStageMOccupancyTaskResult;
+        m_avboitSystem.taskGraphStage().m_occupancyTask = *occupancyTaskResult;
     }
 
     result.occupancyTask = m_avboitSystem.taskGraphStage().m_occupancyTask;

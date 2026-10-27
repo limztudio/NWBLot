@@ -262,7 +262,7 @@ bool LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuC
         if(record.hasScissor)
             viewport.addScissorRect(record.scissor);
         GraphicsState state;
-        state.setPipeline(owner.pipeline.get()).setFramebuffer(owner.framebuffer.get()).setViewport(viewport).setBlendColor(record.blendConstantColor).setDynamicStencilRefValue(record.dynamicStencilRefValue);
+        state.setPipeline(owner.pipeline.get()).setFramebuffer(owner.framebuffer.get()).setViewport(viewport).setBlendConstantColor(record.blendConstantColor).setDynamicStencilRefValue(record.dynamicStencilRefValue);
         for(usize index = 0u; index < record.vertexBuffers.size(); ++index){
             const GpuCommandIrRasterVertexBinding& binding = record.vertexBuffers[index];
             state.addVertexBuffer(VertexBufferBinding().setBuffer(owner.vertexBuffers[index].get()).setSlot(binding.slot).setOffset(binding.offset));

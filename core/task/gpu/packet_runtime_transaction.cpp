@@ -323,7 +323,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& gra
         NWB_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its exact transaction and compiled packet");
     const GpuSubmissionPacket& packet = *packetView.plan;
     const GpuPhysicalQueueInfo* const queueInfo = planAccess.queueInfo(packet.queue);
-    if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
+    if(!queueInfo || queueInfo->queueClass >= CommandQueue::Count)
         NWB_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its compiled physical queue");
     // reset() and cancellation cannot cross a graph-owned submission lease.
     // Once the graph publishes accepted callbacks, this transaction resolution is therefore an invariant rather than a second failure point.

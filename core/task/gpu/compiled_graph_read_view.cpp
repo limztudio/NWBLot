@@ -85,8 +85,8 @@ usize GpuCompiledGraph::ReadView::taskCount()const noexcept{ return m_graph ? m_
 
 usize GpuCompiledGraph::ReadView::packetCount()const noexcept{ return m_graph ? m_graph->packetCount() : 0u; }
 
-bool GpuCompiledGraph::ReadView::validPacket(const GpuSubmissionPacketId& packet)const noexcept{
-    return m_graph && m_graph->validPacket(packet);
+bool GpuCompiledGraph::ReadView::validPacket(const GpuSubmissionPacketId& packetID)const noexcept{
+    return m_graph && m_graph->validPacket(packetID);
 }
 
 bool GpuCompiledGraph::ReadView::validPacketRange(const GpuSubmissionPacketRange& range)const noexcept{

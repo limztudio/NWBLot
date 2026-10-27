@@ -103,7 +103,7 @@ public:
     [[nodiscard]] const EditLimits& limits()const noexcept{ return m_limits; }
 
     [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_textMode; }
-    [[nodiscard]] bool setText(AStringView text);
+    [[nodiscard]] bool setText(AStringView value);
     [[nodiscard]] bool setSelection(usize anchor, usize caret)noexcept;
     [[nodiscard]] bool selectAll()noexcept;
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
@@ -111,7 +111,7 @@ public:
     [[nodiscard]] bool move(EditMove::Enum movement, bool extend = false)noexcept;
     // Returns the complete run containing a grapheme boundary; document end selects the preceding run.
     [[nodiscard]] Expected<EditWordRange> wordRangeAt(usize position)const noexcept;
-    [[nodiscard]] bool replaceSelection(AStringView text);
+    [[nodiscard]] bool replaceSelection(AStringView value);
     [[nodiscard]] bool backspace();
     [[nodiscard]] bool eraseForward();
     // Native surrounding deletion uses byte distances from the caret and preserves the original selection in undo.
@@ -125,8 +125,8 @@ public:
     [[nodiscard]] bool canRedo()const noexcept{ return m_historyCursor < m_history.size(); }
     [[nodiscard]] bool beginComposition()noexcept;
     // Preedit positions are validated UTF8 scalar boundaries, because native IMEs may select part of a grapheme.
-    [[nodiscard]] bool updateComposition(AStringView text, usize anchor, usize caret);
-    [[nodiscard]] bool commitComposition(AStringView text);
+    [[nodiscard]] bool updateComposition(AStringView value, usize anchor, usize caret);
+    [[nodiscard]] bool commitComposition(AStringView value);
     void cancelComposition()noexcept;
     [[nodiscard]] EditCompositionView composition()const noexcept;
 
@@ -137,8 +137,8 @@ private:
     [[nodiscard]] usize nextBoundary(usize position)const noexcept;
     [[nodiscard]] usize wordBoundary(usize position, bool forward)const noexcept;
     [[nodiscard]] bool replaceRange(usize begin, usize end, AStringView replacement);
-    [[nodiscard]] bool validateText(AStringView text)const noexcept;
-    [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(AStringView text)const;
+    [[nodiscard]] bool validateText(AStringView value)const noexcept;
+    [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(AStringView value)const;
     void recordHistory(AStringView before, usize beforeAnchor, usize beforeCaret, AStringView after, usize afterAnchor, usize afterCaret);
     void clearHistory()noexcept;
     void advanceRevision()noexcept;

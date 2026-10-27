@@ -47,7 +47,7 @@ GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubm
     const PacketRuntime& runtime = m_packets[packetID.index];
     if(
         !queueInfo
-        || queueInfo->queueClass >= CommandQueue::kCount
+        || queueInfo->queueClass >= CommandQueue::Count
         || runtime.state != PacketRuntimeState::Accepted
         || !runtime.token.valid()
         || runtime.token.queue != queueInfo->queueClass
@@ -82,7 +82,7 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
         return {};
 
     const GpuPhysicalQueueInfo* const queueInfo = planAccess.queueInfo(queue);
-    if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
+    if(!queueInfo || queueInfo->queueClass >= CommandQueue::Count)
         return {};
 
     GpuTaskGraphPhysicalQueueSubmissionStatistics statistics{

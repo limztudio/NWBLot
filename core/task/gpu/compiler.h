@@ -57,7 +57,7 @@ namespace GpuTaskQueueAssignmentReason{
         Conservative,
         Scored,
 
-        kCount,
+        Count,
     };
 };
 
@@ -98,7 +98,7 @@ struct GpuTaskQueueAssignment{
     GpuPhysicalQueueId initialQueue;
     GpuPhysicalQueueId queue;
     GpuQueueAssignmentScore score;
-    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    CommandQueue::Enum queueClass = CommandQueue::Count;
     GpuTaskQueueAssignmentReason::Enum reason = GpuTaskQueueAssignmentReason::Unknown;
     bool dedicated = false;
     GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;
@@ -114,7 +114,7 @@ namespace GpuTaskGraphPacketizationPolicy{
         // Scored successors must share the preceding packet's nonempty merge domain.
         FrontierScored,
 
-        kCount,
+        Count,
     };
 };
 

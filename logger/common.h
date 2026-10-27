@@ -41,7 +41,7 @@ namespace ArgCommand{
         LogAddress,
         LogPort,
 
-        iNumArg,
+        Count,
     };
 };
 inline constexpr StringView s_ArgCmd[] = { "-a,--logaddress", "-p,--logport", };

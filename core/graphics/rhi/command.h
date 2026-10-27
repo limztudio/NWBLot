@@ -31,7 +31,7 @@ namespace CommandQueue{
         // Optional copy transport, only when the selected backend exposes a distinct transfer-only queue.
         Transfer,
 
-        kCount
+        Count
     };
 };
 
@@ -59,12 +59,12 @@ struct QueueSubmissionToken{
     u64 value = 0;
     u16 physicalQueueIndex = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
-    CommandQueue::Enum queue = CommandQueue::kCount;
+    CommandQueue::Enum queue = CommandQueue::Count;
 
 
 public:
     [[nodiscard]] constexpr bool valid()const noexcept{
-        return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount) && value != 0u;
+        return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::Count) && value != 0u;
     }
 
     [[nodiscard]] constexpr bool hasPhysicalQueueIdentity()const noexcept{
@@ -118,7 +118,7 @@ struct GpuPhysicalQueueInfo{
     u32 queueIndex = 0u;
     u32 timestampValidBits = 0u;
     GpuPhysicalQueueId id;
-    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    CommandQueue::Enum queueClass = CommandQueue::Count;
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
     bool dedicated = false;
 };
@@ -455,7 +455,7 @@ public:
 
     constexpr GraphicsState& setShadingRateState(const VariableRateShadingState& value)noexcept{ shadingRateState = value; return *this; }
 
-    constexpr GraphicsState& setBlendColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
+    constexpr GraphicsState& setBlendConstantColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
 
     constexpr GraphicsState& setDynamicStencilRefValue(u8 value)noexcept{ dynamicStencilRefValue = value; return *this; }
 
@@ -569,7 +569,7 @@ public:
 
     constexpr MeshletState& setViewport(const ViewportState& value)noexcept{ viewport = value; return *this; }
 
-    constexpr MeshletState& setBlendColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
+    constexpr MeshletState& setBlendConstantColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
 
     constexpr MeshletState& setIndirectParams(Buffer* value)noexcept{ indirectParams = value; return *this; }
 

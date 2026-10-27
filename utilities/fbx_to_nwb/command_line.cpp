@@ -22,7 +22,7 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_command_line{
+namespace __hidden_fbx_command_line{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -365,11 +365,11 @@ int RunNwbRefresh(const CLI::App& app, const OptionPresence& presence, Core::Cpu
 
 int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& prompted){
     ImportOptions options;
-    __hidden_command_line::OptionPresence presence;
+    __hidden_fbx_command_line::OptionPresence presence;
     Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_UtilityScratch);
 
-    CLI::App app{ __hidden_command_line::s_FbxToNwbAppName.data() };
-    app.set_help_flag(__hidden_command_line::s_FbxToNwbHelpFlag.data(), "Show help");
+    CLI::App app{ __hidden_fbx_command_line::s_FbxToNwbAppName.data() };
+    app.set_help_flag(__hidden_fbx_command_line::s_FbxToNwbHelpFlag.data(), "Show help");
 
     AInteropString inputPath(options.inputPath.data(), options.inputPath.size());
     AInteropString outputPathText(options.outputPath.data(), options.outputPath.size());
@@ -382,28 +382,28 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
     bool local = false;
     bool ignoreColors = false;
 
-    app.add_option(__hidden_command_line::s_FbxToNwbInputOption.data(), inputPath, "Input FBX file path");
-    CLI::Option& outputOption = *app.add_option(__hidden_command_line::s_FbxToNwbOutputOption.data(), outputPathText, "Output NWB asset metadata path");
+    app.add_option(__hidden_fbx_command_line::s_FbxToNwbInputOption.data(), inputPath, "Input FBX file path");
+    CLI::Option& outputOption = *app.add_option(__hidden_fbx_command_line::s_FbxToNwbOutputOption.data(), outputPathText, "Output NWB asset metadata path");
     AInteropString assetTypeDescription = "Output asset type: ";
     const ScratchString assetTypeOptions = OutputAssetTypeOptionsText(scratchArena);
     assetTypeDescription.append(assetTypeOptions.data(), assetTypeOptions.size());
-    CLI::Option& assetTypeOption = *app.add_option(__hidden_command_line::s_FbxToNwbAssetTypeOption.data(), assetType, assetTypeDescription);
-    app.add_option(__hidden_command_line::s_FbxToNwbVirtualRootOption.data(), virtualRoot, "Virtual asset root used when output path is outside an assets directory");
-    CLI::Option& meshOption = *app.add_option(__hidden_command_line::s_FbxToNwbMeshOption.data(), meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
-    CLI::Option& normalModeOption = *app.add_option(__hidden_command_line::s_FbxToNwbNormalModeOption.data(), normalMode, "Normal mode: imported, smooth shared-position normals, or regenerated per-triangle face normals");
-    CLI::Option& scaleOption = *app.add_option(__hidden_command_line::s_FbxToNwbScaleOption.data(), options.scale, "Additional uniform scale applied after import");
-    app.add_option(__hidden_command_line::s_FbxToNwbTriangleAreaEpsilonOption.data(), options.triangleAreaLengthSquaredEpsilon, "Minimum squared triangle cross-product length kept during import");
-    CLI::Option& defaultColorOption = *app.add_option(__hidden_command_line::s_FbxToNwbDefaultColorOption.data(), defaultColorText, "Default RGBA color, for example 1,1,1,1");
-    CLI::Option& preserveSpaceOption = *app.add_flag(__hidden_command_line::s_FbxToNwbPreserveSpaceFlag.data(), options.preserveSpace, "Keep the FBX source axes and units");
-    CLI::Option& includeHiddenOption = *app.add_flag(__hidden_command_line::s_FbxToNwbIncludeHiddenFlag.data(), options.includeHidden, "Include hidden FBX mesh nodes");
-    CLI::Option& localOption = *app.add_flag(__hidden_command_line::s_FbxToNwbLocalFlag.data(), local, "Do not bake node transforms into mesh");
-    CLI::Option& ignoreColorsOption = *app.add_flag(__hidden_command_line::s_FbxToNwbIgnoreColorsFlag.data(), ignoreColors, "Use the default color instead of FBX vertex colors");
-    CLI::Option& flipWindingOption = *app.add_flag(__hidden_command_line::s_FbxToNwbFlipWindingFlag.data(), options.flipWinding, "Swap the second and third index of every triangle");
-    CLI::Option& separateAssetsOption = *app.add_flag(__hidden_command_line::s_FbxToNwbSeparateAssetsFlag.data(), options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
-    CLI::Option& refreshNwbOption = *app.add_flag(__hidden_command_line::s_FbxToNwbRefreshNwbFlag.data(), options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
-    app.add_flag(__hidden_command_line::s_FbxToNwbForceFlag.data(), options.forceOverwrite, "Overwrite an existing output file");
-    app.add_flag(__hidden_command_line::s_FbxToNwbYesFlag.data(), options.acceptDefaults, "Use defaults for any import options that were not supplied");
-    app.add_flag(__hidden_command_line::s_FbxToNwbListMeshesFlag.data(), options.listMeshes, "List importable mesh instances and exit");
+    CLI::Option& assetTypeOption = *app.add_option(__hidden_fbx_command_line::s_FbxToNwbAssetTypeOption.data(), assetType, assetTypeDescription);
+    app.add_option(__hidden_fbx_command_line::s_FbxToNwbVirtualRootOption.data(), virtualRoot, "Virtual asset root used when output path is outside an assets directory");
+    CLI::Option& meshOption = *app.add_option(__hidden_fbx_command_line::s_FbxToNwbMeshOption.data(), meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
+    CLI::Option& normalModeOption = *app.add_option(__hidden_fbx_command_line::s_FbxToNwbNormalModeOption.data(), normalMode, "Normal mode: imported, smooth shared-position normals, or regenerated per-triangle face normals");
+    CLI::Option& scaleOption = *app.add_option(__hidden_fbx_command_line::s_FbxToNwbScaleOption.data(), options.scale, "Additional uniform scale applied after import");
+    app.add_option(__hidden_fbx_command_line::s_FbxToNwbTriangleAreaEpsilonOption.data(), options.triangleAreaLengthSquaredEpsilon, "Minimum squared triangle cross-product length kept during import");
+    CLI::Option& defaultColorOption = *app.add_option(__hidden_fbx_command_line::s_FbxToNwbDefaultColorOption.data(), defaultColorText, "Default RGBA color, for example 1,1,1,1");
+    CLI::Option& preserveSpaceOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbPreserveSpaceFlag.data(), options.preserveSpace, "Keep the FBX source axes and units");
+    CLI::Option& includeHiddenOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbIncludeHiddenFlag.data(), options.includeHidden, "Include hidden FBX mesh nodes");
+    CLI::Option& localOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbLocalFlag.data(), local, "Do not bake node transforms into mesh");
+    CLI::Option& ignoreColorsOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbIgnoreColorsFlag.data(), ignoreColors, "Use the default color instead of FBX vertex colors");
+    CLI::Option& flipWindingOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbFlipWindingFlag.data(), options.flipWinding, "Swap the second and third index of every triangle");
+    CLI::Option& separateAssetsOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbSeparateAssetsFlag.data(), options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
+    CLI::Option& refreshNwbOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbRefreshNwbFlag.data(), options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
+    app.add_flag(__hidden_fbx_command_line::s_FbxToNwbForceFlag.data(), options.forceOverwrite, "Overwrite an existing output file");
+    app.add_flag(__hidden_fbx_command_line::s_FbxToNwbYesFlag.data(), options.acceptDefaults, "Use defaults for any import options that were not supplied");
+    app.add_flag(__hidden_fbx_command_line::s_FbxToNwbListMeshesFlag.data(), options.listMeshes, "List importable mesh instances and exit");
 
     return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         app.parse(argc, argv);
@@ -419,102 +419,102 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         options.bakeTransforms = !local;
         options.importColors = !ignoreColors;
 
-        presence.output = outputOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.assetType = assetTypeOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.mesh = meshOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.normalMode = normalModeOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.scale = scaleOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.defaultColor = defaultColorOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.preserveSpace = preserveSpaceOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.includeHidden = includeHiddenOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.local = localOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.ignoreColors = ignoreColorsOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.flipWinding = flipWindingOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.separateAssets = separateAssetsOption.count() > __hidden_command_line::s_CliOptionPresentCount;
-        presence.refreshNwb = refreshNwbOption.count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.output = outputOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.assetType = assetTypeOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.mesh = meshOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.normalMode = normalModeOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.scale = scaleOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.defaultColor = defaultColorOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.preserveSpace = preserveSpaceOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.includeHidden = includeHiddenOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.local = localOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.ignoreColors = ignoreColorsOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.flipWinding = flipWindingOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.separateAssets = separateAssetsOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
+        presence.refreshNwb = refreshNwbOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
 
-        if(!__hidden_command_line::ConfigurePromptsBeforeLoad(presence, scratchArena, options, prompted))
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbInputOption, "Input FBX or NWB path is required.", scratchArena);
+        if(!__hidden_fbx_command_line::ConfigurePromptsBeforeLoad(presence, scratchArena, options, prompted))
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbInputOption, "Input FBX or NWB path is required.", scratchArena);
 
         if(!IsFinite(options.scale) || options.scale <= 0.0)
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbScaleOption, "Must be a positive finite number.", scratchArena);
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbScaleOption, "Must be a positive finite number.", scratchArena);
         if(!IsFinite(options.triangleAreaLengthSquaredEpsilon) || options.triangleAreaLengthSquaredEpsilon < 0.0)
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbTriangleAreaEpsilonOption, "Must be a finite non-negative number.", scratchArena);
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbTriangleAreaEpsilonOption, "Must be a finite non-negative number.", scratchArena);
 
         const auto inputIsRegularFile = IsRegularFile(ScratchPath(scratchArena, options.inputPath));
         if(!inputIsRegularFile && !IsMissingPathError(inputIsRegularFile.error())){
             NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), ConvertString(inputIsRegularFile.error().message()));
-            return __hidden_command_line::s_FbxToNwbExitFailure;
+            return __hidden_fbx_command_line::s_FbxToNwbExitFailure;
         }
         if(!inputIsRegularFile || !*inputIsRegularFile)
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbInputOption, "Input path must name an existing regular file.", scratchArena);
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbInputOption, "Input path must name an existing regular file.", scratchArena);
 
-        if(__hidden_command_line::IsNwbRefreshMode(options, scratchArena))
-            return __hidden_command_line::RunNwbRefresh(app, presence, cpuScheduler, scratchArena, options, prompted);
+        if(__hidden_fbx_command_line::IsNwbRefreshMode(options, scratchArena))
+            return __hidden_fbx_command_line::RunNwbRefresh(app, presence, cpuScheduler, scratchArena, options, prompted);
 
         auto scene = LoadScene(options, scratchArena);
         if(!scene)
-            return __hidden_command_line::s_FbxToNwbExitFailure;
+            return __hidden_fbx_command_line::s_FbxToNwbExitFailure;
 
         if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
-            options.includeHidden = __hidden_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, scratchArena, prompted);
+            options.includeHidden = __hidden_fbx_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, scratchArena, prompted);
 
         UtilityVector<MeshInstance> instances = CollectMeshInstances(scene->scene, options.includeHidden);
         if(options.listMeshes){
             PrintMeshInstances(instances, scratchArena);
-            return __hidden_command_line::s_FbxToNwbExitSuccess;
+            return __hidden_fbx_command_line::s_FbxToNwbExitSuccess;
         }
         if(instances.empty()){
             if(options.includeHidden)
                 NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX."));
             else
                 NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
-            return __hidden_command_line::s_FbxToNwbExitFailure;
+            return __hidden_fbx_command_line::s_FbxToNwbExitFailure;
         }
 
-        if(!__hidden_command_line::ConfigurePromptsAfterLoad(presence, instances, scratchArena, options, prompted))
-            return __hidden_command_line::s_FbxToNwbExitFailure;
+        if(!__hidden_fbx_command_line::ConfigurePromptsAfterLoad(presence, instances, scratchArena, options, prompted))
+            return __hidden_fbx_command_line::s_FbxToNwbExitFailure;
 
         if(!ValidateAssetTypeText(options.assetType))
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText(scratchArena), scratchArena);
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText(scratchArena), scratchArena);
         if(!ValidateNormalModeText(options.normalMode))
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbNormalModeOption, NormalModeErrorText(scratchArena), scratchArena);
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbNormalModeOption, NormalModeErrorText(scratchArena), scratchArena);
 
         const auto defaultColor = ParseColorText(options.defaultColorText, scratchArena);
         if(!defaultColor)
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbDefaultColorOption, "Must contain four finite numbers, for example 1,1,1,1.", scratchArena);
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbDefaultColorOption, "Must contain four finite numbers, for example 1,1,1,1.", scratchArena);
 
         auto selectionResult = SelectMeshInstances(instances, options.meshSelector);
         if(!selectionResult)
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbMeshOption, "Must select an available zero-based index, node name, or mesh name.", scratchArena);
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbMeshOption, "Must select an available zero-based index, node name, or mesh name.", scratchArena);
 
         const UtilityVector<usize>& selection = *selectionResult;
         const auto assetTypeResult = ParseAssetTypeText(options.assetType);
         if(!assetTypeResult)
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText(scratchArena), scratchArena);
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText(scratchArena), scratchArena);
         const OutputAssetType::Enum assetTypeValue = *assetTypeResult;
         if(options.separateAssets && assetTypeValue != OutputAssetType::Bunch)
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbSeparateAssetsFlag, "Only valid with asset type 'bunch'.", scratchArena);
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbSeparateAssetsFlag, "Only valid with asset type 'bunch'.", scratchArena);
         bool usesSkinning = false;
         bool wantsSkinning = false;
-        if(__hidden_command_line::AssetTypeCanUseSkinning(assetTypeValue)){
-            const auto selectedUsesSkinning = __hidden_command_line::SelectedMeshesUseSkinning(instances, selection);
+        if(__hidden_fbx_command_line::AssetTypeCanUseSkinning(assetTypeValue)){
+            const auto selectedUsesSkinning = __hidden_fbx_command_line::SelectedMeshesUseSkinning(instances, selection);
             if(!selectedUsesSkinning)
-                return __hidden_command_line::s_FbxToNwbExitFailure;
+                return __hidden_fbx_command_line::s_FbxToNwbExitFailure;
             usesSkinning = wantsSkinning = *selectedUsesSkinning;
         }
-        if(__hidden_command_line::AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning)
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbAssetTypeOption, "Selected source mesh is not skinned; requested asset type requires skinning.", scratchArena);
+        if(__hidden_fbx_command_line::AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning)
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbAssetTypeOption, "Selected source mesh is not skinned; requested asset type requires skinning.", scratchArena);
 
         const ScratchPath outputPath(scratchArena, options.outputPath);
         if(outputPath.empty())
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbOutputOption, __hidden_command_line::s_OutputPathEmptyText, scratchArena);
-        if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, scratchArena, prompted))
-            return __hidden_command_line::s_FbxToNwbExitFailure;
+            return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbOutputOption, __hidden_fbx_command_line::s_OutputPathEmptyText, scratchArena);
+        if(!__hidden_fbx_command_line::ValidateOutputOverwrite(outputPath, options, scratchArena, prompted))
+            return __hidden_fbx_command_line::s_FbxToNwbExitFailure;
 
         auto built = BuildMesh(instances, selection, options, wantsSkinning, *defaultColor, cpuScheduler, scratchArena);
         if(!built)
-            return __hidden_command_line::s_FbxToNwbExitFailure;
+            return __hidden_fbx_command_line::s_FbxToNwbExitFailure;
         const SourceMeshStreams& mesh = built->mesh;
         const UtilityVector<ufbx_node*>& skeletonJoints = built->skeletonJoints;
         const UtilityVector<JointMatrix>& skeletonBindPoseMatrices = built->skeletonBindPoseMatrices;
@@ -524,7 +524,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         const SourceTangentReport& tangentReport = built->tangentReport;
 
         if(!WriteNwbAsset(outputPath, mesh, options.assetType, options.virtualRoot, options.separateAssets, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices, scratchArena))
-            return __hidden_command_line::s_FbxToNwbExitFailure;
+            return __hidden_fbx_command_line::s_FbxToNwbExitFailure;
 
         const auto outputText = PathToGenericString(scratchArena, outputPath);
         ScratchStringStream report(s_FileOpenWrite, scratchArena);
@@ -548,8 +548,8 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         }
         NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
 
-        return __hidden_command_line::s_FbxToNwbExitSuccess;
-    }, [&](const CLI::ParseError& error){ return __hidden_command_line::ExitParseError(app, error, scratchArena); }, [](){
+        return __hidden_fbx_command_line::s_FbxToNwbExitSuccess;
+    }, [&](const CLI::ParseError& error){ return __hidden_fbx_command_line::ExitParseError(app, error, scratchArena); }, [](){
         NWB_LOGGER_ERROR(NWB_TEXT("FBX conversion terminated with an unexpected exception"));
         return -1;
     });

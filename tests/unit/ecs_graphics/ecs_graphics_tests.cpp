@@ -266,24 +266,24 @@ TEST(EcsGraphics, ShadowMaterialConstantsReuseOnlyTheSameMaterialAndLayout){
     using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedConstantRangeMap;
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     ::Vector<u8, NWB::Core::Alloc::ScratchArena> uploadBytes(scratchArena);
-    constexpr u8 constants[] = {0xA1u, 0xB2u, 0xC3u, 0xD4u};
+    constexpr u8 s_Constants[] = {0xA1u, 0xB2u, 0xC3u, 0xD4u};
     RangeMap ranges(0, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
     ranges.reserve(3u);
     const Name material("project/materials/shared");
     const Name otherMaterial("project/materials/other");
 
-    const auto first = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, 17u, constants, uploadBytes, ranges);
+    const auto first = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, 17u, s_Constants, uploadBytes, ranges);
     ASSERT_TRUE(first);
     const usize firstUploadSize = uploadBytes.size();
     for(u32 instance = 0u; instance < 8u; ++instance){
-        const auto repeated = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, 17u, constants, uploadBytes, ranges);
+        const auto repeated = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, 17u, s_Constants, uploadBytes, ranges);
         ASSERT_TRUE(repeated);
         EXPECT_EQ(repeated->byteOffset, first->byteOffset);
         EXPECT_EQ(repeated->byteCount, first->byteCount);
         EXPECT_EQ(uploadBytes.size(), firstUploadSize);
     }
-    const auto differentLayout = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, 18u, constants, uploadBytes, ranges);
-    const auto differentMaterial = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(otherMaterial, 17u, constants, uploadBytes, ranges);
+    const auto differentLayout = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, 18u, s_Constants, uploadBytes, ranges);
+    const auto differentMaterial = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(otherMaterial, 17u, s_Constants, uploadBytes, ranges);
     ASSERT_TRUE(differentLayout);
     ASSERT_TRUE(differentMaterial);
     EXPECT_NE(differentLayout->byteOffset, first->byteOffset);
@@ -292,9 +292,9 @@ TEST(EcsGraphics, ShadowMaterialConstantsReuseOnlyTheSameMaterialAndLayout){
     ASSERT_EQ(ranges.size(), 3u);
     for(const auto& [key, range] : ranges){
         EXPECT_TRUE(key.materialName == material || key.materialName == otherMaterial);
-        ASSERT_EQ(range.byteCount, sizeof(constants));
+        ASSERT_EQ(range.byteCount, sizeof(s_Constants));
         ASSERT_LE(range.byteOffset + range.byteCount, uploadBytes.size());
-        EXPECT_EQ(NWB_MEMCMP(uploadBytes.data() + range.byteOffset, constants, sizeof(constants)), 0);
+        EXPECT_EQ(NWB_MEMCMP(uploadBytes.data() + range.byteOffset, s_Constants, sizeof(s_Constants)), 0);
     }
 }
 

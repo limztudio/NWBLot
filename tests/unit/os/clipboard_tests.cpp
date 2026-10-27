@@ -24,7 +24,7 @@ class FakeClipboardService final : public QueuedClipboardService{
 public:
     explicit FakeClipboardService(Alloc::GlobalArena& arena)
         : QueuedClipboardService(arena)
-        , text(arena)
+        , m_text(arena)
     {}
 
 
@@ -38,18 +38,18 @@ protected:
     virtual void startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum operation, const ClipboardChannel::Enum, const AStringView input)override{
         m_nativeToken = token;
         if(operation == ClipboardOperation::ReadText){
-            ++readCount;
-            if(onRead)
-                onRead();
+            ++m_readCount;
+            if(m_onRead)
+                m_onRead();
             if(m_nativeToken != token)
                 return;
             m_nativeToken = {};
-            if(!completeNativeRequest(token, readStatus, text))
+            if(!completeNativeRequest(token, m_readStatus, m_text))
                 NWB_FATAL_ASSERT(false);
         }
         else{
-            ++writeCount;
-            text.assign(input.data(), input.size());
+            ++m_writeCount;
+            m_text.assign(input.data(), input.size());
             m_nativeToken = {};
             if(!completeNativeRequest(token, ClipboardStatus::Success))
                 NWB_FATAL_ASSERT(false);
@@ -63,11 +63,11 @@ protected:
 
 
 public:
-    AString<Alloc::GlobalArena> text;
-    Function<void()> onRead;
-    ClipboardStatus::Enum readStatus = ClipboardStatus::Success;
-    usize readCount = 0u;
-    usize writeCount = 0u;
+    AString<Alloc::GlobalArena> m_text;
+    Function<void()> m_onRead;
+    ClipboardStatus::Enum m_readStatus = ClipboardStatus::Success;
+    usize m_readCount = 0u;
+    usize m_writeCount = 0u;
 
 
 private:
@@ -88,7 +88,7 @@ TEST(Clipboard, RequestsCopyTextAndPublishOnlyWhenPumped){
     ASSERT_TRUE(write);
     input.assign("changed");
     EXPECT_EQ(service.poll(*write, completion), ClipboardPollResult::Pending);
-    EXPECT_EQ(service.writeCount, 0u);
+    EXPECT_EQ(service.m_writeCount, 0u);
     const auto read = service.requestReadText(ClipboardChannel::Clipboard);
     ASSERT_TRUE(read);
     ASSERT_TRUE(service.pump());
@@ -115,11 +115,11 @@ TEST(Clipboard, CancelPreventsPendingWritesAndRejectsReusedGenerations){
     EXPECT_EQ(service.poll(canceled, completion), ClipboardPollResult::InvalidRequest);
     EXPECT_FALSE(service.cancel(canceled));
     ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.writeCount, 1u);
-    EXPECT_EQ(service.text, "keep");
+    EXPECT_EQ(service.m_writeCount, 1u);
+    EXPECT_EQ(service.m_text, "keep");
     ASSERT_TRUE(service.cancel(current));
     EXPECT_EQ(service.poll(current, completion), ClipboardPollResult::InvalidRequest);
-    EXPECT_EQ(service.text, "keep");
+    EXPECT_EQ(service.m_text, "keep");
 }
 
 TEST(Clipboard, ReusedSlotsKeepRequestOrdering){
@@ -170,7 +170,7 @@ TEST(Clipboard, CanceledNativeCompletionCannotReachNewRequest){
     ASSERT_TRUE(oldAdmission);
     const ClipboardRequestToken old = *oldAdmission;
     ClipboardRequestToken current;
-    service.onRead = [&](){
+    service.m_onRead = [&](){
         EXPECT_TRUE(service.cancel(old));
         const auto currentAdmission = service.requestReadText(ClipboardChannel::Clipboard);
         ASSERT_TRUE(currentAdmission);
@@ -180,8 +180,8 @@ TEST(Clipboard, CanceledNativeCompletionCannotReachNewRequest){
     ASSERT_NO_FATAL_FAILURE(ASSERT_TRUE(service.pump()));
     EXPECT_EQ(service.poll(old, completion), ClipboardPollResult::InvalidRequest);
     EXPECT_EQ(service.poll(current, completion), ClipboardPollResult::Pending);
-    service.onRead = {};
-    service.text.assign("new completion");
+    service.m_onRead = {};
+    service.m_text.assign("new completion");
     ASSERT_TRUE(service.pump());
     EXPECT_EQ(service.poll(current, completion), ClipboardPollResult::Completed);
     EXPECT_EQ(completion.text, "new completion");
@@ -198,9 +198,9 @@ TEST(Clipboard, UnsupportedChannelsAndUnavailableReadsStayExplicit){
     ASSERT_TRUE(service.pump());
     EXPECT_EQ(service.poll(primary, completion), ClipboardPollResult::Completed);
     EXPECT_EQ(completion.status, ClipboardStatus::Unsupported);
-    EXPECT_EQ(service.readCount, 0u);
-    service.readStatus = ClipboardStatus::Unavailable;
-    service.text.assign("must not escape failed read");
+    EXPECT_EQ(service.m_readCount, 0u);
+    service.m_readStatus = ClipboardStatus::Unavailable;
+    service.m_text.assign("must not escape failed read");
     const auto unavailableAdmission = service.requestReadText(ClipboardChannel::Clipboard);
     ASSERT_TRUE(unavailableAdmission);
     const ClipboardRequestToken unavailable = *unavailableAdmission;
@@ -254,7 +254,7 @@ TEST(Clipboard, AdmissionBoundsOutstandingRequestsAndText){
     const ClipboardRequestToken large = *largeAdmission;
     EXPECT_EQ(service.poll(large, completion), ClipboardPollResult::Completed);
     EXPECT_EQ(completion.status, ClipboardStatus::TooLarge);
-    EXPECT_EQ(service.writeCount, 0u);
+    EXPECT_EQ(service.m_writeCount, 0u);
 }
 
 TEST(Clipboard, WrongThreadCallsNeverTouchRequestStorage){
@@ -289,7 +289,7 @@ TEST(Clipboard, ConsumedCompletionOutlivesServiceAndItsArena){
     {
         NWB::Tests::TestArena serviceArena;
         FakeClipboardService service(serviceArena.arena);
-        service.text.assign("owned result");
+        service.m_text.assign("owned result");
         const auto tokenAdmission = service.requestReadText(ClipboardChannel::Clipboard);
         ASSERT_TRUE(tokenAdmission);
         const ClipboardRequestToken token = *tokenAdmission;

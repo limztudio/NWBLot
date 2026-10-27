@@ -170,7 +170,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 }
 
 [[nodiscard]] bool IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept{
-    return hint.cost < GpuTaskCostHint::kCount;
+    return hint.cost < GpuTaskCostHint::Count;
 }
 
 [[nodiscard]] u64 QueueCostWeight(const GpuTaskCostHint::Enum cost)noexcept{

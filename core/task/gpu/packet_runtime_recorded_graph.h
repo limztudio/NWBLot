@@ -124,7 +124,7 @@ struct GpuTaskGraphPhysicalQueueRecordingStatistics{
     u64 recordingAttemptGeneration = 0u;
     GpuPhysicalQueueId queue;
     u16 deviceGeneration = 0u;
-    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    CommandQueue::Enum queueClass = CommandQueue::Count;
     usize packetCount = 0u;
     usize taskCount = 0u;
     usize commandListCount = 0u;
@@ -139,7 +139,7 @@ struct GpuTaskGraphPhysicalQueueRecordingStatistics{
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
+        return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::Count;
     }
 };
 
@@ -305,7 +305,7 @@ private:
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const ArtifactOperation& artifactAccess,
-        const GpuSubmissionPacketId& packet
+        const GpuSubmissionPacketId& packetID
     );
     [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept;
     [[nodiscard]] const CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept;

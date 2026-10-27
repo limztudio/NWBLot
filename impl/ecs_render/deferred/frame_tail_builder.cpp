@@ -55,13 +55,13 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)noe
         const Core::GpuTaskId historyCopyDependencies[] = { inputs.terminalPresentationTask };
         Core::GpuTaskDesc historyCopyDesc;
         historyCopyDesc.setIdentity(Name("render.lagged_history_copy")).setMarkerLabel("Lagged Lighting History Copy").setScheduling(historyCopyScheduling).setDependencies(historyCopyDependencies, LengthOf(historyCopyDependencies));
-        const auto resultHistoryCopyTaskResult = m_graph.addCopyTextureTask(historyCopyDesc, Core::GpuCopyTextureTaskDesc{ .regions = historyCopyRegions, .regionCount = LengthOf(historyCopyRegions), .acceptedToken = &inputs.historyCopySubmissionToken, });
-        if(!resultHistoryCopyTaskResult){
+        const auto historyCopyTaskResult = m_graph.addCopyTextureTask(historyCopyDesc, Core::GpuCopyTextureTaskDesc{ .regions = historyCopyRegions, .regionCount = LengthOf(historyCopyRegions), .acceptedToken = &inputs.historyCopySubmissionToken, });
+        if(!historyCopyTaskResult){
             result.historyCopyTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred lagged-lighting history-copy task"));
             return MakeUnexpected(Failure{});
         }
-        result.historyCopyTask = *resultHistoryCopyTaskResult;
+        result.historyCopyTask = *historyCopyTaskResult;
     }
 
     // Recovery is a late independent Graphics tail.
@@ -83,16 +83,16 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)noe
     recoveryScheduling.isRecoverySubmission = true;
     Core::GpuTaskDesc recoveryDesc;
     recoveryDesc.setIdentity(Name("render.frame_recovery")).setMarkerLabel("Frame Recovery").setScheduling(recoveryScheduling).setResourceUses(recoveryResourceUses, LengthOf(recoveryResourceUses));
-    const auto resultRecoveryTaskResult = m_graph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
+    const auto recoveryTaskResult = m_graph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
         recoveryDesc,
         ECSRenderDetail::FrameRecoveryGraphTask::Payload{ .frameTimingTransaction = inputs.frameTimingTransaction, .armed = inputs.recoveryArmed, .retiresFrameTiming = inputs.recoveryRetiresFrameTiming, }
     );
-    if(!resultRecoveryTaskResult){
+    if(!recoveryTaskResult){
         result.recoveryTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-recovery graph task"));
         return MakeUnexpected(Failure{});
     }
-    result.recoveryTask = *resultRecoveryTaskResult;
+    result.recoveryTask = *recoveryTaskResult;
 
     return result;
 }

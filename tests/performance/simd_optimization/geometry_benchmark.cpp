@@ -602,10 +602,10 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         if(!CheckExceptionEquivalence(active))
             return false;
     }
-    constexpr f64 maximum = Limit<f64>::s_Max;
+    constexpr f64 s_Maximum = Limit<f64>::s_Max;
     const TrianglePair extreme[] = {
         { { Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0) }, { Double4(Limit<f64>::s_Infinity, 1.0, 2.0), Double4(-1.0, -1.0, -1.0), Double4(1.0, 3.0, 4.0) } },
-        { { Double4(maximum, 0.0, 0.0), Double4(maximum, 0.0, 0.0), Double4(maximum, 0.0, 0.0) }, { Double4(-maximum, -1.0, -1.0), Double4(0.0, 1.0, 1.0), Double4(maximum, 0.0, 0.0) } }
+        { { Double4(s_Maximum, 0.0, 0.0), Double4(s_Maximum, 0.0, 0.0), Double4(s_Maximum, 0.0, 0.0) }, { Double4(-s_Maximum, -1.0, -1.0), Double4(0.0, 1.0, 1.0), Double4(s_Maximum, 0.0, 0.0) } }
     };
     for(const TrianglePair& pair : extreme){
         const TrianglePairVectors vectors = LoadTrianglePair(pair);

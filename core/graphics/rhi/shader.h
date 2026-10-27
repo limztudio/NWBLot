@@ -157,8 +157,8 @@ struct ShaderDesc{
     Name debugName;
     // Borrowed until shader creation completes; the created shader rebinds this to its own retained bytecode.
     AStringView entryName = s_DefaultEntryName;
-    CustomSemantic* pCustomSemantics = nullptr;
-    u32* pCoordinateSwizzling = nullptr;
+    CustomSemantic* customSemantics = nullptr;
+    u32* coordinateSwizzling = nullptr;
 
     i32 hlslExtensionsUAV = -1;
     u32 numCustomSemantics = 0;
@@ -179,11 +179,11 @@ public:
 
     constexpr ShaderDesc& setUseSpecificShaderExt(bool value)noexcept{ useSpecificShaderExt = value; return *this; }
 
-    constexpr ShaderDesc& setCustomSemantics(u32 count, CustomSemantic* data)noexcept{ numCustomSemantics = count; pCustomSemantics = data; return *this; }
+    constexpr ShaderDesc& setCustomSemantics(u32 count, CustomSemantic* data)noexcept{ numCustomSemantics = count; customSemantics = data; return *this; }
 
     constexpr ShaderDesc& setFastGSFlags(FastGeometryShaderFlags::Mask value)noexcept{ fastGSFlags = value; return *this; }
 
-    constexpr ShaderDesc& setCoordinateSwizzling(u32* value)noexcept{ pCoordinateSwizzling = value; return *this; }
+    constexpr ShaderDesc& setCoordinateSwizzling(u32* value)noexcept{ coordinateSwizzling = value; return *this; }
 };
 
 struct ShaderSpecialization{

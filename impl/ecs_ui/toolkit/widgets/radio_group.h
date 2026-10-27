@@ -88,7 +88,7 @@ public:
 
     [[nodiscard]] const RadioGroupPlacement& placement()const noexcept{ return m_placement; }
     [[nodiscard]] RadioGroupSnapshot snapshot()const noexcept;
-    [[nodiscard]] bool matches(const RadioGroupSnapshot& snapshot)const noexcept;
+    [[nodiscard]] bool matches(const RadioGroupSnapshot& value)const noexcept;
     void select(u64 key)noexcept;
     void reset()noexcept;
 

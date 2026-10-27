@@ -49,7 +49,7 @@ Expected<Core::GpuTaskId> GpuRendererState::declareStandalone(Core::GpuTaskGraph
     const auto beginResult = graph.addTask<Core::FrameTimingBeginGraphTask>(
         Core::GpuTaskDesc().setIdentity(Name("ui.frame_timing_begin")).setMarkerLabel("UI Frame Timing Begin")
             .setScheduling(beginScheduling)
-            .setTimingMetadata({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
+            .setTiming({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
         Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = m_frameTimingScopePrepared ? GpuRendererTimingScope::s_Frame : Core::GpuTimingScopeDefinition{}, }
     );
     if(!beginResult || !graph.setNormalExecutionPrelude(*beginResult))
@@ -88,7 +88,7 @@ Expected<Core::GpuTaskId> GpuRendererState::declareStandalone(Core::GpuTaskGraph
     const auto outputResult = graph.addTask<GpuOutputTask>(
         Core::GpuTaskDesc().setIdentity(Name("ui.output")).setMarkerLabel("UI Standalone Output").setScheduling(scheduling)
             .setDependencies(&layer->readyTask, 1u).setResourceUses(uses, s_OutputResourceUseCount).setResourceVersionUses(&consume, 1u)
-            .setTimingMetadata({ 0u, m_width ^ (m_height << s_GpuTimingHeightShift), Core::GpuTaskTimingPolicy::Task }),
+            .setTiming({ 0u, m_width ^ (m_height << s_GpuTimingHeightShift), Core::GpuTaskTimingPolicy::Task }),
         GpuOutputTask::Payload{ frame, backBuffer, layer->color, pipeline, frame->m_acquired, frame->m_outputPipeline, frame->m_presentationMode }
     );
     if(!outputResult)
@@ -112,7 +112,7 @@ Expected<Core::GpuTaskId> GpuRendererState::declareStandalone(Core::GpuTaskGraph
     const auto terminalResult = graph.addTask<GpuFrameTimingEndTask>(
         Core::GpuTaskDesc().setIdentity(Name("ui.frame_timing_end")).setMarkerLabel("UI Frame Timing End")
             .setScheduling(timingEndScheduling).setDependencies(&timingEndDependency, 1u)
-            .setTimingMetadata({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
+            .setTiming({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
         GpuFrameTimingEndTask::Payload{ frameTimingTransaction }
     );
     if(!terminalResult || !graph.declarePresentEndpoint({ *terminalResult, backBuffer }))

@@ -154,7 +154,7 @@ bool GpuTaskGraphCompiler::compile(
     const Timer planningBegin = TimerNow();
 
     NWB_ASSERT(topology.queues && topology.queueCount != 0u);
-    if(options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::kCount || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration))
+    if(options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::Count || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration))
         return false;
 
     for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex){

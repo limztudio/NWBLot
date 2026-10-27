@@ -24,7 +24,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_graphics_runtime{
+namespace __hidden_graphics_runtime_frame{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -283,10 +283,10 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
     const bool shouldBootstrapWindowPresentation = !m_hasPresentedFrame;
 
     if(m_windowVisible && (m_windowIsInFocus || shouldRenderUnfocused() || shouldBootstrapWindowPresentation)){
-        if(m_prevDPIScaleFactorX != m_dpiScaleFactorX || m_prevDPIScaleFactorY != m_dpiScaleFactorY){
+        if(m_prevDpiScaleFactorX != m_dpiScaleFactorX || m_prevDpiScaleFactorY != m_dpiScaleFactorY){
             displayScaleChanged();
-            m_prevDPIScaleFactorX = m_dpiScaleFactorX;
-            m_prevDPIScaleFactorY = m_dpiScaleFactorY;
+            m_prevDpiScaleFactorX = m_dpiScaleFactorX;
+            m_prevDpiScaleFactorY = m_dpiScaleFactorY;
         }
 
         Timer animateBegin;
@@ -300,7 +300,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
         if(phaseTiming)
             beginFrameBegin = TimerNow();
         BeginFrameResult beginFrameResult;
-        for(usize attempt = 0u; attempt < __hidden_graphics_runtime::s_MaxBeginFrameResizeAttempts; ++attempt){
+        for(usize attempt = 0u; attempt < __hidden_graphics_runtime_frame::s_MaxBeginFrameResizeAttempts; ++attempt){
             beginFrameResult = m_backend->beginFrame();
             if(beginFrameResult.status != BeginFrameStatus::ResizeRequired)
                 break;
@@ -339,7 +339,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             }
 
             m_acquiredPresentationFrame = { .backBuffer = Move(acquiredBackBuffer), .framebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex], };
-            const __hidden_graphics_runtime::ScopedAcquiredPresentationFrameReset acquiredFrameReset(m_acquiredPresentationFrame);
+            const __hidden_graphics_runtime_frame::ScopedAcquiredPresentationFrameReset acquiredFrameReset(m_acquiredPresentationFrame);
 
             Timer framePreambleBegin;
             if(phaseTiming)
@@ -433,16 +433,16 @@ bool GraphicsRuntime::registerCpuTimingScopes(){
         Perf::TimingScopeId& id;
     };
     const ScopeRegistration registrations[] = {
-        { __hidden_graphics_runtime::s_GraphicsFrameCpuTimingScope, m_frameTimingScope },
-        { __hidden_graphics_runtime::s_GraphicsAnimateCpuTimingScope, m_animateTimingScope },
-        { __hidden_graphics_runtime::s_GraphicsBeginFrameCpuTimingScope, m_beginFrameTimingScope },
-        { __hidden_graphics_runtime::s_GraphicsFramePreambleCpuTimingScope, m_framePreambleTimingScope },
-        { __hidden_graphics_runtime::s_GraphicsPrepareResourcesCpuTimingScope, m_prepareResourcesTimingScope },
-        { __hidden_graphics_runtime::s_GraphicsPrepareResourcesFailedCpuTimingScope, m_prepareResourcesFailedTimingScope },
-        { __hidden_graphics_runtime::s_GraphicsRenderPassesCpuTimingScope, m_renderPassesTimingScope },
-        { __hidden_graphics_runtime::s_GraphicsRenderCpuTimingScope, m_renderTimingScope },
-        { __hidden_graphics_runtime::s_GraphicsPresentCpuTimingScope, m_presentTimingScope },
-        { __hidden_graphics_runtime::s_GraphicsGarbageCollectCpuTimingScope, m_garbageCollectTimingScope },
+        { __hidden_graphics_runtime_frame::s_GraphicsFrameCpuTimingScope, m_frameTimingScope },
+        { __hidden_graphics_runtime_frame::s_GraphicsAnimateCpuTimingScope, m_animateTimingScope },
+        { __hidden_graphics_runtime_frame::s_GraphicsBeginFrameCpuTimingScope, m_beginFrameTimingScope },
+        { __hidden_graphics_runtime_frame::s_GraphicsFramePreambleCpuTimingScope, m_framePreambleTimingScope },
+        { __hidden_graphics_runtime_frame::s_GraphicsPrepareResourcesCpuTimingScope, m_prepareResourcesTimingScope },
+        { __hidden_graphics_runtime_frame::s_GraphicsPrepareResourcesFailedCpuTimingScope, m_prepareResourcesFailedTimingScope },
+        { __hidden_graphics_runtime_frame::s_GraphicsRenderPassesCpuTimingScope, m_renderPassesTimingScope },
+        { __hidden_graphics_runtime_frame::s_GraphicsRenderCpuTimingScope, m_renderTimingScope },
+        { __hidden_graphics_runtime_frame::s_GraphicsPresentCpuTimingScope, m_presentTimingScope },
+        { __hidden_graphics_runtime_frame::s_GraphicsGarbageCollectCpuTimingScope, m_garbageCollectTimingScope },
     };
     for(const ScopeRegistration& registration : registrations){
         if(registration.id.valid())

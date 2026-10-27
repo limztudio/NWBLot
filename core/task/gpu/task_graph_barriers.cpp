@@ -19,14 +19,14 @@ NWB_CORE_BEGIN
 
 
 bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& task, const GpuCompiledBarrier& barrier, CommandList& commandList)const{
-    if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, task) || !validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::kCount)
+    if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, task) || !validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::Count)
         return false;
 
     const GpuGraphResourceNode& resource = m_resources[barrier.resource.index];
     const auto resolveOwnershipQueues = [&]()noexcept{
         const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
         const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
-        return sourceQueue && destinationQueue && sourceQueue->queueClass < CommandQueue::kCount && destinationQueue->queueClass < CommandQueue::kCount;
+        return sourceQueue && destinationQueue && sourceQueue->queueClass < CommandQueue::Count && destinationQueue->queueClass < CommandQueue::Count;
     };
     switch(barrier.type){
     case GpuCompiledBarrierType::TextureTransition:

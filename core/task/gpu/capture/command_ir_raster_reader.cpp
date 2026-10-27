@@ -30,7 +30,7 @@ namespace __hidden_gpu_command_ir_raster_reader{
     case GpuCommandIrOpcode::ClearTextureRectUInt: return GpuCommandIrWireOpcode::ClearTextureRectUInt;
     case GpuCommandIrOpcode::UploadBuffer: return GpuCommandIrWireOpcode::UploadBuffer;
     case GpuCommandIrOpcode::UploadTexture: return GpuCommandIrWireOpcode::UploadTexture;
-    default: return GpuCommandIrWireOpcode::kCount;
+    default: return GpuCommandIrWireOpcode::Count;
     }
 }
 

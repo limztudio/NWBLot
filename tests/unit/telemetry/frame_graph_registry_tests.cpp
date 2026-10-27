@@ -64,18 +64,18 @@ public:
     virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
         if(!builder.addPass(Name("cache_lifetime"), AStringView(m_label)).valid())
             return false;
-        if(throwNext){
-            throwNext = false;
+        if(m_throwNext){
+            m_throwNext = false;
             throw ContributionFailure{};
         }
-        reentryRejected = !m_registry.record(m_session);
+        m_reentryRejected = !m_registry.record(m_session);
         return true;
     }
 
 
 public:
-    bool throwNext = true;
-    bool reentryRejected = false;
+    bool m_throwNext = true;
+    bool m_reentryRejected = false;
 
 
 private:
@@ -97,7 +97,7 @@ TEST(Telemetry, RegistryClearsBorrowedDescriptorsAfterUnwindAndReusesGraphCapaci
 
     label.assign("replacement label after unwind");
     ASSERT_TRUE(registry.record(session));
-    EXPECT_TRUE(contributor.reentryRejected);
+    EXPECT_TRUE(contributor.m_reentryRejected);
     const auto* const event = session.view().eventAt(0u);
     ASSERT_NE(event, nullptr);
     const auto parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, event->payload.data(), event->payload.size());

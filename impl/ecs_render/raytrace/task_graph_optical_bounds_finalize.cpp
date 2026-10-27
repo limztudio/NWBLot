@@ -117,15 +117,15 @@ Expected<RayTracingOpticalSceneGraphBuffer> DeclareRayTracingOpticalBoundsFinali
     };
     const auto inputsResult = importCommon(finalize.inputBuffer, "Ray Optical Runtime Inputs");
     RayTracingOpticalSceneGraphBuffer result;
-    const auto resultResourceResult = importCommon(finalize.outputBuffer, "Ray Optical Resolved Scene");
-    if(!inputsResult || !resultResourceResult){
-        if(resultResourceResult)
-            result.resource = *resultResourceResult;
+    const auto resourceResult = importCommon(finalize.outputBuffer, "Ray Optical Resolved Scene");
+    if(!inputsResult || !resourceResult){
+        if(resourceResult)
+            result.resource = *resourceResult;
         else
             result.resource = {};
         return MakeUnexpected(Failure{});
     }
-    result.resource = *resultResourceResult;
+    result.resource = *resourceResult;
     const Core::GpuGraphResourceId inputs = *inputsResult;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses(scratchArena);

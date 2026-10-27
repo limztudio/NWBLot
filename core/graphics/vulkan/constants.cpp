@@ -162,7 +162,7 @@ static constexpr FormatMapping s_FormatMappings[] = {
 };
 
 struct FormatLookup{
-    VkFormat formats[Format::kCount]{};
+    VkFormat formats[Format::Count]{};
 
 
 public:

@@ -46,7 +46,7 @@ namespace Graphics = Core;
 
 [[nodiscard]] Expected<Graphics::GpuTaskId> AddTask(Graphics::GpuTaskGraph& graph, const Name& identity, const Graphics::GpuTaskId dependency = {}, const Graphics::GpuTaskSchedulingHint& scheduling = {}, const Graphics::GpuTaskTimingMetadata& timing = {}){
     Graphics::GpuTaskDesc desc;
-    desc.setIdentity(identity).setMarkerLabel("Task Graph Timing Test").setScheduling(scheduling).setTimingMetadata(timing);
+    desc.setIdentity(identity).setMarkerLabel("Task Graph Timing Test").setScheduling(scheduling).setTiming(timing);
     if(dependency.valid())
         desc.setDependencies(&dependency, 1u);
     return graph.addTask(desc);

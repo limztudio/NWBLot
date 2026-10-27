@@ -59,7 +59,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': keep-initial-state uploads require a concrete initial state"), ConvertString(textureDesc.name.resolvedText()));
         return MakeUnexpected(Failure{});
     }
-    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount)){
+    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::Count)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': texture format is invalid"), ConvertString(textureDesc.name.resolvedText()));
         return MakeUnexpected(Failure{});
     }
@@ -112,7 +112,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
     };
 
     switch(requestedConsumerQueue){
-    case CommandQueue::kCount:
+    case CommandQueue::Count:
         return uploadBytes < GraphicsModuleDetail::s_SetupUploadLargeMinimumBytes ? CommandQueue::Graphics : availableConsumerQueue();
     case CommandQueue::Transfer:
         return availableConsumerQueue();

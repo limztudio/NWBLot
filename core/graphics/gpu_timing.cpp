@@ -525,7 +525,7 @@ void GpuTimingRecorder::discardFrameResetLocked()noexcept{
 }
 
 void GpuTimingRecorder::noteSkippedScope(const GpuTimingScopeSkipReason::Enum reason)noexcept{
-    NWB_ASSERT(reason < GpuTimingScopeSkipReason::kCount);
+    NWB_ASSERT(reason < GpuTimingScopeSkipReason::Count);
     ++m_statistics.skippedScopeCountByReason[reason];
 }
 

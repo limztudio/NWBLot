@@ -100,24 +100,24 @@ Expected<CommandListHandle> Device::createCommandList(const CommandListParameter
     return CommandListHandle(cmdList, CommandListHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
-Expected<QueueSubmissionReceipt> Device::executeCommandLists(CommandList* const* pCommandLists, const usize numCommandLists, const CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc){
-    return executeCommandLists(pCommandLists, numCommandLists, getPrimaryPhysicalQueue(executionQueue), submitDesc);
+Expected<QueueSubmissionReceipt> Device::executeCommandLists(CommandList* const* commandLists, const usize numCommandLists, const CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc){
+    return executeCommandLists(commandLists, numCommandLists, getPrimaryPhysicalQueue(executionQueue), submitDesc);
 }
 
 
-Expected<QueueSubmissionReceipt> Device::executeCommandLists(CommandList* const* pCommandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
-    return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, false);
+Expected<QueueSubmissionReceipt> Device::executeCommandLists(CommandList* const* commandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
+    return executeCommandListsInternal(commandLists, numCommandLists, executionQueue, submitDesc, false);
 }
 
-void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* pCommandLists, const usize numCommandLists, const bool graphSubmissionAuthorized){
+void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, const usize numCommandLists, const bool graphSubmissionAuthorized){
     auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
     auto& submittedOwners = queue.m_executeSubmittedOwners;
     expectedCommandLists.clear();
 
-    if(pCommandLists && numCommandLists > 0u){
+    if(commandLists && numCommandLists > 0u){
         expectedCommandLists.reserve(numCommandLists);
         for(usize i = 0u; i < numCommandLists; ++i){
-            auto& commandList = *MakeNotNull(pCommandLists[i]);
+            auto& commandList = *MakeNotNull(commandLists[i]);
             TrackedCommandBuffer& owner = *commandList.m_currentCmdBuf;
             expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
                 .owner = &owner,
@@ -141,7 +141,7 @@ void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandLi
 
 }
 
-void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* pCommandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const u64 submittedID, const bool submissionAccepted){
+void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* commandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const u64 submittedID, const bool submissionAccepted){
     const auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
     if(expectedCommandLists.empty())
         return;
@@ -154,10 +154,10 @@ void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandL
     }
 
     const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected)noexcept -> bool {
-        if(!expected.owner || expected.nativeRecordingID == 0u || !pCommandLists)
+        if(!expected.owner || expected.nativeRecordingID == 0u || !commandLists)
             return false;
         for(usize i = 0u; i < numCommandLists; ++i){
-            CommandList* const commandList = pCommandLists[i];
+            CommandList* const commandList = commandLists[i];
             if(commandList && commandList->m_currentCmdBuf.get() == expected.owner && commandList->m_nativeRecordingID == expected.nativeRecordingID)
                 return true;
         }
@@ -184,12 +184,12 @@ void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandL
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<QueueSubmissionReceipt> Device::executeGraphCommandLists(CommandList* const* pCommandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
-    return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, true);
+Expected<QueueSubmissionReceipt> Device::executeGraphCommandLists(CommandList* const* commandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
+    return executeCommandListsInternal(commandLists, numCommandLists, executionQueue, submitDesc, true);
 }
 
 Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
-    CommandList* const* pCommandLists,
+    CommandList* const* commandLists,
     const usize numCommandLists,
     const GpuPhysicalQueueId& executionQueue,
     const QueueSubmissionDesc& submitDesc,
@@ -206,7 +206,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         return MakeUnexpected(Failure{});
     }
 
-    if(numCommandLists > 0u && !pCommandLists){
+    if(numCommandLists > 0u && !commandLists){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list array is null"));
         return MakeUnexpected(Failure{});
     }
@@ -215,9 +215,9 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         return MakeUnexpected(Failure{});
     }
     for(usize i = 0u; i < numCommandLists; ++i){
-        CommandList* const commandList = pCommandLists[i];
+        CommandList* const commandList = commandLists[i];
         for(usize previous = 0u; previous < i; ++previous){
-            if(pCommandLists[previous] == commandList){
+            if(commandLists[previous] == commandList){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
                 return MakeUnexpected(Failure{});
             }
@@ -244,7 +244,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         }
     }
     for(usize i = 0u; i < numCommandLists; ++i){
-        if(!pCommandLists[i]->validateTrackedResourcesReadyForSubmission())
+        if(!commandLists[i]->validateTrackedResourcesReadyForSubmission())
             return MakeUnexpected(Failure{});
     }
 
@@ -288,7 +288,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         }
     }
 
-    prepareSubmissionCommandListWorkspaceLocked(*queue, pCommandLists, numCommandLists, graphSubmissionAuthorized);
+    prepareSubmissionCommandListWorkspaceLocked(*queue, commandLists, numCommandLists, graphSubmissionAuthorized);
 
     // Hook runs after waits validate; its signal stays submission-local.
     Queue::SubmissionSignal hookSignal = {};
@@ -315,7 +315,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     }
 
     const auto submission = queue->submit(
-        pCommandLists,
+        commandLists,
         numCommandLists,
         expectedCommandLists.empty() ? nullptr : expectedCommandLists.data(),
         localWaits.empty() ? nullptr : localWaits.data(),
@@ -332,7 +332,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         : QueueSubmissionToken{}
     ;
 
-    finalizeSubmissionCommandListResourcesLocked(*queue, pCommandLists, numCommandLists, executionQueue, submittedID, submissionAccepted);
+    finalizeSubmissionCommandListResourcesLocked(*queue, commandLists, numCommandLists, executionQueue, submittedID, submissionAccepted);
     hookResolution.resolve(submissionToken);
 
     submissionWorkspaceLock.unlock();
@@ -419,7 +419,7 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQu
         nativeQueue.queue == VK_NULL_HANDLE
         || nativeQueue.familyIndex == Limit<u32>::s_Max
         || nativeQueue.queueIndex == Limit<u32>::s_Max
-        || queueClassIndex >= static_cast<u32>(CommandQueue::kCount)
+        || queueClassIndex >= static_cast<u32>(CommandQueue::Count)
         || requiredCapabilities == 0u
         || (providedCapabilities & requiredCapabilities) != requiredCapabilities
         || (providedCapabilities & static_cast<u8>(~knownCapabilities)) != 0u

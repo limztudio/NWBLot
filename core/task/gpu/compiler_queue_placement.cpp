@@ -163,7 +163,7 @@ namespace GpuTaskGraphCompilerDetail{
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
         if(
-            (requiredClass != CommandQueue::kCount && candidate.queueClass != requiredClass)
+            (requiredClass != CommandQueue::Count && candidate.queueClass != requiredClass)
             || (group.initialOwnershipQueue.valid() && candidate.id != group.initialOwnershipQueue)
             || !HasCapabilities(candidate.capabilities, group.requiredCapabilities)
             || !IsBetterQueue(candidate, result)

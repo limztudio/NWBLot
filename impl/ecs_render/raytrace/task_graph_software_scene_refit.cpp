@@ -122,7 +122,7 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(Core::GpuTaskGr
     Core::GpuTaskDesc uploadDesc;
     uploadDesc.setIdentity(Name("render.shadow_prepare.scene_refit_inputs_upload")).setMarkerLabel("Software Scene Refit Inputs Upload").setScheduling(scheduling).setDependencies(&dependency, 1u);
     SoftwareSceneRefitGraphTasks result;
-    const auto resultInputUploadResult = graph.addUploadBufferTask(
+    const auto inputUploadResult = graph.addUploadBufferTask(
         uploadDesc,
         Core::GpuUploadBufferTaskDesc{
             .source = upload,
@@ -130,11 +130,11 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(Core::GpuTaskGr
             // Retained storage restores Common; the refit read owns the following SRV transition.
             .finalState = Core::ResourceStates::Common, }
     );
-    if(!resultInputUploadResult){
+    if(!inputUploadResult){
         result.inputUpload = {};
         return MakeUnexpected(Failure{});
     }
-    result.inputUpload = *resultInputUploadResult;
+    result.inputUpload = *inputUploadResult;
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name("render.shadow_prepare.scene_refit")).setMarkerLabel("Software Scene BVH Refit").setScheduling(scheduling).setDependencies(&result.inputUpload, 1u).setResourceUses(uses.data(), uses.size());
     const auto refitResult = graph.addTask<__hidden_task_graph_software_scene_refit::RefitTask>(desc, __hidden_task_graph_software_scene_refit::RefitTask::Payload{ snapshot });

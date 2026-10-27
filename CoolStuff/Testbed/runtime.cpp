@@ -30,7 +30,7 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_runtime{
+namespace __hidden_testbed_runtime{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,8 +208,8 @@ static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world, const NW
 NotNullUniquePtr<NWB::Core::ECS::World> Project::CreateInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
     auto world = NWB::CreateInitialProjectWorld(context);
     if(!world){
-        NWB_LOGGER_FATAL(__hidden_runtime::s_InitWorldFailedText);
-        throw RuntimeException(__hidden_runtime::s_InitWorldFailedNarrow.data());
+        NWB_LOGGER_FATAL(__hidden_testbed_runtime::s_InitWorldFailedText);
+        throw RuntimeException(__hidden_testbed_runtime::s_InitWorldFailedNarrow.data());
     }
     return MakeNotNullUnique(Move(*world));
 }
@@ -240,20 +240,20 @@ bool Project::onStartup(){
 
     auto activeCameraEntity = m_world->createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-    const Float4 cameraPosition(0.0f, __hidden_runtime::s_CharacterCameraTargetY, __hidden_runtime::s_CameraStartDepth);
+    const Float4 cameraPosition(0.0f, __hidden_testbed_runtime::s_CharacterCameraTargetY, __hidden_testbed_runtime::s_CameraStartDepth);
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
     NWB_ASSERT(activeCamera.camera.valid());
     auto& cameraTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera));
-    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), cameraTransform.rotation);
+    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_testbed_runtime::s_CameraStartYaw, 0.0f), cameraTransform.rotation);
     const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
-        __hidden_runtime::s_DefaultDirectionalLightPitch,
-        __hidden_runtime::s_DefaultDirectionalLightYaw,
-        __hidden_runtime::s_DefaultDirectionalLightRoll,
-        __hidden_runtime::s_DefaultDirectionalLightColor,
-        __hidden_runtime::s_DefaultDirectionalLightIntensity
+        __hidden_testbed_runtime::s_DefaultDirectionalLightPitch,
+        __hidden_testbed_runtime::s_DefaultDirectionalLightYaw,
+        __hidden_testbed_runtime::s_DefaultDirectionalLightRoll,
+        __hidden_testbed_runtime::s_DefaultDirectionalLightColor,
+        __hidden_testbed_runtime::s_DefaultDirectionalLightIntensity
     );
-    const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, __hidden_runtime::s_PointLightPosition, __hidden_runtime::s_PointLightColor, __hidden_runtime::s_PointLightIntensity, __hidden_runtime::s_PointLightRange);
+    const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, __hidden_testbed_runtime::s_PointLightPosition, __hidden_testbed_runtime::s_PointLightColor, __hidden_testbed_runtime::s_PointLightIntensity, __hidden_testbed_runtime::s_PointLightRange);
     if(!directionalLight.valid() || !pointLight.valid())
         return false;
 
@@ -269,7 +269,7 @@ void Project::onShutdown(){
     unregisterInputHandler();
     clearInputState();
     destroyWorld();
-    NWB_LOGGER_ESSENTIAL_INFO(__hidden_runtime::s_ShutdownText);
+    NWB_LOGGER_ESSENTIAL_INFO(__hidden_testbed_runtime::s_ShutdownText);
 }
 
 bool Project::onUpdate(f32 delta){
@@ -306,7 +306,7 @@ bool Project::keyboardUpdate(const i32 key, const i32 scancode, const i32 action
     if(action == NWB::Core::InputAction::Release)
         setKeyState(key, false);
 
-    if(__hidden_runtime::UiWantsKeyboardCapture(*m_world))
+    if(__hidden_testbed_runtime::UiWantsKeyboardCapture(*m_world))
         return false;
 
     if(action == NWB::Core::InputAction::Press || action == NWB::Core::InputAction::Repeat)
@@ -321,7 +321,7 @@ bool Project::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
         return false;
     }
 
-    if(__hidden_runtime::UiWantsMouseCapture(*m_world)){
+    if(__hidden_testbed_runtime::UiWantsMouseCapture(*m_world)){
         m_mousePositionValid = false;
         return false;
     }
@@ -355,7 +355,7 @@ bool Project::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
 bool Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods)noexcept{
     static_cast<void>(mods);
 
-    if(__hidden_runtime::UiWantsMouseCapture(*m_world)){
+    if(__hidden_testbed_runtime::UiWantsMouseCapture(*m_world)){
         if(button == NWB::Core::MouseButton::Right && action == NWB::Core::InputAction::Release){
             m_mouseLookActive = false;
             m_mousePositionValid = false;
@@ -378,11 +378,11 @@ bool Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mo
 }
 
 bool Project::createDefaultScene(){
-    if(!__hidden_runtime::CreateSkinnedCharacterEntity(*m_world, m_sceneSubsystems).valid()){
-        NWB_LOGGER_ERROR(__hidden_runtime::s_CharacterInvalidText);
+    if(!__hidden_testbed_runtime::CreateSkinnedCharacterEntity(*m_world, m_sceneSubsystems).valid()){
+        NWB_LOGGER_ERROR(__hidden_testbed_runtime::s_CharacterInvalidText);
         return false;
     }
-    __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world, m_sceneSubsystems);
+    __hidden_testbed_runtime::CreateStaticGroundPlaneEntity(*m_world, m_sceneSubsystems);
 
     auto uiEntity = m_world->createEntity();
     auto& customUi = uiEntity.addComponent<NWB::Impl::UiPaintComponent>();
@@ -391,7 +391,7 @@ bool Project::createDefaultScene(){
         drawCustomUiControls(context);
     };
 
-    NWB_LOGGER_ESSENTIAL_INFO(__hidden_runtime::s_StartupSceneText, __hidden_runtime::s_DefaultSceneDescription);
+    NWB_LOGGER_ESSENTIAL_INFO(__hidden_testbed_runtime::s_StartupSceneText, __hidden_testbed_runtime::s_DefaultSceneDescription);
     return true;
 }
 
@@ -422,7 +422,7 @@ void Project::clearInputState()noexcept{
 }
 
 void Project::setKeyState(const i32 key, const bool pressed)noexcept{
-    const auto keyIndex = __hidden_runtime::ResolveKeyIndex(key);
+    const auto keyIndex = __hidden_testbed_runtime::ResolveKeyIndex(key);
     if(!keyIndex)
         return;
 
@@ -430,7 +430,7 @@ void Project::setKeyState(const i32 key, const bool pressed)noexcept{
 }
 
 bool Project::keyPressed(const i32 key)const noexcept{
-    const auto keyIndex = __hidden_runtime::ResolveKeyIndex(key);
+    const auto keyIndex = __hidden_testbed_runtime::ResolveKeyIndex(key);
     if(!keyIndex)
         return false;
 
@@ -438,7 +438,7 @@ bool Project::keyPressed(const i32 key)const noexcept{
 }
 
 void Project::updateMainCamera(const f32 delta)noexcept{
-    const bool pointerCaptured = __hidden_runtime::UiWantsMouseCapture(*m_world);
+    const bool pointerCaptured = __hidden_testbed_runtime::UiWantsMouseCapture(*m_world);
     // Pending deltas were admitted by scene ownership; later UI hover cannot erase a completed drag.
     const f32 mouseDeltaX = m_pendingMouseDeltaX;
     const f32 mouseDeltaY = m_pendingMouseDeltaY;
@@ -449,16 +449,16 @@ void Project::updateMainCamera(const f32 delta)noexcept{
         m_mousePositionValid = false;
     }
 
-    const bool keyboardCaptured = __hidden_runtime::UiWantsKeyboardCapture(*m_world);
+    const bool keyboardCaptured = __hidden_testbed_runtime::UiWantsKeyboardCapture(*m_world);
     const SIMDVectorSingle moveAxes = keyboardCaptured
         ? VectorZero()
-        : __hidden_runtime::ResolveMoveAxes(
+        : __hidden_testbed_runtime::ResolveMoveAxes(
             VectorSet(static_cast<f32>(keyPressed(NWB::Core::Key::D)), static_cast<f32>(keyPressed(NWB::Core::Key::W)), 0.0f, 0.0f),
             VectorSet(static_cast<f32>(keyPressed(NWB::Core::Key::A)), static_cast<f32>(keyPressed(NWB::Core::Key::S)), 0.0f, 0.0f)
         );
     const bool boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
 
-    __hidden_runtime::ApplyFlyCameraInputToMainCamera(*m_world, moveAxes, boosted, VectorSet(mouseDeltaX, mouseDeltaY, 0.0f, 0.0f), VectorSet(delta, 0.0f, 0.0f, 0.0f));
+    __hidden_testbed_runtime::ApplyFlyCameraInputToMainCamera(*m_world, moveAxes, boosted, VectorSet(mouseDeltaX, mouseDeltaY, 0.0f, 0.0f), VectorSet(delta, 0.0f, 0.0f, 0.0f));
 }
 
 void Project::destroyWorld(){

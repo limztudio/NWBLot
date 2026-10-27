@@ -405,7 +405,7 @@ TEST(GpuTaskGraph, LogicalSharingRequiresTwoSelectedFamiliesAcrossEveryMaskAndTo
         Graphics::ResourceQueueSharing::AsyncComputeAndTransfer,
         Graphics::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer,
     };
-    const Graphics::CommandQueue::Enum splitClasses[] = { Graphics::CommandQueue::kCount, Graphics::CommandQueue::Graphics, Graphics::CommandQueue::Compute, Graphics::CommandQueue::Transfer, };
+    const Graphics::CommandQueue::Enum splitClasses[] = { Graphics::CommandQueue::Count, Graphics::CommandQueue::Graphics, Graphics::CommandQueue::Compute, Graphics::CommandQueue::Transfer, };
     for(const Graphics::ResourceQueueSharing::Mask sharing : sharingMasks){
         SCOPED_TRACE(static_cast<u32>(sharing));
         for(const Graphics::CommandQueue::Enum splitClass : splitClasses){

@@ -36,7 +36,7 @@ public:
     [[nodiscard]] static SIMDVectorSingle AccumulateFanAreaVec(SIMDVectorSingle inAreaVec, SIMDVectorSingle originVec, SIMDVectorSingle firstVec, SIMDVectorSingle secondVec)noexcept;
     static void CollectBoundaryEdges(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges);
     [[nodiscard]] static bool OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformCutLoopEdge> edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop);
-    [[nodiscard]] static Expected<SIMDVectorSingleResult> CapNormal(SIMDVectorSingle area)noexcept;
+    [[nodiscard]] static Expected<SIMDVectorSingleResult> CapNormal(SIMDVectorSingle areaVec)noexcept;
     [[nodiscard]] static Expected<u32> FillCapLoop(
         const SIMDVectorSingle loopNormalVec,
         Span<const u32> loop,

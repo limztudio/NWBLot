@@ -42,7 +42,7 @@ namespace GpuTaskGraphBuiltinDetail{
         || textureDesc.sampleCount != 1u
         || mipLevel >= textureDesc.mipLevels
         || arraySlice >= textureDesc.arraySize
-        || static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount)
+        || static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::Count)
     )
         return MakeUnexpected(Failure{});
 

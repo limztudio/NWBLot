@@ -28,8 +28,8 @@ struct GpuTaskRecordContext;
 struct GpuTaskExternalStateSource{
     const CommandListResourceStateHandoff* states = nullptr;
     // This predicate is evaluated after queue assignment and never constrains routing.
-    // kCount keeps the snapshot applicable to every consumer queue class.
-    CommandQueue::Enum applicableConsumerQueueClass = CommandQueue::kCount;
+    // Count keeps the snapshot applicable to every consumer queue class.
+    CommandQueue::Enum applicableConsumerQueueClass = CommandQueue::Count;
 };
 
 // Task payloads live in graph-owned memory; these static thunks let the recorder invoke them with no per-task callable alloc.
@@ -112,7 +112,7 @@ namespace GpuTaskTimingPolicy{
         PacketOnly,
         Task,
 
-        kCount,
+        Count,
     };
 };
 
@@ -202,7 +202,7 @@ public:
 struct GpuGraphResourceVersionDesc{
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;
-    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
+    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::Count;
 
 
 public:
@@ -239,7 +239,7 @@ public:
 struct GpuGraphPipelineDesc{
     Name identity = s_NameNone;
     AStringView markerLabel;
-    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
+    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::Count;
 
 
 public:
@@ -318,7 +318,7 @@ public:
         return *this;
     }
 
-    constexpr GpuTaskDesc& setTimingMetadata(const GpuTaskTimingMetadata& value)noexcept{ timing = value; return *this; }
+    constexpr GpuTaskDesc& setTiming(const GpuTaskTimingMetadata& value)noexcept{ timing = value; return *this; }
 
     constexpr GpuTaskDesc& setResourceVersionUses(const GpuTaskResourceVersionUse* values, const usize count)noexcept{
         resourceVersionUses = values;
@@ -410,7 +410,7 @@ namespace GpuClearTextureTaskValueType{
         Int,
         DepthStencil,
 
-        kCount,
+        Count,
     };
 };
 

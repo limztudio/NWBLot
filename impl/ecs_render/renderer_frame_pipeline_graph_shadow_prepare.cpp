@@ -404,7 +404,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         .setResourceUses(resourceUses.data(), resourceUses.size())
         .setResourceSetUses(resourceSetUses, resourceSetUseCount)
     ;
-    const auto mDeferredShadowPrepareTaskResult = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
+    const auto deferredShadowPrepareTaskResult = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
         desc,
         ECSRenderDetail::ShadowPrepareGraphTask::Payload{
             .raytracingSystem = m_raytracingSystem,
@@ -422,12 +422,12 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             .preparedMeshSwBvhBuildsRecordedByGraph = pureSoftwareMeshSwBvhBuildsGraphOwned,
         }
     );
-    if(!mDeferredShadowPrepareTaskResult){
+    if(!deferredShadowPrepareTaskResult){
         m_deferredShadowPrepareTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation task"));
         return false;
     }
-    m_deferredShadowPrepareTask = *mDeferredShadowPrepareTaskResult;
+    m_deferredShadowPrepareTask = *deferredShadowPrepareTaskResult;
     const bool accelStructBuildStatesGraphOwned = sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned;
     if(accelStructBuildStatesGraphOwned){
         const usize expectedFinalizeResourceUseCount = (sceneTlasBuildGraphOwned ? 1u : 0u) + preparedMeshBlasBuilds.size();
@@ -469,16 +469,16 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             .setResourceUses(accelStructFinalizeSetGraphOwned ? nullptr : accelStructFinalizeResourceUses.data(), accelStructFinalizeSetGraphOwned ? 0u : accelStructFinalizeResourceUses.size())
             .setResourceSetUses(accelStructFinalizeSetGraphOwned ? &accelStructFinalizeSetUse : nullptr, accelStructFinalizeSetGraphOwned ? 1u : 0u)
         ;
-        const auto mDeferredShadowPrepareAccelStructFinalizeTaskResult = m_deferredLightingTaskGraph.addTask< ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask >(
+        const auto deferredShadowPrepareAccelStructFinalizeTaskResult = m_deferredLightingTaskGraph.addTask< ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask >(
             accelStructFinalizeDesc,
             ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask::Payload{}
         );
-        if(!mDeferredShadowPrepareAccelStructFinalizeTaskResult){
+        if(!deferredShadowPrepareAccelStructFinalizeTaskResult){
             m_deferredShadowPrepareAccelStructFinalizeTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare acceleration-structure final-state task"));
             return false;
         }
-        m_deferredShadowPrepareAccelStructFinalizeTask = *mDeferredShadowPrepareAccelStructFinalizeTaskResult;
+        m_deferredShadowPrepareAccelStructFinalizeTask = *deferredShadowPrepareAccelStructFinalizeTaskResult;
     }
     return true;
 }

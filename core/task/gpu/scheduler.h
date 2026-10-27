@@ -291,7 +291,7 @@ private:
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph& recordedGraph,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
-        const GpuSubmissionPacketId& packet,
+        const GpuSubmissionPacketId& packetID,
         usize timingTicketCount,
         const QueueSubmissionPreSubmitHook* preSubmitHook,
         const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks,

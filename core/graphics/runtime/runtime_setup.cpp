@@ -41,7 +41,7 @@ inline constexpr Name s_SetupTextureUploadIdentity("graphics.setup_texture.uploa
         return MakeUnexpected(Failure{});
     if(desc.mipLevel >= textureDesc.mipLevels || desc.mipLevel >= sizeof(u32) * s_BitsPerByte || desc.arraySlice >= textureDesc.arraySize)
         return MakeUnexpected(Failure{});
-    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount))
+    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::Count))
         return MakeUnexpected(Failure{});
 
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);

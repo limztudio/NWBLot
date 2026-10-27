@@ -55,7 +55,7 @@ UiTextEditStatus::Enum ApplyUiTextEditEvent(Ui::EditModel& model, const Core::Te
     case Core::TextInputEventKind::DeleteSurrounding: {
         if(expectedSurroundingRevision == 0u || event.surroundingRevision != expectedSurroundingRevision || !matchesPublishedModel)
             return UiTextEditStatus::StaleSurrounding;
-        if(event.deletionBasis >= Core::TextInputDeletionBasis::kCount)
+        if(event.deletionBasis >= Core::TextInputDeletionBasis::Count)
             return UiTextEditStatus::InvalidEvent;
         if(event.deletionBasis == Core::TextInputDeletionBasis::Selection){
             if(event.deleteBeforeBytes > model.selectionStart() || event.deleteAfterBytes > model.text().size() - model.selectionEnd())

@@ -143,13 +143,13 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
     ;
     // Composite may share its compatible serial predecessor while retaining all graph-owned joins.
-    const auto resultCompositeTaskResult = m_deferredSystem.declareDeferredCompositeTask(m_graph, compositeDesc, compositeInputs, targets, compositeTimingTicket);
-    if(!resultCompositeTaskResult){
+    const auto compositeTaskResult = m_deferredSystem.declareDeferredCompositeTask(m_graph, compositeDesc, compositeInputs, targets, compositeTimingTicket);
+    if(!compositeTaskResult){
         result.compositeTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-composite graph task"));
         return MakeUnexpected(Failure{});
     }
-    result.compositeTask = *resultCompositeTaskResult;
+    result.compositeTask = *compositeTaskResult;
 
     const Core::AcquiredPresentationFrame& presentationFrame = inputs.presentationFrame;
     const Core::FramebufferDesc& presentationFramebufferDesc = inputs.presentationFramebufferDesc;
@@ -213,7 +213,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setResourceUses(presentResourceUses, presentResourceUseCount)
         .setResourceVersionUses(&outputLayerVersionUse, outputLayer.color.valid() ? 1u : 0u)
     ;
-    const auto resultPresentTaskResult = m_graph.addTask<DeferredPresentGraphTask>(
+    const auto presentTaskResult = m_graph.addTask<DeferredPresentGraphTask>(
         presentDesc,
         DeferredPresentGraphTask::Payload{
             .deferredSystem = m_deferredSystem,
@@ -228,23 +228,23 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
             .shadowVisibilityTask = shadowVisibilityTask,
         }
     );
-    if(!resultPresentTaskResult){
+    if(!presentTaskResult){
         result.presentTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-present graph task"));
         return MakeUnexpected(Failure{});
     }
-    result.presentTask = *resultPresentTaskResult;
+    result.presentTask = *presentTaskResult;
 
     // UI/overlay declares before diagnostic tails so timing follows the final contributor.
     result.overlayRequired = m_presentationContributor && m_presentationContributor->hasTaskGraphPresentationWork();
     if(result.overlayRequired){
-        const auto resultOverlayTaskResult = m_presentationContributor->declareTaskGraphPresentation(m_graph, presentationFrame, backbuffer, result.presentTask);
-        if(!resultOverlayTaskResult){
+        const auto overlayTaskResult = m_presentationContributor->declareTaskGraphPresentation(m_graph, presentationFrame, backbuffer, result.presentTask);
+        if(!overlayTaskResult){
             result.overlayTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor did not declare its final graph task"));
             return MakeUnexpected(Failure{});
         }
-        result.overlayTask = *resultOverlayTaskResult;
+        result.overlayTask = *overlayTaskResult;
     }
 
     const Core::GpuTaskId frameTimingEndDependency = result.overlayTask.valid() ? result.overlayTask : result.presentTask;
@@ -254,13 +254,13 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     frameTimingEndScheduling.allowPacketMerge = false;
     Core::GpuTaskDesc frameTimingEndDesc;
     frameTimingEndDesc.setIdentity(Name("render.frame_timing_end")).setMarkerLabel("Frame Timing End").setScheduling(frameTimingEndScheduling).setDependencies(&frameTimingEndDependency, 1u);
-    const auto resultFrameTimingEndTaskResult = m_graph.addTask<FrameTimingEndGraphTask>(frameTimingEndDesc, FrameTimingEndGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, });
-    if(!resultFrameTimingEndTaskResult){
+    const auto frameTimingEndTaskResult = m_graph.addTask<FrameTimingEndGraphTask>(frameTimingEndDesc, FrameTimingEndGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, });
+    if(!frameTimingEndTaskResult){
         result.frameTimingEndTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-timing endpoint graph task"));
         return MakeUnexpected(Failure{});
     }
-    result.frameTimingEndTask = *resultFrameTimingEndTaskResult;
+    result.frameTimingEndTask = *frameTimingEndTaskResult;
     if(!m_graph.declarePresentEndpoint(Core::GpuPresentEndpoint{ .producer = result.frameTimingEndTask, .backBuffer = backbuffer, })){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graph presentation endpoint"));
         return MakeUnexpected(Failure{});

@@ -278,7 +278,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
     bool hasTaskProducedVersions = false;
     for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
         const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
-        if(!graph.validResource(version.resource) || version.origin >= GpuGraphResourceVersionOrigin::kCount){
+        if(!graph.validResource(version.resource) || version.origin >= GpuGraphResourceVersionOrigin::Count){
             return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersion, {}, {}, version.resource, version.id);
         }
 
@@ -305,7 +305,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse, task.id, {}, {}, use.version);
             }
             const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(use.version.index);
-            if(use.role >= GpuTaskResourceVersionRole::kCount){
+            if(use.role >= GpuTaskResourceVersionRole::Count){
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse, task.id, {}, version.resource, use.version);
             }
 

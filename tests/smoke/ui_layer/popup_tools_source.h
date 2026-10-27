@@ -31,7 +31,7 @@ public:
 
     virtual u64 rowCount()const noexcept override{ return 5u; }
     virtual u64 key(u64 index)const noexcept override;
-    virtual Expected<u64> indexOf(u64 key)const noexcept override;
+    virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
     virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
     virtual StringView text(u64 index)const noexcept override;
     virtual bool enabled(u64 index)const noexcept override{ return index < rowCount() && key(index) != 3u; }

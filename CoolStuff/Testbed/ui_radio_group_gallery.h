@@ -35,7 +35,7 @@ public:
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return s_RowCount; }
 
     [[nodiscard]] virtual u64 key(u64 index)const noexcept override{ return index < s_RowCount ? index + 1u : 0u; }
-    [[nodiscard]] virtual Expected<u64> indexOf(u64 key)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
     [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
     [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
     [[nodiscard]] virtual bool enabled(u64 index)const noexcept override{ return index < s_FirstDisabledIndex; }

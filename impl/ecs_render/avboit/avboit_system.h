@@ -89,7 +89,7 @@ public:
     // Host owns the graph artifact; AVBOIT owns its stage identifiers; users see the stage boundary.
     void resetTaskGraphStage()noexcept;
     [[nodiscard]] RendererAvboitTaskGraphStageState& taskGraphStage()noexcept{ return m_taskGraphStage; }
-    [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledPlan, bool clearTargets, bool hasTransparentRenderers)const noexcept;
+    [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledGraph, bool clearTargets, bool hasTransparentRenderers)const noexcept;
     [[nodiscard]] bool appendTaskGraphTimingTickets(const RendererAvboitTaskGraphValidation& validation, usize bindingCapacity, RendererAvboitTaskGraphTimingTickets& timingTickets, Core::GpuTaskGraphTaskTimingTicket* bindings, usize& bindingCount)const;
 
 

@@ -120,7 +120,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         || !deferredClearTimingState.rebindableTimingTicket
     )
         return MakeUnexpected(Failure{});
-    for(usize timingSlot = 0u; timingSlot < static_cast<usize>(PrefixTimingSlotNs::kCount); ++timingSlot){
+    for(usize timingSlot = 0u; timingSlot < static_cast<usize>(PrefixTimingSlotNs::Count); ++timingSlot){
         if(!timingTickets[timingSlot])
             return MakeUnexpected(Failure{});
     }
@@ -187,13 +187,13 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     opaqueColorClearDesc.valueType = Core::GpuClearTextureTaskValueType::Float;
     opaqueColorClearDesc.floatValue = ECSRenderDetail::s_ClearColor;
     opaqueColorClearDesc.recordHooks = deferredClearHooks;
-    const auto mGraphicsPrefixDeferredClearTaskResult = m_deferredLightingTaskGraph.addClearTextureTask(deferredClearDesc, opaqueColorClearDesc);
-    if(!mGraphicsPrefixDeferredClearTaskResult){
+    const auto graphicsPrefixDeferredClearTaskResult = m_deferredLightingTaskGraph.addClearTextureTask(deferredClearDesc, opaqueColorClearDesc);
+    if(!graphicsPrefixDeferredClearTaskResult){
         m_graphicsPrefixDeferredClearTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-clear task"));
         return MakeUnexpected(Failure{});
     }
-    m_graphicsPrefixDeferredClearTask = *mGraphicsPrefixDeferredClearTaskResult;
+    m_graphicsPrefixDeferredClearTask = *graphicsPrefixDeferredClearTaskResult;
 
     // Freeze the opaque packet's draw ordering before recording.
     // The two copied blobs below are the exact source of the heap-selected instance/material streams consumed by these saved draw items.
@@ -604,13 +604,13 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const bool opaqueSharedMaterialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
     const bool opaqueSharedMaterialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned;
     const bool opaqueSharedMaterialGeometryStatesGraphOwned = gbufferPayload.materialGeometryStatesGraphOwned;
-    const auto mGraphicsPrefixGbufferTaskResult = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(gbufferDesc, Move(gbufferPayload));
-    if(!mGraphicsPrefixGbufferTaskResult){
+    const auto graphicsPrefixGbufferTaskResult = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(gbufferDesc, Move(gbufferPayload));
+    if(!graphicsPrefixGbufferTaskResult){
         m_graphicsPrefixGbufferTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque G-buffer task"));
         return MakeUnexpected(Failure{});
     }
-    m_graphicsPrefixGbufferTask = *mGraphicsPrefixGbufferTaskResult;
+    m_graphicsPrefixGbufferTask = *graphicsPrefixGbufferTaskResult;
 
     Core::GpuTaskId gbufferCompletionTask = m_graphicsPrefixGbufferTask;
     if(opaqueSharedComputeEmulationOutputStatesGraphOwned){
@@ -715,16 +715,16 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         .setResourceUses(normalizeResourceUses.data(), normalizeResourceUses.size())
         .setResourceSetUses(shadowTraceGeometryStatesGraphOwned ? &shadowTraceGeometrySetUse : nullptr, shadowTraceGeometryStatesGraphOwned ? 1u : 0u)
     ;
-    const auto mGraphicsPrefixTaskResult = m_deferredLightingTaskGraph.addTask<PostGbufferNormalizeGraphTask>(
+    const auto graphicsPrefixTaskResult = m_deferredLightingTaskGraph.addTask<PostGbufferNormalizeGraphTask>(
         normalizeDesc,
         PostGbufferNormalizeGraphTask::Payload{ .raytracingSystem = m_raytracingSystem, .asyncPrefixTiming = &asyncPrefixTiming, .timingTicket = *timingTicketSlot(PrefixTimingSlotNs::Normalize), .shadowVisibilityTask = &m_deferredShadowVisibilityTask, }
     );
-    if(!mGraphicsPrefixTaskResult){
+    if(!graphicsPrefixTaskResult){
         m_graphicsPrefixTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare post-G-buffer normalization task"));
         return MakeUnexpected(Failure{});
     }
-    m_graphicsPrefixTask = *mGraphicsPrefixTaskResult;
+    m_graphicsPrefixTask = *graphicsPrefixTaskResult;
     // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes immediately after this successful return.
     m_raytracingSystem.publishPreparedLightingClassification(
         rayTracingLightingClassification,

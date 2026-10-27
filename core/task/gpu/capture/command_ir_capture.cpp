@@ -22,7 +22,7 @@ namespace GpuCommandIrDetail{
 
 [[nodiscard]] bool ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept{
     constexpr u32 s_AllowedResourceStates = (static_cast<u32>(ResourceStates::ConvertCoopVecMatrixOutput) << 1u) - 1u;
-    if(record.opcode >= GpuCommandIrOpcode::kCount || !record.task.valid() || !record.packet.valid() || !record.queue.valid() || !record.destination.valid() || record.destination.generation != record.task.generation)
+    if(record.opcode >= GpuCommandIrOpcode::Count || !record.task.valid() || !record.packet.valid() || !record.queue.valid() || !record.destination.valid() || record.destination.generation != record.task.generation)
         return false;
 
     switch(record.opcode){
@@ -34,7 +34,7 @@ namespace GpuCommandIrDetail{
         return true;
     case GpuCommandIrOpcode::ClearTexture:
         return
-            record.clearTextureValueType < GpuClearTextureTaskValueType::kCount
+            record.clearTextureValueType < GpuClearTextureTaskValueType::Count
             && record.destinationSubresources.numMipLevels != 0u
             && record.destinationSubresources.numArraySlices != 0u
             && (record.clearTextureValueType != GpuClearTextureTaskValueType::DepthStencil || record.clearDepth || record.clearStencil)
@@ -56,7 +56,7 @@ namespace GpuCommandIrDetail{
             && record.blobSizeBytes != 0u
             && record.finalState != ResourceStates::Unknown
             && (static_cast<u32>(record.finalState) & ~s_AllowedResourceStates) == 0u
-            && record.uploadAspect < TextureUploadAspect::kCount
+            && record.uploadAspect < TextureUploadAspect::Count
             && record.destinationSlice.x == 0u
             && record.destinationSlice.y == 0u
             && record.destinationSlice.z == 0u

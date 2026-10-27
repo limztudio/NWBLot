@@ -154,7 +154,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         }
 
         Core::RayTracingInstanceDesc instanceDesc;
-        instanceDesc.setBLAS(meshResult->meshResources.blas.get());
+        instanceDesc.setBottomLevelAS(meshResult->meshResources.blas.get());
         instanceDesc.setInstanceID(static_cast<u32>(instances.size()));
         instanceDesc.setInstanceMask(s_RayTracingAllInstanceMask);
 

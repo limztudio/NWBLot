@@ -56,17 +56,6 @@ static const ComponentTypeAutoRegistrar* s_RegisteredComponentTypesHead = nullpt
     return false;
 }
 
-template<typename TPod>
-[[nodiscard]] static Expected<TPod> ReadSingleComponentPodPayload(const Span<const u8> payload, const TStringView contextLabel){
-    usize cursor = 0u;
-    const auto binaryPayload = ReadPOD<TPod>(payload, cursor);
-    if(!binaryPayload || cursor != payload.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid payload size"), contextLabel);
-        return MakeUnexpected(Failure{});
-    }
-    return binaryPayload;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -184,7 +173,7 @@ Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(Core:
 
 
 bool TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = __hidden_scene_runtime_components::ReadSingleComponentPodPayload<ComponentBinaryPayload::TransformComponentPayloadBinary>(
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::TransformComponentPayloadBinary>(
         payload,
         NWB_TEXT("TransformComponentAsset::loadComponentPayload")
     );
@@ -231,7 +220,7 @@ void TransformComponentAsset::applyToEntity(Core::ECS::Entity& entity)const{
 
 
 bool CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = __hidden_scene_runtime_components::ReadSingleComponentPodPayload<ComponentBinaryPayload::CameraComponentPayloadBinary>(
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::CameraComponentPayloadBinary>(
         payload,
         NWB_TEXT("CameraComponentAsset::loadComponentPayload")
     );
@@ -251,7 +240,7 @@ bool CameraComponentAsset::validatePayload()const{
         VectorReplicate(component.nearPlane()),
         VectorReplicate(component.farPlane()),
         VectorReplicate(aspectRatio),
-        VectorReplicate(Scene::CameraDefaults::s_FallbackAspectRatio)
+        VectorReplicate(Scene::s_CameraFallbackAspectRatio)
     );
     if(!IsFinite(aspectRatio) || aspectRatio < 0.0f || !projection){
         NWB_LOGGER_ERROR(
@@ -272,7 +261,7 @@ void CameraComponentAsset::applyToEntity(Core::ECS::Entity& entity)const{
 
 
 bool LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = __hidden_scene_runtime_components::ReadSingleComponentPodPayload<ComponentBinaryPayload::LightComponentPayloadBinary>(
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::LightComponentPayloadBinary>(
         payload,
         NWB_TEXT("LightComponentAsset::loadComponentPayload")
     );

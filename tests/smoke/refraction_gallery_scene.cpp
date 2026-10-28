@@ -103,9 +103,8 @@ constexpr AStringView s_CasePrism = "prism";
 
 class GalleryBuilder final{
 public:
-    GalleryBuilder(ProjectRuntimeContext& context, Core::ECS::World& world, const bool preview)noexcept
-        : m_context(context)
-        , m_world(world)
+    GalleryBuilder(Core::ECS::World& world, const bool preview)noexcept
+        : m_world(world)
         , m_preview(preview)
     {}
 
@@ -127,7 +126,7 @@ public:
         const Float4 firstTint = m_preview ? Float4(0.12f, 0.72f, 1.0f, s_PreviewAlpha) : Float4(0.90f, 0.98f, 1.0f, coverage);
         const Float4 secondTint = m_preview ? Float4(1.0f, 0.33f, 0.13f, s_PreviewAlpha) : Float4(1.0f, 0.94f, 0.88f, coverage);
         const Float4 tint = second ? secondTint : firstTint;
-        const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, mesh, m_preview ? s_Preview : s_Glass, s_Interface, tint, position, scale);
+        const auto entity = CreateTintedStaticMeshEntity(m_world, mesh, m_preview ? s_Preview : s_Glass, s_Interface, tint, position, scale);
 
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery object creation failed"));
         auto& transform = *MakeNotNull(m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity));
@@ -169,7 +168,7 @@ public:
         const bool reference = caseName == s_CaseCsgReference;
         const bool middle = caseName == s_CaseCsgMiddle;
         const auto entity = CreateTintedStaticMeshEntity(
-            m_world, m_context.objectArena, s_Cube,
+            m_world, s_Cube,
             m_preview ? s_Preview : material, m_preview ? NameText<char>{s_Interface} : surfaceInterface, tint,
             Float4(0.f, s_GalleryCenterHeight, reference || middle ? 0.5f : 0.f, 0.f), Float4(s_SlabFaceScale, s_SlabFaceScale, reference ? 1.f : (middle ? 3.f : 2.f), 0.f)
         );
@@ -184,7 +183,7 @@ public:
             auto cutterEntity = m_world.createEntity();
             if(!cutterEntity.id().valid())
                 return MakeUnexpected(Failure{});
-            auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
+            auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
             cutter.receiverGroup = group;
             cutter.shapeType = Impl::s_CsgPlaneShapeName;
             Impl::CsgPlaneShapeParameters parameters;
@@ -200,7 +199,7 @@ public:
             // Raster clips this distinct entry, while its ray distance stays inside the primary hardware association band.
             constexpr f32 s_ForeignExit = 0.25f;
             const auto foreign = CreateTintedStaticMeshEntity(
-                m_world, m_context.objectArena, s_Cube,
+                m_world, s_Cube,
                 m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
                 Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f),
                 Float4(0.f, s_GalleryCenterHeight, (s_ForeignExit + s_IdentityForeignFront) * 0.5f, 0.f),
@@ -235,7 +234,7 @@ public:
         auto cutterEntity = m_world.createEntity();
         if(!cutterEntity.id().valid())
             return false;
-        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
+        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
         cutter.receiverGroup = group;
         cutter.shapeType = Impl::s_CsgPlaneShapeName;
         Impl::CsgPlaneShapeParameters parameters;
@@ -247,7 +246,7 @@ public:
 
     bool crossingOverflow(){
         const auto entity = CreateTintedStaticMeshEntity(
-            m_world, m_context.objectArena, SmokeMeshRef("project/meshes/refraction_crossing_overflow"),
+            m_world, SmokeMeshRef("project/meshes/refraction_crossing_overflow"),
             m_preview ? s_Preview : s_Glass, s_Interface, Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f),
             Float4(0.f, s_GalleryCenterHeight, 0.f, 0.f), Float4(0.1f, 0.1f, 1.f, 0.f)
         );
@@ -261,7 +260,7 @@ public:
 
     bool nearAirSlab(const bool csg){
         const auto entity = CreateTintedStaticMeshEntity(
-            m_world, m_context.objectArena, s_Cube,
+            m_world, s_Cube,
             m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
             Float4(1.f, 1.f, 1.f, m_preview ? s_PreviewAlpha : 0.f),
             Float4(0.f, s_GalleryCenterHeight, 1.25f, 0.f), Float4(s_SlabFaceScale, s_SlabFaceScale, 3.f, 0.f)
@@ -280,7 +279,7 @@ public:
     }
 
     void panel(const SmokeMaterialRef& material, const Float4& tint, const f32 x, const f32 y, const f32 z, const f32 halfWidth, const f32 halfHeight){
-        const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, s_Plane, material, s_Interface, tint, Float4(x, y, z, 0.0f), Float4(halfWidth, 1.0f, halfHeight, 0.0f));
+        const auto entity = CreateTintedStaticMeshEntity(m_world, s_Plane, material, s_Interface, tint, Float4(x, y, z, 0.0f), Float4(halfWidth, 1.0f, halfHeight, 0.0f));
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery backdrop creation failed"));
         auto& transform = *MakeNotNull(m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity));
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
@@ -305,7 +304,6 @@ public:
 
 
 private:
-    ProjectRuntimeContext& m_context;
     Core::ECS::World& m_world;
     bool m_preview;
 };
@@ -320,7 +318,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CreateRefractionGalleryScene(ProjectRuntimeContext& context, Core::ECS::World& world, const AStringView caseName, const bool geometryPreview){
+bool CreateRefractionGalleryScene(Core::ECS::World& world, const AStringView caseName, const bool geometryPreview){
     using namespace __hidden_refraction_gallery_scene;
 
     const auto camera = CreateSmokeCamera(world, s_GalleryCenterHeight, s_GalleryCameraDistance, 0.0f);
@@ -333,7 +331,7 @@ bool CreateRefractionGalleryScene(ProjectRuntimeContext& context, Core::ECS::Wor
     cameraComponent.setVerticalFovRadians(s_PI * (40.0f / 180.0f));
     if(caseName == s_CaseIdentityReference || caseName == s_CaseIdentitySameIor || caseName == s_CaseIdentityDifferentIor)
         cameraComponent.setNearPlane(s_IdentityNearPlane);
-    GalleryBuilder scene(context, world, geometryPreview);
+    GalleryBuilder scene(world, geometryPreview);
     if(caseName == s_CaseCsgReference || caseName == s_CaseCsgCap || caseName == s_CaseCsgMiddle || caseName == s_CaseCsgUncut){
         const auto slab = scene.csgSlab(caseName, Float4(0.9f, 0.98f, 1.f, geometryPreview ? 0.48f : 0.f), s_Glass, s_Interface);
         if(!slab)

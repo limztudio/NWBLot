@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "binary_payload.h"
 
 #include <core/assets/cook_metadata.h>
 
@@ -38,7 +37,7 @@ static bool RegisterTransformComponentCookEntry(Core::Assets::CookEntryRegistry&
         TransformComponentAsset,
         &ParseTransformComponentCookMetadata,
         s_TransformDiagnosticPrefix
-    >(registry, ComponentBinaryPayload::s_TransformComponentAssetKindLabel);
+    >(registry);
 }
 
 static bool RegisterCameraComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
@@ -47,7 +46,7 @@ static bool RegisterCameraComponentCookEntry(Core::Assets::CookEntryRegistry& re
         CameraComponentAsset,
         &ParseCameraComponentCookMetadata,
         s_CameraDiagnosticPrefix
-    >(registry, ComponentBinaryPayload::s_CameraComponentAssetKindLabel);
+    >(registry);
 }
 
 static bool RegisterLightComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
@@ -56,7 +55,7 @@ static bool RegisterLightComponentCookEntry(Core::Assets::CookEntryRegistry& reg
         LightComponentAsset,
         &ParseLightComponentCookMetadata,
         s_LightDiagnosticPrefix
-    >(registry, ComponentBinaryPayload::s_LightComponentAssetKindLabel);
+    >(registry);
 }
 
 

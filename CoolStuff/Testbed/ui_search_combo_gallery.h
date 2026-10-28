@@ -8,7 +8,7 @@
 #include "namespace.h"
 #include "ui_search_combo_source.h"
 
-#include <impl/ecs_ui/components.h>
+#include <impl/ecs_ui/paint_context.h>
 
 #include <core/alloc/scratch.h>
 

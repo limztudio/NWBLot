@@ -3,20 +3,16 @@
 
 
 #include "system.h"
+#include "transform_helpers.h"
 
 #include <impl/assets_model/asset.h>
 #include <impl/assets_skeleton/asset.h>
-#include <impl/ecs_mesh/components.h>
-#include <impl/ecs_scene/components.h>
-#include <impl/ecs_skeleton/components.h>
-#include <impl/ecs_skeleton/runtime_helpers.h>
+#include <impl/ecs_mesh/components.adhd.h>
+#include <impl/ecs_skeleton/components.adhd.h>
 
 #include <core/assets/manager.h>
 #include <core/common/log.h>
 #include <core/ecs/entity.h>
-#include <core/ecs/world.h>
-
-#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,50 +30,7 @@ namespace __hidden_model_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AttachmentJointQuery = ModelAttachmentJointQuery;
-
-static void ResolveAttachmentJointQueries(Core::ECS::World& world, const usize queryCount, const usize* const parentOrder, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, const NotNull<AttachmentJointQuery*> queries){
-    const auto queryAt = [&](const usize index)noexcept -> AttachmentJointQuery&{
-        return queries.get()[parentOrder ? parentOrder[index] : index];
-    };
-    usize groupBegin = 0u;
-    while(groupBegin < queryCount){
-        const Core::ECS::EntityID parentEntity = queryAt(groupBegin).parentEntity;
-        usize groupEnd = groupBegin + 1u;
-        while(groupEnd < queryCount && queryAt(groupEnd).parentEntity == parentEntity)
-            ++groupEnd;
-
-        const SkeletonPoseComponent* const pose = world.tryGetComponent<SkeletonPoseComponent>(parentEntity);
-        if(pose && SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, jointPalette)){
-            for(usize queryIndex = groupBegin; queryIndex < groupEnd; ++queryIndex){
-                AttachmentJointQuery& query = queryAt(queryIndex);
-                if(query.parentJointIndex >= jointPalette.size())
-                    continue;
-                query.jointMatrix = jointPalette[query.parentJointIndex];
-                query.resolved = true;
-            }
-        }
-        groupBegin = groupEnd;
-    }
-}
-
-static constexpr usize s_ParallelModelObjectTransformGrainSize = 256u;
 static constexpr TStringView s_AssetLoadContext = NWB_TEXT("ModelSystem");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] SIMDMatrix LoadOwnerWorldMatrix(Core::ECS::World& world, const Core::ECS::EntityID owner)noexcept{
-    const Scene::TransformComponent* ownerTransform = world.tryGetComponent<Scene::TransformComponent>(owner);
-    return ownerTransform ? MatrixAffineTransformation(LoadFloat(ownerTransform->scale), VectorZero(), LoadFloat(ownerTransform->rotation), LoadFloat(ownerTransform->position)) : MatrixIdentity();
-}
-
-void StoreDecomposedTransform(const MatrixDecomposition& decomposition, Scene::TransformComponent& transform)noexcept{
-    StoreFloat(VectorSetW(decomposition.translation, 0.0f), transform.position);
-    StoreFloat(decomposition.rotation, transform.rotation);
-    StoreFloat(VectorSetW(decomposition.scale, 0.0f), transform.scale);
-}
 
 void TagObject(Core::ECS::Entity& entity, const Core::ECS::EntityID owner, const Name model, const Name object, const SkeletonJointMatrix& localTransform, const ModelObjectKind::Enum kind){
     auto& objectComponent = entity.addComponent<ModelObjectComponent>();
@@ -100,7 +53,6 @@ void TagObject(Core::ECS::Entity& entity, const Core::ECS::EntityID owner, const
 
 ModelSystem::ModelSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::Assets::AssetManager& assetManager, ModelObjectRendererHooks rendererHooks)
     : Core::ECS::ISystem(arena)
-    , m_arena(arena)
     , m_world(world)
     , m_assetManager(assetManager)
     , m_applyRenderer(Move(rendererHooks.apply))
@@ -282,10 +234,10 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
     Core::ECS::Entity entity = m_world.createEntity();
     __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::Skeleton);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
-    if(const auto decomposition = MatrixDecompose(MatrixMultiply(__hidden_model_system::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
-        __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
+    if(const auto decomposition = MatrixDecompose(MatrixMultiply(ModelTransformHelpers::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
+        ModelTransformHelpers::StoreDecomposedTransform(*decomposition, transform);
 
-    auto& pose = entity.addComponent<SkeletonPoseComponent>(m_arena);
+    auto& pose = entity.addComponent<SkeletonPoseComponent>();
     pose.parentJoints.clear();
     pose.localJoints.clear();
     pose.parentJoints.reserve(skeleton.joints().size());
@@ -305,10 +257,10 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
     Core::ECS::Entity entity = m_world.createEntity();
     __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::StaticMesh);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
-    if(const auto decomposition = MatrixDecompose(MatrixMultiply(__hidden_model_system::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
-        __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
+    if(const auto decomposition = MatrixDecompose(MatrixMultiply(ModelTransformHelpers::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
+        ModelTransformHelpers::StoreDecomposedTransform(*decomposition, transform);
     if(m_applyRenderer)
-        m_applyRenderer(m_world, m_arena, owner, object.material, entity);
+        m_applyRenderer(m_world, owner, object.material, entity);
 
     auto& mesh = entity.addComponent<MeshComponent>();
     mesh.mesh = object.mesh;
@@ -366,113 +318,15 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
     Core::ECS::Entity entity = m_world.createEntity();
     __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::SkinnedMesh);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
-    if(const auto decomposition = MatrixDecompose(MatrixMultiply(__hidden_model_system::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
-        __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
+    if(const auto decomposition = MatrixDecompose(MatrixMultiply(ModelTransformHelpers::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
+        ModelTransformHelpers::StoreDecomposedTransform(*decomposition, transform);
     if(m_applyRenderer)
-        m_applyRenderer(m_world, m_arena, owner, object.material, entity);
+        m_applyRenderer(m_world, owner, object.material, entity);
 
     auto& binding = entity.addComponent<SkinnedMeshBindingComponent>();
     binding.skin = object.skin;
     binding.skeletonEntity = skeletonEntity;
     return true;
-}
-
-Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObjectTransforms(){
-    return m_world.view<ModelObjectComponent, Scene::TransformComponent>().parallelEach(
-        m_world.taskScope(),
-        __hidden_model_system::s_ParallelModelObjectTransformGrainSize,
-        [&](const Core::ECS::EntityID entity, ModelObjectComponent& object, Scene::TransformComponent& transform)noexcept{
-            static_cast<void>(entity);
-            if(object.kind == ModelObjectKind::StaticMesh)
-                return;
-
-            if(const auto decomposition = MatrixDecompose(MatrixMultiply(__hidden_model_system::LoadOwnerWorldMatrix(m_world, object.owner), LoadFloat(object.localTransform))))
-                __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
-        }
-    );
-}
-
-void ModelSystem::updateStaticMeshAttachments(){
-    const auto attachments = m_world.view<ModelObjectComponent, ModelStaticMeshAttachmentComponent, Scene::TransformComponent>();
-    usize queryCount = 0u;
-    if(attachments.candidateCount() > 1u){
-        attachments.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform)noexcept{
-            static_cast<void>(entity);
-            static_cast<void>(object);
-            static_cast<void>(transform);
-            if(attachment.parentEntity.valid() && attachment.parentJointIndex != s_SkeletonInvalidJointIndex)
-                ++queryCount;
-        });
-    }
-
-    // Attachment grouping storage is reused member state; zero or one joint query needs neither an index nor scratch.
-    // Only capacity growth may allocate, never per-frame creation.
-    Vector<ModelAttachmentJointQuery, Core::Alloc::GlobalArena>& jointQueries = m_attachmentJointQueries;
-    jointQueries.clear();
-    if(queryCount > 1u){
-        jointQueries.reserve(queryCount);
-        bool sharedParent = true;
-        attachments.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform)noexcept{
-            static_cast<void>(entity);
-            static_cast<void>(object);
-            static_cast<void>(transform);
-            if(!attachment.parentEntity.valid() || attachment.parentJointIndex == s_SkeletonInvalidJointIndex)
-                return;
-            if(!jointQueries.empty() && jointQueries.front().parentEntity != attachment.parentEntity)
-                sharedParent = false;
-            jointQueries.push_back(ModelAttachmentJointQuery{ .parentEntity = attachment.parentEntity, .parentJointIndex = attachment.parentJointIndex, });
-        });
-        const NotNull<ModelAttachmentJointQuery*> queries(jointQueries.data());
-        if(sharedParent){
-            __hidden_model_system::ResolveAttachmentJointQueries(m_world, queryCount, nullptr, m_scratchJoints, queries);
-        }
-        else{
-            Vector<usize, Core::Alloc::GlobalArena>& parentOrder = m_attachmentParentOrder;
-            parentOrder.clear();
-            parentOrder.reserve(queryCount);
-            for(usize queryIndex = 0u; queryIndex < queryCount; ++queryIndex)
-                parentOrder.push_back(queryIndex);
-            Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs)noexcept{
-                return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
-            });
-            __hidden_model_system::ResolveAttachmentJointQueries(m_world, queryCount, parentOrder.data(), m_scratchJoints, queries);
-        }
-    }
-
-    usize nextQuery = 0u;
-    attachments.each([&](const Core::ECS::EntityID entity, ModelObjectComponent& object, ModelStaticMeshAttachmentComponent& attachment, Scene::TransformComponent& transform){
-        static_cast<void>(entity);
-
-        const Scene::TransformComponent* ownerTransform = m_world.tryGetComponent<Scene::TransformComponent>(object.owner);
-        const Scene::TransformComponent* parentTransform = attachment.parentEntity.valid() ? m_world.tryGetComponent<Scene::TransformComponent>(attachment.parentEntity) : ownerTransform;
-        const Scene::TransformComponent* basisTransform = parentTransform ? parentTransform : ownerTransform;
-        const SIMDMatrix parentMatrix = basisTransform ? MatrixAffineTransformation(LoadFloat(basisTransform->scale), VectorZero(), LoadFloat(basisTransform->rotation), LoadFloat(basisTransform->position)) : MatrixIdentity();
-        const SIMDMatrix localMatrix = LoadFloat(attachment.localTransform);
-
-        SIMDMatrix worldTransform{};
-        if(!attachment.parentEntity.valid() || attachment.parentJointIndex == Limit<u32>::s_Max){
-            worldTransform = MatrixMultiply(parentMatrix, localMatrix);
-        }
-        else{
-            SIMDMatrix jointMatrix{};
-            if(queryCount > 1u){
-                const ModelAttachmentJointQuery& query = jointQueries[nextQuery++];
-                if(!query.resolved)
-                    return;
-                jointMatrix = LoadFloat(query.jointMatrix);
-            }
-            else{
-                const SkeletonPoseComponent* const pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
-                if(!pose || !SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints) || attachment.parentJointIndex >= m_scratchJoints.size())
-                    return;
-                jointMatrix = LoadFloat(m_scratchJoints[attachment.parentJointIndex]);
-            }
-            worldTransform = MatrixMultiply(MatrixMultiply(parentMatrix, jointMatrix), localMatrix);
-        }
-
-        if(const auto decomposition = MatrixDecompose(worldTransform))
-            __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
-    });
 }
 
 Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const noexcept{
@@ -493,4 +347,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -8,9 +8,9 @@
 #include <impl/ecs_render/shadow/light_space_capture_history.h>
 #include <impl/ecs_render/raytrace/instance_material.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_render/components.h>
+#include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_mesh/system.h>
-#include <impl/ecs_scene/components.h>
+#include <impl/ecs_scene/components.adhd.h>
 
 #include <core/ecs/entity.h>
 
@@ -86,7 +86,7 @@ public:
 
     [[nodiscard]] Core::ECS::EntityID addCutter(const Name shape, const Name group = s_ReceiverGroup){
         auto entity = testWorld.world.createEntity();
-        auto& cutter = entity.addComponent<CsgCutterComponent>(testWorld.arena);
+        auto& cutter = entity.addComponent<CsgCutterComponent>();
         cutter.receiverGroup = group;
         cutter.shapeType = shape;
         return entity.id();

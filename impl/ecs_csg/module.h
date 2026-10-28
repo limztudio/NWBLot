@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "components.h"
 #include "deform_edit.h"
 #include "frame_state.h"
 #include "shape_registry.h"

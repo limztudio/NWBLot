@@ -7,8 +7,6 @@
 
 #include "smoke_scene_helpers.h"
 
-#include <loader/project_entry.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,7 +29,7 @@ namespace ReflectionFeedbackCase{
 
 class ReflectionFeedbackScene final{
 public:
-    ReflectionFeedbackScene(ProjectRuntimeContext& context, Core::ECS::World& world)noexcept;
+    explicit ReflectionFeedbackScene(Core::ECS::World& world)noexcept;
 
 
 public:
@@ -44,7 +42,6 @@ private:
 
 
 private:
-    ProjectRuntimeContext& m_context;
     Core::ECS::World& m_world;
     Core::ECS::EntityID m_green;
     ReflectionFeedbackCase::Enum m_case = ReflectionFeedbackCase::Boundary;

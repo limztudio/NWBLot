@@ -1,9 +1,13 @@
-nwb_declare_interface_library(nwb_ecs_render_components)
-target_sources(nwb_ecs_render_components INTERFACE
-    "${CMAKE_CURRENT_LIST_DIR}/components.h"
+nwb_declare_static_library(nwb_ecs_render_components)
+target_sources(nwb_ecs_render_components PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.h"
 )
-target_link_libraries(nwb_ecs_render_components INTERFACE nwb_assets nwb_assets_material nwb_ecs)
+nwb_target_adhd_sources(nwb_ecs_render_components
+    NAMESPACE "NWB::Impl"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/components.adhd"
+)
+target_link_libraries(nwb_ecs_render_components PUBLIC nwb_assets nwb_assets_material nwb_ecs)
 
 nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE

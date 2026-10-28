@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u32> SkeletonSkinningMode{
+    enum LinearBlend = 0u,
+    enum DualQuaternion = 1u
+}
+
+[inline]
+bool ValidSkeletonSkinningMode(in u32 mode){
+    return mode == cast<u32>(SkeletonSkinningMode::Enum::LinearBlend) || mode == cast<u32>(SkeletonSkinningMode::Enum::DualQuaternion);
+}
+
+const u32 s_SkeletonRootParent = 4294967295u;
+
+[reflect]
+class SkeletonJointPaletteComponent{
+    public Vector<f32x3x4> joints;
+    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::Enum::LinearBlend);
+}
+
+[reflect]
+class SkeletonPoseComponent{
+    public Vector<u32> parentJoints;
+    public Vector<f32x3x4> localJoints;
+    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::Enum::LinearBlend);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

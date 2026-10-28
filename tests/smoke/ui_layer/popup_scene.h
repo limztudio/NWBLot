@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_ui/components.h>
+#include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/widgets/popup.h>
 
 #include <core/alloc/general.h>

@@ -19,7 +19,6 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/shared/renderer_scene_private.h>
-#include <impl/ecs_scene/components.h>
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
@@ -208,7 +207,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     u32 shadowVisibilityOpaqueFrameIndex = 0u;
     const bool clearAvboitTargets = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
     const Core::FramebufferInfoEx& meshViewFramebufferInfo = deferredTargets.framebuffer->getFramebufferInfo();
-    f32 meshViewAspectRatio = Scene::CameraDefaults::s_FallbackAspectRatio;
+    f32 meshViewAspectRatio = Scene::s_CameraFallbackAspectRatio;
     if(meshViewFramebufferInfo.width != 0u && meshViewFramebufferInfo.height != 0u)
         meshViewAspectRatio = VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(meshViewFramebufferInfo.width)), VectorReplicate(static_cast<f32>(meshViewFramebufferInfo.height))));
     Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope graphPayloadLifetime(m_deferredLightingSubmissionTransaction, m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph);

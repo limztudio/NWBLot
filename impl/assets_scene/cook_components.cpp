@@ -64,23 +64,6 @@ static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
     return false;
 }
 
-[[nodiscard]] static bool ReadOptionalFiniteF32Field(
-    const Path& nwbFilePath,
-    const Value& asset,
-    const AStringView diagnosticPrefix,
-    const AStringView fieldLabel,
-    f32& outValue
-){
-    const Value* const fieldValue = asset.findField(fieldLabel);
-    if(!fieldValue)
-        return true;
-    const auto parsed = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, *fieldValue, diagnosticPrefix, fieldLabel);
-    if(!parsed)
-        return false;
-    outValue = *parsed;
-    return true;
-}
-
 [[nodiscard]] static Expected<Float4> ParseFloat3Field(
     const Path& nwbFilePath,
     const AStringView diagnosticPrefix,
@@ -141,6 +124,88 @@ static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ComponentAssetSerialization{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
+    if(!component.validatePayload())
+        return false;
+
+    auto& assetArena = outBinary.get_allocator().arena();
+    Core::Assets::AssetBytes payload(assetArena);
+    if(!component.serializeComponentPayload(payload))
+        return false;
+
+    ComponentBinaryPayload::ComponentHeaderBinary header;
+    header.componentTypeHash = component.assetType().hash();
+    header.payloadByteCount = static_cast<u64>(payload.size());
+
+    outBinary.clear();
+    outBinary.reserve(sizeof(header) + payload.size());
+    AppendPOD(outBinary, header);
+    if(!payload.empty())
+        outBinary.insert(outBinary.end(), payload.begin(), payload.end());
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+    const IComponent* const component = CastComponent(&asset);
+    if(!component){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("{}: unexpected asset type '{}'"),
+            ComponentBinaryPayload::s_ComponentSerializeContext,
+            ConvertString(asset.assetType().resolvedText())
+        );
+        return false;
+    }
+    return ComponentAssetSerialization::Serialize(*component, outBinary);
+}
+
+bool TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+    ComponentBinaryPayload::TransformComponentPayloadBinary binaryPayload;
+    binaryPayload.position = component.position;
+    binaryPayload.rotation = component.rotation;
+    binaryPayload.scale = component.scale;
+    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+}
+
+bool CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+    ComponentBinaryPayload::CameraComponentPayloadBinary binaryPayload;
+    binaryPayload.projection = component.projection;
+    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+}
+
+bool LightComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+    ComponentBinaryPayload::LightComponentPayloadBinary binaryPayload;
+    binaryPayload.colorIntensity = component.colorIntensity;
+    binaryPayload.range = component.range;
+    binaryPayload.innerConeCos = component.innerConeCos;
+    binaryPayload.outerConeCos = component.outerConeCos;
+    binaryPayload.angularRadius = component.angularRadius;
+    binaryPayload.sourceRadius = component.sourceRadius;
+    binaryPayload.type = static_cast<u8>(component.type);
+    binaryPayload.enableCaustics = component.enableCaustics ? 1u : 0u;
+    binaryPayload.reserved = 0u;
+    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace SceneAssetCook{
 
 
@@ -163,6 +228,56 @@ Expected<bool> ParseMetadataBoolField(
         return MakeUnexpected(Failure{});
     }
     return integerValue != 0;
+}
+
+bool ReadOptionalFiniteF32Field(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldLabel,
+    f32& outValue
+){
+    const Core::Metascript::Value* const fieldValue = asset.findField(fieldLabel);
+    if(!fieldValue)
+        return true;
+    const auto parsed = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, *fieldValue, diagnosticPrefix, fieldLabel);
+    if(!parsed)
+        return false;
+    outValue = *parsed;
+    return true;
+}
+
+bool ReadOptionalI32Field(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldLabel,
+    i32& outValue
+){
+    const Core::Metascript::Value* const fieldValue = asset.findField(fieldLabel);
+    if(!fieldValue)
+        return true;
+    if(!fieldValue->isInteger()){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("{} '{}': field '{}' must be an integer"),
+            ConvertString(diagnosticPrefix),
+            PathToString<tchar>(nwbFilePath),
+            ConvertString(fieldLabel)
+        );
+        return false;
+    }
+    const i64 integerValue = fieldValue->asInteger();
+    if(integerValue < static_cast<i64>(Limit<i32>::s_Min) || integerValue > static_cast<i64>(Limit<i32>::s_Max)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("{} '{}': field '{}' is outside the supported 32-bit signed integer range"),
+            ConvertString(diagnosticPrefix),
+            PathToString<tchar>(nwbFilePath),
+            ConvertString(fieldLabel)
+        );
+        return false;
+    }
+    outValue = static_cast<i32>(integerValue);
+    return true;
 }
 
 

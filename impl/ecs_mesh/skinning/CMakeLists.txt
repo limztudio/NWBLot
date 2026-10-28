@@ -6,6 +6,7 @@ target_sources(nwb_ecs_mesh_skinning PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache_source.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/system_frame_graph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/system_live_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_tasks.h"
     "${CMAKE_CURRENT_LIST_DIR}/frame_plan_builder.cpp"

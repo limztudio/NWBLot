@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "components.h"
+#include <impl/ecs_csg/components.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/world.h>
@@ -77,6 +77,12 @@ struct CsgFrameBuildDesc{
     bool includeTransparentPass = true;
 };
 
+static_assert(IsStandardLayout_V<CsgReceiverComponent>, "CsgReceiverComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<CsgReceiverComponent>, "CsgReceiverComponent must stay cheap to move in dense ECS storage");
+static_assert(IsStandardLayout_V<StaticCsgMeshComponent>, "StaticCsgMeshComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<StaticCsgMeshComponent>, "StaticCsgMeshComponent must stay cheap to move in dense ECS storage");
+static_assert(IsStandardLayout_V<SkinnedCsgMeshComponent>, "SkinnedCsgMeshComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<SkinnedCsgMeshComponent>, "SkinnedCsgMeshComponent must stay cheap to move in dense ECS storage");
 static_assert(IsStandardLayout_V<CsgReceiverDrawState>, "CsgReceiverDrawState must stay layout-stable for frame handoff");
 static_assert(IsTriviallyCopyable_V<CsgReceiverDrawState>, "CsgReceiverDrawState must stay cheap to pass by value");
 static_assert(IsStandardLayout_V<CsgFrameState>, "CsgFrameState must stay layout-stable for frame handoff");
@@ -171,7 +177,7 @@ private:
 
 [[nodiscard]] bool HasCsgFrameCandidates(Core::ECS::World& world)noexcept;
 struct CsgResolvedReceiver{
-    NotNull<const CsgReceiverComponent*> receiver;
+    CsgReceiverComponent receiver;
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
 };
 

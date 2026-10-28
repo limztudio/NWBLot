@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/components.h>
+#include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_model/system.h>
 
 #include <core/ecs/entity.h>
@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void ApplyModelObjectRenderer(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, const Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::Entity& entity){
+inline void ApplyModelObjectRenderer(Core::ECS::World& world, const Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::Entity& entity){
     Core::Assets::AssetRef<Material> resolvedMaterial = material;
     bool visible = true;
     if(const RendererComponent* ownerRenderer = world.tryGetComponent<RendererComponent>(owner)){
@@ -35,18 +35,14 @@ inline void ApplyModelObjectRenderer(Core::ECS::World& world, Core::Alloc::Globa
     renderer.material = resolvedMaterial;
     renderer.visible = visible;
 
-    const MaterialInstanceComponent* ownerMaterialInstance = world.tryGetComponent<MaterialInstanceComponent>(owner);
-    if(!ownerMaterialInstance)
+    if(!world.tryGetComponent<MaterialInstanceComponent>(owner))
         return;
 
-    const Name materialInterface = ownerMaterialInstance->materialInterface;
-    const u64 revision = ownerMaterialInstance->revision;
-    MaterialInstanceComponent::ParameterVector overrides(arena);
-    overrides.assign(ownerMaterialInstance->overrides.begin(), ownerMaterialInstance->overrides.end());
-
-    auto& materialInstance = entity.addComponent<MaterialInstanceComponent>(arena, materialInterface);
-    materialInstance.revision = revision;
-    materialInstance.overrides = Move(overrides);
+    auto& materialInstance = entity.addComponent<MaterialInstanceComponent>();
+    const MaterialInstanceComponent& ownerMaterialInstance = *MakeNotNull(world.tryGetComponent<MaterialInstanceComponent>(owner));
+    materialInstance.materialInterface = ownerMaterialInstance.materialInterface;
+    materialInstance.revision = ownerMaterialInstance.revision;
+    materialInstance.overrides.assign(ownerMaterialInstance.overrides.begin(), ownerMaterialInstance.overrides.end());
 }
 
 [[nodiscard]] inline ModelObjectRendererHooks CreateModelObjectRendererHooks()noexcept{

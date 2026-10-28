@@ -36,6 +36,8 @@ private:
     void emitEnumDecl(MString& out, const EnumDecl& decl)const;
     void emitTypeAliasDecl(MString& out, const TypeAliasDecl& decl)const;
     void emitInterfaceDecl(MString& out, const InterfaceDecl& decl)const;
+    void emitGlobalConstDecl(MString& out, const Stmt& decl)const;
+    void emitFreeFunctionDecl(MString& out, const MethodDecl& fn)const;
     void emitClassDecl(MString& out, const ClassDecl& decl)const;
     void emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const;
     void emitClassMethodsCpp(MString& out, const ClassDecl& decl, const MVector<FieldDecl*>& orderedFields, bool forceInlineBody)const;
@@ -57,4 +59,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

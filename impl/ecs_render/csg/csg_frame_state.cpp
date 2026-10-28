@@ -62,9 +62,9 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
             continue;
 
         const auto resolvedReceiver = ResolveCsgReceiverComponent(m_world, entity);
-        if(!resolvedReceiver || !resolvedReceiver->receiver->enabled)
+        if(!resolvedReceiver || !resolvedReceiver->receiver.enabled)
             continue;
-        const NotNull<const CsgReceiverComponent*> receiver = resolvedReceiver->receiver;
+        const CsgReceiverComponent& receiver = resolvedReceiver->receiver;
         const CsgReceiverKind::Enum receiverKind = resolvedReceiver->receiverKind;
 
         const auto resolvedMeshResult = ecsMeshSystem.resolveRenderableMeshStatus(entity);
@@ -106,8 +106,8 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
             return clipInfo->cutterCount;
         };
 
-        const u32 opaqueCutterCount = !materialInfo->transparent && receiver->affectOpaquePass ? countPassCutters(CsgReceiverPass::Opaque) : 0u;
-        const u32 transparentCutterCount = materialInfo->transparent && receiver->affectTransparentPass ? countPassCutters(CsgReceiverPass::Transparent) : 0u;
+        const u32 opaqueCutterCount = !materialInfo->transparent && receiver.affectOpaquePass ? countPassCutters(CsgReceiverPass::Opaque) : 0u;
+        const u32 transparentCutterCount = materialInfo->transparent && receiver.affectTransparentPass ? countPassCutters(CsgReceiverPass::Transparent) : 0u;
         const bool opaqueWork = opaqueCutterCount > 0u;
         const bool transparentWork = transparentCutterCount > 0u;
         if(!opaqueWork && !transparentWork)

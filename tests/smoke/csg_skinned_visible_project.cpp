@@ -156,7 +156,7 @@ private:
     }
 
     NWB::Core::ECS::EntityID createSkinnedReceiverInstance(const Float4 position, const Float4 colorTint){
-        const auto modelResult = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_ReceiverMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(1.0f, 1.0f, 1.0f, 0.0f));
+        const auto modelResult = CreateTintedModelEntity(*m_world, s_Model, s_ReceiverMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(1.0f, 1.0f, 1.0f, 0.0f));
         const NWB::Core::ECS::EntityID entity = modelResult.entity;
         if(!modelResult.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint"));
@@ -226,7 +226,7 @@ private:
 
     void createCutter(const SIMDVectorSingle cutterLocalCenter){
         auto entity = m_world->createEntity();
-        auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
+        auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = s_ReceiverGroup;
 #if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
         cutter.shapeType = Name("engine/csg/sphere");

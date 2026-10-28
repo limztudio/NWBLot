@@ -1,0 +1,53 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+class CsgReceiverComponent{
+    public Name receiverGroup = s_NameNone;
+    public bool enabled = true;
+    public bool affectOpaquePass = true;
+    public bool affectTransparentPass = true;
+}
+
+[reflect]
+class CsgMeshReceiverComponent<const u8 Kind>{
+    public Name receiverGroup = s_NameNone;
+    public bool enabled = true;
+    public bool affectOpaquePass = true;
+    public bool affectTransparentPass = true;
+
+    [inline]
+    public CsgReceiverComponent asReceiver() const{
+        CsgReceiverComponent out;
+        out.receiverGroup = this.receiverGroup;
+        out.enabled = this.enabled;
+        out.affectOpaquePass = this.affectOpaquePass;
+        out.affectTransparentPass = this.affectTransparentPass;
+        return out;
+    }
+}
+
+type StaticCsgMeshComponent = CsgMeshReceiverComponent<0u>;
+type SkinnedCsgMeshComponent = CsgMeshReceiverComponent<1u>;
+
+[reflect]
+class CsgCutterComponent{
+    public Name receiverGroup = s_NameNone;
+    public Name shapeType = s_NameNone;
+    public f32x3x4 worldToShape(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public f32x3x4 shapeToWorld(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public Vector<u8> parameterBytes;
+    public bool active = true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -272,7 +272,7 @@ private:
     }
 
     NWB::Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& tint, const Float4& position, const Float4& scale){
-        const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_PlaneMesh, material, s_MaterialInterface, tint, position, scale);
+        const auto entity = CreateTintedStaticMeshEntity(*m_world, s_PlaneMesh, material, s_MaterialInterface, tint, position, scale);
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: panel creation failed"));
         auto& transform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity));
         // Rotate the XZ plane to face the camera along -Z.
@@ -348,7 +348,7 @@ private:
         const SIMDVectorSingle halfHeight = VectorMultiply(VectorAdd(VectorReplicate(6.f), frontDepth), tangent);
         const SIMDVectorSingle scaleLanes = VectorDivide(VectorMultiply(VectorMultiply(VectorScale(halfHeight, 2.f), VectorSelect(VectorSplatOne(), aspect, s_SIMDMaskX)), projectedSize), frameSize);
         const Float4 scale(VectorGetX(scaleLanes), VectorGetY(scaleLanes), 0.2f, 0.f);
-        m_glass = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_CubeMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.f, 1.f, 1.f, 0.f), Float4(0.f, 1.4f, VectorGetX(VectorAdd(frontDepth, VectorReplicate(0.1f))), 0.f), scale);
+        m_glass = CreateTintedStaticMeshEntity(*m_world, s_CubeMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.f, 1.f, 1.f, 0.f), Float4(0.f, 1.4f, VectorGetX(VectorAdd(frontDepth, VectorReplicate(0.1f))), 0.f), scale);
         if(!m_glass.valid())
             return false;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionDensity: extent {}x{} requested_percent {} admitted_pixels {} total_pixels {} active_tiles {} total_tiles {} glass_instances 1 capture_mode {}")
@@ -428,12 +428,12 @@ public:
         if(m_densityEnabled)
             return createDensityScene(scratchArena, **density);
         if(galleryCase)
-            return CreateRefractionGalleryScene(m_context, *m_world, AStringView(galleryCase->data(), galleryCase->size()), ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_GEOMETRY"));
+            return CreateRefractionGalleryScene(*m_world, AStringView(galleryCase->data(), galleryCase->size()), ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_GEOMETRY"));
 
         const auto camera = CreateSmokeCamera(*m_world, 1.4f, 6.0f, 0.0f);
         // Include a light so shared shadow and TLAS preparation runs.
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
-        m_glass = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_SphereMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f));
+        m_glass = CreateTintedStaticMeshEntity(*m_world, s_SphereMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f));
         NWB_FATAL_ASSERT_MSG(camera.valid() && m_glass.valid() && light.valid(), NWB_TEXT("RefractionSmokeProject: camera/glass/light creation failed"));
         m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 

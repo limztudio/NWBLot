@@ -4,6 +4,7 @@ target_sources(nwb_assets_scene PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/components.h"
+    "${CMAKE_CURRENT_LIST_DIR}/active_scene_subsystems.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_components.cpp"
 )

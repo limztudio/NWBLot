@@ -103,7 +103,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         TestWorld testWorld;
 
         auto cutterEntity = testWorld.world.createEntity();
-        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = Name(s_ProjectCsgGroupA);
         cutter.shapeType = Name(s_EngineCsgBox);
 
@@ -144,13 +144,13 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         nonMatchingReceiver.receiverGroup = Name(s_ProjectCsgGroupB);
 
         auto inactiveCutterEntity = testWorld.world.createEntity();
-        auto& inactiveCutter = inactiveCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& inactiveCutter = inactiveCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         inactiveCutter.receiverGroup = Name(s_ProjectCsgGroupB);
         inactiveCutter.shapeType = Name(s_EngineCsgBox);
         inactiveCutter.active = false;
 
         auto cutterEntity = testWorld.world.createEntity();
-        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = Name(s_ProjectCsgGroupA);
         cutter.shapeType = Name(s_EngineCsgBox);
 
@@ -176,7 +176,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         visibleReceiver.receiverGroup = Name(s_ProjectCsgGroupA);
 
         auto cutterEntity = testWorld.world.createEntity();
-        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = Name(s_ProjectCsgGroupA);
         cutter.shapeType = Name(s_EngineCsgCapsule);
 
@@ -203,7 +203,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         receiver.affectTransparentPass = false;
 
         auto cutterEntity = testWorld.world.createEntity();
-        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = Name(s_ProjectCsgGroupA);
         cutter.shapeType = Name(s_EngineCsgBox);
 
@@ -240,27 +240,27 @@ TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
         receiver.receiverGroup = Name(s_ProjectCsgGroupA);
 
         auto boxCutterEntity = testWorld.world.createEntity();
-        auto& boxCutter = boxCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& boxCutter = boxCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         boxCutter.receiverGroup = Name(s_ProjectCsgGroupA);
         boxCutter.shapeType = Name(s_EngineCsgBox);
 
         auto sphereCutterEntity = testWorld.world.createEntity();
-        auto& sphereCutter = sphereCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& sphereCutter = sphereCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         sphereCutter.receiverGroup = Name(s_ProjectCsgGroupA);
         sphereCutter.shapeType = Name("engine/csg/sphere");
 
         auto inactiveCutterEntity = testWorld.world.createEntity();
-        auto& inactiveCutter = inactiveCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& inactiveCutter = inactiveCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         inactiveCutter.receiverGroup = Name(s_ProjectCsgGroupA);
         inactiveCutter.shapeType = Name(s_EngineCsgCapsule);
         inactiveCutter.active = false;
 
         auto untypedCutterEntity = testWorld.world.createEntity();
-        auto& untypedCutter = untypedCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& untypedCutter = untypedCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         untypedCutter.receiverGroup = Name(s_ProjectCsgGroupA);
 
         auto otherGroupCutterEntity = testWorld.world.createEntity();
-        auto& otherGroupCutter = otherGroupCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& otherGroupCutter = otherGroupCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         otherGroupCutter.receiverGroup = Name(s_ProjectCsgGroupB);
         otherGroupCutter.shapeType = Name(s_EngineCsgBox);
 
@@ -293,7 +293,7 @@ TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
         receiver.affectTransparentPass = false;
 
         auto cutterEntity = testWorld.world.createEntity();
-        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = Name(s_ProjectCsgGroupA);
         cutter.shapeType = Name(s_EngineCsgBox);
 
@@ -313,7 +313,7 @@ TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
         receiver.affectOpaquePass = false;
 
         auto cutterEntity = testWorld.world.createEntity();
-        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = Name(s_ProjectCsgGroupA);
         cutter.shapeType = Name(s_EngineCsgCapsule);
 

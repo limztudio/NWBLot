@@ -5,8 +5,7 @@
 #pragma once
 
 
-#include "../../global.h"
-#include "../components.h"
+#include "handle.h"
 
 #include <impl/assets_mesh/payload_types.h>
 

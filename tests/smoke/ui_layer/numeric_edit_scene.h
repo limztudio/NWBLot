@@ -7,7 +7,7 @@
 
 #include "numeric_edit_snapshot.h"
 
-#include <impl/ecs_ui/components.h>
+#include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/widgets/numeric_edit.h>
 
 #include <core/alloc/general.h>

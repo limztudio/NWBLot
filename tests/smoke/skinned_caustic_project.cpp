@@ -153,7 +153,7 @@ private:
             return false;
         NWB::Tests::Smoke::AddSkinnedCsgMeshReceiver(*m_world, meshEntity, s_TransitionReceiverGroup, false, true);
         auto entity = m_world->createEntity();
-        auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
+        auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = s_TransitionReceiverGroup;
         cutter.shapeType = Name("engine/csg/plane");
         cutter.active = false;
@@ -298,7 +298,7 @@ private:
     }
 
     NWB::Core::ECS::EntityID createGlassCharacter(){
-        const auto modelResult = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_GlassMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.72f, 0.86f, 1.0f, 0.42f), Float4(0.0f, s_CharacterLift, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
+        const auto modelResult = CreateTintedModelEntity(*m_world, s_Model, s_GlassMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.72f, 0.86f, 1.0f, 0.42f), Float4(0.0f, s_CharacterLift, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
         const NWB::Core::ECS::EntityID entity = modelResult.entity;
         if(!modelResult.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to set glass character tint"));
@@ -374,7 +374,6 @@ public:
 
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_GroundMesh,
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,

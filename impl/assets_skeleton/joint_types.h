@@ -19,6 +19,7 @@ NWB_IMPL_BEGIN
 
 // Stored vectors are affine matrix rows; the implicit fourth row is (0, 0, 0, 1).
 using SkeletonJointMatrix = Float34;
+inline constexpr u32 s_SkeletonInvalidJointIndex = Limit<u32>::s_Max;
 inline constexpr u32 s_SkeletonJointMatrixFloatCount = 12u;
 inline constexpr u32 s_SkeletonJointMatrixRowCount = 3u;
 inline constexpr u32 s_SkeletonJointMatrixColumnCount = 4u;

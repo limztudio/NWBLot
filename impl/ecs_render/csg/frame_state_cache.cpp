@@ -6,8 +6,8 @@
 
 #include <impl/ecs_csg/shape_registry.h>
 #include <impl/ecs_mesh/system.h>
-#include <impl/ecs_render/components.h>
-#include <impl/ecs_scene/components.h>
+#include <impl/ecs_render/components.adhd.h>
+#include <impl/ecs_scene/components.adhd.h>
 
 #include <core/ecs/world.h>
 
@@ -49,7 +49,7 @@ namespace CsgFrameCacheDetail{
     auto receiverView = world.view<StaticCsgMeshComponent>();
     bool cacheable = true;
     receiverView.each([&](const Core::ECS::EntityID entity, StaticCsgMeshComponent& typedReceiver){
-        const CsgReceiverComponent& receiver = typedReceiver;
+        const CsgReceiverComponent receiver = typedReceiver.asReceiver();
         Fnv64AppendValue(contentHash, entity.id);
         Fnv64AppendBool(contentHash, receiver.enabled);
         Fnv64AppendBool(contentHash, receiver.affectOpaquePass);

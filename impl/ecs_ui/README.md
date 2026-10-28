@@ -1,6 +1,6 @@
 # Custom UI ECS adapter
 
-`UiLayerSystem` borrows the world, graphics runtime, input dispatcher, clipboard/text-input services and asset manager. It owns `Ui::Context`, `Ui::Builder`, text/paint services and the independent `Ui::GpuRenderer`. `UiPaintContext.ui` exposes the builder alongside low-level paint/text. Components stay in `components.h`; CPU UI code includes no ECS/native headers and GPU work sees only frozen paint.
+`UiLayerSystem` borrows the world, graphics runtime, input dispatcher, clipboard/text-input services and asset manager. It owns `Ui::Context`, `Ui::Builder`, text/paint services and the independent `Ui::GpuRenderer`. `UiPaintContext.ui` exposes the builder alongside low-level paint/text. Components stay in `components.adhd`; CPU UI code includes no ECS/native headers and GPU work sees only frozen paint.
 
 An omitted skin reference selects the engine default atlas. At startup, a custom skin is selected only after its asset and GPU texture bind both succeed; an unavailable custom skin produces a diagnostic and falls back to the complete engine default skin. The selected asset identity remains stable across resize/revalidation, including when a later bind fails.
 

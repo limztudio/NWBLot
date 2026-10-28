@@ -522,6 +522,68 @@ TEST(AdhdCompiler, SupportsParameterizedInterfaceBoundsInheritedTemplateInterfac
     EXPECT_FALSE(Compiler::compile(s_EscapingMutLambdaSource, "impl/sim/escaping_mut_lambda.adhd", arena.arena, escapingLambdaRes));
 }
 
+TEST(AdhdCompiler, SupportsSelfDefaultedNameBinarySerializeNameHashAndContainerEnumNwb){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "enum<u8> BoundaryMode {\r\n"
+        "    enum OpenSurface = 0,\r\n"
+        "    enum ClosedNested = 1,\r\n"
+        "}\r\n"
+        "[serialize]\r\n"
+        "class SubRecord {\r\n"
+        "    public Name tag;\r\n"
+        "    public u32 version = 1u;\r\n"
+        "    [transient]\r\n"
+        "    private u64 runtimeCache = 0u;\r\n"
+        "}\r\n"
+        "[serialize]\r\n"
+        "class OuterPacket {\r\n"
+        "    public SubRecord sub = SubRecord();\r\n"
+        "    public AssetRef<SubRecord> asset;\r\n"
+        "    [reflect]\r\n"
+        "    private f32 m_nearPlane = 0.1f;\r\n"
+        "}\r\n"
+        "[reflect]\r\n"
+        "class EnumContainerAsset {\r\n"
+        "    public Vector<BoundaryMode> modes;\r\n"
+        "    public Set<BoundaryMode> modeSet;\r\n"
+        "    public Map<Name, BoundaryMode> modeBySlot;\r\n"
+        "    public f32x3x4 localTransform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);\r\n"
+        "}\r\n"
+        "Name makeDefaultName() {\r\n"
+        "    Name localName;\r\n"
+        "    return localName;\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/serialize_and_container_enum.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("{ \"OpenSurface\", OpenSurface },"), MStringView::npos);
+    EXPECT_NE(hdrView.find("{ \"ClosedNested\", ClosedNested },"), MStringView::npos);
+    EXPECT_EQ(hdrView.find("open_surface"), MStringView::npos);
+    EXPECT_EQ(hdrView.find("closed_nested"), MStringView::npos);
+
+    EXPECT_NE(hdrView.find("static constexpr usize serializedBinarySize()noexcept{ return 0u + sizeof(::NameHash) + sizeof(version); }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("static constexpr usize serializedBinarySize()noexcept{ return 0u + decltype(sub)::serializedBinarySize() + sizeof(::NameHash) + sizeof(m_nearPlane); }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("if(const auto* __f = inMap.findField(\"m_nearPlane\"); __f && "), MStringView::npos);
+    EXPECT_NE(hdrView.find("if(const auto __e = BoundaryMode::parseNamedEnum(__f->asList()[__i].asString())) this->modes.push_back(*__e);"), MStringView::npos);
+    EXPECT_NE(hdrView.find("if(const auto __e = BoundaryMode::parseNamedEnum(__f->asList()[__i].asString())) this->modeSet.insert(*__e);"), MStringView::npos);
+    EXPECT_NE(hdrView.find("if(const auto __e = BoundaryMode::parseNamedEnum(__v.asString())) this->modeBySlot[::Name(__k.data())] = *__e;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("Float34 localTransform{ .raw = { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f } };"), MStringView::npos);
+
+    EXPECT_NE(cppView.find("&this->tag.identityHash(), sizeof(::NameHash)"), MStringView::npos);
+    EXPECT_NE(cppView.find("this->tag = ::Name(__hash);"), MStringView::npos);
+    EXPECT_NE(cppView.find("&this->asset.virtualPath.identityHash(), sizeof(::NameHash)"), MStringView::npos);
+    EXPECT_NE(cppView.find("this->asset.virtualPath = ::Name(__hash);"), MStringView::npos);
+    EXPECT_NE(cppView.find("this->sub.serializeBinary(outBuffer + offset, bufferCapacity - offset)"), MStringView::npos);
+    EXPECT_NE(cppView.find("this->sub.deserializeBinary(inBuffer + offset, bufferSize - offset)"), MStringView::npos);
+    EXPECT_NE(cppView.find("Name localName{};"), MStringView::npos);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

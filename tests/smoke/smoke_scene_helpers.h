@@ -60,7 +60,7 @@ struct SmokeTintedEntitySetup{
     Name materialInterface;
 };
 
-[[nodiscard]] inline SmokeTintedEntitySetup CreateSmokeTintedEntity(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, const SmokeMaterialRef& material, const NameText<char> materialInterfacePath, const Float4& position, const Float4& scale){
+[[nodiscard]] inline SmokeTintedEntitySetup CreateSmokeTintedEntity(Core::ECS::World& world, const SmokeMaterialRef& material, const NameText<char> materialInterfacePath, const Float4& position, const Float4& scale){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
     transform.position = position;
@@ -70,7 +70,7 @@ struct SmokeTintedEntitySetup{
     renderer.material = material;
 
     const Name materialInterface(materialInterfacePath);
-    entity.addComponent<Impl::MaterialInstanceComponent>(arena, materialInterface);
+    entity.addComponent<Impl::MaterialInstanceComponent>(materialInterface);
     return { entity.id(), materialInterface };
 }
 
@@ -80,7 +80,6 @@ struct SmokeTintedEntitySetup{
 
 [[nodiscard]] inline Core::ECS::EntityID CreateTintedStaticMeshEntity(
     Core::ECS::World& world,
-    Core::Alloc::GlobalArena& arena,
     const SmokeMeshRef& mesh,
     const SmokeMaterialRef& material,
     const NameText<char> materialInterfacePath,
@@ -89,7 +88,7 @@ struct SmokeTintedEntitySetup{
     const Float4& scale,
     const AStringView tintParameterPath = "runtime.color_tint"
 ){
-    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(world, arena, material, materialInterfacePath, position, scale);
+    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(world, material, materialInterfacePath, position, scale);
 
     auto& meshComponent = world.entity(setup.entity).addComponent<Impl::MeshComponent>();
     meshComponent.mesh = mesh;

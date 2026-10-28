@@ -18,5 +18,5 @@ target_sources(nwb_ui_gpu PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_timing_task.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_standalone.cpp"
 )
-target_link_libraries(nwb_ui_gpu PUBLIC nwb_ui nwb_graphics nwb_assets_texture_loader)
+target_link_libraries(nwb_ui_gpu PUBLIC nwb_assets_scene nwb_ui nwb_graphics nwb_assets_texture_loader)
 target_link_libraries(nwb_ui_gpu PRIVATE nwb_assets_shader_loader)

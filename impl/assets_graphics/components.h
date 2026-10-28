@@ -9,9 +9,9 @@
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_scene/components.h>
-#include <impl/ecs_mesh/components.h>
-#include <impl/ecs_model/components.h>
-#include <impl/ecs_render/components.h>
+#include <impl/ecs_mesh/components.adhd.h>
+#include <impl/ecs_model/components.adhd.h>
+#include <impl/ecs_render/components.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

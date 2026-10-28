@@ -207,7 +207,6 @@ public:
         const auto& transparentMaterial = m_timingEnabled ? s_TimingTransparentMaterial : s_TransparentMaterial;
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_GroundMesh,
             opaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
@@ -217,7 +216,7 @@ public:
         );
 
         // The opaque caster provides the contact-hardening reference.
-        const auto characterModel = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
+        const auto characterModel = CreateTintedModelEntity(*m_world, s_Model, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
         m_characterOwner = characterModel.entity;
         if(!characterModel.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
@@ -225,7 +224,6 @@ public:
         // The glass caster must preserve tint while its penumbra widens with receiver distance.
         const auto glassModel = CreateTintedModelEntity(
             *m_world,
-            m_context.objectArena,
             s_Model,
             transparentMaterial,
             s_SmokeSurfaceMaterialInterface,

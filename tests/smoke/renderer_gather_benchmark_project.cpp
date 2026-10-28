@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_mesh/skinning/module.h>
-#include <impl/ecs_skeleton/components.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -184,7 +183,7 @@ public:
             }
             ++m_renderers;
             if(workload == s_OverridesWorkload){
-                entity.addComponent<NWB::Impl::MaterialInstanceComponent>(m_context.objectArena, Name(s_Interface));
+                entity.addComponent<NWB::Impl::MaterialInstanceComponent>(Name(s_Interface));
                 Float4 tint;
                 StoreFloat(VectorAdd(VectorSet(0.55f, 0.85f, 1.f, 1.f), VectorDivide(VectorSet(static_cast<f32>(index), 0.f, 0.f, 0.f), VectorReplicate(256.f))), tint);
                 if(!NWB::Impl::SetMaterialMutableHalf4(*m_world, entity.id(), Name(s_Interface), "runtime.color_tint", tint))
@@ -250,7 +249,7 @@ public:
 
 private:
     [[nodiscard]] bool createBackdrop(){
-        const auto backdrop = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.f), Float4(0.f, 2.6f, 2.f, 0.f), Float4(5.f, 1.f, 3.5f, 0.f));
+        const auto backdrop = CreateTintedStaticMeshEntity(*m_world, s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.f), Float4(0.f, 2.6f, 2.f, 0.f), Float4(5.f, 1.f, 3.5f, 0.f));
         if(!backdrop.valid())
             return false;
         auto& transform = m_world->entity(backdrop).getComponent<NWB::Impl::Scene::TransformComponent>();
@@ -266,7 +265,7 @@ private:
     }
 
     [[nodiscard]] bool createRuntime(const u32 index, const Float4& position){
-        const auto modelResult = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.f), position, Float4(0.22f, 0.22f, 0.22f, 0.f));
+        const auto modelResult = CreateTintedModelEntity(*m_world, s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.f), position, Float4(0.22f, 0.22f, 0.22f, 0.f));
         const auto owner = modelResult.entity;
         if(!owner.valid() || !modelResult.tintApplied)
             return false;

@@ -12,6 +12,7 @@
 
 
 #include "asset.h"
+#include "binary_payload.h"
 
 #include <core/alloc/scratch.h>
 #include <core/assets/cook_dependency_registry.h>
@@ -114,6 +115,20 @@ using ParseMetadataValueFn = Expected<EntryT>(*)(
     const Core::Metascript::Value& value,
     AStringView fieldLabel
 );
+[[nodiscard]] bool ReadOptionalFiniteF32Field(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    AStringView diagnosticPrefix,
+    AStringView fieldLabel,
+    f32& outValue
+);
+[[nodiscard]] bool ReadOptionalI32Field(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    AStringView diagnosticPrefix,
+    AStringView fieldLabel,
+    i32& outValue
+);
 
 template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
 [[nodiscard]] Expected<EntryT> ParseCookMetadataDocument(
@@ -197,10 +212,10 @@ template<typename AssetT, typename EntryT>
 }
 
 template<typename EntryT, typename AssetT, ParseMetadataValueFn<EntryT> ParseValFn, const AStringView& DiagnosticPrefix>
-[[nodiscard]] bool RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry, const TStringView assetKindLabel){
+[[nodiscard]] bool RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<EntryT, AssetT, TypedComponentAssetCodec<AssetT>>(
         registry,
-        assetKindLabel,
+        ComponentBinaryPayload::s_ComponentAssetKindLabel,
         &ParseCookEntryDocument<EntryT, ParseValFn, DiagnosticPrefix>,
         &ParseCookEntryValue<EntryT, ParseValFn>,
         &BuildComponentCookAsset<AssetT, EntryT>

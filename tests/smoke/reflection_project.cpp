@@ -226,7 +226,7 @@ public:
             m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 
         if(m_feedbackCase){
-            m_feedbackScene = MakeUnique<ReflectionFeedbackScene>(m_context, *m_world);
+            m_feedbackScene = MakeUnique<ReflectionFeedbackScene>(*m_world);
             if(!m_feedbackScene->create(caseName, m_freshFinalState))
                 return false;
         }
@@ -236,7 +236,7 @@ public:
                 return false;
         }
         else if(m_opticalCase){
-            if(!CreateReflectionOpticalScene(m_context, *m_world, caseName))
+            if(!CreateReflectionOpticalScene(*m_world, caseName))
                 return false;
         }
         else if(m_extendedCase && !m_glassRoughnessCase){
@@ -598,7 +598,7 @@ private:
     }
 
     NWB::Core::ECS::EntityID createMesh(const SmokeMeshRef& mesh, const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0 = 0.0f){
-        const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, mesh, material, s_MaterialInterface, color, position, scale);
+        const auto entity = CreateTintedStaticMeshEntity(*m_world, mesh, material, s_MaterialInterface, color, position, scale);
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("ReflectionSmokeProject: mesh creation failed"));
         const Name materialInterface(s_MaterialInterface);
         const Half4U f0 = MakeHalf4U(specularF0, specularF0, specularF0, 0.0f);

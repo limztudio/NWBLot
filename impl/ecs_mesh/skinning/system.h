@@ -13,9 +13,6 @@
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/assets_mesh/subsystem.h>
 #include <impl/assets_scene/asset.h>
-#include <impl/ecs_mesh/runtime/mesh.h>
-#include <impl/ecs_mesh/components.h>
-#include <impl/ecs_skeleton/components.h>
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/system.h>

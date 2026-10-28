@@ -7,11 +7,14 @@
 
 #include "../global.h"
 
-#include <impl/ecs_scene/components.h>
+#include <impl/ecs_scene/components.adhd.h>
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/module.h>
+#include <core/common/log.h>
 #include <core/ecs/module.h>
+
+#include <global/binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,6 +66,17 @@ namespace ComponentAssetRuntime{
 
 
 [[nodiscard]] bool LoadBinary(IComponent& component, Span<const u8> binary);
+
+template<typename TPod>
+[[nodiscard]] Expected<TPod> ReadSinglePodPayload(const Span<const u8> payload, const TStringView contextLabel){
+    usize cursor = 0u;
+    const auto binaryPayload = ReadPOD<TPod>(payload, cursor);
+    if(!binaryPayload || cursor != payload.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid payload size"), contextLabel);
+        return MakeUnexpected(Failure{});
+    }
+    return binaryPayload;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,6 +164,14 @@ public:
 #if defined(NWB_COOK)
 namespace ComponentAssetSerialization{
 [[nodiscard]] bool Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary);
+
+template<typename TPod>
+[[nodiscard]] bool WriteSinglePodPayload(const TPod& pod, Core::Assets::AssetBytes& outBytes){
+    outBytes.clear();
+    outBytes.reserve(sizeof(pod));
+    AppendPOD(outBytes, pod);
+    return true;
+}
 };
 #endif
 

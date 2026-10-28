@@ -4,7 +4,7 @@
 
 #include "optical_scene.h"
 
-#include <impl/ecs_render/components.h>
+#include <impl/ecs_render/components.adhd.h>
 
 #include <global/hash_utils.h>
 

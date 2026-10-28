@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/components.h>
+#include <impl/ecs_render/components.adhd.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_csg/frame_state.h>

@@ -8,7 +8,6 @@ target_sources(nwb_ecs_csg PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deform_pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shape_registry.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/components.h"
     "${CMAKE_CURRENT_LIST_DIR}/deform_edit.h"
     "${CMAKE_CURRENT_LIST_DIR}/deform_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/deform_validator.h"
@@ -19,5 +18,10 @@ target_sources(nwb_ecs_csg PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/frame_state.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/shape_registry.h"
+)
+nwb_target_adhd_sources(nwb_ecs_csg
+    NAMESPACE "NWB::Impl"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/components.adhd"
 )
 target_link_libraries(nwb_ecs_csg PUBLIC nwb_ecs nwb_assets_csg)

@@ -1,0 +1,75 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.h>
+#include <impl/assets_material/asset.h>
+
+NWB_IMPL_BEGIN
+
+class Material;
+
+using MaterialLayoutFieldTypeEnum = MaterialLayoutFieldType::Enum;
+inline constexpr MaterialLayoutFieldTypeEnum s_MaterialLayoutFieldTypeNone = MaterialLayoutFieldType::None;
+
+NWB_IMPL_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> OpticalVolumeCoincidence{
+    enum Independent,
+    enum IdenticalMaterial,
+    enum SharedGroup
+}
+
+[reflect]
+enum<u8> OpticalBoundaryMode{
+    enum Unspecified,
+    enum ClosedNested,
+    enum ClosedPriority
+}
+
+[reflect]
+class RendererComponent{
+    public AssetRef<Material> material;
+    public bool visible = true;
+    public OpticalVolumeCoincidence opticalVolumeCoincidence = OpticalVolumeCoincidence::Enum::Independent;
+    public Name opticalVolumeGroup = s_NameNone;
+    public i32 opticalVolumePriority = 0;
+    public OpticalBoundaryMode opticalBoundaryMode = OpticalBoundaryMode::Enum::Unspecified;
+    public i32 opticalMediumPriority = 0;
+}
+
+[reflect]
+class MaterialInstanceParameter{
+    public Name parameterName = s_NameNone;
+    public Name blockName = s_NameNone;
+    public Name fieldName = s_NameNone;
+    [transient]
+    public MaterialLayoutFieldTypeEnum fieldType = s_MaterialLayoutFieldTypeNone;
+    [transient]
+    public UInt4U value = UInt4U();
+}
+
+[reflect]
+class MaterialInstanceComponent{
+    public Name materialInterface;
+    public Vector<MaterialInstanceParameter> overrides;
+    public u64 revision = 0u;
+
+    [inline]
+    public MaterialInstanceComponent(){}
+
+    [inline]
+    public MaterialInstanceComponent(in Name interfaceName){
+        this.materialInterface = interfaceName;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

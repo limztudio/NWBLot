@@ -8,7 +8,7 @@
 #include "namespace.h"
 
 #include <impl/assets_scene/asset.h>
-#include <impl/ecs_ui/components.h>
+#include <impl/ecs_ui/paint_context.h>
 
 #include <core/assets/manager.h>
 

@@ -233,7 +233,6 @@ private:
 
         const auto modelResult = CreateTintedModelEntity(
             *m_world,
-            m_context.objectArena,
             transparentMaterialClass ? s_CausticModel : s_Model,
             transparent ? s_TransparentMaterial : s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
@@ -255,7 +254,7 @@ private:
         // QuaternionMultiply applies its right operand first: pitch before yaw keeps side walls facing inward.
         const SIMDVectorSingle wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
 
-        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(spanScale, 1.0f, s_BoxHeight, 0.0f));
+        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(spanScale, 1.0f, s_BoxHeight, 0.0f));
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
                 StoreFloat(wallRotation, transform->rotation);
@@ -268,7 +267,7 @@ private:
         const SIMDVectorSingle ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
         Float4 ceilingScale;
         StoreFloat(VectorMultiply(VectorSet(2.0f, 1.0f, 2.0f, 0.0f), VectorSet(s_BoxHalf.x, 1.0f, s_BoxHalf.y, 0.0f)), ceilingScale);
-        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, Float4(0.0f, s_BoxHeight, 0.0f, 0.0f), ceilingScale);
+        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, Float4(0.0f, s_BoxHeight, 0.0f, 0.0f), ceilingScale);
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
                 StoreFloat(ceilingRotation, transform->rotation);
@@ -517,7 +516,6 @@ public:
 
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_GroundMesh,
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
@@ -550,7 +548,7 @@ public:
             }
             renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
         }
-        if(!m_csgScene.initialize(*m_world, m_context.objectArena, scratchArena, m_characterOwners.data(), m_characterOwners.size(), HardwareShadowOpaqueBaseline()))
+        if(!m_csgScene.initialize(*m_world, scratchArena, m_characterOwners.data(), m_characterOwners.size(), HardwareShadowOpaqueBaseline()))
             return false;
 
         bool allCharactersValid = m_characterOwners.size() == characterCount;

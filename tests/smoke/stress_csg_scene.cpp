@@ -49,7 +49,7 @@ static constexpr f32 s_RowDepth[] = { -0.55f, 0.55f };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* const owners, const usize ownerCount, const bool opaqueOnly){
+bool StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* const owners, const usize ownerCount, const bool opaqueOnly){
     const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_STRESS_CSG_PROFILE");
     if(!value || AStringView(value->data(), value->size()) == "none")
         return true;
@@ -75,7 +75,7 @@ bool StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::GlobalAren
     }
     for(usize row = 0u; row < LengthOf(m_cutters); ++row){
         auto entity = world.createEntity();
-        auto& cutter = entity.addComponent<Impl::CsgCutterComponent>(arena);
+        auto& cutter = entity.addComponent<Impl::CsgCutterComponent>();
         cutter.receiverGroup = __hidden_stress_csg_scene::s_Groups[row];
         cutter.shapeType = Name("engine/csg/box");
         Impl::CsgBoxShapeParameters parameters;

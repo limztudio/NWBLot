@@ -278,11 +278,10 @@ public:
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), s_DirectionalLightIntensity);
 
         // Use an untextured white floor to isolate indirect color bounce from the sphere.
-        m_whiteGround = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_GroundPlaneMesh, s_WhiteGroundMaterial, s_WhiteGroundMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(3.25f, 1.0f, 3.25f, 0.0f));
+        m_whiteGround = CreateTintedStaticMeshEntity(*m_world, s_GroundPlaneMesh, s_WhiteGroundMaterial, s_WhiteGroundMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(3.25f, 1.0f, 3.25f, 0.0f));
         // Place the UV-mapped sphere just above the white floor.
         m_texturedSphere = CreateTintedStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_TexturedSphereMesh,
             s_TextureMaterial,
             s_TextureMaterialInterface,

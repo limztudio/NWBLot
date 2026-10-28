@@ -6,7 +6,6 @@
 
 
 #include <core/alloc/scratch.h>
-#include <core/alloc/general.h>
 #include <core/ecs/entity_id.h>
 
 
@@ -39,7 +38,7 @@ namespace NWB::Tests::Smoke{
 
 class StressCsgScene final{
 public:
-    [[nodiscard]] bool initialize(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* owners, usize ownerCount, bool opaqueOnly);
+    [[nodiscard]] bool initialize(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* owners, usize ownerCount, bool opaqueOnly);
     [[nodiscard]] bool update(Core::ECS::World& world, f32 yaw);
 
 

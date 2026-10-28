@@ -152,7 +152,6 @@ public:
 
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_GroundMesh,
             s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
@@ -164,7 +163,6 @@ public:
         // Overlapping opaque and glass shadows exercise their combined response.
         const auto opaqueModel = CreateTintedModelEntity(
             *m_world,
-            m_context.objectArena,
             s_Model,
             s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
@@ -175,7 +173,6 @@ public:
         m_opaqueOwner = opaqueModel.entity;
         const auto transparentModel = CreateTintedModelEntity(
             *m_world,
-            m_context.objectArena,
             s_CausticModel,
             s_TransparentMaterial,
             s_SmokeSurfaceMaterialInterface,

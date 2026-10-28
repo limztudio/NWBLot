@@ -147,6 +147,18 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
     return StripAdhdExtension(path.substr(fileStart));
 }
 
+inline void AppendAdhdTextCrlf(MString& out, const MStringView text){
+    for(usize i = 0u; i < text.size(); ++i){
+        const char ch = text[i];
+        if(ch == '\r')
+            continue;
+        if(ch == '\n')
+            out.append("\r\n");
+        else
+            out.push_back(ch);
+    }
+}
+
 inline constexpr MStringView s_AdhdGeneratedFileBanner = "// Compiled by ADHD Compiler " NWB_ADHD_COMPILER_VERSION "\r\n";
 
 inline void ReportAdhdDiagnostic(MetaArena& arena, MVector<ParseError>& errors, const SourceSpan span, const MStringView message){

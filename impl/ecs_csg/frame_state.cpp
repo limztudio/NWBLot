@@ -48,7 +48,7 @@ template<typename ReceiverT>
 void GatherReceiverState(Core::ECS::World& world, const CsgReceiverKind::Enum receiverKind, const CsgFrameReceiverLookup& receiverLookup, const CsgFrameBuildDesc& desc, CsgFrameState& inOutState){
     auto receiverView = world.view<ReceiverT>();
     receiverView.each([&](const Core::ECS::EntityID entity, ReceiverT& typedReceiver){
-        const CsgReceiverComponent& receiver = typedReceiver;
+        const CsgReceiverComponent receiver = typedReceiver.asReceiver();
         if(!receiver.enabled)
             return;
         if(!ReceiverVisible(world, entity, receiverKind, receiver, desc))
@@ -134,11 +134,11 @@ Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(
     const auto resolvedReceiver = ResolveCsgReceiverComponent(m_world, entity);
     if(!resolvedReceiver)
         return MakeUnexpected(Failure{});
-    const NotNull<const CsgReceiverComponent*> receiver = resolvedReceiver->receiver;
-    if(!receiver->enabled || !__hidden_frame_state::ReceiverPassEnabled(*receiver, receiverPass))
+    const CsgReceiverComponent& receiver = resolvedReceiver->receiver;
+    if(!receiver.enabled || !__hidden_frame_state::ReceiverPassEnabled(receiver, receiverPass))
         return MakeUnexpected(Failure{});
 
-    const auto foundCutterRange = m_cutterRanges.find(receiver->receiverGroup);
+    const auto foundCutterRange = m_cutterRanges.find(receiver.receiverGroup);
     if(foundCutterRange == m_cutterRanges.end() || foundCutterRange.value().range.cutterCount == 0u)
         return MakeUnexpected(Failure{});
 
@@ -157,11 +157,11 @@ Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange
     const auto resolvedReceiver = ResolveCsgReceiverComponent(m_world, entity);
     if(!resolvedReceiver)
         return MakeUnexpected(Failure{});
-    const NotNull<const CsgReceiverComponent*> receiver = resolvedReceiver->receiver;
-    if(!receiver->enabled)
+    const CsgReceiverComponent& receiver = resolvedReceiver->receiver;
+    if(!receiver.enabled)
         return MakeUnexpected(Failure{});
 
-    const auto foundCutterRange = m_cutterRanges.find(receiver->receiverGroup);
+    const auto foundCutterRange = m_cutterRanges.find(receiver.receiverGroup);
     if(foundCutterRange == m_cutterRanges.end() || foundCutterRange.value().range.cutterCount == 0u)
         return MakeUnexpected(Failure{});
 
@@ -178,9 +178,9 @@ bool HasCsgFrameCandidates(Core::ECS::World& world)noexcept{
 
 Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{
     if(const StaticCsgMeshComponent* receiver = world.tryGetComponent<StaticCsgMeshComponent>(entity))
-        return CsgResolvedReceiver{ MakeNotNull(static_cast<const CsgReceiverComponent*>(receiver)), CsgReceiverKind::Static };
+        return CsgResolvedReceiver{ receiver->asReceiver(), CsgReceiverKind::Static };
     if(const SkinnedCsgMeshComponent* receiver = world.tryGetComponent<SkinnedCsgMeshComponent>(entity))
-        return CsgResolvedReceiver{ MakeNotNull(static_cast<const CsgReceiverComponent*>(receiver)), CsgReceiverKind::Skinned };
+        return CsgResolvedReceiver{ receiver->asReceiver(), CsgReceiverKind::Skinned };
     return MakeUnexpected(Failure{});
 }
 

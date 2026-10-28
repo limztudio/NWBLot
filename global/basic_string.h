@@ -28,13 +28,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename ArenaT>
+namespace NWB::Core::Alloc{ class GlobalArena; }
+
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using BasicString = std::basic_string<T, std::char_traits<T>, ContainerDetail::ArenaAllocator<T, ArenaT>>;
-template<typename ArenaT>
+template<typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using AString = BasicString<char, ArenaT>;
-template<typename ArenaT>
+template<typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using WString = BasicString<wchar, ArenaT>;
-template<typename ArenaT>
+template<typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using TString = BasicString<tchar, ArenaT>;
 
 template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>

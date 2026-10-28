@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "components.h"
+#include <impl/ecs_mesh/components.adhd.h>
 
 #include <impl/ecs_mesh/runtime/mesh.h>
 
@@ -34,6 +34,15 @@ NWB_ECS_END
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(IsStandardLayout_V<MeshComponent>, "MeshComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<MeshComponent>, "MeshComponent must stay cheap to move in dense ECS storage");
+static_assert(IsStandardLayout_V<SkinnedMeshBindingComponent>, "SkinnedMeshBindingComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<SkinnedMeshBindingComponent>, "SkinnedMeshBindingComponent must stay cheap to move in dense ECS storage");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

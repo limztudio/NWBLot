@@ -5,10 +5,7 @@
 #pragma once
 
 
-#include "components.h"
-
-#include <impl/assets_skeleton/asset.h>
-#include <impl/assets_skeleton/joint_types.h>
+#include <impl/ecs_model/components.adhd.h>
 
 #include <core/assets/ref.h>
 #include <core/ecs/system.h>
@@ -59,6 +56,21 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static_assert(IsStandardLayout_V<ModelComponent>, "ModelComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ModelComponent>, "ModelComponent must stay cheap to move in dense ECS storage");
+static_assert(IsStandardLayout_V<ModelRuntimeComponent>, "ModelRuntimeComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ModelRuntimeComponent>, "ModelRuntimeComponent must stay cheap to move in dense ECS storage");
+static_assert(IsStandardLayout_V<ModelObjectComponent>, "ModelObjectComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ModelObjectComponent>, "ModelObjectComponent must stay cheap to move in dense ECS storage");
+static_assert(IsStandardLayout_V<ModelSkeletonComponent>, "ModelSkeletonComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ModelSkeletonComponent>, "ModelSkeletonComponent must stay cheap to move in dense ECS storage");
+static_assert(IsStandardLayout_V<ModelStaticMeshAttachmentComponent>, "ModelStaticMeshAttachmentComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ModelStaticMeshAttachmentComponent>, "ModelStaticMeshAttachmentComponent must stay cheap to move in dense ECS storage");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class Material;
 class Model;
 struct ModelSkeletonObject;
@@ -69,7 +81,7 @@ struct ModelSkinnedMeshObject;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ModelObjectRendererCallback = Function<void(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::Entity& entity)>;
+using ModelObjectRendererCallback = Function<void(Core::ECS::World& world, Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::Entity& entity)>;
 
 struct ModelObjectRendererHooks{
     ModelObjectRendererCallback apply;
@@ -115,7 +127,6 @@ private:
 
 
 private:
-    Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
     Core::Assets::AssetManager& m_assetManager;
     ModelObjectRendererCallback m_applyRenderer;

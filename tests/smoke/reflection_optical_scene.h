@@ -7,8 +7,6 @@
 
 #include "smoke_scene_helpers.h"
 
-#include <loader/project_entry.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,9 +30,9 @@ struct ReflectionCsgContextEntities{
     Core::ECS::EntityID denseCutter = Core::ECS::s_InvalidEntityId;
 };
 
-[[nodiscard]] Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(ProjectRuntimeContext& context, Core::ECS::World& world);
+[[nodiscard]] Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(Core::ECS::World& world);
 
-[[nodiscard]] bool CreateReflectionOpticalScene(ProjectRuntimeContext& context, Core::ECS::World& world, AStringView caseName);
+[[nodiscard]] bool CreateReflectionOpticalScene(Core::ECS::World& world, AStringView caseName);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -8,7 +8,7 @@
 #include "radio_group_source.h"
 #include "radio_group_snapshot.h"
 
-#include <impl/ecs_ui/components.h>
+#include <impl/ecs_ui/paint_context.h>
 
 #include <core/input/module.h>
 

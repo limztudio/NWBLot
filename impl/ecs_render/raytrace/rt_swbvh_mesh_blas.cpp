@@ -2,16 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/ecs_render/material/sampled_texture_collection.h>
-#include <impl/ecs_render/optics/coincident_volumes.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-#include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
-#include <impl/ecs_csg/components.h>
 #include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
-
-#include <global/algorithm.h>
-#include <global/hash_utils.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,6 +14,59 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+bool RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources){
+    if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
+        return false;
+
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
+    if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
+        return false;
+
+    if(meshResources.blas)
+        return true;
+
+    const u32 vertexStride = static_cast<u32>(positionDesc.structStride);
+    const u32 vertexCount = static_cast<u32>(positionDesc.byteSize / positionDesc.structStride);
+    Core::RayTracingGeometryTriangles triangles;
+    triangles
+        .setVertexBuffer(meshResources.positionBuffer.get())
+        .setVertexFormat(Core::Format::RGB32_FLOAT)
+        .setVertexStride(vertexStride)
+        .setVertexCount(vertexCount)
+        .setIndexBuffer(meshResources.triangleIndexBuffer.get())
+        .setIndexFormat(Core::Format::R32_UINT)
+        .setIndexCount(meshResources.meshletPrimitiveIndexCount)
+    ;
+    Core::RayTracingGeometryDesc geometry;
+    geometry.setTriangles(triangles).setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation);
+    Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
+    if(meshResources.runtimeMesh)
+        buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
+    Core::RayTracingAccelStructDesc accelStructDesc(m_arena);
+    accelStructDesc.addBottomLevelGeometry(geometry);
+    accelStructDesc.setBuildFlags(buildFlags);
+    accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    const auto blasName = DeriveName(meshResources.meshName, RendererFramePipelineDetail::s_BlasNameSuffix);
+    if(!blasName){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+        return false;
+    }
+    accelStructDesc.setDebugName(*blasName);
+    auto blasResult = m_graphics.getDevice().createAccelStruct(accelStructDesc);
+    if(!blasResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+        return false;
+    }
+    Core::RayTracingAccelStructHandle blas = Move(*blasResult);
+    meshResources.blas = Move(blas);
+    meshResources.blasBuildPending = true;
+    meshResources.blasBuildAccepted = false;
+    meshResources.blasGeometryContentRevision = 0u;
+    meshResources.blasBackingFresh = true;
+    meshResources.blasRefitsSinceRebuild = 0u;
+    return true;
+}
 
 void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     if(!m_preparedMeshBlasBuildsReady)

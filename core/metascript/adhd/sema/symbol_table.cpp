@@ -386,6 +386,7 @@ bool SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
         || baseName == "Array"
         || baseName == "AssetRef"
         || baseName == "CompactString"
+        || baseName == "Name"
         || baseName == "Path";
 }
 

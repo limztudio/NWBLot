@@ -7,7 +7,7 @@
 
 #include "combo_source.h"
 
-#include <impl/ecs_ui/components.h>
+#include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/widgets/combo.h>
 
 #include <core/alloc/general.h>

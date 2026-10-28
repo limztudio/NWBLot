@@ -57,17 +57,17 @@ struct Box{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Core::ECS::EntityID CreateBox(ProjectRuntimeContext& context, Core::ECS::World& world, const Box& box, const SmokeMaterialRef& material, const Float4& tint){
+[[nodiscard]] static Core::ECS::EntityID CreateBox(Core::ECS::World& world, const Box& box, const SmokeMaterialRef& material, const Float4& tint){
     const SIMDVectorSingle minimum = LoadFloat(box.minimum);
     const SIMDVectorSingle maximum = LoadFloat(box.maximum);
     Float4 center;
     Float4 extent;
     StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
     StoreFloat(VectorSubtract(maximum, minimum), extent);
-    return CreateTintedStaticMeshEntity(world, context.objectArena, s_CubeMesh, material, s_MaterialInterface, tint, center, extent);
+    return CreateTintedStaticMeshEntity(world, s_CubeMesh, material, s_MaterialInterface, tint, center, extent);
 }
 
-[[nodiscard]] static bool CreateReferencePieces(ProjectRuntimeContext& context, Core::ECS::World& world, const Box& box, const Box& cutter, const SmokeMaterialRef& material, const Float4& tint){
+[[nodiscard]] static bool CreateReferencePieces(Core::ECS::World& world, const Box& box, const Box& cutter, const SmokeMaterialRef& material, const Float4& tint){
     Float3U lower;
     Float3U upper;
     StoreFloat(VectorMax(LoadFloat(box.minimum), LoadFloat(cutter.minimum)), lower);
@@ -84,19 +84,19 @@ struct Box{
     for(const auto& piece : pieces){
         if(piece.minimum.x >= piece.maximum.x || piece.minimum.y >= piece.maximum.y || piece.minimum.z >= piece.maximum.z)
             continue;
-        if(!CreateBox(context, world, piece, material, tint).valid())
+        if(!CreateBox(world, piece, material, tint).valid())
             return false;
     }
     return true;
 }
 
-[[nodiscard]] static bool CreateSubtraction(ProjectRuntimeContext& context, Core::ECS::World& world, const Box& box, const Box& cutter, const u32 slot, const AStringView arm){
+[[nodiscard]] static bool CreateSubtraction(Core::ECS::World& world, const Box& box, const Box& cutter, const u32 slot, const AStringView arm){
     const auto& material = slot == 0u ? s_DiffuseMaterial : s_CapMaterial;
     const Float4& tint = slot == 0u ? s_Black : s_White;
     if(arm == s_ReferenceArm)
-        return CreateReferencePieces(context, world, box, cutter, material, tint);
+        return CreateReferencePieces(world, box, cutter, material, tint);
 
-    const auto receiver = CreateBox(context, world, box, material, tint);
+    const auto receiver = CreateBox(world, box, material, tint);
     if(!receiver.valid())
         return false;
     AddStaticCsgMeshReceiver(world, receiver, s_Groups[slot], true, false);
@@ -112,7 +112,7 @@ struct Box{
     };
     for(const auto& cut : cuts){
         auto entity = world.createEntity();
-        auto& component = entity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
+        auto& component = entity.addComponent<Impl::CsgCutterComponent>();
         component.receiverGroup = s_Groups[slot];
         component.shapeType = Name(s_BoxShapePath);
         component.active = arm == s_CutArm;
@@ -126,27 +126,27 @@ struct Box{
     return true;
 }
 
-[[nodiscard]] static bool CreateMixedSubtraction(ProjectRuntimeContext& context, Core::ECS::World& world, const AStringView arm){
+[[nodiscard]] static bool CreateMixedSubtraction(Core::ECS::World& world, const AStringView arm){
     const Box box{ Float3U(-0.5f, -0.8f, -0.8f), Float3U(0.5f, 0.2f, 0.8f) };
     const Box cutter{ Float3U(-0.25f, -1.0f, -1.2f), Float3U(0.25f, 0.2f, 1.0f) };
     if(arm == s_ReferenceArm){
-        if(!CreateReferencePieces(context, world, box, cutter, s_MixedMaterial, s_White))
+        if(!CreateReferencePieces(world, box, cutter, s_MixedMaterial, s_White))
             return false;
         const f32 quadCenters[] = { -0.875f, 0.875f };
         for(const f32 x : quadCenters){
-            if(!CreateTintedStaticMeshEntity(world, context.objectArena, s_OpenQuadMesh, s_MixedMaterial, s_MaterialInterface, s_White, Float4(x, -0.3f, -1.0f, 0.0f), Float4(1.25f, 1.0f, 1.0f, 0.0f)).valid())
+            if(!CreateTintedStaticMeshEntity(world, s_OpenQuadMesh, s_MixedMaterial, s_MaterialInterface, s_White, Float4(x, -0.3f, -1.0f, 0.0f), Float4(1.25f, 1.0f, 1.0f, 0.0f)).valid())
                 return false;
         }
         return true;
     }
 
     // One asset contains a closed solid and an independently open two-triangle surface.
-    const auto receiver = CreateTintedStaticMeshEntity(world, context.objectArena, s_MixedMesh, s_MixedMaterial, s_MaterialInterface, s_White, Float4(0.0f, -0.3f, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.6f, 0.0f));
+    const auto receiver = CreateTintedStaticMeshEntity(world, s_MixedMesh, s_MixedMaterial, s_MaterialInterface, s_White, Float4(0.0f, -0.3f, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.6f, 0.0f));
     if(!receiver.valid())
         return false;
     AddStaticCsgMeshReceiver(world, receiver, s_Groups[2], true, false);
     auto entity = world.createEntity();
-    auto& component = entity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
+    auto& component = entity.addComponent<Impl::CsgCutterComponent>();
     component.receiverGroup = s_Groups[2];
     component.shapeType = Name(s_BoxShapePath);
     component.active = arm == s_CutArm;
@@ -221,7 +221,7 @@ Expected<bool> CsgGiScene::start(){
     lightComponent->enableCaustics = false;
 
     using namespace __hidden_csg_gi_scene;
-    if(!CreateBox(m_context, m_world, { Float3U(-5.0f, -1.0f, -6.6f), Float3U(5.0f, 5.0f, -6.5f) }, s_DiffuseMaterial, Float4(0.02f, 0.02f, 1.0f, 1.0f)).valid())
+    if(!CreateBox(m_world, { Float3U(-5.0f, -1.0f, -6.6f), Float3U(5.0f, 5.0f, -6.5f) }, s_DiffuseMaterial, Float4(0.02f, 0.02f, 1.0f, 1.0f)).valid())
         return MakeUnexpected(Failure{});
     for(u32 slot = 0u; slot < 2u; ++slot){
         const f32 x = slot == 0u ? -1.3f : 1.3f;
@@ -230,19 +230,19 @@ Expected<bool> CsgGiScene::start(){
         const SIMDVectorSingle maximumX = VectorAdd(VectorReplicate(x), halfWidths);
         const Box receiver{ Float3U(VectorGetX(minimumX), 0.3f, -0.8f), Float3U(VectorGetX(maximumX), 2.3f, 0.8f) };
         const Box cutter{ Float3U(VectorGetY(minimumX), 0.55f, -1.0f), Float3U(VectorGetY(maximumX), 2.05f, slot == 0u ? 1.0f : 0.4f) };
-        if(!CreateSubtraction(m_context, m_world, receiver, cutter, slot, arm))
+        if(!CreateSubtraction(m_world, receiver, cutter, slot, arm))
             return MakeUnexpected(Failure{});
     }
-    if(!CreateMixedSubtraction(m_context, m_world, arm))
+    if(!CreateMixedSubtraction(m_world, arm))
         return MakeUnexpected(Failure{});
-    const auto passage = CreateBox(m_context, m_world, { Float3U(-1.9f, 0.65f, 1.0f), Float3U(-0.7f, 1.95f, 1.08f) }, s_IndirectMaterial, s_White);
+    const auto passage = CreateBox(m_world, { Float3U(-1.9f, 0.65f, 1.0f), Float3U(-0.7f, 1.95f, 1.08f) }, s_IndirectMaterial, s_White);
     // The cavity receiver sees bounced light from the green generated back cap.
-    const auto cavity = CreateBox(m_context, m_world, { Float3U(0.85f, 0.56f, -0.72f), Float3U(1.75f, 0.61f, 0.06f) }, s_IndirectMaterial, s_White);
-    const auto control = CreateBox(m_context, m_world, { Float3U(-0.35f, 2.7f, 0.0f), Float3U(0.35f, 3.15f, 0.06f) }, s_IndirectMaterial, s_White);
+    const auto cavity = CreateBox(m_world, { Float3U(0.85f, 0.56f, -0.72f), Float3U(1.75f, 0.61f, 0.06f) }, s_IndirectMaterial, s_White);
+    const auto control = CreateBox(m_world, { Float3U(-0.35f, 2.7f, 0.0f), Float3U(0.35f, 3.15f, 0.06f) }, s_IndirectMaterial, s_White);
     if(!passage.valid() || !cavity.valid() || !control.valid())
         return MakeUnexpected(Failure{});
-    const auto mixedPassage = CreateBox(m_context, m_world, { Float3U(-0.2f, -0.7f, 1.0f), Float3U(0.2f, -0.4f, 1.08f) }, s_IndirectMaterial, s_White);
-    const auto mixedFloor = CreateBox(m_context, m_world, { Float3U(-1.3f, -0.82f, -1.85f), Float3U(-0.75f, -0.77f, -1.08f) }, s_IndirectMaterial, s_White);
+    const auto mixedPassage = CreateBox(m_world, { Float3U(-0.2f, -0.7f, 1.0f), Float3U(0.2f, -0.4f, 1.08f) }, s_IndirectMaterial, s_White);
+    const auto mixedFloor = CreateBox(m_world, { Float3U(-1.3f, -0.82f, -1.85f), Float3U(-0.75f, -0.77f, -1.08f) }, s_IndirectMaterial, s_White);
     if(!mixedPassage.valid() || !mixedFloor.valid())
         return MakeUnexpected(Failure{});
 

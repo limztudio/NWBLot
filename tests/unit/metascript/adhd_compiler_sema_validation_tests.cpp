@@ -368,18 +368,30 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
         "    }\r\n"
         "}\r\n"
         "\r\n"
+        "class OuterHolder {\r\n"
+        "    public OolPair<LeafInner> wrapped = OolPair<LeafInner>();\r\n"
+        "}\r\n"
+        "\r\n"
         "class OolPair<T> {\r\n"
         "    public T item = T();\r\n"
+        "    public LeafInner helper = LeafInner();\r\n"
         "    public u8 tag = 1;\r\n"
         "}\r\n"
+        "\r\n"
+        "class LeafInner {\r\n"
+        "    public i32 v = 7;\r\n"
+        "}\r\n"
+        "\r\n"
+        "const LeafInner kDefaultLeaf();\r\n"
         "\r\n"
         "class OolRunner {\r\n"
         "    public i32 execute() const;\r\n"
         "}\r\n"
         "\r\n"
         "i32 OolRunner::execute() const {\r\n"
+        "    LeafInner localLeaf();\r\n"
         "    OolPair<u64> pair = OolPair<u64>();\r\n"
-        "    return cast<i32>(pair.tag);\r\n"
+        "    return cast<i32>(pair.tag) + localLeaf.v + kDefaultLeaf.v;\r\n"
         "}\r\n"
         "\r\n"
         "i32 readFrom<T : ISource>(in T src) {\r\n"
@@ -420,6 +432,15 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
     EXPECT_NE(hdrView.find("[[nodiscard]] static bool extractNwbAssetDependencies(const NwbValue& inMap, [[maybe_unused]] DependencyCallback&& callback)noexcept{"), MStringView::npos);
     EXPECT_NE(hdrView.find("__f->isMap() && !NestedAssetGroup::extractNwbAssetDependencies(*__f, callback)) return false;"), MStringView::npos);
     EXPECT_NE(hdrView.find("template<>\r\nclass OolPair<u64> final{"), MStringView::npos);
+    const usize leafInnerDefPos = hdrView.find("class LeafInner final{");
+    const usize outerHolderDefPos = hdrView.find("class OuterHolder final{");
+    const usize defaultLeafConstPos = hdrView.find("inline constexpr LeafInner kDefaultLeaf{};");
+    ASSERT_NE(leafInnerDefPos, MStringView::npos);
+    ASSERT_NE(outerHolderDefPos, MStringView::npos);
+    ASSERT_NE(defaultLeafConstPos, MStringView::npos);
+    EXPECT_LT(leafInnerDefPos, outerHolderDefPos);
+    EXPECT_LT(leafInnerDefPos, defaultLeafConstPos);
+    EXPECT_NE(srcView.find("LeafInner localLeaf{};"), MStringView::npos);
     EXPECT_NE(srcView.find("(ro = ::MakeNotNull(&(b)));"), MStringView::npos);
     EXPECT_NE(srcView.find("(this->roRef = ::MakeNotNull(&(nextRef)));"), MStringView::npos);
 

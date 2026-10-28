@@ -139,7 +139,7 @@ bool ReflectionRoughnessScene::applyMutation(){
 
 NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const f32 roughness){
     using namespace __hidden_reflection_roughness_scene;
-    const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, s_Plane, material, s_Interface, color, position, scale);
+    const auto entity = CreateTintedStaticMeshEntity(m_world, s_Plane, material, s_Interface, color, position, scale);
     if(!entity.valid())
         return entity;
     auto& transform = m_world.entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
@@ -178,7 +178,7 @@ bool ReflectionRoughnessScene::createDeformingSource(){
     m_bindJoints.reserve(skeleton.joints().size());
     for(const NWB::Impl::SkeletonJoint& joint : skeleton.joints())
         m_bindJoints.push_back(joint.localBindPose);
-    const auto redModel = CreateTintedModelEntity(m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 0.55f, -8.f, 0.f), Float4(0.85f, 0.85f, 0.85f, 0.f));
+    const auto redModel = CreateTintedModelEntity(m_world, s_Model, s_Opaque, s_Interface, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 0.55f, -8.f, 0.f), Float4(0.85f, 0.85f, 0.85f, 0.f));
     m_red = redModel.entity;
     if(!m_red.valid() || !redModel.tintApplied)
         return false;

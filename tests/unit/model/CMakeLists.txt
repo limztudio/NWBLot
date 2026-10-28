@@ -4,4 +4,4 @@ target_sources(nwb_ecs_model_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/model_runtime_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/model_test_context.h"
 )
-target_link_libraries(nwb_ecs_model_tests PRIVATE nwb_ecs_model nwb_assets_model nwb_ecs_scene nwb_common nwb_alloc)
+target_link_libraries(nwb_ecs_model_tests PRIVATE nwb_ecs_model nwb_assets_model nwb_ecs_scene nwb_ecs_mesh nwb_ecs_skeleton nwb_common nwb_alloc)

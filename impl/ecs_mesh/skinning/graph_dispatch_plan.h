@@ -8,7 +8,7 @@
 #include "submission_state.h"
 
 #include <impl/ecs_mesh/runtime/mesh.h>
-#include <impl/ecs_skeleton/components.h>
+#include <impl/ecs_skeleton/components.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/task/gpu/types.h>

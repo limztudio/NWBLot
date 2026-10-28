@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "components.h"
+#include <impl/ecs_csg/components.adhd.h>
 
 #include <impl/assets_csg/shape_id.h>
 

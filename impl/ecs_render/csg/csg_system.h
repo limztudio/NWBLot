@@ -39,7 +39,7 @@ NWB_IMPL_BEGIN
 
 
 namespace Scene{
-    struct TransformComponent;
+    class TransformComponent;
 };
 
 namespace ECSRenderDetail{

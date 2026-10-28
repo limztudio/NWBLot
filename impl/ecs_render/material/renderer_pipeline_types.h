@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/components.h>
+#include <impl/ecs_render/components.adhd.h>
 #include <impl/assets_material/asset.h>
 
 #include <core/alloc/scratch.h>

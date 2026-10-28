@@ -282,15 +282,38 @@ void EmitNwbListContainerFieldDeserialize(
     const MStringView elemName,
     const SymbolTable& symbols
 ){
+    const bool isSetContainer = (containerTypeName == "Set" || containerTypeName == "HashSet" || containerTypeName == "ParallelHashSet");
     const bool isForwardList = (containerTypeName == "ForwardList");
     const bool isFixedVec = (containerTypeName == "FixedVector");
-    const bool isDynVec = (containerTypeName == "Vector" || containerTypeName == "Deque" || containerTypeName == "ParallelVector" || containerTypeName == "List");
+    const bool isDynVec = (containerTypeName == "Vector" || containerTypeName == "Deque" || containerTypeName == "ParallelVector" || containerTypeName == "List" || isSetContainer);
     const bool isPushContainer = isForwardList || isFixedVec || isDynVec;
     const MStringView elemAccessor = isForwardList ? "__f->asList()[__i - 1u]" : "__f->asList()[__i]";
     const MStringView elemListAccessor = isForwardList ? "__f->asList()[__i - 1u].asList()" : "__f->asList()[__i].asList()";
-    const MStringView assignOrPushPrefix = isForwardList ? ".push_front(" : (isPushContainer ? ".push_back(" : "[__i] = ");
+    const MStringView assignOrPushPrefix = isSetContainer ? ".insert(" : (isForwardList ? ".push_front(" : (isPushContainer ? ".push_back(" : "[__i] = "));
 
-    if(IsScalarOrStringLikeNwbElement(elemName, symbols)){
+    if(symbols.findEnum(elemName)){
+        EmitNwbListContainerLoopHeader(out, fieldName, isForwardList, isFixedVec, isDynVec);
+        out.append("{ if(");
+        out.append(elemAccessor.data(), elemAccessor.size());
+        out.append(".isString()){ if(const auto __e = ");
+        out.append(elemName.data(), elemName.size());
+        out.append("::parseNamedEnum(");
+        out.append(elemAccessor.data(), elemAccessor.size());
+        out.append(".asString())) this->");
+        out.append(fieldName.data(), fieldName.size());
+        out.append(assignOrPushPrefix.data(), assignOrPushPrefix.size());
+        out.append("*__e");
+        if(isPushContainer)
+            out.push_back(')');
+        out.append("; } else this->");
+        out.append(fieldName.data(), fieldName.size());
+        out.append(assignOrPushPrefix.data(), assignOrPushPrefix.size());
+        EmitNwbValueConversionExpr(out, elemName, elemAccessor, symbols);
+        if(isPushContainer)
+            out.push_back(')');
+        out.append("; } }\r\n");
+    }
+    else if(IsScalarOrStringLikeNwbElement(elemName, symbols)){
         EmitNwbListContainerLoopHeader(out, fieldName, isForwardList, isFixedVec, isDynVec);
         out.append(" this->");
         out.append(fieldName.data(), fieldName.size());
@@ -299,6 +322,9 @@ void EmitNwbListContainerFieldDeserialize(
         if(isPushContainer)
             out.push_back(')');
         out.append("; }\r\n");
+    }
+    else if(isSetContainer){
+        return;
     }
     else if(IsDeserializableClass(symbols.findClass(elemName))){
         EmitNwbListContainerLoopHeader(out, fieldName, isForwardList, isFixedVec, isDynVec);
@@ -406,7 +432,25 @@ void EmitNwbMapFieldDeserialize(
     if(!isStringLikeKey)
         return;
 
-    if(IsScalarOrStringLikeNwbElement(valName, symbols)){
+    if(symbols.findEnum(valName)){
+        EmitNwbFieldFindPrefix(out, fieldName);
+        out.append("__f->isMap()){ this->");
+        out.append(fieldName.data(), fieldName.size());
+        out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ if(__v.isString()){ if(const auto __e = ");
+        out.append(valName.data(), valName.size());
+        out.append("::parseNamedEnum(__v.asString())) this->");
+        out.append(fieldName.data(), fieldName.size());
+        out.push_back('[');
+        EmitNwbMapKeyExpr(out, keyName);
+        out.append("] = *__e; } else this->");
+        out.append(fieldName.data(), fieldName.size());
+        out.push_back('[');
+        EmitNwbMapKeyExpr(out, keyName);
+        out.append("] = ");
+        EmitNwbValueConversionExpr(out, valName, "__v", symbols);
+        out.append("; } }\r\n");
+    }
+    else if(IsScalarOrStringLikeNwbElement(valName, symbols)){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());
@@ -521,7 +565,7 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
             out.append(field->name.data(), field->name.size());
             out.append(".deserializeNwb(*__f)) return false;\r\n");
         }
-        else if((tname == "ForwardList" || tname == "Array" || tname == "FixedVector" || tname == "Vector" || tname == "Deque" || tname == "ParallelVector" || tname == "List")
+        else if(IsReflectedLinearContainerType(tname)
             && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
         {
             const MStringView elemName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
@@ -532,21 +576,6 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
         {
             const MStringView innerName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
             EmitNwbOptionalFieldDeserialize(out, field->name, innerName, m_symbols);
-        }
-        else if((tname == "Set" || tname == "HashSet" || tname == "ParallelHashSet")
-            && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
-        {
-            const MStringView elemName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
-            if(IsScalarOrStringLikeNwbElement(elemName, m_symbols)){
-                EmitNwbFieldFindPrefix(out, field->name);
-                out.append("__f->isList()){ this->");
-                out.append(field->name.data(), field->name.size());
-                out.append(".clear(); for(usize __i = 0u; __i < __f->asList().size(); ++__i) this->");
-                out.append(field->name.data(), field->name.size());
-                out.append(".insert(");
-                EmitNwbValueConversionExpr(out, elemName, "__f->asList()[__i]", m_symbols);
-                out.append("); }\r\n");
-            }
         }
         else if(IsReflectedMapContainerType(tname)
             && resolvedFieldType && resolvedFieldType->templateArgs.size() >= 2u

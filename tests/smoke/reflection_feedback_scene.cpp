@@ -4,8 +4,6 @@
 
 #include "reflection_feedback_scene.h"
 
-#include <core/assets/manager.h>
-
 #include <global/simd/constant.h>
 #include <global/simd/convert.h>
 #include <global/simd/frame.h>
@@ -47,9 +45,8 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionFeedbackScene::ReflectionFeedbackScene(ProjectRuntimeContext& context, Core::ECS::World& world)noexcept
-    : m_context(context)
-    , m_world(world){}
+ReflectionFeedbackScene::ReflectionFeedbackScene(Core::ECS::World& world)noexcept
+    : m_world(world){}
 
 bool ReflectionFeedbackScene::create(const AStringView caseName, const bool finalState){
     if(caseName == "feedback_mutation")
@@ -91,7 +88,7 @@ bool ReflectionFeedbackScene::applyMutation()noexcept{
 
 Core::ECS::EntityID ReflectionFeedbackScene::createPanel(const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const bool horizontal){
     using namespace __hidden_reflection_feedback_scene;
-    const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, s_Plane, s_Opaque, s_Interface, color, position, scale);
+    const auto entity = CreateTintedStaticMeshEntity(m_world, s_Plane, s_Opaque, s_Interface, color, position, scale);
     if(!entity.valid())
         return entity;
     if(!horizontal){

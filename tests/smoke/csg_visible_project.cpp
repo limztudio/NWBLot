@@ -120,7 +120,6 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateSolidCubeEntity(
     NWB::Core::ECS::World& world,
-    NWB::Core::Alloc::GlobalArena& arena,
     const Name receiverGroup,
     const Float4& colorTint,
     const Float4& position,
@@ -128,7 +127,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     const bool csgReceiver,
     const CsgVisibleMaterialRef& material
 ){
-    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(world, arena, s_CubeMesh, material, s_SmokeSurfaceMaterialInterface, colorTint, position, scale);
+    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(world, s_CubeMesh, material, s_SmokeSurfaceMaterialInterface, colorTint, position, scale);
     if(!entity.valid())
         return NWB::Core::ECS::s_InvalidEntityId;
 
@@ -194,9 +193,9 @@ static void ApplyCutterTransform(NWB::Core::ECS::World& world, const NWB::Core::
     AssignCsgCutterTransform(*cutter, cutterCenter, receiverRotation);
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateCutter(NWB::Core::ECS::World& world, NWB::Core::Alloc::GlobalArena& arena, const usize shapeSlot, const Name receiverGroup, const SIMDVectorSingle center){
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateCutter(NWB::Core::ECS::World& world, const usize shapeSlot, const Name receiverGroup, const SIMDVectorSingle center){
     auto cutterEntity = world.createEntity();
-    auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(arena);
+    auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
     cutter.receiverGroup = receiverGroup;
     AssignCsgCutterTransform(cutter, center, QuaternionIdentity());
 
@@ -415,7 +414,6 @@ public:
             const SIMDVectorSingle cutterPosition = VectorSetW(VectorAdd(receiverPositionVector, cutterLocalOffset), 0.0f);
             m_receivers[shapeSlot] = CreateSolidCubeEntity(
                 *m_world,
-                m_context.objectArena,
                 s_CsgVisibleReceiverGroups[shapeSlot],
                 CsgVisibleShapeColor(shapeSlot),
                 receiverPosition,
@@ -423,7 +421,7 @@ public:
                 true,
                 material
             );
-            m_cutters[shapeSlot] = CreateCutter(*m_world, m_context.objectArena, shapeSlot, s_CsgVisibleReceiverGroups[shapeSlot], cutterPosition);
+            m_cutters[shapeSlot] = CreateCutter(*m_world, shapeSlot, s_CsgVisibleReceiverGroups[shapeSlot], cutterPosition);
             m_receiverCenters[shapeSlot] = receiverPosition;
         }
 
@@ -434,7 +432,6 @@ public:
             StoreFloat(VectorAdd(CsgVisibleShapePosition(CsgVisibleShapeSlot::Plane), VectorSet(0.0f, 0.0f, s_OverlappingReceiverDepthOffset, 0.0f)), receiverPosition);
             const auto receiver = CreateSolidCubeEntity(
                 *m_world,
-                m_context.objectArena,
                 s_CsgVisibleReceiverGroups[CsgVisibleShapeSlot::Plane],
                 CsgVisibleShapeColor(CsgVisibleShapeSlot::Plane),
                 receiverPosition,

@@ -105,7 +105,7 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, const u32 maxLights, Scen
     // Importance-ranked shadow slots: most important lights get the pool (slot -> params.z; rest stay lit).
     // Selection over <= NWB_SCENE_MAX_LIGHTS lights stays cheap.
     const u32 lightCount = static_cast<u32>(gatheredCount);
-    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio);
+    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, NWB::Impl::Scene::s_CameraFallbackAspectRatio);
     const SIMDVectorSingle cameraPosition = cameraView.valid() ? LoadFloat(cameraView.transform->position) : VectorZero();
     for(u32 i = 0u; i < lightCount; ++i){
         const NWB::Impl::Scene::SceneLight& light = sceneLights[i];

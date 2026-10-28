@@ -192,7 +192,7 @@ private:
         StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
         StoreFloat(VectorSubtract(maximum, minimum), extent);
         const auto entity = CreateTintedStaticMeshEntity(
-            *m_world, m_context.objectArena, mesh, transparent ? (m_openAtlas ? s_OpenMaterial : s_GlassMaterial) : s_OpaqueMaterial,
+            *m_world, mesh, transparent ? (m_openAtlas ? s_OpenMaterial : s_GlassMaterial) : s_OpaqueMaterial,
             transparent && m_openAtlas ? NameText<char>{s_OpenInterface} : NameText<char>{s_MaterialInterface}, Float4(1.0f, 1.0f, 1.0f, 1.0f),
             center, extent
         );
@@ -250,7 +250,7 @@ private:
         const auto entity = createBox(box, transparent);
         AddStaticCsgMeshReceiver(*m_world, entity, s_Groups[groupIndex], !transparent, transparent);
         auto cutterEntity = m_world->createEntity();
-        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = s_Groups[groupIndex];
         cutter.shapeType = Name("engine/csg/box");
         cutter.active = m_arm != Arm::Uncut;
@@ -317,7 +317,7 @@ private:
     template<typename ParameterT>
     void addAnalyticCutter(const u32 groupIndex, const Name shapeType, const ParameterT& parameters, const SIMDMatrix& shapeToWorld){
         auto cutterEntity = m_world->createEntity();
-        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = s_AnalyticGroups[groupIndex];
         cutter.shapeType = shapeType;
         cutter.active = m_arm == Arm::Cut;
@@ -399,7 +399,7 @@ private:
                 auto entity = m_world->createEntity();
                 if(!entity.id().valid())
                     return false;
-                auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
+                auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>();
                 cutter.receiverGroup = s_OpenGroups[tile];
                 cutter.shapeType = Name(s_PlaneShapePath);
                 NWB::Impl::CsgPlaneShapeParameters plane;
@@ -504,7 +504,7 @@ public:
         auto& cameraTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(camera));
         const f32 cameraX = m_arm == Arm::CameraShift ? 0.3f : 0.0f;
         cameraTransform.position.x = cameraX;
-        const auto receiver = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_PlaneMesh, s_OpaqueMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 3.0f, 0.0f));
+        const auto receiver = CreateTintedStaticMeshEntity(*m_world, s_PlaneMesh, s_OpaqueMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 3.0f, 0.0f));
         NWB_FATAL_ASSERT_MSG(receiver.valid(), NWB_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
         auto& receiverTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiver));
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform.rotation);

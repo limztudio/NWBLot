@@ -9,7 +9,7 @@
 
 #include <impl/assets_model/asset.h>
 #include <impl/ecs_model/system.h>
-#include <impl/ecs_scene/components.h>
+#include <impl/ecs_scene/components.adhd.h>
 
 #include <core/assets/manager.h>
 #include <core/ecs/entity.h>

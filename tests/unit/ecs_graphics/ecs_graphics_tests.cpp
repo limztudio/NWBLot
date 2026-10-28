@@ -9,8 +9,7 @@
 
 #include <impl/ecs_mesh/skinning/skin_payload.h>
 #include <impl/ecs_mesh/skinning/submission_state.h>
-#include <impl/ecs_mesh/components.h>
-#include <impl/ecs_skeleton/components.h>
+#include <impl/ecs_skeleton/components.adhd.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_csg/module.h>
@@ -556,7 +555,7 @@ TEST(EcsGraphics, NonUniformScaleCannotBecomeRigidJointRotation){
 }
 
 static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(const NWB::Impl::SkeletonJointMatrix& rootJoint, const NWB::Impl::SkeletonJointMatrix& childJoint){
-    NWB::Impl::SkeletonPoseComponent pose(NWB::Tests::TestDetail::Arena());
+    NWB::Impl::SkeletonPoseComponent pose;
     pose.parentJoints.push_back(NWB::Impl::s_SkeletonRootParent);
     pose.parentJoints.push_back(0u);
     pose.localJoints.push_back(rootJoint);
@@ -586,7 +585,7 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     AssignSingleJointSkin(instance, 0u);
     instance.handle.value = 517u;
 
-    NWB::Impl::SkeletonJointPaletteComponent joints(NWB::Tests::TestDetail::Arena());
+    NWB::Impl::SkeletonJointPaletteComponent joints;
     joints.joints.push_back(MakeIdentityJointMatrix());
 
     ::Vector<NWB::Impl::SkeletonJointMatrix, NWB::Core::Alloc::ScratchArena> jointMatrices(scratchArena);

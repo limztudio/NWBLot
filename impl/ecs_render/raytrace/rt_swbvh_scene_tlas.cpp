@@ -2,18 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/ecs_render/material/sampled_texture_collection.h>
-#include <impl/ecs_render/optics/coincident_volumes.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-#include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
-#include <impl/ecs_csg/components.h>
 #include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
-
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-
-#include <global/algorithm.h>
-#include <global/hash_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

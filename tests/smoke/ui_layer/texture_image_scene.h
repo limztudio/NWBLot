@@ -7,7 +7,7 @@
 
 #include "texture_image_snapshot.h"
 
-#include <impl/ecs_ui/components.h>
+#include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/images/image_loader.h>
 
 #include <core/input/module.h>

@@ -4,11 +4,11 @@
 
 #include "coincident_volumes.h"
 
-#include <impl/ecs_render/components.h>
+#include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_csg/components.h>
+#include <impl/ecs_csg/components.adhd.h>
 #include <impl/ecs_mesh/system.h>
-#include <impl/ecs_scene/components.h>
+#include <impl/ecs_scene/components.adhd.h>
 
 #include <core/ecs/world.h>
 

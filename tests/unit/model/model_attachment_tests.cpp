@@ -4,11 +4,7 @@
 
 #include "model_test_context.h"
 
-#include <impl/ecs_skeleton/components.h>
-
-#include <global/arena_memory.h>
-
-#include <tests/common/test_context.h>
+#include <impl/ecs_skeleton/components.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -45,7 +41,7 @@ using namespace NWB::ModelTests;
     auto& object = world.entity(skeleton).getComponent<ModelObjectComponent>();
     object.kind = ModelObjectKind::Skeleton;
     object.localTransform = Translation(objectTranslation);
-    auto& pose = world.entity(skeleton).addComponent<SkeletonPoseComponent>(context.testWorld.arena);
+    auto& pose = world.entity(skeleton).addComponent<SkeletonPoseComponent>();
     pose.parentJoints.reserve(jointCount);
     pose.localJoints.reserve(jointCount);
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
@@ -87,7 +83,7 @@ TEST(ModelAttachment, RevalidatesPoseHierarchyAndParentBindingOnEveryUpdate){
     world.entity(replacement).removeComponent<SkeletonPoseComponent>();
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 20.0f);
-    auto& restored = world.entity(replacement).addComponent<SkeletonPoseComponent>(context.testWorld.arena);
+    auto& restored = world.entity(replacement).addComponent<SkeletonPoseComponent>();
     restored.parentJoints = { s_SkeletonRootParent, 0u };
     restored.localJoints = { Translation(2.0f), Translation(3.0f) };
     ASSERT_TRUE(context.system.update(world, 0.0f));
@@ -118,9 +114,9 @@ TEST(ModelAttachment, PreservesOriginalAttachmentTransformWriteOrder){
     auto& world = context.testWorld.world;
     const auto owner = context.makeOwner();
     world.entity(owner).getComponent<Scene::TransformComponent>().position.x = 10.0f;
-    const auto first = MakeAttachment(context, owner, Core::ECS::s_InvalidEntityId, Limit<u32>::s_Max, 2.0f);
-    const auto second = MakeAttachment(context, owner, first, Limit<u32>::s_Max, 3.0f);
-    auto& pose = world.entity(first).addComponent<SkeletonPoseComponent>(context.testWorld.arena);
+    const auto first = MakeAttachment(context, owner, Core::ECS::s_InvalidEntityId, s_SkeletonInvalidJointIndex, 2.0f);
+    const auto second = MakeAttachment(context, owner, first, s_SkeletonInvalidJointIndex, 3.0f);
+    auto& pose = world.entity(first).addComponent<SkeletonPoseComponent>();
     pose.parentJoints = { s_SkeletonRootParent };
     pose.localJoints = { Translation(1.0f) };
     const auto jointFirst = MakeAttachment(context, owner, first, 0u, 4.0f);

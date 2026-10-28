@@ -37,7 +37,7 @@ struct MeshViewGpuData{
         Float4(0.f, 1.f, 0.f, 0.f),
         Float4(0.f, -1.f, 0.f, 0.f),
         Float4(0.f, 0.f, 1.f, 0.f),
-        Float4(0.f, 0.f, -1.f, NWB::Impl::Scene::CameraDefaults::s_FarPlane),
+        Float4(0.f, 0.f, -1.f, NWB::Impl::Scene::s_CameraFarPlane),
     };
 };
 

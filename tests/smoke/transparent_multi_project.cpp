@@ -150,14 +150,14 @@ public:
 #endif
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-[[nodiscard]] static bool CreateCausticRefractionBackdrop(NWB::Core::ECS::World& world, NWB::Core::Alloc::GlobalArena& arena){
+[[nodiscard]] static bool CreateCausticRefractionBackdrop(NWB::Core::ECS::World& world){
     constexpr TransparentMaterialRef s_BackdropMaterial{"project/smoke/refraction/materials/opaque"};
     // Place unlit colored stripes behind the sphere for screen-space refraction.
     for(u32 stripe = 0u; stripe < 24u; ++stripe){
         const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
         Float4 position;
         StoreFloat(VectorMultiplyAddExpression(VectorSet(static_cast<f32>(stripe), 0.f, 0.f, 0.f), VectorSet(0.2f, 0.f, 0.f, 0.f), VectorSet(-2.3f, s_CameraTargetY, 2.2f, 0.f)), position);
-        const auto entity = CreateTintedStaticMeshEntity(world, arena, s_ShadowPlaneMesh, s_BackdropMaterial, s_SmokeSurfaceMaterialInterface, Float4(value, value, value, 1.f), position, Float4(0.1f, 1.f, 1.3f, 0.f));
+        const auto entity = CreateTintedStaticMeshEntity(world, s_ShadowPlaneMesh, s_BackdropMaterial, s_SmokeSurfaceMaterialInterface, Float4(value, value, value, 1.f), position, Float4(0.1f, 1.f, 1.3f, 0.f));
         if(!entity.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("CausticSphereSmokeProject: failed to create screen refraction backdrop"));
             return false;
@@ -258,9 +258,9 @@ static void ApplyTransparentCsgSceneTransform(
         AssignCsgCutterTransform(*cutter, receiverPosition, receiverRotation);
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentCsgPlaneCutter(NWB::Core::ECS::World& world, NWB::Core::Alloc::GlobalArena& arena){
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentCsgPlaneCutter(NWB::Core::ECS::World& world){
     auto cutterEntity = world.createEntity();
-    auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(arena);
+    auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
     cutter.receiverGroup = s_TransparentCsgReceiverGroup;
     cutter.shapeType = Name("engine/csg/plane");
     cutter.active = !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_TRANSPARENT_CSG_DISABLE_CUTTER");
@@ -277,7 +277,6 @@ static void ApplyTransparentCsgSceneTransform(
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentStaticMeshEntity(
     NWB::Core::ECS::World& world,
-    NWB::Core::Alloc::GlobalArena& arena,
     const TransparentMeshRef& mesh,
     const TransparentMaterialRef& material,
     const Float4& colorTint,
@@ -285,7 +284,7 @@ static void ApplyTransparentCsgSceneTransform(
     const Float4& scale,
     const Name csgReceiverGroup = s_NameNone
 ){
-    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(world, arena, mesh, material, s_SmokeSurfaceMaterialInterface, colorTint, position, scale);
+    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(world, mesh, material, s_SmokeSurfaceMaterialInterface, colorTint, position, scale);
     if(!entity.valid())
         return NWB::Core::ECS::s_InvalidEntityId;
 
@@ -515,7 +514,6 @@ public:
         StoreFloat(TransparentCenterShapeBasePosition(), centerBasePosition);
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_TransparentShapeMesh,
             s_TransparentSharedMaterial,
             Float4(0.55f, 0.78f, 1.0f, 0.30f),
@@ -537,10 +535,9 @@ public:
         StoreFloat(TransparentRightShapeBasePosition(), rightBasePosition);
         StoreFloat(OpaqueLeftShapeBasePosition(), opaqueLeftBasePosition);
         StoreFloat(OpaqueRightShapeBasePosition(), opaqueRightBasePosition);
-        const auto shapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentLeftMesh, s_TransparentSharedMaterial, Float4(1.0f, 0.42f, 0.20f, 0.42f), leftBasePosition, Float4(0.62f, 0.62f, 0.62f));
+        const auto shapeEntity = CreateTransparentStaticMeshEntity(*m_world, s_TransparentLeftMesh, s_TransparentSharedMaterial, Float4(1.0f, 0.42f, 0.20f, 0.42f), leftBasePosition, Float4(0.62f, 0.62f, 0.62f));
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_TransparentCenterMesh,
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
             // Unlit saturated color keeps clipping visible independently of facet lighting while retaining transparency.
@@ -552,7 +549,7 @@ public:
 #endif
             centerBasePosition, Float4(0.78f, 0.78f, 0.78f), TransparentCenterCsgReceiverGroup()
         );
-        const auto rightShapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentRightMesh, s_TransparentSharedMaterial, Float4(0.12f, 0.44f, 1.0f, 0.42f), rightBasePosition, Float4(0.68f, 0.68f, 0.68f));
+        const auto rightShapeEntity = CreateTransparentStaticMeshEntity(*m_world, s_TransparentRightMesh, s_TransparentSharedMaterial, Float4(0.12f, 0.44f, 1.0f, 0.42f), rightBasePosition, Float4(0.68f, 0.68f, 0.68f));
         m_leftShape = shapeEntity;
         m_centerShape = centerShapeEntity;
         m_rightShape = rightShapeEntity;
@@ -560,7 +557,6 @@ public:
         // Static opaque occluders cast hard shadows across the sweeping tinted shadows.
         const auto opaqueLeftEntity = CreateTintedStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_TransparentCenterMesh,
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
@@ -570,7 +566,6 @@ public:
         );
         const auto opaqueRightEntity = CreateTintedStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_TransparentRightMesh,
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
@@ -587,7 +582,6 @@ public:
         // The ground receives tinted shadows and, in caustic builds, additive photon irradiance.
         const auto shadowPlaneEntity = CreateTintedStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_ShadowPlaneMesh,
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
@@ -599,11 +593,11 @@ public:
             Float4(0.0f, -0.08f, 0.08f), Float4(1.75f, 1.0f, 1.55f)
         );
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP") && !CreateCausticRefractionBackdrop(*m_world, m_context.objectArena))
+        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP") && !CreateCausticRefractionBackdrop(*m_world))
             return false;
 #endif
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-        const auto cutterEntity = CreateTransparentCsgPlaneCutter(*m_world, m_context.objectArena);
+        const auto cutterEntity = CreateTransparentCsgPlaneCutter(*m_world);
         const bool csgEntitiesValid = cutterEntity.valid();
         m_csgReceiver = centerShapeEntity;
         m_csgCutter = cutterEntity;

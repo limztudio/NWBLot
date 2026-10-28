@@ -283,7 +283,7 @@ void SourceEmitter::emitParallelStmt(
             out.append(");\r\n");
         }
         emitIndent(out, indent + 1u);
-        out.append(stmt.nativeCode.data(), stmt.nativeCode.size());
+        AppendAdhdTextCrlf(out, stmt.nativeCode);
         out.append("\r\n");
         for(const NativeBinding& binding : stmt.nativeBindings){
             if(binding.mode != ParamPassingMode::Mut || !binding.sourceExpr)

@@ -5,10 +5,10 @@
 #pragma once
 
 
-#include <impl/global.h>
-#include <impl/ecs_ui/toolkit/paint.h>
-#include <impl/ecs_ui/toolkit/builder.h>
-#include <impl/ecs_ui/toolkit/text/service.h>
+#include "../global.h"
+#include "toolkit/paint.h"
+#include "toolkit/builder.h"
+#include "toolkit/text/service.h"
 
 #include <core/ecs/entity_id.h>
 #include <core/os/clipboard.h>
@@ -55,12 +55,7 @@ struct UiPaintContext{
 };
 
 using UiPaintCallback = Function<void(UiPaintContext&)>;
-
-struct UiPaintComponent{
-    UiPaintCallback paint;
-    bool visible = true;
-    i32 order = 0;
-};
+inline const UiPaintCallback s_NullUiPaintCallback{};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,4 +65,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

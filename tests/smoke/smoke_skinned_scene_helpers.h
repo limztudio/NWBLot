@@ -148,7 +148,6 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
 
 [[nodiscard]] inline SmokeTintedModelEntityResult CreateTintedModelEntity(
     Core::ECS::World& world,
-    Core::Alloc::GlobalArena& arena,
     const SmokeModelRef& model,
     const SmokeMaterialRef& material,
     const NameText<char> materialInterfacePath,
@@ -156,7 +155,7 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     const Float4& position,
     const Float4& scale
 ){
-    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(world, arena, material, materialInterfacePath, position, scale);
+    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(world, material, materialInterfacePath, position, scale);
 
     auto& modelComponent = world.entity(setup.entity).addComponent<Impl::ModelComponent>();
     modelComponent.model = model;
@@ -164,7 +163,7 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     return {.entity = setup.entity, .tintApplied = ApplySmokeMaterialTint(world, setup, colorTint)};
 }
 
-[[nodiscard]] inline Core::ECS::EntityID FindSpawnedModelObject(Core::ECS::World& world, const Core::ECS::EntityID owner, const Name objectName, const u32 objectKind)noexcept{
+[[nodiscard]] inline Core::ECS::EntityID FindSpawnedModelObject(Core::ECS::World& world, const Core::ECS::EntityID owner, const Name objectName, const Impl::ModelObjectKind::Enum objectKind)noexcept{
     Core::ECS::EntityID result = Core::ECS::s_InvalidEntityId;
     world.view<Impl::ModelObjectComponent>().each([&](const Core::ECS::EntityID entity, Impl::ModelObjectComponent& object)noexcept{
         if(result.valid())

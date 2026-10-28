@@ -70,32 +70,99 @@ void EmitMethodNameLookupBody(
     out.append("return {};\r\n");
 }
 
+void EmitSerializedBinarySizeMethod(
+    MString& out,
+    const MVector<FieldDecl*>& fields,
+    const SymbolTable& symbols
+){
+    out.append("    [[nodiscard]] static constexpr usize serializedBinarySize()noexcept{ return 0u");
+    for(const FieldDecl* field : fields){
+        if(!field || field->isTransient || !field->type)
+            continue;
+        const TypeRef* resolved = symbols.unwrapTypeAlias(field->type);
+        const MStringView tname = resolved ? resolved->name : field->type->name;
+        if(tname == "Name" || tname == "AssetRef"){
+            out.append(" + sizeof(::NameHash)");
+        }
+        else if(const ClassDecl* subCls = symbols.findClass(tname); subCls && subCls->isSerialize){
+            out.append(" + decltype(");
+            out.append(field->name.data(), field->name.size());
+            out.append(")::serializedBinarySize()");
+        }
+        else{
+            out.append(" + sizeof(");
+            out.append(field->name.data(), field->name.size());
+            out.push_back(')');
+        }
+    }
+    out.append("; }\r\n");
+}
+
 void EmitSerializeBinaryBody(
     MString& out,
     const MVector<FieldDecl*>& fields,
+    const SymbolTable& symbols,
     const MStringView indent
 ){
     out.append(indent.data(), indent.size());
-    out.append("usize offset = 0u;\r\n");
+    out.append("[[maybe_unused]] usize offset = 0u;\r\n");
     for(const FieldDecl* field : fields){
-        if(!field || field->isTransient)
+        if(!field || field->isTransient || !field->type)
             continue;
-        out.append(indent.data(), indent.size());
-        out.append("if(offset + sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(") > bufferCapacity)\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("    return 0u;\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("NWB_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(", sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append("));\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("offset += sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(");\r\n");
+        const TypeRef* resolved = symbols.unwrapTypeAlias(field->type);
+        const MStringView tname = resolved ? resolved->name : field->type->name;
+        if(tname == "Name" || tname == "AssetRef"){
+            out.append(indent.data(), indent.size());
+            out.append("if(offset + sizeof(::NameHash) > bufferCapacity)\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("    return 0u;\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("NWB_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
+            out.append(field->name.data(), field->name.size());
+            if(tname == "AssetRef")
+                out.append(".virtualPath");
+            out.append(".identityHash(), sizeof(::NameHash));\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("offset += sizeof(::NameHash);\r\n");
+        }
+        else if(const ClassDecl* subCls = symbols.findClass(tname); subCls && subCls->isSerialize){
+            out.append(indent.data(), indent.size());
+            out.append("if(offset + this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".serializedBinarySize() > bufferCapacity)\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("    return 0u;\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("if(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".serializeBinary(outBuffer + offset, bufferCapacity - offset) != this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".serializedBinarySize())\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("    return 0u;\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("offset += this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".serializedBinarySize();\r\n");
+        }
+        else{
+            out.append(indent.data(), indent.size());
+            out.append("if(offset + sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(") > bufferCapacity)\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("    return 0u;\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("NWB_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(", sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("));\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("offset += sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(");\r\n");
+        }
     }
     out.append(indent.data(), indent.size());
     out.append("return offset;\r\n");
@@ -104,31 +171,68 @@ void EmitSerializeBinaryBody(
 void EmitDeserializeBinaryBody(
     MString& out,
     const MVector<FieldDecl*>& fields,
+    const SymbolTable& symbols,
     const MStringView indent
 ){
     out.append(indent.data(), indent.size());
-    out.append("usize offset = 0u;\r\n");
+    out.append("[[maybe_unused]] usize offset = 0u;\r\n");
     for(const FieldDecl* field : fields){
-        if(!field || field->isTransient)
+        if(!field || field->isTransient || !field->type)
             continue;
-        out.append(indent.data(), indent.size());
-        out.append("if(offset + sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(") > bufferSize)\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("    return false;\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("NWB_MEMCPY(&this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(", sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append("), inBuffer + offset, sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append("));\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("offset += sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(");\r\n");
+        const TypeRef* resolved = symbols.unwrapTypeAlias(field->type);
+        const MStringView tname = resolved ? resolved->name : field->type->name;
+        if(tname == "Name" || tname == "AssetRef"){
+            out.append(indent.data(), indent.size());
+            out.append("if(offset + sizeof(::NameHash) > bufferSize)\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("    return false;\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("{ ::NameHash __hash{}; NWB_MEMCPY(&__hash, sizeof(::NameHash), inBuffer + offset, sizeof(::NameHash)); this->");
+            out.append(field->name.data(), field->name.size());
+            if(tname == "AssetRef")
+                out.append(".virtualPath");
+            out.append(" = ::Name(__hash); }\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("offset += sizeof(::NameHash);\r\n");
+        }
+        else if(const ClassDecl* subCls = symbols.findClass(tname); subCls && subCls->isSerialize){
+            out.append(indent.data(), indent.size());
+            out.append("if(offset + this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".serializedBinarySize() > bufferSize)\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("    return false;\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("if(!this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".deserializeBinary(inBuffer + offset, bufferSize - offset))\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("    return false;\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("offset += this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".serializedBinarySize();\r\n");
+        }
+        else{
+            out.append(indent.data(), indent.size());
+            out.append("if(offset + sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(") > bufferSize)\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("    return false;\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("NWB_MEMCPY(&this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(", sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("), inBuffer + offset, sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("));\r\n");
+            out.append(indent.data(), indent.size());
+            out.append("offset += sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(");\r\n");
+        }
     }
     out.append(indent.data(), indent.size());
     out.append("return true;\r\n");
@@ -180,6 +284,30 @@ void EmitNwbDependencyFieldFindPrefix(MString& out, const MStringView fieldName)
     out.append("\"); __f && ");
 }
 
+void EmitNwbContainerElementDependencyExtract(
+    MString& out,
+    const MStringView elemTypeName,
+    const MStringView elemExpr,
+    const SymbolTable& symbols
+){
+    if(elemTypeName == "AssetRef"){
+        out.append("if(");
+        out.append(elemExpr.data(), elemExpr.size());
+        out.append(".isString()){ if(const auto __name = ::Name::FromText(");
+        out.append(elemExpr.data(), elemExpr.size());
+        out.append(".asString()); __name && *__name) callback(*__name); }");
+    }
+    else if(symbols.findClass(elemTypeName)){
+        out.append("if(!");
+        out.append(elemExpr.data(), elemExpr.size());
+        out.append(".isMap() || !");
+        out.append(elemTypeName.data(), elemTypeName.size());
+        out.append("::extractNwbAssetDependencies(");
+        out.append(elemExpr.data(), elemExpr.size());
+        out.append(", callback)) return false;");
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -229,6 +357,7 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
     EmitAssetTypeNameDecl(out, decl);
 
     if(decl.isSerialize){
+        EmitSerializedBinarySizeMethod(out, decl.orderedFields, m_symbols);
         out.append("    [[nodiscard]] usize serializeBinary(u8* outBuffer, usize bufferCapacity)const noexcept;\r\n");
         out.append("    [[nodiscard]] bool deserializeBinary(const u8* inBuffer, usize bufferSize)noexcept;\r\n");
     }
@@ -258,12 +387,13 @@ void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl&
     EmitAssetTypeNameDecl(out, decl);
 
     if(decl.isSerialize){
-        out.append("    [[nodiscard]] usize serializeBinary(u8* outBuffer, const usize bufferCapacity)const noexcept{\r\n");
-        EmitSerializeBinaryBody(out, fields, "        ");
+        EmitSerializedBinarySizeMethod(out, fields, m_symbols);
+        out.append("    [[nodiscard]] usize serializeBinary([[maybe_unused]] u8* outBuffer, [[maybe_unused]] const usize bufferCapacity)const noexcept{\r\n");
+        EmitSerializeBinaryBody(out, fields, m_symbols, "        ");
         out.append("    }\r\n");
 
-        out.append("    [[nodiscard]] bool deserializeBinary(const u8* inBuffer, const usize bufferSize)noexcept{\r\n");
-        EmitDeserializeBinaryBody(out, fields, "        ");
+        out.append("    [[nodiscard]] bool deserializeBinary([[maybe_unused]] const u8* inBuffer, [[maybe_unused]] const usize bufferSize)noexcept{\r\n");
+        EmitDeserializeBinaryBody(out, fields, m_symbols, "        ");
         out.append("    }\r\n");
     }
 
@@ -299,14 +429,14 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
     if(decl.isSerialize){
         out.append("usize ");
         out.append(decl.name.data(), decl.name.size());
-        out.append("::serializeBinary(u8* outBuffer, const usize bufferCapacity)const noexcept{\r\n");
-        EmitSerializeBinaryBody(out, activeFields, "    ");
+        out.append("::serializeBinary([[maybe_unused]] u8* outBuffer, [[maybe_unused]] const usize bufferCapacity)const noexcept{\r\n");
+        EmitSerializeBinaryBody(out, activeFields, m_symbols, "    ");
         out.append("}\r\n\r\n");
 
         out.append("bool ");
         out.append(decl.name.data(), decl.name.size());
-        out.append("::deserializeBinary(const u8* inBuffer, const usize bufferSize)noexcept{\r\n");
-        EmitDeserializeBinaryBody(out, activeFields, "    ");
+        out.append("::deserializeBinary([[maybe_unused]] const u8* inBuffer, [[maybe_unused]] const usize bufferSize)noexcept{\r\n");
+        EmitDeserializeBinaryBody(out, activeFields, m_symbols, "    ");
         out.append("}\r\n\r\n");
     }
 
@@ -416,59 +546,45 @@ void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const MVector<F
             continue;
         const TypeRef* resolvedFieldType = m_symbols.unwrapTypeAlias(field->type);
         const MStringView tname = resolvedFieldType ? resolvedFieldType->name : field->type->name;
-        if(tname == "AssetRef"){
+        const MStringView effectiveScalarOrClassType = (
+            tname == "Optional"
+            && resolvedFieldType
+            && !resolvedFieldType->templateArgs.empty()
+            && resolvedFieldType->templateArgs[0].type
+        )
+            ? m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name)
+            : tname;
+
+        if(effectiveScalarOrClassType == "AssetRef"){
             EmitNwbDependencyFieldFindPrefix(out, field->name);
             out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString()); __name && *__name) callback(*__name); }\r\n");
         }
-        else if(m_symbols.findClass(tname)){
+        else if(m_symbols.findClass(effectiveScalarOrClassType)){
             EmitNwbDependencyFieldFindPrefix(out, field->name);
             out.append("__f->isMap() && !");
-            out.append(tname.data(), tname.size());
+            out.append(effectiveScalarOrClassType.data(), effectiveScalarOrClassType.size());
             out.append("::extractNwbAssetDependencies(*__f, callback)) return false;\r\n");
-        }
-        else if(tname == "Optional"
-            && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
-        {
-            const MStringView innerName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
-            if(innerName == "AssetRef"){
-                EmitNwbDependencyFieldFindPrefix(out, field->name);
-                out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString()); __name && *__name) callback(*__name); }\r\n");
-            }
-            else if(m_symbols.findClass(innerName)){
-                EmitNwbDependencyFieldFindPrefix(out, field->name);
-                out.append("__f->isMap() && !");
-                out.append(innerName.data(), innerName.size());
-                out.append("::extractNwbAssetDependencies(*__f, callback)) return false;\r\n");
-            }
         }
         else if(IsReflectedLinearContainerType(tname)
             && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
         {
             const MStringView elemName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
-            if(elemName == "AssetRef"){
+            if(elemName == "AssetRef" || m_symbols.findClass(elemName)){
                 EmitNwbDependencyFieldFindPrefix(out, field->name);
-                out.append("__f->isList()){ for(usize __i = 0u; __i < __f->asList().size(); ++__i){ if(__f->asList()[__i].isString()){ if(const auto __name = ::Name::FromText(__f->asList()[__i].asString()); __name && *__name) callback(*__name); } } }\r\n");
-            }
-            else if(m_symbols.findClass(elemName)){
-                EmitNwbDependencyFieldFindPrefix(out, field->name);
-                out.append("__f->isList()){ for(usize __i = 0u; __i < __f->asList().size(); ++__i){ if(!__f->asList()[__i].isMap() || !");
-                out.append(elemName.data(), elemName.size());
-                out.append("::extractNwbAssetDependencies(__f->asList()[__i], callback)) return false; } }\r\n");
+                out.append("__f->isList()){ for(usize __i = 0u; __i < __f->asList().size(); ++__i){ ");
+                EmitNwbContainerElementDependencyExtract(out, elemName, "__f->asList()[__i]", m_symbols);
+                out.append(" } }\r\n");
             }
         }
         else if(IsReflectedMapContainerType(tname)
             && resolvedFieldType && resolvedFieldType->templateArgs.size() >= 2u && resolvedFieldType->templateArgs[1].type)
         {
             const MStringView valName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[1].type->name);
-            if(valName == "AssetRef"){
+            if(valName == "AssetRef" || m_symbols.findClass(valName)){
                 EmitNwbDependencyFieldFindPrefix(out, field->name);
-                out.append("__f->isMap()){ for(const auto& [__k, __v] : __f->asMap()){ (void)__k; if(__v.isString()){ if(const auto __name = ::Name::FromText(__v.asString()); __name && *__name) callback(*__name); } } }\r\n");
-            }
-            else if(m_symbols.findClass(valName)){
-                EmitNwbDependencyFieldFindPrefix(out, field->name);
-                out.append("__f->isMap()){ for(const auto& [__k, __v] : __f->asMap()){ (void)__k; if(!__v.isMap() || !");
-                out.append(valName.data(), valName.size());
-                out.append("::extractNwbAssetDependencies(__v, callback)) return false; } }\r\n");
+                out.append("__f->isMap()){ for(const auto& [__k, __v] : __f->asMap()){ (void)__k; ");
+                EmitNwbContainerElementDependencyExtract(out, valName, "__v", m_symbols);
+                out.append(" } }\r\n");
             }
         }
     }

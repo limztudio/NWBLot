@@ -5,15 +5,32 @@
 #pragma once
 
 
-#include "components.h"
+#include <impl/ecs_scene/components.adhd.h>
 
 #include <core/ecs/entity_id.h>
+
+#include <cstddef>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_SCENE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(IsStandardLayout_V<ActiveCameraComponent>, "ActiveCameraComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ActiveCameraComponent>, "ActiveCameraComponent must stay cheap to move in dense ECS storage");
+static_assert(sizeof(ActiveCameraComponent) == sizeof(Core::ECS::EntityID), "ActiveCameraComponent must only contain the active camera entity reference");
+
+static_assert(IsStandardLayout_V<CameraComponent>, "CameraComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<CameraComponent>, "CameraComponent must stay cheap to move in dense ECS storage");
+static_assert(alignof(CameraComponent) >= alignof(Float4), "CameraComponent must stay aligned for SIMD component loads");
+static_assert(sizeof(CameraComponent) == sizeof(Float4), "CameraComponent must stay one aligned vector wide");
+static_assert((sizeof(CameraComponent) % alignof(CameraComponent)) == 0u, "CameraComponent array stride must keep every element SIMD-aligned");
+static_assert((offsetof(CameraComponent, projection) % alignof(Float4)) == 0u, "CameraComponent::projection must stay aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -135,12 +152,12 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     return projection;
 }
 
-[[nodiscard]] inline CameraProjection StoreDefaultCameraProjection(const f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio)noexcept{
+[[nodiscard]] inline CameraProjection StoreDefaultCameraProjection(const f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept{
     const auto defaultProjection = TryBuildCameraProjection(
-        VectorReplicate(CameraDefaults::s_VerticalFovRadians),
-        VectorReplicate(CameraDefaults::s_NearPlane),
-        VectorReplicate(CameraDefaults::s_FarPlane),
-        VectorReplicate(CameraDefaults::s_AutoAspectRatio),
+        VectorReplicate(s_CameraVerticalFovRadians),
+        VectorReplicate(s_CameraNearPlane),
+        VectorReplicate(s_CameraFarPlane),
+        VectorReplicate(s_CameraAutoAspectRatio),
         VectorReplicate(fallbackAspectRatio)
     );
     if(defaultProjection)
@@ -150,8 +167,8 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     projection.projectionParams = Float4(1.0f, 1.0f, 1.0f, 0.0f);
     projection.aspectRatio = 1.0f;
     projection.tanHalfVerticalFov = 1.0f;
-    projection.nearPlane = CameraDefaults::s_NearPlane;
-    projection.farPlane = CameraDefaults::s_FarPlane;
+    projection.nearPlane = s_CameraNearPlane;
+    projection.farPlane = s_CameraFarPlane;
     return projection;
 }
 
@@ -173,7 +190,7 @@ public:
 };
 
 
-[[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio)noexcept;
+[[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept;
 [[nodiscard]] Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position);
 
 

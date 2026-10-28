@@ -7,6 +7,7 @@
 
 #include "runtime_instance.h"
 
+#include <impl/ecs_mesh/components.adhd.h>
 #include <impl/ecs_mesh/runtime/mesh_requests.h>
 
 #include <core/ecs/world.h>

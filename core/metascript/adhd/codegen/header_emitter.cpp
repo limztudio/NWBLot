@@ -40,6 +40,13 @@ namespace __hidden_adhd_header_emitter{
     return false;
 }
 
+[[nodiscard]] bool ClassDependsOnClassByValue(
+    const ClassDecl& cls,
+    const MStringView targetClassName,
+    const SymbolTable& symbols,
+    u32 depth = 0u
+)noexcept;
+
 [[nodiscard]] bool TypeRefReferencesSymbolByValue(
     const TypeRef& type,
     const MStringView targetName,
@@ -54,6 +61,10 @@ namespace __hidden_adhd_header_emitter{
         if(unwrapped != &type && TypeRefReferencesSymbolByValue(*unwrapped, targetName, symbols, depth + 1u))
             return true;
     }
+    if(const ClassDecl* cls = symbols.findClass(type.name)){
+        if(!cls->templateParams.empty() && ClassDependsOnClassByValue(*cls, targetName, symbols, depth + 1u))
+            return true;
+    }
     for(const TypeArg& targ : type.templateArgs){
         if(targ.type && TypeRefReferencesSymbolByValue(*targ.type, targetName, symbols, depth + 1u))
             return true;
@@ -64,12 +75,13 @@ namespace __hidden_adhd_header_emitter{
 [[nodiscard]] bool ClassDependsOnClassByValue(
     const ClassDecl& cls,
     const MStringView targetClassName,
-    const SymbolTable& symbols
+    const SymbolTable& symbols,
+    const u32 depth
 )noexcept{
     for(const FieldDecl* field : cls.fields){
         if(!field || !field->type)
             continue;
-        if(TypeRefReferencesSymbolByValue(*field->type, targetClassName, symbols))
+        if(TypeRefReferencesSymbolByValue(*field->type, targetClassName, symbols, depth))
             return true;
     }
     return false;
@@ -195,7 +207,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     if(!unit.topLevelNativeBlocks.empty()){
         out.append("\r\n");
         for(const MStringView& rawBlock : unit.topLevelNativeBlocks){
-            out.append(rawBlock.data(), rawBlock.size());
+            AppendAdhdTextCrlf(out, rawBlock);
             out.append("\r\n");
         }
     }
@@ -235,61 +247,6 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     if(emittedForwardDecl)
         out.append("\r\n");
 
-    auto emitGlobalConstStmt = [&](const Stmt& c){
-        out.append("inline constexpr ");
-        m_typeEmitter.emitTypeCpp(out, *c.varType);
-        out.push_back(' ');
-        out.append(c.name.data(), c.name.size());
-        if(c.isCtorInit){
-            const MStringView baseConstType = m_symbols.resolveBaseTypeName(c.varType->name);
-            if(!baseConstType.empty() && m_symbols.isSimdMatrixType(baseConstType)){
-                if(c.arguments.empty()){
-                    out.append("{};\r\n");
-                }
-                else{
-                    out.append("{ .raw = { ");
-                    for(usize i = 0u; i < c.arguments.size(); ++i){
-                        if(i > 0u)
-                            out.append(", ");
-                        if(c.arguments[i])
-                            m_sourceEmitter.emitExpr(out, *c.arguments[i]);
-                    }
-                    out.append(" } };\r\n");
-                }
-            }
-            else{
-                out.push_back('(');
-                u32 ctorVecLanes = 0u;
-                const bool isScalarSplatCtor = !baseConstType.empty()
-                    && m_symbols.isSimdVectorType(baseConstType, ctorVecLanes)
-                    && c.arguments.size() == 1u && c.arguments[0]
-                    && c.arguments[0]->resolvedSimdType.empty();
-                if(isScalarSplatCtor){
-                    for(u32 lane = 0u; lane < ctorVecLanes; ++lane){
-                        if(lane > 0u)
-                            out.append(", ");
-                        m_sourceEmitter.emitExpr(out, *c.arguments[0]);
-                    }
-                }
-                else{
-                    for(usize i = 0u; i < c.arguments.size(); ++i){
-                        if(i > 0u)
-                            out.append(", ");
-                        if(c.arguments[i])
-                            m_sourceEmitter.emitExpr(out, *c.arguments[i]);
-                    }
-                }
-                out.append(");\r\n");
-            }
-        }
-        else{
-            out.append(" = ");
-            if(c.expr)
-                m_sourceEmitter.emitExpr(out, *c.expr);
-            out.append(";\r\n");
-        }
-    };
-
     auto constUsesLocalTypeAlias = [&](const Stmt& c)noexcept -> bool{
         if(!c.varType)
             return false;
@@ -300,12 +257,22 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         return false;
     };
 
+    auto constUsesLocalClass = [&](const Stmt& c)noexcept -> bool{
+        if(!c.varType)
+            return false;
+        for(const ClassDecl* classDecl : unit.classes){
+            if(classDecl && !classDecl->isImported && __hidden_adhd_header_emitter::TypeRefReferencesSymbolByValue(*c.varType, classDecl->name, m_symbols))
+                return true;
+        }
+        return false;
+    };
+
     bool emittedEarlyConst = false;
     for(const Stmt* c : unit.globalConstants){
-        if(!c || c->isImported || !c->varType || constUsesLocalTypeAlias(*c))
+        if(!c || c->isImported || !c->varType || constUsesLocalTypeAlias(*c) || constUsesLocalClass(*c))
             continue;
         emittedEarlyConst = true;
-        emitGlobalConstStmt(*c);
+        emitGlobalConstDecl(out, *c);
     }
     if(emittedEarlyConst)
         out.append("\r\n\r\n");
@@ -327,14 +294,14 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
     }
 
-    bool emittedLateConst = false;
+    bool emittedMidConst = false;
     for(const Stmt* c : unit.globalConstants){
-        if(!c || c->isImported || !c->varType || !constUsesLocalTypeAlias(*c))
+        if(!c || c->isImported || !c->varType || !constUsesLocalTypeAlias(*c) || constUsesLocalClass(*c))
             continue;
-        emittedLateConst = true;
-        emitGlobalConstStmt(*c);
+        emittedMidConst = true;
+        emitGlobalConstDecl(out, *c);
     }
-    if(emittedLateConst)
+    if(emittedMidConst)
         out.append("\r\n\r\n");
 
     MVector<const InterfaceDecl*> localInterfaces(m_arena);
@@ -428,27 +395,19 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
     }
 
-    for(const MethodDecl* fn : unit.freeFunctions){
-        if(!fn || fn->isImported)
+    bool emittedClassConst = false;
+    for(const Stmt* c : unit.globalConstants){
+        if(!c || c->isImported || !c->varType || !constUsesLocalClass(*c))
             continue;
-        const bool emitInlineBody = fn->isInline || !fn->templateParams.empty();
-        m_typeEmitter.emitTemplateHeaderCpp(out, fn->templateParams);
-        if(fn->isInline)
-            out.append("NWB_FORCE_INLINE ");
-        else if(fn->isNoInline)
-            out.append("NWB_NO_INLINE ");
-        else if(emitInlineBody)
-            out.append("inline ");
+        emittedClassConst = true;
+        emitGlobalConstDecl(out, *c);
+    }
+    if(emittedClassConst)
+        out.append("\r\n\r\n");
 
-        m_typeEmitter.emitMethodSignature(out, nullptr, *fn, false);
-        if(emitInlineBody && fn->hasBody){
-            out.append("{\r\n");
-            m_sourceEmitter.emitMethodBodyBlock(out, *fn, 1u);
-            out.append("}\r\n\r\n");
-        }
-        else{
-            out.append(";\r\n\r\n");
-        }
+    for(const MethodDecl* fn : unit.freeFunctions){
+        if(fn && !fn->isImported)
+            emitFreeFunctionDecl(out, *fn);
     }
 
     if(!namespacePath.empty()){

@@ -9,9 +9,6 @@
 
 #include <impl/assets_mesh/payload_types.h>
 #include <impl/assets_mesh/skin_types.h>
-#include <impl/ecs_mesh/runtime/mesh.h>
-#include <impl/ecs_mesh/components.h>
-#include <impl/ecs_skeleton/components.h>
 
 #include <core/graphics/api.h>
 #include <core/mesh/classification.h>

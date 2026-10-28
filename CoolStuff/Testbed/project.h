@@ -11,7 +11,6 @@
 #include <loader/project_entry.h>
 
 #include <impl/assets_scene/asset.h>
-#include <impl/ecs_ui/components.h>
 
 #include <core/ecs/module.h>
 #include <core/input/module.h>

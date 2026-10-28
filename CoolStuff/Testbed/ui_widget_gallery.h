@@ -20,8 +20,6 @@
 #include "ui_image_gallery.h"
 #include "ui_text_area_gallery.h"
 
-#include <impl/ecs_ui/components.h>
-
 #include <core/alloc/scratch.h>
 
 

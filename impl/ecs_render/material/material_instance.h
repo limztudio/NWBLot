@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/components.h>
+#include <impl/ecs_render/components.adhd.h>
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>

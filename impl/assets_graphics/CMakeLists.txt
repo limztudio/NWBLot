@@ -14,11 +14,13 @@ set(NWB_ASSETS_GRAPHICS_SUBSYSTEM_HEADERS
 nwb_declare_static_library(nwb_assets_graphics)
 target_sources(nwb_assets_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/runtime_components.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/components.h"
+    "${CMAKE_CURRENT_LIST_DIR}/component_binary_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/bindless/runtime_abi.h"
     ${NWB_ASSETS_GRAPHICS_SUBSYSTEM_HEADERS}
 )
-target_link_libraries(nwb_assets_graphics PUBLIC nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_subsystem nwb_assets_scene nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler)
+target_link_libraries(nwb_assets_graphics PUBLIC nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_subsystem nwb_assets_scene nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler nwb_ecs_mesh nwb_ecs_model nwb_ecs_render_components)
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_graphics_gather)
@@ -31,7 +33,11 @@ if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_graphics_cook)
     target_sources(nwb_assets_graphics_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/runtime_components.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_components.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_components.h"
         "${CMAKE_CURRENT_LIST_DIR}/components.h"
+        "${CMAKE_CURRENT_LIST_DIR}/component_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/csg_shader_variants.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/csg_shader_variants.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_validation.cpp"
@@ -44,13 +50,14 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/volume_prepare.cpp"
         ${NWB_ASSETS_GRAPHICS_SUBSYSTEM_HEADERS}
     )
-    target_link_libraries(nwb_assets_graphics_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_assets_scene_cook nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material)
+    target_link_libraries(nwb_assets_graphics_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_assets_scene_cook nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_ecs_mesh nwb_ecs_model nwb_ecs_render_components)
     target_link_libraries(nwb_assets_graphics_cook PRIVATE nwb_assets_volume_cook nwb_assets_csg_cook nwb_assets_material_cook nwb_assets_shader_cook nwb_shader_archive nwb_filesystem)
     target_compile_definitions(nwb_assets_graphics_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_graphics_volume_entry)
     target_sources(nwb_assets_graphics_volume_entry PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/volume_entry.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_components.h"
         "${CMAKE_CURRENT_LIST_DIR}/components.h"
         ${NWB_ASSETS_GRAPHICS_SUBSYSTEM_HEADERS}
     )

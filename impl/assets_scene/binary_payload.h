@@ -58,12 +58,6 @@ inline constexpr u32 s_ComponentVersion = 1u;
 inline constexpr TStringView s_ComponentAssetKindLabel = NWB_TEXT("component");
 inline constexpr TStringView s_ComponentLoadBinaryContext = NWB_TEXT("IComponent::loadBinary");
 inline constexpr TStringView s_ComponentSerializeContext = NWB_TEXT("ComponentAssetCodec::serialize");
-inline constexpr TStringView s_TransformComponentAssetKindLabel = NWB_TEXT("transform_component");
-inline constexpr TStringView s_CameraComponentAssetKindLabel = NWB_TEXT("camera_component");
-inline constexpr TStringView s_LightComponentAssetKindLabel = NWB_TEXT("light_component");
-inline constexpr TStringView s_ModelComponentAssetKindLabel = NWB_TEXT("model_component");
-inline constexpr TStringView s_MeshComponentAssetKindLabel = NWB_TEXT("mesh_component");
-inline constexpr TStringView s_RendererComponentAssetKindLabel = NWB_TEXT("renderer_component");
 
 struct ComponentHeaderBinary{
     u32 magic = s_ComponentMagic;
@@ -101,22 +95,6 @@ struct LightComponentPayloadBinary{
 };
 static_assert(IsStandardLayout_V<LightComponentPayloadBinary>, "LightComponentPayloadBinary must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<LightComponentPayloadBinary>, "LightComponentPayloadBinary must stay binary-serializable");
-
-struct SingleAssetRefComponentPayloadBinary{
-    NameHash assetHash = {};
-};
-static_assert(IsStandardLayout_V<SingleAssetRefComponentPayloadBinary>, "SingleAssetRefComponentPayloadBinary must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<SingleAssetRefComponentPayloadBinary>, "SingleAssetRefComponentPayloadBinary must stay binary-serializable");
-
-struct RendererComponentPayloadBinary{
-    NameHash materialHash = {};
-    u8 visible = 1u;
-    u8 reserved0 = 0u;
-    u16 reserved1 = 0u;
-    u32 reserved2 = 0u;
-};
-static_assert(IsStandardLayout_V<RendererComponentPayloadBinary>, "RendererComponentPayloadBinary must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<RendererComponentPayloadBinary>, "RendererComponentPayloadBinary must stay binary-serializable");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

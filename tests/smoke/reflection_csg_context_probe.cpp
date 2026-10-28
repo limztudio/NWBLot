@@ -7,7 +7,7 @@
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
-#include <impl/ecs_csg/components.h>
+#include <impl/ecs_csg/components.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/backend_selection/backend.h>
@@ -145,7 +145,7 @@ bool ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
         NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: application framebuffer capture is required"));
         return false;
     }
-    const auto scene = CreateReflectionCsgContextScene(m_context, m_world);
+    const auto scene = CreateReflectionCsgContextScene(m_world);
     if(!scene)
         return false;
     m_capturePaths.reserve(5u);

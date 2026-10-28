@@ -1,0 +1,39 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/global.h>
+#include <impl/ecs_mesh/runtime/handle.h>
+#include <core/ecs/entity_id.h>
+
+NWB_IMPL_BEGIN
+
+class Mesh;
+class Skin;
+
+using Core::ECS::EntityID;
+using Core::ECS::s_InvalidEntityId;
+
+NWB_IMPL_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+class MeshComponent{
+    public AssetRef<Mesh> mesh;
+}
+
+[reflect]
+class SkinnedMeshBindingComponent{
+    public AssetRef<Skin> skin;
+    public EntityID skeletonEntity = s_InvalidEntityId;
+    [transient]
+    public RuntimeMeshHandle runtimeMesh = s_InvalidRuntimeMeshHandle;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

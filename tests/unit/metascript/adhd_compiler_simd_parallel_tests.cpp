@@ -361,9 +361,9 @@ TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForw
     EXPECT_NE(hdrView.find("s_AssetTypeName = \"index_contract\""), MStringView::npos);
     EXPECT_NE(hdrView.find("reflectedMethodCount()noexcept{ return 2u; }"), MStringView::npos);
     EXPECT_NE(hdrView.find("reflectedMethodCount()noexcept{ return 3u; }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("NWB_FORCE_INLINE IndexedBucket()noexcept"), MStringView::npos);
-    EXPECT_NE(hdrView.find("NWB_NO_INLINE ~IndexedBucket()noexcept;"), MStringView::npos);
-    EXPECT_NE(hdrView.find("NWB_FORCE_INLINE i32 operator[](const usize idx)const noexcept override"), MStringView::npos);
+    EXPECT_NE(hdrView.find("NWB_INLINE IndexedBucket()noexcept"), MStringView::npos);
+    EXPECT_NE(hdrView.find("NWB_NOINLINE ~IndexedBucket()noexcept;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("NWB_INLINE i32 operator[](const usize idx)const noexcept override"), MStringView::npos);
     EXPECT_NE(hdrView.find("inMap.findField(\"m_base\")"), MStringView::npos);
 
     EXPECT_NE(cppView.find("IndexedBucket::~IndexedBucket()noexcept"), MStringView::npos);

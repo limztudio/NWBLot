@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <impl/assets_graphics/components.h>
+
 #include <core/assets/input_list.h>
 #include <core/assets/volume/built_asset.h>
 #include <core/assets/volume/cooked_object_cache.h>
@@ -410,6 +412,46 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
         EXPECT_EQ((*asset)->virtualPath(), virtualPath);
     }
     EXPECT_EQ(logger.errorCount(), 1u);
+    EXPECT_TRUE(RemoveAllIfExists(root));
+}
+
+TEST(AssetsGraphics, RendererComponentCookAndSerializePreservesOpticalFields){
+    static constexpr AStringView s_RendererComponentMetadata =
+        "renderer_component asset;\n"
+        "asset.material = \"project/materials/glass\";\n"
+        "asset.visible = 1;\n"
+        "asset.optical_volume_coincidence = \"shared_group\";\n"
+        "asset.optical_volume_group = \"lens_assembly\";\n"
+        "asset.optical_volume_priority = 4;\n"
+        "asset.optical_boundary_mode = \"closed_priority\";\n"
+        "asset.optical_medium_priority = 9;\n";
+
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "renderer_component_optical_fields");
+    ASSERT_TRUE(cookCase);
+    const Path& root = cookCase->root;
+    const Path& outputDirectory = cookCase->outputDirectory;
+    const Path assetRoot = root / s_AssetsDirectory;
+    const Name virtualPath("project/entities/lens/renderer");
+
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "entities" / "lens" / "renderer.nwb", s_RendererComponentMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 1u));
+
+    const auto loadedAsset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::ComponentAssetCodec>(testArena, outputDirectory, virtualPath, 1u);
+    ASSERT_TRUE(loadedAsset);
+    ASSERT_NE(loadedAsset->get(), nullptr);
+    EXPECT_EQ((*loadedAsset)->assetType(), NWB::Impl::RendererComponentAsset::AssetTypeName());
+    const auto* rendererAsset = static_cast<const NWB::Impl::RendererComponentAsset*>(loadedAsset->get());
+    EXPECT_EQ(rendererAsset->component.material.name(), Name("project/materials/glass"));
+    EXPECT_TRUE(rendererAsset->component.visible);
+    EXPECT_EQ(rendererAsset->component.opticalVolumeCoincidence, NWB::Impl::OpticalVolumeCoincidence::SharedGroup);
+    EXPECT_EQ(rendererAsset->component.opticalVolumeGroup, Name("lens_assembly"));
+    EXPECT_EQ(rendererAsset->component.opticalVolumePriority, 4);
+    EXPECT_EQ(rendererAsset->component.opticalBoundaryMode, NWB::Impl::OpticalBoundaryMode::ClosedPriority);
+    EXPECT_EQ(rendererAsset->component.opticalMediumPriority, 9);
+    EXPECT_EQ(logger.errorCount(), 0u);
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 

@@ -85,27 +85,27 @@ constexpr auto Tie(Args&... args)noexcept{ return std::tie(args...); }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
-template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
+template<typename T, typename V, typename ArenaT = ::NWB::Core::Alloc::GlobalArena, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
 using ParallelHashMap = tbb::concurrent_unordered_map< T, V, Hash, Equal, ContainerDetail::ArenaCacheAlignedAllocator<typename tbb::concurrent_unordered_map<T, V, Hash, Equal>::value_type, ArenaT> >;
 
-template<typename T, typename ArenaT>
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using ParallelVector = tbb::concurrent_vector<T, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
-template<typename T, typename ArenaT>
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using ParallelQueue = tbb::concurrent_queue<T, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
-template<typename T, typename ArenaT>
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using ParallelBlockQueue = tbb::concurrent_bounded_queue<T, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashSet = tsl::robin_set<T, Hash, Equal, ContainerDetail::ArenaAllocator<T, ArenaT>>;
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashSet = tsl::robin_set<T, Hash, Equal, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
-template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashMap = tsl::robin_map<T, V, Hash, Equal, ContainerDetail::ArenaAllocator<Pair<T, V>, ArenaT>>;
+template<typename T, typename V, typename ArenaT = ::NWB::Core::Alloc::GlobalArena, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashMap = tsl::robin_map<T, V, Hash, Equal, ContainerDetail::ArenaAllocator<Pair<T, V>, ArenaT>>;
 
 template<
     typename K,
@@ -114,13 +114,13 @@ template<
     ArenaT& (*DefaultArena)(),
     typename Hash = Hasher<K>, typename Equal = EqualTo<K> > using DefaultHashMap = tsl::robin_map< K, V, Hash, Equal, ContainerDetail::DefaultArenaAllocator<Pair<K, V>, ArenaT, DefaultArena> >;
 
-template<typename T, typename ArenaT>
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using ForwardList = std::forward_list<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
-template<typename T, typename ArenaT>
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using List = std::list<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
-template<typename T, typename ArenaT>
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using Vector = std::vector<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
 template<typename T>
@@ -129,16 +129,16 @@ using InteropVector = std::vector<T>;
 template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
 using DefaultVector = std::vector<T, ContainerDetail::DefaultArenaAllocator<T, ArenaT, DefaultArena>>;
 
-template<typename T, typename ArenaT>
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using Set = std::set<T, std::less<T>, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
-template<typename T, typename V, typename ArenaT>
+template<typename T, typename V, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using Map = std::map<T, V, std::less<T>, ContainerDetail::ArenaAllocator<typename std::map<T, V>::value_type, ArenaT>>;
 
-template<typename T, typename ArenaT>
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using Queue = std::queue<T, std::deque<T, ContainerDetail::ArenaAllocator<T, ArenaT>>>;
 
-template<typename T, typename ArenaT>
+template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using Deque = std::deque<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
 

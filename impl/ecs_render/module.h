@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include <impl/ecs_render/components.h>
 #include <impl/ecs_render/caustic/settings.h>
 #include <impl/ecs_render/gi/quality_settings.h>
 #include <impl/ecs_render/material/material_instance.h>

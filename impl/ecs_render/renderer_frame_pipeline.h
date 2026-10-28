@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/components.h>
+#include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/avboit/renderer_avboit_state.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/csg/csg_system.h>

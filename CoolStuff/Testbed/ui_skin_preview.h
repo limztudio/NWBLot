@@ -8,7 +8,6 @@
 #include "namespace.h"
 #include "ui_widget_gallery.h"
 
-#include <impl/ecs_ui/components.h>
 #include <impl/ecs_ui/toolkit/widgets/label.h>
 
 

@@ -7,7 +7,7 @@
 
 #include "image_snapshot.h"
 
-#include <impl/ecs_ui/components.h>
+#include <impl/ecs_ui/paint_context.h>
 
 #include <core/input/module.h>
 

@@ -7,7 +7,7 @@
 
 #include "marker_positions.h"
 
-#include <impl/ecs_ui/components.h>
+#include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
 
 #include <core/common/log.h>

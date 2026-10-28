@@ -15,11 +15,8 @@
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
-#include <impl/ecs_model/module.h>
-#include <impl/ecs_model_renderer/model_renderer.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material/material_instance.h>
-#include <impl/ecs_mesh/skinning/module.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -250,7 +247,6 @@ public:
         // The white floor reveals colored GI in the wall's direct shadow.
         m_floorEntity = CreateTintedStaticMeshEntity(
             *m_world,
-            m_context.objectArena,
             s_GroundMesh,
             m_complexSceneEnabled ? s_ComplexDiffuseMaterial : s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
@@ -410,7 +406,7 @@ private:
 
     [[nodiscard]] bool createComplexScene(){
         for(const ComplexSceneBox& box : s_ComplexSceneBoxes){
-            const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_BoxMesh, box.indirectOnly ? s_ComplexIndirectMaterial : s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale);
+            const auto entity = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, box.indirectOnly ? s_ComplexIndirectMaterial : s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale);
             if(!entity.valid())
                 return false;
             if(box.yawDegrees != 0.0f){
@@ -422,13 +418,13 @@ private:
         }
 
         for(const ComplexSceneBox& box : s_ComplexBouncePatches){
-            const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale);
+            const auto entity = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale);
             if(!entity.valid())
                 return false;
         }
 
         for(const ComplexSceneBox& box : s_ComplexFrontEnclosureBoxes){
-            const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale);
+            const auto entity = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale);
             if(!entity.valid())
                 return false;
         }
@@ -509,7 +505,7 @@ private:
             if(blocked)
                 continue;
 
-            const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, body.tint, body.position, body.scale);
+            const auto entity = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, body.tint, body.position, body.scale);
             if(!entity.valid())
                 return false;
             if(body.yawDegrees != 0.0f){
@@ -535,7 +531,7 @@ private:
         if(m_coverageViewEnabled){
             // Place the probe cube where its -X and -Z faces share one spatial cell.
             const auto probe = CreateTintedStaticMeshEntity(
-                *m_world, m_context.objectArena, s_BoxMesh, s_CoverageProbeMaterial,
+                *m_world, s_BoxMesh, s_CoverageProbeMaterial,
                 s_SmokeSurfaceMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f),
                 Float4(0.95f, 1.48f, -2.65f, 0.0f), Float4(0.60f, 0.30f, 0.30f, 0.0f)
             );
@@ -552,7 +548,7 @@ private:
         const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, yawDeg, 0.0f, 0.0f), s_PI / 180.0f));
         const SIMDVectorSingle wallRotation = QuaternionMultiply(pitchQuat, yawQuat);
 
-        auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_GroundMesh, m_complexSceneEnabled ? s_ComplexDiffuseMaterial : s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(width, 1.0f, height, 0.0f));
+        auto entity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, m_complexSceneEnabled ? s_ComplexDiffuseMaterial : s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(width, 1.0f, height, 0.0f));
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
                 StoreFloat(wallRotation, transform->rotation);

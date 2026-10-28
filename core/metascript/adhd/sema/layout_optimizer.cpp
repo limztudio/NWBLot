@@ -95,14 +95,12 @@ namespace __hidden_adhd_layout_optimizer{
 [[nodiscard]] bool AreTypeRefsEqual(const TypeRef* a, const TypeRef* b, const SymbolTable& symbols)noexcept{
     if(!a || !b)
         return a == b;
-    if(a->refMode != b->refMode)
-        return false;
 
     const TypeRef* ua = symbols.unwrapTypeAlias(a);
     const TypeRef* ub = symbols.unwrapTypeAlias(b);
     if(!ua || !ub)
         return ua == ub;
-    if(ua->isFuncType != ub->isFuncType || ua->isAuto != ub->isAuto)
+    if(ua->refMode != ub->refMode || ua->isFuncType != ub->isFuncType || ua->isAuto != ub->isAuto)
         return false;
     if(ua->isFuncType){
         if(ua->inferredCaptureBytes != ub->inferredCaptureBytes || ua->funcParams.size() != ub->funcParams.size())
@@ -243,7 +241,7 @@ void SortAndPackFields(
     const MStringView targetClassName,
     const SymbolTable& symbols,
     const u32 depth = 0u
-)noexcept{
+){
     if(depth > 16u || type.refMode != ParamPassingMode::None)
         return false;
     const TypeRef* unwrapped = symbols.unwrapTypeAlias(&type);
@@ -258,8 +256,14 @@ void SortAndPackFields(
         return false;
     }
     if(const ClassDecl* subCls = symbols.findClass(name)){
+        const bool hasTemplateSub = !subCls->templateParams.empty() && unwrapped->templateArgs.size() == subCls->templateParams.size();
         for(const FieldDecl* subField : subCls->fields){
-            if(subField && subField->type && TypeReferencesClassByValue(*subField->type, targetClassName, symbols, depth + 1u))
+            if(!subField || !subField->type)
+                continue;
+            const TypeRef* subFieldType = hasTemplateSub
+                ? symbols.substituteTypeParams(*subField->type, subCls->templateParams, unwrapped->templateArgs)
+                : subField->type;
+            if(subFieldType && TypeReferencesClassByValue(*subFieldType, targetClassName, symbols, depth + 1u))
                 return true;
         }
     }
@@ -290,7 +294,7 @@ void SortAndPackFields(
     const SymbolTable& symbols,
     MStringView& outReason,
     const u32 depth = 0u
-)noexcept{
+){
     if(depth >= 16u)
         return true;
 
@@ -332,9 +336,13 @@ void SortAndPackFields(
             outReason = "'[serialize]' class cannot contain non-transient polymorphic class members implementing an interface";
             return false;
         }
+        const bool hasTemplateSub = !subCls->templateParams.empty() && unwrapped->templateArgs.size() == subCls->templateParams.size();
         for(const FieldDecl* subField : subCls->fields){
             if(subField && !subField->isTransient && subField->type){
-                if(!IsTypeBinarySerializable(*subField->type, symbols, outReason, depth + 1u))
+                const TypeRef* subFieldType = hasTemplateSub
+                    ? symbols.substituteTypeParams(*subField->type, subCls->templateParams, unwrapped->templateArgs)
+                    : subField->type;
+                if(subFieldType && !IsTypeBinarySerializable(*subFieldType, symbols, outReason, depth + 1u))
                     return false;
             }
         }
@@ -362,6 +370,20 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
     }
     if(!ok)
         return false;
+    MVector<ParseError> silentErrors(m_arena);
+    for(usize iter = 0u; iter < unit.classes.size(); ++iter){
+        bool changed = false;
+        for(ClassDecl* classDecl : unit.classes){
+            const usize prevSize = classDecl->totalSize;
+            const usize prevAlign = classDecl->totalAlign;
+            const bool prevArena = classDecl->needsClassArena;
+            (void)computeClassLayout(*classDecl, silentErrors);
+            if(classDecl->totalSize != prevSize || classDecl->totalAlign != prevAlign || classDecl->needsClassArena != prevArena)
+                changed = true;
+        }
+        if(!changed)
+            break;
+    }
     for(const u32 pass : { 0u, 1u }){
         const bool wantImported = (pass == 0u);
         m_collectingImported = wantImported;
@@ -450,9 +472,57 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
         }
     }
     m_collectingImported = false;
-    for(ClassDecl* classDecl : unit.classes){
-        if(!computeClassLayout(*classDecl, errors))
-            ok = false;
+    for(const ClassTemplateInstantiation* inst : unit.templateInstantiations){
+        if(!inst || !inst->templateDecl || !inst->templateDecl->isSerialize)
+            continue;
+        for(const FieldDecl* clonedField : inst->orderedFields){
+            if(!clonedField || clonedField->isTransient || !clonedField->type)
+                continue;
+            MStringView serializeErr;
+            if(!__hidden_adhd_layout_optimizer::IsTypeBinarySerializable(*clonedField->type, m_symbols, serializeErr)){
+                ReportAdhdDiagnostic(m_arena, errors, clonedField->span, serializeErr);
+                return false;
+            }
+        }
+    }
+    const usize maxPostPasses = unit.classes.size() + unit.templateInstantiations.size() + 1u;
+    for(usize iter = 0u; iter < maxPostPasses; ++iter){
+        bool changed = false;
+        for(ClassTemplateInstantiation* inst : unit.templateInstantiations){
+            if(!inst || !inst->templateDecl)
+                continue;
+            const usize prevSize = inst->totalSize;
+            const usize prevAlign = inst->totalAlign;
+            for(FieldDecl* clonedField : inst->orderedFields){
+                if(!clonedField || !clonedField->type)
+                    continue;
+                usize fieldSize = 8u;
+                usize fieldAlign = 8u;
+                resolveTypeSizeAndAlign(*clonedField->type, fieldSize, fieldAlign);
+                clonedField->resolvedSize = fieldSize;
+                clonedField->resolvedAlign = inst->templateDecl->isSerialize ? 1u : fieldAlign;
+            }
+            __hidden_adhd_layout_optimizer::SortAndPackFields(
+                inst->orderedFields,
+                inst->templateDecl->isSerialize,
+                !inst->templateDecl->implementedInterfaces.empty(),
+                inst->totalSize,
+                inst->totalAlign
+            );
+            if(inst->totalSize != prevSize || inst->totalAlign != prevAlign)
+                changed = true;
+        }
+        for(ClassDecl* classDecl : unit.classes){
+            const usize prevSize = classDecl->totalSize;
+            const usize prevAlign = classDecl->totalAlign;
+            const bool prevArena = classDecl->needsClassArena;
+            if(!computeClassLayout(*classDecl, silentErrors))
+                ok = false;
+            if(classDecl->totalSize != prevSize || classDecl->totalAlign != prevAlign || classDecl->needsClassArena != prevArena)
+                changed = true;
+        }
+        if(!changed)
+            break;
     }
     return ok;
 }
@@ -610,7 +680,7 @@ void LayoutOptimizer::instantiateClassTemplate(
             templateArgs
         );
         clonedField->type = resolvedType;
-        if(resolvedType->refMode == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(m_symbols.resolveBaseTypeName(resolvedType->name))){
+        if(m_symbols.resolveRefMode(resolvedType) == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(m_symbols.resolveBaseTypeName(resolvedType->name))){
             clonedField->usesClassArena = true;
             const_cast<ClassDecl&>(templateDecl).needsClassArena = true;
         }
@@ -638,7 +708,7 @@ void LayoutOptimizer::instantiateClassTemplate(
 }
 
 void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSize, usize& outAlign, const u32 depth)const noexcept{
-    if(depth > 16u || type.refMode != ParamPassingMode::None){
+    if(depth > 16u || m_symbols.resolveRefMode(&type) != ParamPassingMode::None){
         outSize = 8u;
         outAlign = 8u;
         return;
@@ -842,7 +912,7 @@ bool LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseErro
         }
 
         const MStringView baseFieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
-        if(field->type->refMode == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(baseFieldTypeName)){
+        if(m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(baseFieldTypeName)){
             field->usesClassArena = true;
             classDecl.needsClassArena = true;
         }

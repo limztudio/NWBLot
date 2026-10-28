@@ -38,8 +38,151 @@ namespace __hidden_adhd_header_emitter{
         {
             return stmt->expr->rhs;
         }
+        if(stmt->kind == StmtKind::Block && !stmt->statements.empty()){
+            if(const Expr* nested = FindConstructorFieldAssignment(stmt->statements, fieldName))
+                return nested;
+        }
     }
     return nullptr;
+}
+
+
+[[nodiscard]] bool TypeRefReferencesSymbol(const TypeRef& type, const MStringView targetName, const u32 depth = 0u)noexcept{
+    if(depth > 16u)
+        return false;
+    if(type.name == targetName)
+        return true;
+    if(type.isFuncType){
+        if(type.funcReturnType && TypeRefReferencesSymbol(*type.funcReturnType, targetName, depth + 1u))
+            return true;
+        for(const FuncParamType& fp : type.funcParams){
+            if(fp.type && TypeRefReferencesSymbol(*fp.type, targetName, depth + 1u))
+                return true;
+        }
+    }
+    for(const TypeArg& targ : type.templateArgs){
+        if(targ.type && TypeRefReferencesSymbol(*targ.type, targetName, depth + 1u))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool TypeRefReferencesSymbolByValue(
+    const TypeRef& type,
+    const MStringView targetName,
+    const SymbolTable& symbols,
+    const u32 depth = 0u
+)noexcept{
+    if(depth > 16u || type.isFuncType || symbols.resolveRefMode(&type) != ParamPassingMode::None)
+        return false;
+    if(type.name == targetName)
+        return true;
+    if(const TypeRef* unwrapped = symbols.unwrapTypeAlias(&type)){
+        if(unwrapped != &type && TypeRefReferencesSymbolByValue(*unwrapped, targetName, symbols, depth + 1u))
+            return true;
+    }
+    for(const TypeArg& targ : type.templateArgs){
+        if(targ.type && TypeRefReferencesSymbolByValue(*targ.type, targetName, symbols, depth + 1u))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool ClassDependsOnClassByValue(
+    const ClassDecl& cls,
+    const MStringView targetClassName,
+    const SymbolTable& symbols
+)noexcept{
+    for(const FieldDecl* field : cls.fields){
+        if(!field || !field->type)
+            continue;
+        if(TypeRefReferencesSymbolByValue(*field->type, targetClassName, symbols))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool InstantiationDependsOnClassByValue(
+    const ClassTemplateInstantiation& inst,
+    const MStringView targetClassName,
+    const SymbolTable& symbols
+)noexcept{
+    for(const FieldDecl* field : inst.orderedFields){
+        if(field && field->type && TypeRefReferencesSymbolByValue(*field->type, targetClassName, symbols))
+            return true;
+    }
+    for(const TypeArg& targ : inst.templateArgs){
+        if(targ.type && TypeRefReferencesSymbolByValue(*targ.type, targetClassName, symbols))
+            return true;
+    }
+    return false;
+}
+
+void VisitTypeAliasTopo(
+    const usize idx,
+    const MVector<const TypeAliasDecl*>& aliases,
+    MVector<u8>& state,
+    MVector<const TypeAliasDecl*>& outSorted
+){
+    if(state[idx] != 0u)
+        return;
+    state[idx] = 1u;
+    const TypeAliasDecl* cur = aliases[idx];
+    if(cur && cur->aliasedType){
+        for(usize j = 0u; j < aliases.size(); ++j){
+            if(j != idx && state[j] == 0u && aliases[j] && TypeRefReferencesSymbol(*cur->aliasedType, aliases[j]->name))
+                VisitTypeAliasTopo(j, aliases, state, outSorted);
+        }
+    }
+    state[idx] = 2u;
+    outSorted.push_back(cur);
+}
+
+void VisitInterfaceTopo(
+    const usize idx,
+    const MVector<const InterfaceDecl*>& interfaces,
+    const SymbolTable& symbols,
+    MVector<u8>& state,
+    MVector<const InterfaceDecl*>& outSorted
+){
+    if(state[idx] != 0u)
+        return;
+    state[idx] = 1u;
+    const InterfaceDecl* cur = interfaces[idx];
+    if(cur){
+        for(const TypeRef* baseRef : cur->baseInterfaces){
+            if(!baseRef)
+                continue;
+            const MStringView baseName = symbols.resolveBaseTypeName(baseRef->name);
+            for(usize j = 0u; j < interfaces.size(); ++j){
+                if(j != idx && state[j] == 0u && interfaces[j] && interfaces[j]->name == baseName)
+                    VisitInterfaceTopo(j, interfaces, symbols, state, outSorted);
+            }
+        }
+    }
+    state[idx] = 2u;
+    outSorted.push_back(cur);
+}
+
+void VisitClassTopo(
+    const usize idx,
+    const MVector<const ClassDecl*>& classes,
+    const SymbolTable& symbols,
+    MVector<u8>& state,
+    MVector<const ClassDecl*>& outSorted
+){
+    if(state[idx] != 0u)
+        return;
+    state[idx] = 1u;
+    const ClassDecl* cur = classes[idx];
+    if(cur){
+        for(usize j = 0u; j < classes.size(); ++j){
+            if(j != idx && state[j] == 0u && classes[j] && ClassDependsOnClassByValue(*cur, classes[j]->name, symbols))
+                VisitClassTopo(j, classes, symbols, state, outSorted);
+        }
+    }
+    state[idx] = 2u;
+    outSorted.push_back(cur);
 }
 
 
@@ -93,28 +236,51 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         out.append("{\r\n\r\n\r\n");
     }
 
-    bool emittedGlobalConst = false;
-    for(const Stmt* c : unit.globalConstants){
-        if(!c || c->isImported || !c->varType)
+    for(const EnumDecl* enumDecl : unit.enums){
+        if(enumDecl && !enumDecl->isImported)
+            emitEnumDecl(out, *enumDecl);
+    }
+
+    bool emittedForwardDecl = false;
+    for(const InterfaceDecl* ifaceDecl : unit.interfaces){
+        if(!ifaceDecl || ifaceDecl->isImported)
             continue;
-        emittedGlobalConst = true;
+        emittedForwardDecl = true;
+        emitTemplateHeaderCpp(out, ifaceDecl->templateParams);
+        out.append("class ");
+        out.append(ifaceDecl->name.data(), ifaceDecl->name.size());
+        out.append(";\r\n");
+    }
+    for(const ClassDecl* classDecl : unit.classes){
+        if(!classDecl || classDecl->isImported)
+            continue;
+        emittedForwardDecl = true;
+        emitTemplateHeaderCpp(out, classDecl->templateParams);
+        out.append("class ");
+        out.append(classDecl->name.data(), classDecl->name.size());
+        out.append(";\r\n");
+    }
+    if(emittedForwardDecl)
+        out.append("\r\n");
+
+    auto emitGlobalConstStmt = [&](const Stmt& c){
         out.append("inline constexpr ");
-        emitTypeCpp(out, *c->varType);
+        emitTypeCpp(out, *c.varType);
         out.push_back(' ');
-        out.append(c->name.data(), c->name.size());
-        if(c->isCtorInit){
-            const MStringView baseConstType = m_symbols.resolveBaseTypeName(c->varType->name);
+        out.append(c.name.data(), c.name.size());
+        if(c.isCtorInit){
+            const MStringView baseConstType = m_symbols.resolveBaseTypeName(c.varType->name);
             if(!baseConstType.empty() && m_symbols.isSimdMatrixType(baseConstType)){
-                if(c->arguments.empty()){
+                if(c.arguments.empty()){
                     out.append("{};\r\n");
                 }
                 else{
                     out.append("{ .raw = { ");
-                    for(usize i = 0u; i < c->arguments.size(); ++i){
+                    for(usize i = 0u; i < c.arguments.size(); ++i){
                         if(i > 0u)
                             out.append(", ");
-                        if(c->arguments[i])
-                            sourceEmitter.emitExpr(out, *c->arguments[i]);
+                        if(c.arguments[i])
+                            sourceEmitter.emitExpr(out, *c.arguments[i]);
                     }
                     out.append(" } };\r\n");
                 }
@@ -124,21 +290,21 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                 u32 ctorVecLanes = 0u;
                 const bool isScalarSplatCtor = !baseConstType.empty()
                     && m_symbols.isSimdVectorType(baseConstType, ctorVecLanes)
-                    && c->arguments.size() == 1u && c->arguments[0]
-                    && c->arguments[0]->resolvedSimdType.empty();
+                    && c.arguments.size() == 1u && c.arguments[0]
+                    && c.arguments[0]->resolvedSimdType.empty();
                 if(isScalarSplatCtor){
                     for(u32 lane = 0u; lane < ctorVecLanes; ++lane){
                         if(lane > 0u)
                             out.append(", ");
-                        sourceEmitter.emitExpr(out, *c->arguments[0]);
+                        sourceEmitter.emitExpr(out, *c.arguments[0]);
                     }
                 }
                 else{
-                    for(usize i = 0u; i < c->arguments.size(); ++i){
+                    for(usize i = 0u; i < c.arguments.size(); ++i){
                         if(i > 0u)
                             out.append(", ");
-                        if(c->arguments[i])
-                            sourceEmitter.emitExpr(out, *c->arguments[i]);
+                        if(c.arguments[i])
+                            sourceEmitter.emitExpr(out, *c.arguments[i]);
                     }
                 }
                 out.append(");\r\n");
@@ -146,37 +312,147 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
         else{
             out.append(" = ");
-            if(c->expr)
-                sourceEmitter.emitExpr(out, *c->expr);
+            if(c.expr)
+                sourceEmitter.emitExpr(out, *c.expr);
             out.append(";\r\n");
         }
+    };
+
+    auto constUsesLocalTypeAlias = [&](const Stmt& c)noexcept -> bool{
+        if(!c.varType)
+            return false;
+        for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
+            if(aliasDecl && !aliasDecl->isImported && __hidden_adhd_header_emitter::TypeRefReferencesSymbol(*c.varType, aliasDecl->name))
+                return true;
+        }
+        return false;
+    };
+
+    bool emittedEarlyConst = false;
+    for(const Stmt* c : unit.globalConstants){
+        if(!c || c->isImported || !c->varType || constUsesLocalTypeAlias(*c))
+            continue;
+        emittedEarlyConst = true;
+        emitGlobalConstStmt(*c);
     }
-    if(emittedGlobalConst)
+    if(emittedEarlyConst)
         out.append("\r\n\r\n");
 
+    MVector<const TypeAliasDecl*> localAliases(m_arena);
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
         if(aliasDecl && !aliasDecl->isImported)
-            emitTypeAliasDecl(out, *aliasDecl);
+            localAliases.push_back(aliasDecl);
+    }
+    if(!localAliases.empty()){
+        MVector<u8> aliasState(localAliases.size(), 0u, m_arena);
+        MVector<const TypeAliasDecl*> sortedAliases(m_arena);
+        sortedAliases.reserve(localAliases.size());
+        for(usize i = 0u; i < localAliases.size(); ++i)
+            __hidden_adhd_header_emitter::VisitTypeAliasTopo(i, localAliases, aliasState, sortedAliases);
+        for(const TypeAliasDecl* aliasDecl : sortedAliases){
+            if(aliasDecl)
+                emitTypeAliasDecl(out, *aliasDecl);
+        }
     }
 
-    for(const EnumDecl* enumDecl : unit.enums){
-        if(enumDecl && !enumDecl->isImported)
-            emitEnumDecl(out, *enumDecl);
+    bool emittedLateConst = false;
+    for(const Stmt* c : unit.globalConstants){
+        if(!c || c->isImported || !c->varType || !constUsesLocalTypeAlias(*c))
+            continue;
+        emittedLateConst = true;
+        emitGlobalConstStmt(*c);
     }
+    if(emittedLateConst)
+        out.append("\r\n\r\n");
 
+    MVector<const InterfaceDecl*> localInterfaces(m_arena);
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
         if(ifaceDecl && !ifaceDecl->isImported)
-            emitInterfaceDecl(out, *ifaceDecl);
+            localInterfaces.push_back(ifaceDecl);
+    }
+    if(!localInterfaces.empty()){
+        MVector<u8> ifaceState(localInterfaces.size(), 0u, m_arena);
+        MVector<const InterfaceDecl*> sortedInterfaces(m_arena);
+        sortedInterfaces.reserve(localInterfaces.size());
+        for(usize i = 0u; i < localInterfaces.size(); ++i)
+            __hidden_adhd_header_emitter::VisitInterfaceTopo(i, localInterfaces, m_symbols, ifaceState, sortedInterfaces);
+        for(const InterfaceDecl* ifaceDecl : sortedInterfaces){
+            if(ifaceDecl)
+                emitInterfaceDecl(out, *ifaceDecl);
+        }
     }
 
+    MVector<const ClassDecl*> allClasses(m_arena);
     for(const ClassDecl* classDecl : unit.classes){
-        if(!classDecl)
-            continue;
-        if(!classDecl->isImported)
+        if(classDecl)
+            allClasses.push_back(classDecl);
+    }
+    if(!allClasses.empty()){
+        MVector<u8> classState(allClasses.size(), 0u, m_arena);
+        MVector<const ClassDecl*> sortedClasses(m_arena);
+        sortedClasses.reserve(allClasses.size());
+        for(usize i = 0u; i < allClasses.size(); ++i)
+            __hidden_adhd_header_emitter::VisitClassTopo(i, allClasses, m_symbols, classState, sortedClasses);
+
+        MVector<u8> instEmitted(unit.templateInstantiations.size(), 0u, m_arena);
+        MVector<const ClassDecl*> readyClasses(m_arena);
+        readyClasses.reserve(sortedClasses.size());
+        for(const ClassDecl* classDecl : sortedClasses){
+            if(classDecl && classDecl->isImported)
+                readyClasses.push_back(classDecl);
+        }
+
+        auto isClassReady = [&](const ClassDecl* target)noexcept -> bool{
+            for(const ClassDecl* c : readyClasses){
+                if(c == target)
+                    return true;
+            }
+            return false;
+        };
+
+        auto emitReadyInstantiations = [&](){
+            bool progress = true;
+            while(progress){
+                progress = false;
+                for(usize idx = 0u; idx < unit.templateInstantiations.size(); ++idx){
+                    if(instEmitted[idx] != 0u)
+                        continue;
+                    const ClassTemplateInstantiation* inst = unit.templateInstantiations[idx];
+                    if(!inst || inst->isImported || !inst->templateDecl){
+                        instEmitted[idx] = 1u;
+                        continue;
+                    }
+                    if(!isClassReady(inst->templateDecl))
+                        continue;
+                    bool depsReady = true;
+                    for(const ClassDecl* depCls : sortedClasses){
+                        if(!depCls || isClassReady(depCls))
+                            continue;
+                        if(__hidden_adhd_header_emitter::InstantiationDependsOnClassByValue(*inst, depCls->name, m_symbols)){
+                            depsReady = false;
+                            break;
+                        }
+                    }
+                    if(!depsReady)
+                        continue;
+                    instEmitted[idx] = 1u;
+                    emitClassTemplateSpecialization(out, *inst);
+                    progress = true;
+                }
+            }
+        };
+
+        emitReadyInstantiations();
+        for(const ClassDecl* classDecl : sortedClasses){
+            if(!classDecl || classDecl->isImported)
+                continue;
             emitClassDecl(out, *classDecl);
-        for(const ClassTemplateInstantiation* inst : unit.templateInstantiations){
-            if(inst && !inst->isImported && inst->templateDecl == classDecl)
-                emitClassTemplateSpecialization(out, *inst);
+            readyClasses.push_back(classDecl);
+            emitReadyInstantiations();
+        }
+        for(usize idx = 0u; idx < unit.templateInstantiations.size(); ++idx){
+            if(instEmitted[idx] == 0u && unit.templateInstantiations[idx] && !unit.templateInstantiations[idx]->isImported)
+                emitClassTemplateSpecialization(out, *unit.templateInstantiations[idx]);
         }
     }
 
@@ -395,6 +671,28 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         out.append("\";\r\n");
     }
     out.append("        return {};\r\n    }\r\n");
+    if(!decl.entries.empty()){
+        out.append("    inline constexpr ::NamedEnumCase<Enum> s_NamedEnumCases[] = {\r\n");
+        for(const EnumEntry& entry : decl.entries){
+            out.append("        { \"");
+            out.append(entry.name.data(), entry.name.size());
+            out.append("\", ");
+            out.append(entry.name.data(), entry.name.size());
+            out.append(" },\r\n");
+        }
+        out.append("    };\r\n");
+        out.append("    [[nodiscard]] constexpr Span<const ::NamedEnumCase<Enum>> namedEnumCases()noexcept{ return s_NamedEnumCases; }\r\n");
+    }
+    else{
+        out.append("    [[nodiscard]] constexpr Span<const ::NamedEnumCase<Enum>> namedEnumCases()noexcept{ return {}; }\r\n");
+    }
+    out.append("    [[nodiscard]] inline Expected<Enum> parseNamedEnum(const AStringView text)noexcept{ return ::ParseNamedEnumText<Enum>(text, namedEnumCases()); }\r\n");
+    out.append("    [[nodiscard]] constexpr AStringView toNamedEnumText([[maybe_unused]] const Enum value)noexcept{\r\n");
+    out.append("        for(const ::NamedEnumCase<Enum>& item : namedEnumCases()){\r\n");
+    out.append("            if(item.value == value)\r\n");
+    out.append("                return item.text;\r\n");
+    out.append("        }\r\n");
+    out.append("        return {};\r\n    }\r\n");
     out.append("};\r\n\r\n");
 }
 
@@ -440,17 +738,21 @@ void HeaderEmitter::emitInterfaceDecl(MString& out, const InterfaceDecl& decl)co
         out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
         out.append("\";\r\n");
     }
+    MVector<MethodDecl*> allMethods(m_arena);
+    TypeRef selfIfaceRef(m_arena);
+    selfIfaceRef.name = decl.name;
+    m_symbols.collectAllInterfaceMethods(selfIfaceRef, allMethods);
     out.append("    [[nodiscard]] static constexpr usize reflectedMethodCount()noexcept{ return ");
-    AppendAdhdUnsigned(out, decl.methods.size());
+    AppendAdhdUnsigned(out, allMethods.size());
     out.append("u; }\r\n");
     out.append("    [[nodiscard]] static constexpr AStringView reflectedMethodName([[maybe_unused]] const usize index)noexcept{\r\n");
-    for(usize i = 0u; i < decl.methods.size(); ++i){
-        if(!decl.methods[i])
+    for(usize i = 0u; i < allMethods.size(); ++i){
+        if(!allMethods[i])
             continue;
         out.append("        if(index == ");
         AppendAdhdUnsigned(out, i);
         out.append("u) return \"");
-        out.append(decl.methods[i]->name.data(), decl.methods[i]->name.size());
+        out.append(allMethods[i]->name.data(), allMethods[i]->name.size());
         out.append("\";\r\n");
     }
     out.append("        return {};\r\n    }\r\n");
@@ -645,8 +947,9 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& 
         emitTypeCpp(out, *field->type);
         out.push_back(' ');
         out.append(field->name.data(), field->name.size());
+        const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(field->type);
         if(field->defaultExpr){
-            if(field->type->refMode != ParamPassingMode::None){
+            if(fieldRefMode != ParamPassingMode::None){
                 out.append(" = ::MakeNotNull(&(");
                 sourceEmitter.emitExpr(out, *field->defaultExpr);
                 out.append("))");
@@ -679,7 +982,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& 
         else if(field->usesClassArena){
             out.append("{s_ClassArena}");
         }
-        else if(field->type->refMode == ParamPassingMode::None
+        else if(fieldRefMode == ParamPassingMode::None
             && (m_symbols.resolveBaseTypeName(field->type->name) == "Array"
                 || m_symbols.findEnum(m_symbols.resolveBaseTypeName(field->type->name)) != nullptr))
         {
@@ -745,7 +1048,7 @@ void HeaderEmitter::emitConstructorNotNullInitializers(
     SourceEmitter sourceEmitter(m_arena, m_symbols, *this);
     bool firstInit = true;
     for(const FieldDecl* field : orderedFields){
-        if(!field || !field->type || field->type->refMode == ParamPassingMode::None || field->defaultExpr || field->hasCtorInit)
+        if(!field || !field->type || m_symbols.resolveRefMode(field->type) == ParamPassingMode::None || field->defaultExpr || field->hasCtorInit)
             continue;
         const Expr* rhs = __hidden_adhd_header_emitter::FindConstructorFieldAssignment(ctor.body, field->name);
         if(!rhs)

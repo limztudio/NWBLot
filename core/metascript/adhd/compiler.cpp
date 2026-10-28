@@ -64,11 +64,30 @@ bool Compiler::compile(
     MetaArena& arena,
     CompileResult& outResult,
     IIncludeResolver* includeResolver,
-    const MStringView customNamespace
+    const MStringView customNamespace,
+    const MVector<MString>* macroDefinitions
 ){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
 
     Preprocessor preprocessor(arena, scratchArena, outResult.errors, includeResolver);
+    if(macroDefinitions){
+        for(const MString& defText : *macroDefinitions){
+            const MStringView defView(defText.data(), defText.size());
+            if(defView.empty())
+                continue;
+            usize eqPos = defView.size();
+            for(usize i = 0u; i < defView.size(); ++i){
+                if(defView[i] == '='){
+                    eqPos = i;
+                    break;
+                }
+            }
+            if(eqPos < defView.size())
+                preprocessor.defineObjectMacro(defView.substr(0u, eqPos), defView.substr(eqPos + 1u));
+            else
+                preprocessor.defineObjectMacro(defView, "1");
+        }
+    }
     if(!preprocessor.process(source, outResult.preprocessedSource))
         return false;
 

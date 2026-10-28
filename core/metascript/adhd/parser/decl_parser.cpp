@@ -236,7 +236,7 @@ TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const MVector<P
     if(!m_cursor.expect(TokenType::Equal, "expected '=' in 'type' alias declaration"))
         return nullptr;
 
-    decl->aliasedType = m_typeParser.parseType(false, false);
+    decl->aliasedType = m_typeParser.parseType(true, false);
     if(!decl->aliasedType)
         return nullptr;
 

@@ -96,6 +96,9 @@ struct Expr{
     bool isMutArg = false;
     bool injectScratchArena = false;
     bool injectClassArena = false;
+    bool lambdaUsesScratchArena = false;
+    bool lambdaUsesTaskScope = false;
+    bool hasMutLocalCapture = false;
 
 
 public:

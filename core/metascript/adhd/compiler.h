@@ -55,7 +55,8 @@ public:
         MetaArena& arena,
         CompileResult& outResult,
         IIncludeResolver* includeResolver = nullptr,
-        MStringView customNamespace = {}
+        MStringView customNamespace = {},
+        const MVector<MString>* macroDefinitions = nullptr
     );
 
     [[nodiscard]] static MString deriveNamespaceFromPath(MStringView virtualFilePath, MetaArena& arena);

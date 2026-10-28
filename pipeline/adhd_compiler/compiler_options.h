@@ -14,6 +14,7 @@
 struct AdhdCompilerOptions{
     NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString> inputFiles;
     NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString> includeDirectories;
+    NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString> macroDefinitions;
     NWB::Core::Metascript::MString outputDirectory;
     NWB::Core::Metascript::MString customNamespace;
     bool validateOnly = false;
@@ -24,6 +25,7 @@ public:
     explicit AdhdCompilerOptions(NWB::Core::Metascript::MetaArena& arena)noexcept
         : inputFiles(arena)
         , includeDirectories(arena)
+        , macroDefinitions(arena)
         , outputDirectory(arena)
         , customNamespace(arena)
     {}

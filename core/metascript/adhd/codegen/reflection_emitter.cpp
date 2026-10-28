@@ -28,6 +28,30 @@ namespace __hidden_adhd_reflection_emitter{
     return !method.isConstructor && !method.isDestructor && (method.access == AccessSpecifier::Public || method.isReflect);
 }
 
+[[nodiscard]] bool IsAssetDependencyField(const FieldDecl& field, const SymbolTable& symbols)noexcept{
+    if(!field.type)
+        return false;
+    const TypeRef* resolved = symbols.unwrapTypeAlias(field.type);
+    if(!resolved)
+        return false;
+    const MStringView tname = resolved->name;
+    if(tname == "AssetRef")
+        return true;
+    if((tname == "Optional" || tname == "Array" || tname == "FixedVector" || tname == "Vector"
+        || tname == "Deque" || tname == "ParallelVector" || tname == "List" || tname == "ForwardList"
+        || tname == "Set" || tname == "HashSet" || tname == "ParallelHashSet")
+        && !resolved->templateArgs.empty() && resolved->templateArgs[0].type)
+    {
+        return symbols.resolveBaseTypeName(resolved->templateArgs[0].type->name) == "AssetRef";
+    }
+    if((tname == "Map" || tname == "HashMap" || tname == "ParallelHashMap")
+        && resolved->templateArgs.size() >= 2u && resolved->templateArgs[1].type)
+    {
+        return symbols.resolveBaseTypeName(resolved->templateArgs[1].type->name) == "AssetRef";
+    }
+    return false;
+}
+
 void CountReflectedFields(
     const MVector<FieldDecl*>& fields,
     const SymbolTable& symbols,
@@ -39,7 +63,7 @@ void CountReflectedFields(
     for(const FieldDecl* field : fields){
         if(field && IsFieldReflected(*field)){
             ++outNonTransientCount;
-            if(field->type && symbols.resolveBaseTypeName(field->type->name) == "AssetRef")
+            if(IsAssetDependencyField(*field, symbols))
                 ++outAssetRefCount;
         }
     }
@@ -149,7 +173,7 @@ void EmitFieldNameLookupBody(
     for(const FieldDecl* field : fields){
         if(!field || !IsFieldReflected(*field))
             continue;
-        if(assetRefOnly && (!field->type || symbols.resolveBaseTypeName(field->type->name) != "AssetRef"))
+        if(assetRefOnly && !IsAssetDependencyField(*field, symbols))
             continue;
         out.append(indent.data(), indent.size());
         out.append("if(index == ");
@@ -368,6 +392,12 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
             out.append(" = static_cast<");
             out.append(tname.data(), tname.size());
             out.append("::Enum>(__f->asInteger());\r\n");
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isString()){ if(const auto __e = ");
+            out.append(tname.data(), tname.size());
+            out.append("::parseNamedEnum(__f->asString())) this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(" = *__e; }\r\n");
         }
         else if(const ClassDecl* nestedCls = m_symbols.findClass(tname); nestedCls && (nestedCls->isSerialize || nestedCls->isReflect || !nestedCls->assetTypeName.empty() || !nestedCls->templateParams.empty())){
             EmitNwbFieldFindPrefix(out, field->name);
@@ -375,12 +405,12 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
             out.append(field->name.data(), field->name.size());
             out.append(".deserializeNwb(*__f)) return false;\r\n");
         }
-        else if((tname == "Array" || tname == "FixedVector" || tname == "Vector")
+        else if((tname == "Array" || tname == "FixedVector" || tname == "Vector" || tname == "Deque" || tname == "ParallelVector" || tname == "List")
             && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
         {
             const MStringView elemName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
             const bool isFixedVec = (tname == "FixedVector");
-            const bool isDynVec = (tname == "Vector");
+            const bool isDynVec = (tname == "Vector" || tname == "Deque" || tname == "ParallelVector" || tname == "List");
             const bool isIntElem = elemName == "i8" || elemName == "u8" || elemName == "i16" || elemName == "u16"
                 || elemName == "i32" || elemName == "u32" || elemName == "i64" || elemName == "u64"
                 || elemName == "isize" || elemName == "usize";
@@ -475,6 +505,87 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
                     out.append("[__i].deserializeNwb(__f->asList()[__i])) return false; } }\r\n");
                 }
             }
+            else if(u32 simdLanes = 0u; SymbolTable::isSimdVectorType(elemName, simdLanes) && simdLanes >= 2u && simdLanes <= 4u){
+                const MStringView cppVecType = SymbolTable::mapBuiltinCppType(elemName);
+                const MStringView laneScalar = elemName.substr(0u, 3u);
+                const bool isIntLane = (elemName[0] == 'i' || elemName[0] == 'u');
+                const bool isMixedVec = (elemName == "f32x3_i32" || elemName == "f32x3_u32" || elemName == "f64x3_i64" || elemName == "f64x3_u64");
+                EmitNwbFieldFindPrefix(out, field->name);
+                out.append("__f->isList()){ ");
+                if(isFixedVec || isDynVec){
+                    out.append("this->");
+                    out.append(field->name.data(), field->name.size());
+                    out.append(".clear(); ");
+                }
+                out.append("for(usize __i = 0u; __i < __f->asList().size()");
+                if(!isDynVec){
+                    out.append(" && __i < this->");
+                    out.append(field->name.data(), field->name.size());
+                    out.append(isFixedVec ? ".max_size()" : ".size()");
+                }
+                out.append("; ++__i){ if(!__f->asList()[__i].isList() || __f->asList()[__i].asList().size() != ");
+                AppendAdhdUnsigned(out, simdLanes);
+                out.append("u) continue; ");
+                if(isFixedVec || isDynVec){
+                    out.append("this->");
+                    out.append(field->name.data(), field->name.size());
+                    out.append(".push_back(");
+                }
+                else{
+                    out.append("this->");
+                    out.append(field->name.data(), field->name.size());
+                    out.append("[__i] = ");
+                }
+                out.append(cppVecType.data(), cppVecType.size());
+                out.push_back('(');
+                for(u32 lane = 0u; lane < simdLanes; ++lane){
+                    if(lane > 0u)
+                        out.append(", ");
+                    const bool laneIsInt = isIntLane || (isMixedVec && lane == 3u);
+                    const MStringView curScalar = (isMixedVec && lane == 3u) ? elemName.substr(6u) : laneScalar;
+                    out.append("static_cast<");
+                    out.append(curScalar.data(), curScalar.size());
+                    out.append(">(__f->asList()[__i].asList()[");
+                    AppendAdhdUnsigned(out, lane);
+                    out.append(laneIsInt ? "].asInteger())" : "].toDouble())");
+                }
+                out.push_back(')');
+                if(isFixedVec || isDynVec)
+                    out.push_back(')');
+                out.append("; } }\r\n");
+            }
+            else if(SymbolTable::isSimdMatrixType(elemName)){
+                const MStringView cppMatType = SymbolTable::mapBuiltinCppType(elemName);
+                const MStringView elemScalar = elemName.substr(0u, 3u);
+                const u32 elemCount = (elemName == "f64x3x3") ? 9u : ((elemName == "f32x3x4" || elemName == "f64x3x4") ? 12u : 16u);
+                EmitNwbFieldFindPrefix(out, field->name);
+                out.append("__f->isList()){ ");
+                if(isFixedVec || isDynVec){
+                    out.append("this->");
+                    out.append(field->name.data(), field->name.size());
+                    out.append(".clear(); ");
+                }
+                out.append("for(usize __i = 0u; __i < __f->asList().size()");
+                if(!isDynVec){
+                    out.append(" && __i < this->");
+                    out.append(field->name.data(), field->name.size());
+                    out.append(isFixedVec ? ".max_size()" : ".size()");
+                }
+                out.append("; ++__i){ if(!__f->asList()[__i].isList() || __f->asList()[__i].asList().size() != ");
+                AppendAdhdUnsigned(out, elemCount);
+                out.append("u) continue; ");
+                out.append(cppMatType.data(), cppMatType.size());
+                out.append(" __m{}; for(usize __k = 0u; __k < ");
+                AppendAdhdUnsigned(out, elemCount);
+                out.append("u; ++__k) __m.raw[__k] = static_cast<");
+                out.append(elemScalar.data(), elemScalar.size());
+                out.append(">(__f->asList()[__i].asList()[__k].toDouble()); this->");
+                out.append(field->name.data(), field->name.size());
+                if(isFixedVec || isDynVec)
+                    out.append(".push_back(__m); } }\r\n");
+                else
+                    out.append("[__i] = __m; } }\r\n");
+            }
         }
         else if(tname == "Optional"
             && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
@@ -512,6 +623,12 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
                 out.append(" = static_cast<");
                 out.append(innerName.data(), innerName.size());
                 out.append("::Enum>(__f->asInteger());\r\n");
+                EmitNwbFieldFindPrefix(out, field->name);
+                out.append("__f->isString()){ if(const auto __e = ");
+                out.append(innerName.data(), innerName.size());
+                out.append("::parseNamedEnum(__f->asString())) this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(" = *__e; }\r\n");
             }
             else if(innerName == "String"){
                 EmitNwbFieldFindPrefix(out, field->name);
@@ -563,6 +680,23 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
                 }
                 out.append(");\r\n");
             }
+            else if(SymbolTable::isSimdMatrixType(innerName)){
+                const MStringView cppMatType = SymbolTable::mapBuiltinCppType(innerName);
+                const MStringView elemScalar = innerName.substr(0u, 3u);
+                const u32 elemCount = (innerName == "f64x3x3") ? 9u : ((innerName == "f32x3x4" || innerName == "f64x3x4") ? 12u : 16u);
+                EmitNwbFieldFindPrefix(out, field->name);
+                out.append("__f->isList() && __f->asList().size() == ");
+                AppendAdhdUnsigned(out, elemCount);
+                out.append("u){ ");
+                out.append(cppMatType.data(), cppMatType.size());
+                out.append(" __m{}; for(usize __i = 0u; __i < ");
+                AppendAdhdUnsigned(out, elemCount);
+                out.append("u; ++__i) __m.raw[__i] = static_cast<");
+                out.append(elemScalar.data(), elemScalar.size());
+                out.append(">(__f->asList()[__i].toDouble()); this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(" = __m; }\r\n");
+            }
             else if(const ClassDecl* innerCls = m_symbols.findClass(innerName); innerCls && (innerCls->isSerialize || innerCls->isReflect || !innerCls->assetTypeName.empty() || !innerCls->templateParams.empty())){
                 EmitNwbFieldFindPrefix(out, field->name);
                 out.append("__f->isMap()){ this->");
@@ -574,6 +708,135 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
                 out.append(".reset(); return false; } }\r\n");
             }
         }
+        else if((tname == "Set" || tname == "HashSet" || tname == "ParallelHashSet")
+            && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
+        {
+            const MStringView elemName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
+            const bool isIntElem = elemName == "i8" || elemName == "u8" || elemName == "i16" || elemName == "u16"
+                || elemName == "i32" || elemName == "u32" || elemName == "i64" || elemName == "u64"
+                || elemName == "isize" || elemName == "usize";
+            const bool isFloatElem = elemName == "f32" || elemName == "f64";
+            const bool isEnumElem = m_symbols.findEnum(elemName) != nullptr;
+            if(elemName == "bool" || isIntElem || isFloatElem || isEnumElem
+                || elemName == "String" || elemName == "CompactString" || elemName == "Path" || elemName == "Name" || elemName == "AssetRef")
+            {
+                EmitNwbFieldFindPrefix(out, field->name);
+                out.append("__f->isList()){ this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(".clear(); for(usize __i = 0u; __i < __f->asList().size(); ++__i) this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(".insert(");
+                if(elemName == "bool"){
+                    out.append("(__f->asList()[__i].asInteger() != 0)");
+                }
+                else if(isIntElem || isFloatElem){
+                    out.append("static_cast<");
+                    out.append(elemName.data(), elemName.size());
+                    out.append(isIntElem ? ">(__f->asList()[__i].asInteger())" : ">(__f->asList()[__i].toDouble())");
+                }
+                else if(isEnumElem){
+                    out.append("static_cast<");
+                    out.append(elemName.data(), elemName.size());
+                    out.append("::Enum>(__f->asList()[__i].asInteger())");
+                }
+                else if(elemName == "String"){
+                    out.append("AString(__f->asList()[__i].asString(), s_ClassArena)");
+                }
+                else if(elemName == "CompactString"){
+                    out.append("ACompactString(__f->asList()[__i].asString())");
+                }
+                else if(elemName == "Path"){
+                    out.append("Path(::ConvertString(__f->asList()[__i].asString()))");
+                }
+                else if(elemName == "Name"){
+                    out.append("::Name(__f->asList()[__i].asString().data())");
+                }
+                else{
+                    out.append("{::Name(__f->asList()[__i].asString().data())}");
+                }
+                out.append("); }\r\n");
+            }
+        }
+        else if((tname == "Map" || tname == "HashMap" || tname == "ParallelHashMap")
+            && resolvedFieldType && resolvedFieldType->templateArgs.size() >= 2u
+            && resolvedFieldType->templateArgs[0].type && resolvedFieldType->templateArgs[1].type)
+        {
+            const MStringView keyName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
+            const MStringView valName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[1].type->name);
+            const bool isStringLikeKey = (keyName == "String" || keyName == "CompactString" || keyName == "Name" || keyName == "Path");
+            const bool isIntVal = valName == "i8" || valName == "u8" || valName == "i16" || valName == "u16"
+                || valName == "i32" || valName == "u32" || valName == "i64" || valName == "u64"
+                || valName == "isize" || valName == "usize";
+            const bool isFloatVal = valName == "f32" || valName == "f64";
+            const bool isEnumVal = m_symbols.findEnum(valName) != nullptr;
+            const ClassDecl* valCls = m_symbols.findClass(valName);
+            const bool isClassVal = valCls && (valCls->isSerialize || valCls->isReflect || !valCls->assetTypeName.empty() || !valCls->templateParams.empty());
+            if(isStringLikeKey && (valName == "bool" || isIntVal || isFloatVal || isEnumVal
+                || valName == "String" || valName == "CompactString" || valName == "Path" || valName == "Name" || valName == "AssetRef"))
+            {
+                EmitNwbFieldFindPrefix(out, field->name);
+                out.append("__f->isMap()){ this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()) this->");
+                out.append(field->name.data(), field->name.size());
+                out.push_back('[');
+                if(keyName == "String")
+                    out.append("AString(__k, s_ClassArena)");
+                else if(keyName == "CompactString")
+                    out.append("ACompactString(__k)");
+                else if(keyName == "Name")
+                    out.append("::Name(__k.data())");
+                else
+                    out.append("Path(::ConvertString(__k))");
+                out.append("] = ");
+                if(valName == "bool"){
+                    out.append("(__v.asInteger() != 0)");
+                }
+                else if(isIntVal || isFloatVal){
+                    out.append("static_cast<");
+                    out.append(valName.data(), valName.size());
+                    out.append(isIntVal ? ">(__v.asInteger())" : ">(__v.toDouble())");
+                }
+                else if(isEnumVal){
+                    out.append("static_cast<");
+                    out.append(valName.data(), valName.size());
+                    out.append("::Enum>(__v.asInteger())");
+                }
+                else if(valName == "String"){
+                    out.append("AString(__v.asString(), s_ClassArena)");
+                }
+                else if(valName == "CompactString"){
+                    out.append("ACompactString(__v.asString())");
+                }
+                else if(valName == "Path"){
+                    out.append("Path(::ConvertString(__v.asString()))");
+                }
+                else if(valName == "Name"){
+                    out.append("::Name(__v.asString().data())");
+                }
+                else{
+                    out.append("{::Name(__v.asString().data())}");
+                }
+                out.append("; }\r\n");
+            }
+            else if(isStringLikeKey && isClassVal){
+                EmitNwbFieldFindPrefix(out, field->name);
+                out.append("__f->isMap()){ this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ if(!__v.isMap() || !this->");
+                out.append(field->name.data(), field->name.size());
+                out.push_back('[');
+                if(keyName == "String")
+                    out.append("AString(__k, s_ClassArena)");
+                else if(keyName == "CompactString")
+                    out.append("ACompactString(__k)");
+                else if(keyName == "Name")
+                    out.append("::Name(__k.data())");
+                else
+                    out.append("Path(::ConvertString(__k))");
+                out.append("].deserializeNwb(__v)) return false; } }\r\n");
+            }
+        }
     }
     out.append("        return true;\r\n");
     out.append("    }\r\n");
@@ -582,7 +845,7 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
 void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const ClassDecl& decl)const{
     using namespace __hidden_adhd_reflection_emitter;
 
-    const MVector<FieldDecl*>& activeFields = !decl.orderedFields.empty() ? decl.orderedFields : decl.fields;
+    const MVector<FieldDecl*>& activeFields = decl.orderedFields;
 
     if(decl.isSerialize){
         out.append("usize ");

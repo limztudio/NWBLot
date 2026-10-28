@@ -34,6 +34,42 @@ namespace __hidden_adhd_type_checker{
         || op == TokenType::GreaterGreaterEqual;
 }
 
+[[nodiscard]] constexpr MStringView MapTokenTypeToOperatorSymbol(const TokenType::Enum op)noexcept{
+    switch(op){
+    case TokenType::Plus: return "+";
+    case TokenType::Minus: return "-";
+    case TokenType::Star: return "*";
+    case TokenType::Slash: return "/";
+    case TokenType::Percent: return "%";
+    case TokenType::Ampersand: return "&";
+    case TokenType::Pipe: return "|";
+    case TokenType::Caret: return "^";
+    case TokenType::Tilde: return "~";
+    case TokenType::Bang: return "!";
+    case TokenType::LessLess: return "<<";
+    case TokenType::GreaterGreater: return ">>";
+    case TokenType::EqualEqual: return "==";
+    case TokenType::BangEqual: return "!=";
+    case TokenType::Less: return "<";
+    case TokenType::LessEqual: return "<=";
+    case TokenType::Greater: return ">";
+    case TokenType::GreaterEqual: return ">=";
+    case TokenType::PlusEqual: return "+=";
+    case TokenType::MinusEqual: return "-=";
+    case TokenType::StarEqual: return "*=";
+    case TokenType::SlashEqual: return "/=";
+    case TokenType::PercentEqual: return "%=";
+    case TokenType::AmpersandEqual: return "&=";
+    case TokenType::PipeEqual: return "|=";
+    case TokenType::CaretEqual: return "^=";
+    case TokenType::LessLessEqual: return "<<=";
+    case TokenType::GreaterGreaterEqual: return ">>=";
+    case TokenType::PlusPlus: return "++";
+    case TokenType::MinusMinus: return "--";
+    default: return {};
+    }
+}
+
 [[nodiscard]] bool IsNonThreadSafeContainer(const MStringView typeName)noexcept{
     return typeName == "Vector"
         || typeName == "FixedVector"
@@ -185,19 +221,25 @@ void CollectAssignedThisMembers(const MVector<Stmt*>& stmts, MVector<MStringView
     const TypeRef* actual,
     const TypeRef* pattern,
     const MVector<TemplateParamDecl>* ifaceParams,
-    const MVector<TypeArg>* ifaceArgs
+    const MVector<TypeArg>* ifaceArgs,
+    const SymbolTable* symbols = nullptr
 )noexcept;
 
-[[nodiscard]] bool AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b)noexcept{
-    return AreTypeRefsEquivalentWithSubst(a, b, nullptr, nullptr);
+[[nodiscard]] bool AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b, const SymbolTable* symbols = nullptr)noexcept{
+    return AreTypeRefsEquivalentWithSubst(a, b, nullptr, nullptr, symbols);
 }
 
 [[nodiscard]] bool AreTypeRefsEquivalentWithSubst(
     const TypeRef* actual,
     const TypeRef* pattern,
     const MVector<TemplateParamDecl>* ifaceParams,
-    const MVector<TypeArg>* ifaceArgs
+    const MVector<TypeArg>* ifaceArgs,
+    const SymbolTable* symbols
 )noexcept{
+    if(symbols){
+        actual = symbols->unwrapTypeAlias(actual);
+        pattern = symbols->unwrapTypeAlias(pattern);
+    }
     if(actual == pattern)
         return true;
     if(!actual || !pattern)
@@ -207,7 +249,7 @@ void CollectAssignedThisMembers(const MVector<Stmt*>& stmts, MVector<MStringView
         const usize substCount = ifaceParams->size() < ifaceArgs->size() ? ifaceParams->size() : ifaceArgs->size();
         for(usize k = 0u; k < substCount; ++k){
             if(!(*ifaceParams)[k].constValueType && (*ifaceParams)[k].name == pattern->name && (*ifaceArgs)[k].type){
-                const TypeRef* subst = (*ifaceArgs)[k].type;
+                const TypeRef* subst = symbols ? symbols->unwrapTypeAlias((*ifaceArgs)[k].type) : (*ifaceArgs)[k].type;
                 const ParamPassingMode::Enum expectedRefMode = (pattern->refMode != ParamPassingMode::None)
                     ? pattern->refMode
                     : subst->refMode;
@@ -217,7 +259,7 @@ void CollectAssignedThisMembers(const MVector<Stmt*>& stmts, MVector<MStringView
                     && actual->isAuto == subst->isAuto
                     && actual->isFuncType == subst->isFuncType
                     && actual->templateArgs.size() == subst->templateArgs.size()
-                    && AreTypeRefsEquivalent(actual, subst);
+                    && AreTypeRefsEquivalent(actual, subst, symbols);
             }
         }
     }
@@ -233,18 +275,18 @@ void CollectAssignedThisMembers(const MVector<Stmt*>& stmts, MVector<MStringView
     for(usize i = 0u; i < actual->templateArgs.size(); ++i){
         const TypeArg& ta = actual->templateArgs[i];
         const TypeArg& tb = pattern->templateArgs[i];
-        if(ta.constantText != tb.constantText || !AreTypeRefsEquivalentWithSubst(ta.type, tb.type, ifaceParams, ifaceArgs))
+        if(ta.constantText != tb.constantText || !AreTypeRefsEquivalentWithSubst(ta.type, tb.type, ifaceParams, ifaceArgs, symbols))
             return false;
     }
     if(actual->isFuncType){
-        if(!AreTypeRefsEquivalentWithSubst(actual->funcReturnType, pattern->funcReturnType, ifaceParams, ifaceArgs)
+        if(!AreTypeRefsEquivalentWithSubst(actual->funcReturnType, pattern->funcReturnType, ifaceParams, ifaceArgs, symbols)
             || actual->funcParams.size() != pattern->funcParams.size())
         {
             return false;
         }
         for(usize i = 0u; i < actual->funcParams.size(); ++i){
             if(actual->funcParams[i].mode != pattern->funcParams[i].mode
-                || !AreTypeRefsEquivalentWithSubst(actual->funcParams[i].type, pattern->funcParams[i].type, ifaceParams, ifaceArgs))
+                || !AreTypeRefsEquivalentWithSubst(actual->funcParams[i].type, pattern->funcParams[i].type, ifaceParams, ifaceArgs, symbols))
             {
                 return false;
             }
@@ -327,6 +369,21 @@ void PropagateFuncCaptureBytes(
             }
         }
     }
+}
+
+[[nodiscard]] bool IsEscapingMutCaptureLambda(const Expr* rhs, const MVector<ScopedVarInfo>& scope)noexcept{
+    if(!rhs)
+        return false;
+    if(rhs->kind == ExprKind::Lambda)
+        return rhs->hasMutLocalCapture;
+    if(rhs->kind == ExprKind::Identifier){
+        for(usize i = scope.size(); i > 0u; --i){
+            const ScopedVarInfo& v = scope[i - 1u];
+            if(v.name == rhs->text)
+                return v.lambdaExpr && v.lambdaExpr->hasMutLocalCapture;
+        }
+    }
+    return false;
 }
 
 [[nodiscard]] bool DoParamListsMatch(const MVector<ParamDecl>& a, const MVector<ParamDecl>& b)noexcept{
@@ -457,14 +514,16 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
     }
 
     for(TypeAliasDecl* aliasDecl : unit.typeAliases){
-        if(!checkTemplateParamBounds(aliasDecl->templateParams, errors))
+        if(!checkTemplateParamBounds(aliasDecl->templateParams, nullptr, nullptr, errors))
             ok = false;
         if(aliasDecl->aliasedType){
             if(__hidden_adhd_type_checker::TypeRefReferencesAlias(aliasDecl->aliasedType, aliasDecl->name, m_symbols)){
                 reportError(errors, aliasDecl->span, "cyclic 'type' alias declaration is prohibited");
                 ok = false;
             }
-            if(!checkTypeRef(*aliasDecl->aliasedType, nullptr, nullptr, errors, true))
+            MethodDecl aliasScope(m_arena);
+            aliasScope.templateParams = aliasDecl->templateParams;
+            if(!checkTypeRef(*aliasDecl->aliasedType, nullptr, &aliasScope, errors, true))
                 ok = false;
         }
     }
@@ -480,7 +539,7 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
                 reportError(errors, gc->span, "file-level 'const' cannot have an 'interface' type");
                 ok = false;
             }
-            if(gc->varType->refMode != ParamPassingMode::None){
+            if(m_symbols.resolveRefMode(gc->varType) != ParamPassingMode::None){
                 reportError(errors, gc->span, "file-level 'const' cannot declare an 'in' or 'mut' reference");
                 ok = false;
             }
@@ -520,12 +579,12 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
     }
 
     for(MethodDecl* fn : unit.freeFunctions){
-        if(!checkTemplateParamBounds(fn->templateParams, errors))
+        if(!checkTemplateParamBounds(fn->templateParams, nullptr, fn, errors))
             ok = false;
         if(fn->returnType){
             if(!checkTypeRef(*fn->returnType, nullptr, fn, errors, true))
                 ok = false;
-            if(fn->returnType->refMode == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(fn->returnType->name))){
+            if(m_symbols.resolveRefMode(fn->returnType) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(fn->returnType->name))){
                 reportError(errors, fn->span, "cannot return an 'interface' type by value");
                 ok = false;
             }
@@ -717,8 +776,18 @@ bool TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError
     return ok;
 }
 
-bool TypeChecker::checkTemplateParamBounds(const MVector<TemplateParamDecl>& params, MVector<ParseError>& errors){
+bool TypeChecker::checkTemplateParamBounds(
+    const MVector<TemplateParamDecl>& params,
+    const ClassDecl* enclosingClass,
+    const MethodDecl* enclosingMethod,
+    MVector<ParseError>& errors
+){
     bool ok = true;
+    MethodDecl tempMethodScope(m_arena);
+    if(!enclosingMethod)
+        tempMethodScope.templateParams = params;
+    const MethodDecl* effectiveMethod = enclosingMethod ? enclosingMethod : &tempMethodScope;
+
     for(usize i = 0u; i < params.size(); ++i){
         const TemplateParamDecl& param = params[i];
         for(usize j = 0u; j < i; ++j){
@@ -728,12 +797,16 @@ bool TypeChecker::checkTemplateParamBounds(const MVector<TemplateParamDecl>& par
                 break;
             }
         }
-        if(param.constValueType && !checkTypeRef(*param.constValueType, nullptr, nullptr, errors))
+        if(param.constValueType && !checkTypeRef(*param.constValueType, enclosingClass, effectiveMethod, errors))
             ok = false;
         for(usize bIdx = 0u; bIdx < param.interfaceBounds.size(); ++bIdx){
-            const MStringView& boundName = param.interfaceBounds[bIdx];
+            const TypeRef* boundRef = param.interfaceBounds[bIdx];
+            if(!boundRef)
+                continue;
+            const TypeRef* resolvedBound = m_symbols.unwrapTypeAlias(boundRef);
+            const MStringView boundName = resolvedBound ? resolvedBound->name : boundRef->name;
             for(usize prevB = 0u; prevB < bIdx; ++prevB){
-                if(param.interfaceBounds[prevB] == boundName){
+                if(param.interfaceBounds[prevB] && __hidden_adhd_type_checker::AreTypeRefsEquivalent(param.interfaceBounds[prevB], boundRef, &m_symbols)){
                     reportError(errors, param.span, "duplicate interface bound on template parameter");
                     ok = false;
                     break;
@@ -747,39 +820,62 @@ bool TypeChecker::checkTemplateParamBounds(const MVector<TemplateParamDecl>& par
                 reportError(errors, param.span, "unknown interface bound on template parameter");
                 ok = false;
             }
+            else if(!checkTypeRef(*boundRef, enclosingClass, effectiveMethod, errors)){
+                ok = false;
+            }
         }
     }
     return ok;
 }
 
-bool TypeChecker::interfaceInheritsFrom(const InterfaceDecl& iface, const MStringView requiredIface, const u32 depth)const noexcept{
+bool TypeChecker::interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, const u32 depth)const noexcept{
     if(depth > 16u)
         return false;
-    if(iface.name == requiredIface)
-        return true;
-    for(const TypeRef* baseType : iface.baseInterfaces){
-        if(!baseType)
-            continue;
-        if(baseType->name == requiredIface)
+    const TypeRef* unwrappedIface = m_symbols.unwrapTypeAlias(&ifaceRef);
+    const TypeRef* unwrappedReq = m_symbols.unwrapTypeAlias(&requiredIface);
+    if(!unwrappedIface || !unwrappedReq)
+        return false;
+
+    TypeRef cleanIface = *unwrappedIface;
+    cleanIface.refMode = ParamPassingMode::None;
+    TypeRef cleanReq = *unwrappedReq;
+    cleanReq.refMode = ParamPassingMode::None;
+
+    if(cleanIface.name == cleanReq.name){
+        if(cleanReq.templateArgs.empty() || __hidden_adhd_type_checker::AreTypeRefsEquivalent(&cleanIface, &cleanReq, &m_symbols))
             return true;
-        if(const InterfaceDecl* baseDecl = m_symbols.findInterface(baseType->name)){
-            if(interfaceInheritsFrom(*baseDecl, requiredIface, depth + 1u))
+    }
+
+    if(const InterfaceDecl* ifaceDecl = m_symbols.findInterface(cleanIface.name)){
+        const bool hasSubst = !ifaceDecl->templateParams.empty() && !cleanIface.templateArgs.empty();
+        for(const TypeRef* rawBase : ifaceDecl->baseInterfaces){
+            if(!rawBase)
+                continue;
+            const TypeRef* subBase = hasSubst
+                ? m_symbols.substituteTypeParams(*rawBase, ifaceDecl->templateParams, cleanIface.templateArgs)
+                : rawBase;
+            if(subBase && interfaceInheritsFrom(*subBase, cleanReq, depth + 1u))
                 return true;
         }
     }
     return false;
 }
 
-bool TypeChecker::classImplementsInterface(const ClassDecl& cls, const MStringView requiredIface)const noexcept{
-    for(const TypeRef* implType : cls.implementedInterfaces){
-        if(!implType)
+bool TypeChecker::classImplementsInterface(const ClassDecl& cls, const TypeRef* implClassRef, const TypeRef& requiredIface)const noexcept{
+    const TypeRef* unwrappedReq = m_symbols.unwrapTypeAlias(&requiredIface);
+    if(!unwrappedReq)
+        return false;
+
+    const TypeRef* unwrappedImplCls = implClassRef ? m_symbols.unwrapTypeAlias(implClassRef) : nullptr;
+    const bool hasClsSubst = unwrappedImplCls && !cls.templateParams.empty() && !unwrappedImplCls->templateArgs.empty();
+    for(const TypeRef* rawImpl : cls.implementedInterfaces){
+        if(!rawImpl)
             continue;
-        if(implType->name == requiredIface)
+        const TypeRef* subImpl = hasClsSubst
+            ? m_symbols.substituteTypeParams(*rawImpl, cls.templateParams, unwrappedImplCls->templateArgs)
+            : rawImpl;
+        if(subImpl && interfaceInheritsFrom(*subImpl, *unwrappedReq))
             return true;
-        if(const InterfaceDecl* ifaceDecl = m_symbols.findInterface(implType->name)){
-            if(interfaceInheritsFrom(*ifaceDecl, requiredIface))
-                return true;
-        }
     }
     return false;
 }
@@ -838,8 +934,12 @@ bool TypeChecker::checkTemplateArgBounds(
             continue;
 
         const ClassDecl* argClass = m_symbols.findClass(argTypeName);
-        for(const MStringView& boundName : param.interfaceBounds){
-            if(!argClass || !classImplementsInterface(*argClass, boundName)){
+        const TypeRef* resolvedArgType = m_symbols.unwrapTypeAlias(arg.type);
+        for(const TypeRef* boundRef : param.interfaceBounds){
+            if(!boundRef)
+                continue;
+            const TypeRef* subBound = m_symbols.substituteTypeParams(*boundRef, params, args);
+            if(!argClass || !subBound || !classImplementsInterface(*argClass, resolvedArgType, *subBound)){
                 reportError(errors, span, "template type argument does not implement required interface bound");
                 ok = false;
             }
@@ -868,11 +968,19 @@ bool TypeChecker::checkTypeRef(
             ok = false;
         }
     }
+    else if(typeRef.refMode != ParamPassingMode::None){
+        if(const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(typeRef.name)){
+            if(m_symbols.resolveRefMode(aliasDecl->aliasedType) != ParamPassingMode::None){
+                reportError(errors, typeRef.span, "cannot apply 'in' or 'mut' to a 'type' alias that already specifies a reference mode");
+                ok = false;
+            }
+        }
+    }
     if(typeRef.isFuncType){
         if(typeRef.funcReturnType){
             if(!checkTypeRef(*typeRef.funcReturnType, enclosingClass, enclosingMethod, errors, true))
                 ok = false;
-            if(typeRef.funcReturnType->refMode == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(typeRef.funcReturnType->name))){
+            if(m_symbols.resolveRefMode(typeRef.funcReturnType) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(typeRef.funcReturnType->name))){
                 reportError(errors, typeRef.span, "cannot return an 'interface' type by value");
                 ok = false;
             }
@@ -930,10 +1038,7 @@ bool TypeChecker::checkTypeRef(
         if(targ.type){
             if(!checkTypeRef(*targ.type, enclosingClass, enclosingMethod, errors))
                 ok = false;
-            const TypeRef* unwrappedArg = m_symbols.unwrapTypeAlias(targ.type);
-            const ParamPassingMode::Enum argRefMode = targ.type->refMode != ParamPassingMode::None
-                ? targ.type->refMode
-                : (unwrappedArg ? unwrappedArg->refMode : ParamPassingMode::None);
+            const ParamPassingMode::Enum argRefMode = m_symbols.resolveRefMode(targ.type);
             if(argRefMode == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(targ.type->name))){
                 reportError(errors, targ.type->span.line > 0u ? targ.type->span : typeRef.span, "template type argument of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored or instantiated by value");
                 ok = false;
@@ -944,14 +1049,16 @@ bool TypeChecker::checkTypeRef(
 }
 
 bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors){
-    bool ok = checkTemplateParamBounds(iface.templateParams, errors);
+    MethodDecl ifaceScope(m_arena);
+    ifaceScope.templateParams = iface.templateParams;
+    bool ok = checkTemplateParamBounds(iface.templateParams, nullptr, &ifaceScope, errors);
     for(usize i = 0u; i < iface.baseInterfaces.size(); ++i){
         const TypeRef* baseType = iface.baseInterfaces[i];
         if(!baseType)
             continue;
-        const MStringView baseName = baseType->name;
+        const MStringView baseName = m_symbols.resolveBaseTypeName(baseType->name);
         for(usize j = 0u; j < i; ++j){
-            if(iface.baseInterfaces[j] && __hidden_adhd_type_checker::AreTypeRefsEquivalent(iface.baseInterfaces[j], baseType)){
+            if(iface.baseInterfaces[j] && __hidden_adhd_type_checker::AreTypeRefsEquivalent(iface.baseInterfaces[j], baseType, &m_symbols)){
                 reportError(errors, iface.span, "duplicate base interface in interface declaration");
                 ok = false;
                 break;
@@ -961,8 +1068,10 @@ bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& 
             reportError(errors, iface.span, "'interface' cannot inherit from a concrete 'class'");
             ok = false;
         }
-        else if(const InterfaceDecl* baseDecl = m_symbols.findInterface(baseName)){
-            if(interfaceInheritsFrom(*baseDecl, iface.name)){
+        else if(m_symbols.findInterface(baseName)){
+            TypeRef selfRef(m_arena);
+            selfRef.name = iface.name;
+            if(interfaceInheritsFrom(*baseType, selfRef)){
                 reportError(errors, iface.span, "cyclic interface inheritance is prohibited");
                 ok = false;
             }
@@ -971,7 +1080,7 @@ bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& 
             reportError(errors, iface.span, "unknown base interface name");
             ok = false;
         }
-        if(!checkTypeRef(*baseType, nullptr, nullptr, errors))
+        if(!checkTypeRef(*baseType, nullptr, &ifaceScope, errors))
             ok = false;
     }
     for(usize i = 0u; i < iface.methods.size(); ++i){
@@ -992,12 +1101,12 @@ bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& 
                 break;
             }
         }
-        if(!checkTemplateParamBounds(m->templateParams, errors))
+        if(!checkTemplateParamBounds(m->templateParams, nullptr, m, errors))
             ok = false;
         if(m->returnType){
             if(!checkTypeRef(*m->returnType, nullptr, m, errors, true))
                 ok = false;
-            if(m->returnType->refMode == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(m->returnType->name))){
+            if(m_symbols.resolveRefMode(m->returnType) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(m->returnType->name))){
                 reportError(errors, m->span, "cannot return an 'interface' type by value");
                 ok = false;
             }
@@ -1021,20 +1130,20 @@ bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& 
 }
 
 bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors){
-    bool ok = checkTemplateParamBounds(classDecl.templateParams, errors);
+    bool ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
 
     for(usize i = 0u; i < classDecl.implementedInterfaces.size(); ++i){
         const TypeRef* ifaceType = classDecl.implementedInterfaces[i];
         if(!ifaceType)
             continue;
         for(usize j = 0u; j < i; ++j){
-            if(classDecl.implementedInterfaces[j] && __hidden_adhd_type_checker::AreTypeRefsEquivalent(classDecl.implementedInterfaces[j], ifaceType)){
+            if(classDecl.implementedInterfaces[j] && __hidden_adhd_type_checker::AreTypeRefsEquivalent(classDecl.implementedInterfaces[j], ifaceType, &m_symbols)){
                 reportError(errors, classDecl.span, "duplicate implemented interface in class declaration");
                 ok = false;
                 break;
             }
         }
-        const MStringView ifaceName = ifaceType->name;
+        const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
         if(m_symbols.findClass(ifaceName)){
             reportError(errors, classDecl.span, "concrete class inheritance is prohibited in adhd; classes are implicitly final and may only implement interfaces");
             ok = false;
@@ -1043,10 +1152,11 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
         if(!checkTypeRef(*ifaceType, &classDecl, nullptr, errors))
             ok = false;
         MVector<MethodDecl*> requiredInterfaceMethods(m_arena);
-        m_symbols.collectAllInterfaceMethods(ifaceName, requiredInterfaceMethods);
+        m_symbols.collectAllInterfaceMethods(*ifaceType, requiredInterfaceMethods);
+        const TypeRef* resolvedIfaceType = m_symbols.unwrapTypeAlias(ifaceType);
         const InterfaceDecl* directIfaceDecl = m_symbols.findInterface(ifaceName);
         const MVector<TemplateParamDecl>* ifaceParams = directIfaceDecl ? &directIfaceDecl->templateParams : nullptr;
-        const MVector<TypeArg>* ifaceArgs = &ifaceType->templateArgs;
+        const MVector<TypeArg>* ifaceArgs = resolvedIfaceType ? &resolvedIfaceType->templateArgs : &ifaceType->templateArgs;
 
         for(MethodDecl* req : requiredInterfaceMethods){
             MethodDecl* impl = nullptr;
@@ -1056,7 +1166,7 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
                     if(exactParamsMatch){
                         for(usize pIdx = 0u; pIdx < req->params.size(); ++pIdx){
                             if(m->params[pIdx].mode != req->params[pIdx].mode
-                                || !__hidden_adhd_type_checker::AreTypeRefsEquivalentWithSubst(m->params[pIdx].type, req->params[pIdx].type, ifaceParams, ifaceArgs))
+                                || !__hidden_adhd_type_checker::AreTypeRefsEquivalentWithSubst(m->params[pIdx].type, req->params[pIdx].type, ifaceParams, ifaceArgs, &m_symbols))
                             {
                                 exactParamsMatch = false;
                                 break;
@@ -1088,14 +1198,14 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
                     reportError(errors, impl->span, "override method 'const' qualifier does not match interface contract");
                     ok = false;
                 }
-                if(!__hidden_adhd_type_checker::AreTypeRefsEquivalentWithSubst(impl->returnType, req->returnType, ifaceParams, ifaceArgs)){
+                if(!__hidden_adhd_type_checker::AreTypeRefsEquivalentWithSubst(impl->returnType, req->returnType, ifaceParams, ifaceArgs, &m_symbols)){
                     reportError(errors, impl->span, "override method return type does not match interface contract");
                     ok = false;
                 }
                 for(usize pIdx = 0u; pIdx < req->params.size(); ++pIdx){
                     const ParamDecl& implP = impl->params[pIdx];
                     const ParamDecl& reqP = req->params[pIdx];
-                    if(implP.mode != reqP.mode || !__hidden_adhd_type_checker::AreTypeRefsEquivalentWithSubst(implP.type, reqP.type, ifaceParams, ifaceArgs)){
+                    if(implP.mode != reqP.mode || !__hidden_adhd_type_checker::AreTypeRefsEquivalentWithSubst(implP.type, reqP.type, ifaceParams, ifaceArgs, &m_symbols)){
                         reportError(errors, implP.span, "override method parameter 'in'/'mut' mode or type does not match interface contract");
                         ok = false;
                         break;
@@ -1112,12 +1222,12 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
             for(const TypeRef* ifaceType : classDecl.implementedInterfaces){
                 if(!ifaceType)
                     continue;
-                const MStringView ifaceName = ifaceType->name;
+                const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
                 if(!m_symbols.findInterface(ifaceName)){
                     matchesInterface = true;
                     break;
                 }
-                if(const MethodDecl* ifaceMatch = m_symbols.findInterfaceMethod(ifaceName, m->name, &methodArity)){
+                if(const MethodDecl* ifaceMatch = m_symbols.findInterfaceMethod(*ifaceType, m->name, &methodArity)){
                     if(ifaceMatch->isOperator == m->isOperator && ifaceMatch->params.size() == methodArity){
                         matchesInterface = true;
                         break;
@@ -1154,7 +1264,7 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
         if(field->type){
             if(!checkTypeRef(*field->type, &classDecl, nullptr, errors))
                 ok = false;
-            if(field->type->refMode == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(field->type->name))){
+            if(m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(field->type->name))){
                 reportError(errors, field->span, "class member of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored by value");
                 ok = false;
             }
@@ -1184,7 +1294,7 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
             m_inClassArenaContext = savedClassArenaCtx;
         }
 
-        const bool isAutoDefaultField = field->type && field->type->refMode == ParamPassingMode::None && (
+        const bool isAutoDefaultField = field->type && m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && (
             m_symbols.isSelfDefaultedType(field->type->name)
             || findTemplateParam(&classDecl, nullptr, field->type->name) != nullptr
         );
@@ -1215,12 +1325,12 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
                 break;
             }
         }
-        if(!checkTemplateParamBounds(m->templateParams, errors))
+        if(!checkTemplateParamBounds(m->templateParams, &classDecl, m, errors))
             ok = false;
         if(m->returnType){
             if(!checkTypeRef(*m->returnType, &classDecl, m, errors, true))
                 ok = false;
-            if(m->returnType->refMode == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(m->returnType->name))){
+            if(m_symbols.resolveRefMode(m->returnType) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(m->returnType->name))){
                 reportError(errors, m->span, "cannot return an 'interface' type by value");
                 ok = false;
             }
@@ -1274,7 +1384,7 @@ bool TypeChecker::checkConstructorInitialization(ClassDecl& classDecl, MethodDec
     }
 
     for(const FieldDecl* field : classDecl.fields){
-        const bool isAutoDefaultField = field->type && field->type->refMode == ParamPassingMode::None && (
+        const bool isAutoDefaultField = field->type && m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && (
             m_symbols.isSelfDefaultedType(field->type->name)
             || findTemplateParam(&classDecl, nullptr, field->type->name) != nullptr
         );
@@ -1348,7 +1458,7 @@ bool TypeChecker::checkStatementList(
 
     for(usize i = savedScopeSize; i < scope.size(); ++i){
         const ScopedVarInfo& local = scope[i];
-        if(local.isParam || local.isConst || (local.type && local.type->refMode != ParamPassingMode::None))
+        if(local.isParam || local.isConst || (local.type && m_symbols.resolveRefMode(local.type) != ParamPassingMode::None))
             continue;
 
         usize lastUseIndex = statements.size();
@@ -1423,30 +1533,35 @@ bool TypeChecker::checkStatement(
             reportError(errors, stmt.span, "duplicate variable or parameter name in scope");
             ok = false;
         }
+        const ParamPassingMode::Enum varRefMode = m_symbols.resolveRefMode(stmt.varType);
         if(stmt.varType){
             if(!checkTypeRef(*stmt.varType, ownerClass, &method, errors))
                 ok = false;
+            const TypeRef* resolvedVarType = m_symbols.unwrapTypeAlias(stmt.varType);
             const MStringView baseVarTypeName = m_symbols.resolveBaseTypeName(stmt.varType->name);
             if(m_symbols.findInterface(baseVarTypeName)){
-                if(stmt.varType->refMode == ParamPassingMode::None){
+                if(varRefMode == ParamPassingMode::None){
                     reportError(errors, stmt.span, "local variable of 'interface' type must specify 'in' or 'mut'; interfaces cannot be instantiated by value");
                     ok = false;
                 }
                 else if(stmt.expr){
-                    const MStringView rhsType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
+                    const TypeRef* rhsTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
+                    const MStringView rhsType = rhsTypeRef
+                        ? m_symbols.resolveBaseTypeName(rhsTypeRef->name)
+                        : inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
                     if(const ClassDecl* rhsCls = m_symbols.findClass(rhsType)){
-                        if(!classImplementsInterface(*rhsCls, baseVarTypeName)){
+                        if(!resolvedVarType || !classImplementsInterface(*rhsCls, rhsTypeRef, *resolvedVarType)){
                             reportError(errors, stmt.span, "cannot bind concrete class to interface reference: class does not implement the interface");
                             ok = false;
                         }
                     }
                 }
             }
-            if(!stmt.expr && !stmt.isCtorInit && (stmt.varType->refMode != ParamPassingMode::None || !m_symbols.isSelfDefaultedType(stmt.varType->name))){
+            if(!stmt.expr && !stmt.isCtorInit && (varRefMode != ParamPassingMode::None || !m_symbols.isSelfDefaultedType(stmt.varType->name))){
                 reportError(errors, stmt.span, "uninitialized variable declaration is prohibited in adhd; every local variable must be initialized at declaration");
                 ok = false;
             }
-            if(stmt.varType->refMode == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(baseVarTypeName)){
+            if(varRefMode == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(baseVarTypeName)){
                 stmt.usesScratchArena = true;
                 method.usesScratchArena = true;
             }
@@ -1470,7 +1585,7 @@ bool TypeChecker::checkStatement(
         }
 
         if(stmt.expr){
-            const bool isMutRefBinding = stmt.varType && stmt.varType->refMode == ParamPassingMode::Mut;
+            const bool isMutRefBinding = (varRefMode == ParamPassingMode::Mut);
             if(!checkExpr(ownerClass, method, *stmt.expr, scope, isMutRefBinding, errors))
                 ok = false;
             if(stmt.varType && stmt.varType->isAuto && !stmt.expr->resolvedSimdType.empty()){
@@ -1478,9 +1593,59 @@ bool TypeChecker::checkStatement(
                 stmt.varType->name = stmt.expr->resolvedSimdType;
             }
         }
-        for(Expr* arg : stmt.arguments){
-            if(arg && !checkExpr(ownerClass, method, *arg, scope, false, errors))
+        const ClassDecl* ctorCls = nullptr;
+        const MethodDecl* matchedCtor = nullptr;
+        const TypeRef* resolvedCtorVarType = stmt.varType ? m_symbols.unwrapTypeAlias(stmt.varType) : nullptr;
+        if(stmt.isCtorInit && stmt.varType){
+            const MStringView baseVarTypeName = m_symbols.resolveBaseTypeName(stmt.varType->name);
+            ctorCls = m_symbols.findClass(baseVarTypeName);
+            if(ctorCls){
+                matchedCtor = findClassConstructor(*ctorCls, stmt.arguments.size(), ownerClass != ctorCls);
+                if(matchedCtor && ownerClass != ctorCls && matchedCtor->access != AccessSpecifier::Public){
+                    reportError(errors, stmt.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
+                    ok = false;
+                }
+            }
+        }
+        for(usize i = 0u; i < stmt.arguments.size(); ++i){
+            Expr* arg = stmt.arguments[i];
+            if(!arg)
+                continue;
+            bool paramIsMut = false;
+            TypeRef* expectedParamTypeRef = nullptr;
+            MStringView expectedParamType;
+            if(matchedCtor && i < matchedCtor->params.size()){
+                paramIsMut = (matchedCtor->params[i].mode == ParamPassingMode::Mut);
+                if(matchedCtor->params[i].type){
+                    TypeRef* subParamType = matchedCtor->params[i].type;
+                    if(ctorCls && resolvedCtorVarType && !ctorCls->templateParams.empty() && !resolvedCtorVarType->templateArgs.empty())
+                        subParamType = m_symbols.substituteTypeParams(*subParamType, ctorCls->templateParams, resolvedCtorVarType->templateArgs);
+                    expectedParamTypeRef = subParamType;
+                    expectedParamType = m_symbols.resolveBaseTypeName(subParamType->name);
+                    __hidden_adhd_type_checker::PropagateFuncCaptureBytes(matchedCtor->params[i].type, arg, scope, m_symbols);
+                }
+            }
+            arg->isMutArg = paramIsMut;
+            if(expectedParamType == "Path"){
+                const MStringView argType = inferExprTypeName(ownerClass, &method, *arg, scope);
+                if(arg->kind == ExprKind::StringLiteral || argType == "String" || argType == "StringView" || argType == "CompactString")
+                    arg->adaptToTChar = true;
+            }
+            if(!checkExpr(ownerClass, method, *arg, scope, paramIsMut, errors))
                 ok = false;
+            if(!expectedParamType.empty() && m_symbols.findInterface(expectedParamType)){
+                const TypeRef* argTypeRef = inferExprTypeRef(ownerClass, &method, *arg, scope);
+                const MStringView argType = argTypeRef
+                    ? m_symbols.resolveBaseTypeName(argTypeRef->name)
+                    : inferExprTypeName(ownerClass, &method, *arg, scope);
+                if(const ClassDecl* argCls = m_symbols.findClass(argType)){
+                    const TypeRef* resolvedExpected = m_symbols.unwrapTypeAlias(expectedParamTypeRef);
+                    if(!resolvedExpected || !classImplementsInterface(*argCls, argTypeRef, *resolvedExpected)){
+                        reportError(errors, arg->span, "cannot pass concrete class to interface parameter: class does not implement the interface");
+                        ok = false;
+                    }
+                }
+            }
         }
 
         ScopedVarInfo info;
@@ -1488,11 +1653,35 @@ bool TypeChecker::checkStatement(
         info.type = stmt.varType;
         if(stmt.varType && stmt.varType->isAuto && stmt.expr && stmt.expr->kind != ExprKind::Lambda){
             info.inferredTypeName = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
-            if(const TypeRef* exprTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope))
+            const TypeRef* exprTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
+            const MStringView effectiveAutoName = exprTypeRef
+                ? m_symbols.resolveBaseTypeName(exprTypeRef->name)
+                : info.inferredTypeName;
+            if(varRefMode == ParamPassingMode::None && !effectiveAutoName.empty() && m_symbols.findInterface(effectiveAutoName)){
+                reportError(errors, stmt.span, "local variable of 'interface' type must specify 'in' or 'mut'; interfaces cannot be instantiated by value");
+                ok = false;
+            }
+            if(varRefMode != ParamPassingMode::None){
+                if(exprTypeRef){
+                    const ParamPassingMode::Enum savedRefMode = stmt.varType->refMode;
+                    const SourceSpan savedSpan = stmt.varType->span;
+                    *stmt.varType = *exprTypeRef;
+                    stmt.varType->refMode = savedRefMode;
+                    stmt.varType->span = savedSpan;
+                    stmt.varType->isAuto = false;
+                }
+                else if(!effectiveAutoName.empty()){
+                    stmt.varType->isAuto = false;
+                    stmt.varType->name = effectiveAutoName;
+                }
+                info.type = stmt.varType;
+            }
+            else if(exprTypeRef){
                 info.type = const_cast<TypeRef*>(exprTypeRef);
+            }
         }
-        info.mode = stmt.varType ? stmt.varType->refMode : ParamPassingMode::None;
-        info.isConst = stmt.isConst || (stmt.varType && stmt.varType->refMode == ParamPassingMode::In);
+        info.mode = varRefMode;
+        info.isConst = stmt.isConst || (varRefMode == ParamPassingMode::In);
         info.isParam = false;
         if(stmt.expr && stmt.expr->kind == ExprKind::Lambda)
             info.lambdaExpr = stmt.expr;
@@ -1526,9 +1715,7 @@ bool TypeChecker::checkStatement(
         }
         const TypeRef* activeRetType = m_inLambda ? m_activeLambdaReturnType : method.returnType;
         const TypeRef* unwrappedRetType = m_symbols.unwrapTypeAlias(activeRetType);
-        const ParamPassingMode::Enum retRefMode = activeRetType
-            ? (activeRetType->refMode != ParamPassingMode::None ? activeRetType->refMode : (unwrappedRetType ? unwrappedRetType->refMode : ParamPassingMode::None))
-            : ParamPassingMode::None;
+        const ParamPassingMode::Enum retRefMode = m_symbols.resolveRefMode(activeRetType);
         const bool isVoidLike = (!m_inLambda && (method.isConstructor || method.isDestructor)) || __hidden_adhd_type_checker::IsVoidTypeRef(unwrappedRetType);
         if(isVoidLike && stmt.expr){
             reportError(errors, stmt.span, "cannot return a value from a 'void' function, constructor, or destructor");
@@ -1549,9 +1736,12 @@ bool TypeChecker::checkStatement(
             if(retRefMode != ParamPassingMode::None){
                 stmt.wrapReturnNotNull = true;
                 if(m_symbols.findInterface(baseRetTypeName)){
-                    const MStringView retExprType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
+                    const TypeRef* retExprTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
+                    const MStringView retExprType = retExprTypeRef
+                        ? m_symbols.resolveBaseTypeName(retExprTypeRef->name)
+                        : inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
                     if(const ClassDecl* retCls = m_symbols.findClass(retExprType)){
-                        if(!classImplementsInterface(*retCls, baseRetTypeName)){
+                        if(!unwrappedRetType || !classImplementsInterface(*retCls, retExprTypeRef, *unwrappedRetType)){
                             reportError(errors, stmt.span, "cannot return concrete class for interface reference return type: class does not implement the interface");
                             ok = false;
                         }
@@ -1561,6 +1751,10 @@ bool TypeChecker::checkStatement(
         }
         if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, retRefMode == ParamPassingMode::Mut, errors))
             ok = false;
+        if(stmt.expr && __hidden_adhd_type_checker::IsEscapingMutCaptureLambda(stmt.expr, scope)){
+            reportError(errors, stmt.span, "cannot return lambda with 'mut' capture; mutable reference captures cannot escape their enclosing scope");
+            ok = false;
+        }
         break;
     }
     case StmtKind::Break:{
@@ -1645,15 +1839,20 @@ bool TypeChecker::checkStatement(
         const TypeRef* elemTypeRef = nullptr;
         MStringView resolvedElemName;
         if(stmt.varType){
-            if(stmt.varType->isAuto && stmt.expr){
+            if(stmt.expr){
                 const TypeRef* containerType = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
                 if(containerType && !containerType->templateArgs.empty() && containerType->templateArgs[0].type){
                     elemTypeRef = m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type);
                     if(elemTypeRef){
                         resolvedElemName = m_symbols.resolveBaseTypeName(elemTypeRef->name);
-                        if(elemTypeRef->templateArgs.empty() && !elemTypeRef->isFuncType && SymbolTable::isSimdType(resolvedElemName)){
-                            stmt.varType->isAuto = false;
-                            stmt.varType->name = resolvedElemName;
+                        if(stmt.varType->isAuto){
+                            if(elemTypeRef->templateArgs.empty() && !elemTypeRef->isFuncType && SymbolTable::isSimdType(resolvedElemName)){
+                                stmt.varType->isAuto = false;
+                                stmt.varType->name = resolvedElemName;
+                            }
+                        }
+                        else if(elemTypeRef->refMode != ParamPassingMode::None && stmt.varType->refMode == ParamPassingMode::None){
+                            stmt.varType->refMode = elemTypeRef->refMode;
                         }
                     }
                 }
@@ -1802,11 +2001,12 @@ bool TypeChecker::checkExpr(
     case ExprKind::Identifier:{
         const ScopedVarInfo* local = findScopedVar(scope, expr.text);
         if(local){
-            if(!local->isParam && local->mode != ParamPassingMode::None)
+            const ParamPassingMode::Enum resolvedLocalRefMode = m_symbols.resolveRefMode(local->type);
+            if((!local->isParam && local->mode != ParamPassingMode::None) || resolvedLocalRefMode != ParamPassingMode::None)
                 expr.derefNotNull = true;
 
             if(isMutationTarget){
-                if(local->mode == ParamPassingMode::In){
+                if(local->mode == ParamPassingMode::In || (local->isParam && resolvedLocalRefMode == ParamPassingMode::In)){
                     reportError(errors, expr.span, "cannot mutate 'in' parameter or read-only borrow");
                     ok = false;
                 }
@@ -1856,7 +2056,8 @@ bool TypeChecker::checkExpr(
             ok = false;
             break;
         }
-        if(field && field->type && field->type->refMode != ParamPassingMode::None)
+        const ParamPassingMode::Enum fieldRefMode = field ? m_symbols.resolveRefMode(field->type) : ParamPassingMode::None;
+        if(fieldRefMode != ParamPassingMode::None)
             expr.derefNotNull = true;
 
         if(isMutationTarget){
@@ -1864,7 +2065,7 @@ bool TypeChecker::checkExpr(
                 reportError(errors, expr.span, "cannot mutate 'this.member' inside a 'const' method or 'in this' lambda");
                 ok = false;
             }
-            else if(!method.isConstructor && field && field->type && field->type->refMode == ParamPassingMode::In){
+            else if(!method.isConstructor && fieldRefMode == ParamPassingMode::In){
                 reportError(errors, expr.span, "cannot mutate 'in' reference member");
                 ok = false;
             }
@@ -1944,7 +2145,10 @@ bool TypeChecker::checkExpr(
                 expr.lhs->derefNotNull = false;
                 expr.isPointerMemberAccess = true;
             }
-            const MStringView baseType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
+            const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
+            const MStringView baseType = lhsTypeRef
+                ? m_symbols.resolveBaseTypeName(lhsTypeRef->name)
+                : inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
             u32 simdLanes = 4u;
             if(SymbolTable::isSimdVectorType(baseType, simdLanes)){
                 bool isSwizzlePattern = false;
@@ -1959,17 +2163,89 @@ bool TypeChecker::checkExpr(
                     }
                 }
             }
+            else if(const ClassDecl* targetCls = m_symbols.findClass(baseType)){
+                const FieldDecl* field = findClassField(*targetCls, expr.text);
+                const MethodDecl* memberMethod = findClassMethod(*targetCls, expr.text);
+                if(!field && !memberMethod){
+                    reportError(errors, expr.span, "unknown member on class");
+                    ok = false;
+                }
+                else if(field && !memberMethod){
+                    if(ownerClass != targetCls && field->access != AccessSpecifier::Public){
+                        reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
+                        ok = false;
+                    }
+                    const TypeRef* ft = (lhsTypeRef && !targetCls->templateParams.empty() && !lhsTypeRef->templateArgs.empty() && field->type)
+                        ? m_symbols.substituteTypeParams(*field->type, targetCls->templateParams, lhsTypeRef->templateArgs)
+                        : field->type;
+                    const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(ft);
+                    if(fieldRefMode != ParamPassingMode::None)
+                        expr.derefNotNull = true;
+                    if(isMutationTarget && fieldRefMode == ParamPassingMode::In){
+                        reportError(errors, expr.span, "cannot mutate 'in' reference member");
+                        ok = false;
+                    }
+                }
+            }
         }
         break;
     }
     case ExprKind::Index:{
         const u32 savedParallelDepth = m_parallelDepth;
         m_parallelDepth = 0u;
-        if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, isMutationTarget, errors))
+        bool lhsNeedsMut = isMutationTarget;
+        bool rhsNeedsMut = false;
+        const MethodDecl* customOpIdx = nullptr;
+        const TypeRef* containerTypeRef = expr.lhs ? inferExprTypeRef(ownerClass, &method, *expr.lhs, scope) : nullptr;
+        const MStringView lhsBaseType = containerTypeRef
+            ? m_symbols.resolveBaseTypeName(containerTypeRef->name)
+            : (expr.lhs ? inferExprTypeName(ownerClass, &method, *expr.lhs, scope) : MStringView{});
+        const bool recvIsConst = expr.lhs ? isReceiverConst(ownerClass, method, *expr.lhs, scope) : false;
+        const usize oneArg = 1u;
+        if(const ClassDecl* cls = m_symbols.findClass(lhsBaseType)){
+            customOpIdx = findClassOperator(*cls, "[]", &oneArg, recvIsConst, ownerClass != cls);
+            if(!customOpIdx){
+                reportError(errors, expr.span, "indexing custom class requires 'operator[]' to be defined on the class");
+                ok = false;
+            }
+            else{
+                if(ownerClass != cls && customOpIdx->access != AccessSpecifier::Public){
+                    reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
+                    ok = false;
+                }
+                lhsNeedsMut = !customOpIdx->isConst;
+                if(!customOpIdx->params.empty() && customOpIdx->params[0].mode == ParamPassingMode::Mut)
+                    rhsNeedsMut = true;
+            }
+        }
+        else if(containerTypeRef && m_symbols.findInterface(lhsBaseType)){
+            customOpIdx = m_symbols.findInterfaceMethod(*containerTypeRef, "[]", &oneArg);
+            if(customOpIdx){
+                lhsNeedsMut = !customOpIdx->isConst;
+                if(!customOpIdx->params.empty() && customOpIdx->params[0].mode == ParamPassingMode::Mut)
+                    rhsNeedsMut = true;
+            }
+        }
+        if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, lhsNeedsMut, errors))
             ok = false;
         m_parallelDepth = savedParallelDepth;
-        if(expr.rhs && !checkExpr(ownerClass, method, *expr.rhs, scope, false, errors))
+        if(expr.rhs && !checkExpr(ownerClass, method, *expr.rhs, scope, rhsNeedsMut, errors))
             ok = false;
+
+        const TypeRef* indexedElemType = inferExprTypeRef(ownerClass, &method, expr, scope);
+        const ParamPassingMode::Enum elemRefMode = m_symbols.resolveRefMode(indexedElemType);
+        if(elemRefMode != ParamPassingMode::None)
+            expr.derefNotNull = true;
+        if(isMutationTarget){
+            if(elemRefMode == ParamPassingMode::In){
+                reportError(errors, expr.span, "cannot mutate 'in' parameter or read-only borrow");
+                ok = false;
+            }
+            else if(customOpIdx && customOpIdx->returnType && elemRefMode == ParamPassingMode::None){
+                reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
+                ok = false;
+            }
+        }
         break;
     }
     case ExprKind::Call:{
@@ -1977,6 +2253,9 @@ bool TypeChecker::checkExpr(
             ok = false;
 
         const MethodDecl* targetCallable = nullptr;
+        const ClassDecl* targetOwnerCls = nullptr;
+        const TypeRef* recvTypeRef = nullptr;
+        MStringView calledMemberName;
         const ScopedVarInfo* localCallable = nullptr;
         const TypeRef* invokedFuncType = nullptr;
         const usize callArgCount = expr.arguments.size();
@@ -2003,6 +2282,22 @@ bool TypeChecker::checkExpr(
                     if(localCallable && localCallable->type)
                         invokedFuncType = m_symbols.unwrapTypeAlias(localCallable->type);
                 }
+                if(!targetCallable && !localCallable){
+                    if(const ClassDecl* ctorCls = m_symbols.findClass(baseCallee)){
+                        targetOwnerCls = ctorCls;
+                        targetCallable = findClassConstructor(*ctorCls, callArgCount, ownerClass != ctorCls);
+                        if(targetCallable && ownerClass != ctorCls && targetCallable->access != AccessSpecifier::Public){
+                            reportError(errors, expr.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
+                            ok = false;
+                        }
+                        if(!ctorCls->templateParams.empty() && !expr.callTemplateArgs.empty()){
+                            TypeRef* tempClsRef = AllocateAstNode<TypeRef>(m_arena);
+                            tempClsRef->name = baseCallee;
+                            tempClsRef->templateArgs = expr.callTemplateArgs;
+                            recvTypeRef = tempClsRef;
+                        }
+                    }
+                }
                 if(expr.lhs->text == "wait"){
                     reportError(errors, expr.span, "'wait' can only be used as a standalone join statement");
                     ok = false;
@@ -2018,34 +2313,56 @@ bool TypeChecker::checkExpr(
                 }
             }
             else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
-                targetCallable = findClassMethod(*ownerClass, expr.lhs->text, &callArgCount);
+                const ScopedVarInfo* lambdaThis = m_inLambda ? findScopedVar(scope, "this") : nullptr;
+                const bool isConstThis = method.isConst || (lambdaThis && lambdaThis->isConst);
+                targetOwnerCls = ownerClass;
+                targetCallable = findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false);
                 if(!targetCallable){
                     if(const FieldDecl* field = findClassField(*ownerClass, expr.lhs->text))
                         invokedFuncType = m_symbols.unwrapTypeAlias(field->type);
                 }
-                const ScopedVarInfo* lambdaThis = m_inLambda ? findScopedVar(scope, "this") : nullptr;
-                const bool isConstThis = method.isConst || (lambdaThis && lambdaThis->isConst);
                 if(isConstThis && targetCallable && !targetCallable->isConst){
                     reportError(errors, expr.span, "cannot call non-'const' method on 'this' inside a 'const' method or 'in this' lambda");
                     ok = false;
                 }
             }
             else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
-                const MStringView objType = inferExprTypeName(ownerClass, &method, *expr.lhs->lhs, scope);
+                recvTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs->lhs, scope);
+                const MStringView objType = recvTypeRef
+                    ? m_symbols.resolveBaseTypeName(recvTypeRef->name)
+                    : inferExprTypeName(ownerClass, &method, *expr.lhs->lhs, scope);
                 const MStringView mName = expr.lhs->text;
+                calledMemberName = mName;
+                const bool recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope);
                 const bool isMutatingContainerOp = (mName == "push_back" || mName == "emplace_back" || mName == "pop_back" || mName == "clear" || mName == "insert" || mName == "erase" || mName == "resize");
                 if(const ClassDecl* targetCls = m_symbols.findClass(objType)){
-                    targetCallable = findClassMethod(*targetCls, mName, &callArgCount);
-                    if(!targetCallable){
-                        if(const FieldDecl* field = findClassField(*targetCls, mName))
-                            invokedFuncType = m_symbols.unwrapTypeAlias(field->type);
+                    targetOwnerCls = targetCls;
+                    targetCallable = findClassMethod(*targetCls, mName, &callArgCount, recvIsConst, ownerClass != targetCls);
+                    if(targetCallable){
+                        if(ownerClass != targetCls && targetCallable->access != AccessSpecifier::Public){
+                            reportError(errors, expr.span, "cannot call 'private' or 'protected' method outside of its declaring class");
+                            ok = false;
+                        }
+                    }
+                    else if(const FieldDecl* field = findClassField(*targetCls, mName)){
+                        if(ownerClass != targetCls && field->access != AccessSpecifier::Public){
+                            reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
+                            ok = false;
+                        }
+                        const TypeRef* ft = (recvTypeRef && !targetCls->templateParams.empty() && !recvTypeRef->templateArgs.empty() && field->type)
+                            ? m_symbols.substituteTypeParams(*field->type, targetCls->templateParams, recvTypeRef->templateArgs)
+                            : field->type;
+                        invokedFuncType = m_symbols.unwrapTypeAlias(ft);
                     }
                 }
-                else if(m_symbols.findInterface(objType))
-                    targetCallable = m_symbols.findInterfaceMethod(objType, mName, &callArgCount);
+                else if(recvTypeRef && m_symbols.findInterface(objType)){
+                    targetCallable = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount);
+                }
                 else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, objType)){
-                    for(const MStringView& boundName : tp->interfaceBounds){
-                        if(const MethodDecl* boundMethod = m_symbols.findInterfaceMethod(boundName, mName, &callArgCount)){
+                    for(const TypeRef* boundRef : tp->interfaceBounds){
+                        if(!boundRef)
+                            continue;
+                        if(const MethodDecl* boundMethod = m_symbols.findInterfaceMethod(*boundRef, mName, &callArgCount)){
                             targetCallable = boundMethod;
                             break;
                         }
@@ -2070,29 +2387,35 @@ bool TypeChecker::checkExpr(
         }
 
         const TypeRef* callReturnType = nullptr;
-        if(targetCallable)
+        if(targetCallable && !targetCallable->isConstructor){
             callReturnType = targetCallable->returnType;
+            if(callReturnType && targetOwnerCls && recvTypeRef && !targetOwnerCls->templateParams.empty() && !recvTypeRef->templateArgs.empty())
+                callReturnType = m_symbols.substituteTypeParams(*callReturnType, targetOwnerCls->templateParams, recvTypeRef->templateArgs);
+            if(callReturnType && !targetCallable->templateParams.empty() && !expr.callTemplateArgs.empty())
+                callReturnType = m_symbols.substituteTypeParams(*callReturnType, targetCallable->templateParams, expr.callTemplateArgs);
+        }
         else if(invokedFuncType && invokedFuncType->isFuncType)
             callReturnType = invokedFuncType->funcReturnType;
         else if(localCallable && localCallable->lambdaExpr)
             callReturnType = localCallable->lambdaExpr->lambdaReturnType;
 
-        if(callReturnType && callReturnType->refMode != ParamPassingMode::None)
+        const ParamPassingMode::Enum callRetRefMode = m_symbols.resolveRefMode(callReturnType);
+        if(callRetRefMode != ParamPassingMode::None)
             expr.derefNotNull = true;
 
         if(isMutationTarget && callReturnType){
-            if(callReturnType->refMode == ParamPassingMode::In){
+            if(callRetRefMode == ParamPassingMode::In){
                 reportError(errors, expr.span, "cannot mutate 'in' parameter or read-only borrow");
                 ok = false;
             }
-            else if(callReturnType->refMode == ParamPassingMode::None){
+            else if(callRetRefMode == ParamPassingMode::None){
                 reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
                 ok = false;
             }
         }
 
         if(!expr.callTemplateArgs.empty()){
-            if(targetCallable){
+            if(targetCallable && !targetCallable->isConstructor){
                 if(!checkTemplateArgBounds(targetCallable->templateParams, expr.callTemplateArgs, ownerClass, &method, expr.span, errors))
                     ok = false;
             }
@@ -2111,10 +2434,7 @@ bool TypeChecker::checkExpr(
             if(targ.type){
                 if(!checkTypeRef(*targ.type, ownerClass, &method, errors))
                     ok = false;
-                const TypeRef* unwrappedArg = m_symbols.unwrapTypeAlias(targ.type);
-                const ParamPassingMode::Enum argRefMode = targ.type->refMode != ParamPassingMode::None
-                    ? targ.type->refMode
-                    : (unwrappedArg ? unwrappedArg->refMode : ParamPassingMode::None);
+                const ParamPassingMode::Enum argRefMode = m_symbols.resolveRefMode(targ.type);
                 if(argRefMode == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(targ.type->name))){
                     reportError(errors, targ.type->span.line > 0u ? targ.type->span : expr.span, "template type argument of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored or instantiated by value");
                     ok = false;
@@ -2127,17 +2447,25 @@ bool TypeChecker::checkExpr(
             if(!arg)
                 continue;
             bool paramIsMut = false;
+            TypeRef* expectedParamTypeRef = nullptr;
             MStringView expectedParamType;
             if(targetCallable && i < targetCallable->params.size()){
                 paramIsMut = (targetCallable->params[i].mode == ParamPassingMode::Mut);
                 if(targetCallable->params[i].type){
-                    expectedParamType = m_symbols.resolveBaseTypeName(targetCallable->params[i].type->name);
+                    TypeRef* subParamType = targetCallable->params[i].type;
+                    if(targetOwnerCls && recvTypeRef && !targetOwnerCls->templateParams.empty() && !recvTypeRef->templateArgs.empty())
+                        subParamType = m_symbols.substituteTypeParams(*subParamType, targetOwnerCls->templateParams, recvTypeRef->templateArgs);
+                    if(!targetCallable->templateParams.empty() && !expr.callTemplateArgs.empty())
+                        subParamType = m_symbols.substituteTypeParams(*subParamType, targetCallable->templateParams, expr.callTemplateArgs);
+                    expectedParamTypeRef = subParamType;
+                    expectedParamType = m_symbols.resolveBaseTypeName(subParamType->name);
                     __hidden_adhd_type_checker::PropagateFuncCaptureBytes(targetCallable->params[i].type, arg, scope, m_symbols);
                 }
             }
             else if(invokedFuncType && invokedFuncType->isFuncType && i < invokedFuncType->funcParams.size()){
                 paramIsMut = (invokedFuncType->funcParams[i].mode == ParamPassingMode::Mut);
                 if(invokedFuncType->funcParams[i].type){
+                    expectedParamTypeRef = invokedFuncType->funcParams[i].type;
                     expectedParamType = m_symbols.resolveBaseTypeName(invokedFuncType->funcParams[i].type->name);
                     __hidden_adhd_type_checker::PropagateFuncCaptureBytes(invokedFuncType->funcParams[i].type, arg, scope, m_symbols);
                 }
@@ -2145,9 +2473,16 @@ bool TypeChecker::checkExpr(
             else if(localCallable && localCallable->lambdaExpr && i < localCallable->lambdaExpr->lambdaParams.size()){
                 paramIsMut = (localCallable->lambdaExpr->lambdaParams[i].mode == ParamPassingMode::Mut);
                 if(localCallable->lambdaExpr->lambdaParams[i].type){
+                    expectedParamTypeRef = localCallable->lambdaExpr->lambdaParams[i].type;
                     expectedParamType = m_symbols.resolveBaseTypeName(localCallable->lambdaExpr->lambdaParams[i].type->name);
                     __hidden_adhd_type_checker::PropagateFuncCaptureBytes(localCallable->lambdaExpr->lambdaParams[i].type, arg, scope, m_symbols);
                 }
+            }
+            else if(i == 0u && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type
+                && (calledMemberName == "push_back" || calledMemberName == "emplace_back" || calledMemberName == "emplace" || calledMemberName == "insert" || calledMemberName == "push"))
+            {
+                expectedParamTypeRef = recvTypeRef->templateArgs[0].type;
+                expectedParamType = m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
             }
             arg->isMutArg = paramIsMut;
             if(expectedParamType == "Path"){
@@ -2158,9 +2493,13 @@ bool TypeChecker::checkExpr(
             if(!checkExpr(ownerClass, method, *arg, scope, paramIsMut, errors))
                 ok = false;
             if(!expectedParamType.empty() && m_symbols.findInterface(expectedParamType)){
-                const MStringView argType = inferExprTypeName(ownerClass, &method, *arg, scope);
+                const TypeRef* argTypeRef = inferExprTypeRef(ownerClass, &method, *arg, scope);
+                const MStringView argType = argTypeRef
+                    ? m_symbols.resolveBaseTypeName(argTypeRef->name)
+                    : inferExprTypeName(ownerClass, &method, *arg, scope);
                 if(const ClassDecl* argCls = m_symbols.findClass(argType)){
-                    if(!classImplementsInterface(*argCls, expectedParamType)){
+                    const TypeRef* resolvedExpected = m_symbols.unwrapTypeAlias(expectedParamTypeRef);
+                    if(!resolvedExpected || !classImplementsInterface(*argCls, argTypeRef, *resolvedExpected)){
                         reportError(errors, arg->span, "cannot pass concrete class to interface parameter: class does not implement the interface");
                         ok = false;
                     }
@@ -2170,14 +2509,50 @@ bool TypeChecker::checkExpr(
         break;
     }
     case ExprKind::Unary:{
-        const bool mutates = (expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus);
-        if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, mutates, errors))
-            ok = false;
+        bool mutates = (expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus);
+        if(expr.lhs){
+            const MStringView lhsType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
+            if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
+                const MStringView opSym = __hidden_adhd_type_checker::MapTokenTypeToOperatorSymbol(expr.op);
+                const usize zeroArgs = 0u;
+                const bool recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
+                if(const MethodDecl* opMethod = findClassOperator(*cls, opSym, &zeroArgs, recvIsConst, ownerClass != cls)){
+                    if(ownerClass != cls && opMethod->access != AccessSpecifier::Public){
+                        reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
+                        ok = false;
+                    }
+                    if(!opMethod->isConst)
+                        mutates = true;
+                }
+            }
+            if(!checkExpr(ownerClass, method, *expr.lhs, scope, mutates, errors))
+                ok = false;
+        }
         break;
     }
     case ExprKind::Binary:{
         const bool isAssign = __hidden_adhd_type_checker::IsCompoundOrSimpleAssignment(expr.op);
-        if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, isAssign, errors))
+        bool lhsNeedsMut = isAssign;
+        bool rhsNeedsMut = false;
+        if(expr.lhs && expr.op != TokenType::Equal){
+            const MStringView lhsType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
+            if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
+                const MStringView opSym = __hidden_adhd_type_checker::MapTokenTypeToOperatorSymbol(expr.op);
+                const usize oneArg = 1u;
+                const bool recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
+                if(const MethodDecl* opMethod = findClassOperator(*cls, opSym, &oneArg, recvIsConst, ownerClass != cls)){
+                    if(ownerClass != cls && opMethod->access != AccessSpecifier::Public){
+                        reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
+                        ok = false;
+                    }
+                    if(!opMethod->isConst)
+                        lhsNeedsMut = true;
+                    if(!opMethod->params.empty() && opMethod->params[0].mode == ParamPassingMode::Mut)
+                        rhsNeedsMut = true;
+                }
+            }
+        }
+        if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, lhsNeedsMut, errors))
             ok = false;
         bool rhsInClassArenaCtx = false;
         if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::ThisMember && ownerClass){
@@ -2185,13 +2560,20 @@ bool TypeChecker::checkExpr(
                 const MStringView baseFieldTypeName = field->type ? m_symbols.resolveBaseTypeName(field->type->name) : MStringView{};
                 if(field->type && SymbolTable::isArenaBackedContainer(baseFieldTypeName))
                     rhsInClassArenaCtx = true;
-                if(field->type && field->type->refMode != ParamPassingMode::None && (method.isConstructor || m_symbols.findInterface(baseFieldTypeName))){
+                const ParamPassingMode::Enum fieldRefMode = field->type ? m_symbols.resolveRefMode(field->type) : ParamPassingMode::None;
+                if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_symbols.findInterface(baseFieldTypeName))){
                     expr.lhs->derefNotNull = false;
                     expr.isNotNullRebind = true;
+                    if(fieldRefMode == ParamPassingMode::Mut)
+                        rhsNeedsMut = true;
                     if(expr.rhs && m_symbols.findInterface(baseFieldTypeName)){
-                        const MStringView rhsType = inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
+                        const TypeRef* unwrappedFieldType = m_symbols.unwrapTypeAlias(field->type);
+                        const TypeRef* rhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.rhs, scope);
+                        const MStringView rhsType = rhsTypeRef
+                            ? m_symbols.resolveBaseTypeName(rhsTypeRef->name)
+                            : inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
                         if(const ClassDecl* rhsCls = m_symbols.findClass(rhsType)){
-                            if(!classImplementsInterface(*rhsCls, baseFieldTypeName)){
+                            if(!unwrappedFieldType || !classImplementsInterface(*rhsCls, rhsTypeRef, *unwrappedFieldType)){
                                 reportError(errors, expr.span, "cannot bind interface reference member to concrete class that does not implement the interface");
                                 ok = false;
                             }
@@ -2208,10 +2590,16 @@ bool TypeChecker::checkExpr(
                 if(expr.lhs->derefNotNull && m_symbols.findInterface(baseLocalTypeName)){
                     expr.lhs->derefNotNull = false;
                     expr.isNotNullRebind = true;
+                    if(local->mode == ParamPassingMode::Mut || m_symbols.resolveRefMode(local->type) == ParamPassingMode::Mut)
+                        rhsNeedsMut = true;
                     if(expr.rhs){
-                        const MStringView rhsType = inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
+                        const TypeRef* unwrappedLocalType = m_symbols.unwrapTypeAlias(local->type);
+                        const TypeRef* rhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.rhs, scope);
+                        const MStringView rhsType = rhsTypeRef
+                            ? m_symbols.resolveBaseTypeName(rhsTypeRef->name)
+                            : inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
                         if(const ClassDecl* rhsCls = m_symbols.findClass(rhsType)){
-                            if(!classImplementsInterface(*rhsCls, baseLocalTypeName)){
+                            if(!unwrappedLocalType || !classImplementsInterface(*rhsCls, rhsTypeRef, *unwrappedLocalType)){
                                 reportError(errors, expr.span, "cannot rebind interface reference to concrete class that does not implement the interface");
                                 ok = false;
                             }
@@ -2221,13 +2609,45 @@ bool TypeChecker::checkExpr(
                 __hidden_adhd_type_checker::PropagateFuncCaptureBytes(local->type, expr.rhs, scope, m_symbols);
             }
         }
+        if(expr.op == TokenType::Equal && expr.lhs && (expr.lhs->kind == ExprKind::MemberAccess || expr.lhs->kind == ExprKind::Index)){
+            const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
+            const ParamPassingMode::Enum lhsRefMode = m_symbols.resolveRefMode(lhsTypeRef);
+            const MStringView baseLhsTypeName = lhsTypeRef ? m_symbols.resolveBaseTypeName(lhsTypeRef->name) : MStringView{};
+            if(lhsRefMode != ParamPassingMode::None && m_symbols.findInterface(baseLhsTypeName)){
+                expr.lhs->derefNotNull = false;
+                expr.isNotNullRebind = true;
+                if(lhsRefMode == ParamPassingMode::Mut)
+                    rhsNeedsMut = true;
+                if(expr.rhs){
+                    const TypeRef* rhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.rhs, scope);
+                    const MStringView rhsType = rhsTypeRef
+                        ? m_symbols.resolveBaseTypeName(rhsTypeRef->name)
+                        : inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
+                    if(const ClassDecl* rhsCls = m_symbols.findClass(rhsType)){
+                        if(!lhsTypeRef || !classImplementsInterface(*rhsCls, rhsTypeRef, *lhsTypeRef)){
+                            reportError(errors, expr.span, "cannot rebind interface reference to concrete class that does not implement the interface");
+                            ok = false;
+                        }
+                    }
+                }
+            }
+        }
         if(expr.rhs){
+            if(rhsNeedsMut)
+                expr.rhs->isMutArg = true;
             const bool savedClassArenaCtx = m_inClassArenaContext;
             if(rhsInClassArenaCtx)
                 m_inClassArenaContext = true;
-            if(!checkExpr(ownerClass, method, *expr.rhs, scope, false, errors))
+            if(!checkExpr(ownerClass, method, *expr.rhs, scope, rhsNeedsMut, errors))
                 ok = false;
             m_inClassArenaContext = savedClassArenaCtx;
+            if(expr.op == TokenType::Equal
+                && expr.lhs && expr.lhs->kind == ExprKind::ThisMember
+                && __hidden_adhd_type_checker::IsEscapingMutCaptureLambda(expr.rhs, scope))
+            {
+                reportError(errors, expr.span, "cannot store lambda with 'mut' capture into 'this.member'; mutable reference captures cannot escape their enclosing scope");
+                ok = false;
+            }
         }
         if(expr.lhs && expr.rhs){
             const MStringView lhsType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
@@ -2264,7 +2684,7 @@ bool TypeChecker::checkExpr(
         if(expr.lambdaReturnType){
             if(!checkTypeRef(*expr.lambdaReturnType, ownerClass, &method, errors, true))
                 ok = false;
-            if(expr.lambdaReturnType->refMode == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(expr.lambdaReturnType->name))){
+            if(m_symbols.resolveRefMode(expr.lambdaReturnType) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(expr.lambdaReturnType->name))){
                 reportError(errors, expr.span, "cannot return an 'interface' type by value");
                 ok = false;
             }
@@ -2307,6 +2727,8 @@ bool TypeChecker::checkExpr(
                 reportError(errors, cap.span, "cannot capture 'const' global variable as 'mut' in lambda");
                 ok = false;
             }
+            if(outer && cap.mode == ParamPassingMode::Mut)
+                expr.hasMutLocalCapture = true;
             ScopedVarInfo capVar;
             capVar.name = cap.name;
             capVar.type = outer ? outer->type : (globalConst ? globalConst->varType : nullptr);
@@ -2335,10 +2757,14 @@ bool TypeChecker::checkExpr(
         const TypeRef* savedLambdaRet = m_activeLambdaReturnType;
         const u32 savedLoop = m_loopDepth;
         const u32 savedSwitch = m_switchDepth;
+        const bool savedMethodScratch = method.usesScratchArena;
+        const bool savedMethodTaskScope = method.usesTaskScope;
         m_inLambda = true;
         m_activeLambdaReturnType = expr.lambdaReturnType;
         m_loopDepth = 0u;
         m_switchDepth = 0u;
+        method.usesScratchArena = false;
+        method.usesTaskScope = false;
         if(!checkStatementList(ownerClass, method, expr.lambdaBody, lambdaScope, errors))
             ok = false;
         if(expr.lambdaReturnType && !__hidden_adhd_type_checker::IsVoidTypeRef(m_symbols.unwrapTypeAlias(expr.lambdaReturnType))){
@@ -2347,6 +2773,10 @@ bool TypeChecker::checkExpr(
                 ok = false;
             }
         }
+        expr.lambdaUsesScratchArena = method.usesScratchArena;
+        expr.lambdaUsesTaskScope = method.usesTaskScope;
+        method.usesScratchArena = savedMethodScratch;
+        method.usesTaskScope = savedMethodTaskScope;
         m_inLambda = savedInLambda;
         m_activeLambdaReturnType = savedLambdaRet;
         m_loopDepth = savedLoop;
@@ -2397,12 +2827,8 @@ MStringView TypeChecker::inferExprTypeName(
         }
         if(expr.isSwizzle)
             return lhsType;
-        if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
-            if(const FieldDecl* field = findClassField(*cls, expr.text)){
-                if(field->type)
-                    return m_symbols.resolveBaseTypeName(field->type->name);
-            }
-        }
+        if(const TypeRef* memberType = inferExprTypeRef(ownerClass, method, expr, scope))
+            return m_symbols.resolveBaseTypeName(memberType->name);
     }
     else if(expr.kind == ExprKind::Index && expr.lhs){
         const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
@@ -2413,11 +2839,15 @@ MStringView TypeChecker::inferExprTypeName(
             return m_symbols.resolveBaseTypeName(indexedType->name);
     }
     else if(expr.kind == ExprKind::Unary && expr.lhs){
+        if(const TypeRef* unaryTypeRef = inferExprTypeRef(ownerClass, method, expr, scope))
+            return m_symbols.resolveBaseTypeName(unaryTypeRef->name);
         if(expr.op == TokenType::Bang)
             return "bool";
         return inferExprTypeName(ownerClass, method, *expr.lhs, scope);
     }
     else if(expr.kind == ExprKind::Binary){
+        if(const TypeRef* binTypeRef = inferExprTypeRef(ownerClass, method, expr, scope))
+            return m_symbols.resolveBaseTypeName(binTypeRef->name);
         if(expr.op == TokenType::EqualEqual || expr.op == TokenType::BangEqual
             || expr.op == TokenType::Less || expr.op == TokenType::LessEqual
             || expr.op == TokenType::Greater || expr.op == TokenType::GreaterEqual
@@ -2434,23 +2864,14 @@ MStringView TypeChecker::inferExprTypeName(
         return !lhsT.empty() ? lhsT : rhsT;
     }
     else if(expr.kind == ExprKind::Call && expr.lhs){
-        const usize callArgCount = expr.arguments.size();
+        if(const TypeRef* callType = inferExprTypeRef(ownerClass, method, expr, scope))
+            return m_symbols.resolveBaseTypeName(callType->name);
         if(expr.lhs->kind == ExprKind::Identifier){
             const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
             if(m_symbols.findClass(baseCallee) || SymbolTable::isSimdType(baseCallee)
                 || SymbolTable::isArenaBackedContainer(baseCallee) || m_symbols.isSelfDefaultedType(baseCallee))
             {
                 return baseCallee;
-            }
-            if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount)){
-                if(fn->returnType)
-                    return m_symbols.resolveBaseTypeName(fn->returnType->name);
-            }
-            if(const ScopedVarInfo* local = findScopedVar(scope, expr.lhs->text)){
-                if(const TypeRef* ft = m_symbols.unwrapTypeAlias(local->type); ft && ft->isFuncType && ft->funcReturnType)
-                    return m_symbols.resolveBaseTypeName(ft->funcReturnType->name);
-                if(local->lambdaExpr && local->lambdaExpr->lambdaReturnType)
-                    return m_symbols.resolveBaseTypeName(local->lambdaExpr->lambdaReturnType->name);
             }
             if(!expr.arguments.empty() && expr.arguments[0]){
                 const MStringView fnName = expr.lhs->text;
@@ -2489,43 +2910,6 @@ MStringView TypeChecker::inferExprTypeName(
                 }
             }
         }
-        else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
-            if(const MethodDecl* m = findClassMethod(*ownerClass, expr.lhs->text, &callArgCount)){
-                if(m->returnType)
-                    return m_symbols.resolveBaseTypeName(m->returnType->name);
-            }
-            if(const FieldDecl* field = findClassField(*ownerClass, expr.lhs->text)){
-                if(const TypeRef* ft = m_symbols.unwrapTypeAlias(field->type); ft && ft->isFuncType && ft->funcReturnType)
-                    return m_symbols.resolveBaseTypeName(ft->funcReturnType->name);
-            }
-        }
-        else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
-            const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs->lhs, scope);
-            if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
-                if(const MethodDecl* m = findClassMethod(*cls, expr.lhs->text, &callArgCount)){
-                    if(m->returnType)
-                        return m_symbols.resolveBaseTypeName(m->returnType->name);
-                }
-                if(const FieldDecl* field = findClassField(*cls, expr.lhs->text)){
-                    if(const TypeRef* ft = m_symbols.unwrapTypeAlias(field->type); ft && ft->isFuncType && ft->funcReturnType)
-                        return m_symbols.resolveBaseTypeName(ft->funcReturnType->name);
-                }
-            }
-            else if(m_symbols.findInterface(lhsType)){
-                if(const MethodDecl* m = m_symbols.findInterfaceMethod(lhsType, expr.lhs->text, &callArgCount)){
-                    if(m->returnType)
-                        return m_symbols.resolveBaseTypeName(m->returnType->name);
-                }
-            }
-            else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, method, lhsType)){
-                for(const MStringView& boundName : tp->interfaceBounds){
-                    if(const MethodDecl* m = m_symbols.findInterfaceMethod(boundName, expr.lhs->text, &callArgCount)){
-                        if(m->returnType)
-                            return m_symbols.resolveBaseTypeName(m->returnType->name);
-                    }
-                }
-            }
-        }
     }
     else if((expr.kind == ExprKind::Cast || expr.kind == ExprKind::BitCast) && expr.targetType){
         return m_symbols.resolveBaseTypeName(expr.targetType->name);
@@ -2558,14 +2942,24 @@ const TypeRef* TypeChecker::inferExprTypeRef(
             return m_symbols.unwrapTypeAlias(field->type);
     }
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
-        const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
+        const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, method, *expr.lhs, scope);
+        const MStringView lhsType = lhsTypeRef
+            ? m_symbols.resolveBaseTypeName(lhsTypeRef->name)
+            : inferExprTypeName(ownerClass, method, *expr.lhs, scope);
         if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
-            if(const FieldDecl* field = findClassField(*cls, expr.text))
-                return m_symbols.unwrapTypeAlias(field->type);
+            if(const FieldDecl* field = findClassField(*cls, expr.text)){
+                if(!field->type)
+                    return nullptr;
+                const TypeRef* ft = (lhsTypeRef && !cls->templateParams.empty() && !lhsTypeRef->templateArgs.empty())
+                    ? m_symbols.substituteTypeParams(*field->type, cls->templateParams, lhsTypeRef->templateArgs)
+                    : field->type;
+                return m_symbols.unwrapTypeAlias(ft);
+            }
         }
     }
     else if(expr.kind == ExprKind::Index && expr.lhs){
-        if(const TypeRef* containerType = inferExprTypeRef(ownerClass, method, *expr.lhs, scope)){
+        const TypeRef* containerType = inferExprTypeRef(ownerClass, method, *expr.lhs, scope);
+        if(containerType){
             const MStringView baseName = m_symbols.resolveBaseTypeName(containerType->name);
             if((baseName == "Map" || baseName == "HashMap" || baseName == "ParallelHashMap")
                 && containerType->templateArgs.size() >= 2u && containerType->templateArgs[1].type)
@@ -2578,50 +2972,174 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                 return m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type);
             }
         }
-        const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
+        const MStringView lhsType = containerType
+            ? m_symbols.resolveBaseTypeName(containerType->name)
+            : inferExprTypeName(ownerClass, method, *expr.lhs, scope);
         const usize oneArg = 1u;
+        const bool recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
         if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
-            if(const MethodDecl* opIdx = findClassMethod(*cls, "[]", &oneArg))
+            if(const MethodDecl* opIdx = findClassOperator(*cls, "[]", &oneArg, recvIsConst, ownerClass != cls)){
+                if(!opIdx->returnType)
+                    return nullptr;
+                const TypeRef* rt = (containerType && !cls->templateParams.empty() && !containerType->templateArgs.empty())
+                    ? m_symbols.substituteTypeParams(*opIdx->returnType, cls->templateParams, containerType->templateArgs)
+                    : opIdx->returnType;
+                return m_symbols.unwrapTypeAlias(rt);
+            }
+        }
+        else if(containerType && m_symbols.findInterface(lhsType)){
+            if(const MethodDecl* opIdx = m_symbols.findInterfaceMethod(*containerType, "[]", &oneArg))
                 return m_symbols.unwrapTypeAlias(opIdx->returnType);
         }
-        else if(m_symbols.findInterface(lhsType)){
-            if(const MethodDecl* opIdx = m_symbols.findInterfaceMethod(lhsType, "[]", &oneArg))
-                return m_symbols.unwrapTypeAlias(opIdx->returnType);
+        else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, method, lhsType)){
+            for(const TypeRef* boundRef : tp->interfaceBounds){
+                if(!boundRef)
+                    continue;
+                if(const MethodDecl* opIdx = m_symbols.findInterfaceMethod(*boundRef, "[]", &oneArg))
+                    return m_symbols.unwrapTypeAlias(opIdx->returnType);
+            }
+        }
+    }
+    else if((expr.kind == ExprKind::Unary || expr.kind == ExprKind::Binary) && expr.lhs && expr.op != TokenType::Equal){
+        const MStringView opSym = __hidden_adhd_type_checker::MapTokenTypeToOperatorSymbol(expr.op);
+        if(!opSym.empty()){
+            const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, method, *expr.lhs, scope);
+            const MStringView lhsType = lhsTypeRef
+                ? m_symbols.resolveBaseTypeName(lhsTypeRef->name)
+                : inferExprTypeName(ownerClass, method, *expr.lhs, scope);
+            const usize opArity = (expr.kind == ExprKind::Unary) ? 0u : 1u;
+            const bool recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
+            if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
+                if(const MethodDecl* opMethod = findClassOperator(*cls, opSym, &opArity, recvIsConst, ownerClass != cls)){
+                    if(!opMethod->returnType)
+                        return nullptr;
+                    const TypeRef* rt = (lhsTypeRef && !cls->templateParams.empty() && !lhsTypeRef->templateArgs.empty())
+                        ? m_symbols.substituteTypeParams(*opMethod->returnType, cls->templateParams, lhsTypeRef->templateArgs)
+                        : opMethod->returnType;
+                    return m_symbols.unwrapTypeAlias(rt);
+                }
+            }
+            else if(lhsTypeRef && m_symbols.findInterface(lhsType)){
+                if(const MethodDecl* opMethod = m_symbols.findInterfaceMethod(*lhsTypeRef, opSym, &opArity)){
+                    if(opMethod->returnType)
+                        return m_symbols.unwrapTypeAlias(opMethod->returnType);
+                }
+            }
+            else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, method, lhsType)){
+                for(const TypeRef* boundRef : tp->interfaceBounds){
+                    if(!boundRef)
+                        continue;
+                    if(const MethodDecl* opMethod = m_symbols.findInterfaceMethod(*boundRef, opSym, &opArity)){
+                        if(opMethod->returnType)
+                            return m_symbols.unwrapTypeAlias(opMethod->returnType);
+                    }
+                }
+            }
         }
     }
     else if(expr.kind == ExprKind::Call && expr.lhs){
         const usize callArgCount = expr.arguments.size();
         if(expr.lhs->kind == ExprKind::Identifier){
-            if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount))
-                return m_symbols.unwrapTypeAlias(fn->returnType);
+            if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount)){
+                if(!fn->returnType)
+                    return nullptr;
+                const TypeRef* rt = (!fn->templateParams.empty() && !expr.callTemplateArgs.empty())
+                    ? m_symbols.substituteTypeParams(*fn->returnType, fn->templateParams, expr.callTemplateArgs)
+                    : fn->returnType;
+                return m_symbols.unwrapTypeAlias(rt);
+            }
             if(const ScopedVarInfo* local = findScopedVar(scope, expr.lhs->text)){
                 if(const TypeRef* ft = m_symbols.unwrapTypeAlias(local->type); ft && ft->isFuncType && ft->funcReturnType)
                     return m_symbols.unwrapTypeAlias(ft->funcReturnType);
                 if(local->lambdaExpr && local->lambdaExpr->lambdaReturnType)
                     return m_symbols.unwrapTypeAlias(local->lambdaExpr->lambdaReturnType);
             }
+            const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
+            if(m_symbols.findClass(baseCallee) || m_symbols.findTypeAlias(expr.lhs->text)
+                || SymbolTable::isSimdType(baseCallee) || SymbolTable::isArenaBackedContainer(baseCallee)
+                || m_symbols.isSelfDefaultedType(baseCallee))
+            {
+                TypeRef* constructed = AllocateAstNode<TypeRef>(m_arena);
+                constructed->name = expr.lhs->text;
+                constructed->templateArgs = expr.callTemplateArgs;
+                return m_symbols.unwrapTypeAlias(constructed);
+            }
         }
         else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
-            if(const MethodDecl* m = findClassMethod(*ownerClass, expr.lhs->text, &callArgCount))
-                return m_symbols.unwrapTypeAlias(m->returnType);
+            if(const MethodDecl* m = findClassMethod(*ownerClass, expr.lhs->text, &callArgCount)){
+                if(!m->returnType)
+                    return nullptr;
+                const TypeRef* rt = (!m->templateParams.empty() && !expr.callTemplateArgs.empty())
+                    ? m_symbols.substituteTypeParams(*m->returnType, m->templateParams, expr.callTemplateArgs)
+                    : m->returnType;
+                return m_symbols.unwrapTypeAlias(rt);
+            }
             if(const FieldDecl* field = findClassField(*ownerClass, expr.lhs->text)){
                 if(const TypeRef* ft = m_symbols.unwrapTypeAlias(field->type); ft && ft->isFuncType && ft->funcReturnType)
                     return m_symbols.unwrapTypeAlias(ft->funcReturnType);
             }
         }
         else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
-            const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs->lhs, scope);
+            const TypeRef* recvTypeRef = inferExprTypeRef(ownerClass, method, *expr.lhs->lhs, scope);
+            const MStringView lhsType = recvTypeRef
+                ? m_symbols.resolveBaseTypeName(recvTypeRef->name)
+                : inferExprTypeName(ownerClass, method, *expr.lhs->lhs, scope);
+            const MStringView mName = expr.lhs->text;
+            if(recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
+                if((lhsType == "Optional" || lhsType == "Expected") && mName == "value")
+                    return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
+                if(lhsType == "Expected" && mName == "error" && recvTypeRef->templateArgs.size() >= 2u && recvTypeRef->templateArgs[1].type)
+                    return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[1].type);
+                if((lhsType == "Vector" || lhsType == "FixedVector" || lhsType == "Array" || lhsType == "ParallelVector"
+                    || lhsType == "Deque" || lhsType == "List" || lhsType == "ForwardList" || lhsType == "Queue" || lhsType == "Span")
+                    && (mName == "front" || mName == "back"))
+                {
+                    return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
+                }
+                if(lhsType == "Atomic" && (mName == "load" || mName == "exchange" || mName == "fetch_add" || mName == "fetch_sub"))
+                    return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
+            }
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
-                if(const MethodDecl* m = findClassMethod(*cls, expr.lhs->text, &callArgCount))
-                    return m_symbols.unwrapTypeAlias(m->returnType);
-                if(const FieldDecl* field = findClassField(*cls, expr.lhs->text)){
-                    if(const TypeRef* ft = m_symbols.unwrapTypeAlias(field->type); ft && ft->isFuncType && ft->funcReturnType)
-                        return m_symbols.unwrapTypeAlias(ft->funcReturnType);
+                const bool recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs->lhs, scope) : false;
+                if(const MethodDecl* m = findClassMethod(*cls, mName, &callArgCount, recvIsConst, ownerClass != cls)){
+                    if(!m->returnType)
+                        return nullptr;
+                    const TypeRef* rt = m->returnType;
+                    if(recvTypeRef && !cls->templateParams.empty() && !recvTypeRef->templateArgs.empty())
+                        rt = m_symbols.substituteTypeParams(*rt, cls->templateParams, recvTypeRef->templateArgs);
+                    if(!m->templateParams.empty() && !expr.callTemplateArgs.empty())
+                        rt = m_symbols.substituteTypeParams(*rt, m->templateParams, expr.callTemplateArgs);
+                    return m_symbols.unwrapTypeAlias(rt);
+                }
+                if(const FieldDecl* field = findClassField(*cls, mName)){
+                    const TypeRef* ft = (recvTypeRef && !cls->templateParams.empty() && !recvTypeRef->templateArgs.empty() && field->type)
+                        ? m_symbols.substituteTypeParams(*field->type, cls->templateParams, recvTypeRef->templateArgs)
+                        : field->type;
+                    if(const TypeRef* uft = m_symbols.unwrapTypeAlias(ft); uft && uft->isFuncType && uft->funcReturnType)
+                        return m_symbols.unwrapTypeAlias(uft->funcReturnType);
                 }
             }
-            else if(m_symbols.findInterface(lhsType)){
-                if(const MethodDecl* m = m_symbols.findInterfaceMethod(lhsType, expr.lhs->text, &callArgCount))
-                    return m_symbols.unwrapTypeAlias(m->returnType);
+            else if(recvTypeRef && m_symbols.findInterface(lhsType)){
+                if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount); m && m->returnType){
+                    const TypeRef* rt = (!m->templateParams.empty() && !expr.callTemplateArgs.empty())
+                        ? m_symbols.substituteTypeParams(*m->returnType, m->templateParams, expr.callTemplateArgs)
+                        : m->returnType;
+                    return m_symbols.unwrapTypeAlias(rt);
+                }
+            }
+            else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, method, lhsType)){
+                for(const TypeRef* boundRef : tp->interfaceBounds){
+                    if(!boundRef)
+                        continue;
+                    if(const MethodDecl* m = m_symbols.findInterfaceMethod(*boundRef, mName, &callArgCount)){
+                        if(!m->returnType)
+                            return nullptr;
+                        const TypeRef* rt = (!m->templateParams.empty() && !expr.callTemplateArgs.empty())
+                            ? m_symbols.substituteTypeParams(*m->returnType, m->templateParams, expr.callTemplateArgs)
+                            : m->returnType;
+                        return m_symbols.unwrapTypeAlias(rt);
+                    }
+                }
             }
         }
     }
@@ -2629,6 +3147,52 @@ const TypeRef* TypeChecker::inferExprTypeRef(
         return m_symbols.unwrapTypeAlias(expr.targetType);
     }
     return nullptr;
+}
+
+bool TypeChecker::isReceiverConst(
+    ClassDecl* ownerClass,
+    const MethodDecl& method,
+    const Expr& recv,
+    const MVector<ScopedVarInfo>& scope
+)const noexcept{
+    if(recv.kind == ExprKind::Identifier){
+        if(const ScopedVarInfo* local = findScopedVar(scope, recv.text)){
+            const ParamPassingMode::Enum localRefMode = m_symbols.resolveRefMode(local->type);
+            if(localRefMode != ParamPassingMode::None)
+                return localRefMode == ParamPassingMode::In;
+            return local->mode == ParamPassingMode::In || local->isConst;
+        }
+        if(m_symbols.findGlobalConstant(recv.text))
+            return true;
+    }
+    else if(recv.kind == ExprKind::ThisMember && ownerClass){
+        const ScopedVarInfo* lambdaThis = m_inLambda ? findScopedVar(scope, "this") : nullptr;
+        const bool isConstThis = method.isConst || (lambdaThis && lambdaThis->isConst);
+        if(const FieldDecl* field = findClassField(*ownerClass, recv.text)){
+            const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(field->type);
+            if(fieldRefMode != ParamPassingMode::None)
+                return fieldRefMode == ParamPassingMode::In;
+        }
+        return isConstThis;
+    }
+    else if(recv.kind == ExprKind::MemberAccess && recv.lhs){
+        if(const TypeRef* ft = inferExprTypeRef(ownerClass, &method, recv, scope)){
+            const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(ft);
+            if(fieldRefMode != ParamPassingMode::None)
+                return fieldRefMode == ParamPassingMode::In;
+        }
+        return isReceiverConst(ownerClass, method, *recv.lhs, scope);
+    }
+    else if(recv.kind == ExprKind::Index || recv.kind == ExprKind::Call){
+        if(const TypeRef* rt = inferExprTypeRef(ownerClass, &method, recv, scope)){
+            const ParamPassingMode::Enum refMode = m_symbols.resolveRefMode(rt);
+            if(refMode != ParamPassingMode::None)
+                return refMode == ParamPassingMode::In;
+        }
+        if(recv.kind == ExprKind::Index && recv.lhs)
+            return isReceiverConst(ownerClass, method, *recv.lhs, scope);
+    }
+    return false;
 }
 
 const TemplateParamDecl* TypeChecker::findTemplateParam(
@@ -2667,17 +3231,77 @@ const FieldDecl* TypeChecker::findClassField(const ClassDecl& classDecl, const M
     return nullptr;
 }
 
-const MethodDecl* TypeChecker::findClassMethod(const ClassDecl& classDecl, const MStringView name, const usize* preferredArgCount)noexcept{
-    const MethodDecl* firstMatch = nullptr;
+const MethodDecl* TypeChecker::findClassMethod(
+    const ClassDecl& classDecl,
+    const MStringView name,
+    const usize* preferredArgCount,
+    const bool preferConst,
+    const bool requirePublic
+)noexcept{
+    const MethodDecl* bestMatch = nullptr;
+    i32 bestScore = -1;
     for(const MethodDecl* m : classDecl.methods){
-        if(m->name == name){
-            if(!preferredArgCount || m->params.size() == *preferredArgCount)
-                return m;
-            if(!firstMatch)
-                firstMatch = m;
+        if(!m || m->isConstructor || m->isDestructor || m->isOperator || m->name != name)
+            continue;
+        i32 score = 0;
+        if(!preferredArgCount || m->params.size() == *preferredArgCount)
+            score += 4;
+        if(!requirePublic || m->access == AccessSpecifier::Public)
+            score += 2;
+        if(m->isConst == preferConst)
+            score += 1;
+        if(score > bestScore){
+            bestScore = score;
+            bestMatch = m;
         }
     }
-    return firstMatch;
+    return bestMatch;
+}
+
+const MethodDecl* TypeChecker::findClassOperator(
+    const ClassDecl& classDecl,
+    const MStringView opName,
+    const usize* preferredArgCount,
+    const bool preferConst,
+    const bool requirePublic
+)noexcept{
+    const MethodDecl* bestMatch = nullptr;
+    i32 bestScore = -1;
+    for(const MethodDecl* m : classDecl.methods){
+        if(!m || !m->isOperator || m->name != opName)
+            continue;
+        i32 score = 0;
+        if(!preferredArgCount || m->params.size() == *preferredArgCount)
+            score += 4;
+        if(!requirePublic || m->access == AccessSpecifier::Public)
+            score += 2;
+        if(m->isConst == preferConst)
+            score += 1;
+        if(score > bestScore){
+            bestScore = score;
+            bestMatch = m;
+        }
+    }
+    return bestMatch;
+}
+
+const MethodDecl* TypeChecker::findClassConstructor(
+    const ClassDecl& classDecl,
+    const usize argCount,
+    const bool requirePublic
+)noexcept{
+    const MethodDecl* bestMatch = nullptr;
+    i32 bestScore = -1;
+    for(const MethodDecl* m : classDecl.methods){
+        if(!m || !m->isConstructor || m->params.size() != argCount)
+            continue;
+        i32 score = (!requirePublic || m->access == AccessSpecifier::Public) ? 2 : 1;
+        if(score > bestScore){
+            bestScore = score;
+            bestMatch = m;
+        }
+    }
+    return bestMatch;
 }
 
 void TypeChecker::reportError(MVector<ParseError>& errors, const SourceSpan span, const MStringView message)const{

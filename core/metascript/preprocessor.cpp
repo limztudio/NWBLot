@@ -793,8 +793,29 @@ bool Preprocessor::evaluateCondition(const MStringView exprText, const u32 line,
                 }
                 continue;
             }
+            usize afterIdent = i;
+            while(afterIdent < exprText.size() && (exprText[afterIdent] == ' ' || exprText[afterIdent] == '\t'))
+                ++afterIdent;
+            if(afterIdent < exprText.size() && exprText[afterIdent] == '('){
+                u32 parenDepth = 0u;
+                usize scan = afterIdent;
+                while(scan < exprText.size()){
+                    if(exprText[scan] == '(')
+                        ++parenDepth;
+                    else if(exprText[scan] == ')'){
+                        if(--parenDepth == 0u){
+                            ++scan;
+                            break;
+                        }
+                    }
+                    ++scan;
+                }
+                if(parenDepth == 0u)
+                    i = scan;
+            }
+            const MStringView macroTarget = exprText.substr(idStart, i - idStart);
             MString piece(m_arena);
-            if(!expandLineMacros(ident, line, piece))
+            if(!expandLineMacros(macroTarget, line, piece))
                 return false;
             expanded.append(piece.data(), piece.size());
         }

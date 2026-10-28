@@ -156,13 +156,10 @@ bool TypeParser::parseTemplateParamList(MVector<TemplateParamDecl>& outParams){
                         m_cursor.errorExpected("expected interface bound name after ':'");
                         return false;
                     }
-                    param.interfaceBounds.push_back(m_cursor.current().text);
-                    m_cursor.advance();
-                    if(m_cursor.check(TokenType::Less)){
-                        MVector<TypeArg> boundArgs(m_cursor.arena());
-                        if(!parseTypeArgList(boundArgs))
-                            return false;
-                    }
+                    TypeRef* boundType = parseType(false, false);
+                    if(!boundType)
+                        return false;
+                    param.interfaceBounds.push_back(boundType);
                     if(!m_cursor.match(TokenType::Plus))
                         break;
                 }

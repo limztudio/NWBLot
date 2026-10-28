@@ -48,7 +48,12 @@ public:
 
 private:
     [[nodiscard]] bool linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>& errors);
-    [[nodiscard]] bool checkTemplateParamBounds(const MVector<TemplateParamDecl>& params, MVector<ParseError>& errors);
+    [[nodiscard]] bool checkTemplateParamBounds(
+        const MVector<TemplateParamDecl>& params,
+        const ClassDecl* enclosingClass,
+        const MethodDecl* enclosingMethod,
+        MVector<ParseError>& errors
+    );
     [[nodiscard]] bool checkTemplateArgBounds(
         const MVector<TemplateParamDecl>& params,
         const MVector<TypeArg>& args,
@@ -64,8 +69,8 @@ private:
         MVector<ParseError>& errors,
         bool allowVoid = false
     );
-    [[nodiscard]] bool classImplementsInterface(const ClassDecl& cls, MStringView requiredIface)const noexcept;
-    [[nodiscard]] bool interfaceInheritsFrom(const InterfaceDecl& iface, MStringView requiredIface, u32 depth = 0u)const noexcept;
+    [[nodiscard]] bool classImplementsInterface(const ClassDecl& cls, const TypeRef* implClassRef, const TypeRef& requiredIface)const noexcept;
+    [[nodiscard]] bool interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, u32 depth = 0u)const noexcept;
     [[nodiscard]] bool checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors);
     [[nodiscard]] bool checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors);
     [[nodiscard]] bool checkConstructorInitialization(ClassDecl& classDecl, MethodDecl& ctor, MVector<ParseError>& errors);
@@ -105,6 +110,13 @@ private:
         const MVector<ScopedVarInfo>& scope
     )const noexcept;
 
+    [[nodiscard]] bool isReceiverConst(
+        ClassDecl* ownerClass,
+        const MethodDecl& method,
+        const Expr& recv,
+        const MVector<ScopedVarInfo>& scope
+    )const noexcept;
+
     [[nodiscard]] static const TemplateParamDecl* findTemplateParam(
         const ClassDecl* ownerClass,
         const MethodDecl* method,
@@ -112,7 +124,25 @@ private:
     )noexcept;
     [[nodiscard]] static const ScopedVarInfo* findScopedVar(const MVector<ScopedVarInfo>& scope, MStringView name)noexcept;
     [[nodiscard]] static const FieldDecl* findClassField(const ClassDecl& classDecl, MStringView name)noexcept;
-    [[nodiscard]] static const MethodDecl* findClassMethod(const ClassDecl& classDecl, MStringView name, const usize* preferredArgCount = nullptr)noexcept;
+    [[nodiscard]] static const MethodDecl* findClassMethod(
+        const ClassDecl& classDecl,
+        MStringView name,
+        const usize* preferredArgCount = nullptr,
+        bool preferConst = false,
+        bool requirePublic = false
+    )noexcept;
+    [[nodiscard]] static const MethodDecl* findClassOperator(
+        const ClassDecl& classDecl,
+        MStringView opName,
+        const usize* preferredArgCount = nullptr,
+        bool preferConst = false,
+        bool requirePublic = false
+    )noexcept;
+    [[nodiscard]] static const MethodDecl* findClassConstructor(
+        const ClassDecl& classDecl,
+        usize argCount,
+        bool requirePublic = false
+    )noexcept;
     void reportError(MVector<ParseError>& errors, SourceSpan span, MStringView message)const;
 
 

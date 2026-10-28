@@ -41,7 +41,9 @@ public:
     )override{
         using namespace NWB::Core::Metascript;
 
-        if(includePath.size() <= 5u || includePath.substr(includePath.size() - 5u) != ".adhd")
+        const bool hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
+        const bool hasNwbExt = includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
+        if(!hasAdhdExt && !hasNwbExt)
             return false;
         const MString relPath(includePath.data(), includePath.size(), arena);
 
@@ -49,7 +51,8 @@ public:
             for(usize i = m_resolvedParentDirs.size(); i > 0u; --i){
                 const auto candidate = ResolveAbsolutePath(arena, m_resolvedParentDirs[i - 1u], MStringView(relPath.data(), relPath.size()));
                 if(candidate && ReadTextFile(*candidate, outContent)){
-                    outResolvedKey = MString(includePath.data(), includePath.size(), arena);
+                    const std::string resolvedStr = candidate->genericString();
+                    outResolvedKey = MString(resolvedStr.data(), resolvedStr.size(), arena);
                     m_resolvedParentDirs.push_back(candidate->parentPath());
                     return true;
                 }
@@ -60,7 +63,8 @@ public:
             const Path<MetaArena> baseDir(arena, AStringView(dirText.data(), dirText.size()));
             const auto candidate = ResolveAbsolutePath(arena, baseDir, MStringView(relPath.data(), relPath.size()));
             if(candidate && ReadTextFile(*candidate, outContent)){
-                outResolvedKey = MString(includePath.data(), includePath.size(), arena);
+                const std::string resolvedStr = candidate->genericString();
+                outResolvedKey = MString(resolvedStr.data(), resolvedStr.size(), arena);
                 m_resolvedParentDirs.push_back(candidate->parentPath());
                 return true;
             }
@@ -125,7 +129,8 @@ bool RunAdhdCompilerDriver(
             arena,
             result,
             &resolver,
-            customNs
+            customNs,
+            &options.macroDefinitions
         )){
             for(const ParseError& err : result.errors){
                 NWB_LOGGER_ERROR(

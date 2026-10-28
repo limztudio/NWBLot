@@ -67,7 +67,7 @@ public:
 struct TemplateParamDecl{
     MStringView name;
     TypeRef* constValueType = nullptr;
-    MVector<MStringView> interfaceBounds;
+    MVector<TypeRef*> interfaceBounds;
     SourceSpan span;
 
 

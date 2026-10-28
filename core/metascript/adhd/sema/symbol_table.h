@@ -40,8 +40,8 @@ public:
     [[nodiscard]] MethodDecl* findFreeFunction(MStringView name, const usize* preferredArgCount = nullptr)const noexcept;
     [[nodiscard]] Stmt* findGlobalConstant(MStringView name)const noexcept;
 
-    [[nodiscard]] MethodDecl* findInterfaceMethod(MStringView interfaceName, MStringView methodName, const usize* preferredArgCount = nullptr, u32 depth = 0u)const noexcept;
-    void collectAllInterfaceMethods(MStringView interfaceName, MVector<MethodDecl*>& outMethods, u32 depth = 0u)const;
+    [[nodiscard]] MethodDecl* findInterfaceMethod(const TypeRef& ifaceType, MStringView methodName, const usize* preferredArgCount = nullptr, u32 depth = 0u)const noexcept;
+    void collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<MethodDecl*>& outMethods, u32 depth = 0u)const;
 
     [[nodiscard]] TypeRef* substituteTypeParams(
         const TypeRef& origType,
@@ -49,6 +49,7 @@ public:
         const MVector<TypeArg>& templateArgs
     )const;
     [[nodiscard]] const TypeRef* unwrapTypeAlias(const TypeRef* type)const noexcept;
+    [[nodiscard]] ParamPassingMode::Enum resolveRefMode(const TypeRef* type)const noexcept;
     [[nodiscard]] MStringView resolveBaseTypeName(MStringView typeName)const noexcept;
     [[nodiscard]] bool isSelfDefaultedType(MStringView typeName)const noexcept;
 

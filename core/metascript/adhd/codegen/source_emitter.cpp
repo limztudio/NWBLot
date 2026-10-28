@@ -780,8 +780,10 @@ MString SourceEmitter::emitSource(
 
         if(classDecl->templateParams.empty()){
             for(const MethodDecl* method : classDecl->methods){
+                if(!method)
+                    continue;
                 const bool emittedInHeader = !classDecl->isImported && (method->isInline || !method->templateParams.empty());
-                if(!method || method->isImported || !method->hasBody || emittedInHeader)
+                if(method->isImported || !method->hasBody || emittedInHeader)
                     continue;
 
                 if(classDecl->isImported && method->isInline)
@@ -1108,7 +1110,7 @@ void SourceEmitter::emitStmt(
         out.push_back(' ');
         out.append(stmt.name.data(), stmt.name.size());
 
-        if(stmt.varType && stmt.varType->refMode != ParamPassingMode::None && stmt.expr){
+        if(stmt.varType && m_symbols.resolveRefMode(stmt.varType) != ParamPassingMode::None && stmt.expr){
             out.append(" = ::MakeNotNull(&(");
             emitExpr(out, *stmt.expr);
             out.append("));\r\n");
@@ -2544,6 +2546,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
                 break;
             }
         }
+        if(expr.derefNotNull)
+            out.append("(*(");
         if(expr.lhs)
             emitExpr(out, *expr.lhs);
         if(expr.isPointerMemberAccess)
@@ -2551,6 +2555,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         else
             out.push_back('.');
         out.append(expr.text.data(), expr.text.size());
+        if(expr.derefNotNull)
+            out.append("))");
         break;
     }
     case ExprKind::ScopeAccess:{
@@ -2594,12 +2600,16 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
                 break;
             }
         }
+        if(expr.derefNotNull)
+            out.append("(*(");
         if(expr.lhs)
             emitExpr(out, *expr.lhs);
         out.push_back('[');
         if(expr.rhs)
             emitExpr(out, *expr.rhs);
         out.push_back(']');
+        if(expr.derefNotNull)
+            out.append("))");
         break;
     }
     case ExprKind::Call:{
@@ -2840,6 +2850,18 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         else
             out.append("void");
         out.append("{\r\n");
+        if(expr.lambdaUsesScratchArena){
+            emitIndent(out, 2u);
+            out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"lambda\"));\r\n");
+        }
+        if(expr.lambdaUsesTaskScope){
+            emitIndent(out, 2u);
+            out.append("static ::NWB::Core::CpuTaskScheduler s_AdhdTaskScheduler;\r\n");
+            emitIndent(out, 2u);
+            out.append("::NWB::Core::CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler);\r\n");
+            emitIndent(out, 2u);
+            out.append("::ScopeExit __adhd_scope_join([&__adhd_task_scope]()noexcept{ __adhd_task_scope.wait(); });\r\n");
+        }
         emitScopedSimdBody(out, expr.lambdaBody, 2u);
         out.append("    }");
         break;

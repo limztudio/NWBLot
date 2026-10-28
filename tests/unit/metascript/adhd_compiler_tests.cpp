@@ -1880,6 +1880,372 @@ TEST(AdhdCompiler, SupportsTemplatedTypeAliasUnwrappingSwitchSubjectCachingThisM
     EXPECT_FALSE(Compiler::compile(s_RecursiveClassValueMemberSource, "impl/sim/rec_class.adhd", arena.arena, recClassRes));
 }
 
+TEST(AdhdCompiler, SupportsParameterizedInterfaceBoundsInheritedTemplateInterfacesRefAliasesLambdaArenasAndSimdNwbReflection){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "[asset(\"Mesh\")]\r\n"
+        "class MeshAsset {\r\n"
+        "    public u32 vertexCount = 0u;\r\n"
+        "}\r\n"
+        "interface IBaseStream<T> {\r\n"
+        "    T sample() const;\r\n"
+        "}\r\n"
+        "interface IDerivedStream<U> : IBaseStream<U> {\r\n"
+        "    void push(in U item);\r\n"
+        "}\r\n"
+        "type VecStreamIn = in IDerivedStream<f32x4>;\r\n"
+        "class VecStreamImpl : IDerivedStream<f32x4> {\r\n"
+        "    public f32x4 current = f32x4(1.0f);\r\n"
+        "    public f32x4 sample() const override {\r\n"
+        "        return this.current;\r\n"
+        "    }\r\n"
+        "    public void push(in f32x4 item) override {\r\n"
+        "        this.current = item;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "class Holder<T> {\r\n"
+        "    public T value;\r\n"
+        "    public T get() const {\r\n"
+        "        return this.value;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "class StreamConsumer {\r\n"
+        "    public VecStreamIn stream;\r\n"
+        "    public StreamConsumer(in VecStreamIn s) {\r\n"
+        "        this.stream = s;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "[reflect]\r\n"
+        "class SimdNwbPacket {\r\n"
+        "    public Vector<f32x4> points;\r\n"
+        "    public Optional<f32x4x4> transform;\r\n"
+        "    public Vector<AssetRef<MeshAsset>> meshes;\r\n"
+        "}\r\n"
+        "f32x4 readBounded<S : IDerivedStream<f32x4>>(in S src, in Holder<f32x4> h, in Optional<f32x4> opt) {\r\n"
+        "    VecStreamIn aliasRef = src;\r\n"
+        "    auto a = src.sample();\r\n"
+        "    auto b = h.get();\r\n"
+        "    auto c = opt.value();\r\n"
+        "    auto localFn = lambda() -> u32 {\r\n"
+        "        Vector<u32> scratchItems;\r\n"
+        "        scratchItems.push_back(7u);\r\n"
+        "        return 1u;\r\n"
+        "    };\r\n"
+        "    u32 tag = localFn();\r\n"
+        "    return a + b + c + aliasRef.sample();\r\n"
+        "}\r\n"
+        "f32x4 runBounded(in VecStreamImpl impl, in Holder<f32x4> h, in Optional<f32x4> opt) {\r\n"
+        "    return readBounded<VecStreamImpl>(impl, h, opt);\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/param_bounds_ref_alias_nwb.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("static constexpr usize reflectedMethodCount()noexcept{ return 2u; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("using VecStreamIn = ::NotNull<const IDerivedStream<Float4>*>;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("static constexpr usize assetDependencyFieldCount()noexcept{ return 1u; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->points.push_back(Float4("), MStringView::npos);
+    EXPECT_NE(hdrView.find("Float44 __m{}; for(usize __i = 0u; __i < 16u; ++__i) __m.raw[__i] = static_cast<f32>(__f->asList()[__i].toDouble()); this->transform = __m;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("::SIMDVectorSingle __adhd_simd_a = ::LoadFloat(src.sample());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("::SIMDVectorSingle __adhd_simd_b = ::LoadFloat(h.get());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("::SIMDVectorSingle __adhd_simd_c = ::LoadFloat(opt.value());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"lambda\"));"), MStringView::npos);
+    EXPECT_NE(cppView.find("StreamConsumer::StreamConsumer(const VecStreamIn& s)noexcept : stream(::MakeNotNull(&((*s))))"), MStringView::npos);
+
+    static constexpr MStringView s_WrongParameterizedBoundSource =
+        "interface IStream<T> {\r\n"
+        "    T read() const;\r\n"
+        "}\r\n"
+        "class IntStream : IStream<i32> {\r\n"
+        "    public i32 read() const override { return 0; }\r\n"
+        "}\r\n"
+        "f32 consumeFloat<S : IStream<f32>>(in S s) {\r\n"
+        "    return s.read();\r\n"
+        "}\r\n"
+        "f32 badCall(in IntStream is) {\r\n"
+        "    return consumeFloat<IntStream>(is);\r\n"
+        "}\r\n";
+    CompileResult wrongBoundRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_WrongParameterizedBoundSource, "impl/sim/wrong_param_bound.adhd", arena.arena, wrongBoundRes));
+
+    static constexpr MStringView s_DoubleRefAliasSource =
+        "interface IFoo {\r\n"
+        "    void tick();\r\n"
+        "}\r\n"
+        "type FooRef = in IFoo;\r\n"
+        "void badDoubleRef(in FooRef f) {\r\n"
+        "    mut FooRef local = f;\r\n"
+        "}\r\n";
+    CompileResult doubleRefRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DoubleRefAliasSource, "impl/sim/double_ref_alias.adhd", arena.arena, doubleRefRes));
+
+    static constexpr MStringView s_EscapingMutLambdaSource =
+        "Func<i32()> badReturnMutLambda() {\r\n"
+        "    i32 counter = 0;\r\n"
+        "    return lambda[mut counter]() -> i32 {\r\n"
+        "        counter += 1;\r\n"
+        "        return counter;\r\n"
+        "    };\r\n"
+        "}\r\n";
+    CompileResult escapingLambdaRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_EscapingMutLambdaSource, "impl/sim/escaping_mut_lambda.adhd", arena.arena, escapingLambdaRes));
+}
+
+TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullPropagation){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "#define VER_GE(maj, min) (((maj) * 10 + (min)) >= 21)\r\n"
+        "#if VER_GE(2, 1)\r\n"
+        "type AliasB = AliasA;\r\n"
+        "type AliasA = i32;\r\n"
+        "#else\r\n"
+        "type AliasB = i64;\r\n"
+        "#endif\r\n"
+        "\r\n"
+        "interface IDerivedNode : IBaseNode {\r\n"
+        "    i32 derivedId() const;\r\n"
+        "}\r\n"
+        "interface IBaseNode {\r\n"
+        "    i32 baseId() const;\r\n"
+        "}\r\n"
+        "\r\n"
+        "class ConcreteNode : IDerivedNode {\r\n"
+        "    private i32 secret = 42;\r\n"
+        "    public i32 baseId() const override { return this.secret; }\r\n"
+        "    public i32 derivedId() const override { return this.secret + 1; }\r\n"
+        "}\r\n"
+        "\r\n"
+        "class GrandOuter {\r\n"
+        "    public u8 tag = 1;\r\n"
+        "    public MidOuter mid = MidOuter();\r\n"
+        "}\r\n"
+        "class MidOuter {\r\n"
+        "    public u8 flag = 2;\r\n"
+        "    public LeafInner leaf = LeafInner();\r\n"
+        "}\r\n"
+        "class LeafInner {\r\n"
+        "    public u64 payload = 99;\r\n"
+        "}\r\n"
+        "\r\n"
+        "[reflect]\r\n"
+        "class ContainerAssetBundle {\r\n"
+        "    public Set<Name> tags;\r\n"
+        "    public Map<String, i32> weights;\r\n"
+        "    public HashMap<Name, AssetRef<LeafInner>> namedDeps;\r\n"
+        "    public Deque<f32> timeline;\r\n"
+        "}\r\n"
+        "\r\n"
+        "class NodeHolder {\r\n"
+        "    public in IDerivedNode nodeRef;\r\n"
+        "    public NodeHolder(in IDerivedNode n) {\r\n"
+        "        this.nodeRef = n;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "\r\n"
+        "AliasB evaluateNodes(in NodeHolder holder, in Vector<in IDerivedNode> list) {\r\n"
+        "    in auto localRef = holder.nodeRef;\r\n"
+        "    AliasB sum = localRef.derivedId() + holder.nodeRef.baseId() + list[0].derivedId();\r\n"
+        "    for (in IDerivedNode item : list) {\r\n"
+        "        sum += item.baseId();\r\n"
+        "    }\r\n"
+        "    return sum;\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/topo_layout_access.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    const usize aliasAPos = hdrView.find("using AliasA = i32;");
+    const usize aliasBPos = hdrView.find("using AliasB = AliasA;");
+    ASSERT_NE(aliasAPos, MStringView::npos);
+    ASSERT_NE(aliasBPos, MStringView::npos);
+    EXPECT_LT(aliasAPos, aliasBPos);
+
+    const usize baseIfacePos = hdrView.find("class IBaseNode{");
+    const usize derivedIfacePos = hdrView.find("class IDerivedNode : public IBaseNode{");
+    ASSERT_NE(baseIfacePos, MStringView::npos);
+    ASSERT_NE(derivedIfacePos, MStringView::npos);
+    EXPECT_LT(baseIfacePos, derivedIfacePos);
+
+    const usize leafPos = hdrView.find("class LeafInner final{");
+    const usize midPos = hdrView.find("class MidOuter final{");
+    const usize grandPos = hdrView.find("class GrandOuter final{");
+    ASSERT_NE(leafPos, MStringView::npos);
+    ASSERT_NE(midPos, MStringView::npos);
+    ASSERT_NE(grandPos, MStringView::npos);
+    EXPECT_LT(leafPos, midPos);
+    EXPECT_LT(midPos, grandPos);
+
+    ASSERT_EQ(res.unit.classes.size(), 6u);
+    EXPECT_EQ(res.unit.classes[1]->name, "GrandOuter");
+    EXPECT_EQ(res.unit.classes[1]->totalAlign, 8u);
+    EXPECT_EQ(res.unit.classes[1]->totalSize, 24u);
+
+    EXPECT_NE(hdrView.find("static constexpr usize assetDependencyFieldCount()noexcept{ return 1u; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->tags.clear(); for(usize __i = 0u; __i < __f->asList().size(); ++__i) this->tags.insert(::Name(__f->asList()[__i].asString().data()));"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->weights.clear(); for(const auto& [__k, __v] : __f->asMap()) this->weights[AString(__k, s_ClassArena)] = static_cast<i32>(__v.asInteger());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->namedDeps.clear(); for(const auto& [__k, __v] : __f->asMap()) this->namedDeps[::Name(__k.data())] = {::Name(__v.asString().data())};"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->timeline.push_back(static_cast<f32>(__f->asList()[__i].toDouble()));"), MStringView::npos);
+
+    EXPECT_NE(cppView.find("::NotNull<const IDerivedNode*> localRef = ::MakeNotNull(&((*(holder.nodeRef))));"), MStringView::npos);
+    EXPECT_NE(cppView.find("localRef->derivedId()"), MStringView::npos);
+    EXPECT_NE(cppView.find("holder.nodeRef->baseId()"), MStringView::npos);
+    EXPECT_NE(cppView.find("list[0]->derivedId()"), MStringView::npos);
+    EXPECT_NE(cppView.find("for(const ::NotNull<const IDerivedNode*>& item : list)"), MStringView::npos);
+    EXPECT_NE(cppView.find("item->baseId()"), MStringView::npos);
+
+    static constexpr MStringView s_PrivateFieldSource =
+        "class SecretBox {\r\n"
+        "    private i32 hidden = 7;\r\n"
+        "}\r\n"
+        "i32 leak(in SecretBox b) {\r\n"
+        "    return b.hidden;\r\n"
+        "}\r\n";
+    CompileResult privFieldRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_PrivateFieldSource, "impl/sim/priv_field.adhd", arena.arena, privFieldRes));
+
+    static constexpr MStringView s_PrivateMethodSource =
+        "class SecretBox {\r\n"
+        "    private i32 calc() const { return 7; }\r\n"
+        "}\r\n"
+        "i32 leak(in SecretBox b) {\r\n"
+        "    return b.calc();\r\n"
+        "}\r\n";
+    CompileResult privMethodRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_PrivateMethodSource, "impl/sim/priv_method.adhd", arena.arena, privMethodRes));
+
+    static constexpr MStringView s_PrivateCtorSource =
+        "class SecretBox {\r\n"
+        "    public i32 v = 0;\r\n"
+        "    private SecretBox(in i32 x) { this.v = x; }\r\n"
+        "}\r\n"
+        "void make() {\r\n"
+        "    SecretBox b(5);\r\n"
+        "}\r\n";
+    CompileResult privCtorRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_PrivateCtorSource, "impl/sim/priv_ctor.adhd", arena.arena, privCtorRes));
+
+    static constexpr MStringView s_AutoInterfaceByValueSource =
+        "interface INode {\r\n"
+        "    i32 id() const;\r\n"
+        "}\r\n"
+        "void badAuto(in INode n) {\r\n"
+        "    auto copy = n;\r\n"
+        "}\r\n";
+    CompileResult autoIfaceRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_AutoInterfaceByValueSource, "impl/sim/auto_iface.adhd", arena.arena, autoIfaceRes));
+
+    static constexpr MStringView s_MutRebindConstSource =
+        "interface INode {\r\n"
+        "    void step();\r\n"
+        "}\r\n"
+        "class NodeImpl : INode {\r\n"
+        "    public void step() override {}\r\n"
+        "}\r\n"
+        "void badRebind(mut NodeImpl a, in NodeImpl b) {\r\n"
+        "    mut INode ref = a;\r\n"
+        "    ref = b;\r\n"
+        "}\r\n";
+    CompileResult mutRebindRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MutRebindConstSource, "impl/sim/mut_rebind_const.adhd", arena.arena, mutRebindRes));
+}
+
+TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDefines){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "enum<u8> Mode {\r\n"
+        "    enum Idle,\r\n"
+        "    enum Active,\r\n"
+        "}\r\n"
+        "\r\n"
+        "class Box<T> {\r\n"
+        "    public T item = T();\r\n"
+        "    public u8 tag = 0;\r\n"
+        "}\r\n"
+        "\r\n"
+        "class Wrapper {\r\n"
+        "    public Box<Payload> boxed = Box<Payload>();\r\n"
+        "}\r\n"
+        "\r\n"
+        "[reflect]\r\n"
+        "class Payload {\r\n"
+        "    public i32 count = DEFAULT_COUNT;\r\n"
+        "    public Mode mode = Mode.Idle;\r\n"
+        "    public Optional<Mode> optMode;\r\n"
+        "}\r\n"
+        "\r\n"
+        "[asset(\"bundle\")]\r\n"
+        "class BundleAsset {\r\n"
+        "    public ParallelHashSet<AssetRef<Payload>> texSet;\r\n"
+        "    public List<i32> steps;\r\n"
+        "    public Map<String, Payload> payloads;\r\n"
+        "}\r\n";
+
+    NWB::Core::Metascript::MVector<MString> defines(arena.arena);
+    defines.push_back(MString("DEFAULT_COUNT=42", 16u, arena.arena));
+    defines.push_back(MString("FEATURE_ENABLED", 15u, arena.arena));
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/named_enum_spec.adhd", arena.arena, res, nullptr, {}, &defines));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+
+    EXPECT_NE(hdrView.find("inline constexpr ::NamedEnumCase<Enum> s_NamedEnumCases[] = {"), MStringView::npos);
+    EXPECT_NE(hdrView.find("{ \"Idle\", Idle },"), MStringView::npos);
+    EXPECT_NE(hdrView.find("{ \"Active\", Active },"), MStringView::npos);
+    EXPECT_NE(hdrView.find("constexpr Span<const ::NamedEnumCase<Enum>> namedEnumCases()noexcept{ return s_NamedEnumCases; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("inline Expected<Enum> parseNamedEnum(const AStringView text)noexcept{ return ::ParseNamedEnumText<Enum>(text, namedEnumCases()); }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("constexpr AStringView toNamedEnumText([[maybe_unused]] const Enum value)noexcept"), MStringView::npos);
+
+    EXPECT_NE(hdrView.find("__f->isString()){ if(const auto __e = Mode::parseNamedEnum(__f->asString())) this->mode = *__e; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("__f->isString()){ if(const auto __e = Mode::parseNamedEnum(__f->asString())) this->optMode = *__e; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("i32 count = 42;"), MStringView::npos);
+
+    EXPECT_NE(hdrView.find("static constexpr usize assetDependencyFieldCount()noexcept{ return 1u; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->texSet.insert({::Name(__f->asList()[__i].asString().data())});"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->steps.push_back(static_cast<i32>(__f->asList()[__i].asInteger()));"), MStringView::npos);
+    EXPECT_NE(hdrView.find("for(const auto& [__k, __v] : __f->asMap()){ if(!__v.isMap() || !this->payloads[AString(__k, s_ClassArena)].deserializeNwb(__v)) return false; }"), MStringView::npos);
+
+    const usize boxPrimaryPos = hdrView.find("template<typename T>\r\nclass Box final{");
+    const usize payloadClassPos = hdrView.find("class Payload final{");
+    const usize boxSpecPos = hdrView.find("template<>\r\nclass Box<Payload> final{");
+    const usize wrapperClassPos = hdrView.find("class Wrapper final{");
+    ASSERT_NE(boxPrimaryPos, MStringView::npos);
+    ASSERT_NE(payloadClassPos, MStringView::npos);
+    ASSERT_NE(boxSpecPos, MStringView::npos);
+    ASSERT_NE(wrapperClassPos, MStringView::npos);
+    EXPECT_LT(boxPrimaryPos, boxSpecPos);
+    EXPECT_LT(payloadClassPos, boxSpecPos);
+    EXPECT_LT(boxSpecPos, wrapperClassPos);
+
+    static constexpr MStringView s_TemplateRecSource =
+        "class Box<T> {\r\n"
+        "    public T item;\r\n"
+        "}\r\n"
+        "class BadRec {\r\n"
+        "    public Box<BadRec> next;\r\n"
+        "}\r\n";
+    CompileResult recRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_TemplateRecSource, "impl/sim/template_rec.adhd", arena.arena, recRes));
+
+    static constexpr MStringView s_TemplateSerializeBadSource =
+        "[serialize]\r\n"
+        "class Packet<T> {\r\n"
+        "    public T data;\r\n"
+        "}\r\n"
+        "void usePacket(in Packet<Vector<u32>> p) {}\r\n";
+    CompileResult serRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_TemplateSerializeBadSource, "impl/sim/template_ser_bad.adhd", arena.arena, serRes));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

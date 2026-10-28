@@ -121,6 +121,8 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 [[nodiscard]] constexpr MStringView StripAdhdExtension(const MStringView path)noexcept{
     if(path.size() > 5u && path.substr(path.size() - 5u) == ".adhd")
         return path.substr(0u, path.size() - 5u);
+    if(path.size() > 4u && path.substr(path.size() - 4u) == ".nwb")
+        return path.substr(0u, path.size() - 4u);
     return path;
 }
 

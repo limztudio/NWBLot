@@ -203,27 +203,64 @@ Stmt* SymbolTable::findGlobalConstant(const MStringView name)const noexcept{
     return nullptr;
 }
 
-MethodDecl* SymbolTable::findInterfaceMethod(const MStringView interfaceName, const MStringView methodName, const usize* preferredArgCount, const u32 depth)const noexcept{
+MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MStringView methodName, const usize* preferredArgCount, const u32 depth)const noexcept{
     if(depth > 16u)
         return nullptr;
-    const InterfaceDecl* iface = findInterface(interfaceName);
+    const TypeRef* resolvedIface = unwrapTypeAlias(&ifaceType);
+    if(!resolvedIface)
+        return nullptr;
+    const InterfaceDecl* iface = findInterface(resolvedIface->name);
     if(!iface)
         return nullptr;
+
+    const bool hasSubst = !iface->templateParams.empty() && !resolvedIface->templateArgs.empty();
+    auto substituteMethodIfNeeded = [&](MethodDecl* method) -> MethodDecl*{
+        if(!method || !hasSubst)
+            return method;
+        MethodDecl* cloned = AllocateAstNode<MethodDecl>(m_arena);
+        cloned->access = method->access;
+        cloned->name = method->name;
+        cloned->returnType = method->returnType
+            ? substituteTypeParams(*method->returnType, iface->templateParams, resolvedIface->templateArgs)
+            : nullptr;
+        cloned->templateParams = method->templateParams;
+        for(const ParamDecl& p : method->params){
+            ParamDecl subP = p;
+            if(p.type)
+                subP.type = substituteTypeParams(*p.type, iface->templateParams, resolvedIface->templateArgs);
+            cloned->params.push_back(subP);
+        }
+        cloned->span = method->span;
+        cloned->isConstructor = method->isConstructor;
+        cloned->isDestructor = method->isDestructor;
+        cloned->isOperator = method->isOperator;
+        cloned->isConst = method->isConst;
+        cloned->isOverride = method->isOverride;
+        cloned->isInline = method->isInline;
+        cloned->isNoInline = method->isNoInline;
+        cloned->isReflect = method->isReflect;
+        return cloned;
+    };
 
     MethodDecl* firstMatch = nullptr;
     for(MethodDecl* method : iface->methods){
         if(method->name == methodName){
             if(!preferredArgCount || method->params.size() == *preferredArgCount)
-                return method;
+                return substituteMethodIfNeeded(method);
             if(!firstMatch)
-                firstMatch = method;
+                firstMatch = substituteMethodIfNeeded(method);
         }
     }
 
     for(const TypeRef* baseType : iface->baseInterfaces){
         if(!baseType)
             continue;
-        MethodDecl* inherited = findInterfaceMethod(baseType->name, methodName, preferredArgCount, depth + 1u);
+        const TypeRef* subBase = hasSubst
+            ? substituteTypeParams(*baseType, iface->templateParams, resolvedIface->templateArgs)
+            : baseType;
+        if(!subBase)
+            continue;
+        MethodDecl* inherited = findInterfaceMethod(*subBase, methodName, preferredArgCount, depth + 1u);
         if(inherited){
             if(!preferredArgCount || inherited->params.size() == *preferredArgCount)
                 return inherited;
@@ -235,23 +272,64 @@ MethodDecl* SymbolTable::findInterfaceMethod(const MStringView interfaceName, co
     return firstMatch;
 }
 
-void SymbolTable::collectAllInterfaceMethods(const MStringView interfaceName, MVector<MethodDecl*>& outMethods, const u32 depth)const{
+void SymbolTable::collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<MethodDecl*>& outMethods, const u32 depth)const{
     if(depth > 16u)
         return;
-    const InterfaceDecl* iface = findInterface(interfaceName);
+    const TypeRef* resolvedIface = unwrapTypeAlias(&ifaceType);
+    if(!resolvedIface)
+        return;
+    const InterfaceDecl* iface = findInterface(resolvedIface->name);
     if(!iface)
         return;
 
+    const bool hasSubst = !iface->templateParams.empty() && !resolvedIface->templateArgs.empty();
     for(const TypeRef* baseType : iface->baseInterfaces){
-        if(baseType)
-            collectAllInterfaceMethods(baseType->name, outMethods, depth + 1u);
+        if(!baseType)
+            continue;
+        const TypeRef* subBase = hasSubst
+            ? substituteTypeParams(*baseType, iface->templateParams, resolvedIface->templateArgs)
+            : baseType;
+        if(subBase)
+            collectAllInterfaceMethods(*subBase, outMethods, depth + 1u);
     }
 
-    for(MethodDecl* method : iface->methods)
-        outMethods.push_back(method);
+    for(MethodDecl* method : iface->methods){
+        if(!method)
+            continue;
+        if(!hasSubst){
+            outMethods.push_back(method);
+            continue;
+        }
+        MethodDecl* cloned = AllocateAstNode<MethodDecl>(m_arena);
+        cloned->access = method->access;
+        cloned->name = method->name;
+        cloned->returnType = method->returnType
+            ? substituteTypeParams(*method->returnType, iface->templateParams, resolvedIface->templateArgs)
+            : nullptr;
+        cloned->templateParams = method->templateParams;
+        for(const ParamDecl& p : method->params){
+            ParamDecl subP = p;
+            if(p.type)
+                subP.type = substituteTypeParams(*p.type, iface->templateParams, resolvedIface->templateArgs);
+            cloned->params.push_back(subP);
+        }
+        cloned->span = method->span;
+        cloned->isConstructor = method->isConstructor;
+        cloned->isDestructor = method->isDestructor;
+        cloned->isOperator = method->isOperator;
+        cloned->isConst = method->isConst;
+        cloned->isOverride = method->isOverride;
+        cloned->isInline = method->isInline;
+        cloned->isNoInline = method->isNoInline;
+        cloned->isReflect = method->isReflect;
+        outMethods.push_back(cloned);
+    }
 }
 
 const TypeRef* SymbolTable::unwrapTypeAlias(const TypeRef* type)const noexcept{
+    if(!type)
+        return nullptr;
+    ParamPassingMode::Enum outerRefMode = type->refMode;
     const TypeRef* cur = type;
     for(u32 depth = 0u; cur && !cur->isFuncType && !cur->isAuto && depth < 16u; ++depth){
         const TypeAliasDecl* aliasDecl = findTypeAlias(cur->name);
@@ -267,8 +345,25 @@ const TypeRef* SymbolTable::unwrapTypeAlias(const TypeRef* type)const noexcept{
         else{
             cur = aliasDecl->aliasedType;
         }
+        if(cur && outerRefMode == ParamPassingMode::None && cur->refMode != ParamPassingMode::None)
+            outerRefMode = cur->refMode;
+    }
+    if(cur && outerRefMode != ParamPassingMode::None && cur->refMode != outerRefMode){
+        TypeRef* withMode = AllocateAstNode<TypeRef>(m_arena);
+        *withMode = *cur;
+        withMode->refMode = outerRefMode;
+        return withMode;
     }
     return cur;
+}
+
+ParamPassingMode::Enum SymbolTable::resolveRefMode(const TypeRef* type)const noexcept{
+    if(!type)
+        return ParamPassingMode::None;
+    if(type->refMode != ParamPassingMode::None)
+        return type->refMode;
+    const TypeRef* unwrapped = unwrapTypeAlias(type);
+    return unwrapped ? unwrapped->refMode : ParamPassingMode::None;
 }
 
 TypeRef* SymbolTable::substituteTypeParams(

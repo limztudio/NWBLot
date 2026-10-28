@@ -14,6 +14,88 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_symbol_table{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TypeRef* SubstituteAliasTypeRef(
+    const TypeRef& origType,
+    const MVector<TemplateParamDecl>& templateParams,
+    const MVector<TypeArg>& templateArgs,
+    MetaArena& arena
+){
+    const usize count = templateParams.size() < templateArgs.size() ? templateParams.size() : templateArgs.size();
+    for(usize p = 0u; p < count; ++p){
+        if(!templateParams[p].constValueType && origType.name == templateParams[p].name && origType.templateArgs.empty() && templateArgs[p].type){
+            if(origType.refMode != ParamPassingMode::None && templateArgs[p].type->refMode == ParamPassingMode::None){
+                TypeRef* withMode = AllocateAstNode<TypeRef>(arena);
+                *withMode = *templateArgs[p].type;
+                withMode->refMode = origType.refMode;
+                return withMode;
+            }
+            return templateArgs[p].type;
+        }
+    }
+
+    if(origType.templateArgs.empty() && !origType.isFuncType)
+        return const_cast<TypeRef*>(&origType);
+
+    TypeRef* cloned = AllocateAstNode<TypeRef>(arena);
+    cloned->name = origType.name;
+    cloned->refMode = origType.refMode;
+    cloned->funcReturnType = origType.funcReturnType
+        ? SubstituteAliasTypeRef(*origType.funcReturnType, templateParams, templateArgs, arena)
+        : nullptr;
+    cloned->inferredCaptureBytes = origType.inferredCaptureBytes;
+    cloned->span = origType.span;
+    cloned->isFuncType = origType.isFuncType;
+    cloned->isAuto = origType.isAuto;
+    for(const FuncParamType& fp : origType.funcParams){
+        FuncParamType subFp = fp;
+        if(fp.type)
+            subFp.type = SubstituteAliasTypeRef(*fp.type, templateParams, templateArgs, arena);
+        cloned->funcParams.push_back(subFp);
+    }
+    for(const TypeArg& arg : origType.templateArgs){
+        TypeArg subArg = arg;
+        if(arg.type){
+            bool matchedConstParam = false;
+            for(usize p = 0u; p < count; ++p){
+                if(templateParams[p].constValueType && arg.type->name == templateParams[p].name){
+                    subArg.type = nullptr;
+                    subArg.constantText = templateArgs[p].type ? templateArgs[p].type->name : templateArgs[p].constantText;
+                    matchedConstParam = true;
+                    break;
+                }
+            }
+            if(!matchedConstParam)
+                subArg.type = SubstituteAliasTypeRef(*arg.type, templateParams, templateArgs, arena);
+        }
+        else if(!arg.constantText.empty()){
+            for(usize p = 0u; p < count; ++p){
+                if(templateParams[p].constValueType && arg.constantText == templateParams[p].name){
+                    subArg.constantText = templateArgs[p].type ? templateArgs[p].type->name : templateArgs[p].constantText;
+                    break;
+                }
+            }
+        }
+        cloned->templateArgs.push_back(subArg);
+    }
+    return cloned;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
     bool ok = true;
 
@@ -100,12 +182,17 @@ TypeAliasDecl* SymbolTable::findTypeAlias(const MStringView name)const noexcept{
     return nullptr;
 }
 
-MethodDecl* SymbolTable::findFreeFunction(const MStringView name)const noexcept{
+MethodDecl* SymbolTable::findFreeFunction(const MStringView name, const usize* preferredArgCount)const noexcept{
+    MethodDecl* firstMatch = nullptr;
     for(MethodDecl* fn : m_freeFunctions){
-        if(fn->name == name)
-            return fn;
+        if(fn->name == name){
+            if(!preferredArgCount || fn->params.size() == *preferredArgCount)
+                return fn;
+            if(!firstMatch)
+                firstMatch = fn;
+        }
     }
-    return nullptr;
+    return firstMatch;
 }
 
 Stmt* SymbolTable::findGlobalConstant(const MStringView name)const noexcept{
@@ -116,40 +203,117 @@ Stmt* SymbolTable::findGlobalConstant(const MStringView name)const noexcept{
     return nullptr;
 }
 
-MethodDecl* SymbolTable::findInterfaceMethod(const MStringView interfaceName, const MStringView methodName)const noexcept{
+MethodDecl* SymbolTable::findInterfaceMethod(const MStringView interfaceName, const MStringView methodName, const usize* preferredArgCount, const u32 depth)const noexcept{
+    if(depth > 16u)
+        return nullptr;
     const InterfaceDecl* iface = findInterface(interfaceName);
     if(!iface)
         return nullptr;
 
+    MethodDecl* firstMatch = nullptr;
     for(MethodDecl* method : iface->methods){
-        if(method->name == methodName)
-            return method;
+        if(method->name == methodName){
+            if(!preferredArgCount || method->params.size() == *preferredArgCount)
+                return method;
+            if(!firstMatch)
+                firstMatch = method;
+        }
     }
 
-    for(const MStringView& baseName : iface->baseInterfaces){
-        MethodDecl* inherited = findInterfaceMethod(baseName, methodName);
-        if(inherited)
-            return inherited;
+    for(const TypeRef* baseType : iface->baseInterfaces){
+        if(!baseType)
+            continue;
+        MethodDecl* inherited = findInterfaceMethod(baseType->name, methodName, preferredArgCount, depth + 1u);
+        if(inherited){
+            if(!preferredArgCount || inherited->params.size() == *preferredArgCount)
+                return inherited;
+            if(!firstMatch)
+                firstMatch = inherited;
+        }
     }
 
-    return nullptr;
+    return firstMatch;
 }
 
-void SymbolTable::collectAllInterfaceMethods(const MStringView interfaceName, MVector<MethodDecl*>& outMethods)const{
+void SymbolTable::collectAllInterfaceMethods(const MStringView interfaceName, MVector<MethodDecl*>& outMethods, const u32 depth)const{
+    if(depth > 16u)
+        return;
     const InterfaceDecl* iface = findInterface(interfaceName);
     if(!iface)
         return;
 
-    for(const MStringView& baseName : iface->baseInterfaces)
-        collectAllInterfaceMethods(baseName, outMethods);
+    for(const TypeRef* baseType : iface->baseInterfaces){
+        if(baseType)
+            collectAllInterfaceMethods(baseType->name, outMethods, depth + 1u);
+    }
 
     for(MethodDecl* method : iface->methods)
         outMethods.push_back(method);
 }
 
+const TypeRef* SymbolTable::unwrapTypeAlias(const TypeRef* type)const noexcept{
+    const TypeRef* cur = type;
+    for(u32 depth = 0u; cur && !cur->isFuncType && !cur->isAuto && depth < 16u; ++depth){
+        const TypeAliasDecl* aliasDecl = findTypeAlias(cur->name);
+        if(!aliasDecl || !aliasDecl->aliasedType)
+            break;
+        if(!aliasDecl->templateParams.empty() && !cur->templateArgs.empty()){
+            cur = substituteTypeParams(
+                *aliasDecl->aliasedType,
+                aliasDecl->templateParams,
+                cur->templateArgs
+            );
+        }
+        else{
+            cur = aliasDecl->aliasedType;
+        }
+    }
+    return cur;
+}
+
+TypeRef* SymbolTable::substituteTypeParams(
+    const TypeRef& origType,
+    const MVector<TemplateParamDecl>& templateParams,
+    const MVector<TypeArg>& templateArgs
+)const{
+    return __hidden_adhd_symbol_table::SubstituteAliasTypeRef(origType, templateParams, templateArgs, m_arena);
+}
+
+MStringView SymbolTable::resolveBaseTypeName(MStringView typeName)const noexcept{
+    for(u32 depth = 0u; !typeName.empty() && depth < 16u; ++depth){
+        const TypeAliasDecl* aliasDecl = findTypeAlias(typeName);
+        if(!aliasDecl || !aliasDecl->aliasedType || aliasDecl->aliasedType->isFuncType)
+            break;
+        typeName = aliasDecl->aliasedType->name;
+    }
+    return typeName;
+}
+
+bool SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
+    const MStringView baseName = resolveBaseTypeName(typeName);
+    if(const ClassDecl* cls = findClass(baseName)){
+        bool hasAnyCtor = false;
+        for(const MethodDecl* m : cls->methods){
+            if(m && m->isConstructor){
+                hasAnyCtor = true;
+                if(m->params.empty())
+                    return true;
+            }
+        }
+        return !hasAnyCtor;
+    }
+    return isArenaBackedContainer(baseName)
+        || findEnum(baseName) != nullptr
+        || baseName == "Optional"
+        || baseName == "FixedVector"
+        || baseName == "Array"
+        || baseName == "AssetRef"
+        || baseName == "CompactString"
+        || baseName == "Path";
+}
+
 bool SymbolTable::isArenaBackedContainer(const MStringView typeName)noexcept{
     return typeName == "Vector"
-        || typeName == "FixedVector"
         || typeName == "ParallelVector"
         || typeName == "ForwardList"
         || typeName == "List"
@@ -162,7 +326,8 @@ bool SymbolTable::isArenaBackedContainer(const MStringView typeName)noexcept{
         || typeName == "ParallelHashMap"
         || typeName == "Queue"
         || typeName == "ParallelQueue"
-        || typeName == "ParallelBlockQueue";
+        || typeName == "ParallelBlockQueue"
+        || typeName == "String";
 }
 
 bool SymbolTable::isSimdVectorType(const MStringView typeName, u32& outLanes)noexcept{
@@ -209,6 +374,7 @@ MStringView SymbolTable::mapBuiltinCppType(const MStringView typeName)noexcept{
     if(typeName == "String") return "AString";
     if(typeName == "StringView") return "AStringView";
     if(typeName == "CompactString") return "ACompactString";
+    if(typeName == "AssetRef") return "::NWB::Core::Assets::AssetRef";
     if(typeName == "f32x4") return "Float4";
     if(typeName == "i32x4") return "Int4";
     if(typeName == "u32x4") return "UInt4";

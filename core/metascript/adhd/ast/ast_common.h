@@ -133,7 +133,6 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
     return StripAdhdExtension(path.substr(fileStart));
 }
 
-inline constexpr MStringView s_AdhdCompilerVersion = NWB_ADHD_COMPILER_VERSION;
 inline constexpr MStringView s_AdhdGeneratedFileBanner = "// Compiled by ADHD Compiler " NWB_ADHD_COMPILER_VERSION "\r\n";
 
 inline void ReportAdhdDiagnostic(MetaArena& arena, MVector<ParseError>& errors, const SourceSpan span, const MStringView message){

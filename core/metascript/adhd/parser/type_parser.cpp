@@ -55,7 +55,7 @@ TypeRef* TypeParser::parseType(const bool allowRefMode, const bool allowAuto){
         if(!m_cursor.expect(TokenType::Less, "expected '<' after 'Func'"))
             return nullptr;
 
-        type->funcReturnType = parseType(false, false);
+        type->funcReturnType = parseType(true, false);
         if(!type->funcReturnType)
             return nullptr;
 
@@ -158,6 +158,11 @@ bool TypeParser::parseTemplateParamList(MVector<TemplateParamDecl>& outParams){
                     }
                     param.interfaceBounds.push_back(m_cursor.current().text);
                     m_cursor.advance();
+                    if(m_cursor.check(TokenType::Less)){
+                        MVector<TypeArg> boundArgs(m_cursor.arena());
+                        if(!parseTypeArgList(boundArgs))
+                            return false;
+                    }
                     if(!m_cursor.match(TokenType::Plus))
                         break;
                 }
@@ -166,7 +171,7 @@ bool TypeParser::parseTemplateParamList(MVector<TemplateParamDecl>& outParams){
 
         outParams.push_back(Move(param));
 
-        if(m_cursor.check(TokenType::Greater) || m_pendingRightAngles > 0u)
+        if(m_cursor.check(TokenType::Greater) || m_cursor.check(TokenType::GreaterGreater) || m_pendingRightAngles > 0u)
             break;
         if(!m_cursor.expect(TokenType::Comma, "expected ',' or '>' in template parameter list"))
             return false;

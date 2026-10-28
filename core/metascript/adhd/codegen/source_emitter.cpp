@@ -51,7 +51,7 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
     if(name == "clamp") return "::Clamp";
     if(name == "floor") return "::Floor";
     if(name == "ceil") return "::Ceil";
-    if(name == "round") return "::Truncate";
+    if(name == "round") return "std::round";
     if(name == "sqrt") return "::Sqrt";
     if(name == "rsqrt") return "::VectorReciprocalSqrt";
     if(name == "lerp") return "::VectorLerp";
@@ -274,7 +274,8 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
 
     if(expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier){
         const MStringView callee = expr->lhs->text;
-        if(symbols.isSimdType(callee) && IsRegisterPromotableSimdType(expr->resolvedSimdType))
+        const MStringView baseCallee = symbols.resolveBaseTypeName(callee);
+        if(symbols.isSimdType(baseCallee) && IsRegisterPromotableSimdType(expr->resolvedSimdType))
             return true;
         if(!MapBuiltinMathFunction(callee).empty()){
             if(IsRegisterPromotableSimdType(expr->resolvedSimdType))
@@ -307,11 +308,8 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
     case StmtKind::ParallelBlock:
         return StmtsContainSimdMath(stmt->statements, symbols);
     case StmtKind::VarDecl:{
-        if(stmt->isCtorInit && stmt->varType && IsRegisterPromotableSimdType(stmt->varType->name)){
-            u32 lanes = 0u;
-            if(symbols.isSimdVectorType(stmt->varType->name, lanes))
-                return true;
-        }
+        if(stmt->isCtorInit && stmt->varType && IsRegisterPromotableSimdType(symbols.resolveBaseTypeName(stmt->varType->name)))
+            return true;
         if(ExprContainsSimdMath(stmt->expr, symbols))
             return true;
         for(const Expr* arg : stmt->arguments){
@@ -407,17 +405,14 @@ void PreRegisterLocalSimdDecls(
                 break;
 
             MStringView varSimdType;
-            if(stmt->varType && IsRegisterPromotableSimdType(stmt->varType->name))
-                varSimdType = stmt->varType->name;
+            if(stmt->varType && IsRegisterPromotableSimdType(symbols.resolveBaseTypeName(stmt->varType->name)))
+                varSimdType = symbols.resolveBaseTypeName(stmt->varType->name);
             else if(stmt->expr && IsRegisterPromotableSimdType(stmt->expr->resolvedSimdType))
                 varSimdType = stmt->expr->resolvedSimdType;
 
             if(!varSimdType.empty()){
-                u32 vecLanes = 0u;
-                if(!stmt->isCtorInit || symbols.isSimdVectorType(varSimdType, vecLanes)){
-                    SimdVarBinding* binding = FindOrCreateBinding(arena, bindings, false, stmt->name, varSimdType);
-                    binding->isLocalDecl = true;
-                }
+                SimdVarBinding* binding = FindOrCreateBinding(arena, bindings, false, stmt->name, varSimdType);
+                binding->isLocalDecl = true;
             }
             break;
         }
@@ -435,9 +430,12 @@ void PreRegisterLocalSimdDecls(
             break;
         case StmtKind::ForRange:
         case StmtKind::ParallelForRange:{
-            if(stmt->varType && IsRegisterPromotableSimdType(stmt->varType->name)){
-                SimdVarBinding* loopBinding = FindOrCreateBinding(arena, bindings, false, stmt->name, stmt->varType->name);
-                loopBinding->isLoopElement = true;
+            if(stmt->varType){
+                const MStringView resolvedLoopSimd = symbols.resolveBaseTypeName(stmt->varType->name);
+                if(IsRegisterPromotableSimdType(resolvedLoopSimd)){
+                    SimdVarBinding* loopBinding = FindOrCreateBinding(arena, bindings, false, stmt->name, resolvedLoopSimd);
+                    loopBinding->isLoopElement = true;
+                }
             }
             PreRegisterLocalSimdDecls(arena, bindings, stmt->statements, symbols);
             break;
@@ -475,15 +473,8 @@ void AnalyzeSimdExprReads(
         return;
     }
 
-    if(expr->kind == ExprKind::Lambda){
-        for(const LambdaCapture& cap : expr->lambdaCaptures){
-            for(SimdVarBinding& b : bindings){
-                if(!b.isThisMember && b.name == cap.name)
-                    b.needsStorageSync = true;
-            }
-        }
+    if(expr->kind == ExprKind::Lambda)
         return;
-    }
 
     if(expr->kind == ExprKind::MemberAccess){
         u32 lane = 0u;
@@ -506,7 +497,8 @@ void AnalyzeSimdExprReads(
         bool isSimdIntrinsicOrCtor = false;
         if(expr->lhs && expr->lhs->kind == ExprKind::Identifier){
             const MStringView callee = expr->lhs->text;
-            if(symbols.isSimdType(callee) || !MapBuiltinMathFunction(callee).empty())
+            const MStringView baseCallee = symbols.resolveBaseTypeName(callee);
+            if(symbols.isSimdType(baseCallee) || !MapBuiltinMathFunction(callee).empty())
                 isSimdIntrinsicOrCtor = true;
         }
         if(!isSimdIntrinsicOrCtor)
@@ -620,12 +612,14 @@ void ScanStmtsForSimdBindings(
             }
             break;
         }
-        case StmtKind::ForRange:{
+        case StmtKind::ForRange:
+        case StmtKind::ParallelForRange:{
             AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, true, false);
             ScanStmtsForSimdBindings(arena, bindings, stmt->statements, symbols, true, ioHasSeenPossibleReturn);
             break;
         }
-        case StmtKind::ForIndex:{
+        case StmtKind::ForIndex:
+        case StmtKind::ParallelForIndex:{
             if(stmt->initStmt){
                 AnalyzeSimdExprReads(arena, bindings, stmt->initStmt->expr, symbols, false, false);
                 for(const Expr* arg : stmt->initStmt->arguments)
@@ -643,22 +637,6 @@ void ScanStmtsForSimdBindings(
             break;
         }
         case StmtKind::ParallelBlock:{
-            ScanStmtsForSimdBindings(arena, bindings, stmt->statements, symbols, true, ioHasSeenPossibleReturn);
-            break;
-        }
-        case StmtKind::ParallelForRange:{
-            AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, true, false);
-            ScanStmtsForSimdBindings(arena, bindings, stmt->statements, symbols, true, ioHasSeenPossibleReturn);
-            break;
-        }
-        case StmtKind::ParallelForIndex:{
-            if(stmt->initStmt){
-                AnalyzeSimdExprReads(arena, bindings, stmt->initStmt->expr, symbols, false, false);
-                for(const Expr* arg : stmt->initStmt->arguments)
-                    AnalyzeSimdExprReads(arena, bindings, arg, symbols, false, false);
-            }
-            AnalyzeSimdExprReads(arena, bindings, stmt->condition, symbols, false, false);
-            AnalyzeSimdExprReads(arena, bindings, stmt->stepExpr, symbols, false, false);
             ScanStmtsForSimdBindings(arena, bindings, stmt->statements, symbols, true, ioHasSeenPossibleReturn);
             break;
         }
@@ -682,6 +660,59 @@ void ScanStmtsForSimdBindings(
     }
 }
 
+void MarkLambdaCapturedSimdBindingsInExpr(MVector<SimdVarBinding>& bindings, const Expr* expr)noexcept{
+    if(!expr)
+        return;
+    if(expr->kind == ExprKind::Lambda){
+        for(const LambdaCapture& cap : expr->lambdaCaptures){
+            for(SimdVarBinding& b : bindings){
+                if((cap.name == "this" && b.isThisMember) || (!b.isThisMember && b.name == cap.name)){
+                    b.needsStorageSync = true;
+                    if(cap.mode == ParamPassingMode::Mut)
+                        b.capturedByMutLambda = true;
+                    if(!b.isLocalDecl && !b.unconditionallyWrittenFirst)
+                        b.readBeforeWrite = true;
+                }
+            }
+        }
+    }
+    else if(expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::ThisMember){
+        for(SimdVarBinding& b : bindings){
+            if(b.isThisMember){
+                b.needsStorageSync = true;
+                if(!b.unconditionallyWrittenFirst)
+                    b.readBeforeWrite = true;
+            }
+        }
+    }
+    MarkLambdaCapturedSimdBindingsInExpr(bindings, expr->lhs);
+    MarkLambdaCapturedSimdBindingsInExpr(bindings, expr->rhs);
+    for(const Expr* arg : expr->arguments)
+        MarkLambdaCapturedSimdBindingsInExpr(bindings, arg);
+}
+
+void MarkLambdaCapturedSimdBindingsInStmts(MVector<SimdVarBinding>& bindings, const MVector<Stmt*>& statements)noexcept{
+    for(const Stmt* stmt : statements){
+        if(!stmt)
+            continue;
+        if(stmt->initStmt)
+            MarkLambdaCapturedSimdBindingsInExpr(bindings, stmt->initStmt->expr);
+        MarkLambdaCapturedSimdBindingsInExpr(bindings, stmt->expr);
+        MarkLambdaCapturedSimdBindingsInExpr(bindings, stmt->condition);
+        MarkLambdaCapturedSimdBindingsInExpr(bindings, stmt->stepExpr);
+        for(const Expr* arg : stmt->arguments)
+            MarkLambdaCapturedSimdBindingsInExpr(bindings, arg);
+        for(const NativeBinding& nb : stmt->nativeBindings)
+            MarkLambdaCapturedSimdBindingsInExpr(bindings, nb.sourceExpr);
+        MarkLambdaCapturedSimdBindingsInStmts(bindings, stmt->statements);
+        MarkLambdaCapturedSimdBindingsInStmts(bindings, stmt->elseStatements);
+        for(const SwitchCase& sc : stmt->switchCases){
+            MarkLambdaCapturedSimdBindingsInExpr(bindings, sc.matchExpr);
+            MarkLambdaCapturedSimdBindingsInStmts(bindings, sc.statements);
+        }
+    }
+}
+
 void CollectScopedSimdBindings(
     MetaArena& arena,
     MVector<SimdVarBinding>& bindings,
@@ -694,6 +725,7 @@ void CollectScopedSimdBindings(
     PreRegisterLocalSimdDecls(arena, bindings, statements, symbols);
     bool hasSeenPossibleReturn = false;
     ScanStmtsForSimdBindings(arena, bindings, statements, symbols, false, hasSeenPossibleReturn);
+    MarkLambdaCapturedSimdBindingsInStmts(bindings, statements);
 }
 
 [[nodiscard]] bool IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB)noexcept{
@@ -748,8 +780,12 @@ MString SourceEmitter::emitSource(
 
         if(classDecl->templateParams.empty()){
             for(const MethodDecl* method : classDecl->methods){
-                if(!method || method->isImported || !method->hasBody || method->isInline || !method->templateParams.empty())
+                const bool emittedInHeader = !classDecl->isImported && (method->isInline || !method->templateParams.empty());
+                if(!method || method->isImported || !method->hasBody || emittedInHeader)
                     continue;
+
+                if(classDecl->isImported && method->isInline)
+                    out.append("NWB_FORCE_INLINE ");
 
                 m_headerEmitter.emitMethodSignature(out, classDecl, *method, false);
                 if(method->isConstructor)
@@ -789,7 +825,9 @@ void SourceEmitter::emitMethodBodyBlock(
 )const{
     if(method.usesScratchArena){
         emitIndent(out, indent);
-        out.append("::NWB::Core::Alloc::ScratchArena<> __adhd_scratch;\r\n");
+        out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"");
+        out.append(method.name.data(), method.name.size());
+        out.append("\"));\r\n");
     }
     if(method.usesTaskScope){
         emitIndent(out, indent);
@@ -845,6 +883,41 @@ void SourceEmitter::emitSimdLoadReloadForBinding(
         out.append("this->");
     out.append(binding.name.data(), binding.name.size());
     out.append(");\r\n");
+}
+
+void SourceEmitter::emitSimdMutCallReloads(
+    MString& out,
+    const Expr& expr,
+    const u32 indent
+)const{
+    if(!m_activeSimdBindings)
+        return;
+    if(expr.lhs)
+        emitSimdMutCallReloads(out, *expr.lhs, indent);
+    if(expr.rhs)
+        emitSimdMutCallReloads(out, *expr.rhs, indent);
+    for(const Expr* arg : expr.arguments){
+        if(arg)
+            emitSimdMutCallReloads(out, *arg, indent);
+    }
+    if(expr.kind == ExprKind::Call){
+        for(const Expr* arg : expr.arguments){
+            if(!arg || !arg->isMutArg)
+                continue;
+            const SimdVarBinding* mutBinding = nullptr;
+            if(arg->kind == ExprKind::Identifier)
+                mutBinding = findSimdBinding(false, arg->text);
+            else if(arg->kind == ExprKind::ThisMember)
+                mutBinding = findSimdBinding(true, arg->text);
+            if(mutBinding)
+                emitSimdLoadReloadForBinding(out, *mutBinding, indent);
+        }
+        const bool isThisMethodCall = (expr.lhs && expr.lhs->kind == ExprKind::ThisMember);
+        for(const SimdVarBinding& binding : *m_activeSimdBindings){
+            if(binding.capturedByMutLambda || (isThisMethodCall && binding.isThisMember))
+                emitSimdLoadReloadForBinding(out, binding, indent);
+        }
+    }
 }
 
 void SourceEmitter::emitSimdBlockStores(MString& out, const u32 indent, const bool loopElementsOnly)const{
@@ -921,6 +994,44 @@ void SourceEmitter::emitStatementList(
     }
 }
 
+void SourceEmitter::emitSwitchIfChainStatements(
+    MString& out,
+    const MVector<Stmt*>& statements,
+    const u32 indent
+)const{
+    for(const Stmt* child : statements){
+        if(!child || child->kind == StmtKind::Break)
+            continue;
+        if(child->kind == StmtKind::Block){
+            emitIndent(out, indent);
+            out.append("{\r\n");
+            emitSwitchIfChainStatements(out, child->statements, indent + 1u);
+            emitIndent(out, indent);
+            out.append("}\r\n");
+        }
+        else if(child->kind == StmtKind::If){
+            emitIndent(out, indent);
+            out.append("if(");
+            if(child->condition)
+                emitExpr(out, *child->condition);
+            out.append("){\r\n");
+            emitSwitchIfChainStatements(out, child->statements, indent + 1u);
+            emitIndent(out, indent);
+            out.append("}\r\n");
+            if(!child->elseStatements.empty()){
+                emitIndent(out, indent);
+                out.append("else{\r\n");
+                emitSwitchIfChainStatements(out, child->elseStatements, indent + 1u);
+                emitIndent(out, indent);
+                out.append("}\r\n");
+            }
+        }
+        else{
+            emitStmt(out, *child, indent);
+        }
+    }
+}
+
 void SourceEmitter::emitStmt(
     MString& out,
     const Stmt& stmt,
@@ -978,6 +1089,12 @@ void SourceEmitter::emitStmt(
                 out.append("{};\r\n");
                 emitSimdStoreForBinding(out, *simdLocal, indent);
             }
+            if(stmt.expr)
+                emitSimdMutCallReloads(out, *stmt.expr, indent);
+            for(const Expr* arg : stmt.arguments){
+                if(arg)
+                    emitSimdMutCallReloads(out, *arg, indent);
+            }
             break;
         }
 
@@ -1012,15 +1129,28 @@ void SourceEmitter::emitStmt(
             out.append(");\r\n");
         }
         else if(stmt.expr){
-            out.append(" = ");
-            emitExpr(out, *stmt.expr);
-            out.append(";\r\n");
+            if(stmt.usesScratchArena && stmt.expr->kind == ExprKind::StringLiteral){
+                out.push_back('(');
+                emitExpr(out, *stmt.expr);
+                out.append(", __adhd_scratch);\r\n");
+            }
+            else{
+                out.append(" = ");
+                emitExpr(out, *stmt.expr);
+                out.append(";\r\n");
+            }
         }
         else if(stmt.usesScratchArena){
             out.append("(__adhd_scratch);\r\n");
         }
         else{
             out.append("{};\r\n");
+        }
+        if(stmt.expr)
+            emitSimdMutCallReloads(out, *stmt.expr, indent);
+        for(const Expr* arg : stmt.arguments){
+            if(arg)
+                emitSimdMutCallReloads(out, *arg, indent);
         }
         break;
     }
@@ -1173,6 +1303,7 @@ void SourceEmitter::emitStmt(
                         emitExpr(out, lhs);
                         out.append(");\r\n");
                     }
+                    emitSimdMutCallReloads(out, rhs, indent);
                     break;
                 }
             }
@@ -1224,6 +1355,7 @@ void SourceEmitter::emitStmt(
 
                     if(targetBinding->needsStorageSync)
                         emitSimdStoreForBinding(out, *targetBinding, indent);
+                    emitSimdMutCallReloads(out, rhs, indent);
                     break;
                 }
             }
@@ -1275,9 +1407,31 @@ void SourceEmitter::emitStmt(
 
                     if(targetBinding->needsStorageSync)
                         emitSimdStoreForBinding(out, *targetBinding, indent);
+                    emitSimdMutCallReloads(out, rhs, indent);
                     break;
                 }
             }
+        }
+
+        if(stmt.expr && stmt.expr->kind == ExprKind::Call
+            && stmt.expr->lhs && stmt.expr->lhs->kind == ExprKind::Identifier
+            && stmt.expr->lhs->text == "wait")
+        {
+            if(stmt.expr->arguments.empty()){
+                emitIndent(out, indent);
+                out.append("__adhd_task_scope.wait();\r\n");
+            }
+            else{
+                for(const Expr* arg : stmt.expr->arguments){
+                    if(!arg || arg->kind != ExprKind::Identifier)
+                        continue;
+                    emitIndent(out, indent);
+                    out.append("s_AdhdTaskScheduler.wait(__adhd_task_");
+                    out.append(arg->text.data(), arg->text.size());
+                    out.append(");\r\n");
+                }
+            }
+            break;
         }
 
         emitIndent(out, indent);
@@ -1285,19 +1439,8 @@ void SourceEmitter::emitStmt(
             emitExpr(out, *stmt.expr);
         out.append(";\r\n");
 
-        if(stmt.expr && stmt.expr->kind == ExprKind::Call){
-            for(const Expr* arg : stmt.expr->arguments){
-                if(!arg || !arg->isMutArg)
-                    continue;
-                const SimdVarBinding* mutBinding = nullptr;
-                if(arg->kind == ExprKind::Identifier)
-                    mutBinding = findSimdBinding(false, arg->text);
-                else if(arg->kind == ExprKind::ThisMember)
-                    mutBinding = findSimdBinding(true, arg->text);
-                if(mutBinding)
-                    emitSimdLoadReloadForBinding(out, *mutBinding, indent);
-            }
-        }
+        if(stmt.expr)
+            emitSimdMutCallReloads(out, *stmt.expr, indent);
         break;
     }
     case StmtKind::Return:{
@@ -1333,8 +1476,15 @@ void SourceEmitter::emitStmt(
         emitIndent(out, indent);
         out.append("return");
         if(stmt.expr){
-            out.push_back(' ');
-            emitExpr(out, *stmt.expr);
+            if(stmt.wrapReturnNotNull){
+                out.append(" ::MakeNotNull(&(");
+                emitExpr(out, *stmt.expr);
+                out.append("))");
+            }
+            else{
+                out.push_back(' ');
+                emitExpr(out, *stmt.expr);
+            }
         }
         out.append(";\r\n");
         break;
@@ -1371,26 +1521,61 @@ void SourceEmitter::emitStmt(
     }
     case StmtKind::Switch:{
         if(stmt.lowerSwitchToIfChain){
-            bool firstBranch = true;
-            for(const SwitchCase& sc : stmt.switchCases){
+            const bool cacheSubject = stmt.expr
+                && stmt.expr->kind != ExprKind::Identifier
+                && stmt.expr->kind != ExprKind::ThisMember;
+            const u32 bodyIndent = cacheSubject ? (indent + 1u) : indent;
+            if(cacheSubject){
                 emitIndent(out, indent);
-                if(sc.isDefault){
-                    out.append("else{\r\n");
+                out.append("{\r\n");
+                emitIndent(out, bodyIndent);
+                out.append("const auto& __adhd_switch_subject = (");
+                emitExpr(out, *stmt.expr);
+                out.append(");\r\n");
+            }
+
+            bool firstBranch = true;
+            usize idx = 0u;
+            while(idx < stmt.switchCases.size()){
+                usize groupEnd = idx;
+                bool groupHasDefault = stmt.switchCases[idx].isDefault;
+                while(groupEnd + 1u < stmt.switchCases.size() && stmt.switchCases[groupEnd].statements.empty()){
+                    ++groupEnd;
+                    if(stmt.switchCases[groupEnd].isDefault)
+                        groupHasDefault = true;
+                }
+
+                emitIndent(out, bodyIndent);
+                if(groupHasDefault){
+                    out.append(firstBranch ? "{\r\n" : "else{\r\n");
+                    firstBranch = false;
                 }
                 else{
                     out.append(firstBranch ? "if(" : "else if(");
-                    if(stmt.expr)
-                        emitExpr(out, *stmt.expr);
-                    out.append(" == ");
-                    if(sc.matchExpr)
-                        emitExpr(out, *sc.matchExpr);
+                    bool firstCond = true;
+                    for(usize k = idx; k <= groupEnd; ++k){
+                        if(stmt.switchCases[k].isDefault)
+                            continue;
+                        if(!firstCond)
+                            out.append(" || ");
+                        firstCond = false;
+                        if(cacheSubject)
+                            out.append("__adhd_switch_subject");
+                        else if(stmt.expr)
+                            emitExpr(out, *stmt.expr);
+                        out.append(" == ");
+                        if(stmt.switchCases[k].matchExpr)
+                            emitExpr(out, *stmt.switchCases[k].matchExpr);
+                    }
                     out.append("){\r\n");
                     firstBranch = false;
                 }
-                for(const Stmt* child : sc.statements){
-                    if(child && child->kind != StmtKind::Break)
-                        emitStmt(out, *child, indent + 1u);
-                }
+                emitSwitchIfChainStatements(out, stmt.switchCases[groupEnd].statements, bodyIndent + 1u);
+                emitIndent(out, bodyIndent);
+                out.append("}\r\n");
+                idx = groupEnd + 1u;
+            }
+            if(cacheSubject){
                 emitIndent(out, indent);
                 out.append("}\r\n");
             }
@@ -1403,18 +1588,31 @@ void SourceEmitter::emitStmt(
             out.append("){\r\n");
             for(const SwitchCase& sc : stmt.switchCases){
                 emitIndent(out, indent);
-                if(sc.isDefault){
-                    out.append("default:{\r\n");
+                if(sc.statements.empty()){
+                    if(sc.isDefault){
+                        out.append("default:\r\n");
+                    }
+                    else{
+                        out.append("case ");
+                        if(sc.matchExpr)
+                            emitExpr(out, *sc.matchExpr);
+                        out.append(":\r\n");
+                    }
                 }
                 else{
-                    out.append("case ");
-                    if(sc.matchExpr)
-                        emitExpr(out, *sc.matchExpr);
-                    out.append(":{\r\n");
+                    if(sc.isDefault){
+                        out.append("default:{\r\n");
+                    }
+                    else{
+                        out.append("case ");
+                        if(sc.matchExpr)
+                            emitExpr(out, *sc.matchExpr);
+                        out.append(":{\r\n");
+                    }
+                    emitStatementList(out, sc.statements, indent + 1u);
+                    emitIndent(out, indent);
+                    out.append("}\r\n");
                 }
-                emitStatementList(out, sc.statements, indent + 1u);
-                emitIndent(out, indent);
-                out.append("}\r\n");
             }
             emitIndent(out, indent);
             out.append("}\r\n");
@@ -1667,6 +1865,8 @@ void SourceEmitter::emitStmt(
             out.append("]()noexcept{ ");
             if(stmt.expr->lhs)
                 emitExpr(out, *stmt.expr->lhs);
+            if(!stmt.expr->callTemplateArgs.empty())
+                m_headerEmitter.emitTypeArgListCpp(out, stmt.expr->callTemplateArgs);
             out.push_back('(');
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 if(i > 0u)
@@ -1682,7 +1882,7 @@ void SourceEmitter::emitStmt(
         }
         else{
             emitIndent(out, indent);
-            out.append("(void)__adhd_task_scope.submit([=]()noexcept{ ");
+            out.append("(void)__adhd_task_scope.submit([&]()noexcept{ ");
             if(stmt.expr)
                 emitExpr(out, *stmt.expr);
             out.append("; }, ");
@@ -1764,6 +1964,46 @@ void SourceEmitter::emitSimdVectorCtorReg(
 )const{
     const bool isDouble = __hidden_adhd_source_emitter::IsDoubleSimdType(simdType);
     const bool isInt = __hidden_adhd_source_emitter::IsIntSimdType(simdType);
+
+    if(m_symbols.isSimdMatrixType(simdType)){
+        if(arguments.empty()){
+            out.append(isDouble ? "::SIMDMatrixDouble{}" : "::SIMDMatrix{}");
+            return;
+        }
+        if(arguments.size() == 1u && arguments[0] && !arguments[0]->resolvedSimdType.empty()){
+            emitSimdRegExpr(out, *arguments[0], simdType);
+            return;
+        }
+        out.append(isDouble ? "::MatrixDoubleSet(" : "::MatrixSet(");
+        if(simdType == "f64x3x3" && arguments.size() == 9u){
+            for(usize r = 0u; r < 3u; ++r){
+                for(usize c = 0u; c < 3u; ++c){
+                    if(r > 0u || c > 0u)
+                        out.append(", ");
+                    const usize argIdx = r * 3u + c;
+                    if(arguments[argIdx])
+                        emitExpr(out, *arguments[argIdx]);
+                    else
+                        out.append("0.0");
+                }
+                out.append(", 0.0");
+            }
+            out.append(", 0.0, 0.0, 0.0, 1.0)");
+            return;
+        }
+        for(usize i = 0u; i < 16u; ++i){
+            if(i > 0u)
+                out.append(", ");
+            if(i < arguments.size() && arguments[i])
+                emitExpr(out, *arguments[i]);
+            else if(i == 15u && arguments.size() == 12u)
+                out.append(isDouble ? "1.0" : "1.0f");
+            else
+                out.append(isDouble ? "0.0" : "0.0f");
+        }
+        out.push_back(')');
+        return;
+    }
 
     if(arguments.empty()){
         if(isInt)
@@ -2034,8 +2274,9 @@ void SourceEmitter::emitSimdRegExpr(
     case ExprKind::Call:{
         if(expr.lhs && expr.lhs->kind == ExprKind::Identifier){
             const MStringView callee = expr.lhs->text;
+            const MStringView baseCallee = m_symbols.resolveBaseTypeName(callee);
             u32 ctorLanes = 0u;
-            if(m_symbols.isSimdVectorType(callee, ctorLanes)){
+            if(m_symbols.isSimdVectorType(baseCallee, ctorLanes) || m_symbols.isSimdMatrixType(baseCallee)){
                 emitSimdVectorCtorReg(out, simdType, expr.arguments);
                 return;
             }
@@ -2191,6 +2432,15 @@ void SourceEmitter::emitSimdRegExpr(
 }
 
 void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
+    if(expr.adaptToTChar && expr.kind != ExprKind::StringLiteral){
+        out.append("::ConvertString(");
+        Expr unwrapped = expr;
+        unwrapped.adaptToTChar = false;
+        emitExpr(out, unwrapped);
+        out.push_back(')');
+        return;
+    }
+
     if(expr.moveAtLastUse){
         out.append("::Move(");
         out.append(expr.text.data(), expr.text.size());
@@ -2398,8 +2648,35 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
                 }
                 break;
             }
+            if(callee == "lerp" && expr.arguments.size() == 3u
+                && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]
+                && expr.resolvedSimdType.empty())
+            {
+                out.append("((");
+                emitExpr(out, *expr.arguments[0]);
+                out.append(") + ((");
+                emitExpr(out, *expr.arguments[1]);
+                out.append(") - (");
+                emitExpr(out, *expr.arguments[0]);
+                out.append(")) * (");
+                emitExpr(out, *expr.arguments[2]);
+                out.append("))");
+                break;
+            }
+            if(callee == "rsqrt" && expr.arguments.size() == 1u
+                && expr.arguments[0] && expr.resolvedSimdType.empty())
+            {
+                out.append("(static_cast<decltype(");
+                emitExpr(out, *expr.arguments[0]);
+                out.append(")>(1) / ::Sqrt(");
+                emitExpr(out, *expr.arguments[0]);
+                out.append("))");
+                break;
+            }
         }
 
+        if(expr.derefNotNull)
+            out.append("(*");
         if(expr.lhs){
             if(expr.lhs->kind == ExprKind::Identifier){
                 const MStringView mappedMath = __hidden_adhd_source_emitter::MapBuiltinMathFunction(expr.lhs->text);
@@ -2418,10 +2695,31 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         }
         if(!expr.callTemplateArgs.empty())
             m_headerEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
+        const MStringView baseCallee = (expr.lhs && expr.lhs->kind == ExprKind::Identifier)
+            ? m_symbols.resolveBaseTypeName(expr.lhs->text)
+            : MStringView{};
+        if(!baseCallee.empty() && m_symbols.isSimdMatrixType(baseCallee)){
+            if(expr.arguments.empty()){
+                out.append("{}");
+            }
+            else{
+                out.append("{ .raw = { ");
+                for(usize i = 0u; i < expr.arguments.size(); ++i){
+                    if(i > 0u)
+                        out.append(", ");
+                    if(expr.arguments[i])
+                        emitExpr(out, *expr.arguments[i]);
+                }
+                out.append(" } }");
+            }
+            if(expr.derefNotNull)
+                out.push_back(')');
+            break;
+        }
         out.push_back('(');
         u32 ctorVecLanes = 0u;
-        const bool isScalarSplatCtor = expr.lhs && expr.lhs->kind == ExprKind::Identifier
-            && m_symbols.isSimdVectorType(expr.lhs->text, ctorVecLanes)
+        const bool isScalarSplatCtor = !baseCallee.empty()
+            && m_symbols.isSimdVectorType(baseCallee, ctorVecLanes)
             && expr.arguments.size() == 1u && expr.arguments[0]
             && expr.arguments[0]->resolvedSimdType.empty();
         if(isScalarSplatCtor){
@@ -2438,8 +2736,20 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
                 if(expr.arguments[i])
                     emitExpr(out, *expr.arguments[i]);
             }
+            if(expr.injectClassArena){
+                if(!expr.arguments.empty())
+                    out.append(", ");
+                out.append("s_ClassArena");
+            }
+            else if(expr.injectScratchArena){
+                if(!expr.arguments.empty())
+                    out.append(", ");
+                out.append("__adhd_scratch");
+            }
         }
         out.push_back(')');
+        if(expr.derefNotNull)
+            out.push_back(')');
         break;
     }
     case ExprKind::Unary:{
@@ -2503,7 +2813,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
             if(i > 0u)
                 out.append(", ");
             const LambdaCapture& cap = expr.lambdaCaptures[i];
-            if(cap.mode == ParamPassingMode::Mut){
+            if(cap.name == "this"){
+                out.append("this");
+            }
+            else if(cap.mode == ParamPassingMode::Mut){
                 out.push_back('&');
                 out.append(cap.name.data(), cap.name.size());
             }

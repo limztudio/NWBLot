@@ -94,6 +94,8 @@ struct Expr{
     bool isNotNullRebind = false;
     bool derefNotNull = false;
     bool isMutArg = false;
+    bool injectScratchArena = false;
+    bool injectClassArena = false;
 
 
 public:

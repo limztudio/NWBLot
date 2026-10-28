@@ -14,6 +14,38 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_stmt_parser{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool CaseBranchTerminates(const Stmt* stmt)noexcept{
+    if(!stmt)
+        return false;
+    if(stmt->kind == StmtKind::Break || stmt->kind == StmtKind::Return || stmt->kind == StmtKind::Continue)
+        return true;
+    if(stmt->kind == StmtKind::Block)
+        return !stmt->statements.empty() && CaseBranchTerminates(stmt->statements.back());
+    if(stmt->kind == StmtKind::If){
+        return !stmt->statements.empty()
+            && !stmt->elseStatements.empty()
+            && CaseBranchTerminates(stmt->statements.back())
+            && CaseBranchTerminates(stmt->elseStatements.back());
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool StmtParser::parseBlockStatements(MVector<Stmt*>& outStatements){
     if(!m_cursor.expect(TokenType::LeftBrace, "expected '{' to begin statement block"))
         return false;
@@ -63,7 +95,7 @@ Stmt* StmtParser::parseStatement(){
         m_cursor.error("'static' variables are prohibited in adhd");
         return nullptr;
     }
-    if(m_cursor.checkIdentifier("class") || m_cursor.checkIdentifier("struct") || m_cursor.checkIdentifier("interface") || m_cursor.checkIdentifier("enum") || m_cursor.checkIdentifier("union")){
+    if(m_cursor.checkIdentifier("class") || m_cursor.checkIdentifier("struct") || m_cursor.checkIdentifier("interface") || m_cursor.checkIdentifier("enum") || m_cursor.checkIdentifier("union") || m_cursor.checkIdentifier("type") || m_cursor.checkIdentifier("namespace")){
         m_cursor.error("local or nested type declarations are prohibited in adhd; declare types at top-level file scope");
         return nullptr;
     }
@@ -107,6 +139,10 @@ Stmt* StmtParser::parseStatement(){
     }
 
     if(m_cursor.matchIdentifier("break")){
+        if(!attributes.empty()){
+            m_cursor.error(span.line, span.column, "attributes are not permitted on 'break' statements");
+            return nullptr;
+        }
         if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after 'break'"))
             return nullptr;
         Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
@@ -116,6 +152,10 @@ Stmt* StmtParser::parseStatement(){
     }
 
     if(m_cursor.matchIdentifier("continue")){
+        if(!attributes.empty()){
+            m_cursor.error(span.line, span.column, "attributes are not permitted on 'continue' statements");
+            return nullptr;
+        }
         if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after 'continue'"))
             return nullptr;
         Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
@@ -168,9 +208,10 @@ Stmt* StmtParser::parseStatement(){
     if(m_cursor.check(TokenType::Identifier)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         TypeRef* maybeType = m_typeParser.parseType(true, true);
-        if(maybeType && m_cursor.check(TokenType::Identifier) && !m_cursor.checkIdentifier("as"))
+        if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier) && !m_cursor.checkIdentifier("as"))
             return parseVarDeclAfterType(maybeType, span);
         m_cursor.restore(cp);
+        m_typeParser.resetPendingRightAngles();
     }
 
     Expr* expr = m_exprParser.parseExpression();
@@ -187,35 +228,7 @@ Stmt* StmtParser::parseStatement(){
 }
 
 bool StmtParser::parseRawNativeBlock(MStringView& outCode){
-    if(!m_cursor.check(TokenType::LeftBrace)){
-        m_cursor.errorExpected("expected '{' to start native block");
-        return false;
-    }
-
-    const MChar* openBraceEnd = m_cursor.current().text.data() + m_cursor.current().text.size();
-    m_cursor.advance();
-
-    u32 braceDepth = 1u;
-    const MChar* closeBraceStart = openBraceEnd;
-
-    while(!m_cursor.check(TokenType::EndOfFile)){
-        if(m_cursor.check(TokenType::LeftBrace)){
-            ++braceDepth;
-        }
-        else if(m_cursor.check(TokenType::RightBrace)){
-            --braceDepth;
-            if(braceDepth == 0u){
-                closeBraceStart = m_cursor.current().text.data();
-                m_cursor.advance();
-                outCode = MStringView(openBraceEnd, static_cast<usize>(closeBraceStart - openBraceEnd));
-                return true;
-            }
-        }
-        m_cursor.advance();
-    }
-
-    m_cursor.error("unterminated 'native' block; expected '}'");
-    return false;
+    return m_cursor.consumeBalancedBracesRaw(outCode);
 }
 
 bool StmtParser::parseScopedBodyStatements(MVector<Stmt*>& outStatements){
@@ -275,6 +288,7 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
     stmt->expr = subject;
     stmt->span = span;
 
+    bool hasDefault = false;
     while(!m_cursor.check(TokenType::RightBrace) && !m_cursor.check(TokenType::EndOfFile)){
         SwitchCase switchCase(m_cursor.arena());
         switchCase.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
@@ -287,6 +301,11 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
                 return nullptr;
         }
         else if(m_cursor.matchIdentifier("default")){
+            if(hasDefault){
+                m_cursor.error(switchCase.span.line, switchCase.span.column, "duplicate 'default' label in 'switch' statement");
+                return nullptr;
+            }
+            hasDefault = true;
             switchCase.isDefault = true;
             if(!m_cursor.expect(TokenType::Colon, "expected ':' after 'default'"))
                 return nullptr;
@@ -320,8 +339,7 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
                 m_cursor.error(switchCase.span.line, switchCase.span.column, "'switch' case cannot be empty without 'break' or 'return'");
                 return nullptr;
             }
-            const StmtKind::Enum lastKind = switchCase.statements.back()->kind;
-            if(lastKind != StmtKind::Break && lastKind != StmtKind::Return){
+            if(!__hidden_adhd_stmt_parser::CaseBranchTerminates(switchCase.statements.back())){
                 m_cursor.error(switchCase.span.line, switchCase.span.column, "implicit fallthrough in 'switch' is prohibited in adhd; end each case with 'break;' or 'return'");
                 return nullptr;
             }
@@ -748,8 +766,10 @@ Stmt* StmtParser::parseVarDeclAfterType(TypeRef* varType, const SourceSpan span)
             return nullptr;
     }
     else if(m_cursor.check(TokenType::Semicolon)){
-        m_cursor.error(span.line, span.column, "uninitialized variable declaration is prohibited in adhd; every local variable must be initialized at declaration");
-        return nullptr;
+        if(varType->isAuto){
+            m_cursor.error(span.line, span.column, "uninitialized variable declaration is prohibited in adhd; every local variable must be initialized at declaration");
+            return nullptr;
+        }
     }
     else{
         m_cursor.errorExpected("expected '=' or '(' to initialize local variable");

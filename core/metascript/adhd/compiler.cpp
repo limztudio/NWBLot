@@ -24,13 +24,19 @@ namespace __hidden_adhd_compiler{
 
 void AppendPascalCaseSegment(MString& out, const MStringView segment){
     bool capitalizeNext = true;
+    bool emittedAny = false;
     for(usize i = 0u; i < segment.size(); ++i){
         const MChar c = segment[i];
-        if(c == '_' || c == '-'){
+        const bool isLower = (c >= 'a' && c <= 'z');
+        const bool isUpper = (c >= 'A' && c <= 'Z');
+        const bool isDigit = (c >= '0' && c <= '9');
+        if(!isLower && !isUpper && !isDigit){
             capitalizeNext = true;
             continue;
         }
-        if(capitalizeNext && c >= 'a' && c <= 'z'){
+        if(!emittedAny && isDigit)
+            out.push_back('_');
+        if(capitalizeNext && isLower){
             out.push_back(static_cast<MChar>(c - ('a' - 'A')));
             capitalizeNext = false;
         }
@@ -38,6 +44,7 @@ void AppendPascalCaseSegment(MString& out, const MStringView segment){
             out.push_back(c);
             capitalizeNext = false;
         }
+        emittedAny = true;
     }
 }
 
@@ -104,6 +111,14 @@ MString Compiler::deriveNamespaceFromPath(const MStringView virtualFilePath, Met
     MString ns(arena);
     ns.append("NWB");
 
+    if(virtualFilePath.empty()
+        || virtualFilePath[0] == '/'
+        || virtualFilePath[0] == '\\'
+        || (virtualFilePath.size() >= 2u && virtualFilePath[1] == ':'))
+    {
+        return ns;
+    }
+
     usize lastSlash = virtualFilePath.size();
     for(usize i = 0u; i < virtualFilePath.size(); ++i){
         if(virtualFilePath[i] == '/' || virtualFilePath[i] == '\\')
@@ -120,8 +135,12 @@ MString Compiler::deriveNamespaceFromPath(const MStringView virtualFilePath, Met
             if(i > segStart){
                 const MStringView seg = dirPart.substr(segStart, i - segStart);
                 if(seg != "." && seg != ".."){
-                    ns.append("::");
-                    __hidden_adhd_compiler::AppendPascalCaseSegment(ns, seg);
+                    MString segPascal(arena);
+                    __hidden_adhd_compiler::AppendPascalCaseSegment(segPascal, seg);
+                    if(!segPascal.empty()){
+                        ns.append("::");
+                        ns.append(segPascal.data(), segPascal.size());
+                    }
                 }
             }
             segStart = i + 1u;

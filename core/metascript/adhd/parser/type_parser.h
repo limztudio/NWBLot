@@ -29,10 +29,9 @@ public:
     [[nodiscard]] bool parseTemplateParamList(MVector<TemplateParamDecl>& outParams);
     [[nodiscard]] bool parseTypeArgList(MVector<TypeArg>& outArgs);
     [[nodiscard]] bool parseParamList(MVector<ParamDecl>& outParams);
-
-
-private:
     [[nodiscard]] bool expectClosingAngle();
+    [[nodiscard]] bool hasPendingRightAngles()const noexcept{ return m_pendingRightAngles > 0u; }
+    void resetPendingRightAngles()noexcept{ m_pendingRightAngles = 0u; }
 
 
 private:

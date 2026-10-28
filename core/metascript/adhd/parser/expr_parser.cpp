@@ -325,7 +325,7 @@ Expr* ExprParser::parsePostfix(){
         if(m_cursor.check(TokenType::Less)){
             const ParserCursor::Checkpoint cp = m_cursor.save();
             MVector<TypeArg> targs(m_cursor.arena());
-            if(m_typeParser.parseTypeArgList(targs) && m_cursor.check(TokenType::LeftParen)){
+            if(m_typeParser.parseTypeArgList(targs) && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::LeftParen)){
                 Expr* callNode = AllocateAstNode<Expr>(m_cursor.arena());
                 callNode->kind = ExprKind::Call;
                 callNode->lhs = expr;
@@ -337,6 +337,7 @@ Expr* ExprParser::parsePostfix(){
                 continue;
             }
             m_cursor.restore(cp);
+            m_typeParser.resetPendingRightAngles();
         }
 
         if(m_cursor.check(TokenType::LeftParen)){
@@ -398,13 +399,14 @@ Expr* ExprParser::parsePrimary(){
         if(m_cursor.check(TokenType::Identifier)){
             const ParserCursor::Checkpoint cp = m_cursor.save();
             TypeRef* maybeType = m_typeParser.parseType(false, false);
-            if(maybeType && m_cursor.match(TokenType::RightParen)){
+            if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.match(TokenType::RightParen)){
                 if(m_cursor.check(TokenType::Identifier) || m_cursor.check(TokenType::IntegerLiteral) || m_cursor.check(TokenType::FloatLiteral) || m_cursor.check(TokenType::DoubleLiteral) || m_cursor.check(TokenType::LeftParen)){
                     m_cursor.error("C-style '(T)x' cast is prohibited in adhd; use 'cast<T>(x)' or 'bit_cast<T>(x)'");
                     return nullptr;
                 }
             }
             m_cursor.restore(cp);
+            m_typeParser.resetPendingRightAngles();
         }
         Expr* inner = parseExpression();
         if(!inner)
@@ -466,7 +468,7 @@ Expr* ExprParser::parsePrimary(){
             TypeRef* targetType = m_typeParser.parseType(false, false);
             if(!targetType)
                 return nullptr;
-            if(!m_cursor.expect(TokenType::Greater, "expected '>' after cast target type"))
+            if(!m_typeParser.expectClosingAngle())
                 return nullptr;
             if(!m_cursor.expect(TokenType::LeftParen, "expected '(' after cast<T>"))
                 return nullptr;
@@ -558,7 +560,7 @@ Expr* ExprParser::parseLambda(const SourceSpan span){
     if(!m_cursor.expect(TokenType::Arrow, "expected '-> ReturnType' after lambda parameters"))
         return nullptr;
 
-    node->lambdaReturnType = m_typeParser.parseType(false, false);
+    node->lambdaReturnType = m_typeParser.parseType(true, false);
     if(!node->lambdaReturnType)
         return nullptr;
 

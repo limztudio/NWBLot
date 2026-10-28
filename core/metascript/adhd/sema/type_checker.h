@@ -20,12 +20,12 @@ NWB_ADHD_BEGIN
 
 struct ScopedVarInfo{
     MStringView name;
+    MStringView inferredTypeName;
     TypeRef* type = nullptr;
     const Expr* lambdaExpr = nullptr;
     ParamPassingMode::Enum mode = ParamPassingMode::None;
     bool isConst = false;
     bool isParam = false;
-    u32 lambdaCaptureBytes = 0u;
 };
 
 
@@ -61,10 +61,11 @@ private:
         const TypeRef& typeRef,
         const ClassDecl* enclosingClass,
         const MethodDecl* enclosingMethod,
-        MVector<ParseError>& errors
+        MVector<ParseError>& errors,
+        bool allowVoid = false
     );
     [[nodiscard]] bool classImplementsInterface(const ClassDecl& cls, MStringView requiredIface)const noexcept;
-    [[nodiscard]] bool interfaceInheritsFrom(const InterfaceDecl& iface, MStringView requiredIface)const noexcept;
+    [[nodiscard]] bool interfaceInheritsFrom(const InterfaceDecl& iface, MStringView requiredIface, u32 depth = 0u)const noexcept;
     [[nodiscard]] bool checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors);
     [[nodiscard]] bool checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors);
     [[nodiscard]] bool checkConstructorInitialization(ClassDecl& classDecl, MethodDecl& ctor, MVector<ParseError>& errors);
@@ -97,6 +98,12 @@ private:
         const Expr& expr,
         const MVector<ScopedVarInfo>& scope
     )const noexcept;
+    [[nodiscard]] const TypeRef* inferExprTypeRef(
+        ClassDecl* ownerClass,
+        const MethodDecl* method,
+        const Expr& expr,
+        const MVector<ScopedVarInfo>& scope
+    )const noexcept;
 
     [[nodiscard]] static const TemplateParamDecl* findTemplateParam(
         const ClassDecl* ownerClass,
@@ -105,7 +112,7 @@ private:
     )noexcept;
     [[nodiscard]] static const ScopedVarInfo* findScopedVar(const MVector<ScopedVarInfo>& scope, MStringView name)noexcept;
     [[nodiscard]] static const FieldDecl* findClassField(const ClassDecl& classDecl, MStringView name)noexcept;
-    [[nodiscard]] static const MethodDecl* findClassMethod(const ClassDecl& classDecl, MStringView name)noexcept;
+    [[nodiscard]] static const MethodDecl* findClassMethod(const ClassDecl& classDecl, MStringView name, const usize* preferredArgCount = nullptr)noexcept;
     void reportError(MVector<ParseError>& errors, SourceSpan span, MStringView message)const;
 
 
@@ -119,6 +126,7 @@ private:
     u32 m_loopDepth = 0u;
     u32 m_switchDepth = 0u;
     bool m_inLambda = false;
+    bool m_inClassArenaContext = false;
 };
 
 

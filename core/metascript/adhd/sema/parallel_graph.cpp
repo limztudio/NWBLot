@@ -25,9 +25,32 @@ bool ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVe
     MVector<MStringView> declaredTaskNames(m_arena);
     bool ok = true;
 
+    auto validateExprLambdas = [&](auto& self, const Expr* expr) -> void{
+        if(!expr)
+            return;
+        if(expr->kind == ExprKind::Lambda){
+            if(!validateBlock(expr->lambdaBody, errors))
+                ok = false;
+        }
+        self(self, expr->lhs);
+        self(self, expr->rhs);
+        for(const Expr* arg : expr->arguments)
+            self(self, arg);
+    };
+
     for(const Stmt* stmt : statements){
         if(!stmt)
             continue;
+
+        if(stmt->initStmt)
+            validateExprLambdas(validateExprLambdas, stmt->initStmt->expr);
+        validateExprLambdas(validateExprLambdas, stmt->expr);
+        validateExprLambdas(validateExprLambdas, stmt->condition);
+        validateExprLambdas(validateExprLambdas, stmt->stepExpr);
+        for(const Expr* arg : stmt->arguments)
+            validateExprLambdas(validateExprLambdas, arg);
+        for(const NativeBinding& nb : stmt->nativeBindings)
+            validateExprLambdas(validateExprLambdas, nb.sourceExpr);
 
         switch(stmt->kind){
         case StmtKind::ParallelBlock:{
@@ -39,7 +62,15 @@ bool ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVe
                 }
             }
 
-            for(const MStringView& dep : stmt->parallelDependencies){
+            for(usize dIdx = 0u; dIdx < stmt->parallelDependencies.size(); ++dIdx){
+                const MStringView dep = stmt->parallelDependencies[dIdx];
+                for(usize prevD = 0u; prevD < dIdx; ++prevD){
+                    if(stmt->parallelDependencies[prevD] == dep){
+                        ReportAdhdDiagnostic(m_arena, errors, stmt->span, "duplicate task dependency in 'parallel' block");
+                        ok = false;
+                        break;
+                    }
+                }
                 if(dep == stmt->name){
                     ReportAdhdDiagnostic(m_arena, errors, stmt->span, "'parallel' task cannot depend on itself");
                     ok = false;
@@ -84,8 +115,44 @@ bool ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVe
         }
         case StmtKind::Switch:{
             for(const SwitchCase& sc : stmt->switchCases){
+                validateExprLambdas(validateExprLambdas, sc.matchExpr);
                 if(!validateBlock(sc.statements, errors))
                     ok = false;
+            }
+            break;
+        }
+        case StmtKind::ExprStmt:{
+            if(stmt->expr && stmt->expr->kind == ExprKind::Call
+                && stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::Identifier
+                && stmt->expr->lhs->text == "wait")
+            {
+                for(usize aIdx = 0u; aIdx < stmt->expr->arguments.size(); ++aIdx){
+                    const Expr* arg = stmt->expr->arguments[aIdx];
+                    if(!arg || arg->kind != ExprKind::Identifier){
+                        ReportAdhdDiagnostic(m_arena, errors, stmt->span, "'wait' argument must be a 'parallel' task name");
+                        ok = false;
+                        continue;
+                    }
+                    for(usize prevA = 0u; prevA < aIdx; ++prevA){
+                        const Expr* prevArg = stmt->expr->arguments[prevA];
+                        if(prevArg && prevArg->kind == ExprKind::Identifier && prevArg->text == arg->text){
+                            ReportAdhdDiagnostic(m_arena, errors, stmt->span, "duplicate task name in 'wait' statement");
+                            ok = false;
+                            break;
+                        }
+                    }
+                    bool foundTask = false;
+                    for(const MStringView& existing : declaredTaskNames){
+                        if(existing == arg->text){
+                            foundTask = true;
+                            break;
+                        }
+                    }
+                    if(!foundTask){
+                        ReportAdhdDiagnostic(m_arena, errors, stmt->span, "'wait' target must reference an earlier 'parallel' task in the same scope");
+                        ok = false;
+                    }
+                }
             }
             break;
         }

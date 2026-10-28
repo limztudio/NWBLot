@@ -875,6 +875,1011 @@ TEST(AdhdCompiler, OptimizesSimdMathWithBlockScopedLoadStoreAndFmaLowering){
     EXPECT_EQ(biasLoadCount, 1u);
 }
 
+TEST(AdhdCompiler, SupportsFixedVectorLayoutStringArenaPathConvertStringAndMatrixReflection){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "[serialize]\r\n"
+        "class PackedBatch {\r\n"
+        "    public FixedVector<u32, 4> indices = FixedVector<u32, 4>();\r\n"
+        "    public CompactString tag = \"default_tag\";\r\n"
+        "    public f32x3_i32 packedSphere = f32x3_i32(1.0f, 2.0f, 3.0f, 7);\r\n"
+        "    public f32x4x4 worldTransform = f32x4x4();\r\n"
+        "}\r\n"
+        "[reflect]\r\n"
+        "class AssetManifest {\r\n"
+        "    public String label = \"manifest\";\r\n"
+        "    public Path rootPath = \"content/root\";\r\n"
+        "    public void logEntry(in StringView entryName) {\r\n"
+        "        String localNote = \"checking\";\r\n"
+        "        Path sub = \"meshes/hero.nwb\";\r\n"
+        "        this.rootPath = \"content/updated\";\r\n"
+        "        const f32x4x4 customMat(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "        const f32x4 pt(1.0f, 2.0f, 3.0f, 1.0f);\r\n"
+        "        const f32x4 outPt = mul(customMat, pt);\r\n"
+        "        info(\"Entry {}: {} ({})\", entryName, localNote, outPt.x);\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/assets/manifest.adhd", arena.arena, res));
+    ASSERT_EQ(res.unit.classes.size(), 2u);
+
+    const auto* packedCls = res.unit.classes[0];
+    EXPECT_FALSE(packedCls->needsClassArena);
+    ASSERT_EQ(packedCls->orderedFields.size(), 4u);
+    EXPECT_EQ(packedCls->orderedFields[0]->resolvedSize, 20u);
+    EXPECT_EQ(packedCls->orderedFields[1]->resolvedSize, 256u);
+    EXPECT_EQ(packedCls->orderedFields[2]->resolvedSize, 16u);
+    EXPECT_EQ(packedCls->orderedFields[3]->resolvedSize, 64u);
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("FixedVector<u32, 4> indices = FixedVector<u32, 4>();"), MStringView::npos);
+    EXPECT_NE(hdrView.find("Float44 worldTransform = Float44{};"), MStringView::npos);
+    EXPECT_NE(hdrView.find("Float3Int(static_cast<f32>(__f->asList()[0].toDouble()), static_cast<f32>(__f->asList()[1].toDouble()), static_cast<f32>(__f->asList()[2].toDouble()), static_cast<i32>(__f->asList()[3].asInteger()))"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->worldTransform.raw[__i] = static_cast<f32>(__f->asList()[__i].toDouble());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("AString label{\"manifest\", s_ClassArena};"), MStringView::npos);
+    EXPECT_NE(hdrView.find("Path rootPath = NWB_TEXT(\"content/root\");"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->rootPath = ::ConvertString(__f->asString());"), MStringView::npos);
+
+    EXPECT_NE(cppView.find("AString localNote(\"checking\", __adhd_scratch);"), MStringView::npos);
+    EXPECT_NE(cppView.find("Path sub = NWB_TEXT(\"meshes/hero.nwb\");"), MStringView::npos);
+    EXPECT_NE(cppView.find("(this->rootPath = NWB_TEXT(\"content/updated\"));"), MStringView::npos);
+    EXPECT_NE(cppView.find("const ::SIMDMatrix __adhd_simd_customMat = ::MatrixSet("), MStringView::npos);
+    EXPECT_NE(cppView.find("::ConvertString(entryName), ::ConvertString(localNote)"), MStringView::npos);
+}
+
+TEST(AdhdCompiler, SupportsTypeAliasesSelfDefaultedFieldsBoundedOutOfLineAndListNwbReflection){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "type EntityId = u64;\r\n"
+        "type Vec4 = f32x4;\r\n"
+        "type NameMap<V> = HashMap<Name, V>;\r\n"
+        "type TextureRef = AssetRef<TextureAsset>;\r\n"
+        "interface IResettable {\r\n"
+        "    void reset();\r\n"
+        "}\r\n"
+        "class BoundedBuffer<T : IResettable, const usize Capacity> {\r\n"
+        "    public T item;\r\n"
+        "    public FixedVector<u32, Capacity> slots;\r\n"
+        "    public void clearSlots();\r\n"
+        "}\r\n"
+        "void BoundedBuffer<T : IResettable, const usize Capacity>::clearSlots() {\r\n"
+        "    this.item.reset();\r\n"
+        "    this.slots.clear();\r\n"
+        "}\r\n"
+        "[reflect]\r\n"
+        "class SceneRecord {\r\n"
+        "    public EntityId id = 1;\r\n"
+        "    public Vec4 tint = Vec4(1.0f, 0.5f, 0.25f, 1.0f);\r\n"
+        "    public TextureRef icon = TextureRef();\r\n"
+        "    public Array<u32, 4> lodBias = Array<u32, 4>();\r\n"
+        "    public FixedVector<f32, 8> weights;\r\n"
+        "    public Optional<Func<void(in EntityId)>> onLoaded;\r\n"
+        "    private NameMap<u32> m_lookup;\r\n"
+        "    public f32 computeTintSum(in EntityId targetId, in Vec4 scale) const {\r\n"
+        "        Optional<EntityId> maybeId;\r\n"
+        "        Vec4 weighted = this.tint * scale;\r\n"
+        "        return weighted.x + weighted.y;\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/scene/scene_record.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("NameMap<u32> m_lookup{s_ClassArena};"), MStringView::npos);
+    EXPECT_NE(hdrView.find("Optional<::InplaceFunction<0u, void(EntityId)>> onLoaded;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("static constexpr usize assetDependencyFieldCount()noexcept{ return 1u; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->lodBias[__i] = static_cast<u32>(__f->asList()[__i].asInteger());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->weights.push_back(static_cast<f32>(__f->asList()[__i].toDouble()));"), MStringView::npos);
+    EXPECT_NE(hdrView.find("f32 computeTintSum(const EntityId targetId, const Vec4& scale)const noexcept;"), MStringView::npos);
+
+    EXPECT_NE(cppView.find("Optional<EntityId> maybeId{};"), MStringView::npos);
+    EXPECT_NE(cppView.find("const ::SIMDVectorSingle __adhd_simd_this_tint = ::LoadFloat(this->tint);"), MStringView::npos);
+    EXPECT_NE(cppView.find("::SIMDVectorSingle __adhd_simd_weighted = ::VectorMultiply(__adhd_simd_this_tint, __adhd_simd_scale);"), MStringView::npos);
+
+    static constexpr MStringView s_InvalidNestedSerializeSource =
+        "[serialize]\r\n"
+        "class BadBinaryPacket {\r\n"
+        "    public Array<String, 4> names = Array<String, 4>();\r\n"
+        "}\r\n";
+    CompileResult badSerRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_InvalidNestedSerializeSource, "impl/scene/bad_packet.adhd", arena.arena, badSerRes));
+
+    static constexpr MStringView s_WaitAndOptionalReflectionSource =
+        "[reflect]\r\n"
+        "class TaskedAsset {\r\n"
+        "    public AssetRef<ModelAsset> mesh;\r\n"
+        "    public Array<i32, 6> buckets;\r\n"
+        "    public Optional<u32> maxLod;\r\n"
+        "    public Optional<Name> tag;\r\n"
+        "    public void execute(mut u32 total) {\r\n"
+        "        Array<i32, 6> localBuckets;\r\n"
+        "        parallel StepA {\r\n"
+        "            total += 1u;\r\n"
+        "        }\r\n"
+        "        wait(StepA);\r\n"
+        "        parallel StepB {\r\n"
+        "            total += 2u;\r\n"
+        "        }\r\n"
+        "        wait();\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult waitRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_WaitAndOptionalReflectionSource, "impl/scene/tasked_asset.adhd", arena.arena, waitRes));
+    const MStringView waitHdr(waitRes.generatedHeader.data(), waitRes.generatedHeader.size());
+    const MStringView waitCpp(waitRes.generatedSource.data(), waitRes.generatedSource.size());
+    EXPECT_NE(waitHdr.find("::NWB::Core::Assets::AssetRef<ModelAsset> mesh;"), MStringView::npos);
+    EXPECT_NE(waitHdr.find("Array<i32, 6> buckets{};"), MStringView::npos);
+    EXPECT_NE(waitHdr.find("this->maxLod = static_cast<u32>(__f->asInteger());"), MStringView::npos);
+    EXPECT_NE(waitHdr.find("::Name::FromText(__f->asString())"), MStringView::npos);
+    EXPECT_NE(waitCpp.find("s_AdhdTaskScheduler.wait(__adhd_task_StepA);"), MStringView::npos);
+    EXPECT_NE(waitCpp.find("__adhd_task_scope.wait();"), MStringView::npos);
+
+    static constexpr MStringView s_InvalidWaitTargetSource =
+        "void badWait() {\r\n"
+        "    wait(NonExistentTask);\r\n"
+        "}\r\n";
+    CompileResult badWaitRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_InvalidWaitTargetSource, "impl/scene/bad_wait.adhd", arena.arena, badWaitRes));
+}
+
+TEST(AdhdCompiler, SupportsTemplatedInterfacesArenaCtorExprsAndStatefulFuncPropagation){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "enum<u8> ChannelState {\r\n"
+        "    enum Closed = 0,\r\n"
+        "    enum Open = 1,\r\n"
+        "}\r\n"
+        "interface ISink<T> {\r\n"
+        "    void send(in T item);\r\n"
+        "    void send(in T item, mut u32 count);\r\n"
+        "}\r\n"
+        "class IntSink : ISink<i32> {\r\n"
+        "    public ChannelState state;\r\n"
+        "    public Vector<i32> history = Vector<i32>(4);\r\n"
+        "    public Optional<Func<i32(in i32)>> transform;\r\n"
+        "    public void send(in i32 item) override {\r\n"
+        "        this.history.push_back(item);\r\n"
+        "    }\r\n"
+        "    public void send(in i32 item, mut u32 count) override {\r\n"
+        "        this.history.push_back(item);\r\n"
+        "        count += 1u;\r\n"
+        "    }\r\n"
+        "    public void resetHistory(in i32 bias) {\r\n"
+        "        ChannelState localState;\r\n"
+        "        auto scratchVec = Vector<i32>(8);\r\n"
+        "        this.history = Vector<i32>(16);\r\n"
+        "        this.transform = lambda[in bias](in i32 x) -> i32 {\r\n"
+        "            return x + bias;\r\n"
+        "        };\r\n"
+        "        auto boxed = cast<Optional<u32>>(0u);\r\n"
+        "        auto stateCopy = ChannelState::Enum::Open;\r\n"
+        "        u8 rawState = stateCopy::Enum::Open;\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/net/int_sink.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("class IntSink final : public ISink<i32>"), MStringView::npos);
+    EXPECT_NE(hdrView.find("ChannelState::Enum state{};"), MStringView::npos);
+    EXPECT_NE(hdrView.find("Vector<i32> history = Vector<i32>(4, s_ClassArena);"), MStringView::npos);
+    EXPECT_NE(hdrView.find("Optional<::InplaceFunction<64u, i32(i32)>> transform;"), MStringView::npos);
+
+    EXPECT_NE(cppView.find("ChannelState::Enum localState{};"), MStringView::npos);
+    EXPECT_NE(cppView.find("auto scratchVec = Vector<i32>(8, __adhd_scratch);"), MStringView::npos);
+    EXPECT_NE(cppView.find("(this->history = Vector<i32>(16, s_ClassArena));"), MStringView::npos);
+    EXPECT_NE(cppView.find("static_cast<Optional<u32>>(0u)"), MStringView::npos);
+    EXPECT_NE(cppView.find("ChannelState::Enum::Open"), MStringView::npos);
+
+    static constexpr MStringView s_MismatchedTemplatedInterfaceSource =
+        "interface ISink<T> {\r\n"
+        "    void send(in T item);\r\n"
+        "}\r\n"
+        "class BadSink : ISink<i32> {\r\n"
+        "    public void send(in f32 item) override {}\r\n"
+        "}\r\n";
+    CompileResult badSinkRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MismatchedTemplatedInterfaceSource, "impl/net/bad_sink.adhd", arena.arena, badSinkRes));
+}
+
+TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForwardDecls){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "i32 forwardHelper(in i32 x);\r\n"
+        "[reflect, asset(\"index_contract\")]\r\n"
+        "interface IIndexable {\r\n"
+        "    [reflect]\r\n"
+        "    i32 operator[](in usize idx) const;\r\n"
+        "    usize count() const;\r\n"
+        "}\r\n"
+        "class IndexedBucket : IIndexable {\r\n"
+        "    [reflect]\r\n"
+        "    private i32 m_base = 0;\r\n"
+        "    [inline]\r\n"
+        "    public IndexedBucket() {}\r\n"
+        "    [noinline]\r\n"
+        "    public ~IndexedBucket();\r\n"
+        "    [inline]\r\n"
+        "    public i32 operator[](in usize idx) override const;\r\n"
+        "    public usize count() const override {\r\n"
+        "        return 4u;\r\n"
+        "    }\r\n"
+        "    public void inspectNative(mut String text) {\r\n"
+        "        native(mut s = text) {\r\n"
+        "            if(!s.empty() && s[0] == '{') {\r\n"
+        "                s[0] = '}';\r\n"
+        "            }\r\n"
+        "        }\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "IndexedBucket::~IndexedBucket() {\r\n"
+        "}\r\n"
+        "i32 IndexedBucket::operator[](in usize idx) const {\r\n"
+        "    return forwardHelper(this.m_base + cast<i32>(idx));\r\n"
+        "}\r\n"
+        "i32 forwardHelper(in i32 x) {\r\n"
+        "    return x + 1;\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/data/indexed_bucket.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("s_AssetTypeName = \"index_contract\""), MStringView::npos);
+    EXPECT_NE(hdrView.find("reflectedMethodCount()noexcept{ return 2u; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("reflectedMethodCount()noexcept{ return 3u; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("NWB_FORCE_INLINE IndexedBucket()noexcept"), MStringView::npos);
+    EXPECT_NE(hdrView.find("NWB_NO_INLINE ~IndexedBucket()noexcept;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("NWB_FORCE_INLINE i32 operator[](const usize idx)const noexcept override"), MStringView::npos);
+    EXPECT_NE(hdrView.find("inMap.findField(\"m_base\")"), MStringView::npos);
+
+    EXPECT_NE(cppView.find("IndexedBucket::~IndexedBucket()noexcept"), MStringView::npos);
+    EXPECT_NE(cppView.find("AStringView IndexedBucket::reflectedMethodName("), MStringView::npos);
+    EXPECT_NE(cppView.find("if(!s.empty() && s[0] == '{')"), MStringView::npos);
+    EXPECT_NE(cppView.find("i32 forwardHelper(const i32 x)noexcept"), MStringView::npos);
+
+    static constexpr MStringView s_DuplicateFreeFnSource =
+        "i32 dupFn(in i32 x) { return x; }\r\n"
+        "i32 dupFn(in i32 x) { return x + 1; }\r\n";
+    CompileResult dupFreeRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DuplicateFreeFnSource, "impl/data/dup_fn.adhd", arena.arena, dupFreeRes));
+
+    static constexpr MStringView s_DuplicateClassMethodSource =
+        "class DupMethod {\r\n"
+        "    public i32 calc(in i32 x) const { return x; }\r\n"
+        "    public i32 calc(in i32 y) const { return y; }\r\n"
+        "}\r\n";
+    CompileResult dupMethodRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DuplicateClassMethodSource, "impl/data/dup_method.adhd", arena.arena, dupMethodRes));
+}
+
+TEST(AdhdCompiler, EnforcesPrivateReflectionFilterSimdMutCallReloadsAndSafeLastUseMove){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "type IntVec = Vector<i32>;\r\n"
+        "interface IRunnable {\r\n"
+        "    void run();\r\n"
+        "}\r\n"
+        "[reflect]\r\n"
+        "class JobNode : IRunnable {\r\n"
+        "    public i32 visibleId = 1;\r\n"
+        "    private i32 hiddenState = 2;\r\n"
+        "    [reflect]\r\n"
+        "    private i32 reflectedSecret = 3;\r\n"
+        "    private void internalHelper() {}\r\n"
+        "    [reflect]\r\n"
+        "    private void reflectedHelper() {}\r\n"
+        "    public void run() override {}\r\n"
+        "}\r\n"
+        "type JobNodeAlias = JobNode;\r\n"
+        "class RunnerBox<T : IRunnable> {\r\n"
+        "    public T item;\r\n"
+        "}\r\n"
+        "bool tweakSimd(mut f32x4 v) {\r\n"
+        "    v = v + f32x4(1.0f, 1.0f, 1.0f, 1.0f);\r\n"
+        "    return true;\r\n"
+        "}\r\n"
+        "void consumeVec(in IntVec v) {}\r\n"
+        "void mutateVec(mut IntVec v) {\r\n"
+        "    v.push_back(1);\r\n"
+        "}\r\n"
+        "f32 runPipeline(mut f32x4 pos, in f32x4 offset) {\r\n"
+        "    RunnerBox<JobNodeAlias> box = RunnerBox<JobNodeAlias>();\r\n"
+        "    pos = pos + offset;\r\n"
+        "    const bool stepped = tweakSimd(pos);\r\n"
+        "    native(mut p = pos) {\r\n"
+        "        p.x += 2.0f;\r\n"
+        "    }\r\n"
+        "    pos = pos + offset;\r\n"
+        "    IntVec movedVec;\r\n"
+        "    consumeVec(movedVec);\r\n"
+        "    IntVec mutOnlyVec;\r\n"
+        "    mutateVec(mutOnlyVec);\r\n"
+        "    if (stepped) {\r\n"
+        "        return pos.x;\r\n"
+        "    }\r\n"
+        "    return 0.0f;\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/job/job_node.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("reflectedFieldCount()noexcept{ return 2u; }"), MStringView::npos);
+    EXPECT_NE(hdrView.find("reflectedMethodCount()noexcept{ return 2u; }"), MStringView::npos);
+    EXPECT_EQ(hdrView.find("inMap.findField(\"hiddenState\")"), MStringView::npos);
+    EXPECT_NE(hdrView.find("inMap.findField(\"reflectedSecret\")"), MStringView::npos);
+
+    EXPECT_EQ(cppView.find("return \"hiddenState\";"), MStringView::npos);
+    EXPECT_NE(cppView.find("return \"reflectedSecret\";"), MStringView::npos);
+    EXPECT_EQ(cppView.find("return \"internalHelper\";"), MStringView::npos);
+    EXPECT_NE(cppView.find("return \"reflectedHelper\";"), MStringView::npos);
+    EXPECT_NE(cppView.find("const bool stepped = tweakSimd(pos);\r\n    __adhd_simd_pos = ::LoadFloat(pos);"), MStringView::npos);
+    EXPECT_NE(cppView.find("__adhd_simd_pos = ::LoadFloat(pos);\r\n    }"), MStringView::npos);
+    EXPECT_NE(cppView.find("consumeVec(::Move(movedVec));"), MStringView::npos);
+    EXPECT_NE(cppView.find("mutateVec(mutOnlyVec);"), MStringView::npos);
+
+    static constexpr MStringView s_UnsafeParallelNativeMutContainer =
+        "type IntVec = Vector<i32>;\r\n"
+        "void badParallelNative(mut IntVec items) {\r\n"
+        "    parallel_for(u32 i = 0u; i < 8u; ++i) {\r\n"
+        "        native(mut v = items, in i) {\r\n"
+        "            v.push_back(static_cast<i32>(i));\r\n"
+        "        }\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badParNativeRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_UnsafeParallelNativeMutContainer, "impl/job/bad_par_native.adhd", arena.arena, badParNativeRes));
+}
+
+TEST(AdhdCompiler, SupportsTemplateSpecializationArenaReflectionAndScalarMathLowering){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "enum<u8> ModeFlag {\r\n"
+        "    flag Fast\r\n"
+        "}\r\n"
+        "interface IStore<T> {\r\n"
+        "    void put(in T item);\r\n"
+        "}\r\n"
+        "class MemoryStore<T> : IStore<T> {\r\n"
+        "    private i32 hiddenTag = 0;\r\n"
+        "    [reflect]\r\n"
+        "    private i32 reflectedTag = 1;\r\n"
+        "    public T payload;\r\n"
+        "    public f32x4 pos = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "    public f64x2 dpair = f64x2(1.0, 2.0);\r\n"
+        "    public void put(in T item) override {\r\n"
+        "        this.payload = item;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "class RefHolder {\r\n"
+        "    public in f32x4 targetPos;\r\n"
+        "    public mut String targetName;\r\n"
+        "    public in ModeFlag targetMode;\r\n"
+        "    public RefHolder(in f32x4 p, mut String n, in ModeFlag m) {\r\n"
+        "        this.targetPos = p;\r\n"
+        "        this.targetName = n;\r\n"
+        "        this.targetMode = m;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "type VecStore = MemoryStore<Vector<i32>>;\r\n"
+        "void inspectGeneric<T>(in MemoryStore<T> store) {\r\n"
+        "}\r\n"
+        "f32 computeScalarMath(in f32 a, in f32 b, in f32 t) {\r\n"
+        "    VecStore store = VecStore();\r\n"
+        "    const f32 blended = lerp(a, b, t);\r\n"
+        "    const f32 snapped = round(blended);\r\n"
+        "    return rsqrt(snapped + 1.0f);\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/store/memory_store.adhd", arena.arena, res));
+    ASSERT_EQ(res.unit.templateInstantiations.size(), 1u);
+
+    const auto* inst = res.unit.templateInstantiations[0];
+    ASSERT_EQ(inst->orderedFields.size(), 5u);
+    EXPECT_EQ(inst->orderedFields[0]->name, "dpair");
+    EXPECT_EQ(inst->orderedFields[0]->resolvedAlign, 32u);
+    EXPECT_EQ(inst->orderedFields[0]->resolvedSize, 32u);
+    EXPECT_EQ(inst->orderedFields[1]->name, "pos");
+    EXPECT_EQ(inst->orderedFields[1]->resolvedAlign, 16u);
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("template<>\r\nclass MemoryStore<Vector<i32>> final : public IStore<Vector<i32>>{"), MStringView::npos);
+    EXPECT_EQ(hdrView.find("class MemoryStore<T> final : public IStore<T>{\r\nprivate:\r\n    using T ="), MStringView::npos);
+    EXPECT_NE(hdrView.find("Vector<i32> payload{s_ClassArena};"), MStringView::npos);
+    EXPECT_NE(hdrView.find("reflectedFieldCount()noexcept{ return 4u; }"), MStringView::npos);
+    EXPECT_EQ(hdrView.find("return \"hiddenTag\";"), MStringView::npos);
+    EXPECT_NE(hdrView.find("return \"reflectedTag\";"), MStringView::npos);
+    EXPECT_NE(hdrView.find("::NotNull<const Float4*> targetPos;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("::NotNull<AString*> targetName;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("::NotNull<const ModeFlag::Enum*> targetMode;"), MStringView::npos);
+
+    EXPECT_NE(cppView.find("const f32 blended = ((a) + ((b) - (a)) * (t));"), MStringView::npos);
+    EXPECT_NE(cppView.find("const f32 snapped = std::round(blended);"), MStringView::npos);
+    EXPECT_NE(cppView.find("return (static_cast<decltype((snapped + 1.0f))>(1) / ::Sqrt((snapped + 1.0f)));"), MStringView::npos);
+}
+
+TEST(AdhdCompiler, SupportsGlobalConstAndContainerIndexInferenceLambdaSyncAndOrderedReflection){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "enum<u8> QualityLevel {\r\n"
+        "    enum Low = 0,\r\n"
+        "    enum High = 1,\r\n"
+        "}\r\n"
+        "type Vec4Alias = f32x4;\r\n"
+        "const f32x4 kGravity = f32x4(0.0f, -9.8f, 0.0f, 0.0f);\r\n"
+        "[reflect]\r\n"
+        "class ConfigPacket {\r\n"
+        "    public u8 flagByte = 1;\r\n"
+        "    public f32x4 origin = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "    public Array<QualityLevel, 2> tiers = Array<QualityLevel, 2>();\r\n"
+        "    public FixedVector<bool, 4> toggles;\r\n"
+        "    public Optional<QualityLevel> overrideQuality;\r\n"
+        "    public Optional<AssetRef<TextureAsset>> fallbackTex;\r\n"
+        "}\r\n"
+        "f32 stepSimdWithLambdaAndContainers(in Vector<f32x4> positions, in Vector<String> labels, in f32x4 impulse, in f32 dt) {\r\n"
+        "    auto readImpulseX = lambda[in impulse]() -> f32 {\r\n"
+        "        return impulse.x;\r\n"
+        "    };\r\n"
+        "    const f64x3x3 rot3(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);\r\n"
+        "    const f64x3 dpt = mul(rot3, f64x3(1.0, 2.0, 3.0));\r\n"
+        "    const Vec4Alias unit = Vec4Alias(1.0f, 0.0f, 0.0f, 0.0f);\r\n"
+        "    const f32x4 firstStepped = positions[0u] + (kGravity + impulse) * dt + unit;\r\n"
+        "    for (in auto lbl : labels) {\r\n"
+        "        info(\"label: {}\", lbl);\r\n"
+        "    }\r\n"
+        "    return firstStepped.y + readImpulseX() + cast<f32>(dpt.x);\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/config_packet.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("this->tiers[__i] = static_cast<QualityLevel::Enum>(__f->asList()[__i].asInteger());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->toggles.push_back((__f->asList()[__i].asInteger() != 0));"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->overrideQuality = static_cast<QualityLevel::Enum>(__f->asInteger());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->fallbackTex = {*__name};"), MStringView::npos);
+
+    EXPECT_NE(cppView.find("if(index == 0u) return \"origin\";"), MStringView::npos);
+    EXPECT_NE(cppView.find("const ::SIMDMatrixDouble __adhd_simd_rot3 = ::MatrixDoubleSet(1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0);"), MStringView::npos);
+    EXPECT_NE(cppView.find("const ::SIMDVectorSingle __adhd_simd_unit = ::VectorSet(1.0f, 0.0f, 0.0f, 0.0f);"), MStringView::npos);
+    EXPECT_NE(cppView.find("::LoadFloat(positions[0u])"), MStringView::npos);
+    EXPECT_NE(cppView.find("::LoadFloat(kGravity)"), MStringView::npos);
+    EXPECT_NE(cppView.find("::ConvertString(lbl)"), MStringView::npos);
+
+    static constexpr MStringView s_UninitRefLocalSource =
+        "void badUninitRef() {\r\n"
+        "    mut String s;\r\n"
+        "}\r\n";
+    CompileResult badRefRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_UninitRefLocalSource, "impl/sim/bad_ref.adhd", arena.arena, badRefRes));
+
+    static constexpr MStringView s_UnknownLambdaCaptureSource =
+        "void badCapture() {\r\n"
+        "    auto fn = lambda[in missingVar]() -> void {\r\n"
+        "    };\r\n"
+        "}\r\n";
+    CompileResult badCapRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_UnknownLambdaCaptureSource, "impl/sim/bad_cap.adhd", arena.arena, badCapRes));
+}
+
+TEST(AdhdCompiler, SupportsTopLevelConstCtorStackedSwitchCasesLambdaThisAndMutSimdCaptureReload){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "const f32x4 kDefaultUp(0.0f, 1.0f, 0.0f, 0.0f);\r\n"
+        "const Path kDefaultRoot = \"content/assets\";\r\n"
+        "class WorkerNode {\r\n"
+        "    public i32 scale = 2;\r\n"
+        "    public i32 runWithThisLambda(in i32 inputVal) {\r\n"
+        "        auto readScaled = lambda[in this](in i32 v) -> i32 {\r\n"
+        "            return v * this.scale;\r\n"
+        "        };\r\n"
+        "        auto bumpScale = lambda[mut this](in i32 delta) -> void {\r\n"
+        "            this.scale += delta;\r\n"
+        "        };\r\n"
+        "        bumpScale(1);\r\n"
+        "        return readScaled(inputVal);\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "f32 evaluateModesAndMutSimdLambda(in Vector<StringView> modes, in f32x4 stepVec) {\r\n"
+        "    f32x4 acc = kDefaultUp;\r\n"
+        "    auto addStep = lambda[mut acc, in stepVec]() -> void {\r\n"
+        "        acc += stepVec;\r\n"
+        "    };\r\n"
+        "    for (in auto mode : modes) {\r\n"
+        "        switch (mode) {\r\n"
+        "        case \"skip\":\r\n"
+        "            continue;\r\n"
+        "        case \"fast\":\r\n"
+        "        case \"turbo\":\r\n"
+        "            addStep();\r\n"
+        "            break;\r\n"
+        "        default:\r\n"
+        "            break;\r\n"
+        "        }\r\n"
+        "    }\r\n"
+        "    return acc.y;\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/worker_node.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("inline constexpr Float4 kDefaultUp(0.0f, 1.0f, 0.0f, 0.0f);"), MStringView::npos);
+    EXPECT_NE(hdrView.find("inline constexpr Path kDefaultRoot = NWB_TEXT(\"content/assets\");"), MStringView::npos);
+
+    EXPECT_NE(cppView.find("[this](const i32 v)noexcept -> i32"), MStringView::npos);
+    EXPECT_NE(cppView.find("if(mode == \"skip\"){\r\n            continue;\r\n        }"), MStringView::npos);
+    EXPECT_NE(cppView.find("else if(mode == \"fast\" || mode == \"turbo\"){\r\n            addStep();\r\n            __adhd_simd_acc = ::LoadFloat(acc);\r\n        }"), MStringView::npos);
+
+    static constexpr MStringView s_UncapturedThisInLambdaSource =
+        "class BadNode {\r\n"
+        "    public i32 x = 1;\r\n"
+        "    public i32 test() const {\r\n"
+        "        auto fn = lambda() -> i32 {\r\n"
+        "            return this.x;\r\n"
+        "        };\r\n"
+        "        return fn();\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badUncapturedThisRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_UncapturedThisInLambdaSource, "impl/sim/bad_this_cap.adhd", arena.arena, badUncapturedThisRes));
+
+    static constexpr MStringView s_MutateInThisLambdaSource =
+        "class BadConstThis {\r\n"
+        "    public i32 x = 1;\r\n"
+        "    public void test() {\r\n"
+        "        auto fn = lambda[in this]() -> void {\r\n"
+        "            this.x = 2;\r\n"
+        "        };\r\n"
+        "        fn();\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badMutInThisRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MutateInThisLambdaSource, "impl/sim/bad_in_this.adhd", arena.arena, badMutInThisRes));
+
+    static constexpr MStringView s_DuplicateDefaultSwitchSource =
+        "void badSwitch(in u32 x) {\r\n"
+        "    switch (x) {\r\n"
+        "    default:\r\n"
+        "        break;\r\n"
+        "    default:\r\n"
+        "        break;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badDupDefaultRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DuplicateDefaultSwitchSource, "impl/sim/bad_dup_default.adhd", arena.arena, badDupDefaultRes));
+
+    static constexpr MStringView s_BodylessOutOfLineSource =
+        "class Box {\r\n"
+        "    public void run();\r\n"
+        "}\r\n"
+        "void Box::run();\r\n";
+    CompileResult badOolRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BodylessOutOfLineSource, "impl/sim/bad_ool.adhd", arena.arena, badOolRes));
+}
+
+TEST(AdhdCompiler, SupportsBlockCommentsNumericLiteralMacroSafetyConstOverloadLinkingAndCycleValidation){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "/*\r\n"
+        "#include <nonexistent_cpp_header.h>\r\n"
+        "#define UNCLOSED_MACRO(a, b\r\n"
+        "native {\r\n"
+        "*/\r\n"
+        "#define f 999 /* trailing block comment on define */\r\n"
+        "#define u 888\r\n"
+        "#define x 777\r\n"
+        "class DualAccessor {\r\n"
+        "    private i32 secret = 5;\r\n"
+        "    public i32 readVal(in usize idx) const;\r\n"
+        "    private i32 readVal(in usize idx);\r\n"
+        "}\r\n"
+        "[reflect]\r\n"
+        "i32 DualAccessor::readVal(in usize idx) {\r\n"
+        "    this.secret += cast<i32>(idx);\r\n"
+        "    return this.secret;\r\n"
+        "}\r\n"
+        "i32 DualAccessor::readVal(in usize idx) const {\r\n"
+        "    f32 scale = 1.0f;\r\n"
+        "    u32 mask = 0x10u + 10u;\r\n"
+        "    return this.secret + cast<i32>(idx) + cast<i32>(scale) + cast<i32>(mask);\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "/abs/work/dual_accessor.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("namespace NWB{"), MStringView::npos);
+    EXPECT_NE(hdrView.find("reflectedMethodCount()noexcept{ return 2u; }"), MStringView::npos);
+    EXPECT_NE(cppView.find("f32 scale = 1.0f;"), MStringView::npos);
+    EXPECT_NE(cppView.find("u32 mask = (0x10u + 10u);"), MStringView::npos);
+
+    const MString relNs = Compiler::deriveNamespaceFromPath("impl/2d_scene/node.adhd", arena.arena);
+    EXPECT_EQ(MStringView(relNs.data(), relNs.size()), "NWB::Impl::_2dScene");
+
+    static constexpr MStringView s_DuplicateAttrSource =
+        "[inline, inline]\r\n"
+        "void dupAttr() {}\r\n";
+    CompileResult dupAttrRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DuplicateAttrSource, "impl/sim/dup_attr.adhd", arena.arena, dupAttrRes));
+
+    static constexpr MStringView s_CyclicInterfaceSource =
+        "interface IAlpha : IBeta {\r\n"
+        "    void step();\r\n"
+        "}\r\n"
+        "interface IBeta : IAlpha {\r\n"
+        "    void tick();\r\n"
+        "}\r\n";
+    CompileResult cyclicIfaceRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_CyclicInterfaceSource, "impl/sim/cyclic_iface.adhd", arena.arena, cyclicIfaceRes));
+
+    static constexpr MStringView s_DuplicateTemplateParamSource =
+        "class BadPair<T, T> {\r\n"
+        "    public T value;\r\n"
+        "}\r\n";
+    CompileResult dupTParamRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DuplicateTemplateParamSource, "impl/sim/dup_tparam.adhd", arena.arena, dupTParamRes));
+
+    static constexpr MStringView s_DuplicateNativeBindingSource =
+        "void badNative(in i32 a, mut i32 b) {\r\n"
+        "    native(in a, mut a = b) {\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult dupNativeRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DuplicateNativeBindingSource, "impl/sim/dup_native.adhd", arena.arena, dupNativeRes));
+}
+
+TEST(AdhdCompiler, SupportsReturnFuncCapturePropagationEnumAliasScopeOverloadedInterfaceAndConstMutationChecks){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "const u32 kGlobalLimit = 100u;\r\n"
+        "enum<u8> StageMask {\r\n"
+        "    enum Idle = 0,\r\n"
+        "    flag Active = 1 << 0,\r\n"
+        "}\r\n"
+        "type StageMaskAlias = StageMask;\r\n"
+        "interface IProcessor {\r\n"
+        "    void process(in i32 v);\r\n"
+        "    void process(in f32 v);\r\n"
+        "}\r\n"
+        "class DualProcessor : IProcessor {\r\n"
+        "    public f32 lastFloat = 0.0f;\r\n"
+        "    public i32 lastInt = 0;\r\n"
+        "    public void process(in f32 v) override {\r\n"
+        "        this.lastFloat = v;\r\n"
+        "    }\r\n"
+        "    public void process(in i32 v) override {\r\n"
+        "        this.lastInt = v;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "Func<i32(in i32)> makeAdder(in i32 base) {\r\n"
+        "    return lambda[in base](in i32 x) -> i32 {\r\n"
+        "        return x + base;\r\n"
+        "    };\r\n"
+        "}\r\n"
+        "Path defaultConfigPath() {\r\n"
+        "    return \"content/default.nwb\";\r\n"
+        "}\r\n"
+        "u8 readActiveStageMask() {\r\n"
+        "    return StageMaskAlias::Flag::Active;\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/dual_processor.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("::InplaceFunction<64u, i32(i32)> makeAdder(const i32 base)noexcept;"), MStringView::npos);
+    EXPECT_NE(cppView.find("return NWB_TEXT(\"content/default.nwb\");"), MStringView::npos);
+    EXPECT_NE(cppView.find("return StageMask::Flag::Active;"), MStringView::npos);
+
+    static constexpr MStringView s_MutateGlobalConstSource =
+        "const u32 kImmutable = 10u;\r\n"
+        "void badMutateGlobal() {\r\n"
+        "    kImmutable = 20u;\r\n"
+        "}\r\n";
+    CompileResult mutGlobalRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MutateGlobalConstSource, "impl/sim/bad_mut_global.adhd", arena.arena, mutGlobalRes));
+
+    static constexpr MStringView s_MissingReturnSource =
+        "i32 missingReturn(in i32 x) {\r\n"
+        "    i32 y = x + 1;\r\n"
+        "}\r\n";
+    CompileResult missingRetRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MissingReturnSource, "impl/sim/bad_missing_ret.adhd", arena.arena, missingRetRes));
+
+    static constexpr MStringView s_MutateParallelForIndexSource =
+        "void badParIndexMut() {\r\n"
+        "    parallel_for (u32 i = 0u; i < 8u; ++i) {\r\n"
+        "        i += 1u;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult parIdxMutRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MutateParallelForIndexSource, "impl/sim/bad_par_idx_mut.adhd", arena.arena, parIdxMutRes));
+
+    static constexpr MStringView s_InvalidNonEnumScopeAccessSource =
+        "class Dummy {\r\n"
+        "    public u32 x = 0u;\r\n"
+        "}\r\n"
+        "u32 badScope() {\r\n"
+        "    return Dummy::x;\r\n"
+        "}\r\n";
+    CompileResult badScopeRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_InvalidNonEnumScopeAccessSource, "impl/sim/bad_non_enum_scope.adhd", arena.arena, badScopeRes));
+}
+
+TEST(AdhdCompiler, SupportsReferenceReturnTypesConstantTemplateArgsAndOptionalSimdReflection){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "const usize kBatchCap(0x08u);\r\n"
+        "interface IWorker {\r\n"
+        "    u32 run();\r\n"
+        "}\r\n"
+        "interface IWorkerProvider {\r\n"
+        "    in IWorker currentWorker() const;\r\n"
+        "    mut IWorker mutableWorker();\r\n"
+        "}\r\n"
+        "class SimpleWorker : IWorker {\r\n"
+        "    public u32 count = 1u;\r\n"
+        "    public u32 run() override {\r\n"
+        "        this.count += 1u;\r\n"
+        "        return this.count;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "[reflect]\r\n"
+        "class BatchHolder<T, const usize Cap> {\r\n"
+        "    public FixedVector<T, Cap> items;\r\n"
+        "    public Optional<f32x4> boundsTint;\r\n"
+        "    public u32 count = 0u;\r\n"
+        "}\r\n"
+        "class WorkerHost : IWorkerProvider {\r\n"
+        "    public SimpleWorker worker;\r\n"
+        "    public BatchHolder<u32, kBatchCap> batch;\r\n"
+        "    public in IWorker currentWorker() const override {\r\n"
+        "        return this.worker;\r\n"
+        "    }\r\n"
+        "    public mut IWorker mutableWorker() override {\r\n"
+        "        return this.worker;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "in IWorker selectWorker(in WorkerHost host) {\r\n"
+        "    return host.currentWorker();\r\n"
+        "}\r\n"
+        "u32 invokeProvider(mut WorkerHost host, in u32 a, in u32 b) {\r\n"
+        "    bool cmp = a < b >> 1u;\r\n"
+        "    Func<mut IWorker(mut WorkerHost)> getter = lambda(mut WorkerHost h) -> mut IWorker {\r\n"
+        "        return h.mutableWorker();\r\n"
+        "    };\r\n"
+        "    if (cmp) {\r\n"
+        "        return getter(host).run();\r\n"
+        "    }\r\n"
+        "    return host.mutableWorker().run();\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/ref_return_and_const_args.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("virtual ::NotNull<const IWorker*> currentWorker()const noexcept = 0;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("virtual ::NotNull<IWorker*> mutableWorker()noexcept = 0;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("::NotNull<const IWorker*> selectWorker(const WorkerHost& host)noexcept;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("FixedVector<T, Cap> items;"), MStringView::npos);
+    EXPECT_NE(cppView.find("return ::MakeNotNull(&(this->worker));"), MStringView::npos);
+    EXPECT_NE(cppView.find("return ::MakeNotNull(&((*host.currentWorker())));"), MStringView::npos);
+    EXPECT_NE(cppView.find("return getter(host)->run();"), MStringView::npos);
+    EXPECT_NE(cppView.find("return host.mutableWorker()->run();"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->boundsTint = Float4(static_cast<f32>(__f->asList()[0].toDouble())"), MStringView::npos);
+
+    static constexpr MStringView s_ReturnInParamAsMutRefSource =
+        "mut i32 badMutReturn(in i32 x) {\r\n"
+        "    return x;\r\n"
+        "}\r\n";
+    CompileResult badMutRetRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_ReturnInParamAsMutRefSource, "impl/sim/bad_mut_ret.adhd", arena.arena, badMutRetRes));
+
+    static constexpr MStringView s_MutateInReturnValueSource =
+        "in i32 getConstRef(in i32 x) {\r\n"
+        "    return x;\r\n"
+        "}\r\n"
+        "void badMutateConstRef(in i32 a) {\r\n"
+        "    getConstRef(a) = 5;\r\n"
+        "}\r\n";
+    CompileResult badMutConstCallRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_MutateInReturnValueSource, "impl/sim/bad_mut_const_call.adhd", arena.arena, badMutConstCallRes));
+
+    static constexpr MStringView s_InvalidVectorAritySource =
+        "void badVecArity() {\r\n"
+        "    Vector<i32, i32> v;\r\n"
+        "}\r\n";
+    CompileResult badVecArityRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_InvalidVectorAritySource, "impl/sim/bad_vec_arity.adhd", arena.arena, badVecArityRes));
+}
+
+TEST(AdhdCompiler, SupportsParallelCallTemplatesExtendedNwbReflectionAndStrictVoidInterfaceWaitChecks){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "[reflect]\r\n"
+        "class SubConfig {\r\n"
+        "    public u32 level = 1u;\r\n"
+        "}\r\n"
+        "[reflect]\r\n"
+        "class AssetManifest {\r\n"
+        "    public Path rootPath = \"assets/root\";\r\n"
+        "    public Optional<String> label;\r\n"
+        "    public Optional<SubConfig> subConfig;\r\n"
+        "    public FixedVector<SubConfig, 4> stages;\r\n"
+        "    public Vector<String> tags;\r\n"
+        "}\r\n"
+        "void runStage<T>(in T item) {\r\n"
+        "}\r\n"
+        "Path resolveAssetPath(in String relPath) {\r\n"
+        "    Path out = relPath;\r\n"
+        "    return out;\r\n"
+        "}\r\n"
+        "void dispatchWork(in u32 seed) {\r\n"
+        "    parallel TaskA {\r\n"
+        "    }\r\n"
+        "    parallel runStage<u32>(seed);\r\n"
+        "    wait(TaskA);\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/parallel_templates_and_nwb.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("inline static ::NWB::Core::Alloc::GlobalArena s_ClassArena{::Name(\"AssetManifest\")};"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->rootPath = ::ConvertString(__f->asString());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->label = AString(__f->asString(), s_ClassArena);"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->subConfig.emplace(); if(!this->subConfig->deserializeNwb(*__f))"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->stages.emplace_back(); if(!this->stages.back().deserializeNwb(__f->asList()[__i])) return false;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->tags.push_back(AString(__f->asList()[__i].asString(), s_ClassArena));"), MStringView::npos);
+    EXPECT_NE(cppView.find("Path out = ::ConvertString(relPath);"), MStringView::npos);
+    EXPECT_NE(cppView.find("runStage<u32>(__adhd_arg_0);"), MStringView::npos);
+
+    static constexpr MStringView s_VoidVariableSource =
+        "void badVoidVar() {\r\n"
+        "    void x = 0;\r\n"
+        "}\r\n";
+    CompileResult badVoidVarRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_VoidVariableSource, "impl/sim/bad_void_var.adhd", arena.arena, badVoidVarRes));
+
+    static constexpr MStringView s_ByValueInterfaceTemplateArgSource =
+        "interface IJob {\r\n"
+        "    void tick();\r\n"
+        "}\r\n"
+        "void badIfaceVec() {\r\n"
+        "    Vector<IJob> jobs;\r\n"
+        "}\r\n";
+    CompileResult badIfaceVecRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_ByValueInterfaceTemplateArgSource, "impl/sim/bad_iface_vec.adhd", arena.arena, badIfaceVecRes));
+
+    static constexpr MStringView s_WaitInsideParallelSource =
+        "void badParallelWait() {\r\n"
+        "    parallel TaskA {\r\n"
+        "        wait();\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badParWaitRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_WaitInsideParallelSource, "impl/sim/bad_par_wait.adhd", arena.arena, badParWaitRes));
+
+    static constexpr MStringView s_DuplicateWaitTargetSource =
+        "void badDupWait() {\r\n"
+        "    parallel TaskA {\r\n"
+        "    }\r\n"
+        "    wait(TaskA, TaskA);\r\n"
+        "}\r\n";
+    CompileResult badDupWaitRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DuplicateWaitTargetSource, "impl/sim/bad_dup_wait.adhd", arena.arena, badDupWaitRes));
+}
+
+TEST(AdhdCompiler, SupportsTemplatedTypeAliasUnwrappingSwitchSubjectCachingThisMethodSimdSyncAndCycleChecks){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "type VecOf<T> = Vector<T>;\r\n"
+        "type OptOf<T> = Optional<T>;\r\n"
+        "[reflect]\r\n"
+        "class SimBody {\r\n"
+        "    public f32x4 pos = f32x4(0.0f);\r\n"
+        "    public OptOf<u32> badge;\r\n"
+        "    public void helper();\r\n"
+        "    public void step(in VecOf<f32x4> impulses);\r\n"
+        "}\r\n"
+        "void SimBody::helper() {\r\n"
+        "    this.pos = this.pos + f32x4(1.0f);\r\n"
+        "}\r\n"
+        "void SimBody::step(in VecOf<f32x4> impulses) {\r\n"
+        "    this.pos = this.pos + impulses[0];\r\n"
+        "    this.helper();\r\n"
+        "}\r\n"
+        "String fetchTag() {\r\n"
+        "    return \"alpha\";\r\n"
+        "}\r\n"
+        "u32 dispatchByTag(in bool fastPath) {\r\n"
+        "    u32 result = 0u;\r\n"
+        "    switch (fetchTag()) {\r\n"
+        "    case \"alpha\":\r\n"
+        "        if (fastPath) {\r\n"
+        "            result = 1u;\r\n"
+        "            break;\r\n"
+        "        } else {\r\n"
+        "            result = 2u;\r\n"
+        "            break;\r\n"
+        "        }\r\n"
+        "    default:\r\n"
+        "        result = 3u;\r\n"
+        "        break;\r\n"
+        "    }\r\n"
+        "    return result;\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/templated_alias_switch_simd_sync.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("this->badge = static_cast<u32>(__f->asInteger());"), MStringView::npos);
+    EXPECT_NE(cppView.find("::StoreFloat(__adhd_simd_this_pos, this->pos);"), MStringView::npos);
+    EXPECT_NE(cppView.find("this->helper();"), MStringView::npos);
+    EXPECT_NE(cppView.find("__adhd_simd_this_pos = ::LoadFloat(this->pos);"), MStringView::npos);
+    EXPECT_NE(cppView.find("const auto& __adhd_switch_subject = (fetchTag());"), MStringView::npos);
+    EXPECT_EQ(cppView.find("break;"), MStringView::npos);
+
+    static constexpr MStringView s_CyclicTypeAliasSource =
+        "type AliasA = AliasB;\r\n"
+        "type AliasB = AliasA;\r\n";
+    CompileResult cyclicAliasRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_CyclicTypeAliasSource, "impl/sim/cyclic_alias.adhd", arena.arena, cyclicAliasRes));
+
+    static constexpr MStringView s_RecursiveClassValueMemberSource =
+        "class BadNode {\r\n"
+        "    public Optional<BadNode> next;\r\n"
+        "}\r\n";
+    CompileResult recClassRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_RecursiveClassValueMemberSource, "impl/sim/rec_class.adhd", arena.arena, recClassRes));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

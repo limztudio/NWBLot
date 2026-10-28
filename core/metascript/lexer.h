@@ -102,6 +102,7 @@ public:
 
 public:
     [[nodiscard]] Token next()noexcept;
+    [[nodiscard]] bool consumeBalancedBracesRaw(MStringView& outInnerCode)noexcept;
 
 
 private:

@@ -333,11 +333,14 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const MVector<ParsedA
 }
 
 InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
+    MStringView assetTypeName;
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "reflect" && attr.arguments.empty())
             continue;
-        if(attr.name == "asset" && attr.arguments.size() == 1u && attr.arguments[0].kind == TokenType::StringLiteral)
+        if(attr.name == "asset" && attr.arguments.size() == 1u && attr.arguments[0].kind == TokenType::StringLiteral){
+            assetTypeName = attr.arguments[0].text;
             continue;
+        }
         m_cursor.error(attr.line, attr.column, "unsupported attribute on 'interface'; expected 'reflect' or 'asset(\"...\")'");
         return nullptr;
     }
@@ -348,6 +351,7 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
 
     InterfaceDecl* decl = AllocateAstNode<InterfaceDecl>(m_cursor.arena());
     decl->name = m_cursor.current().text;
+    decl->assetTypeName = assetTypeName;
     decl->span = span;
     m_cursor.advance();
 
@@ -362,8 +366,10 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
                 m_cursor.errorExpected("expected base interface name after ':'");
                 return nullptr;
             }
-            decl->baseInterfaces.push_back(m_cursor.current().text);
-            m_cursor.advance();
+            TypeRef* baseType = m_typeParser.parseType(false, false);
+            if(!baseType)
+                return nullptr;
+            decl->baseInterfaces.push_back(baseType);
             if(!m_cursor.match(TokenType::Comma))
                 break;
         }
@@ -373,6 +379,13 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
         return nullptr;
 
     while(!m_cursor.check(TokenType::RightBrace) && !m_cursor.check(TokenType::EndOfFile)){
+        MVector<ParsedAttribute> methodAttrs(m_cursor.arena());
+        if(m_cursor.check(TokenType::LeftBracket)){
+            AttributeParser attrParser(m_cursor);
+            if(!attrParser.parseSingleBracketList(methodAttrs))
+                return nullptr;
+        }
+
         if(m_cursor.checkIdentifier("public") || m_cursor.checkIdentifier("private") || m_cursor.checkIdentifier("protected")){
             m_cursor.error("interface methods are implicitly public; do not write access specifiers inside 'interface'");
             return nullptr;
@@ -383,32 +396,54 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
         }
 
         const SourceSpan methodSpan{m_cursor.current().line, m_cursor.current().column};
-        TypeRef* retType = m_typeParser.parseType(false, false);
+        TypeRef* retType = m_typeParser.parseType(true, false);
         if(!retType)
             return nullptr;
-
-        if(!m_cursor.check(TokenType::Identifier)){
-            m_cursor.errorExpected("expected interface method name");
-            return nullptr;
-        }
 
         MethodDecl* method = AllocateAstNode<MethodDecl>(m_cursor.arena());
         method->access = AccessSpecifier::Public;
         method->returnType = retType;
-        method->name = m_cursor.current().text;
         method->span = methodSpan;
-        m_cursor.advance();
+        if(!applyCallableAttributes(methodAttrs, methodSpan, *method))
+            return nullptr;
 
-        if(! m_cursor.check(TokenType::LeftParen)){
+        if(m_cursor.matchIdentifier("operator")){
+            MStringView opName;
+            if(!parseOperatorName(opName))
+                return nullptr;
+            method->name = opName;
+            method->isOperator = true;
+        }
+        else if(m_cursor.check(TokenType::Identifier)){
+            method->name = m_cursor.current().text;
+            m_cursor.advance();
+        }
+        else{
+            m_cursor.errorExpected("expected interface method name");
+            return nullptr;
+        }
+
+        if(!m_cursor.check(TokenType::LeftParen)){
             m_cursor.error(methodSpan.line, methodSpan.column, "data members are prohibited inside 'interface'; only method contracts are allowed");
             return nullptr;
         }
 
         if(!m_typeParser.parseParamList(method->params))
             return nullptr;
+        if(method->isOperator){
+            MStringView opErr;
+            if(!__hidden_adhd_decl_parser::ValidateMemberOperatorArity(method->name, method->params.size(), opErr)){
+                m_cursor.error(methodSpan.line, methodSpan.column, opErr);
+                return nullptr;
+            }
+        }
 
         if(m_cursor.matchIdentifier("const"))
             method->isConst = true;
+        if(m_cursor.checkIdentifier("override")){
+            m_cursor.error(methodSpan.line, methodSpan.column, "'override' is only permitted on 'class' methods implementing an 'interface', not inside 'interface' itself");
+            return nullptr;
+        }
 
         if(m_cursor.check(TokenType::LeftBrace)){
             m_cursor.error(methodSpan.line, methodSpan.column, "interface methods cannot have inline bodies");
@@ -474,8 +509,10 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const MVector<Parse
                 m_cursor.errorExpected("expected implemented interface name after ':'");
                 return nullptr;
             }
-            decl->implementedInterfaces.push_back(m_cursor.current().text);
-            m_cursor.advance();
+            TypeRef* ifaceType = m_typeParser.parseType(false, false);
+            if(!ifaceType)
+                return nullptr;
+            decl->implementedInterfaces.push_back(ifaceType);
             if(!m_cursor.match(TokenType::Comma))
                 break;
         }
@@ -525,7 +562,7 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.error("'virtual' is prohibited in adhd; declare contracts in an 'interface' and mark implementations with 'override'");
         return false;
     }
-    if(m_cursor.checkIdentifier("class") || m_cursor.checkIdentifier("struct") || m_cursor.checkIdentifier("interface") || m_cursor.checkIdentifier("enum") || m_cursor.checkIdentifier("union")){
+    if(m_cursor.checkIdentifier("class") || m_cursor.checkIdentifier("struct") || m_cursor.checkIdentifier("interface") || m_cursor.checkIdentifier("enum") || m_cursor.checkIdentifier("union") || m_cursor.checkIdentifier("type")){
         m_cursor.error("nested type declarations inside a class are prohibited in adhd");
         return false;
     }
@@ -547,6 +584,11 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
         dtor->name = classDecl.name;
         dtor->isDestructor = true;
         dtor->span = span;
+
+        if(!applyCallableAttributes(attributes, span, *dtor))
+            return false;
+        if(dtor->isReflect)
+            classDecl.isReflect = true;
 
         if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for destructor"))
             return false;
@@ -575,6 +617,11 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
             ctor->name = classDecl.name;
             ctor->isConstructor = true;
             ctor->span = span;
+
+            if(!applyCallableAttributes(attributes, span, *ctor))
+                return false;
+            if(ctor->isReflect)
+                classDecl.isReflect = true;
 
             if(!m_typeParser.parseParamList(ctor->params))
                 return false;
@@ -620,6 +667,11 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
         method->isOperator = true;
         method->span = span;
 
+        if(!applyCallableAttributes(attributes, span, *method))
+            return false;
+        if(method->isReflect)
+            classDecl.isReflect = true;
+
         if(!m_typeParser.parseParamList(method->params))
             return false;
         MStringView opErr;
@@ -628,10 +680,12 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
             return false;
         }
 
-        if(m_cursor.matchIdentifier("const"))
-            method->isConst = true;
-        if(m_cursor.matchIdentifier("override"))
-            method->isOverride = true;
+        while(m_cursor.checkIdentifier("const") || m_cursor.checkIdentifier("override")){
+            if(m_cursor.matchIdentifier("const"))
+                method->isConst = true;
+            else if(m_cursor.matchIdentifier("override"))
+                method->isOverride = true;
+        }
 
         if(m_cursor.check(TokenType::LeftBrace)){
             method->hasBody = true;
@@ -691,6 +745,8 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
 
             if(!applyCallableAttributes(attributes, span, *method))
                 return false;
+            if(method->isReflect)
+                classDecl.isReflect = true;
 
             if(!m_typeParser.parseParamList(method->params))
                 return false;
@@ -723,10 +779,13 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
     field->originalIndex = classDecl.fields.size();
 
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "transient" && attr.arguments.empty())
+        if(attr.name == "transient" && attr.arguments.empty()){
             field->isTransient = true;
-        else if(attr.name == "reflect" && attr.arguments.empty())
-            continue;
+        }
+        else if(attr.name == "reflect" && attr.arguments.empty()){
+            field->isReflect = true;
+            classDecl.isReflect = true;
+        }
         else{
             m_cursor.error(attr.line, attr.column, "unsupported attribute on field; expected 'transient' or 'reflect'");
             return false;
@@ -767,8 +826,14 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
         m_cursor.advance();
 
         if(m_cursor.check(TokenType::Less)){
+            const ParserCursor::Checkpoint argCp = m_cursor.save();
             MVector<TypeArg> ownerTypeArgs(m_cursor.arena());
-            (void)m_typeParser.parseTypeArgList(ownerTypeArgs);
+            if(!m_typeParser.parseTypeArgList(ownerTypeArgs) || m_typeParser.hasPendingRightAngles() || !m_cursor.check(TokenType::ColonColon)){
+                m_cursor.restore(argCp);
+                m_typeParser.resetPendingRightAngles();
+                MVector<TemplateParamDecl> ownerTemplateParams(m_cursor.arena());
+                (void)m_typeParser.parseTemplateParamList(ownerTemplateParams);
+            }
         }
 
         if(m_cursor.match(TokenType::ColonColon)){
@@ -809,9 +874,10 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
             }
         }
         m_cursor.restore(cp);
+        m_typeParser.resetPendingRightAngles();
     }
 
-    decl->returnType = m_typeParser.parseType(false, false);
+    decl->returnType = m_typeParser.parseType(true, false);
     if(!decl->returnType)
         return nullptr;
 
@@ -831,14 +897,16 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     if(m_cursor.check(TokenType::Less)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         MVector<TypeArg> maybeOwnerArgs(m_cursor.arena());
-        if(!m_typeParser.parseTypeArgList(maybeOwnerArgs) || !m_cursor.check(TokenType::ColonColon)){
+        if(!m_typeParser.parseTypeArgList(maybeOwnerArgs) || m_typeParser.hasPendingRightAngles() || !m_cursor.check(TokenType::ColonColon)){
             m_cursor.restore(cp);
+            m_typeParser.resetPendingRightAngles();
             if(!m_typeParser.parseTemplateParamList(decl->templateParams))
                 return nullptr;
         }
     }
 
     if(m_cursor.match(TokenType::ColonColon)){
+        decl->templateParams.clear();
         decl->ownerClassName = firstName;
         if(m_cursor.matchIdentifier("operator")){
             MStringView opName;
@@ -895,6 +963,10 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
         if(!m_stmtParser.parseBlockStatements(decl->body))
             return nullptr;
     }
+    else if(!decl->ownerClassName.empty()){
+        m_cursor.error(span.line, span.column, "out-of-line method definition must have a '{ ... }' body");
+        return nullptr;
+    }
     else if(!m_cursor.expect(TokenType::Semicolon, "expected '{' or ';' after function declaration"))
         return nullptr;
 
@@ -912,7 +984,7 @@ bool DeclParser::applyCallableAttributes(
         else if(attr.name == "noinline" && attr.arguments.empty())
             decl.isNoInline = true;
         else if(attr.name == "reflect" && attr.arguments.empty())
-            continue;
+            decl.isReflect = true;
         else{
             m_cursor.error(attr.line, attr.column, "unsupported attribute on callable; expected 'inline', 'noinline', or 'reflect'");
             return false;

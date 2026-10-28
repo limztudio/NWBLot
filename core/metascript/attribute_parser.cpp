@@ -59,6 +59,13 @@ bool AttributeParser::parseAttributeItem(MVector<ParsedAttribute>& outAttributes
     attr.column = m_cursor.current().column;
     m_cursor.advance();
 
+    for(const ParsedAttribute& existing : outAttributes){
+        if(existing.name == attr.name){
+            m_cursor.error(attr.line, attr.column, "duplicate attribute in '[...]' list");
+            return false;
+        }
+    }
+
     if(m_cursor.match(TokenType::LeftParen)){
         if(!m_cursor.check(TokenType::RightParen)){
             for(;;){

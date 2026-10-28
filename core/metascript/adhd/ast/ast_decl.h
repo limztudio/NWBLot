@@ -80,6 +80,7 @@ struct FieldDecl{
     bool hasCtorInit = false;
     bool usesClassArena = false;
     bool isTransient = false;
+    bool isReflect = false;
 
 
 public:
@@ -109,6 +110,7 @@ struct MethodDecl{
     bool isOperator = false;
     bool isInline = false;
     bool isNoInline = false;
+    bool isReflect = false;
     bool usesScratchArena = false;
     bool usesTaskScope = false;
     bool isImported = false;
@@ -129,8 +131,9 @@ public:
 struct InterfaceDecl{
     MStringView name;
     MVector<TemplateParamDecl> templateParams;
-    MVector<MStringView> baseInterfaces;
+    MVector<TypeRef*> baseInterfaces;
     MVector<MethodDecl*> methods;
+    MStringView assetTypeName;
     SourceSpan span;
     bool isImported = false;
 
@@ -150,7 +153,7 @@ public:
 struct ClassDecl{
     MStringView name;
     MVector<TemplateParamDecl> templateParams;
-    MVector<MStringView> implementedInterfaces;
+    MVector<TypeRef*> implementedInterfaces;
     MVector<FieldDecl*> fields;
     MVector<FieldDecl*> orderedFields;
     MVector<MethodDecl*> methods;
@@ -184,6 +187,7 @@ struct ClassTemplateInstantiation{
     MVector<FieldDecl*> orderedFields;
     usize totalSize = 1u;
     usize totalAlign = 1u;
+    bool isImported = false;
 
 
 public:

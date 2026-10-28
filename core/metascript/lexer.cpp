@@ -186,6 +186,66 @@ Token Lexer::next()noexcept{
     }
 }
 
+bool Lexer::consumeBalancedBracesRaw(MStringView& outInnerCode)noexcept{
+    const usize startOffset = m_current;
+    u32 braceDepth = 1u;
+
+    while(!isAtEnd()){
+        const MChar c = peek();
+        if(c == '/' && peekNext() == '/'){
+            while(!isAtEnd() && peek() != '\n')
+                advance();
+            continue;
+        }
+        if(c == '/' && peekNext() == '*'){
+            advance();
+            advance();
+            while(!isAtEnd()){
+                if(peek() == '*' && peekNext() == '/'){
+                    advance();
+                    advance();
+                    break;
+                }
+                advance();
+            }
+            continue;
+        }
+        if(c == '"' || c == '\''){
+            const MChar quote = advance();
+            while(!isAtEnd() && peek() != quote){
+                if(peek() == '\\'){
+                    advance();
+                    if(isAtEnd())
+                        break;
+                }
+                advance();
+            }
+            if(!isAtEnd())
+                advance();
+            continue;
+        }
+        if(c == '{'){
+            ++braceDepth;
+            advance();
+            continue;
+        }
+        if(c == '}'){
+            --braceDepth;
+            if(braceDepth == 0u){
+                const usize endOffset = m_current;
+                advance();
+                outInnerCode = m_source.substr(startOffset, endOffset - startOffset);
+                return true;
+            }
+            advance();
+            continue;
+        }
+        advance();
+    }
+
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

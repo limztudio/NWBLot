@@ -20,12 +20,15 @@ namespace __hidden_adhd_compiler_driver{
 class FilesystemIncludeResolver final : public NWB::Core::Metascript::IIncludeResolver{
 public:
     FilesystemIncludeResolver(
+        NWB::Core::Metascript::MetaArena& arena,
         const Path<NWB::Core::Metascript::MetaArena>& currentFileDir,
         const NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString>& includeDirs
-    )noexcept
-        : m_currentFileDir(currentFileDir)
+    )
+        : m_resolvedParentDirs(arena)
         , m_includeDirs(includeDirs)
-    {}
+    {
+        m_resolvedParentDirs.push_back(currentFileDir);
+    }
 
 
 public:
@@ -43,10 +46,13 @@ public:
         const MString relPath(includePath.data(), includePath.size(), arena);
 
         if(!isAngleBracket){
-            const auto candidate = ResolveAbsolutePath(arena, m_currentFileDir, MStringView(relPath.data(), relPath.size()));
-            if(candidate && ReadTextFile(*candidate, outContent)){
-                outResolvedKey = MString(includePath.data(), includePath.size(), arena);
-                return true;
+            for(usize i = m_resolvedParentDirs.size(); i > 0u; --i){
+                const auto candidate = ResolveAbsolutePath(arena, m_resolvedParentDirs[i - 1u], MStringView(relPath.data(), relPath.size()));
+                if(candidate && ReadTextFile(*candidate, outContent)){
+                    outResolvedKey = MString(includePath.data(), includePath.size(), arena);
+                    m_resolvedParentDirs.push_back(candidate->parentPath());
+                    return true;
+                }
             }
         }
 
@@ -55,6 +61,7 @@ public:
             const auto candidate = ResolveAbsolutePath(arena, baseDir, MStringView(relPath.data(), relPath.size()));
             if(candidate && ReadTextFile(*candidate, outContent)){
                 outResolvedKey = MString(includePath.data(), includePath.size(), arena);
+                m_resolvedParentDirs.push_back(candidate->parentPath());
                 return true;
             }
         }
@@ -64,7 +71,7 @@ public:
 
 
 private:
-    const Path<NWB::Core::Metascript::MetaArena>& m_currentFileDir;
+    NWB::Core::Metascript::MVector<Path<NWB::Core::Metascript::MetaArena>> m_resolvedParentDirs;
     const NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString>& m_includeDirs;
 };
 
@@ -109,7 +116,7 @@ bool RunAdhdCompilerDriver(
         }
 
         const Path<MetaArena> parentDir = inputPath.parentPath();
-        __hidden_adhd_compiler_driver::FilesystemIncludeResolver resolver(parentDir, options.includeDirectories);
+        __hidden_adhd_compiler_driver::FilesystemIncludeResolver resolver(arena, parentDir, options.includeDirectories);
 
         Adhd::CompileResult result(arena);
         if(!Adhd::Compiler::compile(

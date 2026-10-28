@@ -37,11 +37,20 @@ public:
     [[nodiscard]] InterfaceDecl* findInterface(MStringView name)const noexcept;
     [[nodiscard]] ClassDecl* findClass(MStringView name)const noexcept;
     [[nodiscard]] TypeAliasDecl* findTypeAlias(MStringView name)const noexcept;
-    [[nodiscard]] MethodDecl* findFreeFunction(MStringView name)const noexcept;
+    [[nodiscard]] MethodDecl* findFreeFunction(MStringView name, const usize* preferredArgCount = nullptr)const noexcept;
     [[nodiscard]] Stmt* findGlobalConstant(MStringView name)const noexcept;
 
-    [[nodiscard]] MethodDecl* findInterfaceMethod(MStringView interfaceName, MStringView methodName)const noexcept;
-    void collectAllInterfaceMethods(MStringView interfaceName, MVector<MethodDecl*>& outMethods)const;
+    [[nodiscard]] MethodDecl* findInterfaceMethod(MStringView interfaceName, MStringView methodName, const usize* preferredArgCount = nullptr, u32 depth = 0u)const noexcept;
+    void collectAllInterfaceMethods(MStringView interfaceName, MVector<MethodDecl*>& outMethods, u32 depth = 0u)const;
+
+    [[nodiscard]] TypeRef* substituteTypeParams(
+        const TypeRef& origType,
+        const MVector<TemplateParamDecl>& templateParams,
+        const MVector<TypeArg>& templateArgs
+    )const;
+    [[nodiscard]] const TypeRef* unwrapTypeAlias(const TypeRef* type)const noexcept;
+    [[nodiscard]] MStringView resolveBaseTypeName(MStringView typeName)const noexcept;
+    [[nodiscard]] bool isSelfDefaultedType(MStringView typeName)const noexcept;
 
     [[nodiscard]] static bool isArenaBackedContainer(MStringView typeName)noexcept;
     [[nodiscard]] static bool isSimdVectorType(MStringView typeName, u32& outLanes)noexcept;

@@ -8,7 +8,6 @@
 #include <core/metascript/preprocessor.h>
 
 #include "codegen/header_emitter.h"
-#include "codegen/reflection_emitter.h"
 #include "codegen/source_emitter.h"
 #include "parser/decl_parser.h"
 #include "sema/type_checker.h"

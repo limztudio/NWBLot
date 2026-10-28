@@ -121,9 +121,21 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 [[nodiscard]] constexpr MStringView StripAdhdExtension(const MStringView path)noexcept{
     if(path.size() > 5u && path.substr(path.size() - 5u) == ".adhd")
         return path.substr(0u, path.size() - 5u);
-    if(path.size() > 4u && path.substr(path.size() - 4u) == ".nwb")
-        return path.substr(0u, path.size() - 4u);
     return path;
+}
+
+[[nodiscard]] constexpr bool IsCompoundOrSimpleAssignment(const TokenType::Enum op)noexcept{
+    return op == TokenType::Equal
+        || op == TokenType::PlusEqual
+        || op == TokenType::MinusEqual
+        || op == TokenType::StarEqual
+        || op == TokenType::SlashEqual
+        || op == TokenType::PercentEqual
+        || op == TokenType::AmpersandEqual
+        || op == TokenType::PipeEqual
+        || op == TokenType::CaretEqual
+        || op == TokenType::LessLessEqual
+        || op == TokenType::GreaterGreaterEqual;
 }
 
 [[nodiscard]] constexpr MStringView ExtractAdhdFileStem(const MStringView path)noexcept{

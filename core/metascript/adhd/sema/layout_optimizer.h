@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "symbol_table.h"
+#include "type_utils.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,10 +32,18 @@ public:
 
 private:
     [[nodiscard]] bool computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors);
+    void collectAllTemplateInstantiations(TranslationUnit& unit);
     void collectTemplateInstantiationsInStmt(const Stmt& stmt, TranslationUnit& unit);
     void collectTemplateInstantiationsInExpr(const Expr& expr, TranslationUnit& unit);
     void collectTemplateInstantiationsInType(const TypeRef& type, TranslationUnit& unit, u32 depth = 0u);
     void instantiateClassTemplate(const ClassDecl& templateDecl, const MVector<TypeArg>& templateArgs, TranslationUnit& unit);
+    static void sortAndPackFields(
+        MVector<FieldDecl*>& orderedFields,
+        bool isSerialize,
+        bool hasVtablePointer,
+        usize& outTotalSize,
+        usize& outTotalAlign
+    )noexcept;
 
 
 private:

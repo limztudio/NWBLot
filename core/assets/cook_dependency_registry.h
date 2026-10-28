@@ -92,7 +92,6 @@ public:
     bool registerComponentType(const Name& assetType, CookDependencyExtractFunction extractDependencies);
 
     [[nodiscard]] CookDependencyExtractFunction find(const Name& assetType)const noexcept;
-    [[nodiscard]] bool has(const Name& assetType)const noexcept{ return find(assetType) != nullptr; }
     [[nodiscard]] bool isSubsystemType(const Name& assetType)const noexcept;
     [[nodiscard]] bool isComponentType(const Name& assetType)const noexcept;
     [[nodiscard]] bool extractDependencies(const CookDependencyItemContext& context, ICookDependencyCollector& collector)const;

@@ -5,7 +5,8 @@
 #pragma once
 
 
-#include "../sema/symbol_table.h"
+#include "cpp_type_emitter.h"
+#include "source_emitter.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,18 +23,13 @@ public:
     HeaderEmitter(MetaArena& arena, const SymbolTable& symbols)noexcept
         : m_arena(arena)
         , m_symbols(symbols)
+        , m_typeEmitter(symbols)
+        , m_sourceEmitter(arena, symbols)
     {}
 
 
 public:
     [[nodiscard]] MString emitHeader(const TranslationUnit& unit, MStringView namespacePath)const;
-
-    void emitTypeCpp(MString& out, const TypeRef& type)const;
-    void emitTypeArgListCpp(MString& out, const MVector<TypeArg>& args)const;
-    void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, bool topLevelConst = true)const;
-    void emitTemplateHeaderCpp(MString& out, const MVector<TemplateParamDecl>& params)const;
-    void emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, bool isDeclarationInClass)const;
-    void emitConstructorNotNullInitializers(MString& out, const MVector<FieldDecl*>& orderedFields, const MethodDecl& ctor)const;
 
 
 private:
@@ -44,12 +40,13 @@ private:
     void emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const;
     void emitClassMethodsCpp(MString& out, const ClassDecl& decl, const MVector<FieldDecl*>& orderedFields, bool forceInlineBody)const;
     void emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& orderedFields)const;
-    [[nodiscard]] static bool isSmallValueType(MStringView typeName, const SymbolTable& symbols)noexcept;
 
 
 private:
     MetaArena& m_arena;
     const SymbolTable& m_symbols;
+    CppTypeEmitter m_typeEmitter;
+    SourceEmitter m_sourceEmitter;
 };
 
 

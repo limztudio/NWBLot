@@ -111,7 +111,7 @@ bool Compiler::compile(
     const MString headerFilename = deriveHeaderFilename(virtualFilePath, arena);
 
     HeaderEmitter headerEmitter(arena, outResult.symbols);
-    SourceEmitter sourceEmitter(arena, outResult.symbols, headerEmitter);
+    SourceEmitter sourceEmitter(arena, outResult.symbols);
 
     outResult.generatedHeader = headerEmitter.emitHeader(
         outResult.unit,

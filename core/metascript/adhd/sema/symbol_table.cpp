@@ -86,6 +86,41 @@ TypeRef* SubstituteAliasTypeRef(
     return cloned;
 }
 
+[[nodiscard]] MethodDecl* SubstituteInterfaceMethod(
+    const SymbolTable& symbols,
+    MethodDecl* method,
+    const bool hasSubst,
+    const MVector<TemplateParamDecl>& templateParams,
+    const MVector<TypeArg>& templateArgs,
+    MetaArena& arena
+){
+    if(!method || !hasSubst)
+        return method;
+    MethodDecl* cloned = AllocateAstNode<MethodDecl>(arena);
+    cloned->access = method->access;
+    cloned->name = method->name;
+    cloned->returnType = method->returnType
+        ? symbols.substituteTypeParams(*method->returnType, templateParams, templateArgs)
+        : nullptr;
+    cloned->templateParams = method->templateParams;
+    for(const ParamDecl& p : method->params){
+        ParamDecl subP = p;
+        if(p.type)
+            subP.type = symbols.substituteTypeParams(*p.type, templateParams, templateArgs);
+        cloned->params.push_back(subP);
+    }
+    cloned->span = method->span;
+    cloned->isConstructor = method->isConstructor;
+    cloned->isDestructor = method->isDestructor;
+    cloned->isOperator = method->isOperator;
+    cloned->isConst = method->isConst;
+    cloned->isOverride = method->isOverride;
+    cloned->isInline = method->isInline;
+    cloned->isNoInline = method->isNoInline;
+    cloned->isReflect = method->isReflect;
+    return cloned;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -214,41 +249,14 @@ MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MSt
         return nullptr;
 
     const bool hasSubst = !iface->templateParams.empty() && !resolvedIface->templateArgs.empty();
-    auto substituteMethodIfNeeded = [&](MethodDecl* method) -> MethodDecl*{
-        if(!method || !hasSubst)
-            return method;
-        MethodDecl* cloned = AllocateAstNode<MethodDecl>(m_arena);
-        cloned->access = method->access;
-        cloned->name = method->name;
-        cloned->returnType = method->returnType
-            ? substituteTypeParams(*method->returnType, iface->templateParams, resolvedIface->templateArgs)
-            : nullptr;
-        cloned->templateParams = method->templateParams;
-        for(const ParamDecl& p : method->params){
-            ParamDecl subP = p;
-            if(p.type)
-                subP.type = substituteTypeParams(*p.type, iface->templateParams, resolvedIface->templateArgs);
-            cloned->params.push_back(subP);
-        }
-        cloned->span = method->span;
-        cloned->isConstructor = method->isConstructor;
-        cloned->isDestructor = method->isDestructor;
-        cloned->isOperator = method->isOperator;
-        cloned->isConst = method->isConst;
-        cloned->isOverride = method->isOverride;
-        cloned->isInline = method->isInline;
-        cloned->isNoInline = method->isNoInline;
-        cloned->isReflect = method->isReflect;
-        return cloned;
-    };
 
     MethodDecl* firstMatch = nullptr;
     for(MethodDecl* method : iface->methods){
         if(method->name == methodName){
             if(!preferredArgCount || method->params.size() == *preferredArgCount)
-                return substituteMethodIfNeeded(method);
+                return __hidden_adhd_symbol_table::SubstituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena);
             if(!firstMatch)
-                firstMatch = substituteMethodIfNeeded(method);
+                firstMatch = __hidden_adhd_symbol_table::SubstituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena);
         }
     }
 
@@ -296,33 +304,7 @@ void SymbolTable::collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<M
     for(MethodDecl* method : iface->methods){
         if(!method)
             continue;
-        if(!hasSubst){
-            outMethods.push_back(method);
-            continue;
-        }
-        MethodDecl* cloned = AllocateAstNode<MethodDecl>(m_arena);
-        cloned->access = method->access;
-        cloned->name = method->name;
-        cloned->returnType = method->returnType
-            ? substituteTypeParams(*method->returnType, iface->templateParams, resolvedIface->templateArgs)
-            : nullptr;
-        cloned->templateParams = method->templateParams;
-        for(const ParamDecl& p : method->params){
-            ParamDecl subP = p;
-            if(p.type)
-                subP.type = substituteTypeParams(*p.type, iface->templateParams, resolvedIface->templateArgs);
-            cloned->params.push_back(subP);
-        }
-        cloned->span = method->span;
-        cloned->isConstructor = method->isConstructor;
-        cloned->isDestructor = method->isDestructor;
-        cloned->isOperator = method->isOperator;
-        cloned->isConst = method->isConst;
-        cloned->isOverride = method->isOverride;
-        cloned->isInline = method->isInline;
-        cloned->isNoInline = method->isNoInline;
-        cloned->isReflect = method->isReflect;
-        outMethods.push_back(cloned);
+        outMethods.push_back(__hidden_adhd_symbol_table::SubstituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena));
     }
 }
 

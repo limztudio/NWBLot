@@ -14,6 +14,8 @@
 #include "shadow/subsystem.h"
 #include "transparent/subsystem.h"
 
+#include <impl/assets_scene/binary_payload.h>
+
 #include <core/common/log.h>
 
 #include <global/binary.h>
@@ -49,6 +51,37 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_MeshComponentAssetAutoRegistrar, MeshComp
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, RendererComponentAsset);
 
 
+[[nodiscard]] static bool LoadSingleAssetRefComponentPayload(
+    const Span<const u8> payload,
+    const tchar* const context,
+    Name& outVirtualPath
+){
+    usize cursor = 0u;
+    const auto binaryPayload = ReadPOD<ComponentBinaryPayload::SingleAssetRefComponentPayloadBinary>(payload, cursor);
+    if(!binaryPayload || cursor != payload.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid payload size"), context);
+        return false;
+    }
+    outVirtualPath = Name(binaryPayload->assetHash);
+    return true;
+}
+
+#if defined(NWB_COOK)
+[[nodiscard]] static bool SerializeSingleAssetRefComponentPayload(
+    const Name& assetName,
+    Core::Assets::AssetBytes& outPayload
+){
+    ComponentBinaryPayload::SingleAssetRefComponentPayloadBinary binaryPayload;
+    binaryPayload.assetHash = assetName.hash();
+
+    outPayload.clear();
+    outPayload.reserve(sizeof(binaryPayload));
+    AppendPOD(outPayload, binaryPayload);
+    return true;
+}
+#endif
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -59,14 +92,11 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, Rend
 
 
 bool ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    usize cursor = 0u;
-    const auto binaryPayload = ReadPOD<ComponentBinaryPayload::SingleAssetRefComponentPayloadBinary>(payload, cursor);
-    if(!binaryPayload || cursor != payload.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelComponentAsset::loadComponentPayload failed: invalid payload size"));
-        return false;
-    }
-    component.model.virtualPath = Name(binaryPayload->assetHash);
-    return true;
+    return __hidden_assets_graphics_runtime::LoadSingleAssetRefComponentPayload(
+        payload,
+        NWB_TEXT("ModelComponentAsset::loadComponentPayload"),
+        component.model.virtualPath
+    );
 }
 
 bool ModelComponentAsset::validatePayload()const{
@@ -88,13 +118,7 @@ void ModelComponentAsset::applyToEntity(Core::ECS::Entity& entity)const{
 
 #if defined(NWB_COOK)
 bool ModelComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    ComponentBinaryPayload::SingleAssetRefComponentPayloadBinary binaryPayload;
-    binaryPayload.assetHash = component.model.name().hash();
-
-    outPayload.clear();
-    outPayload.reserve(sizeof(binaryPayload));
-    AppendPOD(outPayload, binaryPayload);
-    return true;
+    return __hidden_assets_graphics_runtime::SerializeSingleAssetRefComponentPayload(component.model.name(), outPayload);
 }
 #endif
 
@@ -103,14 +127,11 @@ bool ModelComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& ou
 
 
 bool MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    usize cursor = 0u;
-    const auto binaryPayload = ReadPOD<ComponentBinaryPayload::SingleAssetRefComponentPayloadBinary>(payload, cursor);
-    if(!binaryPayload || cursor != payload.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshComponentAsset::loadComponentPayload failed: invalid payload size"));
-        return false;
-    }
-    component.mesh.virtualPath = Name(binaryPayload->assetHash);
-    return true;
+    return __hidden_assets_graphics_runtime::LoadSingleAssetRefComponentPayload(
+        payload,
+        NWB_TEXT("MeshComponentAsset::loadComponentPayload"),
+        component.mesh.virtualPath
+    );
 }
 
 bool MeshComponentAsset::validatePayload()const{
@@ -132,13 +153,7 @@ void MeshComponentAsset::applyToEntity(Core::ECS::Entity& entity)const{
 
 #if defined(NWB_COOK)
 bool MeshComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    ComponentBinaryPayload::SingleAssetRefComponentPayloadBinary binaryPayload;
-    binaryPayload.assetHash = component.mesh.name().hash();
-
-    outPayload.clear();
-    outPayload.reserve(sizeof(binaryPayload));
-    AppendPOD(outPayload, binaryPayload);
-    return true;
+    return __hidden_assets_graphics_runtime::SerializeSingleAssetRefComponentPayload(component.mesh.name(), outPayload);
 }
 #endif
 

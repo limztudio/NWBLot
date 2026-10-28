@@ -447,6 +447,30 @@ template<typename AssetT, typename MetadataValue>
     return ref;
 }
 
+template<typename AssetT>
+[[nodiscard]] inline Expected<AssetRef<AssetT>> ParseMetadataReservedAssetRefText(
+    const Path& nwbFilePath,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldLabel,
+    const AStringView text,
+    Alloc::ScratchArena& scratchArena
+){
+    if(TrimView(text).empty() || text != TrimView(text)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
+        return MakeUnexpected(Failure{});
+    }
+    if(text.find('\\') != AStringView::npos || !HasReservedAssetVirtualRoot(text, scratchArena)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
+        return MakeUnexpected(Failure{});
+    }
+    const auto ref = AssetRef<AssetT>::FromText(text);
+    if(!ref || !ref->valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' is invalid"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
+        return MakeUnexpected(Failure{});
+    }
+    return *ref;
+}
+
 template<typename SourceStringT, typename MetadataDocument, typename ParseDocument>
 [[nodiscard]] inline bool ParseMetadataDocumentText(const Path& filePath, const AStringView diagnosticPrefix, ParseDocument&& parseDoc, SourceStringT& ioText, MetadataDocument& outDoc){
     if(!ReadTextFile(filePath, ioText)){

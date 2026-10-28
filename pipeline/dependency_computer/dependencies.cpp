@@ -7,7 +7,6 @@
 
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_dependency_registry.h>
-#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 
@@ -24,25 +23,11 @@ namespace __hidden_dependency_computer_dependencies{
 using namespace NWB;
 namespace Assets = Core::Assets;
 
-inline constexpr Name s_AssetBunchTypeName("asset_bunch");
-
 using KnownVirtualPathTextMap = HashMap<Name, Assets::AssetString, Assets::ScratchArena, Hasher<Name>, EqualTo<Name>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static Expected<bool, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
-    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
-        const AStringView typeName(declaration.type.data(), declaration.type.size());
-        const auto parsedName = ToName(typeName);
-        if(!parsedName)
-            return MakeUnexpected(parsedName.error());
-        if(*parsedName && **parsedName == s_AssetBunchTypeName)
-            return true;
-    }
-    return false;
-}
 
 static void RecordVirtualPathText(const AStringView rawText, Assets::AssetArena& arena, KnownVirtualPathTextMap& outMap){
     const AStringView trimmed = TrimView(rawText);
@@ -204,7 +189,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
             return MakeUnexpected(Failure{});
         CollectDocumentVirtualPathTexts(*document, arena, knownVirtualPathTexts);
 
-        const auto hasBunch = HasAssetBunchDeclaration(*document);
+        const auto hasBunch = Assets::AssetsBunchCook::HasAssetBunchDeclaration(*document);
         if(!hasBunch)
             return MakeUnexpected(Failure{});
         const auto hasComposite = *hasBunch ? Expected<bool, NameTextError::Enum>(false) : Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);

@@ -530,7 +530,7 @@ Every source and header file is strictly split by domain responsibility so that 
 1. **Shared Foundation & `.nwb` Evaluation (`core/metascript/`)**:
    - `lexer.h` / `lexer.cpp`: Unified lexical scanner and token definitions.
    - `parser_cursor.h` / `parser_cursor.cpp`: Token stream navigation and `ParseError` diagnostics.
-   - `preprocessor.h` / `preprocessor.cpp`: Evaluates `#include` (with automatic deduplication), `#define`, `#undef`, `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, and `#endif` for both `.nwb` and `.adhd`.
+   - `preprocessor.h` / `preprocessor.cpp` / `preprocessor_eval.cpp`: Evaluates `#include` (with automatic deduplication), `#define`, `#undef`, `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, `#endif`, and `#if` constant expression evaluation for both `.nwb` and `.adhd`.
    - `attribute_parser.h` / `attribute_parser.cpp`: Parses single-bracket comma-separated attribute lists (`[asset("..."), serialize]`).
    - `value.*`, `operation_validator.*`, `expression_parser.*`, `statement_parser.*`, `parser.*`: `.nwb` document data evaluation.
 
@@ -544,17 +544,20 @@ Every source and header file is strictly split by domain responsibility so that 
    - **Parser (`core/metascript/adhd/parser/`)**:
      - `type_parser.h` / `type_parser.cpp`: Parses type references, template parameter lists, and `Func<...>` signatures.
      - `expr_parser.h` / `expr_parser.cpp`: Parses expressions, `lambda`, `cast<T>` / `bit_cast<T>`, and SIMD swizzles.
-     - `stmt_parser.h` / `stmt_parser.cpp`: Parses control flow, `parallel_for`, `parallel` task blocks, and `native` blocks.
-     - `decl_parser.h` / `decl_parser.cpp`: Parses `class`, `interface`, `enum<SizeType>`, `type`, functions, and translation units.
+     - `stmt_parser.h` / `stmt_parser.cpp` / `stmt_parser_special.cpp`: Parses control flow, `parallel_for`, `parallel` task blocks, and `native` blocks.
+     - `decl_parser.h` / `decl_parser.cpp` / `decl_parser_class.cpp` / `decl_parser_callable.cpp`: Parses `class`, `interface`, `enum<SizeType>`, `type`, functions, out-of-line members, and translation units.
    - **Semantic Analysis & Layout (`core/metascript/adhd/sema/`)**:
      - `symbol_table.h` / `symbol_table.cpp`: Top-level symbol registry, interface conformance, and template instantiation table.
-     - `type_checker.h` / `type_checker.cpp`: Enforces no-raw-pointer rules, `in` / `mut` parameters, mandatory `this.XXX`, `enum<SizeType>` arithmetic, swizzle lanes, and `switch`/`case` `break` rules.
-     - `layout_optimizer.h` / `layout_optimizer.cpp`: Computes field alignment/size and reorders `class` members (including per-instantiation templates) to minimize padding.
+     - `type_utils.h` / `type_utils.cpp`: Shared type equivalence, template parameter substitution, and `constexpr`-friendly / constant expression helpers.
+     - `type_checker.h` / `type_checker.cpp` / `type_checker_type.cpp` / `type_checker_decl.cpp` / `type_checker_stmt.cpp` / `type_checker_expr.cpp` / `type_checker_call.cpp` / `type_checker_infer.cpp`: Enforces no-raw-pointer rules, `in` / `mut` parameters, mandatory `this.XXX`, `enum<SizeType>` arithmetic, swizzle lanes, `switch`/`case` `break` rules, interface bounds, and last-use `Move(...)` optimization.
+     - `layout_optimizer.h` / `layout_optimizer.cpp` / `layout_instantiation.cpp`: Computes field alignment/size and reorders `class` members (including per-instantiation templates) to minimize padding.
      - `parallel_graph.h` / `parallel_graph.cpp`: Validates `parallel name : dep` task DAGs, cycle detection, and `[core(...), priority(...)]` attributes.
    - **Code & Reflection Generation (`core/metascript/adhd/codegen/`)**:
-     - `header_emitter.h` / `header_emitter.cpp`: Emits `.adhd.h` (`class ... final`, `namespace EnumName`, `NWB_DEFINE_ARENA_ALLOCATOR`, inline templates).
-     - `source_emitter.h` / `source_emitter.cpp`: Emits `.adhd.cpp` method bodies, `ScratchArena<>` injection, `CpuTaskScheduler` lowering for `parallel_for` / `parallel`, and `native` blocks.
-     - `reflection_emitter.h` / `reflection_emitter.cpp`: Emits `[serialize]` 1-byte packed binary serialization, `.nwb` property parsing, `AssetRef<T>` dependency extraction, and `[asset("...")]` registration.
+     - `cpp_type_emitter.h` / `cpp_type_emitter.cpp`: Shared C++ type emission, arena-parameterized container mapping, and identifier/literal formatting.
+     - `simd_binding_analyzer.h` / `simd_codegen_utils.cpp` / `simd_binding_analyzer.cpp`: SIMD intrinsic/type mapping and block-scoped SIMD register binding analysis.
+     - `header_emitter.h` / `header_emitter.cpp` / `header_emitter_decl.cpp`: Emits `.adhd.h` (`class ... final`, `namespace EnumName`, `NWB_DEFINE_ARENA_ALLOCATOR`, inline templates).
+     - `source_emitter.h` / `source_emitter.cpp` / `source_emitter_expr.cpp` / `source_emitter_parallel.cpp` / `source_emitter_simd_expr.cpp` / `source_emitter_simd_stmt.cpp`: Emits `.adhd.cpp` method bodies, `ScratchArena<>` injection, `CpuTaskScheduler` lowering for `parallel_for` / `parallel`, SIMD register lowering, and `native` blocks.
+     - `reflection_emitter.h` / `reflection_emitter.cpp` / `reflection_emitter_nwb.cpp`: Emits `[serialize]` 1-byte packed binary serialization, `.nwb` property parsing, `AssetRef<T>` dependency extraction, and `[asset("...")]` registration.
 
 3. **CLI Executable (`pipeline/adhd_compiler/`)**:
    - `compiler_options.h` / `compiler_options.cpp`: CLI argument parsing (input `.adhd`, include directories, output `.adhd.h` / `.adhd.cpp`, `--namespace`, `--validate-only`).

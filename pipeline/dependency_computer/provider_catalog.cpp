@@ -25,7 +25,6 @@ using namespace NWB;
 namespace Assets = Core::Assets;
 
 inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
-inline constexpr Name s_AssetBunchTypeName("asset_bunch");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,18 +42,6 @@ inline constexpr Name s_AssetBunchTypeName("asset_bunch");
     if(expectedType == Impl::IComponent::AssetTypeName() && dependencyRegistry)
         return dependencyRegistry->isComponentType(actualType);
     return actualType == expectedType;
-}
-
-[[nodiscard]] static Expected<bool, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
-    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
-        const AStringView typeName(declaration.type.data(), declaration.type.size());
-        const auto parsedName = ToName(typeName);
-        if(!parsedName)
-            return MakeUnexpected(parsedName.error());
-        if(*parsedName && **parsedName == s_AssetBunchTypeName)
-            return true;
-    }
-    return false;
 }
 
 [[nodiscard]] static Optional<Name> ExtractParentVirtualPath(const AStringView virtualPathText){
@@ -260,7 +247,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
             if(!document)
                 return MakeUnexpected(Failure{});
 
-            const auto hasBunch = HasAssetBunchDeclaration(*document);
+            const auto hasBunch = Assets::AssetsBunchCook::HasAssetBunchDeclaration(*document);
             if(!hasBunch)
                 return MakeUnexpected(Failure{});
             if(*hasBunch){
@@ -316,7 +303,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
             const auto document = read(index, scratchArena);
             if(!document)
                 return MakeUnexpected(Failure{});
-            const auto hasBunch = HasAssetBunchDeclaration(*document);
+            const auto hasBunch = Assets::AssetsBunchCook::HasAssetBunchDeclaration(*document);
             if(!hasBunch)
                 return MakeUnexpected(Failure{});
             const auto hasComposite = *hasBunch ? Expected<bool, NameTextError::Enum>(false) : Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);

@@ -41,33 +41,30 @@ public:
     )override{
         using namespace NWB::Core::Metascript;
 
-        const bool hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
-        const bool hasNwbExt = includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
-        if(!hasAdhdExt && !hasNwbExt)
+        if(includePath.size() <= 5u || includePath.substr(includePath.size() - 5u) != ".adhd")
             return false;
         const MString relPath(includePath.data(), includePath.size(), arena);
 
+        const auto tryResolveFromBase = [&](const Path<MetaArena>& baseDir) -> bool{
+            const auto candidate = ResolveAbsolutePath(arena, baseDir, MStringView(relPath.data(), relPath.size()));
+            if(!candidate || !ReadTextFile(*candidate, outContent))
+                return false;
+            outResolvedKey = PathToGenericString<MChar>(arena, *candidate);
+            m_resolvedParentDirs.push_back(candidate->parentPath());
+            return true;
+        };
+
         if(!isAngleBracket){
             for(usize i = m_resolvedParentDirs.size(); i > 0u; --i){
-                const auto candidate = ResolveAbsolutePath(arena, m_resolvedParentDirs[i - 1u], MStringView(relPath.data(), relPath.size()));
-                if(candidate && ReadTextFile(*candidate, outContent)){
-                    const std::string resolvedStr = candidate->genericString();
-                    outResolvedKey = MString(resolvedStr.data(), resolvedStr.size(), arena);
-                    m_resolvedParentDirs.push_back(candidate->parentPath());
+                if(tryResolveFromBase(m_resolvedParentDirs[i - 1u]))
                     return true;
-                }
             }
         }
 
         for(const MString& dirText : m_includeDirs){
             const Path<MetaArena> baseDir(arena, AStringView(dirText.data(), dirText.size()));
-            const auto candidate = ResolveAbsolutePath(arena, baseDir, MStringView(relPath.data(), relPath.size()));
-            if(candidate && ReadTextFile(*candidate, outContent)){
-                const std::string resolvedStr = candidate->genericString();
-                outResolvedKey = MString(resolvedStr.data(), resolvedStr.size(), arena);
-                m_resolvedParentDirs.push_back(candidate->parentPath());
+            if(tryResolveFromBase(baseDir))
                 return true;
-            }
         }
 
         return false;

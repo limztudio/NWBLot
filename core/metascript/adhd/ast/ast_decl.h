@@ -96,6 +96,7 @@ public:
 struct MethodDecl{
     AccessSpecifier::Enum access = AccessSpecifier::None;
     MStringView ownerClassName;
+    MVector<MStringView> ownerTemplateParams;
     MVector<TemplateParamDecl> templateParams;
     TypeRef* returnType = nullptr;
     MStringView name;
@@ -118,7 +119,8 @@ struct MethodDecl{
 
 public:
     explicit MethodDecl(MetaArena& arena)noexcept
-        : templateParams(arena)
+        : ownerTemplateParams(arena)
+        , templateParams(arena)
         , params(arena)
         , body(arena)
     {}

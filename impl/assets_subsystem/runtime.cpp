@@ -39,24 +39,14 @@ static const SubsystemTypeAutoRegistrar* s_RegisteredSubsystemTypesHead = nullpt
     return nullptr;
 }
 
-static void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcept{
-    usize writeIndex = 0u;
-    for(usize readIndex = 0u; readIndex < subsystems.size(); ++readIndex){
-        const ISubsystem::SubsystemRef& candidate = subsystems[readIndex];
-        bool duplicate = false;
-        for(usize prevIndex = 0u; prevIndex < writeIndex; ++prevIndex){
-            if(subsystems[prevIndex].name() == candidate.name()){
-                duplicate = true;
-                break;
-            }
-        }
-        if(!duplicate){
-            if(writeIndex != readIndex)
-                subsystems[writeIndex] = candidate;
-            ++writeIndex;
-        }
+[[nodiscard]] static bool IsSubsystemAssetType(const Name& assetType)noexcept{
+    if(!assetType)
+        return false;
+    for(const SubsystemTypeAutoRegistrar* node = s_RegisteredSubsystemTypesHead; node != nullptr; node = node->next()){
+        if(node->assetType() == assetType)
+            return true;
     }
-    subsystems.resize(writeIndex);
+    return false;
 }
 
 
@@ -81,18 +71,8 @@ SubsystemTypeAutoRegistrar::SubsystemTypeAutoRegistrar(const Name& assetType, co
 }
 
 
-bool IsSubsystemAssetType(const Name& assetType)noexcept{
-    if(!assetType)
-        return false;
-    for(const SubsystemTypeAutoRegistrar* node = __hidden_subsystem_runtime::s_RegisteredSubsystemTypesHead; node != nullptr; node = node->next()){
-        if(node->assetType() == assetType)
-            return true;
-    }
-    return false;
-}
-
 const ISubsystem* CastSubsystem(const Core::Assets::IAsset* const asset)noexcept{
-    if(!asset || !IsSubsystemAssetType(asset->assetType()))
+    if(!asset || !__hidden_subsystem_runtime::IsSubsystemAssetType(asset->assetType()))
         return nullptr;
     return checked_cast<const ISubsystem*>(asset);
 }
@@ -106,6 +86,26 @@ namespace SubsystemAssetRuntime{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcept{
+    usize writeIndex = 0u;
+    for(usize readIndex = 0u; readIndex < subsystems.size(); ++readIndex){
+        const ISubsystem::SubsystemRef& candidate = subsystems[readIndex];
+        bool duplicate = false;
+        for(usize prevIndex = 0u; prevIndex < writeIndex; ++prevIndex){
+            if(subsystems[prevIndex].name() == candidate.name()){
+                duplicate = true;
+                break;
+            }
+        }
+        if(!duplicate){
+            if(writeIndex != readIndex)
+                subsystems[writeIndex] = candidate;
+            ++writeIndex;
+        }
+    }
+    subsystems.resize(writeIndex);
+}
 
 bool ValidatePayload(const ISubsystem& subsystem){
     if(!subsystem.checkVirtualPath(NWB_TEXT("ISubsystem::validatePayload")))
@@ -242,7 +242,7 @@ bool LoadBinary(ISubsystem& subsystem, const Span<const u8> binary){
         }
         subsystem.subsystems.push_back(ISubsystem::SubsystemRef(subsystemName));
     }
-    __hidden_subsystem_runtime::DeduplicateSubsystemRefs(subsystem.subsystems);
+    DeduplicateSubsystemRefs(subsystem.subsystems);
 
     u64 totalCount = 0u;
     for(const u64 count : fieldCounts){

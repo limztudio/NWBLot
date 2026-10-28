@@ -22,20 +22,6 @@ namespace __hidden_adhd_expr_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr bool IsAssignmentOperator(const TokenType::Enum type)noexcept{
-    return type == TokenType::Equal
-        || type == TokenType::PlusEqual
-        || type == TokenType::MinusEqual
-        || type == TokenType::StarEqual
-        || type == TokenType::SlashEqual
-        || type == TokenType::PercentEqual
-        || type == TokenType::AmpersandEqual
-        || type == TokenType::PipeEqual
-        || type == TokenType::CaretEqual
-        || type == TokenType::LessLessEqual
-        || type == TokenType::GreaterGreaterEqual;
-}
-
 [[nodiscard]] Expr* MakeBinaryExpr(MetaArena& arena, const Token& opTok, Expr* lhs, Expr* rhs){
     Expr* node = AllocateAstNode<Expr>(arena);
     node->kind = ExprKind::Binary;
@@ -109,7 +95,7 @@ Expr* ExprParser::parseAssignment(){
         return nullptr;
     }
 
-    if(__hidden_adhd_expr_parser::IsAssignmentOperator(m_cursor.current().type)){
+    if(IsCompoundOrSimpleAssignment(m_cursor.current().type)){
         const Token opTok = m_cursor.current();
         m_cursor.advance();
         Expr* rhs = parseAssignment();

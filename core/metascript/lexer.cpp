@@ -431,14 +431,8 @@ Token Lexer::readString()noexcept{
 
     const usize contentEnd = m_current;
 
-    if(isAtEnd()){
-        Token tok;
-        tok.type = TokenType::Error;
-        tok.text = __hidden_metascript_lexer::s_UnterminatedStringMessage;
-        tok.line = startLine;
-        tok.column = startColumn;
-        return tok;
-    }
+    if(isAtEnd())
+        return makeErrorToken(__hidden_metascript_lexer::s_UnterminatedStringMessage, startLine, startColumn);
 
     advance();
 
@@ -477,15 +471,11 @@ Token Lexer::makeErrorToken(MStringView message, const u32 line, const u32 colum
 }
 
 MChar Lexer::peek()const noexcept{
-    if(isAtEnd())
-        return '\0';
-    return m_source[m_current];
+    return peekAt(0u);
 }
 
 MChar Lexer::peekNext()const noexcept{
-    if(m_current + 1 >= m_source.size())
-        return '\0';
-    return m_source[m_current + 1];
+    return peekAt(1u);
 }
 
 MChar Lexer::peekAt(const usize offset)const noexcept{

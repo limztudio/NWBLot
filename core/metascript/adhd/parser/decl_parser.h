@@ -48,9 +48,13 @@ private:
     [[nodiscard]] InterfaceDecl* parseInterfaceDecl(SourceSpan span, const MVector<ParsedAttribute>& attributes);
     [[nodiscard]] ClassDecl* parseClassDecl(SourceSpan span, const MVector<ParsedAttribute>& attributes);
     [[nodiscard]] bool parseClassMember(ClassDecl& classDecl);
+    void parseClassMethodQualifiers(MethodDecl& method)noexcept;
+    [[nodiscard]] bool parseClassMemberCallableBody(MethodDecl& method, MStringView missingTerminatorMessage);
     [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, const MVector<ParsedAttribute>& attributes);
+    [[nodiscard]] bool parseCallableOwnerOrTemplateHeader(MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outTemplateParams, bool failOnInvalidTemplateParams);
     [[nodiscard]] bool applyCallableAttributes(const MVector<ParsedAttribute>& attributes, SourceSpan span, MethodDecl& decl);
     [[nodiscard]] bool parseOperatorName(MStringView& outOpName);
+    [[nodiscard]] static bool validateMemberOperatorArity(MStringView opName, usize paramCount, MStringView& outErrorMsg)noexcept;
     [[nodiscard]] bool isCurrentTokenImported()const noexcept;
 
 

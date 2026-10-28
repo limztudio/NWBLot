@@ -7,7 +7,6 @@
 #include <core/common/application_entry.h>
 #include <core/common/log.h>
 #include <core/common/module.h>
-#include <core/metascript/arena_names.h>
 #include <logger/client/module.h>
 
 

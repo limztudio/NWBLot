@@ -62,6 +62,13 @@ private:
         SourceSpan span,
         MVector<ParseError>& errors
     );
+    [[nodiscard]] bool checkTemplateArgTypes(
+        const MVector<TypeArg>& templateArgs,
+        const ClassDecl* enclosingClass,
+        const MethodDecl* enclosingMethod,
+        SourceSpan fallbackSpan,
+        MVector<ParseError>& errors
+    );
     [[nodiscard]] bool checkTypeRef(
         const TypeRef& typeRef,
         const ClassDecl* enclosingClass,
@@ -71,8 +78,26 @@ private:
     );
     [[nodiscard]] bool classImplementsInterface(const ClassDecl& cls, const TypeRef* implClassRef, const TypeRef& requiredIface)const noexcept;
     [[nodiscard]] bool interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, u32 depth = 0u)const noexcept;
+    void markStringToPathAdaptation(
+        ClassDecl* ownerClass,
+        const MethodDecl& method,
+        Expr& expr,
+        const MVector<ScopedVarInfo>& scope
+    )const noexcept;
+    [[nodiscard]] bool verifyConcreteClassImplementsInterface(
+        ClassDecl* ownerClass,
+        const MethodDecl& method,
+        const Expr& rhsExpr,
+        const TypeRef* expectedInterfaceType,
+        const MVector<ScopedVarInfo>& scope,
+        SourceSpan errorSpan,
+        MStringView errorMessage,
+        MVector<ParseError>& errors
+    );
     [[nodiscard]] bool checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors);
     [[nodiscard]] bool checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors);
+    [[nodiscard]] bool checkCallableSignature(const ClassDecl* enclosingClass, MethodDecl& method, MVector<ParseError>& errors);
+    [[nodiscard]] bool hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const FieldDecl& field)const noexcept;
     [[nodiscard]] bool checkConstructorInitialization(ClassDecl& classDecl, MethodDecl& ctor, MVector<ParseError>& errors);
     [[nodiscard]] bool checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVector<ParseError>& errors);
     [[nodiscard]] bool checkStatementList(
@@ -82,11 +107,30 @@ private:
         MVector<ScopedVarInfo>& scope,
         MVector<ParseError>& errors
     );
+    void analyzeBlockMoveAtLastUse(
+        const MVector<Stmt*>& statements,
+        const MVector<ScopedVarInfo>& scope,
+        usize savedScopeSize
+    )const noexcept;
     [[nodiscard]] bool checkStatement(
         ClassDecl* ownerClass,
         MethodDecl& method,
         Stmt& stmt,
         MVector<ScopedVarInfo>& scope,
+        MVector<ParseError>& errors
+    );
+    [[nodiscard]] bool checkVarDeclStatement(
+        ClassDecl* ownerClass,
+        MethodDecl& method,
+        Stmt& stmt,
+        MVector<ScopedVarInfo>& scope,
+        MVector<ParseError>& errors
+    );
+    [[nodiscard]] bool checkReturnStatement(
+        ClassDecl* ownerClass,
+        MethodDecl& method,
+        Stmt& stmt,
+        const MVector<ScopedVarInfo>& scope,
         MVector<ParseError>& errors
     );
     [[nodiscard]] bool checkExpr(
@@ -95,6 +139,42 @@ private:
         Expr& expr,
         const MVector<ScopedVarInfo>& scope,
         bool isMutationTarget,
+        MVector<ParseError>& errors
+    );
+    [[nodiscard]] bool checkCallExpr(
+        ClassDecl* ownerClass,
+        MethodDecl& method,
+        Expr& expr,
+        const MVector<ScopedVarInfo>& scope,
+        bool isMutationTarget,
+        MVector<ParseError>& errors
+    );
+    [[nodiscard]] bool checkCallableArguments(
+        ClassDecl* ownerClass,
+        MethodDecl& method,
+        MVector<Expr*>& arguments,
+        const MVector<ScopedVarInfo>& scope,
+        const MethodDecl* targetCallable,
+        const ClassDecl* targetOwnerCls,
+        const TypeRef* recvTypeRef,
+        const MVector<TypeArg>* callTemplateArgs,
+        const TypeRef* invokedFuncType,
+        const ScopedVarInfo* localCallable,
+        MStringView calledMemberName,
+        MVector<ParseError>& errors
+    );
+    [[nodiscard]] bool checkBinaryExpr(
+        ClassDecl* ownerClass,
+        MethodDecl& method,
+        Expr& expr,
+        const MVector<ScopedVarInfo>& scope,
+        MVector<ParseError>& errors
+    );
+    [[nodiscard]] bool checkLambdaExpr(
+        ClassDecl* ownerClass,
+        MethodDecl& method,
+        Expr& expr,
+        const MVector<ScopedVarInfo>& scope,
         MVector<ParseError>& errors
     );
     [[nodiscard]] MStringView inferExprTypeName(
@@ -116,6 +196,15 @@ private:
         const Expr& recv,
         const MVector<ScopedVarInfo>& scope
     )const noexcept;
+
+    static void propagateFuncCaptureBytes(
+        TypeRef* targetType,
+        const Expr* rhs,
+        const MVector<ScopedVarInfo>& scope,
+        const SymbolTable& symbols
+    )noexcept;
+    [[nodiscard]] static bool isEscapingMutCaptureLambda(const Expr* rhs, const MVector<ScopedVarInfo>& scope)noexcept;
+    [[nodiscard]] static bool statementsContainReturnOrNative(const MVector<Stmt*>& stmts)noexcept;
 
     [[nodiscard]] static const TemplateParamDecl* findTemplateParam(
         const ClassDecl* ownerClass,
@@ -167,4 +256,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

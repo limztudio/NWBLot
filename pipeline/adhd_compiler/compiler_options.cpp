@@ -10,6 +10,55 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_compiler_options{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool TryConsumeOptionValue(
+    const NWB::Core::Metascript::MStringView arg,
+    const NWB::Core::Metascript::MStringView shortFlag,
+    const NWB::Core::Metascript::MStringView longFlag,
+    int& inOutIndex,
+    const int argc,
+    char** argv,
+    NWB::Core::Metascript::MetaArena& arena,
+    NWB::Core::Metascript::MString& outValue,
+    bool& outMatched
+){
+    using namespace NWB::Core::Metascript;
+
+    outMatched = false;
+    if(arg == longFlag || (!shortFlag.empty() && arg == shortFlag)){
+        outMatched = true;
+        if(inOutIndex + 1 >= argc){
+            NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: missing argument after '{}'"), ConvertString(arg));
+            return false;
+        }
+        const MStringView val(argv[++inOutIndex]);
+        outValue = MString(val.data(), val.size(), arena);
+        return true;
+    }
+    if(!shortFlag.empty() && arg.size() > shortFlag.size() && arg.substr(0u, shortFlag.size()) == shortFlag){
+        outMatched = true;
+        const MStringView val = arg.substr(shortFlag.size());
+        outValue = MString(val.data(), val.size(), arena);
+        return true;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool ParseAdhdCompilerOptions(
     const int argc,
     char** argv,
@@ -17,6 +66,7 @@ bool ParseAdhdCompilerOptions(
     AdhdCompilerOptions& outOptions
 ){
     using namespace NWB::Core::Metascript;
+    using namespace __hidden_adhd_compiler_options;
 
     for(int i = 1; i < argc; ++i){
         const MStringView arg(argv[i]);
@@ -24,66 +74,41 @@ bool ParseAdhdCompilerOptions(
             outOptions.showHelp = true;
             return true;
         }
-        if(arg == "-o" || arg == "--output-dir"){
-            if(i + 1 >= argc){
-                NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: missing argument after '{}'"), ConvertString(arg));
-                return false;
-            }
-            const MStringView val(argv[++i]);
-            outOptions.outputDirectory = MString(val.data(), val.size(), arena);
+
+        bool matched = false;
+        MString value(arena);
+
+        if(!TryConsumeOptionValue(arg, "-o", "--output-dir", i, argc, argv, arena, outOptions.outputDirectory, matched))
+            return false;
+        if(matched)
+            continue;
+
+        if(!TryConsumeOptionValue(arg, "-I", "--include-dir", i, argc, argv, arena, value, matched))
+            return false;
+        if(matched){
+            outOptions.includeDirectories.push_back(Move(value));
             continue;
         }
-        if(arg.size() > 2u && arg.substr(0u, 2u) == "-o"){
-            const MStringView val = arg.substr(2u);
-            outOptions.outputDirectory = MString(val.data(), val.size(), arena);
+
+        if(!TryConsumeOptionValue(arg, "-D", "--define", i, argc, argv, arena, value, matched))
+            return false;
+        if(matched){
+            outOptions.macroDefinitions.push_back(Move(value));
             continue;
         }
-        if(arg == "-I" || arg == "--include-dir"){
-            if(i + 1 >= argc){
-                NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: missing argument after '{}'"), ConvertString(arg));
-                return false;
-            }
-            const MStringView val(argv[++i]);
-            outOptions.includeDirectories.push_back(MString(val.data(), val.size(), arena));
+
+        if(!TryConsumeOptionValue(arg, {}, "--input", i, argc, argv, arena, value, matched))
+            return false;
+        if(matched){
+            outOptions.inputFiles.push_back(Move(value));
             continue;
         }
-        if(arg.size() > 2u && arg.substr(0u, 2u) == "-I"){
-            const MStringView val = arg.substr(2u);
-            outOptions.includeDirectories.push_back(MString(val.data(), val.size(), arena));
+
+        if(!TryConsumeOptionValue(arg, {}, "--namespace", i, argc, argv, arena, outOptions.customNamespace, matched))
+            return false;
+        if(matched)
             continue;
-        }
-        if(arg == "-D" || arg == "--define"){
-            if(i + 1 >= argc){
-                NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: missing argument after '{}'"), ConvertString(arg));
-                return false;
-            }
-            const MStringView val(argv[++i]);
-            outOptions.macroDefinitions.push_back(MString(val.data(), val.size(), arena));
-            continue;
-        }
-        if(arg.size() > 2u && arg.substr(0u, 2u) == "-D"){
-            const MStringView val = arg.substr(2u);
-            outOptions.macroDefinitions.push_back(MString(val.data(), val.size(), arena));
-            continue;
-        }
-        if(arg == "--input"){
-            if(i + 1 >= argc){
-                NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: missing argument after '--input'"));
-                return false;
-            }
-            const MStringView val(argv[++i]);
-            outOptions.inputFiles.push_back(MString(val.data(), val.size(), arena));
-            continue;
-        }
-        if(arg == "--namespace"){
-            if(i + 1 >= argc){
-                NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: missing argument after '--namespace'"));
-                return false;
-            }
-            const MStringView val(argv[++i]);
-            outOptions.customNamespace = MString(val.data(), val.size(), arena);
-            continue;
-        }
+
         if(arg == "--validate-only"){
             outOptions.validateOnly = true;
             continue;

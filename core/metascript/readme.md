@@ -184,10 +184,13 @@ MetaScript handles syntax and generic value operations. File access, UTF-8 BOM r
 | `global.h`, `arena_names.h` | Arena/container aliases, source reader interface, and allocation/diagnostic names. |
 | `value.h`, `value.cpp` | Tagged value storage, arithmetic, construction, and arena ownership. |
 | `lexer.h`, `lexer.cpp` | Tokenization and source positions. Token text views borrow the lexer source. |
+| `preprocessor.h`, `preprocessor.cpp`, `preprocessor_eval.cpp` | Shared `#include`, `#define`, `#undef`, and `#if`/`#elif`/`#else`/`#endif` directive processor. |
+| `attribute_parser.h`, `attribute_parser.cpp` | Shared single-bracket attribute list parser (`[name("arg"), flag]`). |
 | `parser.h`, `parser.cpp` | `Document`, parse entry points, and reader buffering. |
 | `parser_cursor.*` | Shared token cursor and diagnostics. |
 | `expression_parser.*`, `operation_validator.*` | Literal/reference expressions and operand validation. |
 | `statement_parser.*` | Variable declarations, assignments, attributes, and independent struct descriptions. |
+| `adhd/` | `adhd` language AST (`ast/`), parser (`parser/`), semantic analyzer (`sema/`), C++/reflection emitters (`codegen/`), and `Compiler` pipeline (`compiler.*`). |
 
 ## Build and tests
 

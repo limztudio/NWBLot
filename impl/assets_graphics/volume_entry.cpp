@@ -20,15 +20,13 @@
 #include "shadow/subsystem.h"
 #include "transparent/subsystem.h"
 
+#include <impl/assets_scene/binary_payload.h>
+#include <impl/assets_scene/cook.h>
 #include <impl/assets_subsystem/cook.h>
 
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
-#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
-#include <core/common/log.h>
-
-#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,225 +51,66 @@ static constexpr AStringView s_ModelComponentDiagnosticPrefix = "Model component
 static constexpr AStringView s_MeshComponentDiagnosticPrefix = "Mesh component meta";
 static constexpr AStringView s_RendererComponentDiagnosticPrefix = "Renderer component meta";
 
-
-struct ModelComponentCookEntry{
-    Name virtualPath = s_NameNone;
-    ModelComponent component;
-
-
-public:
-    explicit ModelComponentCookEntry(Core::Assets::AssetArena&)noexcept{}
-};
-
-struct MeshComponentCookEntry{
-    Name virtualPath = s_NameNone;
-    MeshComponent component;
+using ModelComponentCookEntry = TypedComponentCookEntry<ModelComponent>;
+using MeshComponentCookEntry = TypedComponentCookEntry<MeshComponent>;
+using RendererComponentCookEntry = TypedComponentCookEntry<RendererComponent>;
 
 
-public:
-    explicit MeshComponentCookEntry(Core::Assets::AssetArena&)noexcept{}
-};
-
-struct RendererComponentCookEntry{
-    Name virtualPath = s_NameNone;
-    RendererComponent component;
-
-
-public:
-    explicit RendererComponentCookEntry(Core::Assets::AssetArena&)noexcept{}
-};
-
-
-template<typename TAsset>
-[[nodiscard]] static Expected<Core::Assets::AssetRef<TAsset>> ParseGraphicsComponentAssetRef(
-    const Path& nwbFilePath,
-    const AStringView diagnosticPrefix,
-    const AStringView fieldLabel,
-    const AStringView text,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    if(TrimView(text).empty() || text != TrimView(text)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
-        return MakeUnexpected(Failure{});
-    }
-    if(text.find('\\') != AStringView::npos || !Core::Assets::HasReservedAssetVirtualRoot(text, scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
-        return MakeUnexpected(Failure{});
-    }
-    const auto ref = Core::Assets::AssetRef<TAsset>::FromText(text);
-    if(!ref || !ref->valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' is invalid"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
-        return MakeUnexpected(Failure{});
-    }
-    return *ref;
-}
-
-[[nodiscard]] static Expected<ModelComponentCookEntry> ParseModelComponentCookMetadata(
+template<
+    typename ComponentAssetT,
+    typename ReferencedAssetT,
+    Core::Assets::AssetRef<ReferencedAssetT> decltype(ComponentAssetT::component)::* FieldPtr,
+    const AStringView& DiagnosticPrefix
+>
+[[nodiscard]] static Expected<TypedComponentCookEntry<decltype(ComponentAssetT::component)>> ParseSingleAssetRefComponentCookMetadata(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    ModelComponentCookEntry entry(arena);
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_ModelComponentDiagnosticPrefix))
+    using EntryT = TypedComponentCookEntry<decltype(ComponentAssetT::component)>;
+
+    EntryT entry(arena);
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, DiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_ModelComponentDiagnosticPrefix))
+    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, DiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ModelComponentDiagnosticPrefix, { s_AssetField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, DiagnosticPrefix, { s_AssetField }))
         return MakeUnexpected(Failure{});
 
-    const auto assetField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_ModelComponentDiagnosticPrefix, s_AssetField, true);
+    const auto assetField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, DiagnosticPrefix, s_AssetField, true);
     if(!assetField)
         return MakeUnexpected(Failure{});
-    const auto modelRef = ParseGraphicsComponentAssetRef<Model>(nwbFilePath, s_ModelComponentDiagnosticPrefix, s_AssetField, assetField->text, scratchArena);
-    if(!modelRef)
+    const auto assetRef = Core::Assets::ParseMetadataReservedAssetRefText<ReferencedAssetT>(nwbFilePath, DiagnosticPrefix, s_AssetField, assetField->text, scratchArena);
+    if(!assetRef)
         return MakeUnexpected(Failure{});
-    entry.component.model = *modelRef;
+    entry.component.*FieldPtr = *assetRef;
 
-    ModelComponentAsset candidate(arena, entry.virtualPath);
-    candidate.component = entry.component;
-    if(!candidate.validatePayload())
+    if(!SceneAssetCook::BuildComponentAssetFromEntry<ComponentAssetT>(entry, arena))
         return MakeUnexpected(Failure{});
 
     return entry;
 }
 
-[[nodiscard]] static Expected<ModelComponentCookEntry> ParseModelComponentDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
+template<
+    typename ComponentAssetT,
+    typename ReferencedAssetT,
+    Core::Assets::AssetRef<ReferencedAssetT> decltype(ComponentAssetT::component)::* FieldPtr,
+    const AStringView& DiagnosticPrefix
+>
+static bool ExtractSingleAssetRefComponentDependencies(
+    const Core::Assets::CookDependencyItemContext& context,
+    Core::Assets::ICookDependencyCollector& collector
 ){
-    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, context.scratchArena);
-    if(!virtualPathResult)
-        return MakeUnexpected(Failure{});
-    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_ModelComponentDiagnosticPrefix);
-    if(!asset)
-        return MakeUnexpected(asset.error());
-    return ParseModelComponentCookMetadata(*virtualPathResult, nwbFilePath, **asset, context.cookArena, context.scratchArena);
-}
-
-[[nodiscard]] static Expected<ModelComponentCookEntry> ParseModelComponentValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseModelComponentCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
-[[nodiscard]] static Expected<ModelComponentAsset> BuildModelComponentAsset(ModelComponentCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    ModelComponentAsset asset(arena, entry.virtualPath);
-    asset.component = entry.component;
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure{});
-    return asset;
-}
-
-static bool ExtractModelComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto entry = context.document
-        ? [&]() -> Expected<ModelComponentCookEntry>{
-            auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(context.assetRoot, context.virtualRoot, context.nwbFilePath, context.scratchArena);
-            if(!virtualPathResult)
-                return MakeUnexpected(Failure{});
-            const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(context.nwbFilePath, *context.document, s_ModelComponentDiagnosticPrefix);
-            if(!asset)
-                return MakeUnexpected(asset.error());
-            return ParseModelComponentCookMetadata(*virtualPathResult, context.nwbFilePath, **asset, context.arena, context.scratchArena);
-        }()
-        : ParseModelComponentCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
-    ;
+    using EntryT = TypedComponentCookEntry<decltype(ComponentAssetT::component)>;
+    const auto entry = SceneAssetCook::ParseCookDependencyEntry<
+        EntryT,
+        &ParseSingleAssetRefComponentCookMetadata<ComponentAssetT, ReferencedAssetT, FieldPtr, DiagnosticPrefix>
+    >(context, DiagnosticPrefix);
     if(!entry)
         return false;
-    return collector.addAssetDependency(entry->component.model.name(), Model::AssetTypeName());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<MeshComponentCookEntry> ParseMeshComponentCookMetadata(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    MeshComponentCookEntry entry(arena);
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_MeshComponentDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_MeshComponentDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_MeshComponentDiagnosticPrefix, { s_AssetField }))
-        return MakeUnexpected(Failure{});
-
-    const auto assetField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_MeshComponentDiagnosticPrefix, s_AssetField, true);
-    if(!assetField)
-        return MakeUnexpected(Failure{});
-    const auto meshRef = ParseGraphicsComponentAssetRef<Mesh>(nwbFilePath, s_MeshComponentDiagnosticPrefix, s_AssetField, assetField->text, scratchArena);
-    if(!meshRef)
-        return MakeUnexpected(Failure{});
-    entry.component.mesh = *meshRef;
-
-    MeshComponentAsset candidate(arena, entry.virtualPath);
-    candidate.component = entry.component;
-    if(!candidate.validatePayload())
-        return MakeUnexpected(Failure{});
-
-    return entry;
-}
-
-[[nodiscard]] static Expected<MeshComponentCookEntry> ParseMeshComponentDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, context.scratchArena);
-    if(!virtualPathResult)
-        return MakeUnexpected(Failure{});
-    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_MeshComponentDiagnosticPrefix);
-    if(!asset)
-        return MakeUnexpected(asset.error());
-    return ParseMeshComponentCookMetadata(*virtualPathResult, nwbFilePath, **asset, context.cookArena, context.scratchArena);
-}
-
-[[nodiscard]] static Expected<MeshComponentCookEntry> ParseMeshComponentValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseMeshComponentCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
-[[nodiscard]] static Expected<MeshComponentAsset> BuildMeshComponentAsset(MeshComponentCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    MeshComponentAsset asset(arena, entry.virtualPath);
-    asset.component = entry.component;
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure{});
-    return asset;
-}
-
-static bool ExtractMeshComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto entry = context.document
-        ? [&]() -> Expected<MeshComponentCookEntry>{
-            auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(context.assetRoot, context.virtualRoot, context.nwbFilePath, context.scratchArena);
-            if(!virtualPathResult)
-                return MakeUnexpected(Failure{});
-            const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(context.nwbFilePath, *context.document, s_MeshComponentDiagnosticPrefix);
-            if(!asset)
-                return MakeUnexpected(asset.error());
-            return ParseMeshComponentCookMetadata(*virtualPathResult, context.nwbFilePath, **asset, context.arena, context.scratchArena);
-        }()
-        : ParseMeshComponentCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
-    ;
-    if(!entry)
-        return false;
-    return collector.addAssetDependency(entry->component.mesh.name(), Mesh::AssetTypeName());
+    return collector.addAssetDependency((entry->component.*FieldPtr).name(), ReferencedAssetT::AssetTypeName());
 }
 
 
@@ -296,73 +135,29 @@ static bool ExtractMeshComponentDependencies(const Core::Assets::CookDependencyI
     const auto materialField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_MaterialField, true);
     if(!materialField)
         return MakeUnexpected(Failure{});
-    const auto materialRef = ParseGraphicsComponentAssetRef<Material>(nwbFilePath, s_RendererComponentDiagnosticPrefix, s_MaterialField, materialField->text, scratchArena);
+    const auto materialRef = Core::Assets::ParseMetadataReservedAssetRefText<Material>(nwbFilePath, s_RendererComponentDiagnosticPrefix, s_MaterialField, materialField->text, scratchArena);
     if(!materialRef)
         return MakeUnexpected(Failure{});
     entry.component.material = *materialRef;
 
     if(const Core::Metascript::Value* visibleValue = asset.findField(s_VisibleField)){
-        if(!visibleValue->isInteger() || (visibleValue->asInteger() != 0 && visibleValue->asInteger() != 1)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be 0 or 1"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_VisibleField));
+        const auto visible = SceneAssetCook::ParseMetadataBoolField(nwbFilePath, s_RendererComponentDiagnosticPrefix, *visibleValue, s_VisibleField);
+        if(!visible)
             return MakeUnexpected(Failure{});
-        }
-        entry.component.visible = visibleValue->asInteger() != 0;
+        entry.component.visible = *visible;
     }
 
-    RendererComponentAsset candidate(arena, entry.virtualPath);
-    candidate.component = entry.component;
-    if(!candidate.validatePayload())
+    if(!SceneAssetCook::BuildComponentAssetFromEntry<RendererComponentAsset>(entry, arena))
         return MakeUnexpected(Failure{});
 
     return entry;
 }
 
-[[nodiscard]] static Expected<RendererComponentCookEntry> ParseRendererComponentDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, context.scratchArena);
-    if(!virtualPathResult)
-        return MakeUnexpected(Failure{});
-    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_RendererComponentDiagnosticPrefix);
-    if(!asset)
-        return MakeUnexpected(asset.error());
-    return ParseRendererComponentCookMetadata(*virtualPathResult, nwbFilePath, **asset, context.cookArena, context.scratchArena);
-}
-
-[[nodiscard]] static Expected<RendererComponentCookEntry> ParseRendererComponentValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseRendererComponentCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
-[[nodiscard]] static Expected<RendererComponentAsset> BuildRendererComponentAsset(RendererComponentCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    RendererComponentAsset asset(arena, entry.virtualPath);
-    asset.component = entry.component;
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure{});
-    return asset;
-}
-
 static bool ExtractRendererComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto entry = context.document
-        ? [&]() -> Expected<RendererComponentCookEntry>{
-            auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(context.assetRoot, context.virtualRoot, context.nwbFilePath, context.scratchArena);
-            if(!virtualPathResult)
-                return MakeUnexpected(Failure{});
-            const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(context.nwbFilePath, *context.document, s_RendererComponentDiagnosticPrefix);
-            if(!asset)
-                return MakeUnexpected(asset.error());
-            return ParseRendererComponentCookMetadata(*virtualPathResult, context.nwbFilePath, **asset, context.arena, context.scratchArena);
-        }()
-        : ParseRendererComponentCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
-    ;
+    const auto entry = SceneAssetCook::ParseCookDependencyEntry<RendererComponentCookEntry, &ParseRendererComponentCookMetadata>(
+        context,
+        s_RendererComponentDiagnosticPrefix
+    );
     if(!entry)
         return false;
     return collector.addAssetDependency(entry->component.material.name(), Material::AssetTypeName());
@@ -384,27 +179,24 @@ static bool RegisterGraphicsSubsystemCookEntries(Core::Assets::CookEntryRegistry
         && AssetsSubsystemCook::RegisterSubsystemCookEntry<TransparentSubsystem>(registry)
         && AssetsSubsystemCook::RegisterSubsystemCookEntry<RefractiveSubsystem>(registry)
         && AssetsSubsystemCook::RegisterSubsystemCookEntry<CsgSubsystem>(registry)
-        && Core::Assets::RegisterDocumentValueCookEntry<ModelComponentCookEntry, ModelComponentAsset, TypedComponentAssetCodec<ModelComponentAsset>>(
-            registry,
-            ComponentBinaryPayload::s_ModelComponentAssetKindLabel,
-            &ParseModelComponentDocument,
-            &ParseModelComponentValue,
-            &BuildModelComponentAsset
-        )
-        && Core::Assets::RegisterDocumentValueCookEntry<MeshComponentCookEntry, MeshComponentAsset, TypedComponentAssetCodec<MeshComponentAsset>>(
-            registry,
-            ComponentBinaryPayload::s_MeshComponentAssetKindLabel,
-            &ParseMeshComponentDocument,
-            &ParseMeshComponentValue,
-            &BuildMeshComponentAsset
-        )
-        && Core::Assets::RegisterDocumentValueCookEntry<RendererComponentCookEntry, RendererComponentAsset, TypedComponentAssetCodec<RendererComponentAsset>>(
-            registry,
-            ComponentBinaryPayload::s_RendererComponentAssetKindLabel,
-            &ParseRendererComponentDocument,
-            &ParseRendererComponentValue,
-            &BuildRendererComponentAsset
-        )
+        && SceneAssetCook::RegisterComponentCookEntry<
+            ModelComponentCookEntry,
+            ModelComponentAsset,
+            &ParseSingleAssetRefComponentCookMetadata<ModelComponentAsset, Model, &ModelComponent::model, s_ModelComponentDiagnosticPrefix>,
+            s_ModelComponentDiagnosticPrefix
+        >(registry, ComponentBinaryPayload::s_ModelComponentAssetKindLabel)
+        && SceneAssetCook::RegisterComponentCookEntry<
+            MeshComponentCookEntry,
+            MeshComponentAsset,
+            &ParseSingleAssetRefComponentCookMetadata<MeshComponentAsset, Mesh, &MeshComponent::mesh, s_MeshComponentDiagnosticPrefix>,
+            s_MeshComponentDiagnosticPrefix
+        >(registry, ComponentBinaryPayload::s_MeshComponentAssetKindLabel)
+        && SceneAssetCook::RegisterComponentCookEntry<
+            RendererComponentCookEntry,
+            RendererComponentAsset,
+            &ParseRendererComponentCookMetadata,
+            s_RendererComponentDiagnosticPrefix
+        >(registry, ComponentBinaryPayload::s_RendererComponentAssetKindLabel)
     ;
 }
 
@@ -420,8 +212,14 @@ static bool RegisterGraphicsSubsystemCookDependencies(Core::Assets::CookDependen
         && AssetsSubsystemCook::RegisterSubsystemCookDependency<TransparentSubsystem>(registry)
         && AssetsSubsystemCook::RegisterSubsystemCookDependency<RefractiveSubsystem>(registry)
         && AssetsSubsystemCook::RegisterSubsystemCookDependency<CsgSubsystem>(registry)
-        && registry.registerComponentType(ModelComponentAsset::AssetTypeName(), &ExtractModelComponentDependencies)
-        && registry.registerComponentType(MeshComponentAsset::AssetTypeName(), &ExtractMeshComponentDependencies)
+        && registry.registerComponentType(
+            ModelComponentAsset::AssetTypeName(),
+            &ExtractSingleAssetRefComponentDependencies<ModelComponentAsset, Model, &ModelComponent::model, s_ModelComponentDiagnosticPrefix>
+        )
+        && registry.registerComponentType(
+            MeshComponentAsset::AssetTypeName(),
+            &ExtractSingleAssetRefComponentDependencies<MeshComponentAsset, Mesh, &MeshComponent::mesh, s_MeshComponentDiagnosticPrefix>
+        )
         && registry.registerComponentType(RendererComponentAsset::AssetTypeName(), &ExtractRendererComponentDependencies)
     ;
 }
@@ -453,4 +251,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

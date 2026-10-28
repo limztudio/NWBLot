@@ -143,6 +143,7 @@ namespace SubsystemAssetRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcept;
 [[nodiscard]] bool ValidatePayload(const ISubsystem& subsystem);
 [[nodiscard]] bool LoadBinary(ISubsystem& subsystem, Span<const u8> binary);
 
@@ -253,7 +254,6 @@ private:
 };
 
 
-[[nodiscard]] bool IsSubsystemAssetType(const Name& assetType)noexcept;
 [[nodiscard]] const ISubsystem* CastSubsystem(const Core::Assets::IAsset* asset)noexcept;
 
 

@@ -89,6 +89,12 @@ template<typename T>
 }
 
 template<typename T>
+[[nodiscard]] NWB_INLINE T Round(const T value)noexcept(IsArithmetic_V<T>){
+    using std::round;
+    return static_cast<T>(round(value));
+}
+
+template<typename T>
 [[nodiscard]] NWB_INLINE T Truncate(const T value)noexcept(IsArithmetic_V<T>){
     using std::trunc;
     return static_cast<T>(trunc(value));

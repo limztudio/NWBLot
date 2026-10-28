@@ -3,7 +3,9 @@ target_sources(nwb_assets_scene PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
+    "${CMAKE_CURRENT_LIST_DIR}/components.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/runtime_components.cpp"
 )
 target_link_libraries(nwb_assets_scene PUBLIC nwb_assets nwb_assets_subsystem nwb_ecs nwb_ecs_scene)
 
@@ -13,9 +15,13 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
+        "${CMAKE_CURRENT_LIST_DIR}/components.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_components.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/runtime_components.cpp"
     )
     target_link_libraries(nwb_assets_scene_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_ecs nwb_ecs_scene nwb_metascript)
     target_compile_definitions(nwb_assets_scene_cook PRIVATE NWB_COOK=1)

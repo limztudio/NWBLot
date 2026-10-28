@@ -236,73 +236,35 @@ Value ExpressionParser::parseBraceExpression(){
 
     Value list(m_arena);
     list.makeList();
-    list.append(Move(first));
 
-    if(m_cursor.m_current.type == TokenType::RightBrace){
-        m_cursor.advance();
-        return list;
-    }
-
-    if(!m_cursor.expect(TokenType::Comma, __hidden_metascript_expression_parser::s_ListExpectedCommaOrCloseMessage))
-        return Value(m_arena);
-    if(m_cursor.m_current.type == TokenType::RightBrace){
-        m_cursor.advance();
-        return list;
-    }
-
-    while(m_cursor.m_current.type != TokenType::RightBrace){
-        Value elem = parseExpression();
-        if(m_cursor.failed())
-            return Value(m_arena);
+    Value elem = Move(first);
+    for(;;){
         list.append(Move(elem));
 
-        if(m_cursor.m_current.type == TokenType::RightBrace)
-            break;
+        if(m_cursor.m_current.type == TokenType::RightBrace){
+            m_cursor.advance();
+            return list;
+        }
 
         if(!m_cursor.expect(TokenType::Comma, __hidden_metascript_expression_parser::s_ListExpectedCommaOrCloseMessage))
             return Value(m_arena);
-        if(m_cursor.m_current.type == TokenType::RightBrace)
-            break;
-    }
+        if(m_cursor.m_current.type == TokenType::RightBrace){
+            m_cursor.advance();
+            return list;
+        }
 
-    m_cursor.advance();
-    return list;
+        elem = parseExpression();
+        if(m_cursor.failed())
+            return Value(m_arena);
+    }
 }
 
 Value ExpressionParser::parseMapLiteralContinuation(Value&& firstKey){
-    m_cursor.advance();
-
-    if(!firstKey.isString()){
-        m_cursor.error(__hidden_metascript_expression_parser::s_MapKeysMustBeStringsMessage);
-        return Value(m_arena);
-    }
-
     Value map(m_arena);
     map.makeMap();
 
-    Value firstValue = parseExpression();
-    if(m_cursor.failed())
-        return Value(m_arena);
-
-    map.field(firstKey.asString()) = Move(firstValue);
-
-    if(m_cursor.m_current.type == TokenType::RightBrace){
-        m_cursor.advance();
-        return map;
-    }
-
-    if(!m_cursor.expect(TokenType::Comma, __hidden_metascript_expression_parser::s_MapExpectedCommaOrCloseMessage))
-        return Value(m_arena);
-    if(m_cursor.m_current.type == TokenType::RightBrace){
-        m_cursor.advance();
-        return map;
-    }
-
-    while(m_cursor.m_current.type != TokenType::RightBrace){
-        Value key = parseExpression();
-        if(m_cursor.failed())
-            return Value(m_arena);
-
+    Value key = Move(firstKey);
+    for(;;){
         if(!key.isString()){
             m_cursor.error(__hidden_metascript_expression_parser::s_MapKeysMustBeStringsMessage);
             return Value(m_arena);
@@ -317,17 +279,22 @@ Value ExpressionParser::parseMapLiteralContinuation(Value&& firstKey){
 
         map.field(key.asString()) = Move(val);
 
-        if(m_cursor.m_current.type == TokenType::RightBrace)
-            break;
+        if(m_cursor.m_current.type == TokenType::RightBrace){
+            m_cursor.advance();
+            return map;
+        }
 
         if(!m_cursor.expect(TokenType::Comma, __hidden_metascript_expression_parser::s_MapExpectedCommaOrCloseMessage))
             return Value(m_arena);
-        if(m_cursor.m_current.type == TokenType::RightBrace)
-            break;
-    }
+        if(m_cursor.m_current.type == TokenType::RightBrace){
+            m_cursor.advance();
+            return map;
+        }
 
-    m_cursor.advance();
-    return map;
+        key = parseExpression();
+        if(m_cursor.failed())
+            return Value(m_arena);
+    }
 }
 
 

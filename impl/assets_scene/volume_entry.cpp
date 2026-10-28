@@ -11,10 +11,6 @@
 #include "cook.h"
 #include "binary_payload.h"
 
-#include <core/assets/cook_dependency_registry.h>
-#include <core/assets/cook_entry_registry.h>
-#include <core/assets/cook_metadata.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,148 +27,42 @@ namespace __hidden_assets_scene_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<TransformComponentCookEntry> ParseTransformComponentDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseTransformComponentCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
+using namespace SceneAssetCook;
 
-static Expected<TransformComponentCookEntry> ParseTransformComponentValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseTransformComponentCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
-static bool ExtractTransformComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
-    const auto entry = context.document
-        ? ParseTransformComponentCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena)
-        : ParseTransformComponentCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
-    ;
-    return entry.has_value();
-}
 
 static bool RegisterTransformComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<TransformComponentCookEntry, TransformComponentAsset, TypedComponentAssetCodec<TransformComponentAsset>>(
-        registry,
-        ComponentBinaryPayload::s_TransformComponentAssetKindLabel,
-        &ParseTransformComponentDocument,
-        &ParseTransformComponentValue,
-        &BuildTransformComponentAsset
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Expected<CameraComponentCookEntry> ParseCameraComponentDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseCameraComponentCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
-static Expected<CameraComponentCookEntry> ParseCameraComponentValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseCameraComponentCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
-static bool ExtractCameraComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
-    const auto entry = context.document
-        ? ParseCameraComponentCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena)
-        : ParseCameraComponentCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
-    ;
-    return entry.has_value();
+    return RegisterComponentCookEntry<
+        TransformComponentCookEntry,
+        TransformComponentAsset,
+        &ParseTransformComponentCookMetadata,
+        s_TransformDiagnosticPrefix
+    >(registry, ComponentBinaryPayload::s_TransformComponentAssetKindLabel);
 }
 
 static bool RegisterCameraComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<CameraComponentCookEntry, CameraComponentAsset, TypedComponentAssetCodec<CameraComponentAsset>>(
-        registry,
-        ComponentBinaryPayload::s_CameraComponentAssetKindLabel,
-        &ParseCameraComponentDocument,
-        &ParseCameraComponentValue,
-        &BuildCameraComponentAsset
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Expected<LightComponentCookEntry> ParseLightComponentDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseLightComponentCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
-static Expected<LightComponentCookEntry> ParseLightComponentValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseLightComponentCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
-static bool ExtractLightComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
-    const auto entry = context.document
-        ? ParseLightComponentCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena)
-        : ParseLightComponentCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
-    ;
-    return entry.has_value();
+    return RegisterComponentCookEntry<
+        CameraComponentCookEntry,
+        CameraComponentAsset,
+        &ParseCameraComponentCookMetadata,
+        s_CameraDiagnosticPrefix
+    >(registry, ComponentBinaryPayload::s_CameraComponentAssetKindLabel);
 }
 
 static bool RegisterLightComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<LightComponentCookEntry, LightComponentAsset, TypedComponentAssetCodec<LightComponentAsset>>(
-        registry,
-        ComponentBinaryPayload::s_LightComponentAssetKindLabel,
-        &ParseLightComponentDocument,
-        &ParseLightComponentValue,
-        &BuildLightComponentAsset
-    );
+    return RegisterComponentCookEntry<
+        LightComponentCookEntry,
+        LightComponentAsset,
+        &ParseLightComponentCookMetadata,
+        s_LightDiagnosticPrefix
+    >(registry, ComponentBinaryPayload::s_LightComponentAssetKindLabel);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<EntityCookEntry> ParseEntityDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseEntityCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
-static Expected<EntityCookEntry> ParseEntityValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-    return ParseEntityCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
 static bool ExtractEntityDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto entityEntry = context.document
-        ? ParseEntityCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena)
-        : ParseEntityCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
-    ;
+    const auto entityEntry = ParseCookDependencyEntry<EntityCookEntry, &ParseEntityCookMetadata>(context, s_EntityDiagnosticPrefix);
     if(!entityEntry)
         return false;
 
@@ -187,8 +77,8 @@ static bool RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<EntityCookEntry, EntityAsset, EntityAssetCodec>(
         registry,
         EntityBinaryPayload::s_EntityAssetKindLabel,
-        &ParseEntityDocument,
-        &ParseEntityValue,
+        &ParseCookEntryDocument<EntityCookEntry, &ParseEntityCookMetadata, s_EntityDiagnosticPrefix>,
+        &ParseCookEntryValue<EntityCookEntry, &ParseEntityCookMetadata>,
         &BuildEntityAsset
     );
 }
@@ -197,25 +87,8 @@ static bool RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<ProjectCookEntry> ParseProjectDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseProjectCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
-static Expected<ProjectCookEntry> ParseProjectValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-    return ParseProjectCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
 static bool ExtractProjectDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto projectEntry = context.document
-        ? ParseProjectCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena)
-        : ParseProjectCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
-    ;
+    const auto projectEntry = ParseCookDependencyEntry<ProjectCookEntry, &ParseProjectCookMetadata>(context, s_ProjectDiagnosticPrefix);
     if(!projectEntry)
         return false;
     return collector.addAssetDependency(projectEntry->startScene.name(), SceneAsset::AssetTypeName());
@@ -225,8 +98,8 @@ static bool RegisterProjectCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<ProjectCookEntry, ProjectAsset, ProjectAssetCodec>(
         registry,
         ProjectBinaryPayload::s_ProjectAssetKindLabel,
-        &ParseProjectDocument,
-        &ParseProjectValue,
+        &ParseCookEntryDocument<ProjectCookEntry, &ParseProjectCookMetadata, s_ProjectDiagnosticPrefix>,
+        &ParseCookEntryValue<ProjectCookEntry, &ParseProjectCookMetadata>,
         &BuildProjectAsset
     );
 }
@@ -235,25 +108,8 @@ static bool RegisterProjectCookEntry(Core::Assets::CookEntryRegistry& registry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<SceneCookEntry> ParseSceneDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
-    return ParseSceneCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
-static Expected<SceneCookEntry> ParseSceneValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-    return ParseSceneCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
 static bool ExtractSceneDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto sceneEntry = context.document
-        ? ParseSceneCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena)
-        : ParseSceneCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
-    ;
+    const auto sceneEntry = ParseCookDependencyEntry<SceneCookEntry, &ParseSceneCookMetadata>(context, s_SceneDiagnosticPrefix);
     if(!sceneEntry)
         return false;
 
@@ -287,17 +143,26 @@ static bool RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<SceneCookEntry, SceneAsset, SceneAssetCodec>(
         registry,
         SceneBinaryPayload::s_SceneAssetKindLabel,
-        &ParseSceneDocument,
-        &ParseSceneValue,
+        &ParseCookEntryDocument<SceneCookEntry, &ParseSceneCookMetadata, s_SceneDiagnosticPrefix>,
+        &ParseCookEntryValue<SceneCookEntry, &ParseSceneCookMetadata>,
         &BuildSceneAsset
     );
 }
 
 static bool RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& registry){
     return
-        registry.registerComponentType(TransformComponentAsset::AssetTypeName(), &ExtractTransformComponentDependencies)
-        && registry.registerComponentType(CameraComponentAsset::AssetTypeName(), &ExtractCameraComponentDependencies)
-        && registry.registerComponentType(LightComponentAsset::AssetTypeName(), &ExtractLightComponentDependencies)
+        registry.registerComponentType(
+            TransformComponentAsset::AssetTypeName(),
+            &ExtractLeafComponentDependencies<TransformComponentCookEntry, &ParseTransformComponentCookMetadata, s_TransformDiagnosticPrefix>
+        )
+        && registry.registerComponentType(
+            CameraComponentAsset::AssetTypeName(),
+            &ExtractLeafComponentDependencies<CameraComponentCookEntry, &ParseCameraComponentCookMetadata, s_CameraDiagnosticPrefix>
+        )
+        && registry.registerComponentType(
+            LightComponentAsset::AssetTypeName(),
+            &ExtractLeafComponentDependencies<LightComponentCookEntry, &ParseLightComponentCookMetadata, s_LightDiagnosticPrefix>
+        )
         && registry.registerType(EntityAsset::AssetTypeName(), &ExtractEntityDependencies)
         && registry.registerType(ProjectAsset::AssetTypeName(), &ExtractProjectDependencies)
         && registry.registerType(SceneAsset::AssetTypeName(), &ExtractSceneDependencies)
@@ -336,4 +201,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

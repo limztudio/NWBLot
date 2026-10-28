@@ -13,7 +13,6 @@
 #include "binary_payload.h"
 
 #include <core/assets/binary_payload_io.h>
-#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 
@@ -135,26 +134,7 @@ template<typename TAsset>
         return MakeUnexpected(Failure{});
     }
     const AStringView text(itemValue.asString().data(), itemValue.asString().size());
-    if(TrimView(text).empty() || text != TrimView(text)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), ConvertString(AssetsSubsystemCook::s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
-        return MakeUnexpected(Failure{});
-    }
-    if(text.find('\\') != AStringView::npos || !Core::Assets::HasReservedAssetVirtualRoot(text, scratchArena)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"),
-            ConvertString(AssetsSubsystemCook::s_SubsystemDiagnosticPrefix),
-            PathToString<tchar>(nwbFilePath),
-            ConvertString(fieldLabel),
-            ConvertString(text)
-        );
-        return MakeUnexpected(Failure{});
-    }
-    const auto ref = Core::Assets::AssetRef<TAsset>::FromText(text);
-    if(!ref || !ref->valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' is invalid"), ConvertString(AssetsSubsystemCook::s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
-        return MakeUnexpected(Failure{});
-    }
-    return *ref;
+    return Core::Assets::ParseMetadataReservedAssetRefText<TAsset>(nwbFilePath, AssetsSubsystemCook::s_SubsystemDiagnosticPrefix, fieldLabel, text, scratchArena);
 }
 
 [[nodiscard]] static bool ValidateSubsystemMetadataFields(const ISubsystem& subsystem, const Path& nwbFilePath, const Value& asset){

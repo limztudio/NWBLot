@@ -92,18 +92,7 @@ bool Document::parse(IMetaReader& reader, IIncludeResolver* includeResolver){
         buffer.append(chunk, *bytesRead);
     }
 
-    const MStringView rawView(buffer.data(), buffer.size());
-    if(rawView.find('#') != MStringView::npos){
-        Preprocessor preprocessor(m_arena, scratchArena, m_errors, includeResolver);
-        MString processed(m_arena);
-        if(!preprocessor.process(rawView, processed))
-            return false;
-        StatementParser parser(MStringView(processed.data(), processed.size()), m_arena, scratchArena, m_errors, m_variables, m_declarations, m_structs);
-        return parser.parseInto();
-    }
-
-    StatementParser parser(rawView, m_arena, scratchArena, m_errors, m_variables, m_declarations, m_structs);
-    return parser.parseInto();
+    return parse(MStringView(buffer.data(), buffer.size()), includeResolver);
 }
 
 const Value* Document::findVariable(MStringView name)const noexcept{

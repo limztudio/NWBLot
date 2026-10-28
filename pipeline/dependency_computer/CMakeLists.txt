@@ -25,8 +25,6 @@ endif()
 target_link_libraries(nwb_dependency_computer PRIVATE
     nwb_pipeline_command_line
     nwb_assets_cook
-    nwb_assets_scene
-    nwb_assets_subsystem
     nwb_logclient
     nwb::tbb
 )

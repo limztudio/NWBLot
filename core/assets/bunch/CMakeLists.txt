@@ -3,6 +3,8 @@ if(NWB_BUILD_PIPELINE)
     target_sources(nwb_assets_bunch_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
+        "${CMAKE_CURRENT_LIST_DIR}/reference_resolver.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/reference_resolver.h"
     )
     target_link_libraries(nwb_assets_bunch_cook PUBLIC nwb_assets nwb_assets_cook nwb_metascript nwb_filesystem)
     target_compile_definitions(nwb_assets_bunch_cook PRIVATE NWB_COOK=1)

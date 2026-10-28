@@ -524,8 +524,12 @@ bool TypeChecker::checkStatement(
                     break;
                 }
             }
-            if(binding.sourceExpr && !checkExpr(ownerClass, method, *binding.sourceExpr, scope, binding.mode == ParamPassingMode::Mut, errors))
-                ok = false;
+            if(binding.sourceExpr){
+                if(binding.mode == ParamPassingMode::Mut)
+                    binding.sourceExpr->isMutArg = true;
+                if(!checkExpr(ownerClass, method, *binding.sourceExpr, scope, binding.mode == ParamPassingMode::Mut, errors))
+                    ok = false;
+            }
         }
         break;
     }

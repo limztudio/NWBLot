@@ -46,7 +46,7 @@ namespace __hidden_cook_dependency_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CookDependencyRegistry::registerType(const Name& assetType, const CookDependencyExtractFunction extractDependencies){
+bool CookDependencyRegistry::registerType(const Name& assetType, const CookDependencyExtractFunction extractDependencies, const Name& categoryAssetType){
     if(!assetType){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: tried to register an unnamed cook dependency type"));
         return false;
@@ -56,26 +56,33 @@ bool CookDependencyRegistry::registerType(const Name& assetType, const CookDepen
         return false;
     }
 
-    if(m_lookup.emplace(assetType, MakeNotNull(extractDependencies)).second)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook dependency type registration '{}'"), ConvertString(assetType.resolvedText()));
-    return false;
-}
-
-bool CookDependencyRegistry::registerSubsystemType(const Name& assetType, const CookDependencyExtractFunction extractDependencies){
-    if(!registerType(assetType, extractDependencies))
+    if(!m_lookup.emplace(assetType, MakeNotNull(extractDependencies)).second){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook dependency type registration '{}'"), ConvertString(assetType.resolvedText()));
         return false;
+    }
 
-    m_subsystemTypes.emplace(assetType);
+    if(categoryAssetType)
+        m_categories.emplace(assetType, categoryAssetType);
     return true;
 }
 
-bool CookDependencyRegistry::registerComponentType(const Name& assetType, const CookDependencyExtractFunction extractDependencies){
-    if(!registerType(assetType, extractDependencies))
+bool CookDependencyRegistry::registerDefaultEntryAsset(const Name& virtualPath, const Name& assetType, const AStringView virtualPathText){
+    if(!virtualPath || !assetType || virtualPathText.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid default cook entry asset registration"));
         return false;
+    }
+    if(m_defaultEntryAsset.virtualPath && (m_defaultEntryAsset.virtualPath != virtualPath || m_defaultEntryAsset.assetType != assetType)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("AssetCook: duplicate default cook entry asset registration '{}' (already registered '{}')"),
+            ConvertString(virtualPathText),
+            ConvertString(m_defaultEntryAsset.virtualPathText)
+        );
+        return false;
+    }
 
-    m_componentTypes.emplace(assetType);
+    m_defaultEntryAsset.virtualPath = virtualPath;
+    m_defaultEntryAsset.assetType = assetType;
+    m_defaultEntryAsset.virtualPathText = virtualPathText;
     return true;
 }
 
@@ -84,16 +91,14 @@ CookDependencyExtractFunction CookDependencyRegistry::find(const Name& assetType
     return found == m_lookup.end() ? nullptr : found.value().get();
 }
 
-bool CookDependencyRegistry::isSubsystemType(const Name& assetType)const noexcept{
-    if(!assetType)
+bool CookDependencyRegistry::matchesAssetType(const Name& actualType, const Name& expectedType)const noexcept{
+    if(!expectedType || actualType == expectedType)
+        return true;
+    if(!actualType)
         return false;
-    return m_subsystemTypes.find(assetType) != m_subsystemTypes.end();
-}
 
-bool CookDependencyRegistry::isComponentType(const Name& assetType)const noexcept{
-    if(!assetType)
-        return false;
-    return m_componentTypes.find(assetType) != m_componentTypes.end();
+    const auto found = m_categories.find(actualType);
+    return found != m_categories.end() && found.value() == expectedType;
 }
 
 bool CookDependencyRegistry::extractDependencies(const CookDependencyItemContext& context, ICookDependencyCollector& collector)const{

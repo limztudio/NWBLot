@@ -47,6 +47,11 @@ struct AutoMetadataParser{
     return s_Queue;
 }
 
+::AutoRegistrationQueue<Name, AssetArena>& QueryAutoCompositeRootTypeQueue(){
+    static ::AutoRegistrationQueue<Name, AssetArena> s_Queue(AssetsArenaScope::s_CompositeRootTypeQueueArena);
+    return s_Queue;
+}
+
 [[nodiscard]] static Expected<Core::Metascript::Document> ParseMetascriptDocument(CookArena& cookArena, const Path& nwbFilePath, ScratchArena& scratchArena){
     Core::Metascript::Document doc(cookArena);
     ScratchString metaText{scratchArena};
@@ -153,6 +158,30 @@ AssetMetadataParserAutoRegistrar::AssetMetadataParserAutoRegistrar(const AssetDo
 
 AssetBunchExpanderAutoRegistrar::AssetBunchExpanderAutoRegistrar(const AssetBunchExpandFunction function){
     ::RegisterAutoFactory(__hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue(), function);
+}
+
+CompositeRootAssetTypeAutoRegistrar::CompositeRootAssetTypeAutoRegistrar(const Name& assetType){
+    RegisterCompositeRootAssetType(assetType);
+}
+
+void RegisterCompositeRootAssetType(const Name& assetType){
+    if(!assetType)
+        return;
+
+    __hidden_cook_metadata::QueryAutoCompositeRootTypeQueue().appendUnique(
+        assetType,
+        [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; }
+    );
+}
+
+bool IsCompositeRootAssetType(const Name& assetType){
+    if(!assetType)
+        return false;
+
+    return __hidden_cook_metadata::QueryAutoCompositeRootTypeQueue().contains(
+        assetType,
+        [](const Name& lhs, const Name& rhs)noexcept{ return lhs == rhs; }
+    );
 }
 
 

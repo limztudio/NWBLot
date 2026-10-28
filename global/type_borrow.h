@@ -204,11 +204,6 @@ using IsCopyConstructible = std::is_copy_constructible<T>;
 template<class T>
 inline constexpr bool IsCopyConstructible_V = std::is_copy_constructible_v<T>;
 
-template<class T>
-using IsNothrowCopyConstructible = std::is_nothrow_copy_constructible<T>;
-template<class T>
-inline constexpr bool IsNothrowCopyConstructible_V = std::is_nothrow_copy_constructible_v<T>;
-
 template<class T, class... Args>
 using IsNothrowConstructible = std::is_nothrow_constructible<T, Args...>;
 template<class T, class... Args>

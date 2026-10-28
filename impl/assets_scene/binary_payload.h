@@ -58,7 +58,6 @@ inline constexpr u32 s_ComponentVersion = 1u;
 inline constexpr TStringView s_ComponentAssetKindLabel = NWB_TEXT("component");
 inline constexpr TStringView s_ComponentLoadBinaryContext = NWB_TEXT("IComponent::loadBinary");
 inline constexpr TStringView s_ComponentSerializeContext = NWB_TEXT("ComponentAssetCodec::serialize");
-inline constexpr TStringView s_ComponentDataPayloadLabel = NWB_TEXT("component payload");
 inline constexpr TStringView s_TransformComponentAssetKindLabel = NWB_TEXT("transform_component");
 inline constexpr TStringView s_CameraComponentAssetKindLabel = NWB_TEXT("camera_component");
 inline constexpr TStringView s_LightComponentAssetKindLabel = NWB_TEXT("light_component");

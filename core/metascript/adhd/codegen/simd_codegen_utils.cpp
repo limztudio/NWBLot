@@ -20,6 +20,20 @@ namespace __hidden_adhd_simd_codegen_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr const char* s_IntLaneGettersSingle[4] = {
+    "::VectorGetIntX(",
+    "::VectorGetIntY(",
+    "::VectorGetIntZ(",
+    "::VectorGetIntW("
+};
+
+static constexpr const char* s_IntLaneGettersDouble[4] = {
+    "::VectorDoubleGetIntX(",
+    "::VectorDoubleGetIntY(",
+    "::VectorDoubleGetIntZ(",
+    "::VectorDoubleGetIntW("
+};
+
 [[nodiscard]] constexpr bool IsFloatSimdVectorType(const MStringView simdType)noexcept{
     return simdType == "f32x4"
         || simdType == "f64x2"
@@ -102,6 +116,35 @@ namespace __hidden_adhd_simd_codegen_utils{
     return simdType == "i32x4" || simdType == "i64x4";
 }
 
+[[nodiscard]] MStringView IntSimdLaneType(const MStringView simdType)noexcept{
+    if(simdType == "i32x4") return "i32";
+    if(simdType == "u32x4") return "u32";
+    if(simdType == "i64x4") return "i64";
+    return "u64";
+}
+
+[[nodiscard]] MStringView IntSimdRawWordType(const bool isDouble)noexcept{
+    return isDouble ? "u64" : "u32";
+}
+
+void AppendIntSimdLaneExtract(
+    MString& out,
+    const MStringView varName,
+    const u32 lane,
+    const bool isDouble,
+    const MStringView laneType
+){
+    const char* const getter = isDouble
+        ? __hidden_adhd_simd_codegen_utils::s_IntLaneGettersDouble[lane]
+        : __hidden_adhd_simd_codegen_utils::s_IntLaneGettersSingle[lane];
+    out.append("static_cast<");
+    out.append(laneType.data(), laneType.size());
+    out.append(">(");
+    out.append(getter);
+    out.append(varName.data(), varName.size());
+    out.append("))");
+}
+
 [[nodiscard]] u32 InferEffectiveSimdLanes(const Expr& expr)noexcept{
     if(expr.kind == ExprKind::MemberAccess && expr.isSwizzle && expr.text.size() >= 2u && expr.text.size() <= 4u)
         return static_cast<u32>(expr.text.size());
@@ -173,6 +216,31 @@ namespace __hidden_adhd_simd_codegen_utils{
     return {};
 }
 
+[[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(const MStringView callee, const bool isDouble)noexcept{
+    if(callee == "abs") return isDouble ? "::VectorDoubleAbs(" : "::VectorAbs(";
+    if(callee == "floor") return isDouble ? "::VectorDoubleFloor(" : "::VectorFloor(";
+    if(callee == "ceil") return isDouble ? "::VectorDoubleCeiling(" : "::VectorCeiling(";
+    if(callee == "round") return isDouble ? "::VectorDoubleRound(" : "::VectorRound(";
+    if(callee == "sqrt") return isDouble ? "::VectorDoubleSqrt(" : "::VectorSqrt(";
+    if(callee == "rsqrt") return isDouble ? "::VectorDoubleReciprocalSqrt(" : "::VectorReciprocalSqrt(";
+    if(callee == "sin") return isDouble ? "::VectorDoubleSin(" : "::VectorSin(";
+    if(callee == "cos") return isDouble ? "::VectorDoubleCos(" : "::VectorCos(";
+    if(callee == "tan") return isDouble ? "::VectorDoubleTan(" : "::VectorTan(";
+    return {};
+}
+
+void AppendSimdLaneCountIntrinsicPrefix(
+    MString& out,
+    const bool isDouble,
+    const u32 effLanes,
+    const MStringView suffix
+){
+    out.append(isDouble ? "::VectorDouble" : "::Vector");
+    out.push_back(effLanes == 2u ? '2' : (effLanes == 3u ? '3' : '4'));
+    out.append(suffix.data(), suffix.size());
+    out.push_back('(');
+}
+
 [[nodiscard]] bool IsSimdAssignmentOp(const TokenType::Enum op)noexcept{
     switch(op){
     case TokenType::Equal:
@@ -180,26 +248,52 @@ namespace __hidden_adhd_simd_codegen_utils{
     case TokenType::MinusEqual:
     case TokenType::StarEqual:
     case TokenType::SlashEqual:
+    case TokenType::PercentEqual:
     case TokenType::AmpersandEqual:
     case TokenType::PipeEqual:
     case TokenType::CaretEqual:
+    case TokenType::LessLessEqual:
+    case TokenType::GreaterGreaterEqual:
         return true;
     default:
         return false;
     }
 }
 
-[[nodiscard]] MStringView SimdCompoundScalarOpSymbol(const TokenType::Enum op)noexcept{
+[[nodiscard]] TokenType::Enum MapSimdAssignToBinaryOp(const TokenType::Enum op)noexcept{
     switch(op){
-    case TokenType::PlusEqual: return " + ";
-    case TokenType::MinusEqual: return " - ";
-    case TokenType::StarEqual: return " * ";
-    case TokenType::SlashEqual: return " / ";
-    case TokenType::AmpersandEqual: return " & ";
-    case TokenType::PipeEqual: return " | ";
-    case TokenType::CaretEqual: return " ^ ";
+    case TokenType::PlusEqual: return TokenType::Plus;
+    case TokenType::MinusEqual: return TokenType::Minus;
+    case TokenType::StarEqual: return TokenType::Star;
+    case TokenType::SlashEqual: return TokenType::Slash;
+    case TokenType::PercentEqual: return TokenType::Percent;
+    case TokenType::AmpersandEqual: return TokenType::Ampersand;
+    case TokenType::PipeEqual: return TokenType::Pipe;
+    case TokenType::CaretEqual: return TokenType::Caret;
+    case TokenType::LessLessEqual: return TokenType::LessLess;
+    case TokenType::GreaterGreaterEqual: return TokenType::GreaterGreater;
+    default: return op;
+    }
+}
+
+[[nodiscard]] MStringView SimdBinaryScalarOpSymbol(const TokenType::Enum binaryOp)noexcept{
+    switch(binaryOp){
+    case TokenType::Plus: return " + ";
+    case TokenType::Minus: return " - ";
+    case TokenType::Star: return " * ";
+    case TokenType::Slash: return " / ";
+    case TokenType::Percent: return " % ";
+    case TokenType::Ampersand: return " & ";
+    case TokenType::Pipe: return " | ";
+    case TokenType::Caret: return " ^ ";
+    case TokenType::LessLess: return " << ";
+    case TokenType::GreaterGreater: return " >> ";
     default: return {};
     }
+}
+
+[[nodiscard]] MStringView SimdCompoundScalarOpSymbol(const TokenType::Enum op)noexcept{
+    return SimdBinaryScalarOpSymbol(MapSimdAssignToBinaryOp(op));
 }
 
 [[nodiscard]] bool IsSingleSwizzleLane(const MStringView text, u32& outLane)noexcept{

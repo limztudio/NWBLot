@@ -174,10 +174,17 @@ public:
     explicit AssetBunchExpanderAutoRegistrar(AssetBunchExpandFunction function);
 };
 
+class CompositeRootAssetTypeAutoRegistrar final{
+public:
+    explicit CompositeRootAssetTypeAutoRegistrar(const Name& assetType);
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RegisterCompositeRootAssetType(const Name& assetType);
+[[nodiscard]] bool IsCompositeRootAssetType(const Name& assetType);
 [[nodiscard]] Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookArena, Span<const ResolvedAssetRoot> assetRoots, AStringView expectedExtension, ScratchArena& scratchArena);
 [[nodiscard]] bool AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);

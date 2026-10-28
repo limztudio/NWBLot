@@ -212,15 +212,21 @@ static bool RegisterGraphicsSubsystemCookDependencies(Core::Assets::CookDependen
         && AssetsSubsystemCook::RegisterSubsystemCookDependency<TransparentSubsystem>(registry)
         && AssetsSubsystemCook::RegisterSubsystemCookDependency<RefractiveSubsystem>(registry)
         && AssetsSubsystemCook::RegisterSubsystemCookDependency<CsgSubsystem>(registry)
-        && registry.registerComponentType(
+        && registry.registerType(
             ModelComponentAsset::AssetTypeName(),
-            &ExtractSingleAssetRefComponentDependencies<ModelComponentAsset, Model, &ModelComponent::model, s_ModelComponentDiagnosticPrefix>
+            &ExtractSingleAssetRefComponentDependencies<ModelComponentAsset, Model, &ModelComponent::model, s_ModelComponentDiagnosticPrefix>,
+            IComponent::AssetTypeName()
         )
-        && registry.registerComponentType(
+        && registry.registerType(
             MeshComponentAsset::AssetTypeName(),
-            &ExtractSingleAssetRefComponentDependencies<MeshComponentAsset, Mesh, &MeshComponent::mesh, s_MeshComponentDiagnosticPrefix>
+            &ExtractSingleAssetRefComponentDependencies<MeshComponentAsset, Mesh, &MeshComponent::mesh, s_MeshComponentDiagnosticPrefix>,
+            IComponent::AssetTypeName()
         )
-        && registry.registerComponentType(RendererComponentAsset::AssetTypeName(), &ExtractRendererComponentDependencies)
+        && registry.registerType(
+            RendererComponentAsset::AssetTypeName(),
+            &ExtractRendererComponentDependencies,
+            IComponent::AssetTypeName()
+        )
     ;
 }
 

@@ -41,7 +41,9 @@ public:
     )override{
         using namespace NWB::Core::Metascript;
 
-        if(includePath.size() <= 5u || includePath.substr(includePath.size() - 5u) != ".adhd")
+        const bool hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
+        const bool hasNwbExt = includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
+        if(!hasAdhdExt && !hasNwbExt)
             return false;
         const MString relPath(includePath.data(), includePath.size(), arena);
 

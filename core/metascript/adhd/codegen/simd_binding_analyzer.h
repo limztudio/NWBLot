@@ -43,13 +43,26 @@ struct SimdVarBinding{
 [[nodiscard]] bool IsDoubleSimdType(MStringView simdType)noexcept;
 [[nodiscard]] bool IsIntSimdType(MStringView simdType)noexcept;
 [[nodiscard]] bool IsSignedIntSimdType(MStringView simdType)noexcept;
+[[nodiscard]] MStringView IntSimdLaneType(MStringView simdType)noexcept;
+[[nodiscard]] MStringView IntSimdRawWordType(bool isDouble)noexcept;
+void AppendIntSimdLaneExtract(
+    MString& out,
+    MStringView varName,
+    u32 lane,
+    bool isDouble,
+    MStringView laneType
+);
 [[nodiscard]] u32 InferEffectiveSimdLanes(const Expr& expr)noexcept;
 [[nodiscard]] bool IsUnitFloatLiteral(const Expr& expr)noexcept;
 [[nodiscard]] MStringView SimdRegisterCppType(MStringView simdType)noexcept;
 [[nodiscard]] MStringView SimdLoadFunctionCpp(MStringView simdType)noexcept;
 [[nodiscard]] MStringView SimdStoreFunctionCpp(MStringView simdType)noexcept;
 [[nodiscard]] MStringView MapBuiltinMathFunction(MStringView name)noexcept;
+[[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(MStringView callee, bool isDouble)noexcept;
+void AppendSimdLaneCountIntrinsicPrefix(MString& out, bool isDouble, u32 effLanes, MStringView suffix);
 [[nodiscard]] bool IsSimdAssignmentOp(TokenType::Enum op)noexcept;
+[[nodiscard]] TokenType::Enum MapSimdAssignToBinaryOp(TokenType::Enum op)noexcept;
+[[nodiscard]] MStringView SimdBinaryScalarOpSymbol(TokenType::Enum binaryOp)noexcept;
 [[nodiscard]] MStringView SimdCompoundScalarOpSymbol(TokenType::Enum op)noexcept;
 [[nodiscard]] bool IsSingleSwizzleLane(MStringView text, u32& outLane)noexcept;
 [[nodiscard]] u32 MapSwizzleCharToLane(char c)noexcept;

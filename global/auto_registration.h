@@ -36,6 +36,17 @@ public:
         m_values.push_back(value);
     }
 
+    template<typename EqualT>
+    [[nodiscard]] bool contains(const ValueT value, EqualT&& equal){
+        ScopedLock lock(m_mutex);
+        for(const ValueT current : m_values){
+            if(equal(current, value))
+                return true;
+        }
+
+        return false;
+    }
+
     template<typename OutputVectorT>
     void copyTo(OutputVectorT& outValues)noexcept([]()constexpr noexcept{
         if constexpr(IsDefaultConstructible_V<ValueT>)

@@ -17,6 +17,7 @@
 #include <core/alloc/scratch.h>
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/metascript/parser.h>
 
@@ -159,6 +160,7 @@ template<typename SubsystemT>
 
 template<typename SubsystemT>
 [[nodiscard]] bool RegisterSubsystemCookEntry(Core::Assets::CookEntryRegistry& registry){
+    Core::Assets::RegisterCompositeRootAssetType(SubsystemT::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<SubsystemCookEntry<SubsystemT>, SubsystemT, TypedSubsystemAssetCodec<SubsystemT>>(
         registry,
         SubsystemBinaryPayload::s_SubsystemAssetKindLabel,
@@ -170,7 +172,8 @@ template<typename SubsystemT>
 
 template<typename SubsystemT>
 [[nodiscard]] bool RegisterSubsystemCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerSubsystemType(SubsystemT::AssetTypeName(), &ExtractSubsystemDependencies<SubsystemT>);
+    Core::Assets::RegisterCompositeRootAssetType(SubsystemT::AssetTypeName());
+    return registry.registerType(SubsystemT::AssetTypeName(), &ExtractSubsystemDependencies<SubsystemT>, ISubsystem::AssetTypeName());
 }
 
 

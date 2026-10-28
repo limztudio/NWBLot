@@ -101,6 +101,20 @@ void LayoutOptimizer::collectAllTemplateInstantiations(TranslationUnit& unit){
                     collectTemplateInstantiationsInStmt(*s, unit);
             }
         }
+        for(const MethodDecl* m : unit.outOfLineMethods){
+            if(!m || m->isImported != wantImported)
+                continue;
+            if(m->returnType)
+                collectTemplateInstantiationsInType(*m->returnType, unit);
+            for(const ParamDecl& p : m->params){
+                if(p.type)
+                    collectTemplateInstantiationsInType(*p.type, unit);
+            }
+            for(const Stmt* s : m->body){
+                if(s)
+                    collectTemplateInstantiationsInStmt(*s, unit);
+            }
+        }
     }
     m_collectingImported = false;
 }

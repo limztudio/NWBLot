@@ -4,9 +4,6 @@
 
 #include "provider_catalog.h"
 
-#include <impl/assets_scene/asset.h>
-#include <impl/assets_subsystem/asset.h>
-
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_paths.h>
 #include <core/common/log.h>
@@ -35,13 +32,9 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
     const Name& expectedType,
     const Assets::CookDependencyRegistry* const dependencyRegistry
 )noexcept{
-    if(!expectedType)
+    if(!expectedType || actualType == expectedType)
         return true;
-    if(expectedType == Impl::ISubsystem::AssetTypeName() && dependencyRegistry)
-        return dependencyRegistry->isSubsystemType(actualType);
-    if(expectedType == Impl::IComponent::AssetTypeName() && dependencyRegistry)
-        return dependencyRegistry->isComponentType(actualType);
-    return actualType == expectedType;
+    return dependencyRegistry && dependencyRegistry->matchesAssetType(actualType, expectedType);
 }
 
 [[nodiscard]] static Optional<Name> ExtractParentVirtualPath(const AStringView virtualPathText){
@@ -144,7 +137,11 @@ bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Co
     return true;
 }
 
-Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena)const{
+Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
+    const PipelineOptions& options,
+    const NWB::Core::Assets::CookDependencyRegistry& dependencyRegistry,
+    NWB::Core::Alloc::ScratchArena& scratchArena
+)const{
     using namespace __hidden_dependency_provider_catalog;
     DependencyInputSelection selection(scratchArena);
     auto& selected = selection.selected;
@@ -153,14 +150,20 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const
     order.reserve(m_files.size());
 
     if(options.inputs.empty()){
+        const Assets::DefaultCookEntryAssetDescriptor& defaultEntry = dependencyRegistry.defaultEntryAsset();
+        if(!defaultEntry.virtualPath){
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no default entry asset registered"));
+            return MakeUnexpected(Failure{});
+        }
         const auto projectProvider = resolve(
-            Impl::ProjectAssetDefaults::s_DefaultProjectVirtualPath,
-            Impl::ProjectAsset::s_AssetTypeName,
-            Impl::ProjectAssetDefaults::s_DefaultProjectVirtualPathText,
-            scratchArena
+            defaultEntry.virtualPath,
+            defaultEntry.assetType,
+            defaultEntry.virtualPathText,
+            scratchArena,
+            &dependencyRegistry
         );
         if(!projectProvider){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no project root '{}' found in asset roots"), ConvertString(Impl::ProjectAssetDefaults::s_DefaultProjectVirtualPathText));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no project root '{}' found in asset roots"), ConvertString(defaultEntry.virtualPathText));
             return MakeUnexpected(Failure{});
         }
         selected[*projectProvider] = 1u;

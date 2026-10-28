@@ -50,6 +50,7 @@ private:
     [[nodiscard]] bool tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, u32 indent)const;
     [[nodiscard]] bool tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, u32 indent)const;
     [[nodiscard]] bool tryEmitSimdReturnStmt(MString& out, const Stmt& stmt, u32 indent)const;
+    [[nodiscard]] bool tryEmitSimdBinaryOpReg(MString& out, TokenType::Enum binaryOp, const Expr& lhs, const Expr& rhs, MStringView simdType)const;
     void emitSimdRegExpr(MString& out, const Expr& expr, MStringView expectedSimdType)const;
     void emitSimdVectorCtorReg(MString& out, MStringView simdType, const MVector<Expr*>& arguments)const;
     void emitSimdStoreForBinding(MString& out, const SimdVarBinding& binding, u32 indent)const;

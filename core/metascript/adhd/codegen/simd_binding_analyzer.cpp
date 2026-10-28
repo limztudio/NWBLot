@@ -213,7 +213,8 @@ void AnalyzeSimdExprReads(
 
     if(expr->kind == ExprKind::MemberAccess){
         u32 lane = 0u;
-        const bool isSimdSwizzleOrLane = expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType)
+        const bool isSimdSwizzleOrLane = !expr->isMutArg
+            && expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType)
             && (expr->isSwizzle || IsSingleSwizzleLane(expr->text, lane));
         AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, !isSimdSwizzleOrLane, false);
         return;
@@ -221,7 +222,8 @@ void AnalyzeSimdExprReads(
 
     if(expr->kind == ExprKind::Index){
         u32 vecLanes = 0u;
-        const bool isSimdVecIndex = expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType)
+        const bool isSimdVecIndex = !expr->isMutArg
+            && expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType)
             && symbols.isSimdVectorType(expr->lhs->resolvedSimdType, vecLanes);
         AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, !isSimdVecIndex, false);
         AnalyzeSimdExprReads(arena, bindings, expr->rhs, symbols, false, false);
@@ -285,6 +287,19 @@ void AnalyzeSimdExprReads(
             MarkPartialSimdBindingWrite(arena, bindings, *expr->lhs->lhs);
             return;
         }
+    }
+
+    if(expr->kind == ExprKind::Cast || expr->kind == ExprKind::BitCast){
+        AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, true, false);
+        return;
+    }
+
+    if(expr->kind == ExprKind::Binary && !IsRegisterPromotableSimdType(expr->resolvedSimdType)){
+        const bool lhsIsSimd = expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType);
+        const bool rhsIsSimd = expr->rhs && IsRegisterPromotableSimdType(expr->rhs->resolvedSimdType);
+        AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, lhsIsSimd, false);
+        AnalyzeSimdExprReads(arena, bindings, expr->rhs, symbols, rhsIsSimd, false);
+        return;
     }
 
     AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, false, false);

@@ -103,7 +103,7 @@ bool TypeChecker::checkExpr(
                 reportError(errors, expr.span, "cannot mutate 'this.member' inside a 'const' method or 'in this' lambda");
                 ok = false;
             }
-            else if(!method.isConstructor && fieldRefMode == ParamPassingMode::In){
+            else if(fieldRefMode == ParamPassingMode::In){
                 reportError(errors, expr.span, "cannot mutate 'in' reference member");
                 ok = false;
             }
@@ -194,6 +194,10 @@ bool TypeChecker::checkExpr(
                 if(CheckSwizzlePattern(expr.text, simdLanes, isSwizzlePattern, validLanes) && isSwizzlePattern){
                     if(!validLanes){
                         reportError(errors, expr.span, "invalid SIMD swizzle component for vector width or mixed xyzw/rgba set");
+                        ok = false;
+                    }
+                    else if(baseType == "f32x3_i32" || baseType == "f32x3_u32" || baseType == "f64x3_i64" || baseType == "f64x3_u64"){
+                        reportError(errors, expr.span, "multi-lane SIMD swizzling is not supported on mixed float/integer vector types");
                         ok = false;
                     }
                     else{
@@ -379,6 +383,44 @@ bool TypeChecker::checkBinaryExpr(
                     lhsNeedsMut = true;
                 if(!opMethod->params.empty() && opMethod->params[0].mode == ParamPassingMode::Mut)
                     rhsNeedsMut = true;
+            }
+        }
+    }
+    if(expr.op == TokenType::Equal && expr.lhs){
+        if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
+            if(const FieldDecl* field = findClassField(*ownerClass, expr.lhs->text); field && field->type){
+                const MStringView baseFieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
+                const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(field->type);
+                if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_symbols.findInterface(baseFieldTypeName))){
+                    const ScopedVarInfo* lambdaThis = m_inLambda ? findScopedVar(scope, "this") : nullptr;
+                    if(method.isConst || (lambdaThis && lambdaThis->isConst)){
+                        reportError(errors, expr.lhs->span, "cannot mutate 'this.member' inside a 'const' method or 'in this' lambda");
+                        ok = false;
+                    }
+                    lhsNeedsMut = false;
+                }
+            }
+        }
+        else if(expr.lhs->kind == ExprKind::Identifier){
+            if(const ScopedVarInfo* local = findScopedVar(scope, expr.lhs->text); local && local->type && !local->isParam){
+                const MStringView baseLocalTypeName = m_symbols.resolveBaseTypeName(local->type->name);
+                const ParamPassingMode::Enum localRefMode = (local->mode != ParamPassingMode::None) ? local->mode : m_symbols.resolveRefMode(local->type);
+                if(localRefMode != ParamPassingMode::None && m_symbols.findInterface(baseLocalTypeName))
+                    lhsNeedsMut = false;
+            }
+        }
+        else if(expr.lhs->kind == ExprKind::MemberAccess || expr.lhs->kind == ExprKind::Index){
+            const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
+            const ParamPassingMode::Enum lhsRefMode = m_symbols.resolveRefMode(lhsTypeRef);
+            const MStringView baseLhsTypeName = lhsTypeRef ? m_symbols.resolveBaseTypeName(lhsTypeRef->name) : MStringView{};
+            if(lhsRefMode != ParamPassingMode::None && m_symbols.findInterface(baseLhsTypeName)){
+                lhsNeedsMut = false;
+                if(expr.lhs->lhs){
+                    const bool savedDeref = expr.lhs->lhs->derefNotNull;
+                    if(!checkExpr(ownerClass, method, *expr.lhs->lhs, scope, true, errors))
+                        ok = false;
+                    expr.lhs->lhs->derefNotNull = savedDeref;
+                }
             }
         }
     }

@@ -31,8 +31,6 @@ NWB_ASSETS_BEGIN
 using CookArena = Core::Alloc::GlobalArena;
 template<typename T, typename V>
 using CookDependencyMap = HashMap<T, V, CookArena, Hasher<T>, EqualTo<T>>;
-template<typename T>
-using CookDependencySet = HashSet<T, CookArena, Hasher<T>, EqualTo<T>>;
 using ScratchArena = Core::Alloc::ScratchArena;
 
 
@@ -70,37 +68,40 @@ public:
 
 using CookDependencyExtractFunction = bool (*)(const CookDependencyItemContext& context, ICookDependencyCollector& collector);
 
+struct DefaultCookEntryAssetDescriptor{
+    Name virtualPath = s_NameNone;
+    Name assetType = s_NameNone;
+    AStringView virtualPathText{};
+};
+
 
 class CookDependencyRegistry : NoCopy{
 private:
     using ExtractorLookup = CookDependencyMap<Name, NotNull<CookDependencyExtractFunction>>;
-    using SubsystemTypeSet = CookDependencySet<Name>;
-    using ComponentTypeSet = CookDependencySet<Name>;
+    using CategoryLookup = CookDependencyMap<Name, Name>;
 
 
 public:
     explicit CookDependencyRegistry(CookArena& arena)noexcept
         : m_lookup(0, Hasher<Name>(), EqualTo<Name>(), arena)
-        , m_subsystemTypes(0, Hasher<Name>(), EqualTo<Name>(), arena)
-        , m_componentTypes(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , m_categories(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
 
 
 public:
-    bool registerType(const Name& assetType, CookDependencyExtractFunction extractDependencies);
-    bool registerSubsystemType(const Name& assetType, CookDependencyExtractFunction extractDependencies);
-    bool registerComponentType(const Name& assetType, CookDependencyExtractFunction extractDependencies);
+    bool registerType(const Name& assetType, CookDependencyExtractFunction extractDependencies, const Name& categoryAssetType = s_NameNone);
+    bool registerDefaultEntryAsset(const Name& virtualPath, const Name& assetType, AStringView virtualPathText);
 
     [[nodiscard]] CookDependencyExtractFunction find(const Name& assetType)const noexcept;
-    [[nodiscard]] bool isSubsystemType(const Name& assetType)const noexcept;
-    [[nodiscard]] bool isComponentType(const Name& assetType)const noexcept;
+    [[nodiscard]] bool matchesAssetType(const Name& actualType, const Name& expectedType)const noexcept;
+    [[nodiscard]] const DefaultCookEntryAssetDescriptor& defaultEntryAsset()const noexcept{ return m_defaultEntryAsset; }
     [[nodiscard]] bool extractDependencies(const CookDependencyItemContext& context, ICookDependencyCollector& collector)const;
 
 
 private:
     ExtractorLookup m_lookup;
-    SubsystemTypeSet m_subsystemTypes;
-    ComponentTypeSet m_componentTypes;
+    CategoryLookup m_categories;
+    DefaultCookEntryAssetDescriptor m_defaultEntryAsset;
 };
 
 

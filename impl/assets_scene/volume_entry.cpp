@@ -11,6 +11,8 @@
 #include "cook.h"
 #include "binary_payload.h"
 
+#include <core/assets/cook_metadata.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,6 +76,7 @@ static bool ExtractEntityDependencies(const Core::Assets::CookDependencyItemCont
 }
 
 static bool RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
+    Core::Assets::RegisterCompositeRootAssetType(EntityAsset::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<EntityCookEntry, EntityAsset, EntityAssetCodec>(
         registry,
         EntityBinaryPayload::s_EntityAssetKindLabel,
@@ -140,6 +143,7 @@ static bool ExtractSceneDependencies(const Core::Assets::CookDependencyItemConte
 }
 
 static bool RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
+    Core::Assets::RegisterCompositeRootAssetType(SceneAsset::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<SceneCookEntry, SceneAsset, SceneAssetCodec>(
         registry,
         SceneBinaryPayload::s_SceneAssetKindLabel,
@@ -150,18 +154,28 @@ static bool RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
 }
 
 static bool RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& registry){
+    Core::Assets::RegisterCompositeRootAssetType(EntityAsset::AssetTypeName());
+    Core::Assets::RegisterCompositeRootAssetType(SceneAsset::AssetTypeName());
     return
-        registry.registerComponentType(
+        registry.registerDefaultEntryAsset(
+            ProjectAssetDefaults::s_DefaultProjectVirtualPath,
+            ProjectAsset::AssetTypeName(),
+            ProjectAssetDefaults::s_DefaultProjectVirtualPathText
+        )
+        && registry.registerType(
             TransformComponentAsset::AssetTypeName(),
-            &ExtractLeafComponentDependencies<TransformComponentCookEntry, &ParseTransformComponentCookMetadata, s_TransformDiagnosticPrefix>
+            &ExtractLeafComponentDependencies<TransformComponentCookEntry, &ParseTransformComponentCookMetadata, s_TransformDiagnosticPrefix>,
+            IComponent::AssetTypeName()
         )
-        && registry.registerComponentType(
+        && registry.registerType(
             CameraComponentAsset::AssetTypeName(),
-            &ExtractLeafComponentDependencies<CameraComponentCookEntry, &ParseCameraComponentCookMetadata, s_CameraDiagnosticPrefix>
+            &ExtractLeafComponentDependencies<CameraComponentCookEntry, &ParseCameraComponentCookMetadata, s_CameraDiagnosticPrefix>,
+            IComponent::AssetTypeName()
         )
-        && registry.registerComponentType(
+        && registry.registerType(
             LightComponentAsset::AssetTypeName(),
-            &ExtractLeafComponentDependencies<LightComponentCookEntry, &ParseLightComponentCookMetadata, s_LightDiagnosticPrefix>
+            &ExtractLeafComponentDependencies<LightComponentCookEntry, &ParseLightComponentCookMetadata, s_LightDiagnosticPrefix>,
+            IComponent::AssetTypeName()
         )
         && registry.registerType(EntityAsset::AssetTypeName(), &ExtractEntityDependencies)
         && registry.registerType(ProjectAsset::AssetTypeName(), &ExtractProjectDependencies)
@@ -173,6 +187,8 @@ static bool RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static Core::Assets::CompositeRootAssetTypeAutoRegistrar s_EntityCompositeRootRegistrar(EntityAsset::AssetTypeName());
+static Core::Assets::CompositeRootAssetTypeAutoRegistrar s_SceneCompositeRootRegistrar(SceneAsset::AssetTypeName());
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_TransformComponentCookEntryRegistrar, RegisterTransformComponentCookEntry);
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_CameraComponentCookEntryRegistrar, RegisterCameraComponentCookEntry);
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_LightComponentCookEntryRegistrar, RegisterLightComponentCookEntry);

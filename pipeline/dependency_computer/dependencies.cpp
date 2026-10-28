@@ -98,7 +98,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
     DependencyProviderCatalog catalog(arena);
     if(!catalog.discover(options, scratchArena))
         return MakeUnexpected(Failure{});
-    auto selection = catalog.selectInputs(options, scratchArena);
+    auto selection = catalog.selectInputs(options, dependencyRegistry, scratchArena);
     if(!selection)
         return MakeUnexpected(Failure{});
 

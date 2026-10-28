@@ -288,7 +288,10 @@ void SourceEmitter::emitParallelStmt(
         for(const NativeBinding& binding : stmt.nativeBindings){
             if(binding.mode != ParamPassingMode::Mut || !binding.sourceExpr)
                 continue;
-            if(const SimdVarBinding* mutBinding = findSimdBindingForExpr(binding.sourceExpr))
+            const SimdVarBinding* mutBinding = findSimdBindingForExpr(binding.sourceExpr);
+            if(!mutBinding && (binding.sourceExpr->kind == ExprKind::MemberAccess || binding.sourceExpr->kind == ExprKind::Index))
+                mutBinding = findSimdBindingForExpr(binding.sourceExpr->lhs);
+            if(mutBinding)
                 emitSimdLoadReloadForBinding(out, *mutBinding, indent + 1u);
         }
         emitIndent(out, indent);

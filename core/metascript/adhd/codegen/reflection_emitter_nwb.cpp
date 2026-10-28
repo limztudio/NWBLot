@@ -548,7 +548,7 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
                 out.append("); }\r\n");
             }
         }
-        else if((tname == "Map" || tname == "HashMap" || tname == "ParallelHashMap")
+        else if(IsReflectedMapContainerType(tname)
             && resolvedFieldType && resolvedFieldType->templateArgs.size() >= 2u
             && resolvedFieldType->templateArgs[0].type && resolvedFieldType->templateArgs[1].type)
         {

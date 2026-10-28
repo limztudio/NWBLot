@@ -24,30 +24,6 @@ namespace __hidden_adhd_reflection_emitter{
     return !method.isConstructor && !method.isDestructor && (method.access == AccessSpecifier::Public || method.isReflect);
 }
 
-[[nodiscard]] bool IsAssetDependencyField(const FieldDecl& field, const SymbolTable& symbols)noexcept{
-    if(!field.type)
-        return false;
-    const TypeRef* resolved = symbols.unwrapTypeAlias(field.type);
-    if(!resolved)
-        return false;
-    const MStringView tname = resolved->name;
-    if(tname == "AssetRef")
-        return true;
-    if((tname == "Optional" || tname == "Array" || tname == "FixedVector" || tname == "Vector"
-        || tname == "Deque" || tname == "ParallelVector" || tname == "List" || tname == "ForwardList"
-        || tname == "Set" || tname == "HashSet" || tname == "ParallelHashSet")
-        && !resolved->templateArgs.empty() && resolved->templateArgs[0].type)
-    {
-        return symbols.resolveBaseTypeName(resolved->templateArgs[0].type->name) == "AssetRef";
-    }
-    if((tname == "Map" || tname == "HashMap" || tname == "ParallelHashMap")
-        && resolved->templateArgs.size() >= 2u && resolved->templateArgs[1].type)
-    {
-        return symbols.resolveBaseTypeName(resolved->templateArgs[1].type->name) == "AssetRef";
-    }
-    return false;
-}
-
 void CountReflectedFields(
     const MVector<FieldDecl*>& fields,
     const SymbolTable& symbols,
@@ -198,6 +174,12 @@ void EmitReflectedCountMethod(MString& out, const MStringView methodName, const 
     out.append("u; }\r\n");
 }
 
+void EmitNwbDependencyFieldFindPrefix(MString& out, const MStringView fieldName){
+    out.append("        if(const NwbValue* __f = inMap.findField(\"");
+    out.append(fieldName.data(), fieldName.size());
+    out.append("\"); __f && ");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -207,6 +189,38 @@ void EmitReflectedCountMethod(MString& out, const MStringView methodName, const 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+bool IsAssetDependencyType(const TypeRef* const type, const SymbolTable& symbols, const u32 depth)noexcept{
+    if(!type || depth > 8u)
+        return false;
+    const TypeRef* resolved = symbols.unwrapTypeAlias(type);
+    if(!resolved)
+        return false;
+    const MStringView tname = resolved->name;
+    if(tname == "AssetRef")
+        return true;
+    if(const ClassDecl* cls = symbols.findClass(tname)){
+        for(const FieldDecl* f : cls->orderedFields){
+            if(f && IsFieldReflected(*f) && IsAssetDependencyField(*f, symbols, depth + 1u))
+                return true;
+        }
+    }
+    if((tname == "Optional" || IsReflectedLinearContainerType(tname))
+        && !resolved->templateArgs.empty() && resolved->templateArgs[0].type)
+    {
+        return IsAssetDependencyType(resolved->templateArgs[0].type, symbols, depth + 1u);
+    }
+    if(IsReflectedMapContainerType(tname)
+        && resolved->templateArgs.size() >= 2u && resolved->templateArgs[1].type)
+    {
+        return IsAssetDependencyType(resolved->templateArgs[1].type, symbols, depth + 1u);
+    }
+    return false;
+}
+
+bool IsAssetDependencyField(const FieldDecl& field, const SymbolTable& symbols, const u32 depth)noexcept{
+    return IsAssetDependencyType(field.type, symbols, depth);
+}
 
 void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const ClassDecl& decl)const{
     using namespace __hidden_adhd_reflection_emitter;
@@ -233,6 +247,7 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
         EmitReflectedCountMethod(out, "assetDependencyFieldCount", assetRefCount);
         out.append("    [[nodiscard]] static AStringView assetDependencyFieldName(usize index)noexcept;\r\n");
         emitDeserializeNwbMethod(out, activeFields);
+        emitAssetDependencyMethods(out, activeFields);
     }
 }
 
@@ -273,6 +288,7 @@ void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl&
     out.append("    }\r\n");
 
     emitDeserializeNwbMethod(out, fields);
+    emitAssetDependencyMethods(out, fields);
 }
 
 void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const ClassDecl& decl)const{
@@ -313,6 +329,151 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
         EmitFieldNameLookupBody(out, activeFields, m_symbols, true, "    ");
         out.append("}\r\n\r\n");
     }
+}
+
+void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const MVector<FieldDecl*>& fields)const{
+    using namespace __hidden_adhd_reflection_emitter;
+
+    out.append("    template<typename DependencyCallback>\r\n");
+    out.append("    void forEachAssetDependency([[maybe_unused]] DependencyCallback&& callback)const{\r\n");
+    for(const FieldDecl* field : fields){
+        if(!field || !IsFieldReflected(*field) || !field->type || !IsAssetDependencyField(*field, m_symbols))
+            continue;
+        const TypeRef* resolvedFieldType = m_symbols.unwrapTypeAlias(field->type);
+        const MStringView tname = resolvedFieldType ? resolvedFieldType->name : field->type->name;
+        if(tname == "AssetRef"){
+            out.append("        if(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".valid()) callback(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".virtualPath);\r\n");
+        }
+        else if(m_symbols.findClass(tname)){
+            out.append("        this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(".forEachAssetDependency(callback);\r\n");
+        }
+        else if(tname == "Optional"
+            && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
+        {
+            const MStringView innerName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
+            if(innerName == "AssetRef"){
+                out.append("        if(this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(".has_value() && this->");
+                out.append(field->name.data(), field->name.size());
+                out.append("->valid()) callback(this->");
+                out.append(field->name.data(), field->name.size());
+                out.append("->virtualPath);\r\n");
+            }
+            else if(m_symbols.findClass(innerName)){
+                out.append("        if(this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(".has_value()) this->");
+                out.append(field->name.data(), field->name.size());
+                out.append("->forEachAssetDependency(callback);\r\n");
+            }
+        }
+        else if(IsReflectedLinearContainerType(tname)
+            && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
+        {
+            const MStringView elemName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
+            if(elemName == "AssetRef"){
+                out.append("        for(const auto& __dep : this->");
+                out.append(field->name.data(), field->name.size());
+                out.append("){ if(__dep.valid()) callback(__dep.virtualPath); }\r\n");
+            }
+            else if(m_symbols.findClass(elemName)){
+                out.append("        for(const auto& __item : this->");
+                out.append(field->name.data(), field->name.size());
+                out.append(") __item.forEachAssetDependency(callback);\r\n");
+            }
+        }
+        else if(IsReflectedMapContainerType(tname)
+            && resolvedFieldType && resolvedFieldType->templateArgs.size() >= 2u && resolvedFieldType->templateArgs[1].type)
+        {
+            const MStringView valName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[1].type->name);
+            if(valName == "AssetRef"){
+                out.append("        for(const auto& [__k, __dep] : this->");
+                out.append(field->name.data(), field->name.size());
+                out.append("){ (void)__k; if(__dep.valid()) callback(__dep.virtualPath); }\r\n");
+            }
+            else if(m_symbols.findClass(valName)){
+                out.append("        for(const auto& [__k, __item] : this->");
+                out.append(field->name.data(), field->name.size());
+                out.append("){ (void)__k; __item.forEachAssetDependency(callback); }\r\n");
+            }
+        }
+    }
+    out.append("    }\r\n");
+
+    out.append("    template<typename NwbValue, typename DependencyCallback>\r\n");
+    out.append("    [[nodiscard]] static bool extractNwbAssetDependencies(const NwbValue& inMap, [[maybe_unused]] DependencyCallback&& callback)noexcept{\r\n");
+    out.append("        if(!inMap.isMap())\r\n");
+    out.append("            return false;\r\n");
+    for(const FieldDecl* field : fields){
+        if(!field || !IsFieldReflected(*field) || !field->type || !IsAssetDependencyField(*field, m_symbols))
+            continue;
+        const TypeRef* resolvedFieldType = m_symbols.unwrapTypeAlias(field->type);
+        const MStringView tname = resolvedFieldType ? resolvedFieldType->name : field->type->name;
+        if(tname == "AssetRef"){
+            EmitNwbDependencyFieldFindPrefix(out, field->name);
+            out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString()); __name && *__name) callback(*__name); }\r\n");
+        }
+        else if(m_symbols.findClass(tname)){
+            EmitNwbDependencyFieldFindPrefix(out, field->name);
+            out.append("__f->isMap() && !");
+            out.append(tname.data(), tname.size());
+            out.append("::extractNwbAssetDependencies(*__f, callback)) return false;\r\n");
+        }
+        else if(tname == "Optional"
+            && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
+        {
+            const MStringView innerName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
+            if(innerName == "AssetRef"){
+                EmitNwbDependencyFieldFindPrefix(out, field->name);
+                out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString()); __name && *__name) callback(*__name); }\r\n");
+            }
+            else if(m_symbols.findClass(innerName)){
+                EmitNwbDependencyFieldFindPrefix(out, field->name);
+                out.append("__f->isMap() && !");
+                out.append(innerName.data(), innerName.size());
+                out.append("::extractNwbAssetDependencies(*__f, callback)) return false;\r\n");
+            }
+        }
+        else if(IsReflectedLinearContainerType(tname)
+            && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type)
+        {
+            const MStringView elemName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
+            if(elemName == "AssetRef"){
+                EmitNwbDependencyFieldFindPrefix(out, field->name);
+                out.append("__f->isList()){ for(usize __i = 0u; __i < __f->asList().size(); ++__i){ if(__f->asList()[__i].isString()){ if(const auto __name = ::Name::FromText(__f->asList()[__i].asString()); __name && *__name) callback(*__name); } } }\r\n");
+            }
+            else if(m_symbols.findClass(elemName)){
+                EmitNwbDependencyFieldFindPrefix(out, field->name);
+                out.append("__f->isList()){ for(usize __i = 0u; __i < __f->asList().size(); ++__i){ if(!__f->asList()[__i].isMap() || !");
+                out.append(elemName.data(), elemName.size());
+                out.append("::extractNwbAssetDependencies(__f->asList()[__i], callback)) return false; } }\r\n");
+            }
+        }
+        else if(IsReflectedMapContainerType(tname)
+            && resolvedFieldType && resolvedFieldType->templateArgs.size() >= 2u && resolvedFieldType->templateArgs[1].type)
+        {
+            const MStringView valName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[1].type->name);
+            if(valName == "AssetRef"){
+                EmitNwbDependencyFieldFindPrefix(out, field->name);
+                out.append("__f->isMap()){ for(const auto& [__k, __v] : __f->asMap()){ (void)__k; if(__v.isString()){ if(const auto __name = ::Name::FromText(__v.asString()); __name && *__name) callback(*__name); } } }\r\n");
+            }
+            else if(m_symbols.findClass(valName)){
+                EmitNwbDependencyFieldFindPrefix(out, field->name);
+                out.append("__f->isMap()){ for(const auto& [__k, __v] : __f->asMap()){ (void)__k; if(!__v.isMap() || !");
+                out.append(valName.data(), valName.size());
+                out.append("::extractNwbAssetDependencies(__v, callback)) return false; } }\r\n");
+            }
+        }
+    }
+    out.append("        return true;\r\n");
+    out.append("    }\r\n");
 }
 
 

@@ -71,6 +71,19 @@ bool TypeChecker::checkCallableArguments(
     MVector<ParseError>& errors
 ){
     bool ok = true;
+    const SourceSpan errSpan = !arguments.empty() && arguments[0] ? arguments[0]->span : method.span;
+    if(targetCallable && targetCallable->params.size() != arguments.size()){
+        reportError(errors, errSpan, "wrong number of arguments in call");
+        ok = false;
+    }
+    else if(invokedFuncType && invokedFuncType->isFuncType && invokedFuncType->funcParams.size() != arguments.size()){
+        reportError(errors, errSpan, "wrong number of arguments in Func call");
+        ok = false;
+    }
+    else if(localCallable && localCallable->lambdaExpr && localCallable->lambdaExpr->lambdaParams.size() != arguments.size()){
+        reportError(errors, errSpan, "wrong number of arguments in lambda call");
+        ok = false;
+    }
     for(usize i = 0u; i < arguments.size(); ++i){
         Expr* arg = arguments[i];
         if(!arg)
@@ -130,6 +143,50 @@ bool TypeChecker::checkCallableArguments(
                 errors
             )){
                 ok = false;
+            }
+        }
+        if(targetCallable && expectedParamTypeRef && (!callTemplateArgs || callTemplateArgs->empty()) && !targetCallable->templateParams.empty()){
+            for(const TemplateParamDecl& tp : targetCallable->templateParams){
+                if(tp.name != expectedParamTypeRef->name || tp.interfaceBounds.empty())
+                    continue;
+                for(const TypeRef* boundRef : tp.interfaceBounds){
+                    if(!boundRef)
+                        continue;
+                    if(!verifyConcreteClassImplementsInterface(
+                        ownerClass,
+                        method,
+                        *arg,
+                        boundRef,
+                        scope,
+                        arg->span,
+                        "template type argument does not implement required interface bound",
+                        errors
+                    )){
+                        ok = false;
+                    }
+                }
+            }
+        }
+        if(targetOwnerCls && expectedParamTypeRef && (!recvTypeRef || recvTypeRef->templateArgs.empty()) && !targetOwnerCls->templateParams.empty()){
+            for(const TemplateParamDecl& tp : targetOwnerCls->templateParams){
+                if(tp.name != expectedParamTypeRef->name || tp.interfaceBounds.empty())
+                    continue;
+                for(const TypeRef* boundRef : tp.interfaceBounds){
+                    if(!boundRef)
+                        continue;
+                    if(!verifyConcreteClassImplementsInterface(
+                        ownerClass,
+                        method,
+                        *arg,
+                        boundRef,
+                        scope,
+                        arg->span,
+                        "template type argument does not implement required interface bound",
+                        errors
+                    )){
+                        ok = false;
+                    }
+                }
             }
         }
     }
@@ -198,6 +255,27 @@ bool TypeChecker::checkCallExpr(
             if(expr.lhs->text == "wait"){
                 reportError(errors, expr.span, "'wait' can only be used as a standalone join statement");
                 ok = false;
+            }
+            if(!targetCallable && !localCallable){
+                const MStringView fnName = expr.lhs->text;
+                usize expectedBuiltinArity = 0u;
+                if(fnName == "abs" || fnName == "floor" || fnName == "ceil" || fnName == "round"
+                    || fnName == "sqrt" || fnName == "rsqrt" || fnName == "length" || fnName == "lengthSq"
+                    || fnName == "normalize" || fnName == "transpose" || fnName == "inverse"
+                    || fnName == "sin" || fnName == "cos" || fnName == "tan")
+                {
+                    expectedBuiltinArity = 1u;
+                }
+                else if(fnName == "min" || fnName == "max" || fnName == "dot" || fnName == "cross" || fnName == "mul"){
+                    expectedBuiltinArity = 2u;
+                }
+                else if(fnName == "clamp" || fnName == "lerp"){
+                    expectedBuiltinArity = 3u;
+                }
+                if(expectedBuiltinArity > 0u && callArgCount != expectedBuiltinArity){
+                    reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
+                    ok = false;
+                }
             }
             if(baseCallee == "Path"){
                 for(Expr* arg : expr.arguments){

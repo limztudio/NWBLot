@@ -81,6 +81,10 @@ MStringView TypeChecker::inferExprTypeName(
             return lhsT;
         if(SymbolTable::isSimdType(rhsT))
             return rhsT;
+        if(m_symbols.findEnum(lhsT))
+            return lhsT;
+        if(m_symbols.findEnum(rhsT))
+            return rhsT;
         return !lhsT.empty() ? lhsT : rhsT;
     }
     else if(expr.kind == ExprKind::Call && expr.lhs){
@@ -141,6 +145,32 @@ MStringView TypeChecker::inferExprTypeName(
     }
     else if(expr.kind == ExprKind::StringLiteral){
         return "StringView";
+    }
+    else if(expr.kind == ExprKind::BoolLiteral){
+        return "bool";
+    }
+    else if(expr.kind == ExprKind::FloatLiteral){
+        return "f32";
+    }
+    else if(expr.kind == ExprKind::DoubleLiteral){
+        return "f64";
+    }
+    else if(expr.kind == ExprKind::IntegerLiteral){
+        const MStringView t = expr.text;
+        bool hasU = false;
+        bool hasL = false;
+        for(usize i = t.size(); i > 0u; --i){
+            const MChar c = t[i - 1u];
+            if(c == 'u' || c == 'U')
+                hasU = true;
+            else if(c == 'l' || c == 'L')
+                hasL = true;
+            else
+                break;
+        }
+        if(hasL)
+            return hasU ? "u64" : "i64";
+        return hasU ? "u32" : "i32";
     }
     return {};
 }

@@ -38,7 +38,11 @@ public:
 
 public:
     [[nodiscard]] bool discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Expected<DependencyInputSelection> selectInputs(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] Expected<DependencyInputSelection> selectInputs(
+        const PipelineOptions& options,
+        const NWB::Core::Assets::CookDependencyRegistry& dependencyRegistry,
+        NWB::Core::Alloc::ScratchArena& scratchArena
+    )const;
     [[nodiscard]] Expected<NWB::Core::Metascript::Document> read(usize index, NWB::Core::Alloc::ScratchArena& scratchArena)const;
     [[nodiscard]] Expected<usize> resolve(
         const Name& virtualPath,

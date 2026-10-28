@@ -97,16 +97,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     }
     case ExprKind::MemberAccess:{
         u32 lane = 0u;
-        if(expr.lhs && IsRegisterPromotableSimdType(expr.lhs->resolvedSimdType)
+        if(!expr.isMutArg && expr.lhs && IsRegisterPromotableSimdType(expr.lhs->resolvedSimdType)
             && IsSingleSwizzleLane(expr.text, lane))
         {
-            const SimdVarBinding* lhsBinding = nullptr;
-            if(expr.lhs->kind == ExprKind::Identifier)
-                lhsBinding = findSimdBinding(false, expr.lhs->text);
-            else if(expr.lhs->kind == ExprKind::ThisMember)
-                lhsBinding = findSimdBinding(true, expr.lhs->text);
-
-            if(lhsBinding || ExprContainsSimdMath(expr.lhs, m_symbols)){
+            if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
                 const MStringView lhsSimd = expr.lhs->resolvedSimdType;
                 const bool isDouble = IsDoubleSimdType(lhsSimd);
                 const bool isInt = IsIntSimdType(lhsSimd);
@@ -150,17 +144,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     }
     case ExprKind::Index:{
         u32 vecLanes = 0u;
-        if(expr.lhs && expr.rhs
+        if(!expr.isMutArg && expr.lhs && expr.rhs
             && IsRegisterPromotableSimdType(expr.lhs->resolvedSimdType)
             && m_symbols.isSimdVectorType(expr.lhs->resolvedSimdType, vecLanes))
         {
-            const SimdVarBinding* lhsBinding = nullptr;
-            if(expr.lhs->kind == ExprKind::Identifier)
-                lhsBinding = findSimdBinding(false, expr.lhs->text);
-            else if(expr.lhs->kind == ExprKind::ThisMember)
-                lhsBinding = findSimdBinding(true, expr.lhs->text);
-
-            if(lhsBinding || ExprContainsSimdMath(expr.lhs, m_symbols)){
+            if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
                 const MStringView lhsSimd = expr.lhs->resolvedSimdType;
                 const bool isDouble = IsDoubleSimdType(lhsSimd);
                 const bool isInt = IsIntSimdType(lhsSimd);
@@ -205,35 +193,15 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
                 const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0]);
                 out.append(isDouble ? "::VectorDoubleGetX(" : "::VectorGetX(");
                 if(callee == "dot"){
-                    if(effLanes == 2u)
-                        out.append(isDouble ? "::VectorDouble2Dot(" : "::Vector2Dot(");
-                    else if(effLanes == 3u)
-                        out.append(isDouble ? "::VectorDouble3Dot(" : "::Vector3Dot(");
-                    else
-                        out.append(isDouble ? "::VectorDouble4Dot(" : "::Vector4Dot(");
+                    AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "Dot");
                     emitSimdRegExpr(out, *expr.arguments[0], argSimd);
                     out.append(", ");
                     if(expr.arguments.size() > 1u && expr.arguments[1])
                         emitSimdRegExpr(out, *expr.arguments[1], argSimd);
                     out.append("))");
                 }
-                else if(callee == "length"){
-                    if(effLanes == 2u)
-                        out.append(isDouble ? "::VectorDouble2Length(" : "::Vector2Length(");
-                    else if(effLanes == 3u)
-                        out.append(isDouble ? "::VectorDouble3Length(" : "::Vector3Length(");
-                    else
-                        out.append(isDouble ? "::VectorDouble4Length(" : "::Vector4Length(");
-                    emitSimdRegExpr(out, *expr.arguments[0], argSimd);
-                    out.append("))");
-                }
                 else{
-                    if(effLanes == 2u)
-                        out.append(isDouble ? "::VectorDouble2LengthSq(" : "::Vector2LengthSq(");
-                    else if(effLanes == 3u)
-                        out.append(isDouble ? "::VectorDouble3LengthSq(" : "::Vector3LengthSq(");
-                    else
-                        out.append(isDouble ? "::VectorDouble4LengthSq(" : "::Vector4LengthSq(");
+                    AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, callee == "length" ? "Length" : "LengthSq");
                     emitSimdRegExpr(out, *expr.arguments[0], argSimd);
                     out.append("))");
                 }

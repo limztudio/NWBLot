@@ -30,6 +30,7 @@ inline constexpr Name s_RegisterCodecsScratch("core/assets/register_auto_collect
 
 inline constexpr Name s_MetadataParserQueueArena("core/assets/asset_metadata_parser_queue");
 inline constexpr Name s_BunchExpanderQueueArena("core/assets/asset_bunch_expander_queue");
+inline constexpr Name s_CompositeRootTypeQueueArena("core/assets/composite_root_type_queue");
 
 inline constexpr Name s_AutoRegistrationQueueArena("core/assets/cook_entry_auto_registration_queue");
 inline constexpr Name s_CookDependencyQueueArena("core/assets/cook_dependency_auto_registration_queue");

@@ -205,7 +205,7 @@ private:
     [[nodiscard]] bool validControlTargets()const noexcept;
     [[nodiscard]] bool validCommandOwners()const noexcept;
     [[nodiscard]] const HitTarget* commandHost(const HitTarget& source)const noexcept;
-    [[nodiscard]] bool currentControlCommandOwner(const CommandSource& source)const noexcept;
+    [[nodiscard]] bool currentControlCommandOwner(const CommandSource& held)const noexcept;
     [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const noexcept;
     [[nodiscard]] bool currentControlAction(const ControlAction& action)const noexcept;
     void reconcileControlActions()noexcept;

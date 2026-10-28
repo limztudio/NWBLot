@@ -106,9 +106,9 @@ struct alignas(32) Double2{
         , y(yValue)
     {
     }
-    explicit constexpr Double2(const f64 (&pArray)[2])noexcept
-        : x(pArray[0])
-        , y(pArray[1])
+    explicit constexpr Double2(const f64 (&values)[2])noexcept
+        : x(values[0])
+        , y(values[1])
     {
     }
 };
@@ -143,10 +143,10 @@ struct alignas(32) Double3{
         , z(zValue)
     {
     }
-    explicit constexpr Double3(const f64 (&pArray)[3])noexcept
-        : x(pArray[0])
-        , y(pArray[1])
-        , z(pArray[2])
+    explicit constexpr Double3(const f64 (&values)[3])noexcept
+        : x(values[0])
+        , y(values[1])
+        , z(values[2])
     {
     }
 };
@@ -183,8 +183,8 @@ struct alignas(16) Float4{
         : x(xValue), y(yValue), z(zValue), w(wValue)
     {
     }
-    explicit constexpr Float4(const f32 (&pArray)[4])noexcept
-        : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3])
+    explicit constexpr Float4(const f32 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
     {
     }
 };
@@ -218,8 +218,8 @@ struct alignas(32) Double4{
         : x(xValue), y(yValue), z(zValue), w(wValue)
     {
     }
-    explicit constexpr Double4(const f64 (&pArray)[4])noexcept
-        : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3])
+    explicit constexpr Double4(const f64 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
     {
     }
 };

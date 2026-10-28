@@ -398,7 +398,7 @@ private:
         return !m_teardownInProgress && m_activeCompiledGraph == &compiledGraph && m_activeRecordingPlanGeneration == planGeneration && m_activeRecordingAttemptGeneration == recordingAttemptGeneration;
     }
 
-    [[nodiscard]] Expected<void, RecordTaskFailure> recordTask(const GpuTaskId& task, CommandList& commandList, const GpuTaskRecordContext& context, const GpuPacketRecordingLease& lease)const;
+    [[nodiscard]] Expected<void, RecordTaskFailure> recordTask(const GpuTaskId& taskID, CommandList& commandList, const GpuTaskRecordContext& context, const GpuPacketRecordingLease& lease)const;
 
     // Caller owns teardown/binding validation, lease reset, and claim release; task mutation holds the lifecycle lock.
     void discardPacketTasksWithinLock(const GpuSubmissionPacket& packetPlan, const GpuTaskId* const tasks, const u64 notificationGeneration = 0u)const noexcept{
@@ -466,7 +466,7 @@ private:
         CommandList& commandList
     )const;
     // Seeds retained states after barriers lower, keeping packet handoffs when the required state already matches.
-    [[nodiscard]] bool seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& task, CommandList& commandList)const;
+    [[nodiscard]] bool seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& taskID, CommandList& commandList)const;
 
 private:
     [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;

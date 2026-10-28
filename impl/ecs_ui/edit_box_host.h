@@ -135,7 +135,7 @@ public:
     void commitFrame(u64 generation);
     void collectNative();
     [[nodiscard]] bool prepareSubmit(const Ui::InputEvent& event)noexcept;
-    void input(const Ui::InputEvent& event, Ui::WidgetId previousCapture, bool submit);
+    void input(const Ui::InputEvent& input, Ui::WidgetId previousCapture, bool submit);
     [[nodiscard]] bool character(u32 unicode);
     [[nodiscard]] bool pastePrimary(Ui::Point position);
     [[nodiscard]] bool hasTextFocus()const noexcept;

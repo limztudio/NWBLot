@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_runtime{
+namespace __hidden_assets_material_runtime{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -336,7 +336,7 @@ bool Material::loadBinary(const Span<const u8> binary){
         return false;
     }
 
-    auto typedLayout = __hidden_runtime::ReadMaterialTypedLayout(binary, m_shaderVariant.get_allocator().arena(), cursor);
+    auto typedLayout = __hidden_assets_material_runtime::ReadMaterialTypedLayout(binary, m_shaderVariant.get_allocator().arena(), cursor);
     if(!typedLayout)
         return false;
     candidate.m_typedLayoutHash = typedLayout->layoutHash;

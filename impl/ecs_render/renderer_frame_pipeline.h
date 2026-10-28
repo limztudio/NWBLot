@@ -101,7 +101,7 @@ namespace DeferredGraphicsPrefixTimingSlot{
         CsgIntervalCombine,
         CsgIntervalSample,
         Normalize,
-        kCount,
+        Count,
     };
 };
 

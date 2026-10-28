@@ -18,7 +18,7 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_scene{
+namespace __hidden_fbx_scene{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,7 +111,7 @@ Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::Scrat
         loadOptions.target_axes.right = UFBX_COORDINATE_AXIS_POSITIVE_X;
         loadOptions.target_axes.up = UFBX_COORDINATE_AXIS_POSITIVE_Y;
         loadOptions.target_axes.front = UFBX_COORDINATE_AXIS_POSITIVE_Z;
-        loadOptions.target_unit_meters = __hidden_scene::s_TargetUnitMeters;
+        loadOptions.target_unit_meters = __hidden_fbx_scene::s_TargetUnitMeters;
     }
 
     const ScratchPath nativeInputPath(scratchArena, options.inputPath);
@@ -119,7 +119,7 @@ Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::Scrat
     ufbx_error error = {};
     outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
     if(!outScene.scene){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to load FBX: {}"), ConvertString(__hidden_scene::FormatUfbxError(error, scratchArena)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to load FBX: {}"), ConvertString(__hidden_fbx_scene::FormatUfbxError(error, scratchArena)));
         return MakeUnexpected(Failure{});
     }
 
@@ -160,7 +160,7 @@ void PrintMeshInstances(const Span<const MeshInstance> instances, Core::Alloc::S
     report << "Mesh instances:\n";
     for(const MeshInstance& instance : instances){
         report << "  ";
-        __hidden_scene::AppendMeshDisplayName(report, instance);
+        __hidden_fbx_scene::AppendMeshDisplayName(report, instance);
         report << s_ReportLineEndText;
     }
     NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
@@ -185,7 +185,7 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance
         return outSelection;
     }
 
-    const auto parsedIndex = __hidden_scene::ParseIndexSelector(normalized);
+    const auto parsedIndex = __hidden_fbx_scene::ParseIndexSelector(normalized);
     if(parsedIndex){
         if(*parsedIndex >= instances.size()){
             NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': mesh index is out of range"), ConvertString(selector));
@@ -198,10 +198,10 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance
     UtilityVector<usize> partialSelection;
     outSelection.reserve(instances.size());
     for(const MeshInstance& instance : instances){
-        if(EqualsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.node->name), normalized) || EqualsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.mesh->name), normalized)){
+        if(EqualsAsciiIgnoreCase(__hidden_fbx_scene::UfbxStringView(instance.node->name), normalized) || EqualsAsciiIgnoreCase(__hidden_fbx_scene::UfbxStringView(instance.mesh->name), normalized)){
             outSelection.push_back(instance.index);
         }
-        else if(outSelection.empty() && (ContainsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.node->name), normalized) || ContainsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.mesh->name), normalized))){
+        else if(outSelection.empty() && (ContainsAsciiIgnoreCase(__hidden_fbx_scene::UfbxStringView(instance.node->name), normalized) || ContainsAsciiIgnoreCase(__hidden_fbx_scene::UfbxStringView(instance.mesh->name), normalized))){
             if(partialSelection.empty())
                 partialSelection.reserve(instances.size());
             partialSelection.push_back(instance.index);

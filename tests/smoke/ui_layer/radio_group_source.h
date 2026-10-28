@@ -29,15 +29,15 @@ public:
     [[nodiscard]] virtual u64 revision()const noexcept override;
     [[nodiscard]] virtual u64 rowCount()const noexcept override;
     [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
-    [[nodiscard]] virtual Expected<u64> indexOf(u64 key)const noexcept override;
-    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverseValue)const noexcept override;
     [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
     [[nodiscard]] virtual bool enabled(u64 index)const noexcept override;
 
 
 public:
     void reverse()noexcept;
-    void remove(u64 key)noexcept;
+    void remove(u64 keyValue)noexcept;
     void replace()noexcept;
     void beginFrame()noexcept{ m_labelReads = 0u; }
 

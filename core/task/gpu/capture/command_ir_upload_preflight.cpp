@@ -128,7 +128,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     const TextureDesc& description = destination->getCreationDescription();
     const TextureSlice& slice = record.destinationSlice;
     Expected<usize> requiredBytes = MakeUnexpected(Failure{});
-    if(static_cast<usize>(description.format) >= static_cast<usize>(Format::kCount))
+    if(static_cast<usize>(description.format) >= static_cast<usize>(Format::Count))
         return GpuCommandIrReplayError::InvalidTextureUpload;
     const auto resolvedAspect = ResolveTextureUploadAspect(GetFormatInfo(description.format), record.uploadAspect);
     if(

@@ -100,7 +100,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const usize dependencyCount
 ){
     Graphics::GpuTaskDesc desc;
-    desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling).setTimingMetadata(timing).setDependencies(dependencies, dependencyCount);
+    desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling).setTiming(timing).setDependencies(dependencies, dependencyCount);
     return graph.addTask(desc, commands);
 }
 

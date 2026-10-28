@@ -696,7 +696,9 @@ ZEXTERN int ZEXPORT deflateCopy(z_streamp dest,
      deflateCopy returns Z_OK if success, Z_MEM_ERROR if there was not
    enough memory, Z_STREAM_ERROR if the source stream state was inconsistent
    (such as zalloc being Z_NULL).  msg is left unchanged in both source and
-   destination.
+   destination.  If deflateCopy fails and dest is not Z_NULL, then dest->state
+   is set to Z_NULL with dest otherwise unchanged, so that deflateEnd(dest) can
+   be called safely, though dest is not a usable stream.
 */
 
 ZEXTERN int ZEXPORT deflateReset(z_streamp strm);
@@ -769,17 +771,17 @@ ZEXTERN uLong ZEXPORT deflateBound(z_streamp strm, uLong sourceLen);
 ZEXTERN z_size_t ZEXPORT deflateBound_z(z_streamp strm, z_size_t sourceLen);
 /*
      deflateBound() returns an upper bound on the compressed size after
-   deflation of sourceLen bytes.  It must be called after deflateInit() or
-   deflateInit2(), and after deflateSetHeader(), if used.  This would be used
-   to allocate an output buffer for deflation in a single pass, and so would be
-   called before deflate().  If that first deflate() call is provided the
-   sourceLen input bytes, an output buffer allocated to the size returned by
-   deflateBound(), and the flush value Z_FINISH, then deflate() is guaranteed
-   to return Z_STREAM_END.  Note that it is possible for the compressed size to
-   be larger than the value returned by deflateBound() if flush options other
-   than Z_FINISH or Z_NO_FLUSH are used.
+  deflation of sourceLen bytes.  It must be called after deflateInit() or
+  deflateInit2(), and after deflateSetHeader() or deflateSetDictionary(), if
+  used.  This would be used to allocate an output buffer for deflation in a
+  single pass, and so would be called before deflate().  If that first
+  deflate() call is provided the sourceLen input bytes, an output buffer
+  allocated to the size returned by deflateBound(), and the flush value
+  Z_FINISH, then deflate() is guaranteed to return Z_STREAM_END.  Note that it
+  is possible for the compressed size to be larger than the value returned by
+  deflateBound() if flush options other than Z_FINISH or Z_NO_FLUSH are used.
 
-     delfateBound_z() is the same, but takes and returns a size_t length.  Note
+     deflateBound_z() is the same, but takes and returns a size_t length.  Note
    that a long is 32 bits on Windows.
 */
 
@@ -789,7 +791,7 @@ ZEXTERN int ZEXPORT deflatePending(z_streamp strm,
 /*
      deflatePending() returns the number of bytes and bits of output that have
    been generated, but not yet provided in the available output.  The bytes not
-   provided would be due to the available output space having being consumed.
+   provided would be due to the available output space having been consumed.
    The number of bits of output not provided are between 0 and 7, where they
    await more bits to join them in order to fill out a full byte.  If pending
    or bits are Z_NULL, then those values are not set.
@@ -980,7 +982,9 @@ ZEXTERN int ZEXPORT inflateCopy(z_streamp dest,
      inflateCopy returns Z_OK if success, Z_MEM_ERROR if there was not
    enough memory, Z_STREAM_ERROR if the source stream state was inconsistent
    (such as zalloc being Z_NULL).  msg is left unchanged in both source and
-   destination.
+   destination.  If inflateCopy fails and dest is not Z_NULL, then dest->state
+   is set to Z_NULL with dest otherwise unchanged, so that inflateEnd(dest) can
+   be called safely, though dest is not a usable stream.
 */
 
 ZEXTERN int ZEXPORT inflateReset(z_streamp strm);
@@ -1501,9 +1505,12 @@ ZEXTERN z_size_t ZEXPORT gzfread(voidp buf, z_size_t size, z_size_t nitems,
      gzfread() returns the number of full items read of size size, or zero if
    the end of the file was reached and a full item could not be read, or if
    there was an error.  gzerror() must be consulted if zero is returned in
-   order to determine if there was an error.  If the multiplication of size and
-   nitems overflows, i.e. the product does not fit in a z_size_t, then nothing
-   is read, zero is returned, and the error state is set to Z_STREAM_ERROR.
+   order to determine if there was an error.  If some data was read before an
+   error, then that data is returned until exhausted, after which the next call
+   will return zero and gzerror() will report the error.  If the multiplication
+   of size and nitems overflows, i.e. the product does not fit in a z_size_t,
+   then nothing is read, zero is returned, and the error state is set to
+   Z_STREAM_ERROR.
 
      In the event that the end of file is reached and only a partial item is
    available at the end, i.e. the remaining uncompressed data length is not a
@@ -1780,7 +1787,8 @@ ZEXTERN const char * ZEXPORT gzerror(gzFile file, int *errnum);
    If errnum is not NULL, *errnum is set to zlib error number.  If an error
    occurred in the file system and not in the compression library, *errnum is
    set to Z_ERRNO and the application may consult errno to get the exact error
-   code.
+   code.  The error is reported by gzerror() as soon as it is detected, which
+   may be before all of the data read prior to the error has been returned.
 
      The application must not modify the returned string.  Future calls to
    this function may invalidate the previously returned string.  If file is

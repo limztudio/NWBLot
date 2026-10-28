@@ -37,7 +37,7 @@ namespace ShaderOptimizationLevel{
         High,
         Maximal,
 
-        kCount,
+        Count,
     };
 };
 

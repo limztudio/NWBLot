@@ -32,8 +32,8 @@ struct Float2U{
         : x(xValue), y(yValue)
     {
     }
-    explicit constexpr Float2U(const f32 (&pArray)[2])noexcept
-        : x(pArray[0]), y(pArray[1])
+    explicit constexpr Float2U(const f32 (&values)[2])noexcept
+        : x(values[0]), y(values[1])
     {
     }
 };
@@ -59,8 +59,8 @@ struct Double2U{
         : x(xValue), y(yValue)
     {
     }
-    explicit constexpr Double2U(const f64 (&pArray)[2])noexcept
-        : x(pArray[0]), y(pArray[1])
+    explicit constexpr Double2U(const f64 (&values)[2])noexcept
+        : x(values[0]), y(values[1])
     {
     }
 };
@@ -88,8 +88,8 @@ struct Float3U{
         : x(xValue), y(yValue), z(zValue)
     {
     }
-    explicit constexpr Float3U(const f32 (&pArray)[3])noexcept
-        : x(pArray[0]), y(pArray[1]), z(pArray[2])
+    explicit constexpr Float3U(const f32 (&values)[3])noexcept
+        : x(values[0]), y(values[1]), z(values[2])
     {
     }
 };
@@ -117,8 +117,8 @@ struct Double3U{
         : x(xValue), y(yValue), z(zValue)
     {
     }
-    explicit constexpr Double3U(const f64 (&pArray)[3])noexcept
-        : x(pArray[0]), y(pArray[1]), z(pArray[2])
+    explicit constexpr Double3U(const f64 (&values)[3])noexcept
+        : x(values[0]), y(values[1]), z(values[2])
     {
     }
 };
@@ -148,8 +148,8 @@ struct Float4U{
         : x(xValue), y(yValue), z(zValue), w(wValue)
     {
     }
-    explicit constexpr Float4U(const f32 (&pArray)[4])noexcept
-        : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3])
+    explicit constexpr Float4U(const f32 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
     {
     }
 };
@@ -179,8 +179,8 @@ struct Double4U{
         : x(xValue), y(yValue), z(zValue), w(wValue)
     {
     }
-    explicit constexpr Double4U(const f64 (&pArray)[4])noexcept
-        : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3])
+    explicit constexpr Double4U(const f64 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
     {
     }
 };

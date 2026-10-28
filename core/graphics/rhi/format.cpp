@@ -23,7 +23,7 @@ static constexpr int s_UnknownFormatBlockY = 0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr FormatInfo s_FormatInfo[Format::kCount] = {
+static constexpr FormatInfo s_FormatInfo[Format::Count] = {
     { Format::UNKNOWN              , "UNKNOWN", __hidden_graphics_format::s_UnknownFormatBlockX, __hidden_graphics_format::s_UnknownFormatBlockY, FormatKind::Integer     , false, false, false, false, false, false, false, false },
 
     { Format::R8_UINT              , "R8_UINT"              ,  1,  1, FormatKind::Integer     , true , false, false, false, false, false, false, false },
@@ -150,8 +150,8 @@ static constexpr FormatInfo s_FormatInfo[Format::kCount] = {
 
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
-    NWB_ASSERT_MSG(static_cast<usize>(format) < static_cast<usize>(Format::kCount), NWB_TEXT("Format::Enum out of range"));
-    if(static_cast<usize>(format) >= static_cast<usize>(Format::kCount))
+    NWB_ASSERT_MSG(static_cast<usize>(format) < static_cast<usize>(Format::Count), NWB_TEXT("Format::Enum out of range"));
+    if(static_cast<usize>(format) >= static_cast<usize>(Format::Count))
         return s_FormatInfo[static_cast<u32>(Format::UNKNOWN)];
 
     return s_FormatInfo[static_cast<u32>(format)];
@@ -203,7 +203,7 @@ u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept{
 }
 
 Expected<TextureUploadAspect::Enum> ResolveTextureUploadAspect(const FormatInfo& formatInfo, const TextureUploadAspect::Enum requestedAspect)noexcept{
-    if(requestedAspect >= TextureUploadAspect::kCount)
+    if(requestedAspect >= TextureUploadAspect::Count)
         return MakeUnexpected(Failure{});
 
     if(formatInfo.hasDepth && formatInfo.hasStencil){

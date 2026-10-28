@@ -110,7 +110,7 @@ namespace LightType{
         Point,
         Spot,
 
-        kCount
+        Count
     };
 };
 

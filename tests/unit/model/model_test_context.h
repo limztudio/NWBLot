@@ -30,7 +30,7 @@ namespace ModelTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class EmptyAssetSource final : public Core::Assets::IAssetBinarySource{
+struct EmptyAssetSource final : public Core::Assets::IAssetBinarySource{
 public:
     virtual bool readAssetBinary(const Name& virtualPath, Core::Assets::AssetBytes& outBinary)const noexcept override{
         static_cast<void>(virtualPath);

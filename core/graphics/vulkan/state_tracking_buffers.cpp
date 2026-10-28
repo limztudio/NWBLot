@@ -267,9 +267,9 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
     m_pendingBufferBarriers.resize(firstBarrierIndex);
 }
 
-void CommandList::releaseBufferOwnership(Buffer* buffer, const CommandQueue::Enum destinationQueue, const BufferRange range){
-    if(buffer)
-        releaseBufferOwnership(buffer, m_device.getPrimaryPhysicalQueue(destinationQueue), range);
+void CommandList::releaseBufferOwnership(Buffer* bufferResource, const CommandQueue::Enum destinationQueue, const BufferRange range){
+    if(bufferResource)
+        releaseBufferOwnership(bufferResource, m_device.getPrimaryPhysicalQueue(destinationQueue), range);
 }
 
 void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysicalQueueId destinationQueue, const BufferRange range){

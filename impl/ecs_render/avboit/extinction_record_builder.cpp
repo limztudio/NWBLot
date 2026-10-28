@@ -270,13 +270,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
             .setResourceUses(extinctionComputeEmulationResourceUses, extinctionComputeEmulationResourceUseCount)
             .setResourceSetUses(extinctionComputeEmulationResourceSetUses, extinctionComputeEmulationResourceSetUseCount)
         ;
-        const auto mAvboitSystemTaskGraphStageMExtinctionComputeEmulationTaskResult = m_graph.addTask< AvboitExtinctionComputeEmulationGraphTask >(extinctionComputeEmulationDesc, Move(computeEmulationPayload));
-        if(!mAvboitSystemTaskGraphStageMExtinctionComputeEmulationTaskResult){
+        const auto extinctionComputeEmulationTaskResult = m_graph.addTask< AvboitExtinctionComputeEmulationGraphTask >(extinctionComputeEmulationDesc, Move(computeEmulationPayload));
+        if(!extinctionComputeEmulationTaskResult){
             m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Extinction compute-emulation producer"));
             return MakeUnexpected(Failure{});
         }
-        m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask = *mAvboitSystemTaskGraphStageMExtinctionComputeEmulationTaskResult;
+        m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask = *extinctionComputeEmulationTaskResult;
         extinctionDependency = m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask;
         avboitExtinctionScheduling.allowMergeAcrossConsumerFrontier = true;
     }
@@ -383,7 +383,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         const Span<const Core::GpuTaskResourceSetUse> extinctionMaterialResourceSetUseSpan(extinctionMaterialResourceSetUses, extinctionMaterialResourceSetUseCount);
         for(usize phaseIndex = 0u; phaseIndex < extinctionSharedComputeEmulationPhaseCount; ++phaseIndex){
             const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
-            const auto mAvboitSystemTaskGraphStageMExtinctionSharedComputeEmulationTasksPhaseIndexResult = addExtinctionSharedComputeEmulationPhase(
+            const auto extinctionSharedComputeEmulationTaskResult = addExtinctionSharedComputeEmulationPhase(
                 extinctionSharedComputeEmulationPhaseIdentities[phaseIndex],
                 extinctionSharedComputeEmulationPhaseMarkers[phaseIndex],
                 extinctionSharedComputeEmulationDependency,
@@ -394,12 +394,12 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
                 isRasterPhase ? Span<const Core::GpuTaskResourceUse>(extinctionSharedRasterResourceUses) : Span<const Core::GpuTaskResourceUse>(extinctionSharedGenerateResourceUses),
                 extinctionMaterialResourceSetUseSpan
             );
-            if(!mAvboitSystemTaskGraphStageMExtinctionSharedComputeEmulationTasksPhaseIndexResult){
+            if(!extinctionSharedComputeEmulationTaskResult){
                 m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex] = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Extinction shared compute-emulation phase"));
                 return MakeUnexpected(Failure{});
             }
-            m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex] = *mAvboitSystemTaskGraphStageMExtinctionSharedComputeEmulationTasksPhaseIndexResult;
+            m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex] = *extinctionSharedComputeEmulationTaskResult;
             extinctionSharedComputeEmulationDependency = m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex];
         }
         m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTaskCount = extinctionSharedComputeEmulationPhaseCount;
@@ -418,13 +418,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
             .setResourceUses(extinctionResourceUses.data(), extinctionResourceUses.size())
             .setResourceSetUses(extinctionMaterialResourceSetUseCount != 0u ? extinctionMaterialResourceSetUses : nullptr, extinctionMaterialResourceSetUseCount)
         ;
-        const auto mAvboitSystemTaskGraphStageMExtinctionTaskResult = m_graph.addTask<AvboitExtinctionGraphTask>(extinctionDesc, Move(extinctionPayload));
-        if(!mAvboitSystemTaskGraphStageMExtinctionTaskResult){
+        const auto extinctionTaskResult = m_graph.addTask<AvboitExtinctionGraphTask>(extinctionDesc, Move(extinctionPayload));
+        if(!extinctionTaskResult){
             m_avboitSystem.taskGraphStage().m_extinctionTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
             return MakeUnexpected(Failure{});
         }
-        m_avboitSystem.taskGraphStage().m_extinctionTask = *mAvboitSystemTaskGraphStageMExtinctionTaskResult;
+        m_avboitSystem.taskGraphStage().m_extinctionTask = *extinctionTaskResult;
     }
     result.extinctionTask = m_avboitSystem.taskGraphStage().m_extinctionTask;
     result.declared = true;

@@ -276,7 +276,7 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
         appendText(mapping.stage);
         appendText(mapping.slangStage);
     }
-    for(u8 optimizationLevel = 0u; optimizationLevel < ShaderOptimizationLevel::kCount; ++optimizationLevel)
+    for(u8 optimizationLevel = 0u; optimizationLevel < ShaderOptimizationLevel::Count; ++optimizationLevel)
         appendText(__hidden_slang_compiler::SlangOptimizationArgument(static_cast<ShaderOptimizationLevel::Enum>(optimizationLevel)));
     return fingerprint;
 }
@@ -310,7 +310,7 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
     }
 
     const AStringView optimizationArgument = __hidden_slang_compiler::SlangOptimizationArgument(request.optimizationLevel);
-    if(request.optimizationLevel >= ShaderOptimizationLevel::kCount){
+    if(request.optimizationLevel >= ShaderOptimizationLevel::Count){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader '{}' uses an invalid optimization level {}"), ConvertString(request.shaderName), static_cast<u32>(request.optimizationLevel));
         return false;
     }

@@ -37,7 +37,7 @@ namespace RendererTaskTimingFeedbackCollectionAction{
         Enable,
         Disable,
 
-        kCount,
+        Count,
     };
 };
 

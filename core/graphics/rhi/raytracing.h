@@ -152,7 +152,7 @@ struct RayTracingGeometryTriangles{
     RayTracingOpacityMicromap* opacityMicromap = nullptr;
     Buffer* ommIndexBuffer = nullptr;
     u64 ommIndexBufferOffset = 0;
-    const RayTracingOpacityMicromapUsageCount* pOmmUsageCounts = nullptr;
+    const RayTracingOpacityMicromapUsageCount* ommUsageCounts = nullptr;
 
     u32 indexCount = 0;
     u32 vertexCount = 0;
@@ -190,7 +190,7 @@ public:
 
     constexpr RayTracingGeometryTriangles& setOmmIndexFormat(Format::Enum value)noexcept{ ommIndexFormat = value; return *this; }
 
-    constexpr RayTracingGeometryTriangles& setPOmmUsageCounts(const RayTracingOpacityMicromapUsageCount* value)noexcept{ pOmmUsageCounts = value; return *this; }
+    constexpr RayTracingGeometryTriangles& setOmmUsageCounts(const RayTracingOpacityMicromapUsageCount* value)noexcept{ ommUsageCounts = value; return *this; }
 
     constexpr RayTracingGeometryTriangles& setNumOmmUsageCounts(u32 value)noexcept{ numOmmUsageCounts = value; return *this; }
 };
@@ -416,7 +416,7 @@ public:
 
     constexpr RayTracingInstanceDesc& setFlags(RayTracingInstanceFlags::Mask value)noexcept{ flags = value; return *this; }
 
-    constexpr RayTracingInstanceDesc& setBLAS(RayTracingAccelStruct* value)noexcept{ bottomLevelAS = value; return *this; }
+    constexpr RayTracingInstanceDesc& setBottomLevelAS(RayTracingAccelStruct* value)noexcept{ bottomLevelAS = value; return *this; }
 };
 static_assert(sizeof(RayTracingInstanceDesc) == RayTracingInstanceDesc::s_ByteSize, "sizeof(InstanceDesc) is supposed to be 64 bytes");
 static_assert(sizeof(IndirectInstanceDesc) == sizeof(RayTracingInstanceDesc));

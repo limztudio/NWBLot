@@ -88,7 +88,7 @@ bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& decla
             const GpuTaskGraphTaskView taskView = declarationAccess.taskAt(task.index);
             const GpuCompiledTaskView compiledTaskView = planAccess.findTask(task);
             const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
-            if(!compiledTaskView.valid() || taskView.id != task || compiledTask->packet != packetID || compiledTask->timingPolicy != taskView.timing.policy || compiledTask->timingPolicy >= GpuTaskTimingPolicy::kCount)
+            if(!compiledTaskView.valid() || taskView.id != task || compiledTask->packet != packetID || compiledTask->timingPolicy != taskView.timing.policy || compiledTask->timingPolicy >= GpuTaskTimingPolicy::Count)
                 return false;
             packetRecordsTiming = packetRecordsTiming || compiledTask->timingPolicy != GpuTaskTimingPolicy::None;
             if(compiledTask->timingPolicy == GpuTaskTimingPolicy::Task && !countScopeOccurrence(taskView.identity))

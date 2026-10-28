@@ -51,7 +51,7 @@ static constexpr AStringView s_ImageMarkerLabel = "UI Texture Image";
     if(!ValidSource(version.m_source) || !version.m_texture.valid())
         return false;
     const TextureGpuResource& resource = version.m_texture;
-    if(resource.format == Core::Format::UNKNOWN || resource.format >= Core::Format::kCount)
+    if(resource.format == Core::Format::UNKNOWN || resource.format >= Core::Format::Count)
         return false;
     const Core::FormatInfo& format = Core::GetFormatInfo(resource.format);
     if(

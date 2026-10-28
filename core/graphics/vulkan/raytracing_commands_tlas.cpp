@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
+void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* instances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
     constexpr TStringView s_BuildTlasOperation = NWB_TEXT("build TLAS");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("build top-level acceleration structure")))
         return;
@@ -25,7 +25,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is null"));
         return;
     }
-    if(!pInstances && numInstances > 0){
+    if(!instances && numInstances > 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance data is null"));
         return;
     }
@@ -50,7 +50,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
     const bool allowEmptyInstances = (buildFlags & RayTracingAccelStructBuildFlags::AllowEmptyInstances) != 0u;
     for(usize i = 0u; i < numInstances; ++i){
-        auto* blas = pInstances[i].bottomLevelAS;
+        auto* blas = instances[i].bottomLevelAS;
         if(!blas){
             if(allowEmptyInstances)
                 continue;
@@ -63,7 +63,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance {} references an invalid bottom-level acceleration structure"), i);
             return;
         }
-        if(pInstances[i].instanceMask == 0u && !allowEmptyInstances){
+        if(instances[i].instanceMask == 0u && !allowEmptyInstances){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance {} has a zero mask"), i);
             return;
         }
@@ -82,7 +82,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     const auto mappedInstanceData = MakeNotNull(static_cast<u8*>(instanceInput->cpuAddress));
 
     auto buildVkInstance = [&](usize i)noexcept{
-        const auto& inst = pInstances[i];
+        const auto& inst = instances[i];
         VkAccelerationStructureInstanceKHR vkInst = {};
 
         NWB_MEMCPY(&vkInst.transform, sizeof(VkTransformMatrixKHR), &inst.transform, sizeof(VkTransformMatrixKHR));
@@ -121,7 +121,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
             buildVkInstance(i);
     }
 
-    if(!buildTopLevelAccelStructFromInstanceData(as, instanceDataAddress, numInstances, buildFlags, vkBuildFlags, s_BuildTlasOperation, pInstances))
+    if(!buildTopLevelAccelStructFromInstanceData(as, instanceDataAddress, numInstances, buildFlags, vkBuildFlags, s_BuildTlasOperation, instances))
         return;
 }
 

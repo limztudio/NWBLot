@@ -79,22 +79,22 @@ bool RendererFramePipeline::declareFrameTimingBeginTask(Core::GpuTimingFrameTran
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
-    const auto mDeferredFrameTimingBeginTaskResult = m_deferredLightingTaskGraph.addTask<Core::FrameTimingBeginGraphTask>(
+    const auto deferredFrameTimingBeginTaskResult = m_deferredLightingTaskGraph.addTask<Core::FrameTimingBeginGraphTask>(
         Core::GpuTaskDesc{}
             .setIdentity(Name("render.frame_timing_begin"))
             .setMarkerLabel("Frame Timing Begin")
             .setScheduling(scheduling),
         Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = RendererGpuTimingScope::s_Frame, }
     );
-    if(!mDeferredFrameTimingBeginTaskResult || !m_deferredLightingTaskGraph.setNormalExecutionPrelude(*mDeferredFrameTimingBeginTaskResult)){
-        if(mDeferredFrameTimingBeginTaskResult)
-            m_deferredFrameTimingBeginTask = *mDeferredFrameTimingBeginTaskResult;
+    if(!deferredFrameTimingBeginTaskResult || !m_deferredLightingTaskGraph.setNormalExecutionPrelude(*deferredFrameTimingBeginTaskResult)){
+        if(deferredFrameTimingBeginTaskResult)
+            m_deferredFrameTimingBeginTask = *deferredFrameTimingBeginTaskResult;
         else
             m_deferredFrameTimingBeginTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare frame timing prelude"));
         return false;
     }
-    m_deferredFrameTimingBeginTask = *mDeferredFrameTimingBeginTaskResult;
+    m_deferredFrameTimingBeginTask = *deferredFrameTimingBeginTaskResult;
     return true;
 }
 

@@ -24,17 +24,11 @@ GraphicsPipelineDesc& GraphicsPipelineDesc::setVertexShader(const ShaderHandle& 
 
 GraphicsPipelineDesc& GraphicsPipelineDesc::setHullShader(const ShaderHandle& value)noexcept{ hullShader = value; return *this; }
 
-GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationControlShader(const ShaderHandle& value)noexcept{ hullShader = value; return *this; }
-
 GraphicsPipelineDesc& GraphicsPipelineDesc::setDomainShader(const ShaderHandle& value)noexcept{ domainShader = value; return *this; }
-
-GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationEvaluationShader(const ShaderHandle& value)noexcept{ domainShader = value; return *this; }
 
 GraphicsPipelineDesc& GraphicsPipelineDesc::setGeometryShader(const ShaderHandle& value)noexcept{ geometryShader = value; return *this; }
 
 GraphicsPipelineDesc& GraphicsPipelineDesc::setPixelShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
-
-GraphicsPipelineDesc& GraphicsPipelineDesc::setFragmentShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
 
 GraphicsPipelineDesc& GraphicsPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
@@ -54,15 +48,11 @@ ComputePipelineDesc& ComputePipelineDesc::addBindingLayout(const BindingLayoutHa
 
 MeshletPipelineDesc::~MeshletPipelineDesc()noexcept = default;
 
-MeshletPipelineDesc& MeshletPipelineDesc::setTaskShader(const ShaderHandle& value)noexcept{ amplificationShader = value; return *this; }
-
 MeshletPipelineDesc& MeshletPipelineDesc::setAmplificationShader(const ShaderHandle& value)noexcept{ amplificationShader = value; return *this; }
 
 MeshletPipelineDesc& MeshletPipelineDesc::setMeshShader(const ShaderHandle& value)noexcept{ meshShader = value; return *this; }
 
 MeshletPipelineDesc& MeshletPipelineDesc::setPixelShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
-
-MeshletPipelineDesc& MeshletPipelineDesc::setFragmentShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
 
 MeshletPipelineDesc& MeshletPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 

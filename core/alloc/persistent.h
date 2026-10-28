@@ -58,7 +58,7 @@ public:
 
 private:
     [[nodiscard]] Expected<Allocation> allocateLocked(usize align, usize size)noexcept;
-    void deallocateBlockLocked(NotNull<void*> block)noexcept;
+    void deallocateBlockLocked(NotNull<void*> blockPointer)noexcept;
 
 
 private:

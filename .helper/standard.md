@@ -59,6 +59,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Enum pattern is typically:
   - `namespace SomeEnum { enum Enum : u8 { ... }; };`
 - For engine public/module-facing enums, use the namespace-enum pattern (`namespace X { enum Enum : u8 { ... }; };`) and do not use `enum class`.
+- Name the last count item in an enum `kCount`. Use it for size and range checks. Keep plain `Count` only for non-enum counts such as fields or locals.
 - Handle aliases follow `<Type>Handle` naming.
 - C++ free functions at global or namespace scope use `UpperCamelCase`, starting with an uppercase letter. This includes templates, namespace helpers, and translation-unit-local `static` functions and callbacks.
 - Exception: keep `checked_cast` in `snake_case` to align with the C++ cast names.

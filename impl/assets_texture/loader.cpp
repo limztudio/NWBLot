@@ -141,7 +141,7 @@ static void InitializeBasisTranscoder(){
     case TextureDimension::Texture2D: return Core::GpuDescriptorClass::SampledImage;
     case TextureDimension::TextureCube: return Core::GpuDescriptorClass::SampledImageCube;
     case TextureDimension::Texture3D: return Core::GpuDescriptorClass::SampledImage3D;
-    default: return Core::GpuDescriptorClass::kCount;
+    default: return Core::GpuDescriptorClass::Count;
     }
 }
 
@@ -182,7 +182,7 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
     const Core::TextureDimension::Enum textureDimension = __hidden_texture_loader::ToCoreTextureDimension(textureAsset.dimension());
     const Core::GpuDescriptorClass::Enum descriptorClass = __hidden_texture_loader::ToSampledImageDescriptorClass(textureAsset.dimension());
     // Texture::loadBinary already validated the cooked dimension; keep a debug-only invariant here.
-    NWB_ASSERT(textureDimension != Core::TextureDimension::Unknown && descriptorClass != Core::GpuDescriptorClass::kCount);
+    NWB_ASSERT(textureDimension != Core::TextureDimension::Unknown && descriptorClass != Core::GpuDescriptorClass::Count);
 
     Core::TextureDesc textureDesc;
     textureDesc

@@ -83,7 +83,7 @@ public:
     [[nodiscard]] const SliderPlacement& placement()const noexcept{ return m_placement; }
     [[nodiscard]] ControlToken controlToken()const noexcept;
     [[nodiscard]] SliderSnapshot snapshot()const noexcept;
-    [[nodiscard]] bool matches(const SliderSnapshot& snapshot)const noexcept;
+    [[nodiscard]] bool matches(const SliderSnapshot& value)const noexcept;
     [[nodiscard]] bool setValue(f64 value)noexcept;
     void reset()noexcept;
 

@@ -58,7 +58,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
     meshViewSetupScheduling.allowPacketMerge = true;
     Core::GpuTaskDesc meshViewSetupDesc;
     meshViewSetupDesc.setIdentity(Name("render.graphics_prefix.mesh_view_setup")).setMarkerLabel("Mesh View Setup").setScheduling(meshViewSetupScheduling).setDependencies(&inputs.shadowPrepareTask, 1u);
-    const auto resultMeshViewSetupTaskResult = m_graph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
+    const auto meshViewSetupTaskResult = m_graph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
         meshViewSetupDesc,
         ECSRenderDetail::MeshViewSetupGraphTask::Payload{
             .graphics = m_graphics,
@@ -68,11 +68,11 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
             .shadowVisibilityTask = &inputs.shadowVisibilityTask,
         }
     );
-    if(!resultMeshViewSetupTaskResult){
+    if(!meshViewSetupTaskResult){
         result.meshViewSetupTask = {};
         return MakeUnexpected(Failure{});
     }
-    result.meshViewSetupTask = *resultMeshViewSetupTaskResult;
+    result.meshViewSetupTask = *meshViewSetupTaskResult;
 
     Core::GpuTaskSchedulingHint immutableUploadScheduling;
     immutableUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -174,12 +174,12 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
     sceneShadingSetupPayload.lightCount = sceneLightCount;
     sceneShadingSetupPayload.lightUploadRequired = sceneLightUploadRequired;
     sceneShadingSetupPayload.sceneShadingUploadRequired = sceneShadingUploadRequired;
-    const auto resultSceneShadingSetupTaskResult = m_graph.addTask<ECSRenderDetail::SceneShadingSetupGraphTask>(sceneShadingSetupDesc, Move(sceneShadingSetupPayload));
-    if(!resultSceneShadingSetupTaskResult){
+    const auto sceneShadingSetupTaskResult = m_graph.addTask<ECSRenderDetail::SceneShadingSetupGraphTask>(sceneShadingSetupDesc, Move(sceneShadingSetupPayload));
+    if(!sceneShadingSetupTaskResult){
         result.sceneShadingSetupTask = {};
         return MakeUnexpected(Failure{});
     }
-    result.sceneShadingSetupTask = *resultSceneShadingSetupTaskResult;
+    result.sceneShadingSetupTask = *sceneShadingSetupTaskResult;
     result.tailTask = result.sceneShadingSetupTask;
     result.lightingClassification = rayTracingLightingClassification;
     NWB_SIMD_MEMCPY(result.lightData, sizeof(result.lightData), sceneLightData, sizeof(sceneLightData));

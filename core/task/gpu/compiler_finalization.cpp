@@ -98,7 +98,7 @@ namespace GpuTaskGraphCompilerDetail{
 
         // Graph storage admits a known external final state only for texture, buffer and acceleration structure resources.
         const GpuCompiledBarrierType::Enum exportType = StateExportBarrierType(resource.type);
-        NWB_ASSERT(exportType < GpuCompiledBarrierType::kCount);
+        NWB_ASSERT(exportType < GpuCompiledBarrierType::Count);
 
         bool hasTerminalDeclaredRange = false;
         GpuTaskId externalExportTask;
@@ -158,7 +158,7 @@ namespace GpuTaskGraphCompilerDetail{
             });
             if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
-                NWB_ASSERT(releaseType < GpuCompiledBarrierType::kCount);
+                NWB_ASSERT(releaseType < GpuCompiledBarrierType::Count);
                 // Export the exact final state before ownership moves.
                 // Native lowering therefore captures the same state in the released snapshot and the paired Vulkan queue-family release barrier.
                 if(!AppendCompiledOwnershipTransfer(plan, resource, terminalRange, state.task, GpuTaskId{}, state.queue, resource.externalFinalReleaseDestinationQueue, GpuOwnershipTransferRoute::ExternalExport))

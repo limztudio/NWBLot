@@ -186,7 +186,7 @@ public:
     void pruneRuntimeMeshResources(Core::Alloc::ScratchArena& scratchArena);
     void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;
     [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(const Name& meshName)const noexcept;
-    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& mesh)const noexcept;
+    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& desc)const noexcept;
     [[nodiscard]] bool commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired);
     [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> ensureRayTracingInputHeapHandles(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected);
     void discardRayTracingBuildState()noexcept;

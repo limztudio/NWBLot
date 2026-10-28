@@ -288,7 +288,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
 
             const RayTracingGeometryTriangles& triangles = desc.bottomLevelGeometries[i].geometryData.triangles;
             if(!triangles.opacityMicromap){
-                if(triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u || triangles.pOmmUsageCounts || triangles.numOmmUsageCounts != 0u || triangles.ommIndexFormat != Format::UNKNOWN){
+                if(triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u || triangles.ommUsageCounts || triangles.numOmmUsageCounts != 0u || triangles.ommIndexFormat != Format::UNKNOWN){
                     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: triangle OMM metadata requires an opacity micromap"));
                     return MakeUnexpected(Failure{});
                 }
@@ -298,7 +298,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: triangle OMM geometry requires VK_EXT_opacity_micromap"));
                 return MakeUnexpected(Failure{});
             }
-            if(triangles.numOmmUsageCounts != 0u && !triangles.pOmmUsageCounts){
+            if(triangles.numOmmUsageCounts != 0u && !triangles.ommUsageCounts){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: triangle OMM usage counts are null"));
                 return MakeUnexpected(Failure{});
             }
@@ -370,7 +370,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
                 const RayTracingGeometryTriangles& triangles = desc.bottomLevelGeometries[i].geometryData.triangles;
                 const usize usageOffset = opacityMicromapUsageOffsets[i];
                 for(u32 usageIndex = 0u; usageIndex < triangles.numOmmUsageCounts; ++usageIndex){
-                    const RayTracingOpacityMicromapUsageCount& usage = triangles.pOmmUsageCounts[usageIndex];
+                    const RayTracingOpacityMicromapUsageCount& usage = triangles.ommUsageCounts[usageIndex];
                     VkOpacityMicromapFormatEXT format = VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_KHR;
                     if(usage.format == OpacityMicromapFormat::OC1_2_State)
                         format = VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT;

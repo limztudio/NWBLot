@@ -30,7 +30,7 @@ struct RendererAvboitTaskGraphValidation;
 
 // GPU timing tickets, measures, and clear-timing bindings for one deferred frame. Members point at each other, so the state stays in place.
 struct FrameExecuteTimingState final : NoCopy{
-    static constexpr usize s_GraphicsPrefixTimingTicketCount = static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::kCount);
+    static constexpr usize s_GraphicsPrefixTimingTicketCount = static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Count);
 
     // Prefix stages start separate; shared packets rebind to one ticket.
     Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket;

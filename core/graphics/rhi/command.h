@@ -455,7 +455,7 @@ public:
 
     constexpr GraphicsState& setShadingRateState(const VariableRateShadingState& value)noexcept{ shadingRateState = value; return *this; }
 
-    constexpr GraphicsState& setBlendColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
+    constexpr GraphicsState& setBlendConstantColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
 
     constexpr GraphicsState& setDynamicStencilRefValue(u8 value)noexcept{ dynamicStencilRefValue = value; return *this; }
 
@@ -569,7 +569,7 @@ public:
 
     constexpr MeshletState& setViewport(const ViewportState& value)noexcept{ viewport = value; return *this; }
 
-    constexpr MeshletState& setBlendColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
+    constexpr MeshletState& setBlendConstantColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
 
     constexpr MeshletState& setIndirectParams(Buffer* value)noexcept{ indirectParams = value; return *this; }
 

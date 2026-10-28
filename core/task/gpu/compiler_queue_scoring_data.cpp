@@ -38,7 +38,7 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     , m_externalQueueLoads(options.queueLoads)
     , m_externalQueueLoadCount(options.queueLoadCount)
 {
-    for(usize costGroup = 0u; costGroup < GpuTaskCostHint::kCount; ++costGroup)
+    for(usize costGroup = 0u; costGroup < GpuTaskCostHint::Count; ++costGroup)
         m_costGroupWeights[costGroup] = QueueCostWeight(static_cast<GpuTaskCostHint::Enum>(costGroup));
     for(usize taskIndex = 0u; taskIndex < m_taskCosts.size(); ++taskIndex){
         const GpuTaskSchedulingHint& scheduling = graph.taskAt(taskIndex).scheduling;
@@ -135,7 +135,7 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
     }
 
     m_costWordsPerGroup = m_taskCosts.empty() ? 0u : (m_taskCosts.size() - 1u) / s_BitsPerWord + 1u;
-    const auto wordsPerQueue = TryMultiply<usize>(m_costWordsPerGroup, GpuTaskCostHint::kCount);
+    const auto wordsPerQueue = TryMultiply<usize>(m_costWordsPerGroup, GpuTaskCostHint::Count);
     if(!wordsPerQueue)
         throw AllocationSizeException{};
     const auto wordCount = TryMultiply<usize>(AddSize(topology.queueCount, 1u), *wordsPerQueue);
@@ -185,7 +185,7 @@ void GpuTaskQueueScoringData::updateAssignmentLoads(const GpuTaskId& task, const
         }
         return;
     }
-    const usize wordsPerQueue = m_costWordsPerGroup * GpuTaskCostHint::kCount;
+    const usize wordsPerQueue = m_costWordsPerGroup * GpuTaskCostHint::Count;
     const usize wordIndex = m_taskCostGroups[task.index] * m_costWordsPerGroup + task.index / s_BitsPerWord;
     const u64 mask = static_cast<u64>(1u) << (task.index % s_BitsPerWord);
     for(usize queueIndex = 0u; queueIndex < m_assignedQueueLoads.size(); ++queueIndex){
@@ -245,7 +245,7 @@ u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachab
         firstWord = Min(firstWord, range.m_begin);
         lastWord = Max(lastWord, range.m_end);
     }
-    const usize queueOffset = (queueIndex + 1u) * GpuTaskCostHint::kCount * m_costWordsPerGroup;
+    const usize queueOffset = (queueIndex + 1u) * GpuTaskCostHint::Count * m_costWordsPerGroup;
     for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
         u64 related = 0u;
         if(reachability.m_rowOffsets.empty()){
@@ -262,7 +262,7 @@ u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachab
         }
         if(related == 0u)
             continue;
-        for(usize costGroup = 0u; costGroup < GpuTaskCostHint::kCount; ++costGroup){
+        for(usize costGroup = 0u; costGroup < GpuTaskCostHint::Count; ++costGroup){
             const usize costWord = costGroup * m_costWordsPerGroup + wordIndex;
             const u64 offQueue = m_assignedCostWords[costWord] & ~m_assignedCostWords[queueOffset + costWord];
             independentCost -= static_cast<u64>(CountSetBits(related & offQueue)) * m_costGroupWeights[costGroup];

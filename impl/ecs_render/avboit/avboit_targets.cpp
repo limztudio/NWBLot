@@ -230,7 +230,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     Core::FramebufferDesc accumulationFramebufferDesc;
     for(const Core::FramebufferAttachment& attachment : accumulationAttachments)
         accumulationFramebufferDesc.addColorAttachment(attachment);
-    accumulationFramebufferDesc.setDepthAttachment(Core::FramebufferAttachment().setTexture(createdTargets.depth.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources).setReadOnly(true));
+    accumulationFramebufferDesc.setDepthAttachment(Core::FramebufferAttachment().setTexture(createdTargets.depth.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources).setIsReadOnly(true));
     auto accumulationFramebufferResult = device.createFramebuffer(accumulationFramebufferDesc);
     if(accumulationFramebufferResult)
         avboitTargets.accumulationFramebuffer = Move(*accumulationFramebufferResult);

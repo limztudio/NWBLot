@@ -95,7 +95,7 @@ struct GpuTaskGraphResourceVersionView{
     GpuGraphResourceVersionId id;
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;
-    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
+    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::Count;
 };
 
 struct GpuTaskGraphResourceSetView{
@@ -111,7 +111,7 @@ struct GpuTaskGraphPipelineView{
     Name identity = s_NameNone;
     AStringView markerLabel;
     bool hasBackendPipeline = false;
-    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
+    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::Count;
 };
 
 struct GpuTaskGraphExternalCompletionView{

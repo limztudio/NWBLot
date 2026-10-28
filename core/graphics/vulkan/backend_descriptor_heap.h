@@ -406,7 +406,7 @@ private:
     FixedTable<TextureHandle> m_resourceDescriptorTextures;
     FixedTable<SamplerHandle> m_samplerDescriptorResources;
     // Binding byte offsets within a set block.
-    u32 m_classBufferOffset[GpuDescriptorClass::kCount] = {};
+    u32 m_classBufferOffset[GpuDescriptorClass::Count] = {};
     u32 m_accelStructBufferBindingOffset = 0u;
 
     SlotAllocator m_resourceSlots;

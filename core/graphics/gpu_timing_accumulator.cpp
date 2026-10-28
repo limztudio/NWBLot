@@ -584,7 +584,7 @@ void GpuTimingAccumulator::appendStatistics(GpuTimingRecorderStatistics& outStat
     outStatistics.unpublishedSampleCount += m_unpublishedSampleCount;
     outStatistics.discardedScopeCount += m_discardedScopeCount;
     outStatistics.quarantinedScopeCount += m_quarantinedScopeCount;
-    for(u8 reason = 0u; reason < GpuTimingScopeSkipReason::kCount; ++reason)
+    for(u8 reason = 0u; reason < GpuTimingScopeSkipReason::Count; ++reason)
         outStatistics.skippedScopeCountByReason[reason] += m_skippedScopeCountByReason[reason];
 }
 

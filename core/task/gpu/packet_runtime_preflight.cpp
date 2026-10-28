@@ -345,7 +345,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         NWB_ASSERT(barrierCount == 0u || barriers != nullptr);
         for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){
             const GpuCompiledBarrier& barrier = barriers[barrierIndex];
-            if(barrier.type >= GpuCompiledBarrierType::kCount || !declarationAccess.validResource(barrier.resource) || declarationAccess.resourceAt(barrier.resource.index).type != __hidden_gpu_packet_runtime_preflight::BarrierResourceType(barrier.type))
+            if(barrier.type >= GpuCompiledBarrierType::Count || !declarationAccess.validResource(barrier.resource) || declarationAccess.resourceAt(barrier.resource.index).type != __hidden_gpu_packet_runtime_preflight::BarrierResourceType(barrier.type))
                 return false;
             const GpuTaskGraphResourceView barrierResource = declarationAccess.resourceAt(barrier.resource.index);
             if(
@@ -412,7 +412,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         NWB_ASSERT(compiledTaskView.valid() && compiledTask->packet == packetID && taskView.id == task && (taskView.resourceUseCount == 0u || taskView.resourceUses != nullptr));
         for(usize useIndex = 0u; useIndex < taskView.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = taskView.resourceUses[useIndex];
-            if(use.access >= GpuTaskResourceAccess::kCount || !validateResourceState(use.resource, use.requiredState))
+            if(use.access >= GpuTaskResourceAccess::Count || !validateResourceState(use.resource, use.requiredState))
                 return false;
             const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(use.resource.index);
             if(resource.type == GpuGraphResourceType::Texture && !validateTextureRange(declarationAccess.textureForResource(use.resource), use.range.textureSubresources))

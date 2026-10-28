@@ -20,7 +20,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_packet_runtime_recorded_graph{
+namespace __hidden_gpu_packet_runtime_recorded_graph_statistics{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,9 +95,9 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(const GpuC
         if(recordedPacket.commandListCount == 0u || recordedPacket.packet != planAccess.packetIdAt(packetIndex))
             continue;
 
-        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingCounts(statistics, recordingSeconds, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
+        __hidden_gpu_packet_runtime_recorded_graph_statistics::AccumulatePacketRecordingCounts(statistics, recordingSeconds, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
     }
-    __hidden_gpu_packet_runtime_recorded_graph::StorePacketRecordingSeconds(statistics, recordingSeconds);
+    __hidden_gpu_packet_runtime_recorded_graph_statistics::StorePacketRecordingSeconds(statistics, recordingSeconds);
     return statistics;
 }
 
@@ -137,9 +137,9 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
         if(packetPlan.queue != queue)
             continue;
 
-        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingCounts(statistics, recordingSeconds, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
+        __hidden_gpu_packet_runtime_recorded_graph_statistics::AccumulatePacketRecordingCounts(statistics, recordingSeconds, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
     }
-    __hidden_gpu_packet_runtime_recorded_graph::StorePacketRecordingSeconds(statistics, recordingSeconds);
+    __hidden_gpu_packet_runtime_recorded_graph_statistics::StorePacketRecordingSeconds(statistics, recordingSeconds);
     return statistics;
 }
 
@@ -165,10 +165,10 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     Alloc::ScratchArena& scratchArena,
     const ArtifactOperation& artifactAccess
 ){
-    using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph::PacketRecordingIntervalEntry;
+    using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph_statistics::PacketRecordingIntervalEntry;
     const bool artifactAccessValid = planAccess.validFor(compiledGraph) && artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid;
     NWB_FATAL_ASSERT_MSG(artifactAccessValid, "Packet overlap caching requires its exact valid artifact writer");
-    if(packetIndices.size() < __hidden_gpu_packet_runtime_recorded_graph::s_MinOverlapPacketCount)
+    if(packetIndices.size() < __hidden_gpu_packet_runtime_recorded_graph_statistics::s_MinOverlapPacketCount)
         return;
     ArtifactStorage& storage = *m_activeStorage;
 
@@ -182,7 +182,7 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
             continue;
         intervalEntries.push_back(IntervalEntry{ .beginNanoseconds = recordedPacket.recordingBeginNanoseconds, .endNanoseconds = recordedPacket.recordingEndNanoseconds, .packetIndex = packetIndex, });
     }
-    Sort(intervalEntries.begin(), intervalEntries.end(), __hidden_gpu_packet_runtime_recorded_graph::LessPacketRecordingIntervalEntry);
+    Sort(intervalEntries.begin(), intervalEntries.end(), __hidden_gpu_packet_runtime_recorded_graph_statistics::LessPacketRecordingIntervalEntry);
 
     u64 maximumPreviousEndNanoseconds = 0u;
     for(usize intervalIndex = 0u; intervalIndex < intervalEntries.size(); ++intervalIndex){

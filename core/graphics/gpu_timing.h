@@ -165,7 +165,7 @@ private:
     u64 m_unpublishedSampleCount = 0u;
     u64 m_discardedScopeCount = 0u;
     u64 m_quarantinedScopeCount = 0u;
-    u64 m_skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};
+    u64 m_skippedScopeCountByReason[GpuTimingScopeSkipReason::Count]{};
     Name m_scopeName = s_NameNone;
     u32 m_requestedQueryCount = 0u;
     bool m_captureEnabled = false;

@@ -193,7 +193,7 @@ TEST_F(UiSelectionDeletionTests, MalformedCopiedDeletionBasisRejectsWithoutChang
     TextInputEvent event(m_arena);
     event.kind = TextInputEventKind::DeleteSurrounding;
     event.surroundingRevision = 7u;
-    event.deletionBasis = TextInputDeletionBasis::kCount;
+    event.deletionBasis = TextInputDeletionBasis::Count;
     event.deleteBeforeBytes = 1u;
     event.deleteAfterBytes = 1u;
     EXPECT_EQ(ApplyUiTextEditEvent(m_model, event, 7u, true), UiTextEditStatus::InvalidEvent);

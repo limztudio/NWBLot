@@ -189,7 +189,7 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     Core::GpuTaskDesc desc = TaskDesc(Name("render.reflection.temporal"), "Reflection Temporal Accumulation", dependency);
     desc.setResourceUses(uses.data(), uses.size());
     if(snapshot.history.eligible)
-        desc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
+        desc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
     const auto temporalTask = graph.addTask<TemporalTask>(
         desc,
         TemporalTask::Payload{ graphics, snapshot, Move(reservation), resources.parameters.width, resources.parameters.height, inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u, }
@@ -210,7 +210,7 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     uses.push_back(WriteUse(spatial, Core::ResourceStates::UnorderedAccess));
     desc = TaskDesc(Name("render.reflection.spatial"), "Reflection Spatial Filter", dependency);
     desc.setResourceUses(uses.data(), uses.size());
-    desc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
+    desc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
     const auto spatialTask = graph.addTask<SpatialTask>(
         desc,
         SpatialTask::Payload{

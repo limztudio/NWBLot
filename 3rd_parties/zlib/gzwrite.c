@@ -156,6 +156,11 @@ local int gz_zero(gz_statep state) {
     unsigned n;
     z_streamp strm = &(state->strm);
 
+    /* allocate memory if this is the first time through -- the input buffer
+       must exist before it is zeroed below */
+    if (state->size == 0 && gz_init(state) == -1)
+        return -1;
+
     /* consume whatever's left in the input buffer */
     if (strm->avail_in && gz_comp(state, Z_NO_FLUSH) == -1)
         return -1;
@@ -175,8 +180,14 @@ local int gz_zero(gz_statep state) {
         n -= strm->avail_in;
         state->x.pos += n;
         state->skip -= n;
-        if (ret == -1)
+        if (ret == -1) {
+            /* discard any unconsumed zero fill -- it was not yet accounted
+               for in state->skip, so it will be generated again when the
+               operation is retried */
+            strm->avail_in = 0;
+            strm->next_in = state->in;
             return -1;
+        }
     } while (state->skip);
     return 0;
 }
@@ -374,9 +385,10 @@ int ZEXPORT gzputs(gzFile file, const char *s) {
     return len && put == 0 ? -1 : (int)put;
 }
 
-#if (((!defined(STDC) && !defined(Z_HAVE_STDARG_H)) || !defined(NO_vsnprintf)) && \
-     (defined(STDC) || defined(Z_HAVE_STDARG_H) || !defined(NO_snprintf))) || \
-    defined(ZLIB_INSECURE)
+#if (((!defined(STDC) && !defined(Z_HAVE_STDARG_H)) || \
+      !defined(NO_vsnprintf)) && \
+     (defined(STDC) || defined(Z_HAVE_STDARG_H) || \
+     !defined(NO_snprintf))) || defined(ZLIB_INSECURE)
 /* If the second half of the input buffer is occupied, write out the contents.
    If there is any input remaining due to a non-blocking stall on write, move
    it to the start of the buffer. Return true if this did not open up the

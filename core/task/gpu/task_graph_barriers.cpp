@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 
 
 bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& task, const GpuCompiledBarrier& barrier, CommandList& commandList)const{
-    if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, task) || !validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::kCount)
+    if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, task) || !validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::Count)
         return false;
 
     const GpuGraphResourceNode& resource = m_resources[barrier.resource.index];

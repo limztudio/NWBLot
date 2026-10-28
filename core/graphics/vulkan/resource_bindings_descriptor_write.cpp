@@ -186,7 +186,7 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
                 return false;
             }
             const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
-            if(viewFormat == Format::UNKNOWN || viewFormat >= Format::kCount){
+            if(viewFormat == Format::UNKNOWN || viewFormat >= Format::Count){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer format is invalid."));
                 return false;
             }

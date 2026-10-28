@@ -150,7 +150,7 @@ namespace Format{
         ASTC_12x12_UNORM_SRGB,
         ASTC_12x12_FLOAT,
 
-        kCount
+        Count
     };
 
     [[nodiscard]] constexpr bool IsBCCompressedFormat(const Enum format)noexcept{
@@ -181,7 +181,7 @@ namespace FormatKind{
         Float,
         DepthStencil,
 
-        kCount
+        Count
     };
 };
 
@@ -189,7 +189,7 @@ struct FormatInfo{
     static constexpr usize s_ByteSize = 16u;
 
     // Literal backing and a bounded length preserve the compact format metadata layout.
-    NotNull<const char*> m_name;
+    NotNull<const char*> name;
     Format::Enum format;
     u8 bytesPerBlock;
     u8 blockSize;
@@ -202,7 +202,7 @@ struct FormatInfo{
     bool hasStencil : 1;
     bool isSigned : 1;
     bool isSRGB : 1;
-    u8 m_nameLength;
+    u8 nameLength;
 
 
 public:
@@ -220,9 +220,9 @@ public:
         const bool hasDepthValue,
         const bool hasStencilValue,
         const bool isSignedValue,
-        const bool isSrgbValue
+        const bool isSRGBValue
     )noexcept
-        : m_name(nameValue)
+        : name(nameValue)
         , format(formatValue)
         , bytesPerBlock(bytesPerBlockValue)
         , blockSize(blockSizeValue)
@@ -234,15 +234,15 @@ public:
         , hasDepth(hasDepthValue)
         , hasStencil(hasStencilValue)
         , isSigned(isSignedValue)
-        , isSRGB(isSrgbValue)
-        , m_nameLength(static_cast<u8>(NameSize - 1u))
+        , isSRGB(isSRGBValue)
+        , nameLength(static_cast<u8>(NameSize - 1u))
     {
         static_assert(NameSize - 1u <= Limit<u8>::s_Max, "Format names must fit the compact metadata length");
     }
 
 
 public:
-    [[nodiscard]] constexpr AStringView getName()const noexcept{ return AStringView(m_name.get(), m_nameLength); }
+    [[nodiscard]] constexpr AStringView getName()const noexcept{ return AStringView(name.get(), nameLength); }
 };
 static_assert(sizeof(FormatInfo) == FormatInfo::s_ByteSize, "FormatInfo should remain tightly packed");
 static_assert(alignof(FormatInfo) == alignof(void*), "FormatInfo should retain pointer alignment");
@@ -262,7 +262,7 @@ namespace TextureUploadAspect{
         Depth,
         Stencil,
 
-        kCount,
+        Count,
     };
 };
 

@@ -305,7 +305,7 @@ private:
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const ArtifactOperation& artifactAccess,
-        const GpuSubmissionPacketId& packet
+        const GpuSubmissionPacketId& packetID
     );
     [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept;
     [[nodiscard]] const CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept;

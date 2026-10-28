@@ -93,7 +93,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importResource(const GpuGraphResource
     if(!mutation.valid())
         return MakeUnexpected(Failure{});
 
-    if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphResourceType::kCount)
+    if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphResourceType::Count)
         return MakeUnexpected(Failure{});
 
     const u32 resourceIndex = findResourceIdentity(desc.identity);

@@ -54,12 +54,12 @@ public:
     [[nodiscard]] virtual u64 revision()const override;
     [[nodiscard]] virtual u64 rowCount()const override;
     [[nodiscard]] virtual u64 key(u64 index)const override;
-    [[nodiscard]] virtual Expected<u64> indexOf(u64 key)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
     [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
     [[nodiscard]] virtual StringView text(u64 index)const override;
     [[nodiscard]] virtual bool enabled(u64 index)const override;
     void resetCounters()const noexcept;
-    void armSelection(RadioGroupState& state, RadioCallbackSite::Enum site, u64 key, bool awayAndBack = false)noexcept;
+    void armSelection(RadioGroupState& state, RadioCallbackSite::Enum site, u64 keyValue, bool awayAndBack = false)noexcept;
     void armSource(RadioCallbackSite::Enum site, bool replacement = false)noexcept;
     void armReentry(Builder& builder, RadioCallbackSite::Enum site, bool panel = false)noexcept;
     void armClose(PopupState& popup, RadioCallbackSite::Enum site)noexcept;
@@ -127,11 +127,11 @@ protected:
     [[nodiscard]] bool prepare(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
     [[nodiscard]] bool accept(u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
     [[nodiscard]] WidgetId host()const;
-    [[nodiscard]] const RadioGroupChoicePlacement* choice(u64 key, const RadioGroupState& state)const noexcept;
-    [[nodiscard]] Point choicePoint(u64 key)const noexcept;
+    [[nodiscard]] const RadioGroupChoicePlacement* choice(u64 keyValue, const RadioGroupState& state)const noexcept;
+    [[nodiscard]] Point choicePoint(u64 keyValue)const noexcept;
     [[nodiscard]] RadioAcceptedFrame accepted()const noexcept;
     void expectAccepted(const RadioAcceptedFrame& saved, bool focus = true, bool popupScopes = true)const;
-    [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& region)const noexcept;
+    [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept;
 
 
 protected:

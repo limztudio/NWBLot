@@ -1,5 +1,5 @@
 package: system_info_utils
-version: 2.3
-updated_utc: 2026-06-23T16:02:45Z
-source: https://github.com/GPUOpen-Tools/system_info_utils/releases/tag/v2.3
-notes: Top-level CMake wrapper builds the system_info static lib (source/{system_info_reader,driver_overrides_reader}.cpp) using shared nwb::rapidjson (official Tencent/rapidjson). RDF C-API interfaces are enabled by SYSTEM_INFO_BUILD_RDF_INTERFACES; the lifted WMI dependency remains unused. Built with vendor warnings suppressed.
+version: 2.4 (commit 8f8fb11c4976bff4336a52f00347ff639e2997a4)
+updated_utc: 2026-10-27T17:15:00Z
+source: https://github.com/GPUOpen-Tools/system_info_utils/releases/tag/v2.4
+notes: Top-level CMake wrapper builds the system_info static lib (source/{system_info_reader,driver_overrides_reader}.cpp) using shared nwb::rapidjson (official Tencent/rapidjson). RDF C-API interfaces are enabled by SYSTEM_INFO_BUILD_RDF_INTERFACES; the lifted WMI dependency and upstream v2.4 writer sources (source/{platform_utils.h,system_info_writer.cpp,system_info_writer.h}) remain unused and pruned. Built with vendor warnings suppressed.

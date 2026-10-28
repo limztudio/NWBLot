@@ -57,13 +57,13 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(Core::GpuTaskGraph& graph, Re
                 .setExternalDependencies(inputs.externalDependencies.data(), inputs.externalDependencies.size())
                 .setExternalStateSources(inputs.computeStateSource.states ? &inputs.computeStateSource : nullptr, inputs.computeStateSource.states ? 1u : 0u)
             ;
-            const auto resultPreparationTaskResult = m_graph.addClearBufferTask(poolClearDesc, Core::GpuClearBufferTaskDesc{ .destination = inputs.surfelPool, .clearValue = 0u, });
-            if(!resultPreparationTaskResult){
+            const auto preparationTaskResult = m_graph.addClearBufferTask(poolClearDesc, Core::GpuClearBufferTaskDesc{ .destination = inputs.surfelPool, .clearValue = 0u, });
+            if(!preparationTaskResult){
                 result.preparationTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI pool initialization clear"));
                 return MakeUnexpected(Failure{});
             }
-            result.preparationTask = *resultPreparationTaskResult;
+            result.preparationTask = *preparationTaskResult;
 
             Core::GpuTaskSchedulingHint chainedInitializationScheduling = initializationScheduling;
             chainedInitializationScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -118,13 +118,13 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(Core::GpuTaskGraph& graph, Re
 
             Core::GpuTaskDesc initializationLifecycleDesc;
             initializationLifecycleDesc.setIdentity(Name("render.surfel_gi.initialize_lifecycle")).setMarkerLabel("Surfel GI Initialize Lifecycle").setScheduling(chainedInitializationScheduling).setDependencies(&initializationDependency, 1u);
-            const auto resultInitializationLifecycleTaskResult = m_raytracingSystem.declareSurfelResourceInitializationLifecycleTask(m_graph, initializationLifecycleDesc);
-            if(!resultInitializationLifecycleTaskResult){
+            const auto initializationLifecycleTaskResult = m_raytracingSystem.declareSurfelResourceInitializationLifecycleTask(m_graph, initializationLifecycleDesc);
+            if(!initializationLifecycleTaskResult){
                 result.initializationLifecycleTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization lifecycle"));
                 return MakeUnexpected(Failure{});
             }
-            result.initializationLifecycleTask = *resultInitializationLifecycleTaskResult;
+            result.initializationLifecycleTask = *initializationLifecycleTaskResult;
             dependency = result.initializationLifecycleTask;
         }
 
@@ -140,13 +140,13 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(Core::GpuTaskGraph& graph, Re
             .setDependencies(&dependency, 1u)
             .setExternalStateSources(inputs.computeStateSource.states ? &inputs.computeStateSource : nullptr, inputs.computeStateSource.states ? 1u : 0u)
         ;
-        const auto resultSnapshotCopyTaskResult = m_graph.addCopyBufferTask(snapshotDesc, Core::GpuCopyBufferTaskDesc{ .regions = snapshotRegions, .regionCount = LengthOf(snapshotRegions), });
-        if(!resultSnapshotCopyTaskResult){
+        const auto snapshotCopyTaskResult = m_graph.addCopyBufferTask(snapshotDesc, Core::GpuCopyBufferTaskDesc{ .regions = snapshotRegions, .regionCount = LengthOf(snapshotRegions), });
+        if(!snapshotCopyTaskResult){
             result.snapshotCopyTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI snapshot-copy task"));
             return MakeUnexpected(Failure{});
         }
-        result.snapshotCopyTask = *resultSnapshotCopyTaskResult;
+        result.snapshotCopyTask = *snapshotCopyTaskResult;
         if(!result.preparationTask.valid())
             result.preparationTask = result.snapshotCopyTask;
         dependency = result.snapshotCopyTask;

@@ -60,7 +60,7 @@ namespace GpuTaskGraphCompilerDetail{
     case GpuGraphResourceType::AccelStruct:
         return GpuCompiledBarrierType::AccelStructStateExport;
     default:
-        return GpuCompiledBarrierType::kCount;
+        return GpuCompiledBarrierType::Count;
     }
 }
 
@@ -73,7 +73,7 @@ namespace GpuTaskGraphCompilerDetail{
     case GpuGraphResourceType::AccelStruct:
         return GpuCompiledBarrierType::AccelStructOwnershipRelease;
     default:
-        return GpuCompiledBarrierType::kCount;
+        return GpuCompiledBarrierType::Count;
     }
 }
 
@@ -86,7 +86,7 @@ namespace GpuTaskGraphCompilerDetail{
     case GpuGraphResourceType::AccelStruct:
         return GpuCompiledBarrierType::AccelStructOwnershipAcquire;
     default:
-        return GpuCompiledBarrierType::kCount;
+        return GpuCompiledBarrierType::Count;
     }
 }
 
@@ -157,7 +157,7 @@ namespace GpuTaskGraphCompilerDetail{
                 // HazardDomain uses never reach state planning, so the type is texture, buffer or acceleration structure.
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
                 const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
-                NWB_ASSERT(releaseType < GpuCompiledBarrierType::kCount && acquireType < GpuCompiledBarrierType::kCount);
+                NWB_ASSERT(releaseType < GpuCompiledBarrierType::Count && acquireType < GpuCompiledBarrierType::Count);
                 if(!AppendCompiledOwnershipTransfer(plan, resource, barrierRange, previousState->task, compiledTask.task, previousState->queue, compiledTask.queue, GpuOwnershipTransferRoute::Internal))
                     return MakeUnexpected(Failure{});
                 pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
@@ -282,7 +282,7 @@ namespace GpuTaskGraphCompilerDetail{
                     if(readStateSource && stateFragments.size() == 1u && RangeContains(resource, fragment.range, (*plannedRange)))
                         readStateSourceIndex = static_cast<usize>(readStateSource - trackedResourceStates.data());
                     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSource = nullptr;
-                    GpuCompiledBarrierType::Enum initialOwnerAcquireType = GpuCompiledBarrierType::kCount;
+                    GpuCompiledBarrierType::Enum initialOwnerAcquireType = GpuCompiledBarrierType::Count;
                     if(!previousState){
                         if(resource.initialAvailabilityCompletion.valid()){
                             initialAvailabilityDependencies.push_back(GpuTaskExternalDependencyEdge{ .completion = resource.initialAvailabilityCompletion, .consumer = taskID, });
@@ -292,7 +292,7 @@ namespace GpuTaskGraphCompilerDetail{
                             if(!initialOwnerHandoffSource)
                                 return false;
                             initialOwnerAcquireType = OwnershipAcquireBarrierType(resource.type);
-                            NWB_ASSERT(initialOwnerAcquireType < GpuCompiledBarrierType::kCount);
+                            NWB_ASSERT(initialOwnerAcquireType < GpuCompiledBarrierType::Count);
                             initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{ .completion = initialOwnerHandoffSource->completion, .consumer = taskID, });
                         }
                         else if(resource.initialOwnerQueue.valid() && resource.initialOwnerQueue != compiledTask.queue)

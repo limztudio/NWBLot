@@ -259,7 +259,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
 #if defined(NWB_DEBUG)
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
-        NWB_ASSERT(resource.identity && resource.type < GpuGraphResourceType::kCount);
+        NWB_ASSERT(resource.identity && resource.type < GpuGraphResourceType::Count);
     }
     for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex)
         NWB_ASSERT(graph.externalCompletionAt(completionIndex).identity);
@@ -267,7 +267,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
         NWB_ASSERT(task.identity);
-        if(!IsValidCommandRequirements(task.commands) || !IsValidSchedulingHint(task.scheduling) || task.timing.policy >= GpuTaskTimingPolicy::kCount)
+        if(!IsValidCommandRequirements(task.commands) || !IsValidSchedulingHint(task.scheduling) || task.timing.policy >= GpuTaskTimingPolicy::Count)
             return fail(GpuTaskGraphAnalysisStatus::InvalidTask, task.id);
         for(usize dependencyIndex = 0u; dependencyIndex < task.dependencyCount; ++dependencyIndex){
             if(!graph.validTask(task.dependencies[dependencyIndex]))
@@ -286,7 +286,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
 #endif
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-            if(!graph.validResource(use.resource) || use.access >= GpuTaskResourceAccess::kCount)
+            if(!graph.validResource(use.resource) || use.access >= GpuTaskResourceAccess::Count)
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
 
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);

@@ -37,7 +37,7 @@ public:
 
     constexpr FramebufferAttachment& setFormat(Format::Enum f)noexcept{ format = f; return *this; }
 
-    constexpr FramebufferAttachment& setReadOnly(bool val)noexcept{ isReadOnly = val; return *this; }
+    constexpr FramebufferAttachment& setIsReadOnly(bool val)noexcept{ isReadOnly = val; return *this; }
 
     [[nodiscard]] constexpr bool valid()const noexcept{ return texture != nullptr; }
 };

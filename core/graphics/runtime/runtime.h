@@ -253,7 +253,7 @@ public:
 
     [[nodiscard]] const GpuTimingRecorder& gpuTiming()const noexcept{ return m_gpuTiming; }
 
-    [[nodiscard]] bool isVsyncEnabled()const noexcept{ return m_swapChainState.vsyncEnabled; }
+    [[nodiscard]] bool isVSyncEnabled()const noexcept{ return m_swapChainState.vsyncEnabled; }
 
     [[nodiscard]] bool isHDR10OutputActive()const noexcept{ return m_swapChainState.outputMode == SwapChainOutputMode::HDR10; }
 
@@ -367,8 +367,8 @@ private:
     Timer m_previousFrameTimestamp = {};
     f32 m_dpiScaleFactorX = 1.f;
     f32 m_dpiScaleFactorY = 1.f;
-    f32 m_prevDPIScaleFactorX = 0.f;
-    f32 m_prevDPIScaleFactorY = 0.f;
+    f32 m_prevDpiScaleFactorX = 0.f;
+    f32 m_prevDpiScaleFactorY = 0.f;
 
     u64 m_successfulPresentationCount = 0u;
 

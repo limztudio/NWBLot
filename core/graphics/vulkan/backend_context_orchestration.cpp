@@ -322,7 +322,7 @@ bool BackendContext::destroy(){
 Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(const SwapChainTransitionKind::Enum kind){
     UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
     SwapChainTransitionTicket ticket;
-    if(kind >= SwapChainTransitionKind::kCount)
+    if(kind >= SwapChainTransitionKind::Count)
         return MakeUnexpected(Failure{});
     if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
         if(kind != SwapChainTransitionKind::Destroy || m_swapChainLifecycleEpoch == 0u)

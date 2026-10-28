@@ -64,7 +64,7 @@ public:
 
     constexpr RenderState& setRasterState(const RasterState& value)noexcept{ rasterState = value; return *this; }
 
-    constexpr RenderState& setSinglePassStereoState(const SinglePassStereoState& value)noexcept{ singlePassStereo = value; return *this; }
+    constexpr RenderState& setSinglePassStereo(const SinglePassStereoState& value)noexcept{ singlePassStereo = value; return *this; }
 };
 
 namespace VariableShadingRate{
@@ -141,15 +141,12 @@ public:
     GraphicsPipelineDesc& setInputLayout(const InputLayoutHandle& value)noexcept;
     GraphicsPipelineDesc& setVertexShader(const ShaderHandle& value)noexcept;
     GraphicsPipelineDesc& setHullShader(const ShaderHandle& value)noexcept;
-    GraphicsPipelineDesc& setTessellationControlShader(const ShaderHandle& value)noexcept;
     GraphicsPipelineDesc& setDomainShader(const ShaderHandle& value)noexcept;
-    GraphicsPipelineDesc& setTessellationEvaluationShader(const ShaderHandle& value)noexcept;
     GraphicsPipelineDesc& setGeometryShader(const ShaderHandle& value)noexcept;
     GraphicsPipelineDesc& setPixelShader(const ShaderHandle& value)noexcept;
-    GraphicsPipelineDesc& setFragmentShader(const ShaderHandle& value)noexcept;
     constexpr GraphicsPipelineDesc& setRenderState(const RenderState& value)noexcept{ renderState = value; return *this; }
 
-    constexpr GraphicsPipelineDesc& setVariableRateShadingState(const VariableRateShadingState& value)noexcept{ shadingRateState = value; return *this; }
+    constexpr GraphicsPipelineDesc& setShadingRateState(const VariableRateShadingState& value)noexcept{ shadingRateState = value; return *this; }
     GraphicsPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout);
 };
 
@@ -190,11 +187,9 @@ public:
 
 public:
     constexpr MeshletPipelineDesc& setPrimType(PrimitiveType::Enum value)noexcept{ primType = value; return *this; }
-    MeshletPipelineDesc& setTaskShader(const ShaderHandle& value)noexcept;
     MeshletPipelineDesc& setAmplificationShader(const ShaderHandle& value)noexcept;
     MeshletPipelineDesc& setMeshShader(const ShaderHandle& value)noexcept;
     MeshletPipelineDesc& setPixelShader(const ShaderHandle& value)noexcept;
-    MeshletPipelineDesc& setFragmentShader(const ShaderHandle& value)noexcept;
     constexpr MeshletPipelineDesc& setRenderState(const RenderState& value)noexcept{ renderState = value; return *this; }
     MeshletPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout);
 };

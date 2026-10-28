@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
+void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* geometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
     constexpr TStringView s_BuildBottomLevelAccelStructOperation = NWB_TEXT("build bottom-level acceleration structure");
     constexpr TStringView s_BuildBlasOperation = NWB_TEXT("build BLAS");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_BuildBottomLevelAccelStructOperation))
@@ -26,7 +26,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is null"));
         return;
     }
-    if(!pGeometries && numGeometries > 0){
+    if(!geometries && numGeometries > 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: geometry data is null"));
         return;
     }
@@ -84,12 +84,12 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     bool hasOpacityMicromap = false;
     for(usize i = 0u; i < numGeometries; ++i){
         opacityMicromapUsageOffsets[i] = Limit<usize>::s_Max;
-        if(pGeometries[i].geometryType != RayTracingGeometryType::Triangles)
+        if(geometries[i].geometryType != RayTracingGeometryType::Triangles)
             continue;
 
-        const RayTracingGeometryTriangles& triangles = pGeometries[i].geometryData.triangles;
+        const RayTracingGeometryTriangles& triangles = geometries[i].geometryData.triangles;
         if(!triangles.opacityMicromap){
-            if(triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u || triangles.pOmmUsageCounts || triangles.numOmmUsageCounts != 0u || triangles.ommIndexFormat != Format::UNKNOWN){
+            if(triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u || triangles.ommUsageCounts || triangles.numOmmUsageCounts != 0u || triangles.ommIndexFormat != Format::UNKNOWN){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM metadata requires an opacity micromap"));
                 return;
             }
@@ -99,7 +99,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM geometry requires VK_EXT_opacity_micromap"));
             return;
         }
-        if(triangles.numOmmUsageCounts != 0u && !triangles.pOmmUsageCounts){
+        if(triangles.numOmmUsageCounts != 0u && !triangles.ommUsageCounts){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM usage counts are null"));
             return;
         }
@@ -127,7 +127,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
     usize transformCount = 0;
     for(usize i = 0u; i < numGeometries; ++i){
-        const RayTracingGeometryDesc& geometryDesc = pGeometries[i];
+        const RayTracingGeometryDesc& geometryDesc = geometries[i];
         if(geometryDesc.geometryType == RayTracingGeometryType::Triangles){
             const RayTracingGeometryTriangles& triangles = geometryDesc.geometryData.triangles;
             if(!validateBuildInput(triangles.vertexBuffer, VulkanDetail::s_TriangleVertexInputName) || !validateBuildInput(triangles.indexBuffer, VulkanDetail::s_TriangleIndexInputName))
@@ -149,7 +149,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
 
         blasScratch.transformOffsets[i] = Limit<usize>::s_Max;
-        const auto geometry = VulkanDetail::FillBlasGeometryForSizeQuery(m_context, pGeometries[i], s_BuildBlasOperation, true);
+        const auto geometry = VulkanDetail::FillBlasGeometryForSizeQuery(m_context, geometries[i], s_BuildBlasOperation, true);
         if(!geometry)
             return;
         blasScratch.geometries[i] = geometry->geometry;
@@ -160,8 +160,8 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             blasScratch.geometries[i].pNext = &blasScratch.spheresData[i];
         else if(geometry->geometry.geometryType == VK_GEOMETRY_TYPE_LINEAR_SWEPT_SPHERES_NV)
             blasScratch.geometries[i].pNext = &blasScratch.lssData[i];
-        if(pGeometries[i].geometryType == RayTracingGeometryType::Triangles && pGeometries[i].geometryData.triangles.opacityMicromap){
-            const RayTracingGeometryTriangles& triangles = pGeometries[i].geometryData.triangles;
+        if(geometries[i].geometryType == RayTracingGeometryType::Triangles && geometries[i].geometryData.triangles.opacityMicromap){
+            const RayTracingGeometryTriangles& triangles = geometries[i].geometryData.triangles;
             OpacityMicromap* const opacityMicromap = triangles.opacityMicromap;
             if(&opacityMicromap->m_context != &m_context){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap belongs to another device"));
@@ -240,7 +240,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
             const usize usageOffset = opacityMicromapUsageOffsets[i];
             for(u32 usageIndex = 0u; usageIndex < triangles.numOmmUsageCounts; ++usageIndex){
-                const RayTracingOpacityMicromapUsageCount& usage = triangles.pOmmUsageCounts[usageIndex];
+                const RayTracingOpacityMicromapUsageCount& usage = triangles.ommUsageCounts[usageIndex];
                 VkOpacityMicromapFormatEXT format = VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_KHR;
                 if(usage.format == OpacityMicromapFormat::OC1_2_State)
                     format = VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT;
@@ -271,15 +271,15 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             ommGeometry.usageCountsCount = triangles.numOmmUsageCounts;
             ommGeometry.micromap = opacityMicromap->m_micromap;
         }
-        if(pGeometries[i].useTransform){
-            if(pGeometries[i].geometryType != RayTracingGeometryType::Triangles){
+        if(geometries[i].useTransform){
+            if(geometries[i].geometryType != RayTracingGeometryType::Triangles){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: only triangle geometry supports per-geometry transforms"));
                 return;
             }
             ++transformCount;
         }
 
-        geometrySignatures[i] = VulkanDetail::MakeAccelStructGeometryBuildSignature(blasScratch.geometries[i], &blasScratch.spheresData[i], &blasScratch.lssData[i], blasScratch.primitiveCounts[i], pGeometries[i].useTransform);
+        geometrySignatures[i] = VulkanDetail::MakeAccelStructGeometryBuildSignature(blasScratch.geometries[i], &blasScratch.spheresData[i], &blasScratch.lssData[i], blasScratch.primitiveCounts[i], geometries[i].useTransform);
     }
 
     // OMM update details are not in the AS signature, so this path stays fail-closed: micromap geometry updates unsupported.
@@ -306,7 +306,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             continue;
 
         VkAccelerationStructureTrianglesOpacityMicromapEXT& ommGeometry = opacityMicromapGeometries[i];
-        const u32 usageCount = pGeometries[i].geometryData.triangles.numOmmUsageCounts;
+        const u32 usageCount = geometries[i].geometryData.triangles.numOmmUsageCounts;
         ommGeometry.pUsageCounts = usageCount != 0u ? opacityMicromapUsageCounts.data() + opacityMicromapUsageOffsets[i] : nullptr;
         blasScratch.geometries[i].geometry.triangles.pNext = &ommGeometry;
     }
@@ -327,11 +327,11 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
         usize transformIndex = 0;
         for(usize i = 0u; i < numGeometries; ++i){
-            if(!pGeometries[i].useTransform)
+            if(!geometries[i].useTransform)
                 continue;
 
             const usize transformOffset = transformIndex * sizeof(VkTransformMatrixKHR);
-            NWB_MEMCPY(mappedTransforms.get() + transformOffset, sizeof(VkTransformMatrixKHR), &pGeometries[i].transform, sizeof(VkTransformMatrixKHR));
+            NWB_MEMCPY(mappedTransforms.get() + transformOffset, sizeof(VkTransformMatrixKHR), &geometries[i].transform, sizeof(VkTransformMatrixKHR));
             blasScratch.transformOffsets[i] = transformOffset;
             ++transformIndex;
         }
@@ -340,7 +340,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     }
 
     auto buildGeometry = [&](usize i)noexcept{
-        const auto& geomDesc = pGeometries[i];
+        const auto& geomDesc = geometries[i];
 
         VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
         const u32 primitiveCount = blasScratch.primitiveCounts[i];
@@ -455,7 +455,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
 
     for(usize i = 0u; i < numGeometries; ++i){
-        const RayTracingGeometryDesc& geomDesc = pGeometries[i];
+        const RayTracingGeometryDesc& geomDesc = geometries[i];
         if(geomDesc.geometryType == RayTracingGeometryType::Triangles){
             const RayTracingGeometryTriangles& triangles = geomDesc.geometryData.triangles;
             if(triangles.vertexBuffer)

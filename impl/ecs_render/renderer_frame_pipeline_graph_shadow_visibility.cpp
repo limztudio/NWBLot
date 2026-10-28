@@ -310,12 +310,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             const Core::BufferDesc& bufferDesc = buffer->getCreationDescription();
             if(!bufferDesc.debugName)
                 return false;
-            const auto hardwareTransparentScratchIndexResult = m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(bufferDesc.debugName, "Hardware Transparent Shadow Scratch").setInitialState(bufferDesc.initialState));
-            if(!hardwareTransparentScratchIndexResult){
+            const auto hardwareTransparentScratchResult = m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(bufferDesc.debugName, "Hardware Transparent Shadow Scratch").setInitialState(bufferDesc.initialState));
+            if(!hardwareTransparentScratchResult){
                 hardwareTransparentScratch[index] = {};
                 return false;
             }
-            hardwareTransparentScratch[index] = *hardwareTransparentScratchIndexResult;
+            hardwareTransparentScratch[index] = *hardwareTransparentScratchResult;
             resourceUses.push_back(ReadWriteUse(hardwareTransparentScratch[index], Core::ResourceStates::UnorderedAccess));
         }
         for(const Core::GpuTaskResourceUse& use : hardwareSceneReads.uses)
@@ -448,13 +448,13 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             EnableSameFamilyComputeEffectRouting(counterClearScheduling, adaptivePrimitivePrecedesVisibility);
             Core::GpuTaskDesc counterClearDesc;
             counterClearDesc.setIdentity(Name("render.shadow_visibility.adaptive_counter_clear")).setMarkerLabel("Shadow Adaptive Counter Clear").setScheduling(counterClearScheduling).setDependencies(&shadowVisibilityDependency, 1u);
-            const auto mDeferredShadowVisibilityAdaptiveCounterClearTaskResult = m_deferredLightingTaskGraph.addClearBufferTask(counterClearDesc, Core::GpuClearBufferTaskDesc{ .destination = adaptiveEdgeCounter, .clearValue = 0u, });
-            if(!mDeferredShadowVisibilityAdaptiveCounterClearTaskResult){
+            const auto deferredShadowVisibilityAdaptiveCounterClearTaskResult = m_deferredLightingTaskGraph.addClearBufferTask(counterClearDesc, Core::GpuClearBufferTaskDesc{ .destination = adaptiveEdgeCounter, .clearValue = 0u, });
+            if(!deferredShadowVisibilityAdaptiveCounterClearTaskResult){
                 m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned adaptive shadow counter clear"));
                 return false;
             }
-            m_deferredShadowVisibilityAdaptiveCounterClearTask = *mDeferredShadowVisibilityAdaptiveCounterClearTaskResult;
+            m_deferredShadowVisibilityAdaptiveCounterClearTask = *deferredShadowVisibilityAdaptiveCounterClearTaskResult;
             shadowVisibilityDependency = m_deferredShadowVisibilityAdaptiveCounterClearTask;
             adaptivePrimitivePrecedesVisibility = true;
         }
@@ -481,15 +481,15 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         .setExternalDependencies(laggedLightingHistoryWriterDrainDependencies, laggedLightingHistoryWriterDrainDependencyCount)
         .setResourceUses(&allLitClearResourceUse, 1u)
     ;
-    const auto mDeferredShadowVisibilityAllLitClearTaskResult = m_deferredLightingTaskGraph.addTask<
+    const auto deferredShadowVisibilityAllLitClearTaskResult = m_deferredLightingTaskGraph.addTask<
         ECSRenderDetail::FloatTextureClearGraphTask
     >(allLitClearDesc, ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = shadowVisibility, .subresources = ECSRenderDetail::s_ShadowVisibilitySubresources, .floatValue = ECSRenderDetail::s_ShadowVisibilityAllLitClearColor, });
-    if(!mDeferredShadowVisibilityAllLitClearTaskResult){
+    if(!deferredShadowVisibilityAllLitClearTaskResult){
         m_deferredShadowVisibilityAllLitClearTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned all-lit shadow-visibility clear"));
         return false;
     }
-    m_deferredShadowVisibilityAllLitClearTask = *mDeferredShadowVisibilityAllLitClearTaskResult;
+    m_deferredShadowVisibilityAllLitClearTask = *deferredShadowVisibilityAllLitClearTaskResult;
     shadowVisibilityDependency = m_deferredShadowVisibilityAllLitClearTask;
 
     Core::GpuTaskSchedulingHint scheduling;
@@ -509,7 +509,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         .setResourceUses(resourceUses.data(), resourceUses.size())
         .setResourceSetUses(traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr, traceResourceSetUseCount)
     ;
-    const auto mDeferredShadowVisibilityTaskResult2 = m_raytracingSystem.declareShadowVisibilityTask(
+    const auto deferredShadowVisibilityTaskResult = m_raytracingSystem.declareShadowVisibilityTask(
         m_deferredLightingTaskGraph,
         desc,
         deferredLightingResources,
@@ -519,12 +519,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         deferredTargets,
         timingTicket
     );
-    if(!mDeferredShadowVisibilityTaskResult2){
+    if(!deferredShadowVisibilityTaskResult){
         m_deferredShadowVisibilityTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));
         return false;
     }
-    m_deferredShadowVisibilityTask = *mDeferredShadowVisibilityTaskResult2;
+    m_deferredShadowVisibilityTask = *deferredShadowVisibilityTaskResult;
     return true;
 }
 

@@ -92,7 +92,7 @@ namespace GpuTaskPacketizationDecision{
         MergedFrontierScored,
         ScoredMergeDomainMismatch,
 
-        kCount,
+        Count,
     };
 };
 
@@ -186,7 +186,7 @@ namespace GpuOwnershipTransferRoute{
         ExternalImport,
         ExternalExport,
 
-        kCount,
+        Count,
     };
 };
 
@@ -204,7 +204,7 @@ struct GpuCompiledOwnershipTransfer{
     GpuPhysicalQueueId destinationQueue;
     ResourceQueueSharing::Mask declaredQueueSharing = ResourceQueueSharing::Exclusive;
     GpuGraphResourceType::Enum resourceType = GpuGraphResourceType::HazardDomain;
-    GpuOwnershipTransferRoute::Enum route = GpuOwnershipTransferRoute::kCount;
+    GpuOwnershipTransferRoute::Enum route = GpuOwnershipTransferRoute::Count;
     bool concurrentSharingCouldAvoid = false;
 
 
@@ -214,7 +214,7 @@ public:
             !resource.valid()
             || resourceIdentity == s_NameNone
             || resourceType >= GpuGraphResourceType::HazardDomain
-            || route >= GpuOwnershipTransferRoute::kCount
+            || route >= GpuOwnershipTransferRoute::Count
             || !sourceQueue.valid()
             || !destinationQueue.valid()
             || sourceQueue == destinationQueue
@@ -254,8 +254,8 @@ public:
 // Core counters and the caller-provided declaration duration publish only after success; failed or superseded plans keep an empty snapshot.
 struct GpuTaskGraphCompileStatistics{
     static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
-    static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::kCount);
-    static constexpr usize s_OwnershipTransferRouteCount = static_cast<usize>(GpuOwnershipTransferRoute::kCount);
+    static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::Count);
+    static constexpr usize s_OwnershipTransferRouteCount = static_cast<usize>(GpuOwnershipTransferRoute::Count);
 
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -442,7 +442,7 @@ public:
         [[nodiscard]] u64 objectIdentity()const noexcept{ return m_graph ? m_graph->m_objectIdentity : 0u; }
         [[nodiscard]] usize taskCount()const noexcept;
         [[nodiscard]] usize packetCount()const noexcept;
-        [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packet)const noexcept;
+        [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packetID)const noexcept;
         [[nodiscard]] bool validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;
         [[nodiscard]] GpuSubmissionPacketId packetIdAt(usize index)const noexcept;
         [[nodiscard]] GpuSubmissionPacketRange packetRange(const GpuSubmissionPacketId& first, const GpuSubmissionPacketId& last)const noexcept;
@@ -525,7 +525,7 @@ private:
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
 
     [[nodiscard]] usize packetCount()const noexcept{ return m_packets.size(); }
-    [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packet)const noexcept;
+    [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packetID)const noexcept;
     [[nodiscard]] bool validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;
     [[nodiscard]] GpuSubmissionPacketId packetIdAt(usize index)const noexcept;
     [[nodiscard]] GpuSubmissionPacketRange packetRange(const GpuSubmissionPacketId& first, const GpuSubmissionPacketId& last)const noexcept;

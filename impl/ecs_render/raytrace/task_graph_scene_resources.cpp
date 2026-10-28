@@ -46,12 +46,12 @@ Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
         const Name identity = buffer->getCreationDescription().debugName;
         if(!identity)
             return MakeUnexpected(Failure{});
-        const auto importedBuffersIndexResult = graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(identity, "Ray Scene Buffer"));
-        if(!importedBuffersIndexResult){
+        const auto importedBufferResult = graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(identity, "Ray Scene Buffer"));
+        if(!importedBufferResult){
             importedBuffers[index] = {};
             return MakeUnexpected(Failure{});
         }
-        importedBuffers[index] = *importedBuffersIndexResult;
+        importedBuffers[index] = *importedBufferResult;
     }
 
     // Shared consumers reuse this identity. Reimporting the same TLAS returns it, keeping producer and cross-effect deps.

@@ -50,13 +50,13 @@ void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(const RayTrac
     const Core::GpuTaskId dependencies[] = { m_deferredSurfelGiTask, m_deferredFrameTimingEndTask, };
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name(RendererFramePipelineDetail::s_SurfelCounterReadbackName)).setMarkerLabel(RendererFramePipelineDetail::s_SurfelCounterReadbackLabel).setScheduling(scheduling).setDependencies(dependencies, LengthOf(dependencies));
-    const auto mDeferredSurfelGiCounterReadbackTaskResult = m_deferredLightingTaskGraph.addCopyBufferTask(desc, Core::GpuCopyBufferTaskDesc{ .regions = regions, .regionCount = LengthOf(regions), });
-    if(!mDeferredSurfelGiCounterReadbackTaskResult){
+    const auto deferredSurfelGiCounterReadbackTaskResult = m_deferredLightingTaskGraph.addCopyBufferTask(desc, Core::GpuCopyBufferTaskDesc{ .regions = regions, .regionCount = LengthOf(regions), });
+    if(!deferredSurfelGiCounterReadbackTaskResult){
         m_deferredSurfelGiCounterReadbackTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel counter-readback task"));
         return;
     }
-    m_deferredSurfelGiCounterReadbackTask = *mDeferredSurfelGiCounterReadbackTaskResult;
+    m_deferredSurfelGiCounterReadbackTask = *deferredSurfelGiCounterReadbackTaskResult;
     // The token stays invalid until native submission accepts; this timestamp is only read when it publishes.
     m_raytracingSystem.markSurfelCountReadbackScheduled();
 }

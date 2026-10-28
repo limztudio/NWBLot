@@ -31,7 +31,7 @@ namespace GpuCommandIrOpcode{
         UploadBuffer,
         UploadTexture,
 
-        kCount,
+        Count,
     };
 };
 
@@ -61,7 +61,7 @@ namespace GpuCommandIrWireOpcode{
         SetPushConstants,
         EndRenderPass,
 
-        kCount,
+        Count,
     };
 };
 
@@ -544,7 +544,7 @@ public:
     [[nodiscard]] BinaryByteView commandBytes()const;
     [[nodiscard]] Expected<GpuCommandIrOwnedStream> exportOwned(GraphicsArena& arena)const;
     [[nodiscard]] GpuCommandIrCaptureCheckpoint checkpoint()const noexcept;
-    [[nodiscard]] bool rollback(const GpuCommandIrCaptureCheckpoint& checkpoint)noexcept;
+    [[nodiscard]] bool rollback(const GpuCommandIrCaptureCheckpoint& target)noexcept;
     [[nodiscard]] bool captureSetGraphicsState(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state);
     // ownerArena and the descriptor owner's arena must outlive every exported stream that retains this heap binding.
     // The Device and its heap must outlive the last retained lease/artifact.

@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_command_line{
+namespace __hidden_pipeline_command_line{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,11 +83,11 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         return MakeUnexpected(Failure{});
     }
     if(
-        !__hidden_command_line::AssignInputs(m_inputs, options.inputs)
-        || !__hidden_command_line::AssignInputs(m_assetRoots, options.assetRoots)
-        || !__hidden_command_line::AssignText(m_repoRoot, options.repoRoot)
-        || !__hidden_command_line::AssignText(m_outputPath, options.outputPath)
-        || !__hidden_command_line::AssignText(m_cacheDirectory, options.cacheDirectory)
+        !__hidden_pipeline_command_line::AssignInputs(m_inputs, options.inputs)
+        || !__hidden_pipeline_command_line::AssignInputs(m_assetRoots, options.assetRoots)
+        || !__hidden_pipeline_command_line::AssignText(m_repoRoot, options.repoRoot)
+        || !__hidden_pipeline_command_line::AssignText(m_outputPath, options.outputPath)
+        || !__hidden_pipeline_command_line::AssignText(m_cacheDirectory, options.cacheDirectory)
     )
         return MakeUnexpected(Failure{});
     if(options.outputPath.empty()){

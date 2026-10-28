@@ -57,7 +57,7 @@ namespace GpuTaskQueueAssignmentReason{
         Conservative,
         Scored,
 
-        kCount,
+        Count,
     };
 };
 
@@ -114,7 +114,7 @@ namespace GpuTaskGraphPacketizationPolicy{
         // Scored successors must share the preceding packet's nonempty merge domain.
         FrontierScored,
 
-        kCount,
+        Count,
     };
 };
 

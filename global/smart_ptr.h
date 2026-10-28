@@ -124,9 +124,9 @@ template<typename OwnerA, typename OwnerB>
     typedef typename OwnerA::pointer P1;
     typedef typename OwnerB::pointer P2;
     typedef typename CommonType<P1, P2>::type PCommon;
-    PCommon pT1 = a.get();
-    PCommon pT2 = b.get();
-    return LessThan<PCommon>()(pT1, pT2);
+    PCommon lhsPointer = a.get();
+    PCommon rhsPointer = b.get();
+    return LessThan<PCommon>()(lhsPointer, rhsPointer);
 }
 
 template<typename Owner>
@@ -148,8 +148,8 @@ template<typename Owner>
     && noexcept(static_cast<bool>(LessThan<typename Owner::pointer>{}(nullptr, b.get())))
 ){
     typedef typename Owner::pointer pointer;
-    pointer pT = b.get();
-    return LessThan<pointer>()(nullptr, pT);
+    pointer rhsPointer = b.get();
+    return LessThan<pointer>()(nullptr, rhsPointer);
 }
 
 

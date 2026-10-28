@@ -26,7 +26,7 @@ namespace GpuTaskQueueAssignmentAcceptance{
         Unchanged,
         Changed,
 
-        kCount,
+        Count,
     };
 };
 

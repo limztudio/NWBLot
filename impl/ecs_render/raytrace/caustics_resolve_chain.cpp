@@ -71,12 +71,12 @@ inline constexpr usize s_MaxStageResourceUses = 8u;
         for(u32 index = 0u; index < LengthOf(activityResources); ++index){
             Core::GpuGraphResourceDesc desc = BufferResourceDesc(s_CausticResolveActivityBufferNames[index], "caustic resolve activity");
             desc.setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common);
-            const auto activityResourcesIndexResult = m_graph.importBuffer(activity.buffers[index], desc);
-            if(!activityResourcesIndexResult){
+            const auto activityResourceResult = m_graph.importBuffer(activity.buffers[index], desc);
+            if(!activityResourceResult){
                 activityResources[index] = {};
                 return MakeUnexpected(Failure{});
             }
-            activityResources[index] = *activityResourcesIndexResult;
+            activityResources[index] = *activityResourceResult;
         }
     }
 
@@ -124,13 +124,13 @@ inline constexpr usize s_MaxStageResourceUses = 8u;
 
     Core::GpuTaskDesc timingCloseDesc;
     timingCloseDesc.setIdentity(naming.timingClose.identity).setMarkerLabel(naming.timingClose.label).setScheduling(stageScheduling).setDependencies(&result.causticResolveUpsampleTask, 1u);
-    const auto resultCausticsTaskResult = m_raytracingSystem.declareCausticResolveTask(m_graph, timingCloseDesc, (inputs.producerDispatched), (inputs.timingTicket), (inputs.resolveTiming));
-    if(!resultCausticsTaskResult){
+    const auto causticsTaskResult = m_raytracingSystem.declareCausticResolveTask(m_graph, timingCloseDesc, (inputs.producerDispatched), (inputs.timingTicket), (inputs.resolveTiming));
+    if(!causticsTaskResult){
         result.causticsTask = {};
         NWB_LOGGER_WARNING(naming.timingClose.warnText);
         return MakeUnexpected(Failure{});
     }
-    result.causticsTask = *resultCausticsTaskResult;
+    result.causticsTask = *causticsTaskResult;
     return result;
 }
 

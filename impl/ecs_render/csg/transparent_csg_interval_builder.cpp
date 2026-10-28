@@ -194,16 +194,16 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .setScheduling(transparentCsgFirstUploadScheduling)
                 .setDependencies(&result.uploadTask, 1u)
             ;
-            const auto resultUploadTaskResult = m_graph.addUploadBufferTask(
+            const auto instanceUploadTaskResult = m_graph.addUploadBufferTask(
                 transparentCsgInstanceUploadDesc,
                 Core::GpuUploadBufferTaskDesc{ .source = transparentCsgInstanceBlob, .destination = inputs.materialInstances, .finalState = Core::ResourceStates::Common, }
             );
-            if(!resultUploadTaskResult){
+            if(!instanceUploadTaskResult){
                 result.uploadTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG material instance upload"));
                 return MakeUnexpected(Failure{});
             }
-            result.uploadTask = *resultUploadTaskResult;
+            result.uploadTask = *instanceUploadTaskResult;
 
             Core::GpuTaskDesc transparentCsgMaterialTypedUploadDesc;
             transparentCsgMaterialTypedUploadDesc
@@ -212,16 +212,16 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .setScheduling(transparentCsgUploadScheduling)
                 .setDependencies(&result.uploadTask, 1u)
             ;
-            const auto resultUploadTaskResult2 = m_graph.addUploadBufferTask(
+            const auto materialTypedUploadTaskResult = m_graph.addUploadBufferTask(
                 transparentCsgMaterialTypedUploadDesc,
                 Core::GpuUploadBufferTaskDesc{ .source = transparentCsgMaterialTypedBlob, .destination = inputs.materialTyped, .finalState = Core::ResourceStates::Common, }
             );
-            if(!resultUploadTaskResult2){
+            if(!materialTypedUploadTaskResult){
                 result.uploadTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG material typed upload"));
                 return MakeUnexpected(Failure{});
             }
-            result.uploadTask = *resultUploadTaskResult2;
+            result.uploadTask = *materialTypedUploadTaskResult;
 
             Core::GpuTaskDesc transparentCsgReceiverRangesUploadDesc;
             transparentCsgReceiverRangesUploadDesc
@@ -230,26 +230,26 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .setScheduling(transparentCsgUploadScheduling)
                 .setDependencies(&result.uploadTask, 1u)
             ;
-            const auto resultUploadTaskResult3 = m_graph.addUploadBufferTask(
+            const auto receiverRangesUploadTaskResult = m_graph.addUploadBufferTask(
                 transparentCsgReceiverRangesUploadDesc,
                 Core::GpuUploadBufferTaskDesc{ .source = transparentCsgReceiverRangesBlob, .destination = inputs.csgReceiverRanges, .finalState = Core::ResourceStates::Common, }
             );
-            if(!resultUploadTaskResult3){
+            if(!receiverRangesUploadTaskResult){
                 result.uploadTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG receiver-range upload"));
                 return MakeUnexpected(Failure{});
             }
-            result.uploadTask = *resultUploadTaskResult3;
+            result.uploadTask = *receiverRangesUploadTaskResult;
 
             Core::GpuTaskDesc transparentCsgCuttersUploadDesc;
             transparentCsgCuttersUploadDesc.setIdentity(Name("render.avboit.transparent_csg.cutters_upload")).setMarkerLabel("Transparent CSG Cutters Upload").setScheduling(transparentCsgUploadScheduling).setDependencies(&result.uploadTask, 1u);
-            const auto resultUploadTaskResult4 = m_graph.addUploadBufferTask(transparentCsgCuttersUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = transparentCsgCuttersBlob, .destination = inputs.csgCutters, .finalState = Core::ResourceStates::Common, });
-            if(!resultUploadTaskResult4){
+            const auto cuttersUploadTaskResult = m_graph.addUploadBufferTask(transparentCsgCuttersUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = transparentCsgCuttersBlob, .destination = inputs.csgCutters, .finalState = Core::ResourceStates::Common, });
+            if(!cuttersUploadTaskResult){
                 result.uploadTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG cutter upload"));
                 return MakeUnexpected(Failure{});
             }
-            result.uploadTask = *resultUploadTaskResult4;
+            result.uploadTask = *cuttersUploadTaskResult;
 
             Core::GpuTaskDesc transparentCsgClipContextSlotsUploadDesc;
             transparentCsgClipContextSlotsUploadDesc
@@ -258,16 +258,16 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .setScheduling(transparentCsgUploadScheduling)
                 .setDependencies(&result.uploadTask, 1u)
             ;
-            const auto resultUploadTaskResult5 = m_graph.addUploadBufferTask(
+            const auto clipContextSlotsUploadTaskResult = m_graph.addUploadBufferTask(
                 transparentCsgClipContextSlotsUploadDesc,
                 Core::GpuUploadBufferTaskDesc{ .source = transparentCsgClipContextSlotsBlob, .destination = inputs.csgClipContextSlots, .finalState = Core::ResourceStates::Common, }
             );
-            if(!resultUploadTaskResult5){
+            if(!clipContextSlotsUploadTaskResult){
                 result.uploadTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG clip-context upload"));
                 return MakeUnexpected(Failure{});
             }
-            result.uploadTask = *resultUploadTaskResult5;
+            result.uploadTask = *clipContextSlotsUploadTaskResult;
 
             Core::GpuTaskDesc transparentCsgIntervalSampleStateUploadDesc;
             transparentCsgIntervalSampleStateUploadDesc
@@ -276,16 +276,16 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .setScheduling(transparentCsgUploadScheduling)
                 .setDependencies(&result.uploadTask, 1u)
             ;
-            const auto resultUploadTaskResult6 = m_graph.addUploadBufferTask(
+            const auto intervalSampleStateUploadTaskResult = m_graph.addUploadBufferTask(
                 transparentCsgIntervalSampleStateUploadDesc,
                 Core::GpuUploadBufferTaskDesc{ .source = transparentCsgIntervalSampleStateBlob, .destination = inputs.csgIntervalSampleState, .finalState = Core::ResourceStates::Common, }
             );
-            if(!resultUploadTaskResult6){
+            if(!intervalSampleStateUploadTaskResult){
                 result.uploadTask = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval-state upload"));
                 return MakeUnexpected(Failure{});
             }
-            result.uploadTask = *resultUploadTaskResult6;
+            result.uploadTask = *intervalSampleStateUploadTaskResult;
 
             avboitPrePayload.transparentCsgSnapshot.capture(transparentCsgDrawItems.csgReceiverSurface, transparentCsgFrameData, transparentCsgInstanceData.size(), transparentCsgMaterialTypedBytes.size());
             receiverSpanPayload.transparentCsgSnapshot.capture(transparentCsgDrawItems.csgReceiverSurface, transparentCsgFrameData, transparentCsgInstanceData.size(), transparentCsgMaterialTypedBytes.size());
@@ -316,16 +316,16 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
         const Core::Rect transparentCsgClearRect = avboitPrePayload.transparentCsgSnapshot.csgWorkRegion.resolveRect(inputs.targets.width, inputs.targets.height);
         const Core::GpuClearTextureTaskRecordHooks transparentCsgIntervalClearBeginHooks{ .context = &intervalClearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
         const Core::GpuClearTextureTaskRecordHooks transparentCsgIntervalClearEndHooks{ .context = &intervalClearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
-        const auto mAvboitSystemTaskGraphStageMTransparentCsgIntervalClearFirstTaskResult = m_graph.addClearTextureRectUIntTask(
+        const auto transparentCsgIntervalClearFirstTaskResult = m_graph.addClearTextureRectUIntTask(
             makeTransparentCsgIntervalClearTaskDesc(Name("render.avboit.transparent_csg.interval_clear"), "Transparent CSG Interval Id Clear", result.uploadTask),
             Core::GpuClearTextureRectUIntTaskDesc{ .destination = inputs.csgIntervalId, .subresources = inputs.csgPeelSubresources, .rect = transparentCsgClearRect, .uintValue = Core::UIntColor(0u), .recordHooks = transparentCsgIntervalClearBeginHooks, }
         );
-        if(!mAvboitSystemTaskGraphStageMTransparentCsgIntervalClearFirstTaskResult){
+        if(!transparentCsgIntervalClearFirstTaskResult){
             m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned transparent CSG interval-id clear"));
             return MakeUnexpected(Failure{});
         }
-        m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask = *mAvboitSystemTaskGraphStageMTransparentCsgIntervalClearFirstTaskResult;
+        m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask = *transparentCsgIntervalClearFirstTaskResult;
         Core::GpuTaskSchedulingHint transparentCsgIntervalClearTailScheduling = transparentCsgIntervalClearScheduling;
         transparentCsgIntervalClearTailScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc transparentCsgIntervalClearTailDesc;
@@ -335,7 +335,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             .setScheduling(transparentCsgIntervalClearTailScheduling)
             .setDependencies(&m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask, 1u)
         ;
-        const auto mAvboitSystemTaskGraphStageMTransparentCsgIntervalClearTaskResult = m_graph.addClearTextureRectUIntTask(
+        const auto transparentCsgIntervalClearTaskResult = m_graph.addClearTextureRectUIntTask(
             transparentCsgIntervalClearTailDesc,
             Core::GpuClearTextureRectUIntTaskDesc{
                 .destination = inputs.csgReceiverEventCount,
@@ -345,12 +345,12 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .recordHooks = transparentCsgIntervalClearEndHooks,
             }
         );
-        if(!mAvboitSystemTaskGraphStageMTransparentCsgIntervalClearTaskResult){
+        if(!transparentCsgIntervalClearTaskResult){
             m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned transparent CSG receiver-event clear"));
             return MakeUnexpected(Failure{});
         }
-        m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask = *mAvboitSystemTaskGraphStageMTransparentCsgIntervalClearTaskResult;
+        m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask = *transparentCsgIntervalClearTaskResult;
         result.uploadTask = m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask;
         NWB_ASSERT(avboitPrePayload.transparentCsgStreamsUploaded && avboitPrePayload.transparentCsgSnapshot.captured);
     }

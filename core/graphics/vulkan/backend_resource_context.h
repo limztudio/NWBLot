@@ -187,9 +187,9 @@ inline constexpr VkImageLayout s_ReadOnlyImageLayout = VK_IMAGE_LAYOUT_READ_ONLY
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state)noexcept;
-VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state, bool rayTracingStageAvailable)noexcept;
-VkImageLayout GetVkImageLayout(ResourceStates::Mask state)noexcept;
+VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states)noexcept;
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool rayTracingStageAvailable)noexcept;
+VkImageLayout GetVkImageLayout(ResourceStates::Mask states)noexcept;
 VkFormat ConvertFormat(Format::Enum format)noexcept;
 VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount)noexcept;
 extern VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset = 0)noexcept;

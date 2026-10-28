@@ -25,7 +25,7 @@ Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& setti
     u64 seenLights = 0u;
     for(usize index = 0u; index < requestCount; ++index){
         const auto& request = requests[index];
-        if(request.lightIndex >= NWB_SCENE_MAX_LIGHTS || request.shadowSlot >= NWB_SCENE_SHADOW_SLOT_COUNT || request.type >= Scene::LightType::kCount)
+        if(request.lightIndex >= NWB_SCENE_MAX_LIGHTS || request.shadowSlot >= NWB_SCENE_SHADOW_SLOT_COUNT || request.type >= Scene::LightType::Count)
             return MakeUnexpected(Failure{});
         const u32 slotBit = 1u << request.shadowSlot;
         const u64 lightBit = 1ull << request.lightIndex;

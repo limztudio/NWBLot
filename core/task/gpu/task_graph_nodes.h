@@ -176,7 +176,7 @@ struct ResourceBinding{
 struct GpuGraphResourceVersionNode{
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;
-    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
+    GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::Count;
 };
 
 struct GpuGraphResourceSetNode{
@@ -192,7 +192,7 @@ struct GpuGraphPipelineNode{
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
     u16 deviceGeneration = 0u;
-    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
+    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::Count;
     GraphicsPipelineHandle graphicsPipeline;
     ComputePipelineHandle computePipeline;
     MeshletPipelineHandle meshletPipeline;
@@ -201,7 +201,7 @@ struct GpuGraphPipelineNode{
 
 struct PipelinePointerKey{
     const void* pointer = nullptr;
-    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
+    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::Count;
 };
 
 struct PipelinePointerEqual{

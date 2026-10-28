@@ -159,7 +159,7 @@ private:
 
 
 public:
-    UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, ChunkKind::Enum chunkKind);
+    UploadManager(Device& parent, u64 defaultChunkSize, u64 memoryLimit, ChunkKind::Enum chunkKind);
     ~UploadManager()noexcept;
 
 

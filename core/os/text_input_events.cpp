@@ -34,7 +34,7 @@ TextInputAdmission::Enum QueuedTextInputService::emitDeleteSurrounding(const Tex
         return TextInputAdmission::InvalidSession;
     if(revision != m_surroundingRevision)
         return TextInputAdmission::InvalidRange;
-    if(basis >= TextInputDeletionBasis::kCount)
+    if(basis >= TextInputDeletionBasis::Count)
         return TextInputAdmission::InvalidRange;
     const usize start = basis == TextInputDeletionBasis::Selection ? Min(m_anchorByte, m_caretByte) : m_caretByte;
     const usize end = basis == TextInputDeletionBasis::Selection ? Max(m_anchorByte, m_caretByte) : m_caretByte;

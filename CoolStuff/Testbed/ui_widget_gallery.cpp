@@ -29,7 +29,7 @@ namespace __hidden_ui_widget_gallery{
 namespace Section{
     enum Enum : u32{
         Controls, Edit, List, Combo, SearchCombo, PopupTools, NestedPopup,
-        NumericEdit, TextArea, RadioGroup, Slider, Progress, Image, kCount
+        NumericEdit, TextArea, RadioGroup, Slider, Progress, Image, Count
     };
 };
 
@@ -37,7 +37,7 @@ static constexpr f32 s_Margin = 18.0f;
 static constexpr f32 s_SelectorHeight = 88.0f;
 static constexpr f32 s_ContentGap = 12.0f;
 static constexpr Name s_SelectorArena("testbed/ui/gallery_selector");
-static constexpr Array<StringView, Section::kCount> s_SectionNames{
+static constexpr Array<StringView, Section::Count> s_SectionNames{
     "Controls and menu", "Text editing", "Virtual list", "Keyed combo", "Searchable combo",
     "Tooltips and context menu", "Nested popups", "Numeric editing", "Multiline text",
     "Radio choices", "Slider", "Progress", "Images"
@@ -97,13 +97,13 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
     navigation.enabled = m_selectedGallery != 0u && !ui.input().hasPopup();
     if(ui.button("previous", "Previous", navigation))
         --m_selectedGallery;
-    navigation.enabled = m_selectedGallery + 1u < Section::kCount && !ui.input().hasPopup();
+    navigation.enabled = m_selectedGallery + 1u < Section::Count && !ui.input().hasPopup();
     if(ui.button("next", "Next", navigation))
         ++m_selectedGallery;
     valid = ui.endContainer() && valid;
     const u32 selected = m_selectedGallery;
     NWB::Core::Alloc::ScratchArena scratchArena(s_SelectorArena);
-    const auto caption = StringFormat(scratchArena, "UI samples {}/{}: {}", selected + 1u, static_cast<u32>(Section::kCount), s_SectionNames[selected]);
+    const auto caption = StringFormat(scratchArena, "UI samples {}/{}: {}", selected + 1u, static_cast<u32>(Section::Count), s_SectionNames[selected]);
     valid = ui.label("section", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid){

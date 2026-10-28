@@ -113,7 +113,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
     }
 
     const GpuDescriptorClass::Enum descriptorClass = handle.descriptorClass();
-    if(descriptorClass >= GpuDescriptorClass::kCount){
+    if(descriptorClass >= GpuDescriptorClass::Count){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: handle has invalid class {}."), static_cast<u32>(descriptorClass));
         return false;
     }
@@ -240,7 +240,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
             }
 
             const Format::Enum format = writeItem.format != Format::UNKNOWN ? writeItem.format : textureDesc.format;
-            if(format == Format::UNKNOWN || format >= Format::kCount){
+            if(format == Format::UNKNOWN || format >= Format::Count){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid sampled-image format."));
                 return false;
             }
@@ -259,7 +259,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
             }
 
             const Format::Enum format = writeItem.format != Format::UNKNOWN ? writeItem.format : textureDesc.format;
-            if(format == Format::UNKNOWN || format >= Format::kCount){
+            if(format == Format::UNKNOWN || format >= Format::Count){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid StorageImage format."));
                 return false;
             }
@@ -310,7 +310,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
     if(descriptorClass == GpuDescriptorClass::SampledBuffer){
         const BufferDesc& bufferDesc = buffer->getCreationDescription();
         const Format::Enum format = writeItem.format != Format::UNKNOWN ? writeItem.format : bufferDesc.format;
-        if(format == Format::UNKNOWN || format >= Format::kCount){
+        if(format == Format::UNKNOWN || format >= Format::Count){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid sampled-buffer format."));
             return false;
         }

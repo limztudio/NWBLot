@@ -1317,39 +1317,49 @@ int ZEXPORT deflateEnd(z_streamp strm) {
  */
 int ZEXPORT deflateCopy(z_streamp dest, z_streamp source) {
 #ifdef MAXSEG_64K
-    (void)dest;
     (void)source;
+    if (dest != Z_NULL)
+        dest->state = Z_NULL;
     return Z_STREAM_ERROR;
 #else
     deflate_state *ds;
     deflate_state *ss;
 
-
-    if (deflateStateCheck(source) || dest == Z_NULL) {
+    if (dest == Z_NULL)
+        return Z_STREAM_ERROR;
+    if (deflateStateCheck(source)) {
+        dest->state = Z_NULL;
         return Z_STREAM_ERROR;
     }
 
     ss = source->state;
 
-    zmemcpy(dest, source, sizeof(z_stream));
-
-    ds = (deflate_state *) ZALLOC(dest, 1, sizeof(deflate_state));
-    if (ds == Z_NULL) return Z_MEM_ERROR;
-    zmemzero(ds, sizeof(deflate_state));
-    dest->state = (struct internal_state FAR *) ds;
-    zmemcpy(ds, ss, sizeof(deflate_state));
-    ds->strm = dest;
-
-    ds->window = (Bytef *) ZALLOC(dest, ds->w_size, 2*sizeof(Byte));
-    ds->prev   = (Posf *)  ZALLOC(dest, ds->w_size, sizeof(Pos));
-    ds->head   = (Posf *)  ZALLOC(dest, ds->hash_size, sizeof(Pos));
-    ds->pending_buf = (uchf *) ZALLOC(dest, ds->lit_bufsize, LIT_BUFS);
-
-    if (ds->window == Z_NULL || ds->prev == Z_NULL || ds->head == Z_NULL ||
-        ds->pending_buf == Z_NULL) {
-        deflateEnd (dest);
+    ds = (deflate_state *) ZALLOC(source, 1, sizeof(deflate_state));
+    if (ds == Z_NULL) {
+        dest->state = Z_NULL;
         return Z_MEM_ERROR;
     }
+    zmemcpy(ds, ss, sizeof(deflate_state));
+    ds->window = (Bytef *) ZALLOC(source, ds->w_size, 2*sizeof(Byte));
+    ds->prev   = (Posf *)  ZALLOC(source, ds->w_size, sizeof(Pos));
+    ds->head   = (Posf *)  ZALLOC(source, ds->hash_size, sizeof(Pos));
+    ds->pending_buf = (uchf *) ZALLOC(source, ds->lit_bufsize, LIT_BUFS);
+    if (ds->window == Z_NULL || ds->prev == Z_NULL || ds->head == Z_NULL ||
+        ds->pending_buf == Z_NULL) {
+        TRY_FREE(source, ds->pending_buf);
+        TRY_FREE(source, ds->head);
+        TRY_FREE(source, ds->prev);
+        TRY_FREE(source, ds->window);
+        ZFREE(source, ds);
+        dest->state = Z_NULL;
+        return Z_MEM_ERROR;
+    }
+
+    /* copy the stream and attach the new state */
+    zmemcpy(dest, source, sizeof(z_stream));
+    dest->state = (struct internal_state FAR *) ds;
+    ds->strm = dest;
+
     /* following zmemcpy's do not work for 16-bit MSDOS */
     zmemcpy(ds->window, ss->window, ss->high_water);
     zmemcpy(ds->prev, ss->prev,
@@ -1642,7 +1652,10 @@ local void check_match(deflate_state *s, IPos start, IPos match, int length) {
 /* Same but force premature exit if necessary. */
 #define FLUSH_BLOCK(s, last) { \
    FLUSH_BLOCK_ONLY(s, last); \
-   if (s->strm->avail_out == 0) return (last) ? finish_started : need_more; \
+   if (s->strm->avail_out == 0) { \
+      if (!(last)) return need_more; \
+      if (s->pending != 0 || s->wrap != 0) return finish_started; \
+   } \
 }
 
 /* Maximum stored block length in deflate format (not including header). */
@@ -1677,7 +1690,7 @@ local block_state deflate_stored(deflate_state *s, int flush) {
      * possible. If flushing, copy the remaining available input to next_out as
      * stored blocks, if there is enough space.
      */
-    int last = 0;
+    int last = 0, all;
     unsigned len, left, have;
     unsigned used = s->strm->avail_in;
     do {
@@ -1692,10 +1705,13 @@ local block_state deflate_stored(deflate_state *s, int flush) {
             /* maximum stored block length that will fit in avail_out: */
         have = s->strm->avail_out - have;
         left = (unsigned)(s->strstart - s->block_start);    /* window bytes */
-        if (len > (ulg)left + s->strm->avail_in)
+        if (left < len && s->strm->avail_in < len - left)
             len = left + s->strm->avail_in;     /* limit len to the input */
         if (len > have)
             len = have;                         /* limit len to the output */
+
+        /* all is true if len is all of the available input */
+        all = len >= left && len - left == s->strm->avail_in;
 
         /* If the stored block would be less than min_block in length, or if
          * unable to copy all of the available input when flushing, then try
@@ -1704,13 +1720,13 @@ local block_state deflate_stored(deflate_state *s, int flush) {
          */
         if (len < min_block && ((len == 0 && flush != Z_FINISH) ||
                                 flush == Z_NO_FLUSH ||
-                                len != left + s->strm->avail_in))
+                                !all))
             break;
 
         /* Make a dummy stored block in pending to get the header bytes,
          * including any pending bits. This also updates the debugging counts.
          */
-        last = flush == Z_FINISH && len == left + s->strm->avail_in ? 1 : 0;
+        last = flush == Z_FINISH && all ? 1 : 0;
         _tr_stored_block(s, (char *)0, 0L, last);
 
         /* Replace the lengths in the dummy stored block with len. */
@@ -2015,7 +2031,8 @@ local block_state deflate_slow(deflate_state *s, int flush) {
             uInt max_insert = s->strstart + s->lookahead - MIN_MATCH;
             /* Do not insert strings in hash table beyond this. */
 
-            check_match(s, s->strstart - 1, s->prev_match, (int)s->prev_length);
+            check_match(s, s->strstart - 1, s->prev_match,
+                        (int)s->prev_length);
 
             _tr_tally_dist(s, s->strstart - 1 - s->prev_match,
                            s->prev_length - MIN_MATCH, bflush);

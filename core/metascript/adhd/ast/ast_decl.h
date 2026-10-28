@@ -110,7 +110,7 @@ struct MethodDecl{
     bool isDestructor = false;
     bool isOperator = false;
     bool isInline = false;
-    bool isNoInline = false;
+    bool isOutOfLine = false;
     bool isReflect = false;
     bool usesScratchArena = false;
     bool usesTaskScope = false;

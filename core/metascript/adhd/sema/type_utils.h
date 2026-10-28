@@ -93,6 +93,7 @@ NWB_ADHD_BEGIN
 )noexcept;
 
 [[nodiscard]] usize ParseUnsignedConstant(MStringView text, const SymbolTable& symbols)noexcept;
+[[nodiscard]] bool IsKnownConcreteTypeName(MStringView name, const SymbolTable& symbols)noexcept;
 [[nodiscard]] bool IsConcreteTypeRef(const TypeRef& type, const SymbolTable& symbols)noexcept;
 [[nodiscard]] bool IsConcreteTemplateArgList(
     const MVector<TemplateParamDecl>& params,

@@ -102,7 +102,7 @@ MString SourceEmitter::emitSource(
                     continue;
 
                 if(classDecl->isImported && method->isInline)
-                    out.append("NWB_INLINE ");
+                    out.append("inline ");
 
                 m_typeEmitter.emitMethodSignature(out, classDecl, *method, false);
                 if(method->isConstructor)

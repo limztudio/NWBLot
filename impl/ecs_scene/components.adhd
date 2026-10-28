@@ -2,22 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/ecs_scene/global.h>
-#include <core/ecs/entity_id.h>
-
-NWB_IMPL_SCENE_BEGIN
-
-using Core::ECS::EntityID;
-using Core::ECS::s_InvalidEntityId;
-
-NWB_IMPL_SCENE_END
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const f32 s_CameraDefaultVerticalFovDegrees = 60.0f;
 const f32 s_CameraDegreesPerHalfTurn = 180.0f;
 const f32 s_CameraVerticalFovRadians = s_CameraDefaultVerticalFovDegrees * (s_PI / s_CameraDegreesPerHalfTurn);
@@ -55,42 +39,34 @@ class ActiveCameraComponent{
 class CameraComponent{
     public f32x4 projection(s_CameraVerticalFovRadians, s_CameraNearPlane, s_CameraFarPlane, s_CameraAutoAspectRatio);
 
-    [inline]
-    public f32 verticalFovRadians() const{
+    public f32 verticalFovRadians()const{
         return this.projection.x;
     }
 
-    [inline]
-    public f32 nearPlane() const{
+    public f32 nearPlane()const{
         return this.projection.y;
     }
 
-    [inline]
-    public f32 farPlane() const{
+    public f32 farPlane()const{
         return this.projection.z;
     }
 
-    [inline]
-    public f32 aspectRatio() const{
+    public f32 aspectRatio()const{
         return this.projection.w;
     }
 
-    [inline]
     public void setVerticalFovRadians(in f32 value){
         this.projection.x = value;
     }
 
-    [inline]
     public void setNearPlane(in f32 value){
         this.projection.y = value;
     }
 
-    [inline]
     public void setFarPlane(in f32 value){
         this.projection.z = value;
     }
 
-    [inline]
     public void setAspectRatio(in f32 value){
         this.projection.w = value;
     }
@@ -101,7 +77,7 @@ enum<u8> LightType{
     enum Directional,
     enum Point,
     enum Spot,
-    enum Count
+    enum kCount
 }
 
 [reflect]
@@ -115,24 +91,20 @@ class LightComponent{
     public LightType type = LightType::Enum::Directional;
     public bool enableCaustics = s_LightEnableCaustics;
 
-    [inline]
-    public f32x4 color() const{
+    public f32x4 color()const{
         return f32x4(this.colorIntensity.x, this.colorIntensity.y, this.colorIntensity.z, 0.0f);
     }
 
-    [inline]
-    public f32 intensity() const{
+    public f32 intensity()const{
         return this.colorIntensity.w;
     }
 
-    [inline]
     public void setColor(in f32x4 value){
         this.colorIntensity.x = value.x;
         this.colorIntensity.y = value.y;
         this.colorIntensity.z = value.z;
     }
 
-    [inline]
     public void setIntensity(in f32 value){
         this.colorIntensity.w = value;
     }

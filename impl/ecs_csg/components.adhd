@@ -2,14 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/global.h>
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [reflect]
 class CsgReceiverComponent{
     public Name receiverGroup = s_NameNone;
@@ -25,8 +17,7 @@ class CsgMeshReceiverComponent<const u8 Kind>{
     public bool affectOpaquePass = true;
     public bool affectTransparentPass = true;
 
-    [inline]
-    public CsgReceiverComponent asReceiver() const{
+    public CsgReceiverComponent asReceiver()const{
         CsgReceiverComponent out;
         out.receiverGroup = this.receiverGroup;
         out.enabled = this.enabled;

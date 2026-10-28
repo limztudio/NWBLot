@@ -2,19 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/global.h>
-#include <impl/assets_material/asset.h>
-
-NWB_IMPL_BEGIN
-
-class Material;
-
-using MaterialLayoutFieldTypeEnum = MaterialLayoutFieldType::Enum;
-inline constexpr MaterialLayoutFieldTypeEnum s_MaterialLayoutFieldTypeNone = MaterialLayoutFieldType::None;
-
-NWB_IMPL_END
-}
+#include <impl/assets_material/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,9 +39,9 @@ class MaterialInstanceParameter{
     public Name blockName = s_NameNone;
     public Name fieldName = s_NameNone;
     [transient]
-    public MaterialLayoutFieldTypeEnum fieldType = s_MaterialLayoutFieldTypeNone;
+    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::Enum::None;
     [transient]
-    public UInt4U value = UInt4U();
+    public u32x4u value;
 }
 
 [reflect]
@@ -62,10 +50,8 @@ class MaterialInstanceComponent{
     public Vector<MaterialInstanceParameter> overrides;
     public u64 revision = 0u;
 
-    [inline]
     public MaterialInstanceComponent(){}
 
-    [inline]
     public MaterialInstanceComponent(in Name interfaceName){
         this.materialInterface = interfaceName;
     }

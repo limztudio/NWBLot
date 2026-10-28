@@ -27,16 +27,16 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
         "#endif\r\n"
         "\r\n"
         "interface IDerivedNode : IBaseNode {\r\n"
-        "    i32 derivedId() const;\r\n"
+        "    i32 derivedId()const;\r\n"
         "}\r\n"
         "interface IBaseNode {\r\n"
-        "    i32 baseId() const;\r\n"
+        "    i32 baseId()const;\r\n"
         "}\r\n"
         "\r\n"
         "class ConcreteNode : IDerivedNode {\r\n"
         "    private i32 secret = 42;\r\n"
-        "    public i32 baseId() const override { return this.secret; }\r\n"
-        "    public i32 derivedId() const override { return this.secret + 1; }\r\n"
+        "    public i32 baseId()const override { return this.secret; }\r\n"
+        "    public i32 derivedId()const override { return this.secret + 1; }\r\n"
         "}\r\n"
         "\r\n"
         "class GrandOuter {\r\n"
@@ -132,7 +132,7 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
 
     static constexpr MStringView s_PrivateMethodSource =
         "class SecretBox {\r\n"
-        "    private i32 calc() const { return 7; }\r\n"
+        "    private i32 calc()const { return 7; }\r\n"
         "}\r\n"
         "i32 leak(in SecretBox b) {\r\n"
         "    return b.calc();\r\n"
@@ -153,7 +153,7 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
 
     static constexpr MStringView s_AutoInterfaceByValueSource =
         "interface INode {\r\n"
-        "    i32 id() const;\r\n"
+        "    i32 id()const;\r\n"
         "}\r\n"
         "void badAuto(in INode n) {\r\n"
         "    auto copy = n;\r\n"
@@ -183,6 +183,7 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
         "enum<u8> Mode {\r\n"
         "    enum Idle,\r\n"
         "    enum Active,\r\n"
+        "    enum kCount,\r\n"
         "}\r\n"
         "\r\n"
         "class Box<T> {\r\n"
@@ -217,9 +218,11 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
 
+    EXPECT_NE(hdrView.find("constexpr usize reflectedEnumeratorCount()noexcept{ return 2u; }"), MStringView::npos);
     EXPECT_NE(hdrView.find("inline constexpr ::NamedEnumCase<Enum> s_NamedEnumCases[] = {"), MStringView::npos);
     EXPECT_NE(hdrView.find("{ \"Idle\", Idle },"), MStringView::npos);
     EXPECT_NE(hdrView.find("{ \"Active\", Active },"), MStringView::npos);
+    EXPECT_EQ(hdrView.find("{ \"kCount\", kCount },"), MStringView::npos);
     EXPECT_NE(hdrView.find("constexpr Span<const ::NamedEnumCase<Enum>> namedEnumCases()noexcept{ return s_NamedEnumCases; }"), MStringView::npos);
     EXPECT_NE(hdrView.find("inline Expected<Enum> parseNamedEnum(const AStringView text)noexcept{ return ::ParseNamedEnumText<Enum>(text, namedEnumCases()); }"), MStringView::npos);
     EXPECT_NE(hdrView.find("constexpr AStringView toNamedEnumText([[maybe_unused]] const Enum value)noexcept"), MStringView::npos);
@@ -263,6 +266,14 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
         "void usePacket(in Packet<Vector<u32>> p) {}\r\n";
     CompileResult serRes(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_TemplateSerializeBadSource, "impl/sim/template_ser_bad.adhd", arena.arena, serRes));
+
+    static constexpr MStringView s_BadEnumCountSource =
+        "enum<u8> BadMode {\r\n"
+        "    enum Idle,\r\n"
+        "    enum Count,\r\n"
+        "}\r\n";
+    CompileResult badEnumCountRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BadEnumCountSource, "impl/sim/bad_enum_count.adhd", arena.arena, badEnumCountRes));
 }
 
 TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfElse){
@@ -272,7 +283,7 @@ TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfEls
         "type EntityId = u32;\r\n"
         "\r\n"
         "interface ILookup {\r\n"
-        "    EntityId resolve(in u32 raw) const;\r\n"
+        "    EntityId resolve(in u32 raw)const;\r\n"
         "}\r\n"
         "\r\n"
         "class LookupTable : ILookup {\r\n"
@@ -284,10 +295,10 @@ TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfEls
         "            this.fallback = secondary;\r\n"
         "        }\r\n"
         "    }\r\n"
-        "    public u32 resolve(in EntityId raw) const override;\r\n"
+        "    public u32 resolve(in EntityId raw)const override;\r\n"
         "}\r\n"
         "\r\n"
-        "EntityId LookupTable::resolve(in u32 raw) const {\r\n"
+        "EntityId LookupTable::resolve(in u32 raw)const {\r\n"
         "    return raw + 1u;\r\n"
         "}\r\n"
         "\r\n"
@@ -322,7 +333,7 @@ TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfEls
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView srcView(res.generatedSource.data(), res.generatedSource.size());
 
-    EXPECT_NE(srcView.find(": fallback(::MakeNotNull(&(primary)))"), MStringView::npos);
+    EXPECT_NE(hdrView.find(": fallback(::MakeNotNull(&(primary)))"), MStringView::npos);
     EXPECT_NE(srcView.find("u32 count = consumeIds(::Move(local));"), MStringView::npos);
     EXPECT_NE(srcView.find("return consumeIds(captured);"), MStringView::npos);
     EXPECT_EQ(srcView.find("return consumeIds(::Move(captured));"), MStringView::npos);
@@ -348,13 +359,13 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
 
     static constexpr MStringView s_Source =
         "interface ISource {\r\n"
-        "    i32 read() const;\r\n"
+        "    i32 read()const;\r\n"
         "    void write(in i32 v);\r\n"
         "}\r\n"
         "\r\n"
         "class SourceImpl : ISource {\r\n"
         "    public i32 value = 0;\r\n"
-        "    public i32 read() const override { return this.value; }\r\n"
+        "    public i32 read()const override { return this.value; }\r\n"
         "    public void write(in i32 v) override { this.value = v; }\r\n"
         "}\r\n"
         "\r\n"
@@ -385,10 +396,10 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
         "const LeafInner kDefaultLeaf();\r\n"
         "\r\n"
         "class OolRunner {\r\n"
-        "    public i32 execute() const;\r\n"
+        "    public i32 execute()const;\r\n"
         "}\r\n"
         "\r\n"
-        "i32 OolRunner::execute() const {\r\n"
+        "i32 OolRunner::execute()const {\r\n"
         "    LeafInner localLeaf();\r\n"
         "    OolPair<u64> pair = OolPair<u64>();\r\n"
         "    return cast<i32>(pair.tag) + localLeaf.v + kDefaultLeaf.v;\r\n"
@@ -442,11 +453,11 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
     EXPECT_LT(leafInnerDefPos, defaultLeafConstPos);
     EXPECT_NE(srcView.find("LeafInner localLeaf{};"), MStringView::npos);
     EXPECT_NE(srcView.find("(ro = ::MakeNotNull(&(b)));"), MStringView::npos);
-    EXPECT_NE(srcView.find("(this->roRef = ::MakeNotNull(&(nextRef)));"), MStringView::npos);
+    EXPECT_NE(hdrView.find("(this->roRef = ::MakeNotNull(&(nextRef)));"), MStringView::npos);
 
     static constexpr MStringView s_DeducedBoundViolationSource =
         "interface ISource {\r\n"
-        "    i32 read() const;\r\n"
+        "    i32 read()const;\r\n"
         "}\r\n"
         "class Unrelated {\r\n"
         "    public i32 x = 0;\r\n"

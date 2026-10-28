@@ -179,6 +179,7 @@ bool CppTypeEmitter::isSmallValueType(MStringView typeName, const SymbolTable& s
     if(typeName == "bool"
         || IsIntegerScalarType(typeName)
         || IsFloatScalarType(typeName)
+        || typeName == "EntityID"
         || typeName == "Name" || typeName == "StringView")
     {
         return true;

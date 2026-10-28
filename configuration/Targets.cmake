@@ -74,7 +74,7 @@ function(nwb_target_sources_standalone_runtime target)
 endfunction()
 
 function(nwb_target_adhd_sources target_name)
-    cmake_parse_arguments(PARSE_ARGV 1 ADHD "" "NAMESPACE" "SOURCES;INCLUDES;DEFINES")
+    cmake_parse_arguments(PARSE_ARGV 1 ADHD "" "NAMESPACE" "SOURCES;INCLUDES;DEFINES;DEPENDS")
 
     if(DEFINED ADHD_UNPARSED_ARGUMENTS AND NOT "${ADHD_UNPARSED_ARGUMENTS}" STREQUAL "")
         message(FATAL_ERROR "nwb_target_adhd_sources: unparsed arguments '${ADHD_UNPARSED_ARGUMENTS}'; pass files under SOURCES")
@@ -116,7 +116,7 @@ function(nwb_target_adhd_sources target_name)
         add_custom_command(
             OUTPUT "${gen_h}" "${gen_cpp}"
             COMMAND $<TARGET_FILE:nwb_adhd_compiler> --input "${adhd_abs}" -o "${out_dir}" -I "${CMAKE_CURRENT_LIST_DIR}" -I "${PROJECT_SOURCE_DIR}" ${extra_args}
-            DEPENDS nwb_adhd_compiler "${adhd_abs}"
+            DEPENDS nwb_adhd_compiler "${adhd_abs}" ${ADHD_DEPENDS}
             COMMENT "Compiling adhd source ${adhd_file}"
             VERBATIM
         )

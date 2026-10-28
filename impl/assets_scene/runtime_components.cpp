@@ -267,7 +267,7 @@ bool LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
     );
     if(!binaryPayload)
         return false;
-    if(binaryPayload->type >= Scene::LightType::Count || binaryPayload->enableCaustics > 1u || binaryPayload->reserved != 0u){
+    if(binaryPayload->type >= Scene::LightType::kCount || binaryPayload->enableCaustics > 1u || binaryPayload->reserved != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("LightComponentAsset::loadComponentPayload failed: invalid light flags"));
         return false;
     }
@@ -291,7 +291,7 @@ bool LightComponentAsset::validatePayload()const{
     constexpr f32 s_ConeCosineMin = -1.0f;
     constexpr f32 s_ConeCosineMax = 1.0f;
     if(
-        component.type >= Scene::LightType::Count
+        component.type >= Scene::LightType::kCount
         || !IsFinite(color.x) || !IsFinite(color.y) || !IsFinite(color.z)
         || color.x < 0.0f || color.y < 0.0f || color.z < 0.0f
         || !IsFinite(intensity) || intensity <= 0.0f

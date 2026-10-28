@@ -29,6 +29,10 @@ MStringView TypeChecker::inferExprTypeName(
         }
         if(const Stmt* gc = m_symbols.findGlobalConstant(expr.text); gc && gc->varType)
             return m_symbols.resolveBaseTypeName(gc->varType->name);
+        if(expr.text == "s_InvalidEntityId")
+            return "EntityID";
+        if(expr.text == "s_NameNone")
+            return "Name";
     }
     else if(expr.kind == ExprKind::ThisMember && ownerClass){
         if(const FieldDecl* field = findClassField(*ownerClass, expr.text)){
@@ -45,6 +49,9 @@ MStringView TypeChecker::inferExprTypeName(
                 return lhsType.substr(6u);
             return lhsType.substr(0u, 3u);
         }
+        u32 unalignedLanes = 0u;
+        if(SymbolTable::isUnalignedVectorType(lhsType, unalignedLanes) && expr.text.size() == 1u)
+            return lhsType.substr(0u, 3u);
         if(expr.isSwizzle)
             return lhsType;
         if(const TypeRef* memberType = inferExprTypeRef(ownerClass, method, expr, scope))
@@ -54,6 +61,9 @@ MStringView TypeChecker::inferExprTypeName(
         const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
         u32 simdLanes = 0u;
         if(SymbolTable::isSimdVectorType(lhsType, simdLanes))
+            return lhsType.substr(0u, 3u);
+        u32 unalignedLanes = 0u;
+        if(SymbolTable::isUnalignedVectorType(lhsType, unalignedLanes))
             return lhsType.substr(0u, 3u);
         if(const TypeRef* indexedType = inferExprTypeRef(ownerClass, method, expr, scope))
             return m_symbols.resolveBaseTypeName(indexedType->name);

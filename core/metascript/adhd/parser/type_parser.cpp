@@ -55,6 +55,22 @@ TypeRef* TypeParser::parseType(const bool allowRefMode, const bool allowAuto){
         if(!m_cursor.expect(TokenType::Less, "expected '<' after 'Func'"))
             return nullptr;
 
+        if(m_cursor.check(TokenType::IntegerLiteral)){
+            const MStringView capText = m_cursor.current().text;
+            u32 capVal = 0u;
+            for(usize i = 0u; i < capText.size(); ++i){
+                const MChar c = capText[i];
+                if(c >= '0' && c <= '9')
+                    capVal = capVal * 10u + static_cast<u32>(c - '0');
+                else
+                    break;
+            }
+            type->inferredCaptureBytes = capVal;
+            m_cursor.advance();
+            if(!m_cursor.expect(TokenType::Comma, "expected ',' after Func capture byte capacity"))
+                return nullptr;
+        }
+
         type->funcReturnType = parseType(true, false);
         if(!type->funcReturnType)
             return nullptr;

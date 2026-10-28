@@ -294,12 +294,12 @@ TEST(AdhdCompiler, SupportsEnumFlagKeywordsBitwiseOperatorsAndSimdLowering){
         "    public AssetRef<TextureAsset> albedoMap = AssetRef<TextureAsset>();\r\n"
         "    public Pair<u8, f32x4> packedPair = Pair<u8, f32x4>();\r\n"
         "    public RenderMask mask = RenderMask::Opaque;\r\n"
-        "    public RenderMask operator|(in RenderMask extra) const {\r\n"
+        "    public RenderMask operator|(in RenderMask extra)const {\r\n"
         "        return this.mask | extra;\r\n"
         "    }\r\n"
-        "    public f32 saturateWeight(in f32 w) const;\r\n"
+        "    public f32 saturateWeight(in f32 w)const;\r\n"
         "}\r\n"
-        "f32 MaterialDef::saturateWeight(in f32 w) const {\r\n"
+        "f32 MaterialDef::saturateWeight(in f32 w)const {\r\n"
         "    return clamp(w, 0.0f, 1.0f);\r\n"
         "}\r\n";
 

@@ -201,6 +201,19 @@ struct Int2U{
         };
         i32 raw[2];
     };
+
+    constexpr Int2U()noexcept
+        : x(0), y(0)
+    {
+    }
+    constexpr Int2U(const i32 xValue, const i32 yValue)noexcept
+        : x(xValue), y(yValue)
+    {
+    }
+    explicit constexpr Int2U(const i32 (&values)[2])noexcept
+        : x(values[0]), y(values[1])
+    {
+    }
 };
 
 struct Int64x2U{
@@ -215,6 +228,19 @@ struct Int64x2U{
         };
         i64 raw[2];
     };
+
+    constexpr Int64x2U()noexcept
+        : x(0), y(0)
+    {
+    }
+    constexpr Int64x2U(const i64 xValue, const i64 yValue)noexcept
+        : x(xValue), y(yValue)
+    {
+    }
+    explicit constexpr Int64x2U(const i64 (&values)[2])noexcept
+        : x(values[0]), y(values[1])
+    {
+    }
 };
 
 struct Int3U{
@@ -231,6 +257,19 @@ struct Int3U{
         };
         i32 raw[3];
     };
+
+    constexpr Int3U()noexcept
+        : x(0), y(0), z(0)
+    {
+    }
+    constexpr Int3U(const i32 xValue, const i32 yValue, const i32 zValue)noexcept
+        : x(xValue), y(yValue), z(zValue)
+    {
+    }
+    explicit constexpr Int3U(const i32 (&values)[3])noexcept
+        : x(values[0]), y(values[1]), z(values[2])
+    {
+    }
 };
 
 struct Int64x3U{
@@ -247,6 +286,19 @@ struct Int64x3U{
         };
         i64 raw[3];
     };
+
+    constexpr Int64x3U()noexcept
+        : x(0), y(0), z(0)
+    {
+    }
+    constexpr Int64x3U(const i64 xValue, const i64 yValue, const i64 zValue)noexcept
+        : x(xValue), y(yValue), z(zValue)
+    {
+    }
+    explicit constexpr Int64x3U(const i64 (&values)[3])noexcept
+        : x(values[0]), y(values[1]), z(values[2])
+    {
+    }
 };
 
 struct Int4U{
@@ -265,6 +317,19 @@ struct Int4U{
         };
         i32 raw[4];
     };
+
+    constexpr Int4U()noexcept
+        : x(0), y(0), z(0), w(0)
+    {
+    }
+    constexpr Int4U(const i32 xValue, const i32 yValue, const i32 zValue, const i32 wValue)noexcept
+        : x(xValue), y(yValue), z(zValue), w(wValue)
+    {
+    }
+    explicit constexpr Int4U(const i32 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
+    {
+    }
 };
 
 struct Int64x4U{
@@ -283,6 +348,19 @@ struct Int64x4U{
         };
         i64 raw[4];
     };
+
+    constexpr Int64x4U()noexcept
+        : x(0), y(0), z(0), w(0)
+    {
+    }
+    constexpr Int64x4U(const i64 xValue, const i64 yValue, const i64 zValue, const i64 wValue)noexcept
+        : x(xValue), y(yValue), z(zValue), w(wValue)
+    {
+    }
+    explicit constexpr Int64x4U(const i64 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
+    {
+    }
 };
 
 struct UInt2U{
@@ -297,6 +375,19 @@ struct UInt2U{
         };
         u32 raw[2];
     };
+
+    constexpr UInt2U()noexcept
+        : x(0u), y(0u)
+    {
+    }
+    constexpr UInt2U(const u32 xValue, const u32 yValue)noexcept
+        : x(xValue), y(yValue)
+    {
+    }
+    explicit constexpr UInt2U(const u32 (&values)[2])noexcept
+        : x(values[0]), y(values[1])
+    {
+    }
 };
 
 struct UInt64x2U{
@@ -311,6 +402,19 @@ struct UInt64x2U{
         };
         u64 raw[2];
     };
+
+    constexpr UInt64x2U()noexcept
+        : x(0u), y(0u)
+    {
+    }
+    constexpr UInt64x2U(const u64 xValue, const u64 yValue)noexcept
+        : x(xValue), y(yValue)
+    {
+    }
+    explicit constexpr UInt64x2U(const u64 (&values)[2])noexcept
+        : x(values[0]), y(values[1])
+    {
+    }
 };
 
 struct UInt3U{
@@ -327,6 +431,19 @@ struct UInt3U{
         };
         u32 raw[3];
     };
+
+    constexpr UInt3U()noexcept
+        : x(0u), y(0u), z(0u)
+    {
+    }
+    constexpr UInt3U(const u32 xValue, const u32 yValue, const u32 zValue)noexcept
+        : x(xValue), y(yValue), z(zValue)
+    {
+    }
+    explicit constexpr UInt3U(const u32 (&values)[3])noexcept
+        : x(values[0]), y(values[1]), z(values[2])
+    {
+    }
 };
 
 struct UInt64x3U{
@@ -343,6 +460,19 @@ struct UInt64x3U{
         };
         u64 raw[3];
     };
+
+    constexpr UInt64x3U()noexcept
+        : x(0u), y(0u), z(0u)
+    {
+    }
+    constexpr UInt64x3U(const u64 xValue, const u64 yValue, const u64 zValue)noexcept
+        : x(xValue), y(yValue), z(zValue)
+    {
+    }
+    explicit constexpr UInt64x3U(const u64 (&values)[3])noexcept
+        : x(values[0]), y(values[1]), z(values[2])
+    {
+    }
 };
 
 struct UInt4U{
@@ -361,6 +491,19 @@ struct UInt4U{
         };
         u32 raw[4];
     };
+
+    constexpr UInt4U()noexcept
+        : x(0u), y(0u), z(0u), w(0u)
+    {
+    }
+    constexpr UInt4U(const u32 xValue, const u32 yValue, const u32 zValue, const u32 wValue)noexcept
+        : x(xValue), y(yValue), z(zValue), w(wValue)
+    {
+    }
+    explicit constexpr UInt4U(const u32 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
+    {
+    }
 };
 
 struct UInt64x4U{
@@ -379,6 +522,19 @@ struct UInt64x4U{
         };
         u64 raw[4];
     };
+
+    constexpr UInt64x4U()noexcept
+        : x(0u), y(0u), z(0u), w(0u)
+    {
+    }
+    constexpr UInt64x4U(const u64 xValue, const u64 yValue, const u64 zValue, const u64 wValue)noexcept
+        : x(xValue), y(yValue), z(zValue), w(wValue)
+    {
+    }
+    explicit constexpr UInt64x4U(const u64 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
+    {
+    }
 };
 
 

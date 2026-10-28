@@ -205,6 +205,14 @@ bool TypeChecker::checkExpr(
                     }
                 }
             }
+            else if(u32 unalignedLanes = 0u; SymbolTable::isUnalignedVectorType(baseType, unalignedLanes)){
+                bool isSwizzlePattern = false;
+                bool validLanes = true;
+                if(!CheckSwizzlePattern(expr.text, unalignedLanes, isSwizzlePattern, validLanes) || !isSwizzlePattern || !validLanes || expr.text.size() != 1u){
+                    reportError(errors, expr.span, "invalid component access on unaligned vector type; only single-lane .x/.y/.z/.w or .r/.g/.b/.a within vector width is supported");
+                    ok = false;
+                }
+            }
             else if(const ClassDecl* targetCls = m_symbols.findClass(baseType)){
                 const FieldDecl* field = findClassField(*targetCls, expr.text);
                 const MethodDecl* memberMethod = findClassMethod(*targetCls, expr.text);

@@ -170,6 +170,91 @@ void VisitClassTopo(
     outSorted.push_back(cur);
 }
 
+[[nodiscard]] bool HasTemplateParamName(const MVector<TemplateParamDecl>* params, const MStringView name)noexcept{
+    if(!params)
+        return false;
+    for(const TemplateParamDecl& p : *params){
+        if(p.name == name)
+            return true;
+    }
+    return false;
+}
+
+void CollectExternalForwardDeclClasses(
+    const TypeRef& type,
+    const SymbolTable& symbols,
+    const MVector<TemplateParamDecl>* outerTemplateParams,
+    const MVector<TemplateParamDecl>* innerTemplateParams,
+    MVector<MStringView>& outNames,
+    const bool inRefOrAssetContext = false,
+    const u32 depth = 0u
+){
+    if(depth > 16u || type.isAuto)
+        return;
+
+    if(type.isFuncType){
+        if(type.funcReturnType){
+            CollectExternalForwardDeclClasses(
+                *type.funcReturnType,
+                symbols,
+                outerTemplateParams,
+                innerTemplateParams,
+                outNames,
+                type.funcReturnType->refMode != ParamPassingMode::None,
+                depth + 1u
+            );
+        }
+        for(const FuncParamType& fp : type.funcParams){
+            if(fp.type){
+                CollectExternalForwardDeclClasses(
+                    *fp.type,
+                    symbols,
+                    outerTemplateParams,
+                    innerTemplateParams,
+                    outNames,
+                    true,
+                    depth + 1u
+                );
+            }
+        }
+        return;
+    }
+
+    const bool isRefOrAsset = inRefOrAssetContext || (type.refMode != ParamPassingMode::None);
+    if(isRefOrAsset
+        && !type.name.empty()
+        && type.templateArgs.empty()
+        && !HasTemplateParamName(outerTemplateParams, type.name)
+        && !HasTemplateParamName(innerTemplateParams, type.name)
+        && !IsKnownConcreteTypeName(type.name, symbols))
+    {
+        bool alreadyPresent = false;
+        for(const MStringView existing : outNames){
+            if(existing == type.name){
+                alreadyPresent = true;
+                break;
+            }
+        }
+        if(!alreadyPresent)
+            outNames.push_back(type.name);
+    }
+
+    const bool childInAssetContext = (type.name == "AssetRef");
+    for(const TypeArg& targ : type.templateArgs){
+        if(targ.type){
+            CollectExternalForwardDeclClasses(
+                *targ.type,
+                symbols,
+                outerTemplateParams,
+                innerTemplateParams,
+                outNames,
+                childInAssetContext || (targ.type->refMode != ParamPassingMode::None),
+                depth + 1u
+            );
+        }
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -196,6 +281,11 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     out.append("#include <core/alloc/general.h>\r\n");
     out.append("#include <core/alloc/scratch.h>\r\n");
     out.append("#include <core/assets/ref.h>\r\n");
+    out.append("#include <core/ecs/entity_id.h>\r\n");
+    if(namespacePath == "NWB::Impl::Scene")
+        out.append("#include <impl/ecs_scene/global.h>\r\n");
+    else if(namespacePath.size() >= 9u && namespacePath.substr(0u, 9u) == "NWB::Impl")
+        out.append("#include <impl/global.h>\r\n");
 
     for(const MString& inc : unit.includedAdhdFiles){
         const MStringView incView = StripAdhdExtension(MStringView(inc.data(), inc.size()));
@@ -225,7 +315,61 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             emitEnumDecl(out, *enumDecl);
     }
 
+    MVector<MStringView> externalForwardClasses(m_arena);
+    for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
+        if(aliasDecl && !aliasDecl->isImported && aliasDecl->aliasedType)
+            __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*aliasDecl->aliasedType, m_symbols, &aliasDecl->templateParams, nullptr, externalForwardClasses);
+    }
+    for(const InterfaceDecl* ifaceDecl : unit.interfaces){
+        if(!ifaceDecl || ifaceDecl->isImported)
+            continue;
+        for(const MethodDecl* m : ifaceDecl->methods){
+            if(!m)
+                continue;
+            if(m->returnType)
+                __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*m->returnType, m_symbols, &ifaceDecl->templateParams, &m->templateParams, externalForwardClasses);
+            for(const ParamDecl& p : m->params){
+                if(p.type)
+                    __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*p.type, m_symbols, &ifaceDecl->templateParams, &m->templateParams, externalForwardClasses, true);
+            }
+        }
+    }
+    for(const ClassDecl* classDecl : unit.classes){
+        if(!classDecl || classDecl->isImported)
+            continue;
+        for(const FieldDecl* f : classDecl->fields){
+            if(f && f->type)
+                __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*f->type, m_symbols, &classDecl->templateParams, nullptr, externalForwardClasses);
+        }
+        for(const MethodDecl* m : classDecl->methods){
+            if(!m)
+                continue;
+            if(m->returnType)
+                __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*m->returnType, m_symbols, &classDecl->templateParams, &m->templateParams, externalForwardClasses);
+            for(const ParamDecl& p : m->params){
+                if(p.type)
+                    __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*p.type, m_symbols, &classDecl->templateParams, &m->templateParams, externalForwardClasses, true);
+            }
+        }
+    }
+    for(const MethodDecl* fn : unit.freeFunctions){
+        if(!fn || fn->isImported)
+            continue;
+        if(fn->returnType)
+            __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*fn->returnType, m_symbols, &fn->templateParams, nullptr, externalForwardClasses);
+        for(const ParamDecl& p : fn->params){
+            if(p.type)
+                __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*p.type, m_symbols, &fn->templateParams, nullptr, externalForwardClasses, true);
+        }
+    }
+
     bool emittedForwardDecl = false;
+    for(const MStringView extCls : externalForwardClasses){
+        emittedForwardDecl = true;
+        out.append("class ");
+        out.append(extCls.data(), extCls.size());
+        out.append(";\r\n");
+    }
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
         if(!ifaceDecl || ifaceDecl->isImported)
             continue;

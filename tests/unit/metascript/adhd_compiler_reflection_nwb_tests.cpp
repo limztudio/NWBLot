@@ -28,7 +28,7 @@ TEST(AdhdCompiler, SupportsBlockCommentsNumericLiteralMacroSafetyConstOverloadLi
         "#define x 777\r\n"
         "class DualAccessor {\r\n"
         "    private i32 secret = 5;\r\n"
-        "    public i32 readVal(in usize idx) const;\r\n"
+        "    public i32 readVal(in usize idx)const;\r\n"
         "    private i32 readVal(in usize idx);\r\n"
         "}\r\n"
         "[reflect]\r\n"
@@ -36,7 +36,7 @@ TEST(AdhdCompiler, SupportsBlockCommentsNumericLiteralMacroSafetyConstOverloadLi
         "    this.secret += cast<i32>(idx);\r\n"
         "    return this.secret;\r\n"
         "}\r\n"
-        "i32 DualAccessor::readVal(in usize idx) const {\r\n"
+        "i32 DualAccessor::readVal(in usize idx)const {\r\n"
         "    f32 scale = 1.0f;\r\n"
         "    u32 mask = 0x10u + 10u;\r\n"
         "    return this.secret + cast<i32>(idx) + cast<i32>(scale) + cast<i32>(mask);\r\n"
@@ -57,7 +57,7 @@ TEST(AdhdCompiler, SupportsBlockCommentsNumericLiteralMacroSafetyConstOverloadLi
     EXPECT_EQ(MStringView(relNs.data(), relNs.size()), "NWB::Impl::_2dScene");
 
     static constexpr MStringView s_DuplicateAttrSource =
-        "[inline, inline]\r\n"
+        "[reflect, reflect]\r\n"
         "void dupAttr() {}\r\n";
     CompileResult dupAttrRes(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_DuplicateAttrSource, "impl/sim/dup_attr.adhd", arena.arena, dupAttrRes));
@@ -131,8 +131,8 @@ TEST(AdhdCompiler, SupportsReturnFuncCapturePropagationEnumAliasScopeOverloadedI
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
 
     EXPECT_NE(hdrView.find("::InplaceFunction<64u, i32(i32)> makeAdder(const i32 base)noexcept;"), MStringView::npos);
-    EXPECT_NE(cppView.find("return NWB_TEXT(\"content/default.nwb\");"), MStringView::npos);
-    EXPECT_NE(cppView.find("return StageMask::Flag::Active;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("return NWB_TEXT(\"content/default.nwb\");"), MStringView::npos);
+    EXPECT_NE(hdrView.find("return StageMask::Flag::Active;"), MStringView::npos);
 
     static constexpr MStringView s_MutateGlobalConstSource =
         "const u32 kImmutable = 10u;\r\n"
@@ -178,7 +178,7 @@ TEST(AdhdCompiler, SupportsReferenceReturnTypesConstantTemplateArgsAndOptionalSi
         "    u32 run();\r\n"
         "}\r\n"
         "interface IWorkerProvider {\r\n"
-        "    in IWorker currentWorker() const;\r\n"
+        "    in IWorker currentWorker()const;\r\n"
         "    mut IWorker mutableWorker();\r\n"
         "}\r\n"
         "class SimpleWorker : IWorker {\r\n"
@@ -197,7 +197,7 @@ TEST(AdhdCompiler, SupportsReferenceReturnTypesConstantTemplateArgsAndOptionalSi
         "class WorkerHost : IWorkerProvider {\r\n"
         "    public SimpleWorker worker;\r\n"
         "    public BatchHolder<u32, kBatchCap> batch;\r\n"
-        "    public in IWorker currentWorker() const override {\r\n"
+        "    public in IWorker currentWorker()const override {\r\n"
         "        return this.worker;\r\n"
         "    }\r\n"
         "    public mut IWorker mutableWorker() override {\r\n"
@@ -226,10 +226,10 @@ TEST(AdhdCompiler, SupportsReferenceReturnTypesConstantTemplateArgsAndOptionalSi
 
     EXPECT_NE(hdrView.find("virtual ::NotNull<const IWorker*> currentWorker()const noexcept = 0;"), MStringView::npos);
     EXPECT_NE(hdrView.find("virtual ::NotNull<IWorker*> mutableWorker()noexcept = 0;"), MStringView::npos);
-    EXPECT_NE(hdrView.find("::NotNull<const IWorker*> selectWorker(const WorkerHost& host)noexcept;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("inline ::NotNull<const IWorker*> selectWorker(const WorkerHost& host)noexcept{"), MStringView::npos);
     EXPECT_NE(hdrView.find("FixedVector<T, Cap> items;"), MStringView::npos);
-    EXPECT_NE(cppView.find("return ::MakeNotNull(&(this->worker));"), MStringView::npos);
-    EXPECT_NE(cppView.find("return ::MakeNotNull(&((*host.currentWorker())));"), MStringView::npos);
+    EXPECT_NE(hdrView.find("return ::MakeNotNull(&(this->worker));"), MStringView::npos);
+    EXPECT_NE(hdrView.find("return ::MakeNotNull(&((*host.currentWorker())));"), MStringView::npos);
     EXPECT_NE(cppView.find("return getter(host)->run();"), MStringView::npos);
     EXPECT_NE(cppView.find("return host.mutableWorker()->run();"), MStringView::npos);
     EXPECT_NE(hdrView.find("this->boundsTint = Float4(static_cast<f32>(__f->asList()[0].toDouble())"), MStringView::npos);
@@ -416,7 +416,7 @@ TEST(AdhdCompiler, SupportsParameterizedInterfaceBoundsInheritedTemplateInterfac
         "    public u32 vertexCount = 0u;\r\n"
         "}\r\n"
         "interface IBaseStream<T> {\r\n"
-        "    T sample() const;\r\n"
+        "    T sample()const;\r\n"
         "}\r\n"
         "interface IDerivedStream<U> : IBaseStream<U> {\r\n"
         "    void push(in U item);\r\n"
@@ -424,7 +424,7 @@ TEST(AdhdCompiler, SupportsParameterizedInterfaceBoundsInheritedTemplateInterfac
         "type VecStreamIn = in IDerivedStream<f32x4>;\r\n"
         "class VecStreamImpl : IDerivedStream<f32x4> {\r\n"
         "    public f32x4 current = f32x4(1.0f);\r\n"
-        "    public f32x4 sample() const override {\r\n"
+        "    public f32x4 sample()const override {\r\n"
         "        return this.current;\r\n"
         "    }\r\n"
         "    public void push(in f32x4 item) override {\r\n"
@@ -433,7 +433,7 @@ TEST(AdhdCompiler, SupportsParameterizedInterfaceBoundsInheritedTemplateInterfac
         "}\r\n"
         "class Holder<T> {\r\n"
         "    public T value;\r\n"
-        "    public T get() const {\r\n"
+        "    public T get()const {\r\n"
         "        return this.value;\r\n"
         "    }\r\n"
         "}\r\n"
@@ -481,14 +481,14 @@ TEST(AdhdCompiler, SupportsParameterizedInterfaceBoundsInheritedTemplateInterfac
     EXPECT_NE(hdrView.find("::SIMDVectorSingle __adhd_simd_b = ::LoadFloat(h.get());"), MStringView::npos);
     EXPECT_NE(hdrView.find("::SIMDVectorSingle __adhd_simd_c = ::LoadFloat(opt.value());"), MStringView::npos);
     EXPECT_NE(hdrView.find("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"lambda\"));"), MStringView::npos);
-    EXPECT_NE(cppView.find("StreamConsumer::StreamConsumer(const VecStreamIn& s)noexcept : stream(::MakeNotNull(&((*s))))"), MStringView::npos);
+    EXPECT_NE(hdrView.find("StreamConsumer(const VecStreamIn& s)noexcept : stream(::MakeNotNull(&((*s))))"), MStringView::npos);
 
     static constexpr MStringView s_WrongParameterizedBoundSource =
         "interface IStream<T> {\r\n"
-        "    T read() const;\r\n"
+        "    T read()const;\r\n"
         "}\r\n"
         "class IntStream : IStream<i32> {\r\n"
-        "    public i32 read() const override { return 0; }\r\n"
+        "    public i32 read()const override { return 0; }\r\n"
         "}\r\n"
         "f32 consumeFloat<S : IStream<f32>>(in S s) {\r\n"
         "    return s.read();\r\n"
@@ -582,6 +582,40 @@ TEST(AdhdCompiler, SupportsSelfDefaultedNameBinarySerializeNameHashAndContainerE
     EXPECT_NE(cppView.find("this->sub.serializeBinary(outBuffer + offset, bufferCapacity - offset)"), MStringView::npos);
     EXPECT_NE(cppView.find("this->sub.deserializeBinary(inBuffer + offset, bufferSize - offset)"), MStringView::npos);
     EXPECT_NE(cppView.find("Name localName{};"), MStringView::npos);
+}
+
+TEST(AdhdCompiler, SupportsBuiltInEntityIdUnalignedVectorsSizedFuncAndExternalForwardDecls){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "type ExternalCallback = Func<64u, void(mut ExternalContext)>;\r\n"
+        "[reflect]\r\n"
+        "class NativeFreeComponent {\r\n"
+        "    public AssetRef<ExternalAsset> asset;\r\n"
+        "    public EntityID owner = s_InvalidEntityId;\r\n"
+        "    public u32x4u packedValue;\r\n"
+        "    public f32x2u uv(0.25f, 0.75f);\r\n"
+        "    [transient]\r\n"
+        "    public ExternalCallback callback;\r\n"
+        "    public f32 sumUv()const {\r\n"
+        "        return this.uv.x + this.uv.y;\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/native_free.adhd", arena.arena, res, nullptr, "NWB::Impl"));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    EXPECT_NE(hdrView.find("#include <core/ecs/entity_id.h>"), MStringView::npos);
+    EXPECT_NE(hdrView.find("#include <impl/global.h>"), MStringView::npos);
+    EXPECT_NE(hdrView.find("class ExternalContext;\r\n"), MStringView::npos);
+    EXPECT_NE(hdrView.find("class ExternalAsset;\r\n"), MStringView::npos);
+    EXPECT_NE(hdrView.find("using ExternalCallback = ::InplaceFunction<64u, void(ExternalContext&)>;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("::NWB::Core::ECS::EntityID owner = ::NWB::Core::ECS::s_InvalidEntityId;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("UInt4U packedValue{};"), MStringView::npos);
+    EXPECT_NE(hdrView.find("Float2U uv{0.25f, 0.75f};"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->owner = ::NWB::Core::ECS::EntityID(static_cast<u32>(__f->asInteger()));"), MStringView::npos);
+    EXPECT_NE(hdrView.find("this->packedValue = UInt4U(static_cast<u32>(__f->asList()[0].asInteger())"), MStringView::npos);
 }
 
 

@@ -94,7 +94,7 @@ TEST(AdhdCompiler, SupportsCustomClassSwitchEnumVarScopeAndConstSafety){
         "}\r\n"
         "class TagKey {\r\n"
         "    public u32 id = 0;\r\n"
-        "    public bool operator==(in TagKey rhs) const {\r\n"
+        "    public bool operator==(in TagKey rhs)const {\r\n"
         "        return this.id == rhs.id;\r\n"
         "    }\r\n"
         "}\r\n"
@@ -135,11 +135,11 @@ TEST(AdhdCompiler, EnforcesTemplateBoundMethodCallsAndEmitsInstantiationReflecti
     static constexpr MStringView s_ValidSource =
         "interface IComponent {\r\n"
         "    void step(in f32 dt);\r\n"
-        "    u32 id() const;\r\n"
+        "    u32 id()const;\r\n"
         "}\r\n"
         "class Converter {\r\n"
         "    private Vector<i32> m_buffer(8);\r\n"
-        "    public Out convert<Out>(in u32 x) const {\r\n"
+        "    public Out convert<Out>(in u32 x)const {\r\n"
         "        return cast<Out>(x);\r\n"
         "    }\r\n"
         "}\r\n"
@@ -190,7 +190,7 @@ TEST(AdhdCompiler, EnforcesTemplateBoundMethodCallsAndEmitsInstantiationReflecti
 
     static constexpr MStringView s_MismatchedOverrideConst =
         "interface IComponent {\r\n"
-        "    u32 id() const;\r\n"
+        "    u32 id()const;\r\n"
         "}\r\n"
         "class BadComp : IComponent {\r\n"
         "    public u32 id() override {\r\n"
@@ -228,7 +228,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
     EXPECT_NE(hdrView.find("#include \"shared_service.adhd.h\""), MStringView::npos);
     EXPECT_EQ(hdrView.find("class SharedService final"), MStringView::npos);
     EXPECT_NE(hdrView.find("::NotNull<IStore<i32>*> m_store;"), MStringView::npos);
-    EXPECT_NE(cppView.find("StoreClient::StoreClient(IStore<i32>& store)noexcept : m_store(::MakeNotNull(&(store)))"), MStringView::npos);
+    EXPECT_NE(hdrView.find("StoreClient(IStore<i32>& store)noexcept : m_store(::MakeNotNull(&(store)))"), MStringView::npos);
     EXPECT_NE(cppView.find("this->m_store->put(v);"), MStringView::npos);
     EXPECT_NE(cppView.find("i32 SharedService::accumulate(const i32 delta)noexcept"), MStringView::npos);
     EXPECT_EQ(cppView.find("SharedService::reflectedFieldCount"), MStringView::npos);
@@ -247,7 +247,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
     static constexpr MStringView s_InvalidOperatorArity =
         "class Mask {\r\n"
         "    public u32 bits = 0;\r\n"
-        "    public Mask operator~(in Mask other) const {\r\n"
+        "    public Mask operator~(in Mask other)const {\r\n"
         "        return Mask();\r\n"
         "    }\r\n"
         "}\r\n";
@@ -288,7 +288,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
     static constexpr MStringView s_UnknownThisMemberSource =
         "class KnownClass {\r\n"
         "    public u32 count = 0;\r\n"
-        "    public u32 readBad() const {\r\n"
+        "    public u32 readBad()const {\r\n"
         "        return this.missingField;\r\n"
         "    }\r\n"
         "}\r\n";

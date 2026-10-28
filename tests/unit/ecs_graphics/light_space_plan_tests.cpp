@@ -114,7 +114,7 @@ TEST(LightSpacePlan, RejectsInvalidIdentityWithoutPublishingPartialPlan){
     requests[1].shadowSlot = 8u;
     EXPECT_FALSE(BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(requests, s_ExpectedDualCount), Limit<u32>::s_Max, 20u));
     requests[1].shadowSlot = 1u;
-    requests[1].type = Scene::LightType::Count;
+    requests[1].type = Scene::LightType::kCount;
     EXPECT_FALSE(BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(requests, s_ExpectedDualCount), Limit<u32>::s_Max, 20u));
 }
 

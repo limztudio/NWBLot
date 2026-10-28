@@ -11,7 +11,7 @@
 #pragma once
 
 
-#include "joint_types.h"
+#include <impl/assets_skeleton/joint_types.adhd.h>
 
 #include <core/assets/paths.h>
 #include <core/common/log.h>

@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_ui/components.adhd.h>
+#include "paint_context.h"
 #include "edit_box_host.h"
 #include "frame_delta.h"
 #include "skin_selection.h"

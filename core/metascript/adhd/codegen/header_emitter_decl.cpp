@@ -70,21 +70,31 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         out.append("    constexpr Enum& operator&=(Enum& a, const Enum b)noexcept{ a = (a & b); return a; }\r\n");
         out.append("    constexpr Enum& operator^=(Enum& a, const Enum b)noexcept{ a = (a ^ b); return a; }\r\n");
     }
+    usize reflectedEntryCount = 0u;
+    for(const EnumEntry& entry : decl.entries){
+        if(entry.name != "kCount")
+            ++reflectedEntryCount;
+    }
     out.append("    [[nodiscard]] constexpr usize reflectedEnumeratorCount()noexcept{ return ");
-    AppendAdhdUnsigned(out, decl.entries.size());
+    AppendAdhdUnsigned(out, reflectedEntryCount);
     out.append("u; }\r\n");
     out.append("    [[nodiscard]] constexpr AStringView reflectedEnumeratorName([[maybe_unused]] const usize index)noexcept{\r\n");
-    for(usize i = 0u; i < decl.entries.size(); ++i){
+    usize reflectedIndex = 0u;
+    for(const EnumEntry& entry : decl.entries){
+        if(entry.name == "kCount")
+            continue;
         out.append("        if(index == ");
-        AppendAdhdUnsigned(out, i);
+        AppendAdhdUnsigned(out, reflectedIndex++);
         out.append("u) return \"");
-        out.append(decl.entries[i].name.data(), decl.entries[i].name.size());
+        out.append(entry.name.data(), entry.name.size());
         out.append("\";\r\n");
     }
     out.append("        return {};\r\n    }\r\n");
-    if(!decl.entries.empty()){
+    if(reflectedEntryCount > 0u){
         out.append("    inline constexpr ::NamedEnumCase<Enum> s_NamedEnumCases[] = {\r\n");
         for(const EnumEntry& entry : decl.entries){
+            if(entry.name == "kCount")
+                continue;
             out.append("        { \"");
             out.append(entry.name.data(), entry.name.size());
             out.append("\", ");
@@ -200,7 +210,7 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
             out.push_back('(');
             u32 ctorVecLanes = 0u;
             const bool isScalarSplatCtor = !baseConstType.empty()
-                && m_symbols.isSimdVectorType(baseConstType, ctorVecLanes)
+                && (m_symbols.isSimdVectorType(baseConstType, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseConstType, ctorVecLanes))
                 && c.arguments.size() == 1u && c.arguments[0]
                 && c.arguments[0]->resolvedSimdType.empty();
             if(isScalarSplatCtor){
@@ -232,11 +242,7 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
 void HeaderEmitter::emitFreeFunctionDecl(MString& out, const MethodDecl& fn)const{
     const bool emitInlineBody = fn.isInline || !fn.templateParams.empty();
     m_typeEmitter.emitTemplateHeaderCpp(out, fn.templateParams);
-    if(fn.isInline)
-        out.append("NWB_INLINE ");
-    else if(fn.isNoInline)
-        out.append("NWB_NOINLINE ");
-    else if(emitInlineBody)
+    if(emitInlineBody)
         out.append("inline ");
 
     m_typeEmitter.emitMethodSignature(out, nullptr, fn, false);

@@ -50,6 +50,77 @@ namespace __hidden_adhd_type_checker{
     return false;
 }
 
+[[nodiscard]] bool ExprUsesOutOfLineConstruct(const Expr* expr)noexcept{
+    if(!expr)
+        return false;
+    if(!expr->resolvedSimdType.empty() || expr->kind == ExprKind::Lambda)
+        return true;
+    if(expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier){
+        const MStringView callee = expr->lhs->text;
+        if(callee == "assert" || callee == "log_info" || callee == "log_warning" || callee == "log_error" || callee == "log_debug" || callee == "log_essential_info")
+            return true;
+    }
+    if(ExprUsesOutOfLineConstruct(expr->lhs) || ExprUsesOutOfLineConstruct(expr->rhs))
+        return true;
+    for(const Expr* arg : expr->arguments){
+        if(ExprUsesOutOfLineConstruct(arg))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool StmtListIsAutoInlineable(const MVector<Stmt*>& stmts, u32& inOutCount)noexcept{
+    for(const Stmt* s : stmts){
+        if(!s)
+            continue;
+        ++inOutCount;
+        if(inOutCount > 16u)
+            return false;
+        switch(s->kind){
+        case StmtKind::Return:
+            if(ExprUsesOutOfLineConstruct(s->expr))
+                return false;
+            break;
+        case StmtKind::ExprStmt:
+            if(!s->expr || s->expr->kind != ExprKind::Binary || s->expr->op != TokenType::Equal)
+                return false;
+            if(!s->expr->lhs || s->expr->lhs->kind != ExprKind::ThisMember)
+                return false;
+            if(ExprUsesOutOfLineConstruct(s->expr->lhs) || ExprUsesOutOfLineConstruct(s->expr->rhs))
+                return false;
+            break;
+        case StmtKind::If:
+            if(ExprUsesOutOfLineConstruct(s->condition))
+                return false;
+            if(!StmtListIsAutoInlineable(s->statements, inOutCount) || !StmtListIsAutoInlineable(s->elseStatements, inOutCount))
+                return false;
+            break;
+        case StmtKind::Switch:
+            if(ExprUsesOutOfLineConstruct(s->expr))
+                return false;
+            for(const SwitchCase& sc : s->switchCases){
+                if(ExprUsesOutOfLineConstruct(sc.matchExpr))
+                    return false;
+                if(!StmtListIsAutoInlineable(sc.statements, inOutCount))
+                    return false;
+            }
+            break;
+        default:
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool ShouldAutoInlineCallable(const MethodDecl& fn)noexcept{
+    if(!fn.hasBody || fn.isOutOfLine || fn.usesScratchArena || fn.usesTaskScope)
+        return false;
+    if(!fn.templateParams.empty())
+        return true;
+    u32 stmtCount = 0u;
+    return StmtListIsAutoInlineable(fn.body, stmtCount);
+}
+
 [[nodiscard]] const MethodDecl* FindScoredClassCallable(
     const ClassDecl& classDecl,
     const MStringView name,
@@ -101,6 +172,10 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
         if(!enumDecl)
             continue;
         for(usize i = 0u; i < enumDecl->entries.size(); ++i){
+            if(enumDecl->entries[i].name == "Count"){
+                reportError(errors, enumDecl->entries[i].span, "use 'kCount' instead of 'Count' for enum count sentries");
+                ok = false;
+            }
             for(usize j = 0u; j < i; ++j){
                 if(enumDecl->entries[j].name == enumDecl->entries[i].name){
                     reportError(errors, enumDecl->entries[i].span, "duplicate enumerator name in enum");
@@ -174,6 +249,10 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
     for(ClassDecl* classDecl : unit.classes){
         if(!checkClassDecl(*classDecl, errors))
             ok = false;
+        for(MethodDecl* m : classDecl->methods){
+            if(m)
+                m->isInline = __hidden_adhd_type_checker::ShouldAutoInlineCallable(*m);
+        }
     }
 
     for(MethodDecl* fn : unit.freeFunctions){
@@ -186,12 +265,15 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
             }
             continue;
         }
-        if(fn->isImported)
+        if(fn->isImported){
+            fn->isInline = __hidden_adhd_type_checker::ShouldAutoInlineCallable(*fn);
             continue;
+        }
         if(!m_parallelValidator.validateMethod(*fn, errors))
             ok = false;
         if(!checkMethodBody(nullptr, *fn, errors))
             ok = false;
+        fn->isInline = __hidden_adhd_type_checker::ShouldAutoInlineCallable(*fn);
     }
 
     if(!m_layoutOptimizer.optimizeTranslationUnit(unit, errors))
@@ -301,18 +383,11 @@ bool TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError
             matched->templateParams = ool->templateParams;
         matched->params = ool->params;
         matched->hasBody = true;
+        matched->isOutOfLine = true;
         matched->body = ool->body;
-        if(ool->isInline)
-            matched->isInline = true;
-        if(ool->isNoInline)
-            matched->isNoInline = true;
         if(ool->isReflect){
             matched->isReflect = true;
             cls->isReflect = true;
-        }
-        if(matched->isInline && matched->isNoInline){
-            reportError(errors, ool->span, "callable cannot be marked both '[inline]' and '[noinline]'");
-            ok = false;
         }
         if(!ool->isImported)
             matched->isImported = false;
@@ -342,17 +417,10 @@ bool TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError
                 if(!prev->isImported){
                     prev->params = fn->params;
                     prev->hasBody = true;
+                    prev->isOutOfLine = true;
                     prev->body = fn->body;
-                    if(fn->isInline)
-                        prev->isInline = true;
-                    if(fn->isNoInline)
-                        prev->isNoInline = true;
                     if(fn->isReflect)
                         prev->isReflect = true;
-                    if(prev->isInline && prev->isNoInline){
-                        reportError(errors, fn->span, "callable cannot be marked both '[inline]' and '[noinline]'");
-                        ok = false;
-                    }
                     fn->isImported = true;
                     fn->hasBody = false;
                 }

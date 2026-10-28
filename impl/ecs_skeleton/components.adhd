@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/global.h>
-}
+#include <impl/assets_skeleton/joint_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,23 +14,22 @@ enum<u32> SkeletonSkinningMode{
     enum DualQuaternion = 1u
 }
 
-[inline]
 bool ValidSkeletonSkinningMode(in u32 mode){
     return mode == cast<u32>(SkeletonSkinningMode::Enum::LinearBlend) || mode == cast<u32>(SkeletonSkinningMode::Enum::DualQuaternion);
 }
 
-const u32 s_SkeletonRootParent = 4294967295u;
+const u32 s_SkeletonRootParent = s_SkeletonInvalidJointIndex;
 
 [reflect]
 class SkeletonJointPaletteComponent{
-    public Vector<f32x3x4> joints;
+    public Vector<SkeletonJointMatrix> joints;
     public u32 skinningMode = cast<u32>(SkeletonSkinningMode::Enum::LinearBlend);
 }
 
 [reflect]
 class SkeletonPoseComponent{
     public Vector<u32> parentJoints;
-    public Vector<f32x3x4> localJoints;
+    public Vector<SkeletonJointMatrix> localJoints;
     public u32 skinningMode = cast<u32>(SkeletonSkinningMode::Enum::LinearBlend);
 }
 

@@ -116,7 +116,7 @@ TypeRef* SubstituteAliasTypeRef(
     cloned->isConst = method->isConst;
     cloned->isOverride = method->isOverride;
     cloned->isInline = method->isInline;
-    cloned->isNoInline = method->isNoInline;
+    cloned->isOutOfLine = method->isOutOfLine;
     cloned->isReflect = method->isReflect;
     return cloned;
 }
@@ -367,6 +367,10 @@ MStringView SymbolTable::resolveBaseTypeName(MStringView typeName)const noexcept
 }
 
 bool SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
+    if(const TypeAliasDecl* aliasDecl = findTypeAlias(typeName)){
+        if(aliasDecl->aliasedType && aliasDecl->aliasedType->isFuncType)
+            return true;
+    }
     const MStringView baseName = resolveBaseTypeName(typeName);
     if(const ClassDecl* cls = findClass(baseName)){
         bool hasAnyCtor = false;
@@ -380,11 +384,13 @@ bool SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
         return !hasAnyCtor;
     }
     return isArenaBackedContainer(baseName)
+        || isUnalignedVectorType(baseName)
         || findEnum(baseName) != nullptr
         || baseName == "Optional"
         || baseName == "FixedVector"
         || baseName == "Array"
         || baseName == "AssetRef"
+        || baseName == "EntityID"
         || baseName == "CompactString"
         || baseName == "Name"
         || baseName == "Path";
@@ -428,6 +434,33 @@ bool SymbolTable::isSimdVectorType(const MStringView typeName, u32& outLanes)noe
     return false;
 }
 
+bool SymbolTable::isUnalignedVectorType(const MStringView typeName, u32& outLanes)noexcept{
+    if(typeName == "f32x2u" || typeName == "i32x2u" || typeName == "u32x2u"
+        || typeName == "f64x2u" || typeName == "i64x2u" || typeName == "u64x2u")
+    {
+        outLanes = 2u;
+        return true;
+    }
+    if(typeName == "f32x3u" || typeName == "i32x3u" || typeName == "u32x3u"
+        || typeName == "f64x3u" || typeName == "i64x3u" || typeName == "u64x3u")
+    {
+        outLanes = 3u;
+        return true;
+    }
+    if(typeName == "f32x4u" || typeName == "i32x4u" || typeName == "u32x4u"
+        || typeName == "f64x4u" || typeName == "i64x4u" || typeName == "u64x4u")
+    {
+        outLanes = 4u;
+        return true;
+    }
+    return false;
+}
+
+bool SymbolTable::isUnalignedVectorType(const MStringView typeName)noexcept{
+    u32 lanes = 0u;
+    return isUnalignedVectorType(typeName, lanes);
+}
+
 bool SymbolTable::isSimdMatrixType(const MStringView typeName)noexcept{
     return typeName == "f32x3x4"
         || typeName == "f32x4x4"
@@ -453,6 +486,25 @@ MStringView SymbolTable::mapBuiltinCppType(const MStringView typeName)noexcept{
     if(typeName == "StringView") return "AStringView";
     if(typeName == "CompactString") return "ACompactString";
     if(typeName == "AssetRef") return "::NWB::Core::Assets::AssetRef";
+    if(typeName == "EntityID") return "::NWB::Core::ECS::EntityID";
+    if(typeName == "f32x2u") return "Float2U";
+    if(typeName == "f32x3u") return "Float3U";
+    if(typeName == "f32x4u") return "Float4U";
+    if(typeName == "i32x2u") return "Int2U";
+    if(typeName == "i32x3u") return "Int3U";
+    if(typeName == "i32x4u") return "Int4U";
+    if(typeName == "u32x2u") return "UInt2U";
+    if(typeName == "u32x3u") return "UInt3U";
+    if(typeName == "u32x4u") return "UInt4U";
+    if(typeName == "f64x2u") return "Double2U";
+    if(typeName == "f64x3u") return "Double3U";
+    if(typeName == "f64x4u") return "Double4U";
+    if(typeName == "i64x2u") return "Int64x2U";
+    if(typeName == "i64x3u") return "Int64x3U";
+    if(typeName == "i64x4u") return "Int64x4U";
+    if(typeName == "u64x2u") return "UInt64x2U";
+    if(typeName == "u64x3u") return "UInt64x3U";
+    if(typeName == "u64x4u") return "UInt64x4U";
     if(typeName == "f32x4") return "Float4";
     if(typeName == "i32x4") return "Int4";
     if(typeName == "u32x4") return "UInt4";

@@ -65,6 +65,9 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
             out.append(expr.text.data(), expr.text.size());
             out.push_back(')');
         }
+        else if(expr.text == "s_InvalidEntityId"){
+            out.append("::NWB::Core::ECS::s_InvalidEntityId");
+        }
         else{
             out.append(expr.text.data(), expr.text.size());
         }
@@ -278,7 +281,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         out.push_back('(');
         u32 ctorVecLanes = 0u;
         const bool isScalarSplatCtor = !baseCallee.empty()
-            && m_symbols.isSimdVectorType(baseCallee, ctorVecLanes)
+            && (m_symbols.isSimdVectorType(baseCallee, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseCallee, ctorVecLanes))
             && expr.arguments.size() == 1u && expr.arguments[0]
             && expr.arguments[0]->resolvedSimdType.empty();
         if(isScalarSplatCtor){

@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+class RuntimeMeshHandle{
+    public u64 value = 0u;
+
+    public bool valid()const{
+        return this.value != 0u;
+    }
+
+    public void reset(){
+        this.value = 0u;
+    }
+
+    public bool operator==(in RuntimeMeshHandle rhs)const{
+        return this.value == rhs.value;
+    }
+
+    public bool operator!=(in RuntimeMeshHandle rhs)const{
+        return this.value != rhs.value;
+    }
+}
+
+const RuntimeMeshHandle s_InvalidRuntimeMeshHandle();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

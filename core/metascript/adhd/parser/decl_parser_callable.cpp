@@ -230,21 +230,14 @@ bool DeclParser::applyCallableAttributes(
     const SourceSpan span,
     MethodDecl& decl
 ){
+    (void)span;
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "inline" && attr.arguments.empty())
-            decl.isInline = true;
-        else if(attr.name == "noinline" && attr.arguments.empty())
-            decl.isNoInline = true;
-        else if(attr.name == "reflect" && attr.arguments.empty())
+        if(attr.name == "reflect" && attr.arguments.empty())
             decl.isReflect = true;
         else{
-            m_cursor.error(attr.line, attr.column, "unsupported attribute on callable; expected 'inline', 'noinline', or 'reflect'");
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on callable; expected 'reflect'");
             return false;
         }
-    }
-    if(decl.isInline && decl.isNoInline){
-        m_cursor.error(span.line, span.column, "callable cannot be marked both '[inline]' and '[noinline]'");
-        return false;
     }
     return true;
 }

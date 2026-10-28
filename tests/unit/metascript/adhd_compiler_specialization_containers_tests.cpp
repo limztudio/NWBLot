@@ -289,7 +289,7 @@ TEST(AdhdCompiler, SupportsTopLevelConstCtorStackedSwitchCasesLambdaThisAndMutSi
     static constexpr MStringView s_UncapturedThisInLambdaSource =
         "class BadNode {\r\n"
         "    public i32 x = 1;\r\n"
-        "    public i32 test() const {\r\n"
+        "    public i32 test()const {\r\n"
         "        auto fn = lambda() -> i32 {\r\n"
         "            return this.x;\r\n"
         "        };\r\n"

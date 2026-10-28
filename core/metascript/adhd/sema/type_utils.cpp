@@ -20,24 +20,6 @@ namespace __hidden_adhd_type_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsKnownConcreteTypeName(const MStringView name, const SymbolTable& symbols)noexcept{
-    if(name == "bool" || name == "void"
-        || IsIntegerScalarType(name) || IsFloatScalarType(name)
-        || name == "Name" || name == "Path" || name == "String" || name == "StringView" || name == "CompactString"
-        || IsSingleTypeParamBuiltinGeneric(name)
-        || IsTwoTypeParamBuiltinGeneric(name)
-        || IsTypeAndCountBuiltinGeneric(name))
-    {
-        return true;
-    }
-    return SymbolTable::isSimdType(name)
-        || SymbolTable::isArenaBackedContainer(name)
-        || symbols.findEnum(name) != nullptr
-        || symbols.findInterface(name) != nullptr
-        || symbols.findClass(name) != nullptr
-        || symbols.findTypeAlias(name) != nullptr;
-}
-
 [[nodiscard]] bool IsConcreteConstTemplateArgText(const MStringView text, const SymbolTable& symbols)noexcept{
     if(text.empty())
         return false;
@@ -51,6 +33,30 @@ namespace __hidden_adhd_type_utils{
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool IsKnownConcreteTypeName(const MStringView name, const SymbolTable& symbols)noexcept{
+    if(name == "bool" || name == "void"
+        || IsIntegerScalarType(name) || IsFloatScalarType(name)
+        || name == "Name" || name == "Path" || name == "String" || name == "StringView" || name == "CompactString"
+        || name == "EntityID"
+        || IsSingleTypeParamBuiltinGeneric(name)
+        || IsTwoTypeParamBuiltinGeneric(name)
+        || IsTypeAndCountBuiltinGeneric(name))
+    {
+        return true;
+    }
+    return SymbolTable::isSimdType(name)
+        || SymbolTable::isUnalignedVectorType(name)
+        || SymbolTable::isArenaBackedContainer(name)
+        || symbols.findEnum(name) != nullptr
+        || symbols.findInterface(name) != nullptr
+        || symbols.findClass(name) != nullptr
+        || symbols.findTypeAlias(name) != nullptr;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -356,12 +362,14 @@ namespace __hidden_adhd_type_utils{
         if(type.funcReturnType && !IsConcreteTypeRef(*type.funcReturnType, symbols))
             return false;
         for(const FuncParamType& fp : type.funcParams){
-            if(fp.type && !IsConcreteTypeRef(*fp.type, symbols))
+            if(fp.type && fp.mode == ParamPassingMode::None && !IsConcreteTypeRef(*fp.type, symbols))
                 return false;
         }
         return true;
     }
-    if(!__hidden_adhd_type_utils::IsKnownConcreteTypeName(type.name, symbols))
+    if(type.name == "AssetRef")
+        return type.templateArgs.size() == 1u && type.templateArgs[0].type != nullptr;
+    if(!IsKnownConcreteTypeName(type.name, symbols))
         return false;
     for(const TypeArg& arg : type.templateArgs){
         if(arg.type){

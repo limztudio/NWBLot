@@ -137,7 +137,8 @@ bool TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, Method
 
 bool TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const FieldDecl& field)const noexcept{
     const bool isAutoDefaultField = field.type && m_symbols.resolveRefMode(field.type) == ParamPassingMode::None && (
-        m_symbols.isSelfDefaultedType(field.type->name)
+        field.type->isFuncType
+        || m_symbols.isSelfDefaultedType(field.type->name)
         || findTemplateParam(&classDecl, nullptr, field.type->name) != nullptr
     );
     return (field.defaultExpr != nullptr) || field.hasCtorInit || isAutoDefaultField;
@@ -284,8 +285,10 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
             }
         }
         const TypeRef* unwrappedFieldType = field->type ? m_symbols.unwrapTypeAlias(field->type) : nullptr;
-        if(TypeRef* targetFuncType = ExtractUnderlyingFuncType(field->type, m_symbols); targetFuncType && field->defaultExpr && field->defaultExpr->kind == ExprKind::Lambda)
-            targetFuncType->inferredCaptureBytes = field->defaultExpr->lambdaCaptures.empty() ? 0u : 64u;
+        if(TypeRef* targetFuncType = ExtractUnderlyingFuncType(field->type, m_symbols); targetFuncType && field->defaultExpr && field->defaultExpr->kind == ExprKind::Lambda){
+            if(!field->defaultExpr->lambdaCaptures.empty() && targetFuncType->inferredCaptureBytes < 64u)
+                targetFuncType->inferredCaptureBytes = 64u;
+        }
         if(unwrappedFieldType && unwrappedFieldType->name == "Path"){
             if(field->defaultExpr && field->defaultExpr->kind == ExprKind::StringLiteral)
                 field->defaultExpr->adaptToTChar = true;

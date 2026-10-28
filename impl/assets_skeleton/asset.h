@@ -7,7 +7,7 @@
 
 #include "../global.h"
 
-#include <impl/assets_skeleton/joint_types.h>
+#include <impl/assets_skeleton/joint_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/module.h>
@@ -21,6 +21,11 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+static_assert(IsStandardLayout_V<SkeletonJointMatrix>, "SkeletonJointMatrix must stay GPU-uploadable");
+static_assert(IsTriviallyCopyable_V<SkeletonJointMatrix>, "SkeletonJointMatrix must stay GPU-uploadable");
+static_assert(sizeof(SkeletonJointMatrix) == sizeof(f32) * s_SkeletonJointMatrixFloatCount, "SkeletonJointMatrix GPU layout drifted");
+static_assert(alignof(SkeletonJointMatrix) >= alignof(Float4), "SkeletonJointMatrix must stay SIMD-aligned");
 
 struct SkeletonJoint{
     u32 parentIndex = s_SkeletonInvalidJointIndex;

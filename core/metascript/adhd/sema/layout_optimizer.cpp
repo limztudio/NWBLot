@@ -283,7 +283,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
         outAlign = 2u;
         return;
     }
-    if(name == "i32" || name == "u32" || name == "f32"){
+    if(name == "i32" || name == "u32" || name == "f32" || name == "EntityID"){
         outSize = 4u;
         outAlign = 4u;
         return;
@@ -291,6 +291,14 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
     if(name == "i64" || name == "u64" || name == "isize" || name == "usize" || name == "f64"){
         outSize = 8u;
         outAlign = 8u;
+        return;
+    }
+
+    u32 unalignedLanes = 0u;
+    if(SymbolTable::isUnalignedVectorType(name, unalignedLanes)){
+        const usize elemSize = (name.size() >= 3u && name.substr(1u, 2u) == "64") ? 8u : 4u;
+        outSize = elemSize * unalignedLanes;
+        outAlign = elemSize;
         return;
     }
 

@@ -1,0 +1,218 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u32> MaterialParameterValueType{
+    enum None = 0u,
+    enum Bool,
+    enum Char,
+    enum UChar,
+    enum Short,
+    enum UShort,
+    enum Int,
+    enum UInt,
+    enum Half,
+    enum Float
+}
+
+[reflect]
+enum<u32> MaterialBlockClass{
+    enum None = 0u,
+    enum MaterialConstant,
+    enum MaterialMutable
+}
+
+bool IsValidMaterialBlockClass(in MaterialBlockClass blockClass){
+    return blockClass == MaterialBlockClass::Enum::MaterialConstant || blockClass == MaterialBlockClass::Enum::MaterialMutable;
+}
+
+[reflect]
+enum<u32> MaterialResourceKind{
+    enum None = 0u,
+    enum SampledImage2D,
+    enum Sampler
+}
+
+bool IsValidMaterialResourceKind(in MaterialResourceKind resourceKind){
+    return resourceKind == MaterialResourceKind::Enum::SampledImage2D || resourceKind == MaterialResourceKind::Enum::Sampler;
+}
+
+[reflect]
+enum<u32> MaterialLayoutFieldType{
+    enum None = 0u,
+    enum Bool,
+    enum Bool2,
+    enum Bool3,
+    enum Bool4,
+    enum Char,
+    enum Char2,
+    enum Char3,
+    enum Char4,
+    enum UChar,
+    enum UChar2,
+    enum UChar3,
+    enum UChar4,
+    enum Short,
+    enum Short2,
+    enum Short3,
+    enum Short4,
+    enum UShort,
+    enum UShort2,
+    enum UShort3,
+    enum UShort4,
+    enum Int,
+    enum Int2,
+    enum Int3,
+    enum Int4,
+    enum UInt,
+    enum UInt2,
+    enum UInt3,
+    enum UInt4,
+    enum Half,
+    enum Half2,
+    enum Half3,
+    enum Half4,
+    enum Float,
+    enum Float2,
+    enum Float3,
+    enum Float4,
+    // Resource fields occupy one patched uint heap slot in the typed-byte payload.
+    // They intentionally live after the contiguous numeric range so a resource can never be mistaken for an authored uint parameter.
+    enum SampledImage2D = 37u,
+    enum Sampler
+}
+
+const u32 s_MaterialLayoutFieldComponentsPerValueType = 4u;
+const u32 s_MaterialLayoutFieldFirstTypeId = cast<u32>(MaterialLayoutFieldType::Enum::Bool);
+const u32 s_MaterialParameterFirstValueTypeId = cast<u32>(MaterialParameterValueType::Enum::Bool);
+
+bool IsValidMaterialLayoutFieldType(in MaterialLayoutFieldType fieldType){
+    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::Enum::Bool) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Enum::Sampler);
+}
+
+bool IsMaterialLayoutNumericFieldType(in MaterialLayoutFieldType fieldType){
+    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::Enum::Bool) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Enum::Float4);
+}
+
+bool IsMaterialLayoutResourceFieldType(in MaterialLayoutFieldType fieldType){
+    return fieldType == MaterialLayoutFieldType::Enum::SampledImage2D || fieldType == MaterialLayoutFieldType::Enum::Sampler;
+}
+
+MaterialResourceKind MaterialLayoutFieldResourceKind(in MaterialLayoutFieldType fieldType){
+    switch(fieldType){
+        case MaterialLayoutFieldType::Enum::SampledImage2D:
+            return MaterialResourceKind::Enum::SampledImage2D;
+        case MaterialLayoutFieldType::Enum::Sampler:
+            return MaterialResourceKind::Enum::Sampler;
+        default:
+            return MaterialResourceKind::Enum::None;
+    }
+}
+
+u32 MaterialLayoutFieldComponentCount(in MaterialLayoutFieldType fieldType){
+    if(!IsMaterialLayoutNumericFieldType(fieldType)){
+        return 0u;
+    }
+
+    return ((cast<u32>(fieldType) - s_MaterialLayoutFieldFirstTypeId) % s_MaterialLayoutFieldComponentsPerValueType) + 1u;
+}
+
+MaterialParameterValueType MaterialLayoutFieldValueType(in MaterialLayoutFieldType fieldType){
+    if(!IsMaterialLayoutNumericFieldType(fieldType)){
+        return MaterialParameterValueType::Enum::None;
+    }
+
+    const u32 valueTypeOffset = (cast<u32>(fieldType) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType;
+    return cast<MaterialParameterValueType>(s_MaterialParameterFirstValueTypeId + valueTypeOffset);
+}
+
+MaterialLayoutFieldType MaterialLayoutFieldTypeFromParameterType(in MaterialParameterValueType valueType, in u32 componentCount){
+    if(componentCount == 0u || componentCount > s_MaterialLayoutFieldComponentsPerValueType){
+        return MaterialLayoutFieldType::Enum::None;
+    }
+
+    u32 firstFieldType = 0u;
+    switch(valueType){
+        case MaterialParameterValueType::Enum::Bool: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Bool); break;
+        case MaterialParameterValueType::Enum::Char: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Char); break;
+        case MaterialParameterValueType::Enum::UChar: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::UChar); break;
+        case MaterialParameterValueType::Enum::Short: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Short); break;
+        case MaterialParameterValueType::Enum::UShort: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::UShort); break;
+        case MaterialParameterValueType::Enum::Int: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Int); break;
+        case MaterialParameterValueType::Enum::UInt: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::UInt); break;
+        case MaterialParameterValueType::Enum::Half: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Half); break;
+        case MaterialParameterValueType::Enum::Float: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Float); break;
+        default: return MaterialLayoutFieldType::Enum::None;
+    }
+
+    return cast<MaterialLayoutFieldType>(firstFieldType + componentCount - 1u);
+}
+
+u32 MaterialParameterValueTypeByteSize(in MaterialParameterValueType valueType){
+    switch(valueType){
+        case MaterialParameterValueType::Enum::Bool:
+        case MaterialParameterValueType::Enum::Char:
+        case MaterialParameterValueType::Enum::UChar:
+            return 1u;
+        case MaterialParameterValueType::Enum::Short:
+        case MaterialParameterValueType::Enum::UShort:
+        case MaterialParameterValueType::Enum::Half:
+            return 2u;
+        case MaterialParameterValueType::Enum::Int:
+        case MaterialParameterValueType::Enum::UInt:
+        case MaterialParameterValueType::Enum::Float:
+            return 4u;
+        default:
+            return 0u;
+    }
+}
+
+u32 MaterialLayoutFieldByteSize(in MaterialLayoutFieldType fieldType){
+    if(IsMaterialLayoutResourceFieldType(fieldType)){
+        return 4u;
+    }
+
+    return MaterialLayoutFieldComponentCount(fieldType) * MaterialParameterValueTypeByteSize(MaterialLayoutFieldValueType(fieldType));
+}
+
+u32 MaterialLayoutFieldAlignment(in MaterialLayoutFieldType fieldType){
+    if(IsMaterialLayoutResourceFieldType(fieldType)){
+        return 4u;
+    }
+
+    return MaterialParameterValueTypeByteSize(MaterialLayoutFieldValueType(fieldType));
+}
+
+[reflect]
+class MaterialTypedLayoutBlock{
+    public Name blockName = s_NameNone;
+    public MaterialBlockClass blockClass = MaterialBlockClass::Enum::None;
+    public u32 fieldBegin = 0u;
+    public u32 fieldCount = 0u;
+    public u32 byteSize = 0u;
+}
+
+[reflect]
+class MaterialTypedLayoutField{
+    public Name fieldName = s_NameNone;
+    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::Enum::None;
+    public u32 offset = 0u;
+    public u32x4u defaultValue;
+}
+
+// A cooked material separates resource identity from its numeric/default payload.
+// `constantByteOffset` is the slot word the renderer patches after resolving the descriptor handle.
+// Exactly one typed reference is valid.
+[reflect]
+class MaterialResourceReference{
+    public Name blockName = s_NameNone;
+    public Name fieldName = s_NameNone;
+    public AssetRef<Texture> textureAsset;
+    public AssetRef<Sampler> samplerAsset;
+    public MaterialResourceKind resourceKind = MaterialResourceKind::Enum::None;
+    public u32 constantByteOffset = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

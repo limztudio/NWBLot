@@ -49,6 +49,7 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
         || IsIntegerScalarType(typeName)
         || IsFloatScalarType(typeName)
         || symbols.findEnum(typeName) != nullptr
+        || typeName == "EntityID"
         || typeName == "String"
         || typeName == "CompactString"
         || typeName == "Path"
@@ -95,6 +96,11 @@ void EmitNwbValueConversionExpr(
         out.append("Path(::ConvertString(");
         out.append(valueAccessor.data(), valueAccessor.size());
         out.append(".asString()))");
+    }
+    else if(typeName == "EntityID"){
+        out.append("::NWB::Core::ECS::EntityID(static_cast<u32>(");
+        out.append(valueAccessor.data(), valueAccessor.size());
+        out.append(".asInteger()))");
     }
     else if(typeName == "Name"){
         out.append("::Name(");
@@ -226,6 +232,13 @@ void EmitNwbSimdMatrixLocalInit(
         EmitNwbEnumFieldDeserialize(out, fieldName, typeName);
         return true;
     }
+    if(typeName == "EntityID"){
+        EmitNwbFieldFindPrefix(out, fieldName);
+        out.append("__f->isNumeric()) this->");
+        out.append(fieldName.data(), fieldName.size());
+        out.append(" = ::NWB::Core::ECS::EntityID(static_cast<u32>(__f->asInteger()));\r\n");
+        return true;
+    }
     if(typeName == "Name"){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString())) this->");
@@ -234,7 +247,7 @@ void EmitNwbSimdMatrixLocalInit(
         return true;
     }
     u32 simdLanes = 0u;
-    if(SymbolTable::isSimdVectorType(typeName, simdLanes) && simdLanes >= 2u && simdLanes <= 4u){
+    if((SymbolTable::isSimdVectorType(typeName, simdLanes) || SymbolTable::isUnalignedVectorType(typeName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isList() && __f->asList().size() == ");
         AppendAdhdUnsigned(out, simdLanes);
@@ -348,7 +361,7 @@ void EmitNwbListContainerFieldDeserialize(
             out.append(")) return false; } }\r\n");
         }
     }
-    else if(u32 simdLanes = 0u; SymbolTable::isSimdVectorType(elemName, simdLanes) && simdLanes >= 2u && simdLanes <= 4u){
+    else if(u32 simdLanes = 0u; (SymbolTable::isSimdVectorType(elemName, simdLanes) || SymbolTable::isUnalignedVectorType(elemName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbListContainerLoopHeader(out, fieldName, isForwardList, isFixedVec, isDynVec);
         out.append("{ ");
         EmitNwbListSizeContinueGuard(out, elemAccessor, simdLanes);
@@ -472,7 +485,7 @@ void EmitNwbMapFieldDeserialize(
         EmitNwbMapKeyExpr(out, keyName);
         out.append("].deserializeNwb(__v)) return false; } }\r\n");
     }
-    else if(u32 simdLanes = 0u; SymbolTable::isSimdVectorType(valName, simdLanes) && simdLanes >= 2u && simdLanes <= 4u){
+    else if(u32 simdLanes = 0u; (SymbolTable::isSimdVectorType(valName, simdLanes) || SymbolTable::isUnalignedVectorType(valName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());

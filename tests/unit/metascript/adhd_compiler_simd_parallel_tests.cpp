@@ -36,7 +36,7 @@ TEST(AdhdCompiler, OptimizesSimdMathWithBlockScopedLoadStoreAndFmaLowering){
         "        }\r\n"
         "        return dot(this.position.xyz, dir3.xyz) + this.position.x + invStep[0u];\r\n"
         "    }\r\n"
-        "    public f32x4 transformBatch(mut Span<f32x4> points, in f32x4x4 m0, in f32x4x4 m1, in f32x4 bias) const {\r\n"
+        "    public f32x4 transformBatch(mut Span<f32x4> points, in f32x4x4 m0, in f32x4x4 m1, in f32x4 bias)const {\r\n"
         "        const f32x4x4 combinedT = transpose(mul(m0, m1));\r\n"
         "        parallel_for (mut auto pt : points) {\r\n"
         "            pt = mul(combinedT, pt) + bias;\r\n"
@@ -178,7 +178,7 @@ TEST(AdhdCompiler, SupportsTypeAliasesSelfDefaultedFieldsBoundedOutOfLineAndList
         "    public FixedVector<f32, 8> weights;\r\n"
         "    public Optional<Func<void(in EntityId)>> onLoaded;\r\n"
         "    private NameMap<u32> m_lookup;\r\n"
-        "    public f32 computeTintSum(in EntityId targetId, in Vec4 scale) const {\r\n"
+        "    public f32 computeTintSum(in EntityId targetId, in Vec4 scale)const {\r\n"
         "        Optional<EntityId> maybeId;\r\n"
         "        Vec4 weighted = this.tint * scale;\r\n"
         "        return weighted.x + weighted.y;\r\n"
@@ -320,19 +320,16 @@ TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForw
         "[reflect, asset(\"index_contract\")]\r\n"
         "interface IIndexable {\r\n"
         "    [reflect]\r\n"
-        "    i32 operator[](in usize idx) const;\r\n"
-        "    usize count() const;\r\n"
+        "    i32 operator[](in usize idx)const;\r\n"
+        "    usize count()const;\r\n"
         "}\r\n"
         "class IndexedBucket : IIndexable {\r\n"
         "    [reflect]\r\n"
         "    private i32 m_base = 0;\r\n"
-        "    [inline]\r\n"
         "    public IndexedBucket() {}\r\n"
-        "    [noinline]\r\n"
         "    public ~IndexedBucket();\r\n"
-        "    [inline]\r\n"
         "    public i32 operator[](in usize idx) override const;\r\n"
-        "    public usize count() const override {\r\n"
+        "    public usize count()const override {\r\n"
         "        return 4u;\r\n"
         "    }\r\n"
         "    public void inspectNative(mut String text) {\r\n"
@@ -345,7 +342,7 @@ TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForw
         "}\r\n"
         "IndexedBucket::~IndexedBucket() {\r\n"
         "}\r\n"
-        "i32 IndexedBucket::operator[](in usize idx) const {\r\n"
+        "i32 IndexedBucket::operator[](in usize idx)const {\r\n"
         "    return forwardHelper(this.m_base + cast<i32>(idx));\r\n"
         "}\r\n"
         "i32 forwardHelper(in i32 x) {\r\n"
@@ -361,9 +358,9 @@ TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForw
     EXPECT_NE(hdrView.find("s_AssetTypeName = \"index_contract\""), MStringView::npos);
     EXPECT_NE(hdrView.find("reflectedMethodCount()noexcept{ return 2u; }"), MStringView::npos);
     EXPECT_NE(hdrView.find("reflectedMethodCount()noexcept{ return 3u; }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("NWB_INLINE IndexedBucket()noexcept"), MStringView::npos);
-    EXPECT_NE(hdrView.find("NWB_NOINLINE ~IndexedBucket()noexcept;"), MStringView::npos);
-    EXPECT_NE(hdrView.find("NWB_INLINE i32 operator[](const usize idx)const noexcept override"), MStringView::npos);
+    EXPECT_NE(hdrView.find("IndexedBucket()noexcept{"), MStringView::npos);
+    EXPECT_NE(hdrView.find("~IndexedBucket()noexcept;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("i32 operator[](const usize idx)const noexcept override;"), MStringView::npos);
     EXPECT_NE(hdrView.find("inMap.findField(\"m_base\")"), MStringView::npos);
 
     EXPECT_NE(cppView.find("IndexedBucket::~IndexedBucket()noexcept"), MStringView::npos);
@@ -379,8 +376,8 @@ TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForw
 
     static constexpr MStringView s_DuplicateClassMethodSource =
         "class DupMethod {\r\n"
-        "    public i32 calc(in i32 x) const { return x; }\r\n"
-        "    public i32 calc(in i32 y) const { return y; }\r\n"
+        "    public i32 calc(in i32 x)const { return x; }\r\n"
+        "    public i32 calc(in i32 y)const { return y; }\r\n"
         "}\r\n";
     CompileResult dupMethodRes(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_DuplicateClassMethodSource, "impl/data/dup_method.adhd", arena.arena, dupMethodRes));

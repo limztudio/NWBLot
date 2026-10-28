@@ -168,11 +168,6 @@ void HeaderEmitter::emitClassMethodsCpp(
             out.append("    ");
         }
         const bool emitInlineBody = forceInlineBody || method->isInline || !method->templateParams.empty();
-        if(method->isInline)
-            out.append("NWB_INLINE ");
-        else if(method->isNoInline)
-            out.append("NWB_NOINLINE ");
-
         m_typeEmitter.emitMethodSignature(out, &decl, *method, true);
         if(emitInlineBody && method->hasBody){
             if(method->isConstructor)
@@ -222,7 +217,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& 
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
             u32 ctorVecLanes = 0u;
             const bool isScalarSplatCtor = !baseFieldType.empty()
-                && m_symbols.isSimdVectorType(baseFieldType, ctorVecLanes)
+                && (m_symbols.isSimdVectorType(baseFieldType, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseFieldType, ctorVecLanes))
                 && field->ctorArgs.size() == 1u && field->ctorArgs[0]
                 && field->ctorArgs[0]->resolvedSimdType.empty();
             if(!baseFieldType.empty() && m_symbols.isSimdMatrixType(baseFieldType)){
@@ -270,6 +265,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& 
         }
         else if(fieldRefMode == ParamPassingMode::None
             && (m_symbols.resolveBaseTypeName(field->type->name) == "Array"
+                || SymbolTable::isUnalignedVectorType(m_symbols.resolveBaseTypeName(field->type->name))
                 || m_symbols.findEnum(m_symbols.resolveBaseTypeName(field->type->name)) != nullptr))
         {
             out.append("{}");

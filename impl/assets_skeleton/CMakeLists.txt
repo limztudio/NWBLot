@@ -1,13 +1,14 @@
-nwb_declare_interface_library(nwb_assets_skeleton_types)
-target_sources(nwb_assets_skeleton_types INTERFACE
-    "${CMAKE_CURRENT_LIST_DIR}/joint_types.h"
+nwb_declare_static_library(nwb_assets_skeleton_types)
+nwb_target_adhd_sources(nwb_assets_skeleton_types
+    NAMESPACE "NWB::Impl"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/joint_types.adhd"
 )
-target_link_libraries(nwb_assets_skeleton_types INTERFACE nwb_alloc)
+target_link_libraries(nwb_assets_skeleton_types PUBLIC nwb_alloc nwb_ecs)
 
 nwb_declare_static_library(nwb_assets_skeleton)
 target_sources(nwb_assets_skeleton PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
-    "${CMAKE_CURRENT_LIST_DIR}/joint_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/payload_validation.h"
@@ -19,7 +20,6 @@ if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_skeleton_cook)
     target_sources(nwb_assets_skeleton_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
-        "${CMAKE_CURRENT_LIST_DIR}/joint_types.h"
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/payload_validation.h"

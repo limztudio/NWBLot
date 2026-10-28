@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include <impl/ecs_ui/components.adhd.h>
 #include "toolkit/paint.h"
 #include "toolkit/builder.h"
 #include "toolkit/text/service.h"
@@ -42,7 +43,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct UiPaintContext{
+class UiPaintContext{
+public:
     Core::ECS::World& world;
     Core::IClipboardService& clipboard;
     Core::ITextInputService& textInput;
@@ -54,7 +56,6 @@ struct UiPaintContext{
     f32 deltaSeconds = 0.0f;
 };
 
-using UiPaintCallback = Function<void(UiPaintContext&)>;
 inline const UiPaintCallback s_NullUiPaintCallback{};
 
 

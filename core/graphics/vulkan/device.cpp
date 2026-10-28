@@ -209,7 +209,7 @@ Device::Device(const DeviceDesc& desc)
             return;
         }
     }
-    for(u32 queueClassIndex = 0u; queueClassIndex < static_cast<u32>(CommandQueue::Count); ++queueClassIndex){
+    for(u32 queueClassIndex = 0u; queueClassIndex < static_cast<u32>(CommandQueue::kCount); ++queueClassIndex){
         if(m_primaryQueues[queueClassIndex] && !m_explicitPrimaryQueues[queueClassIndex]){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Every registered physical queue class requires one explicit primary."));
             return;

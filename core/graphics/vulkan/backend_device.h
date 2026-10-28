@@ -434,8 +434,8 @@ private:
     GraphicsVector<NotNull<NativeQueueState*>> m_nativeQueueStates;
     GraphicsVector<NotNull<Queue*>> m_physicalQueues;
     GraphicsVector<GpuPhysicalQueueInfo> m_physicalQueueInfos;
-    Array<Queue*, static_cast<u32>(CommandQueue::Count)> m_primaryQueues = {};
-    Array<bool, static_cast<u32>(CommandQueue::Count)> m_explicitPrimaryQueues = {};
+    Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};
+    Array<bool, static_cast<u32>(CommandQueue::kCount)> m_explicitPrimaryQueues = {};
     // Only block-compressed entries are populated; all are resolved before the device is exposed.
     Array<FormatSupport::Mask, static_cast<usize>(Format::Count)> m_compressedFormatSupport = {};
 

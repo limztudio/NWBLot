@@ -253,7 +253,7 @@ public:
 // Immutable accepted-plan telemetry for one concrete task-graph plan.
 // Core counters and the caller-provided declaration duration publish only after success; failed or superseded plans keep an empty snapshot.
 struct GpuTaskGraphCompileStatistics{
-    static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::Count);
+    static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
     static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::Count);
     static constexpr usize s_OwnershipTransferRouteCount = static_cast<usize>(GpuOwnershipTransferRoute::Count);
 
@@ -344,7 +344,7 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     GpuPhysicalQueueId queue;
-    CommandQueue::Enum queueClass = CommandQueue::Count;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
     u16 deviceGeneration = 0u;
     usize taskCount = 0u;
     usize packetCount = 0u;
@@ -364,7 +364,7 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::Count;
+        return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
     }
 };
 

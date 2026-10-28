@@ -55,7 +55,7 @@ struct VulkanNativeQueueDesc{
 struct VulkanPhysicalQueueDesc{
     u32 nativeQueueIndex = Limit<u32>::s_Max;
     u32 timestampValidBits = 0u;
-    CommandQueue::Enum queueClass = CommandQueue::Count;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
     bool dedicated = false;
     bool primaryForClass = false;

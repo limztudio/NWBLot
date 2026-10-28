@@ -200,13 +200,13 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             continue;
 
         const GpuPhysicalQueueInfo* const taskQueue = planAccess.queueInfoForTask(tasks[taskIndex]);
-        if(!taskQueue || taskQueue->queueClass >= CommandQueue::Count)
+        if(!taskQueue || taskQueue->queueClass >= CommandQueue::kCount)
             return MakeUnexpected(Failure{});
         for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex){
             const GpuTaskExternalStateSource& source = task.externalStateSources[sourceIndex];
-            if(source.applicableConsumerQueueClass > CommandQueue::Count)
+            if(source.applicableConsumerQueueClass > CommandQueue::kCount)
                 return MakeUnexpected(Failure{});
-            if(source.applicableConsumerQueueClass != CommandQueue::Count && source.applicableConsumerQueueClass != taskQueue->queueClass)
+            if(source.applicableConsumerQueueClass != CommandQueue::kCount && source.applicableConsumerQueueClass != taskQueue->queueClass)
                 continue;
             if(!appendStateSource(source.states, tasks + taskIndex, 1u))
                 return MakeUnexpected(Failure{});

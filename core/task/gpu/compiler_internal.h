@@ -252,7 +252,7 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskQueuePlacementGroup& group,
-    CommandQueue::Enum requiredClass = CommandQueue::Count
+    CommandQueue::Enum requiredClass = CommandQueue::kCount
 )noexcept;
 
 [[nodiscard]] GpuQueueAssignmentScore BuildQueuePlacementGroupScore(

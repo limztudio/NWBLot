@@ -26,7 +26,7 @@ bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, c
     const auto resolveOwnershipQueues = [&]()noexcept{
         const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
         const GpuPhysicalQueueInfo* const destinationQueue = planAccess.queueInfo(barrier.destinationQueue);
-        return sourceQueue && destinationQueue && sourceQueue->queueClass < CommandQueue::Count && destinationQueue->queueClass < CommandQueue::Count;
+        return sourceQueue && destinationQueue && sourceQueue->queueClass < CommandQueue::kCount && destinationQueue->queueClass < CommandQueue::kCount;
     };
     switch(barrier.type){
     case GpuCompiledBarrierType::TextureTransition:

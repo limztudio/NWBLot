@@ -181,7 +181,7 @@ bool GpuNativePacketRecorder::recordPacket(
     if(
         packet.taskCount == 0u
         || !queue
-        || queue->queueClass >= CommandQueue::Count
+        || queue->queueClass >= CommandQueue::kCount
         || !m_device.matchesPhysicalQueueIdentity(packet.queue)
         || packet.recordsTiming != static_cast<bool>(packetTimingTicket)
         || (packetTimingTicket && (!m_timingRecorder || outRecordedGraph.timingRecorderWithinArtifactOperation(artifactAccess) != m_timingRecorder))

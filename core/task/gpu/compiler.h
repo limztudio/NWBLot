@@ -98,7 +98,7 @@ struct GpuTaskQueueAssignment{
     GpuPhysicalQueueId initialQueue;
     GpuPhysicalQueueId queue;
     GpuQueueAssignmentScore score;
-    CommandQueue::Enum queueClass = CommandQueue::Count;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuTaskQueueAssignmentReason::Enum reason = GpuTaskQueueAssignmentReason::Unknown;
     bool dedicated = false;
     GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;

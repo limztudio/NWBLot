@@ -282,7 +282,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
         NWB_ASSERT(task.externalStateSourceCount == 0u || task.externalStateSources);
 #if defined(NWB_DEBUG)
         for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex)
-            NWB_ASSERT(task.externalStateSources[sourceIndex].states && task.externalStateSources[sourceIndex].applicableConsumerQueueClass <= CommandQueue::Count);
+            NWB_ASSERT(task.externalStateSources[sourceIndex].states && task.externalStateSources[sourceIndex].applicableConsumerQueueClass <= CommandQueue::kCount);
 #endif
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];

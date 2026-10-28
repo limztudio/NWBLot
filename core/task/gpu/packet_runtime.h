@@ -110,7 +110,7 @@ struct GpuTaskGraphNormalExecutionDesc{
 
 // Submission telemetry. Wait counts follow the same elision/merge rules as Device::executeCommandLists().
 struct GpuTaskGraphSubmissionStatistics{
-    static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::Count);
+    static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
 
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -150,7 +150,7 @@ struct GpuTaskGraphPacketSubmissionStatistics{
     u64 recordingAttemptGeneration = 0u;
     GpuSubmissionPacketId packet;
     GpuPhysicalQueueId queue;
-    CommandQueue::Enum queueClass = CommandQueue::Count;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
     u16 deviceGeneration = 0u;
     bool joinsAcceptedQueueFrontier = false;
     bool isRecoverySubmission = false;
@@ -175,7 +175,7 @@ public:
             && packet.generation == planGeneration
             && queue.valid()
             && queue.deviceGeneration == deviceGeneration
-            && queueClass < CommandQueue::Count
+            && queueClass < CommandQueue::kCount
             && taskCount != 0u
         ;
     }
@@ -188,7 +188,7 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
     GpuPhysicalQueueId queue;
-    CommandQueue::Enum queueClass = CommandQueue::Count;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
     u16 deviceGeneration = 0u;
     usize acceptedPacketCount = 0u;
     usize acceptedTaskCount = 0u;
@@ -209,7 +209,7 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::Count;
+        return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
     }
 };
 

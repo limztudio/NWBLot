@@ -124,7 +124,7 @@ struct GpuTaskGraphPhysicalQueueRecordingStatistics{
     u64 recordingAttemptGeneration = 0u;
     GpuPhysicalQueueId queue;
     u16 deviceGeneration = 0u;
-    CommandQueue::Enum queueClass = CommandQueue::Count;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
     usize packetCount = 0u;
     usize taskCount = 0u;
     usize commandListCount = 0u;
@@ -139,7 +139,7 @@ struct GpuTaskGraphPhysicalQueueRecordingStatistics{
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::Count;
+        return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
     }
 };
 

@@ -112,7 +112,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
     };
 
     switch(requestedConsumerQueue){
-    case CommandQueue::Count:
+    case CommandQueue::kCount:
         return uploadBytes < GraphicsModuleDetail::s_SetupUploadLargeMinimumBytes ? CommandQueue::Graphics : availableConsumerQueue();
     case CommandQueue::Transfer:
         return availableConsumerQueue();

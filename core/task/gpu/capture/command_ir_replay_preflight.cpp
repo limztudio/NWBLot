@@ -393,7 +393,7 @@ struct TextureClearDestination{
     if(!packetView.valid())
         return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::InvalidPacket);
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packetView.plan->queue);
-    if(!queue || queue->queueClass >= CommandQueue::Count)
+    if(!queue || queue->queueClass >= CommandQueue::kCount)
         return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::PacketQueueUnavailable);
     if(reader.recordCount() != 0u && reader.graphGeneration() != graph.generation())
         return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::GraphGenerationMismatch);

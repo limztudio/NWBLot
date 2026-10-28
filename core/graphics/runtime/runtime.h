@@ -47,9 +47,9 @@ public:
         u64 destOffsetBytes = 0;
         // Optional output written after producer submission and consumer readiness bridges.
         QueueSubmissionToken* acceptedToken = nullptr;
-        // Direct native consumer timeline; Count resolves from payload size, final state, and available queues.
+        // Direct native consumer timeline; kCount resolves from payload size, final state, and available queues.
         // The scheduler independently places the producer and submits readiness bridges for consumers.
-        CommandQueue::Enum queue = CommandQueue::Count;
+        CommandQueue::Enum queue = CommandQueue::kCount;
     };
 
     struct TextureSetupDesc{
@@ -64,7 +64,7 @@ public:
         u32 mipLevel = 0;
         // See BufferSetupDesc::queue for the native consumer readiness contract.
         // A non-retained Unknown initial state publishes CopyDest; a retained upload requires a concrete initial state.
-        CommandQueue::Enum queue = CommandQueue::Count;
+        CommandQueue::Enum queue = CommandQueue::kCount;
         // Automatic selects one aspect for color, depth-only, and stencil-only formats.
         // D24S8/D32S8 need one caller-selected aspect; Vulkan copies depth/stencil from separate CPU layouts.
         TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
@@ -93,7 +93,7 @@ public:
         ResourceStates::Mask finalState = ResourceStates::Unknown;
         ResourceStates::Mask physicalInitialState = ResourceStates::Unknown;
         // See BufferSetupDesc::queue; the resolved native consumer must be admitted by the destination sharing contract.
-        CommandQueue::Enum queue = CommandQueue::Count;
+        CommandQueue::Enum queue = CommandQueue::kCount;
         bool hasPhysicalInitialState = false;
     };
 
@@ -106,7 +106,7 @@ public:
         Name indexBufferName;
         u32 vertexStride = 0;
         // Forwarded to the constituent buffer setups' native consumer readiness contracts.
-        CommandQueue::Enum queue = CommandQueue::Count;
+        CommandQueue::Enum queue = CommandQueue::kCount;
         bool use32BitIndices = true;
     };
 

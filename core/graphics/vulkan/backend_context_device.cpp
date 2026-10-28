@@ -298,7 +298,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     const i32 secondaryTransferQueueFamily = createCrossFamilySecondaryTransferQueue ? m_secondaryTransferQueueFamily : s_InvalidQueueFamilyIndex;
 
     struct SameClassQueueRequest{
-        CommandQueue::Enum queueClass = CommandQueue::Count;
+        CommandQueue::Enum queueClass = CommandQueue::kCount;
         i32 family = s_InvalidQueueFamilyIndex;
         u32 queueIndex = 0u;
     };

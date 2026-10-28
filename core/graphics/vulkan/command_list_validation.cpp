@@ -191,7 +191,7 @@ bool CommandList::validateCommandRecordingScope(const TStringView operationName)
         return false;
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::Count;
+    const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
     const u8 exactCapabilityBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     const bool validRecordingScope = matchesActiveNativeLeaseIdentity();
     const bool validExactQueue = queueInfo && queueInfo->queueClass == m_creationDesc.queueType && (exactCapabilityBits & __hidden_command_list_validation::s_KnownCapabilityBits) != 0u;

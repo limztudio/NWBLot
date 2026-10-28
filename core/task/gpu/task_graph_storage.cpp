@@ -143,7 +143,7 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
         return MakeUnexpected(Failure{});
 
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
-        if(!desc.externalStateSources[sourceIndex].states || !desc.externalStateSources[sourceIndex].states->valid() || desc.externalStateSources[sourceIndex].applicableConsumerQueueClass > CommandQueue::Count)
+        if(!desc.externalStateSources[sourceIndex].states || !desc.externalStateSources[sourceIndex].states->valid() || desc.externalStateSources[sourceIndex].applicableConsumerQueueClass > CommandQueue::kCount)
             return MakeUnexpected(Failure{});
     }
 

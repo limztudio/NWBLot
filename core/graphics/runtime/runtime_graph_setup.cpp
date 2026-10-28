@@ -388,7 +388,7 @@ CommandQueue::Enum ResolveSetupUploadConsumerQueue(GraphicsBackend::Device& devi
         return CommandQueue::Graphics;
 
     switch(requestedConsumerQueue){
-    case CommandQueue::Count:
+    case CommandQueue::kCount:
         if(uploadBytes < s_SetupUploadLargeMinimumBytes || !hasKnownFinalState)
             return CommandQueue::Graphics;
         return __hidden_graphics_graph_setup::ResolveAvailableSetupConsumerQueue(device);

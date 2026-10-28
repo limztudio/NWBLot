@@ -26,7 +26,7 @@ u16 Device::getPhysicalQueueIndex(const CommandQueue::Enum queue)const noexcept{
 
 GpuPhysicalQueueId Device::getPrimaryPhysicalQueue(const CommandQueue::Enum queue)const noexcept{
     const u32 queueIndex = static_cast<u32>(queue);
-    if(queueIndex >= static_cast<u32>(CommandQueue::Count))
+    if(queueIndex >= static_cast<u32>(CommandQueue::kCount))
         return {};
     const Queue* const result = m_primaryQueues[queueIndex];
     return result ? result->m_physicalQueue : GpuPhysicalQueueId{};
@@ -96,7 +96,7 @@ bool Device::matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const 
 
 Queue* Device::getQueue(const CommandQueue::Enum queueType)noexcept{
     const u32 index = static_cast<u32>(queueType);
-    return index < static_cast<u32>(CommandQueue::Count) ? m_primaryQueues[index] : nullptr;
+    return index < static_cast<u32>(CommandQueue::kCount) ? m_primaryQueues[index] : nullptr;
 }
 
 

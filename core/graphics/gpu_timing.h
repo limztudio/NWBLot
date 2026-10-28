@@ -82,7 +82,7 @@ private:
         GpuPhysicalQueueId physicalQueue;
         GpuPhysicalQueueId frameResetRecordingQueue;
         u32 epoch = 0u;
-        CommandQueue::Enum queueClass = CommandQueue::Count;
+        CommandQueue::Enum queueClass = CommandQueue::kCount;
         QueryState::Enum state = QueryState::Available;
         // A recovery endpoint finishes an accepted begin after a later packet rejects. It retires on the device timeline but publishes no frame sample.
         bool publishSample = true;

@@ -472,7 +472,7 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
     record.publicationGeneration = 0u;
     record.performanceCaptureEpoch = 0u;
     record.retirementSubscriptionIdentityLimit = 0u;
-    record.queueClass = CommandQueue::Count;
+    record.queueClass = CommandQueue::kCount;
     record.state = QueryState::Available;
     record.publishSample = true;
     record.attribution = s_NoGpuTimingSampleAttribution;

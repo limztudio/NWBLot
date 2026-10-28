@@ -112,7 +112,7 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
 
     const ArtifactStorage& storage = *m_activeStorage;
     const GpuPhysicalQueueInfo* const queueInfo = planAccess.queueInfo(queue);
-    if(!queueInfo || queueInfo->queueClass >= CommandQueue::Count)
+    if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
         return {};
 
     GpuTaskGraphPhysicalQueueRecordingStatistics statistics{

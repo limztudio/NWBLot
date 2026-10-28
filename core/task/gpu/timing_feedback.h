@@ -60,7 +60,7 @@ struct GpuTaskTimingKey{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return task && queue < CommandQueue::Count; }
+    [[nodiscard]] constexpr bool valid()const noexcept{ return task && queue < CommandQueue::kCount; }
 };
 inline constexpr bool operator==(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
     return lhs.task == rhs.task && lhs.variant == rhs.variant && lhs.resolutionClass == rhs.resolutionClass && lhs.queue == rhs.queue;

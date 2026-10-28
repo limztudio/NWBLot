@@ -23,7 +23,7 @@ namespace __hidden_gpu_task_graph_external_completion_imports{
 
 
 [[nodiscard]] static bool HasExternalCompletionTokenValue(const QueueSubmissionToken& token)noexcept{
-    return token.queue != CommandQueue::Count || token.value != 0u || token.physicalQueueIndex != Limit<u16>::s_Max || token.deviceGeneration != 0u;
+    return token.queue != CommandQueue::kCount || token.value != 0u || token.physicalQueueIndex != Limit<u16>::s_Max || token.deviceGeneration != 0u;
 }
 
 

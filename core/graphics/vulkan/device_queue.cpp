@@ -419,7 +419,7 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQu
         nativeQueue.queue == VK_NULL_HANDLE
         || nativeQueue.familyIndex == Limit<u32>::s_Max
         || nativeQueue.queueIndex == Limit<u32>::s_Max
-        || queueClassIndex >= static_cast<u32>(CommandQueue::Count)
+        || queueClassIndex >= static_cast<u32>(CommandQueue::kCount)
         || requiredCapabilities == 0u
         || (providedCapabilities & requiredCapabilities) != requiredCapabilities
         || (providedCapabilities & static_cast<u8>(~knownCapabilities)) != 0u

@@ -28,8 +28,8 @@ struct GpuTaskRecordContext;
 struct GpuTaskExternalStateSource{
     const CommandListResourceStateHandoff* states = nullptr;
     // This predicate is evaluated after queue assignment and never constrains routing.
-    // Count keeps the snapshot applicable to every consumer queue class.
-    CommandQueue::Enum applicableConsumerQueueClass = CommandQueue::Count;
+    // kCount keeps the snapshot applicable to every consumer queue class.
+    CommandQueue::Enum applicableConsumerQueueClass = CommandQueue::kCount;
 };
 
 // Task payloads live in graph-owned memory; these static thunks let the recorder invoke them with no per-task callable alloc.

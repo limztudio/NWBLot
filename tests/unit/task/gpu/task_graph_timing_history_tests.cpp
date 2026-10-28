@@ -35,7 +35,7 @@ struct TimingInput{
 };
 
 [[nodiscard]] TimingInput Input(const u32 index, const u16 generation = 1u)noexcept{
-    return { .key = { .task = Name("tests/timing_history/work"), .variant = index, .resolutionClass = index % 3u, .queue = static_cast<CommandQueue::Enum>(index % CommandQueue::Count), }, .queue = { static_cast<u16>(index % 7u), generation }, };
+    return { .key = { .task = Name("tests/timing_history/work"), .variant = index, .resolutionClass = index % 3u, .queue = static_cast<CommandQueue::Enum>(index % CommandQueue::kCount), }, .queue = { static_cast<u16>(index % 7u), generation }, };
 }
 
 TEST(GpuTaskTimingHistory, PreservesEveryRouteKeyFieldAndFullNameIdentity){

@@ -345,7 +345,7 @@ GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompil
 
     for(const GpuTaskGraphPhysicalQueueCompileStatistics& statistics : m_physicalQueueCompileStatistics){
         if(statistics.queue == queue){
-            NWB_ASSERT(statistics.queueClass < CommandQueue::Count);
+            NWB_ASSERT(statistics.queueClass < CommandQueue::kCount);
             return statistics;
         }
     }

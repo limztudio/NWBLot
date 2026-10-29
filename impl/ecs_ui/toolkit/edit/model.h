@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,38 +18,6 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace EditTextMode{
-    enum Enum : u8{ SingleLine, Multiline };
-};
-
-namespace EditMove{
-    enum Enum : u8{ Left, Right, Home, End, WordLeft, WordRight, DocumentHome, DocumentEnd };
-};
-
-inline constexpr usize s_EditDefaultMaxBytes = 4096u;
-inline constexpr usize s_EditDefaultMaxHistoryRecords = 64u;
-inline constexpr usize s_EditDefaultMaxHistoryBytes = 131072u;
-
-struct EditLimits{
-    usize maxBytes = s_EditDefaultMaxBytes;
-    usize maxHistoryRecords = s_EditDefaultMaxHistoryRecords;
-    usize maxHistoryBytes = s_EditDefaultMaxHistoryBytes;
-};
-
-struct EditWordRange{
-    usize begin = 0u;
-    usize end = 0u;
-};
-
-struct EditCompositionView{
-    AStringView text;
-    usize anchor = 0u;
-    usize caret = 0u;
-    usize replacementStart = 0u;
-    usize replacementEnd = 0u;
-    b8 active = false;
-};
 
 // UTF8 byte selections always lie on Unicode 17 extended grapheme boundaries; preedit stays separate from committed text.
 class EditModel final : NoCopy{

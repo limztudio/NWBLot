@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_mesh/runtime/mesh.h>
+#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include <impl/ecs_skeleton/components.adhd.h>
 
 
@@ -19,7 +20,6 @@ NWB_IMPL_BEGIN
 
 
 struct MeshSkinningRuntimeInstance;
-inline constexpr usize s_MeshSkinningResourceBufferCount = 19u;
 using MeshSkinningResourceBuffers = Array<Core::BufferHandle, s_MeshSkinningResourceBufferCount>;
 
 // Retains exact buffer identities so resource replacement cannot reuse old descriptor bindings.

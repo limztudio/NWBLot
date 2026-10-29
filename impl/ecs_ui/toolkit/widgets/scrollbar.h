@@ -6,39 +6,13 @@
 
 
 #include "../paint.h"
+#include <impl/ecs_ui/toolkit/widgets/scrollbar_style.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ScrollAxis{
-    enum Enum : u8{ Horizontal, Vertical };
-};
-inline constexpr u32 s_ScrollAxisCount = 2u;
-
-struct ScrollbarPlacement{
-    Rect track;
-    Rect thumb;
-    f64 contentExtent = 0.0;
-    f64 viewportExtent = 0.0;
-    f64 maximum = 0.0;
-    f64 offset = 0.0;
-    b8 visible = false;
-};
-
-struct ScrollViewportPlacement{
-    Rect viewport;
-    Rect contentClip;
-    Rect corner;
-    ScrollbarPlacement horizontal;
-    ScrollbarPlacement vertical;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

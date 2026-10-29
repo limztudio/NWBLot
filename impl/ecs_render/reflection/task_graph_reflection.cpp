@@ -5,7 +5,7 @@
 #include "task_graph_reflection.h"
 #include "timing_names.h"
 #include "task_graph_postprocess.h"
-#include "sampling_sequence.h"
+#include <impl/ecs_render/reflection/sampling_sequence.adhd.h>
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>

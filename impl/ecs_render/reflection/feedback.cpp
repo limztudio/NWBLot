@@ -16,23 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(const ReflectionFeedbackPlan& plan, const b8 hardwareReady)noexcept{
-    const b8 hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
-    ReflectionFeedbackOutcome result;
-    result.epoch = plan.epoch + (hardwareChanged ? 1u : 0u);
-    result.startGraphicsFrame = hardwareChanged ? plan.graphicsFrameIndex : plan.startGraphicsFrame;
-    result.probeIndex = hardwareChanged ? 0u : plan.probeIndex;
-    result.eligible = plan.eligible && hardwareReady;
-    result.reused = result.eligible && plan.reused && !hardwareChanged;
-    result.reset = plan.reset || hardwareChanged;
-    result.resetReason = hardwareChanged ? ReflectionFeedbackResetReason::HardwareChanged : plan.resetReason;
-    return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 ReflectionFeedbackState::ReflectionFeedbackState(const u16 deviceGeneration)noexcept
     : m_deviceGeneration(deviceGeneration)
 {}

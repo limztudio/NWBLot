@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "scene_content_stamp.h"
 #include "statistics.h"
 
 #include <core/alloc/global.h>
@@ -23,39 +22,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct ReflectionHistoryPlan{
-    ReflectionSceneContentStamp stamp;
-    ReflectionSettings settings;
-    u64 generation = 0u;
-    u64 sequence = 0u;
-    u64 acceptedSequence = 0u;
-    u64 epoch = 0u;
-    u64 graphicsFrameIndex = 0u;
-    u64 historyStartGraphicsFrame = 0u;
-    u32 sampleIndex = 0u;
-    u32 previousSampleCount = 0u;
-    u32 currentBank = 0u;
-    u32 previousBank = 0u;
-    b8 eligible = false;
-    b8 reused = false;
-    b8 reset = false;
-    b8 previousHardwareReady = false;
-    ReflectionHistoryResetReason::Enum resetReason = ReflectionHistoryResetReason::None;
-};
-
-struct ReflectionHistoryOutcome{
-    u64 epoch = 0u;
-    u64 historyStartGraphicsFrame = 0u;
-    u32 sampleIndex = 0u;
-    u32 sampleCount = 0u;
-    b8 eligible = false;
-    b8 reused = false;
-    b8 reset = false;
-    ReflectionHistoryResetReason::Enum resetReason = ReflectionHistoryResetReason::None;
-};
-
-[[nodiscard]] ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(const ReflectionHistoryPlan& plan, b8 hardwareReady)noexcept;
 
 // CPU acceptance chooses banks; GPU ordering protects reuse; owner never waits.
 class ReflectionHistoryState : NoCopy{

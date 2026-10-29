@@ -27,7 +27,7 @@ NWB_IMPL_BEGIN
 
 
 class RendererMaterialSystem;
-struct CsgFrameState;
+class CsgFrameState;
 
 
 // Shared AVBOIT pass upload owns gather plus readiness checks for occupancy, extinction, and accumulation.

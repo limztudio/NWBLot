@@ -61,7 +61,7 @@ class RendererMaterialSystem;
 class RendererShaderSystem;
 class RendererAvboitState;
 struct CsgFrameGpuDataView;
-struct CsgFrameState;
+class CsgFrameState;
 struct MaterialPassDrawItemPartitionsView;
 struct MaterialPassDrawItemsView;
 namespace ECSRenderDetail{

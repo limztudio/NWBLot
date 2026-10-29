@@ -12,5 +12,89 @@ class UiPaintComponent{
     public i32 order = 0;
 }
 
+const usize s_UiClipboardMaxPublications = 16u;
+
+enum<u8> UiSkinSelectionResult{
+    enum Failed,
+    enum Selected,
+    enum DefaultFallback,
+}
+
+enum<u8> UiSkinChangeResult{
+    enum Deferred,
+    enum Applied,
+    enum Failed,
+}
+
+enum<u8> UiEditClickKind{
+    enum Caret,
+    enum Word,
+}
+
+enum<u8> UiTextEditStatus{
+    enum Idle,
+    enum Applied,
+    enum Cancelled,
+    enum StaleOwner,
+    enum StaleModel,
+    enum StaleSurrounding,
+    enum InvalidEvent,
+    enum ModelRejected,
+    enum NativeFailure,
+    enum WrongThread,
+}
+
+class UiTextEditResult{
+    public UiTextEditStatus status = UiTextEditStatus::Enum::Idle;
+    public b8 textChanged = false;
+    public usize eventsApplied = 0u;
+}
+
+enum<u8> UiClipboardPublicationStatus{
+    enum Idle,
+    enum Pending,
+    enum Published,
+    enum Unsupported,
+    enum InvalidText,
+    enum TooLarge,
+    enum NativeFailure,
+    enum WrongThread,
+    enum QueueFull,
+}
+
+class UiClipboardPublicationResult{
+    public UiClipboardPublicationStatus status = UiClipboardPublicationStatus::Enum::Idle;
+    public usize published = 0u;
+    public usize failed = 0u;
+}
+
+enum<u8> UiEditClipboardStatus{
+    enum Idle,
+    enum Pending,
+    enum Applied,
+    enum Published,
+    enum Cancelled,
+    enum StaleOwner,
+    enum StaleModel,
+    enum InvalidOwner,
+    enum InvalidAction,
+    enum ReadOnly,
+    enum NoSelection,
+    enum Unsupported,
+    enum CompositionActive,
+    enum InvalidText,
+    enum TooLarge,
+    enum ModelRejected,
+    enum NativeFailure,
+    enum WrongThread,
+    enum QueueFull,
+}
+
+class UiEditClipboardResult{
+    public UiEditClipboardStatus status = UiEditClipboardStatus::Enum::Idle;
+    public b8 textChanged = false;
+    public b8 selectionChanged = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

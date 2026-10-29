@@ -26,5 +26,51 @@ class ScrollbarStyle{
     public f32 minimumThumb = s_StyleScrollbarMinimumThumb;
 }
 
+enum<u8> ScrollAxis{
+    enum Horizontal,
+    enum Vertical,
+}
+
+const u32 s_ScrollAxisCount = 2u;
+
+// Activation values of the track parts before and after each scrollbar thumb.
+const u32 s_TextAreaScrollHorizontalBefore = 1u;
+const u32 s_TextAreaScrollHorizontalAfter = 2u;
+const u32 s_TextAreaScrollVerticalBefore = 3u;
+const u32 s_TextAreaScrollVerticalAfter = 4u;
+
+class ScrollbarPlacement{
+    public Rect track;
+    public Rect thumb;
+    public f64 contentExtent = 0.0;
+    public f64 viewportExtent = 0.0;
+    public f64 maximum = 0.0;
+    public f64 offset = 0.0;
+    public b8 visible = false;
+}
+
+class ScrollViewportPlacement{
+    public Rect viewport;
+    public Rect contentClip;
+    public Rect corner;
+    public ScrollbarPlacement horizontal;
+    public ScrollbarPlacement vertical;
+}
+
+class ScrollPlacement{
+    public Rect bounds;
+    public Rect viewport;
+    public Rect contentClip;
+    public Rect track;
+    public Rect thumb;
+    public f64 contentHeight = 0.0;
+    public f64 maxOffset = 0.0;
+    public f64 offset = 0.0;
+    public u64 firstRow = 0u;
+    public u64 endRow = 0u;
+    public u64 rowCount = 0u;
+    public b8 scrollbarVisible = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

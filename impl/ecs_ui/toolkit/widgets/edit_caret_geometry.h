@@ -8,6 +8,7 @@
 #include <impl/ecs_ui/toolkit/edit/model.h>
 #include <impl/ecs_ui/toolkit/edit/grapheme.h>
 #include <impl/ecs_ui/toolkit/text/layout.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_style.adhd.h>
 
 #include <global/not_null.h>
 
@@ -20,34 +21,6 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct EditBoxCaretStop{
-    usize committedByte = 0u;
-    usize displayByte = 0u;
-    f32 x = 0.0f;
-    u32 lineIndex = 0u;
-};
-
-struct EditBoxRange{
-    usize begin = 0u;
-    usize end = 0u;
-};
-
-struct EditCaretMapping{
-    usize committedByte = 0u;
-    usize displayByte = 0u;
-};
-
-struct EditCaretLine{
-    usize byteBegin = 0u;
-    usize byteEnd = 0u;
-    usize breakEnd = 0u;
-    u32 firstStop = 0u;
-    u32 stopCount = 0u;
-    f32 top = 0.0f;
-    f32 height = 0.0f;
-    f32 advance = 0.0f;
-};
 
 // Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
 [[nodiscard]] Expected<usize> HitEditCaretGeometry(Span<const EditCaretLine> lines, Span<const EditBoxCaretStop> stops, Point localPoint)noexcept;

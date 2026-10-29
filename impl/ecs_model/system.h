@@ -73,9 +73,9 @@ static_assert(IsTriviallyCopyable_V<ModelStaticMeshAttachmentComponent>, "ModelS
 
 class Material;
 class Model;
-struct ModelSkeletonObject;
-struct ModelStaticMeshObject;
-struct ModelSkinnedMeshObject;
+class ModelSkeletonObject;
+class ModelStaticMeshObject;
+class ModelSkinnedMeshObject;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,14 +87,6 @@ struct ModelObjectRendererHooks{
     ModelObjectRendererCallback apply;
     const Core::ECS::ComponentAccess* accesses = nullptr;
     usize accessCount = 0u;
-};
-
-
-struct ModelAttachmentJointQuery{
-    Core::ECS::EntityID parentEntity;
-    u32 parentJointIndex = s_SkeletonInvalidJointIndex;
-    b8 resolved = false;
-    SkeletonJointMatrix jointMatrix{};
 };
 
 

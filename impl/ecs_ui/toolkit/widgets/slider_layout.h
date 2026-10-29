@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/slider_style.adhd.h>
 #include "../paint.h"
 
 
@@ -13,30 +13,6 @@
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SliderOptions;
-class SliderStyle;
-
-struct SliderMetrics{
-    Insets padding;
-    Point thumbExtent = { s_StyleControlExtent, s_StyleControlExtent };
-    f32 trackHeight = s_StyleSliderTrackHeight;
-    Point contentSize;
-};
-
-struct SliderPlacement{
-    Rect bounds;
-    Rect clip;
-    Rect travelBounds;
-    Rect track;
-    Rect centerTravel;
-    Rect thumb;
-    Point thumbExtent;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

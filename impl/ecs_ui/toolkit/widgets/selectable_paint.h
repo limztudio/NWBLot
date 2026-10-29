@@ -18,19 +18,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stable across interaction states so hover, selection and disabling cannot change text placement.
-struct SelectableMetrics{
-    Insets padding;
-    Point minimum;
-};
-
-struct SelectablePaintFlags{
-    b8 enabled = true;
-    b8 selected = false;
-    b8 hover = false;
-    b8 focused = false;
-};
-
 class SelectablePainter final{
 public:
     [[nodiscard]] static Expected<SelectableMetrics> Measure(const UiSkin& skin, const SelectableStyle& style)noexcept;

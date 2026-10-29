@@ -4,7 +4,7 @@
 
 #include "widget_fixture.h"
 
-#include <impl/ecs_ui/toolkit/widgets/progress.h>
+#include <impl/ecs_ui/toolkit/widgets/progress_layout.h>
 
 #include <global/simdmath.h>
 

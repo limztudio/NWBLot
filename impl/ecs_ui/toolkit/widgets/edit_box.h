@@ -5,10 +5,8 @@
 #pragma once
 
 
-#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
 #include "edit_caret_geometry.h"
 
-#include <impl/assets_ui_skin/region_names.h>
 #include <impl/ecs_ui/toolkit/text/service.h>
 
 
@@ -16,52 +14,6 @@
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct EditBoxPlacement{
-    Rect bounds;
-    Rect frameClip;
-    Rect content;
-    Rect clip;
-    Point textOrigin;
-    Rect caret;
-    f32 scroll = 0.0f;
-    f32 scrollY = 0.0f;
-};
-
-inline constexpr Color s_EditBoxSelectionColor = { 0.20f, 0.40f, 0.78f, 0.75f };
-inline constexpr Color s_EditBoxInactiveSelectionColor = { 0.28f, 0.31f, 0.38f, 0.55f };
-inline constexpr Color s_EditBoxCaretColor = { 0.95f, 0.97f, 1.0f, 1.0f };
-inline constexpr Color s_EditBoxPreeditColor = { 0.50f, 0.72f, 1.0f, 1.0f };
-
-struct EditBoxStyle{
-    Name normal = UiSkinToolkitRegions::s_EditNormalRegionName;
-    Name hover = UiSkinToolkitRegions::s_EditHoverRegionName;
-    Name focused = UiSkinToolkitRegions::s_EditFocusedRegionName;
-    Name disabled = UiSkinToolkitRegions::s_EditDisabledRegionName;
-    Name fallback = UiSkinToolkitRegions::s_ButtonNormalRegionName;
-    Name focus = UiSkinToolkitRegions::s_FocusOverlayRegionName;
-    Color background = s_StyleInsetColor;
-    Color text = s_StyleTextColor;
-    Color disabledText = s_StyleDisabledTextColor;
-    Color selection = s_EditBoxSelectionColor;
-    Color inactiveSelection = s_EditBoxInactiveSelectionColor;
-    Color caret = s_EditBoxCaretColor;
-    Color preedit = s_EditBoxPreeditColor;
-    Insets padding = { s_StyleSpacingMedium, s_StyleSpacingSmall, s_StyleSpacingMedium, s_StyleSpacingSmall };
-};
-
-struct EditBoxPaintFlags{
-    b8 enabled = true;
-    b8 hovered = false;
-    b8 focused = false;
-    b8 readOnly = false;
-    b8 caretVisible = true;
-    b8 preeditCaretVisible = true;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

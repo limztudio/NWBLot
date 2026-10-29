@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "image.h"
 #include "image_layout.h"
 
 

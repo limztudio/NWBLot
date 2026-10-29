@@ -65,5 +65,14 @@ class CsgReceiverClipDrawInfo{
     public u32 cutterCount = 0u;
 }
 
+class CsgFrameStateCacheSignature{
+    public u64 contentHash = 0u;
+    public u64 shapeRegistryRevision = 0u;
+
+    public b8 operator==(in CsgFrameStateCacheSignature rhs)const{
+        return this.contentHash == rhs.contentHash && this.shapeRegistryRevision == rhs.shapeRegistryRevision;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

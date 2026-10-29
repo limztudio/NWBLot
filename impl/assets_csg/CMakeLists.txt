@@ -1,8 +1,14 @@
-nwb_declare_interface_library(nwb_assets_csg)
-target_sources(nwb_assets_csg INTERFACE
+nwb_declare_static_library(nwb_assets_csg)
+target_sources(nwb_assets_csg PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/shape_id.h"
 )
+nwb_target_adhd_sources(nwb_assets_csg
+    NAMESPACE "NWB::Impl"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
+)
+target_link_libraries(nwb_assets_csg PUBLIC nwb_assets)
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_csg_cook)

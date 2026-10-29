@@ -18,39 +18,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct SliderOptions{
-    LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    f32 height = s_StyleControlHeight;
-    b8 enabled = true;
-    f64 minimum = 0.0;
-    f64 maximum = 1.0;
-    // Zero chooses one hundredth of the range, with a representable fallback for tiny spans.
-    f64 keyStep = 0.0;
-};
-
-struct SliderResult{
-    b8 valid = false;
-    b8 valueChanged = false;
-    b8 focused = false;
-    b8 dragging = false;
-};
-
-struct SliderSnapshot{
-    u64 instanceGeneration = 0u;
-    u64 inputGeneration = 0u;
-    u64 revision = 0u;
-    u64 admissionGeneration = 0u;
-    u64 valueBits = 0u;
-    InputActionId press;
-    b8 pressMoved = false;
-};
-
-[[nodiscard]] b8 operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Public value intents retire copied input; diagnostics are published only after the enclosing Builder scope validates.
 class SliderState final : NoCopy{
     friend class Builder;

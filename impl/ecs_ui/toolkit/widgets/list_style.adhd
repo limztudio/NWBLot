@@ -35,5 +35,38 @@ class ListStyle{
     public f32 minimumThumb = s_StyleScrollbarMinimumThumb;
 }
 
+const f32 s_ListDefaultHeight = 240.0f;
+const f32 s_ListMinimumWidth = 120.0f;
+// Padding left, top, right, bottom, then minimum x and y.
+const usize s_ListRowMetricCount = 6u;
+
+class ListOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Enum::Fixed, s_ListDefaultHeight);
+    public f32 wheelRows = s_StyleScrollWheelStep;
+    public b8 enabled = true;
+    public b8 selectOnNavigate = true;
+}
+
+class ListResult{
+    public b8 valid = false;
+    public b8 selectionChanged = false;
+    public b8 activated = false;
+    public b8 focused = false;
+}
+
+// Stable across interaction states so hover, selection and disabling cannot change text placement.
+class SelectableMetrics{
+    public Insets padding;
+    public Point minimum;
+}
+
+class SelectablePaintFlags{
+    public b8 enabled = true;
+    public b8 selected = false;
+    public b8 hover = false;
+    public b8 focused = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

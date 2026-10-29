@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <impl/assets_mesh/skin_types.adhd.h>
+
 #include <global/binary.h>
 
 
@@ -23,33 +25,14 @@ namespace MeshBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MeshMagic = 0x4D534837u; // MSH7
+inline constexpr u32 s_MeshMagic = s_MeshBinaryMagic; // MSH7
 inline constexpr TStringView s_MeshLoadBinaryContext = NWB_TEXT("Mesh::loadBinary");
 inline constexpr TStringView s_MeshSerializeContext = NWB_TEXT("MeshAssetCodec::serialize");
 inline constexpr TStringView s_MeshAssetKindLabel = NWB_TEXT("mesh");
 
-#pragma pack(push, 1)
-struct MeshHeaderBinary{
-    u32 magic = s_MeshMagic;
-    u32 meshClass = 0;
-    u64 positionCount = 0;
-    u64 normalCount = 0;
-    u64 tangentCount = 0;
-    u64 uv0Count = 0;
-    u64 colorCount = 0;
-    u64 skinCount = 0;
-    u64 skeletonJointCount = 0;
-    u64 inverseBindMatrixCount = 0;
-    u64 meshletCount = 0;
-    u64 meshletBoundCount = 0;
-    u64 meshletPositionRefDeltaByteCount = 0;
-    u64 meshletAttributeRefDeltaByteCount = 0;
-    u64 meshletLocalVertexRefCount = 0;
-    u64 meshletPrimitiveIndexCount = 0;
-};
-#pragma pack(pop)
+using MeshHeaderBinary = MeshBinaryHeader;
 static_assert(sizeof(MeshHeaderBinary) == sizeof(u32) + sizeof(u32) + (sizeof(u64) * 14u), "MeshHeaderBinary layout drifted");
-static constexpr usize s_MeshPackedAlignBytes = 1u;
+using Impl::s_MeshPackedAlignBytes;
 static_assert(alignof(MeshHeaderBinary) == s_MeshPackedAlignBytes, "MeshHeaderBinary must stay packed");
 static_assert(IsStandardLayout_V<MeshHeaderBinary>, "MeshHeaderBinary must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<MeshHeaderBinary>, "MeshHeaderBinary must stay binary-serializable");

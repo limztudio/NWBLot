@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_ui/components.adhd.h>
 
 #include <core/assets/ref.h>
 
@@ -20,14 +21,6 @@ NWB_IMPL_BEGIN
 
 
 class UiSkin;
-
-namespace UiSkinSelectionResult{
-    enum Enum : u8{ Failed, Selected, DefaultFallback };
-};
-
-namespace UiSkinChangeResult{
-    enum Enum : u8{ Deferred, Applied, Failed };
-};
 
 
 // Commits a skin identity only after its complete asset and GPU binding succeeds.

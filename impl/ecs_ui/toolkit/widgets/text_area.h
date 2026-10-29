@@ -18,16 +18,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f32 s_TextAreaDefaultHeight = 160.0f;
-
-struct TextAreaOptions{
-    LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    LayoutSize height = { LayoutSizePolicy::Fixed, s_TextAreaDefaultHeight };
-    b8 enabled = true;
-    b8 readOnly = false;
-    f32 wheelLines = s_StyleScrollWheelStep;
-};
-
 // Model and viewport remain lent through the enclosing scope; public intents retire even identical prior loans.
 class TextAreaState final : NoCopy{
     friend class Builder;

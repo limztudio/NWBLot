@@ -49,5 +49,13 @@ class ModelStaticMeshAttachmentComponent{
     public f32x3x4 localTransform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 }
 
+[reflect]
+class ModelAttachmentJointQuery{
+    public SkeletonJointMatrix jointMatrix(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    public EntityID parentEntity = s_InvalidEntityId;
+    public u32 parentJointIndex = s_SkeletonInvalidJointIndex;
+    public b8 resolved = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

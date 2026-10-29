@@ -6,6 +6,7 @@
 
 
 #include "optical_scene_resources.h"
+#include <impl/ecs_render/raytrace/types.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/raytracing.h>
@@ -22,15 +23,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// Semantic identities selected by the current scene preflight, including direct transform and material edits.
-// Runtime deformation is unstamped.
-// Static mesh, texture and shader resources remain immutable until invalidation.
-struct RayTracingSceneContentStamp{
-    u64 geometry = 0u;
-    u64 material = 0u;
-    b8 trusted = false;
-};
 
 // Ray-tracing domain owns live scene/material tables; effects retain this snapshot post-preflight plus frozen geometry/texture bundles.
 // Schedulable != dispatchable: scene prep must also succeed.

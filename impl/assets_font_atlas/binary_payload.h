@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include <impl/assets_font_atlas/types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,12 +19,12 @@ NWB_IMPL_BEGIN
 
 
 namespace FontAtlasBinaryPayload{
-    inline constexpr u32 s_Magic = 0x31415446u; // FTA1, explicitly encoded little endian.
-    inline constexpr u32 s_Version = 2u;
-    inline constexpr u32 s_HeaderBytes = 164u;
-    inline constexpr u32 s_GlyphBytes = 52u;
-    inline constexpr u32 s_GroupHeaderBytes = 48u;
-    inline constexpr u32 s_TableHeaderBytes = 40u;
+    inline constexpr u32 s_Magic = s_FontAtlasBinaryMagic;
+    inline constexpr u32 s_Version = s_FontAtlasBinaryVersion;
+    inline constexpr u32 s_HeaderBytes = s_FontAtlasBinaryHeaderBytes;
+    inline constexpr u32 s_GlyphBytes = s_FontAtlasBinaryGlyphBytes;
+    inline constexpr u32 s_GroupHeaderBytes = s_FontAtlasBinaryGroupHeaderBytes;
+    inline constexpr u32 s_TableHeaderBytes = s_FontAtlasBinaryTableHeaderBytes;
 };
 
 

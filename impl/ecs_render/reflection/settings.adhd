@@ -112,5 +112,248 @@ b8 ValidateReflectionSettings(in ReflectionSettings settings){
         && settings.environmentBottom.x >= 0.0f && settings.environmentBottom.y >= 0.0f && settings.environmentBottom.z >= 0.0f;
 }
 
+b8 SameReflectionEstimatorSettings(in ReflectionSettings first, in ReflectionSettings second){
+    // Diagnostics/filter leave the temporal estimator unchanged.
+    return first.temporalEnabled == second.temporalEnabled && first.temporalMaxSamples == second.temporalMaxSamples && SameReflectionTraceSettings(first, second);
+}
+
+// Unavailable or unstamped inputs disable temporal reuse; versions alone prove nothing.
+class ReflectionSceneContentStamp{
+    public u64 geometry;
+    public u64 material;
+    public u64 lighting;
+    public u64 view;
+    public b8 trusted;
+
+    public ReflectionSceneContentStamp(){
+        this.geometry = 0u;
+        this.material = 0u;
+        this.lighting = 0u;
+        this.view = 0u;
+        this.trusted = false;
+    }
+
+    public ReflectionSceneContentStamp(in u64 inGeometry, in u64 inMaterial, in u64 inLighting, in u64 inView, in b8 inTrusted){
+        this.geometry = inGeometry;
+        this.material = inMaterial;
+        this.lighting = inLighting;
+        this.view = inView;
+        this.trusted = inTrusted;
+    }
+
+    public b8 matchesScene(in ReflectionSceneContentStamp other)const{
+        return this.geometry == other.geometry && this.material == other.material && this.lighting == other.lighting && this.trusted == other.trusted;
+    }
+}
+
+enum<u8> ReflectionFeedbackResetReason{
+    enum None,
+    enum FirstObservation,
+    enum ResourcesChanged,
+    enum SettingsChanged,
+    enum SceneChanged,
+    enum ViewChanged,
+    enum Disabled,
+    enum UntrustedScene,
+    enum HardwareChanged,
+    enum InvalidAcceptance
+}
+
+class ReflectionFeedbackPlan{
+    public ReflectionSceneContentStamp stamp;
+    public ReflectionSettings settings;
+    public u64 generation = 0u;
+    public u64 sequence = 0u;
+    public u64 acceptedSequence = 0u;
+    public u64 epoch = 0u;
+    public u64 graphicsFrameIndex = 0u;
+    public u64 startGraphicsFrame = 0u;
+    public u32 probeIndex = 0u;
+    public u32 currentBank = 0u;
+    public u32 previousBank = 0u;
+    public b8 enabled = false;
+    public b8 eligible = false;
+    public b8 reused = false;
+    public b8 reset = false;
+    public b8 previousHardwareReady = false;
+    public b8 quarantined = false;
+    public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::Enum::None;
+}
+
+class ReflectionFeedbackOutcome{
+    public u64 epoch = 0u;
+    public u64 startGraphicsFrame = 0u;
+    public u32 probeIndex = 0u;
+    public b8 eligible = false;
+    public b8 reused = false;
+    public b8 reset = false;
+    public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::Enum::None;
+}
+
+ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(in ReflectionFeedbackPlan plan, in b8 hardwareReady){
+    const b8 hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
+    ReflectionFeedbackOutcome result;
+    if(hardwareChanged){
+        result.epoch = plan.epoch + 1u;
+        result.startGraphicsFrame = plan.graphicsFrameIndex;
+        result.probeIndex = 0u;
+    }
+    else{
+        result.epoch = plan.epoch;
+        result.startGraphicsFrame = plan.startGraphicsFrame;
+        result.probeIndex = plan.probeIndex;
+    }
+    result.eligible = plan.eligible && hardwareReady;
+    result.reused = result.eligible && plan.reused && !hardwareChanged;
+    result.reset = plan.reset || hardwareChanged;
+    if(hardwareChanged){
+        result.resetReason = ReflectionFeedbackResetReason::Enum::HardwareChanged;
+    }
+    else{
+        result.resetReason = plan.resetReason;
+    }
+    return result;
+}
+
+enum<u8> ReflectionHistoryResetReason{
+    enum None,
+    enum FirstSample,
+    enum SceneChanged,
+    enum ViewChanged,
+    enum SettingsChanged,
+    enum HardwareChanged,
+    enum UntrustedScene,
+    enum Disabled,
+    enum ResourcesChanged
+}
+
+class ReflectionHistoryPlan{
+    public ReflectionSceneContentStamp stamp;
+    public ReflectionSettings settings;
+    public u64 generation = 0u;
+    public u64 sequence = 0u;
+    public u64 acceptedSequence = 0u;
+    public u64 epoch = 0u;
+    public u64 graphicsFrameIndex = 0u;
+    public u64 historyStartGraphicsFrame = 0u;
+    public u32 sampleIndex = 0u;
+    public u32 previousSampleCount = 0u;
+    public u32 currentBank = 0u;
+    public u32 previousBank = 0u;
+    public b8 eligible = false;
+    public b8 reused = false;
+    public b8 reset = false;
+    public b8 previousHardwareReady = false;
+    public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::Enum::None;
+}
+
+class ReflectionHistoryOutcome{
+    public u64 epoch = 0u;
+    public u64 historyStartGraphicsFrame = 0u;
+    public u32 sampleIndex = 0u;
+    public u32 sampleCount = 0u;
+    public b8 eligible = false;
+    public b8 reused = false;
+    public b8 reset = false;
+    public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::Enum::None;
+}
+
+ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(in ReflectionHistoryPlan plan, in b8 hardwareReady){
+    const b8 hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
+    ReflectionHistoryOutcome result;
+    if(hardwareChanged){
+        result.epoch = plan.epoch + 1u;
+        result.sampleIndex = 0u;
+    }
+    else{
+        result.epoch = plan.epoch;
+        result.sampleIndex = plan.sampleIndex;
+    }
+    result.eligible = plan.eligible;
+    result.reused = plan.reused && !hardwareChanged;
+    if(result.eligible){
+        if(result.reused){
+            result.historyStartGraphicsFrame = plan.historyStartGraphicsFrame;
+        }
+        else{
+            result.historyStartGraphicsFrame = plan.graphicsFrameIndex;
+        }
+    }
+    else{
+        result.historyStartGraphicsFrame = 0u;
+    }
+    result.reset = plan.reset || hardwareChanged;
+    if(hardwareChanged){
+        result.resetReason = ReflectionHistoryResetReason::Enum::HardwareChanged;
+    }
+    else{
+        result.resetReason = plan.resetReason;
+    }
+    if(result.eligible){
+        u32 nextSampleCount = 1u;
+        if(result.reused){
+            nextSampleCount = plan.previousSampleCount + 1u;
+        }
+        if(nextSampleCount < plan.settings.temporalMaxSamples){
+            result.sampleCount = nextSampleCount;
+        }
+        else{
+            result.sampleCount = plan.settings.temporalMaxSamples;
+        }
+    }
+    else{
+        result.sampleCount = 0u;
+    }
+    return result;
+}
+
+class ReflectionFeedbackExtent{
+    public u32 width;
+    public u32 height;
+    public u32 tilesX;
+    public u32 tilesY;
+    public u32 entryCount;
+    public u32 byteCount;
+
+    public ReflectionFeedbackExtent(){
+        this.width = 0u;
+        this.height = 0u;
+        this.tilesX = 0u;
+        this.tilesY = 0u;
+        this.entryCount = 0u;
+        this.byteCount = 0u;
+    }
+
+    public ReflectionFeedbackExtent(in u32 inWidth, in u32 inHeight, in u32 inTilesX, in u32 inTilesY, in u32 inEntryCount, in u32 inByteCount){
+        this.width = inWidth;
+        this.height = inHeight;
+        this.tilesX = inTilesX;
+        this.tilesY = inTilesY;
+        this.entryCount = inEntryCount;
+        this.byteCount = inByteCount;
+    }
+
+    public b8 valid()const{
+        return this.byteCount != 0u;
+    }
+}
+
+class ReflectionDepthPyramidMip{
+    public Name taskIdentity = s_NameNone;
+    public u32 sampledSlot = 0u;
+    public u32 storageSlot = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+}
+
+const StringView s_ReflectionHwOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionHwPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionHwUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionBuildArgsVariant = "NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionCsgBuildArgsVariant = "NWB_RT_CSG_ENABLED=1";
+const StringView s_ReflectionHwCsgOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=1";
+const StringView s_ReflectionHwCsgPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=1";
+const StringView s_ReflectionHwCsgUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=1";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -23,13 +23,13 @@ NWB_IMPL_UI_BEGIN
 
 // Stable keys of widget parts; builder, paint, and input code must derive the same ids.
 namespace WidgetPartKey{
-    inline constexpr AStringView s_Popup = "popup";
-    inline constexpr AStringView s_Rows = "rows";
-    inline constexpr AStringView s_Scrollbar = "scrollbar";
-    inline constexpr AStringView s_Track = "track";
-    inline constexpr AStringView s_Thumb = "thumb";
-    inline constexpr AStringView s_ScrollHorizontalThumb = "scroll.x.thumb";
-    inline constexpr AStringView s_ScrollVerticalThumb = "scroll.y.thumb";
+    inline constexpr AStringView s_Popup = s_WidgetPartPopup;
+    inline constexpr AStringView s_Rows = s_WidgetPartRows;
+    inline constexpr AStringView s_Scrollbar = s_WidgetPartScrollbar;
+    inline constexpr AStringView s_Track = s_WidgetPartTrack;
+    inline constexpr AStringView s_Thumb = s_WidgetPartThumb;
+    inline constexpr AStringView s_ScrollHorizontalThumb = s_WidgetPartScrollHorizontalThumb;
+    inline constexpr AStringView s_ScrollVerticalThumb = s_WidgetPartScrollVerticalThumb;
 };
 
 [[nodiscard]] Expected<WidgetId> MakeRootId(const WidgetRoot& root)noexcept;

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/popup_style.adhd.h>
 #include "../paint.h"
 #include <impl/ecs_ui/toolkit/input/popup.adhd.h>
 
@@ -14,33 +14,6 @@
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace PopupPlacementSide{
-    enum Enum : u8{ Below, Above, Right, Left, Center };
-};
-
-inline constexpr Point s_PopupDefaultSize = { 220.0f, 160.0f };
-
-struct PopupOptions{
-    Rect anchor;
-    Point size = s_PopupDefaultSize;
-    PopupPlacementSide::Enum side = PopupPlacementSide::Below;
-    f32 gap = s_StyleSpacingSmall;
-    b8 modal = false;
-    b8 dismissOutside = true;
-    b8 dismissCancel = true;
-    b8 autofocus = true;
-};
-
-struct PopupPlacement{
-    Rect bounds;
-    Rect viewport;
-    PopupPlacementSide::Enum side = PopupPlacementSide::Below;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

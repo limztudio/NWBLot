@@ -16,45 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_reflection_history{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 SameEstimatorSettings(const ReflectionSettings& a, const ReflectionSettings& b)noexcept{
-    // Diagnostics/filter leave the temporal estimator unchanged.
-    return a.temporalEnabled == b.temporalEnabled && a.temporalMaxSamples == b.temporalMaxSamples && SameReflectionTraceSettings(a, b);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(const ReflectionHistoryPlan& plan, const b8 hardwareReady)noexcept{
-    const b8 hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
-    ReflectionHistoryOutcome result;
-    result.epoch = plan.epoch + (hardwareChanged ? 1u : 0u);
-    result.sampleIndex = hardwareChanged ? 0u : plan.sampleIndex;
-    result.eligible = plan.eligible;
-    result.reused = plan.reused && !hardwareChanged;
-    result.historyStartGraphicsFrame = result.eligible ? (result.reused ? plan.historyStartGraphicsFrame : plan.graphicsFrameIndex) : 0u;
-    result.reset = plan.reset || hardwareChanged;
-    result.resetReason = hardwareChanged ? ReflectionHistoryResetReason::HardwareChanged : plan.resetReason;
-    result.sampleCount = result.eligible ? Min(result.reused ? plan.previousSampleCount + 1u : 1u, plan.settings.temporalMaxSamples) : 0u;
-    return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 ReflectionHistoryState::ReflectionHistoryState(const u16 deviceGeneration)noexcept
     : m_deviceGeneration(deviceGeneration)
 {}
@@ -88,7 +49,7 @@ ReflectionHistoryPlan ReflectionHistoryState::plan(const ReflectionSceneContentS
     result.previousHardwareReady = m_hardwareReady;
     if(m_acceptedSequence == 0u)
         result.resetReason = m_resourcesChanged ? ReflectionHistoryResetReason::ResourcesChanged : ReflectionHistoryResetReason::FirstSample;
-    else if(!__hidden_reflection_history::SameEstimatorSettings(settings, m_settings))
+    else if(!SameReflectionEstimatorSettings(settings, m_settings))
         result.resetReason = ReflectionHistoryResetReason::SettingsChanged;
     else if(!stamp.matchesScene(m_stamp))
         result.resetReason = ReflectionHistoryResetReason::SceneChanged;

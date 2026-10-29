@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <impl/assets_texture/types.adhd.h>
+
 #include <core/assets/module.h>
 
 #include <global/texture_payload.h>
@@ -21,16 +23,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TextureMipLevel{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 blockCountX = 0u;
-    u32 blockCountY = 0u;
-    u64 offsetBytes = 0u;
-    u64 sizeBytes = 0u;
-    // 2D payload planes per mip: one for 2D, six for cubemap, reduced Z extent for 3D.
-    u32 sliceCount = 1u;
-};
 static_assert(IsStandardLayout_V<TextureMipLevel>, "Texture mip level must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<TextureMipLevel>, "Texture mip level must stay binary-serializable");
 

@@ -4,8 +4,6 @@
 
 #include "image_layout.h"
 
-#include "image.h"
-
 #include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
 

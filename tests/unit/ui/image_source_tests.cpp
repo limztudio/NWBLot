@@ -57,7 +57,7 @@ protected:
             if(!slices)
                 return false;
             const u64 size = plane->planeByteCount * *slices;
-            mips.push_back({ width, height, plane->blocksX, plane->blocksY, offset, size, *slices });
+            mips.push_back({ offset, size, width, height, plane->blocksX, plane->blocksY, *slices });
             offset += size;
             width = width > 1u ? width >> 1u : 1u;
             height = height > 1u ? height >> 1u : 1u;

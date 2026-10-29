@@ -2,17 +2,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "style.adhd"
+#include "popup_style.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const f32 s_TooltipDefaultDelaySeconds = 0.5f;
+const f32 s_TooltipDefaultMaximumWidth = 320.0f;
 
 class TooltipStyle{
     public Name background = Name("tooltip.normal");
     public Name fallback = Name("panel.normal");
     public Insets padding = Insets(s_StyleSpacingMedium, s_StyleFieldPaddingY, s_StyleSpacingMedium, s_StyleFieldPaddingY);
     public Color text;
+}
+
+class TooltipOptions{
+    public b8 enabled = true;
+    public PopupPlacementSide side = PopupPlacementSide::Enum::Below;
+    public f32 delaySeconds = s_TooltipDefaultDelaySeconds;
+    public f32 maximumWidth = s_TooltipDefaultMaximumWidth;
+    public f32 gap = s_StyleSpacingSmall;
 }
 
 

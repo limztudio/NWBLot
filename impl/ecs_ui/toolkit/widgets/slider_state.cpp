@@ -35,20 +35,6 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs)noexcept{
-    return
-        lhs.instanceGeneration == rhs.instanceGeneration && lhs.inputGeneration == rhs.inputGeneration
-        && lhs.revision == rhs.revision && lhs.admissionGeneration == rhs.admissionGeneration && lhs.valueBits == rhs.valueBits
-        && lhs.press.target == rhs.press.target && lhs.press.declarationGeneration == rhs.press.declarationGeneration
-        && lhs.press.layoutGeneration == rhs.press.layoutGeneration && lhs.press.sequence == rhs.press.sequence
-        && lhs.pressMoved == rhs.pressMoved
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 SliderState::SliderState()noexcept
     : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_slider_state::s_NextIdentity))
     , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_slider_state::s_NextIdentity))
@@ -59,7 +45,7 @@ ControlToken SliderState::controlToken()const noexcept{
 }
 
 SliderSnapshot SliderState::snapshot()const noexcept{
-    return { .instanceGeneration = m_instanceGeneration, .inputGeneration = m_inputGeneration, .revision = m_revision, .admissionGeneration = m_admissionGeneration, .valueBits = BitCast<u64>(m_value), .press = m_press, .pressMoved = m_pressMoved };
+    return { .press = m_press, .instanceGeneration = m_instanceGeneration, .inputGeneration = m_inputGeneration, .revision = m_revision, .admissionGeneration = m_admissionGeneration, .valueBits = BitCast<u64>(m_value), .pressMoved = m_pressMoved };
 }
 
 b8 SliderState::matches(const SliderSnapshot& value)const noexcept{

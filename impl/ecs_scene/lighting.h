@@ -27,21 +27,6 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(Float4) SceneLight{
-    // xyz = world position (point/spot); w = spot inner cone cosine.
-    Float4 position = Float4(0.0f, 0.0f, 0.0f, 1.0f);
-    // Directional: direction toward light. Spot: emission axis. w = outer cone cosine.
-    Float4 direction = Float4(0.0f, 0.0f, -1.0f, 1.0f);
-    // xyz = color, w = intensity.
-    Float4 colorIntensity = Float4(s_LightWhiteColorComponent, s_LightWhiteColorComponent, s_LightWhiteColorComponent, s_LightIntensity);
-    f32 range = 0.0f;
-    // Soft-shadow source size: angular radius (radians) / punctual radius (world units).
-    f32 angularRadius = s_LightDirectionalAngularRadius;
-    f32 sourceRadius = s_LightPunctualSourceRadius;
-    LightType::Enum type = LightType::Directional;
-    b8 enableCaustics = s_LightEnableCaustics;
-};
-
 static_assert(sizeof(LightType::Enum) == sizeof(u8), "LightType must stay compact for ECS storage");
 static_assert(IsStandardLayout_V<LightComponent>, "LightComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<LightComponent>, "LightComponent must stay cheap to move in dense ECS storage");

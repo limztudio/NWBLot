@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include <impl/assets_font/types.adhd.h>
 
 #include <global/expected.h>
 #include <global/span.h>
@@ -19,12 +20,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr usize s_FontSfntHeaderBytes = 12u;
-inline constexpr u32 s_FontSfntHeadTag = 0x68656164u;
-inline constexpr u32 s_FontSfntMaxpTag = 0x6d617870u;
-inline constexpr usize s_FontSfntHeadUnitsPerEmOffset = 18u;
-inline constexpr usize s_FontSfntMaxpGlyphCountOffset = 4u;
 
 struct FontSfntTable{
     u32 tag;

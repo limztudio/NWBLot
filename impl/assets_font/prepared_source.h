@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include <impl/assets_font/types.adhd.h>
 
 #include <core/assets/module.h>
 
@@ -22,8 +23,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr AStringView s_PreparedFontExtension = ".font";
 
 struct PreparedFontImageView{
     u32 width = 0u;

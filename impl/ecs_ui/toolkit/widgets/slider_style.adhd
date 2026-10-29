@@ -25,5 +25,71 @@ class SliderStyle{
     public f32 trackHeight = s_StyleSliderTrackHeight;
 }
 
+class SliderOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public f32 height = s_StyleControlHeight;
+    public b8 enabled = true;
+    public f64 minimum = 0.0;
+    public f64 maximum = 1.0;
+    // Zero chooses one hundredth of the range, with a representable fallback for tiny spans.
+    public f64 keyStep = 0.0;
+}
+
+class SliderResult{
+    public b8 valid = false;
+    public b8 valueChanged = false;
+    public b8 focused = false;
+    public b8 dragging = false;
+}
+
+class SliderSnapshot{
+    public u64 instanceGeneration = 0u;
+    public u64 inputGeneration = 0u;
+    public u64 revision = 0u;
+    public u64 admissionGeneration = 0u;
+    public u64 valueBits = 0u;
+    public InputActionId press;
+    public b8 pressMoved = false;
+
+    public b8 operator==(in SliderSnapshot rhs)const{
+        return
+            this.instanceGeneration == rhs.instanceGeneration
+            && this.inputGeneration == rhs.inputGeneration
+            && this.revision == rhs.revision
+            && this.admissionGeneration == rhs.admissionGeneration
+            && this.valueBits == rhs.valueBits
+            && this.press == rhs.press
+            && this.pressMoved == rhs.pressMoved;
+    }
+
+    public b8 operator!=(in SliderSnapshot rhs)const{
+        return
+            this.instanceGeneration != rhs.instanceGeneration
+            || this.inputGeneration != rhs.inputGeneration
+            || this.revision != rhs.revision
+            || this.admissionGeneration != rhs.admissionGeneration
+            || this.valueBits != rhs.valueBits
+            || this.press != rhs.press
+            || this.pressMoved != rhs.pressMoved;
+    }
+}
+
+class SliderMetrics{
+    public Insets padding;
+    public Point thumbExtent = Point(s_StyleControlExtent, s_StyleControlExtent);
+    public f32 trackHeight = s_StyleSliderTrackHeight;
+    public Point contentSize;
+}
+
+class SliderPlacement{
+    public Rect bounds;
+    public Rect clip;
+    public Rect travelBounds;
+    public Rect track;
+    public Rect centerTravel;
+    public Rect thumb;
+    public Point thumbExtent;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

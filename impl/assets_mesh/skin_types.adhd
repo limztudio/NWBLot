@@ -10,11 +10,34 @@
 
 // Joint/weight pairs per influence record. Keeps CPU and GPU forms in lockstep.
 const u32 s_SkinInfluenceJointCount = 4u;
+const u32 s_SkinBinaryMagic = 0x534B4E31u; // SKN1
+const u32 s_MeshBinaryMagic = 0x4D534837u; // MSH7
+const usize s_MeshPackedAlignBytes = 1u;
 
 [serialize]
 class SkinInfluence4{
     public Array<u16, s_SkinInfluenceJointCount> joint;
     public f32x4u weight(0.0f);
+}
+
+[serialize]
+class MeshBinaryHeader{
+    public u32 magic = s_MeshBinaryMagic;
+    public u32 meshClass = 0u;
+    public u64 positionCount = 0u;
+    public u64 normalCount = 0u;
+    public u64 tangentCount = 0u;
+    public u64 uv0Count = 0u;
+    public u64 colorCount = 0u;
+    public u64 skinCount = 0u;
+    public u64 skeletonJointCount = 0u;
+    public u64 inverseBindMatrixCount = 0u;
+    public u64 meshletCount = 0u;
+    public u64 meshletBoundCount = 0u;
+    public u64 meshletPositionRefDeltaByteCount = 0u;
+    public u64 meshletAttributeRefDeltaByteCount = 0u;
+    public u64 meshletLocalVertexRefCount = 0u;
+    public u64 meshletPrimitiveIndexCount = 0u;
 }
 
 

@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/resource.h>
@@ -20,15 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caustic resolve chain works on targets reduced by this factor in each axis.
-inline constexpr u32 s_CausticResolveDownscaleFactor = 2u;
 inline constexpr Name s_CausticResolveActivityBufferNames[] = { Name("caustic_resolve_activity_a"), Name("caustic_resolve_activity_b") };
-
-struct CausticResolveActivityLayout{
-    u64 bufferByteSize = 0u;
-    u32 tilesX = 0u;
-    u32 tilesY = 0u;
-};
 
 // Both buffers are scratch for one complete resolve chain; every producing group overwrites its own word.
 inline constexpr usize s_CausticResolveActivityBufferCount = LengthOf(s_CausticResolveActivityBufferNames);

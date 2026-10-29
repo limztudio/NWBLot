@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/csg/types.adhd.h>
 
 #include <core/ecs/global.h>
 
@@ -41,13 +42,6 @@ NWB_IMPL_BEGIN
 
 class CsgShapeRegistry;
 class MeshSystem;
-
-struct CsgFrameStateCacheSignature{
-public:
-    u64 contentHash = 0u;
-    u64 shapeRegistryRevision = 0u;
-};
-inline b8 operator==(const CsgFrameStateCacheSignature& lhs, const CsgFrameStateCacheSignature& rhs)noexcept{ return lhs.contentHash == rhs.contentHash && lhs.shapeRegistryRevision == rhs.shapeRegistryRevision; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

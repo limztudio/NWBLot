@@ -13,7 +13,8 @@
 #include "widgets/window.h"
 #include "widgets/edit_box_state.h"
 #include "widgets/text_area.h"
-#include "widgets/numeric_edit.h"
+#include "edit/integer_model.h"
+#include "edit/float_model.h"
 #include "widgets/popup.h"
 #include <impl/ecs_ui/toolkit/widgets/popup_style.adhd.h>
 #include "widgets/list.h"

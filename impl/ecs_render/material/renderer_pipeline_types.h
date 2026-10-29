@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/components.adhd.h>
+#include <impl/ecs_render/material/pipeline_types.adhd.h>
 #include <impl/assets_material/asset.h>
 
 #include <core/alloc/scratch.h>
@@ -32,69 +33,6 @@ class MeshShader;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace MaterialPipelinePass{
-    enum Enum : u8{
-        Opaque,
-        CsgReceiverSurface,
-        AvboitOccupancy,
-        AvboitExtinction,
-        AvboitAccumulate,
-        AvboitRefractionCapture,
-    };
-};
-
-namespace RenderPath{
-    enum Enum : u8{
-        MeshShader,
-        VertexIndexed,
-        ComputeEmulation,
-    };
-};
-
-namespace MaterialPipelineCsgMode{
-    enum Enum : u8{
-        None,
-        ClipOnly,
-    };
-};
-
-[[nodiscard]] NWB_INLINE b8 MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass)noexcept{
-    switch(pass){
-    case MaterialPipelinePass::AvboitOccupancy:
-    case MaterialPipelinePass::AvboitExtinction:
-    case MaterialPipelinePass::AvboitAccumulate:
-    case MaterialPipelinePass::AvboitRefractionCapture:
-        return true;
-    default:
-        return false;
-    }
-}
-
-[[nodiscard]] NWB_INLINE b8 MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass)noexcept{
-    switch(pass){
-    case MaterialPipelinePass::Opaque:
-    case MaterialPipelinePass::CsgReceiverSurface:
-        return true;
-    default:
-        return MaterialPipelinePassUsesRendererAvboit(pass);
-    }
-}
-
-[[nodiscard]] NWB_INLINE b8 MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const b8 transparent)noexcept{
-    switch(pass){
-    case MaterialPipelinePass::Opaque:
-        return !transparent;
-    case MaterialPipelinePass::CsgReceiverSurface:
-        return true;
-    default:
-        return transparent && MaterialPipelinePassUsesRendererAvboit(pass);
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using MaterialTypedByteVector = Vector<u8, Core::Alloc::GlobalArena>;
 using MaterialTypedLayoutBlockVector = Vector<MaterialTypedLayoutBlock, Core::Alloc::GlobalArena>;
 using MaterialTypedLayoutFieldVector = Vector<MaterialTypedLayoutField, Core::Alloc::GlobalArena>;
@@ -113,11 +51,6 @@ struct MaterialPipelineKey{
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     b8 twoSided = false;
     MaterialPipelineCsgMode::Enum csgMode = MaterialPipelineCsgMode::None;
-};
-
-struct MaterialPipelineCsgBindingUse{
-    b8 clip = false;
-    b8 avboitClip = false;
 };
 
 [[nodiscard]] NWB_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(const MaterialPipelineKey& pipelineKey, const MaterialPipelinePass::Enum pass)noexcept{

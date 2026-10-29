@@ -8,7 +8,7 @@
 #include <tests/common/test_context.h>
 
 #include <impl/ecs_mesh/skinning/skin_payload.h>
-#include <impl/ecs_mesh/skinning/submission_state.h>
+#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include <impl/ecs_skeleton/components.adhd.h>
 #include <impl/ecs_mesh/system.h>
 #include <impl/ecs_scene/module.h>

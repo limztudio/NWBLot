@@ -1,0 +1,38 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_CsgShapeInlineParameterFloat4Count = 2u;
+const usize s_CsgShapeInlineParameterMaxBytes = 16u * s_CsgShapeInlineParameterFloat4Count;
+const f32 s_CsgShapeBoundsW = 0.0f;
+const u32 s_CsgCapsuleAxisSelectX = 0u;
+const u32 s_CsgCapsuleAxisSelectY = 1u;
+const u32 s_CsgCapsuleAxisSelectZ = 0u;
+const u32 s_CsgCapsuleAxisSelectW = 0u;
+const f32x4 s_CsgPlaneDefaultNormalDistance(0.0f, 1.0f, 0.0f, 0.0f);
+const f32x4 s_CsgBoxDefaultHalfExtents(1.0f, 1.0f, 1.0f, 0.0f);
+const f32x4 s_CsgSphereDefaultRadius(1.0f, 0.0f, 0.0f, 0.0f);
+const f32x4 s_CsgCapsuleDefaultRadiusHalfHeight(1.0f, 1.0f, 0.0f, 0.0f);
+
+[reflect]
+class CsgPlaneShapeParameters{
+    public f32x4 normalDistance = s_CsgPlaneDefaultNormalDistance;
+}
+
+[reflect]
+class CsgBoxShapeParameters{
+    public f32x4 halfExtents = s_CsgBoxDefaultHalfExtents;
+}
+
+[reflect]
+class CsgSphereShapeParameters{
+    public f32x4 radius = s_CsgSphereDefaultRadius;
+}
+
+[reflect]
+class CsgCapsuleShapeParameters{
+    public f32x4 radiusHalfHeight = s_CsgCapsuleDefaultRadiusHalfHeight;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

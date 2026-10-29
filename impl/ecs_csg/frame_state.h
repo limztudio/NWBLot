@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_csg/components.adhd.h>
+#include <impl/ecs_csg/frame_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/world.h>
@@ -19,53 +20,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace CsgReceiverKind{
-    enum Enum : u8{
-        Static,
-        Skinned,
-    };
-};
-
-namespace CsgReceiverPass{
-    enum Enum : u8{
-        Opaque,
-        Transparent,
-    };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct CsgReceiverDrawState{
-    u32 firstCutter = 0u;
-    u32 cutterCount = 0u;
-    CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
-    b8 active = false;
-    // cutterCount lets render CSG iterate the lookup range directly, skipping receiver/group resolve.
-};
-
-struct CsgFrameState{
-    b8 hasAnyWork = false;
-
-    b8 hasOpaqueStaticWork = false;
-    b8 hasOpaqueSkinnedWork = false;
-    b8 hasTransparentStaticWork = false;
-    b8 hasTransparentSkinnedWork = false;
-
-    u32 receiverCount = 0u;
-    u32 cutterCount = 0u;
-
-
-public:
-    [[nodiscard]] b8 empty()const noexcept{ return !hasAnyWork; }
-};
-
-struct CsgFrameCutterRange{
-    u32 firstCutter = 0u;
-    u32 cutterCount = 0u;
-};
 
 using CsgReceiverVisibleCallback = b8(*)(Core::ECS::World& world, Core::ECS::EntityID entity, CsgReceiverKind::Enum receiverKind, const CsgReceiverComponent& receiver, void* userData);
 
@@ -176,14 +130,7 @@ private:
 
 
 [[nodiscard]] b8 HasCsgFrameCandidates(Core::ECS::World& world)noexcept;
-struct CsgResolvedReceiver{
-    CsgReceiverComponent receiver;
-    CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
-};
-
 [[nodiscard]] Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, Core::ECS::EntityID entity)noexcept;
-void AddCsgFrameReceiverWork(CsgFrameState& inOutState, CsgReceiverKind::Enum receiverKind, b8 opaqueWork, b8 transparentWork, u32 cutterCount)noexcept;
-void FinalizeCsgFrameState(CsgFrameState& inOutState)noexcept;
 [[nodiscard]] CsgFrameState BuildCsgFrameState(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const CsgFrameBuildDesc& desc = CsgFrameBuildDesc{});
 
 

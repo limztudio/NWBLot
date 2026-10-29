@@ -17,22 +17,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace EditNavigationDirection{
-    enum Enum : u8{ Up, Down, PageUp, PageDown };
-};
-
-struct EditNavigationSnapshot{
-    u64 instanceGeneration = 0u;
-    u64 generation = 0u;
-    f32 preferredX = 0.0f;
-    b8 valid = false;
-};
-
-struct EditNavigationResult{
-    usize committedByte = 0u;
-    f32 preferredX = 0.0f;
-};
-
 // Caller-owned preferred-column intent is lent synchronously; identical accepted intentions still retire old snapshots.
 class EditNavigationState final : NoCopy{
 public:

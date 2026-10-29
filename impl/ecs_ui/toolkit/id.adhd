@@ -2,6 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Stable keys of widget parts; builder, paint, and input code must derive the same ids.
+const StringView s_WidgetPartPopup = "popup";
+const StringView s_WidgetPartRows = "rows";
+const StringView s_WidgetPartScrollbar = "scrollbar";
+const StringView s_WidgetPartTrack = "track";
+const StringView s_WidgetPartThumb = "thumb";
+const StringView s_WidgetPartScrollHorizontalThumb = "scroll.x.thumb";
+const StringView s_WidgetPartScrollVerticalThumb = "scroll.y.thumb";
+
+const u64 s_WidgetMaxStates = 4096u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class WidgetId{
     public u64 value = 0u;
 
@@ -29,6 +44,53 @@ class WidgetRoot{
 
     public b8 operator!=(in WidgetRoot rhs)const{
         return this.value != rhs.value || this.generation != rhs.generation;
+    }
+}
+
+enum<u8> WidgetKind{
+    enum Panel,
+    enum Container,
+    enum Label,
+    enum Button,
+    enum Checkbox,
+    enum Window,
+    enum Separator,
+    enum EditBox,
+    enum Popup,
+    enum Selectable,
+    enum VirtualList,
+    enum ComboBox,
+    enum SearchComboBox,
+    enum Tooltip,
+    enum ContextMenu,
+    enum TextArea,
+    enum RadioGroup,
+    enum Slider,
+    enum Progress,
+    enum Image,
+}
+
+class WidgetState{
+    public WidgetId id;
+    public WidgetRoot root;
+    public u64 declarationGeneration;
+    public u64 lastSeenFrame;
+    public WidgetKind kind;
+
+    public WidgetState(){
+        this.id = WidgetId();
+        this.root = WidgetRoot();
+        this.declarationGeneration = 0u;
+        this.lastSeenFrame = 0u;
+        this.kind = WidgetKind::Enum::Panel;
+    }
+
+    public WidgetState(in WidgetId id, in WidgetRoot root, in u64 declarationGeneration, in u64 lastSeenFrame, in WidgetKind kind){
+        this.id = id;
+        this.root = root;
+        this.declarationGeneration = declarationGeneration;
+        this.lastSeenFrame = lastSeenFrame;
+        this.kind = kind;
     }
 }
 

@@ -27,11 +27,6 @@ static_assert(IsTriviallyCopyable_V<SkeletonJointMatrix>, "SkeletonJointMatrix m
 static_assert(sizeof(SkeletonJointMatrix) == sizeof(f32) * s_SkeletonJointMatrixFloatCount, "SkeletonJointMatrix GPU layout drifted");
 static_assert(alignof(SkeletonJointMatrix) >= alignof(Float4), "SkeletonJointMatrix must stay SIMD-aligned");
 
-struct SkeletonJoint{
-    u32 parentIndex = s_SkeletonInvalidJointIndex;
-    SkeletonJointMatrix localBindPose = ::MatrixIdentity<Float34>();
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

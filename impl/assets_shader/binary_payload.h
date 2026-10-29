@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <impl/assets_shader/types.adhd.h>
+
 #include <global/binary.h>
 
 
@@ -25,29 +27,6 @@ namespace ShaderBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SpvMagic = 0x07230203u;
-inline constexpr usize s_SpvWordBytes = sizeof(u32);
-inline constexpr usize s_SpvWordByteMask = s_SpvWordBytes - 1u;
-inline constexpr u32 s_AssetPayloadMagic = 0x53484431u; // SHD1
-inline constexpr u32 s_AssetPayloadVersion = 1u;
-inline constexpr usize s_AssetPayloadHeaderBytes = sizeof(u32) * 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace BytecodeValidationFailure{
-    enum Enum : u8{
-        None,
-        InvalidSize,
-        InvalidMagic,
-    };
-};
-
-[[nodiscard]] inline b8 IsValidBytecodeSize(const usize byteSize)noexcept{
-    return byteSize >= s_SpvWordBytes && (byteSize % s_SpvWordBytes) == 0u;
-}
-
 [[nodiscard]] inline BytecodeValidationFailure::Enum ValidateBytecode(const Span<const u8> binary)noexcept{
     if(!IsValidBytecodeSize(binary.size()))
         return BytecodeValidationFailure::InvalidSize;
@@ -59,15 +38,6 @@ namespace BytecodeValidationFailure{
 
     return BytecodeValidationFailure::None;
 }
-
-namespace AssetPayloadEncodeFailure{
-    enum Enum : u8{
-        None,
-        InvalidEntryPoint,
-        InvalidBytecode,
-        OutputSizeOverflow,
-    };
-};
 
 template<typename PayloadContainer>
 [[nodiscard]] inline AssetPayloadEncodeFailure::Enum EncodeAssetPayload(const AStringView entryPoint, const Span<const u8> bytecode, PayloadContainer& outPayload){
@@ -93,15 +63,6 @@ template<typename PayloadContainer>
     AppendBytesNoReserveUnchecked(outPayload, bytecode.data(), bytecode.size());
     return AssetPayloadEncodeFailure::None;
 }
-
-namespace AssetPayloadDecodeFailure{
-    enum Enum : u8{
-        InvalidHeader,
-        UnsupportedVersion,
-        InvalidEntryPoint,
-        InvalidBytecode,
-    };
-};
 
 struct AssetPayloadView{
     AStringView entryPoint;

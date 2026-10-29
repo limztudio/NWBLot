@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 
@@ -138,16 +139,7 @@ struct MaterialPassDrawContext{
 };
 
 
-// Ray tracing gathers emission targets before Deferred ranks lights. The root module brokers this contract between them.
-struct RayTracingLightingClassificationInput{
-    u32 refractiveInstanceCount = 0u;
-};
 static_assert(sizeof(RayTracingLightingClassificationInput) == sizeof(u32));
-
-struct RayTracingLightingClassification{
-    u32 causticLightCount = 0u;
-    u32 softShadowSlotMask = 0u;
-};
 static_assert(sizeof(RayTracingLightingClassification) == sizeof(u32) * 2u);
 
 // Deferred owns these buffers, while the root module freezes their generation for graph imports and ray-tracing payloads.
@@ -160,79 +152,7 @@ public:
     [[nodiscard]] b8 valid()const noexcept{ return sceneShadingBuffer && lightBuffer; }
 };
 
-
-// Heap-slot indirection for the ray-tracing material context.
-struct RayTraceMaterialContextSlots{
-    u32 sceneBvhNodes = 0u;
-    u32 sceneInstances = 0u;
-    u32 instanceMaterial = 0u;
-    u32 materialTyped = 0u;
-
-    u32 meshInstances = 0u;
-    u32 opticalScene = 0u;
-    u32 opticalInstanceCount = 0u;
-    u32 csgContext = Core::GpuDescriptorHandle::s_Invalid;
-};
 static_assert(sizeof(RayTraceMaterialContextSlots) == sizeof(u32) * 8u, "Ray-trace material-context slots must stay two uint4 lanes");
-
-// Eleven std140 uint4 lanes of ordinary-pass heap slots.
-struct DeferredBindlessResourceSlots{
-    u32 gbufferBaseColor = 0u;
-    u32 gbufferNormal = 0u;
-    u32 gbufferWorldPosition = 0u;
-    u32 gbufferDepth = 0u;
-
-    u32 shadowVisibility = 0u;
-    u32 causticIrradiance = 0u;
-    u32 surfelIrradiance = 0u;
-    u32 sampler = 0u;
-
-    u32 opaqueColor = 0u;
-    u32 avboitAccumColor = 0u;
-    u32 avboitAccumExtinction = 0u;
-    u32 opaqueColorStorage = 0u;
-
-    u32 avboitTransmittance = 0u;
-    u32 avboitLinearSampler = 0u;
-    u32 sceneShading = 0u;
-    u32 lightList = 0u;
-
-    u32 avboitCoverage = 0u;
-    u32 avboitDepthWarp = 0u;
-    u32 avboitControl = 0u;
-    u32 avboitExtinction = 0u;
-
-    u32 avboitExtinctionOverflow = 0u;
-    u32 avboitTransmittanceStorage = 0u;
-    // Compute composite output sampled by the Graphics presentation blit.
-    u32 compositeColor = 0u;
-    u32 compositeColorStorage = 0u;
-
-    // CSG typed Texture2DArray aliases use the global StorageImage heap.
-    u32 csgCapBackNormal = 0u;
-    u32 csgIntervalDepth = 0u;
-    u32 csgIntervalId = 0u;
-    u32 csgReceiverEventData = 0u;
-
-    u32 csgReceiverEventCount = 0u;
-    u32 csgReceiverSpanData = 0u;
-    u32 csgReceiverSpanCount = 0u;
-    u32 csgRemovedIntervalDepth = 0u;
-
-    u32 csgRemovedIntervalCapNormal = 0u;
-    u32 csgRemovedIntervalData = 0u;
-    u32 csgRemovedIntervalCount = 0u;
-    u32 csgPadding = 0u;
-
-    u32 refractionDepth = 0u;
-    u32 refractionNormalIor = 0u;
-    u32 refractionTintCoverage = 0u;
-    u32 refractionResolveStorage = 0u;
-    u32 refractionResolve = 0u;
-    u32 avboitForegroundColor = 0u;
-    u32 avboitForegroundExtinction = 0u;
-    u32 refractionInstance = 0u;
-};
 static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 44u, "Deferred bindless slots must match eleven std140 uint4 lanes");
 
 // Deferred target generation owns these heap registrations and retires them before target release.

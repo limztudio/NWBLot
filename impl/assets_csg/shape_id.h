@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/assets_csg/shape_id.adhd.h>
 
 #include <global/hash_utils.h>
 
@@ -14,23 +15,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Cooked-asset ABI shared by the CSG cooker and the runtime registry.
-using CsgShapeTypeId = u32;
-
-inline constexpr CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
-inline constexpr u32 s_CsgShapeHashFoldShiftBits = 32u;
-
-
-// Built-in cutter names shared by cooker, registry, and CPU rebuild; one copy, no drift.
-inline constexpr Name s_CsgPlaneShapeName("engine/csg/plane");
-inline constexpr Name s_CsgBoxShapeName("engine/csg/box");
-inline constexpr Name s_CsgSphereShapeName("engine/csg/sphere");
-inline constexpr Name s_CsgCapsuleShapeName("engine/csg/capsule");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -19,10 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace UiEditClickKind{
-    enum Enum : u8{ Caret, Word };
-};
-
 // Editor-local policy: a released second press within 500 ms and four logical units selects a word run.
 class UiEditClickTracker final{
 public:

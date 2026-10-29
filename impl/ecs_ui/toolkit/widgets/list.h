@@ -6,7 +6,7 @@
 
 
 #include "scroll.h"
-#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/list_style.adhd.h>
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
 
@@ -35,26 +35,6 @@ public:
     // Text may be temporary until the next source call; the list shapes/copies it before that call.
     [[nodiscard]] virtual StringView text(u64 index)const = 0;
     [[nodiscard]] virtual b8 enabled(u64 index)const = 0;
-};
-
-inline constexpr f32 s_ListDefaultHeight = 240.0f;
-inline constexpr f32 s_ListMinimumWidth = 120.0f;
-// Padding left, top, right, bottom, then minimum x and y.
-inline constexpr usize s_ListRowMetricCount = 6u;
-
-struct ListOptions{
-    LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    LayoutSize height = { LayoutSizePolicy::Fixed, s_ListDefaultHeight };
-    f32 wheelRows = s_StyleScrollWheelStep;
-    b8 enabled = true;
-    b8 selectOnNavigate = true;
-};
-
-struct ListResult{
-    b8 valid = false;
-    b8 selectionChanged = false;
-    b8 activated = false;
-    b8 focused = false;
 };
 
 

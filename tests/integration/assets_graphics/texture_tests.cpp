@@ -71,9 +71,9 @@ static NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(TestArena& test
 static NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& testArena){
     NWB::Impl::Texture::MipLevelVector mipLevels(testArena.arena);
     mipLevels.reserve(3u);
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 7u, 5u, s_ExpectedDualCount, s_ExpectedDualCount, 0u, 64u });
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 3u, s_ExpectedDualCount, 1u, 1u, 64u, 16u });
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 1u, 1u, 1u, 1u, 80u, 16u });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ .offsetBytes = 0u, .sizeBytes = 64u, .width = 7u, .height = 5u, .blockCountX = s_ExpectedDualCount, .blockCountY = s_ExpectedDualCount });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ .offsetBytes = 64u, .sizeBytes = 16u, .width = 3u, .height = s_ExpectedDualCount, .blockCountX = 1u, .blockCountY = 1u });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ .offsetBytes = 80u, .sizeBytes = 16u, .width = 1u, .height = 1u, .blockCountX = 1u, .blockCountY = 1u });
     return mipLevels;
 }
 

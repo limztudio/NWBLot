@@ -36,15 +36,6 @@ static_assert((offsetof(CameraComponent, projection) % alignof(Float4)) == 0u, "
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(Float4) CameraProjection{
-    // Persistent projection payload; helpers convert at this boundary.
-    Float4 projectionParams = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    f32 aspectRatio = 0.0f;
-    f32 tanHalfVerticalFov = 0.0f;
-    f32 nearPlane = 0.0f;
-    f32 farPlane = 0.0f;
-};
-
 static_assert(IsStandardLayout_V<CameraProjection>, "CameraProjection must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<CameraProjection>, "CameraProjection must stay cheap to pass by value");
 static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection must keep storage vectors aligned");

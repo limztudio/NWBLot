@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 
 #include <core/graphics/rhi/device.h>
 
@@ -18,14 +19,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace SoftShadowOpaqueResolvePhase{
-    enum Enum : u8{
-        TemporalAndWavelet,
-        TemporalOnly,
-        WaveletOnly,
-    };
-};
 
 // Target creation validates each history selector once; frame recording trusts the owner-created independent allocations.
 struct SoftShadowCombinedWaveletInputs{
@@ -40,15 +33,6 @@ struct SoftShadowCombinedWaveletInputs{
 
 public:
     [[nodiscard]] b8 valid()const noexcept;
-};
-
-// Soft resolve either overwrites visibility or multiplies transparent transmittance.
-namespace SoftShadowUpsampleFold{
-    static constexpr auto s_SoftShadowUpsampleFoldOverwriteBase = 0u;
-    enum Enum : u32{
-        Overwrite = s_SoftShadowUpsampleFoldOverwriteBase,
-        Multiply,
-    };
 };
 
 // Resolve resources pair backing targets with their pushed heap slots.
@@ -92,10 +76,6 @@ struct SoftShadowResolveDispatch{
     b8 firstWaveletWritesHalfA = true;
     SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
 };
-
-[[nodiscard]] inline b8 CanCombineSoftShadowWavelets(const b8 combinedUpsample, const b8 pipelineReady, const b8 opaqueTemporalReady, const b8 transparentTemporalReady, const u32 opaquePassCount, const u32 transparentPassCount)noexcept{
-    return combinedUpsample && pipelineReady && opaqueTemporalReady && transparentTemporalReady && opaquePassCount == 1u && transparentPassCount == 1u;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

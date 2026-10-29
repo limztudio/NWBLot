@@ -2,13 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "style.adhd"
+#include "list_style.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 const f32 s_ComboArrowExtent = 20.0f;
+const f32 s_SearchComboQueryHeight = 36.0f;
 
 class ComboStyle{
     public Name normal = Name("combo.normal");
@@ -22,6 +23,35 @@ class ComboStyle{
     public Insets padding = Insets(s_StyleSpacingMedium, s_StyleFieldPaddingY, s_StyleSpacingMedium, s_StyleFieldPaddingY);
     public f32 arrowExtent = s_ComboArrowExtent;
     public f32 arrowGap = s_StyleSpacingMedium;
+}
+
+class ComboOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize height;
+    public f32 popupHeight = s_ListDefaultHeight;
+    public f32 wheelRows = s_StyleScrollWheelStep;
+    public b8 enabled = true;
+    public StringView placeholder = "Select...";
+}
+
+class ComboResult{
+    public b8 valid = false;
+    public b8 selectionChanged = false;
+    public b8 committed = false;
+    public b8 opened = false;
+    public b8 closed = false;
+    public b8 focused = false;
+}
+
+class SearchComboOptions{
+    public ComboOptions combo;
+    public f32 queryHeight = s_SearchComboQueryHeight;
+    public f32 queryGap = s_StyleSpacingSmall;
+}
+
+class SearchComboResult{
+    public ComboResult combo;
+    public b8 queryChanged = false;
 }
 
 

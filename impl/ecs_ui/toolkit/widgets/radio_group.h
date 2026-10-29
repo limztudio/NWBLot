@@ -18,48 +18,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RadioGroupOptions{
-    LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    b8 enabled = true;
-};
-
-struct RadioGroupResult{
-    b8 valid = false;
-    b8 selectionChanged = false;
-    b8 activated = false;
-    b8 focused = false;
-};
-
-struct RadioGroupChoice{
-    u64 key = 0u;
-    b8 enabled = false;
-};
-
-struct RadioGroupChoices{
-    Array<RadioGroupChoice, s_RadioGroupMaxChoices> rows{};
-    u64 sourceGeneration = 0u;
-    u64 sourceRevision = 0u;
-    u32 count = 0u;
-};
-
-struct RadioGroupSnapshot{
-    u64 instanceGeneration = 0u;
-    u64 inputGeneration = 0u;
-    u64 revision = 0u;
-    u64 selectedKey = 0u;
-    u64 cursorKey = 0u;
-    u64 sourceGeneration = 0u;
-    u64 sourceRevision = 0u;
-
-
-public:
-    [[nodiscard]] b8 operator==(const RadioGroupSnapshot&)const noexcept = default;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Application state is borrowed through its enclosing Builder scope; accepted public intents retire copied input.
 class RadioGroupState final : NoCopy{
     friend class Builder;

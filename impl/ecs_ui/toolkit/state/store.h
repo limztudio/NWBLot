@@ -20,24 +20,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_WidgetMaxStates = 4096u;
-
-
-namespace WidgetKind{
-    enum Enum : u8{
-        Panel, Container, Label, Button, Checkbox, Window, Separator, EditBox, Popup, Selectable, VirtualList,
-        ComboBox, SearchComboBox, Tooltip, ContextMenu, TextArea, RadioGroup, Slider, Progress, Image
-    };
-};
-
-struct WidgetState{
-    WidgetId id;
-    WidgetRoot root;
-    u64 declarationGeneration = 0u;
-    u64 lastSeenFrame = 0u;
-    WidgetKind::Enum kind = WidgetKind::Panel;
-};
-
 // Retain identity and typed lifetime; application values stay in the host model and are never copied into draw snapshots.
 class WidgetStateStore final : NoCopy{
 private:

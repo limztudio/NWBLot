@@ -8,6 +8,9 @@ const f32 s_UiSkinDefaultFontSize = 16.0f;
 const f32 s_UiSkinMinDefaultFontSizeScale = 64.0f;
 const f32 s_UiSkinMinDefaultFontSize = 1.0f / s_UiSkinMinDefaultFontSizeScale;
 const f32 s_UiSkinMaxDefaultFontSize = 2048.0f;
+const u32 s_UiSkinBinaryMagic = 0x55495331u; // UIS1
+const u32 s_UiSkinBinaryVersion = 3u;
+const u32 s_UiSkinPaletteColorCount = 17u;
 
 [reflect]
 enum<u8> UiSkinDrawMode{
@@ -85,6 +88,37 @@ class UiSkinColor{
 class UiSkinTypography{
     public f32 defaultFontSize = s_UiSkinDefaultFontSize;
 }
+
+[serialize]
+class UiSkinColorBinary{
+    public f32 r = 0.0f;
+    public f32 g = 0.0f;
+    public f32 b = 0.0f;
+    public f32 a = 0.0f;
+}
+
+[serialize]
+class UiSkinTypographyBinary{
+    public f32 defaultFontSize = s_UiSkinDefaultFontSize;
+}
+
+const UiSkinColor s_DefaultTextNormalColor(0.92f, 0.94f, 0.98f, 1.0f);
+const UiSkinColor s_DefaultTextDisabledColor(0.48f, 0.5f, 0.55f, 1.0f);
+const UiSkinColor s_DefaultTextTooltipColor(1.0f, 1.0f, 1.0f, 1.0f);
+const UiSkinColor s_DefaultEditBackgroundColor(0.08f, 0.1f, 0.14f, 1.0f);
+const UiSkinColor s_DefaultEditSelectionColor(0.2f, 0.4f, 0.78f, 0.75f);
+const UiSkinColor s_DefaultEditInactiveSelectionColor(0.28f, 0.31f, 0.38f, 0.55f);
+const UiSkinColor s_DefaultEditCaretColor(0.95f, 0.97f, 1.0f, 1.0f);
+const UiSkinColor s_DefaultEditPreeditColor(0.5f, 0.72f, 1.0f, 1.0f);
+const UiSkinColor s_DefaultScrollbarTrackColor(0.08f, 0.1f, 0.14f, 1.0f);
+const UiSkinColor s_DefaultScrollbarThumbColor(0.35f, 0.4f, 0.48f, 1.0f);
+const UiSkinColor s_DefaultScrollbarDisabledColor(0.25f, 0.28f, 0.32f, 1.0f);
+const UiSkinColor s_DefaultPopupBackdropColor(0.0f, 0.0f, 0.0f, 0.4f);
+const UiSkinColor s_DefaultControlHoverTintColor(1.08f, 1.08f, 1.08f, 1.0f);
+const UiSkinColor s_DefaultControlPressedTintColor(0.85f, 0.85f, 0.85f, 1.0f);
+const UiSkinColor s_DefaultControlDisabledTintColor(0.55f, 0.55f, 0.55f, 0.6f);
+const UiSkinColor s_DefaultProgressTrackTintColor(1.0f, 1.0f, 1.0f, 1.0f);
+const UiSkinColor s_DefaultProgressFillTintColor(1.0f, 1.0f, 1.0f, 1.0f);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

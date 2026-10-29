@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_skeleton/joint_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_ModelBinaryMagic = 0x4D444C32u; // MDL2
+
+[reflect]
+class ModelSkeletonObject{
+    public SkeletonJointMatrix transform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public Name name = s_NameNone;
+    public AssetRef<Skeleton> skeleton;
+}
+
+[reflect]
+class ModelStaticMeshObject{
+    // Static attachment order: model owner * parent_object skeleton transform * parent_joint pose * transform.
+    // If parent_joint is empty, the joint pose term is omitted.
+    // If parent_object is empty, the model owner is used.
+    public SkeletonJointMatrix transform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public Name name = s_NameNone;
+    public AssetRef<Mesh> mesh;
+    public AssetRef<Material> material;
+    public Name parentObject = s_NameNone;
+    public Name parentJoint = s_NameNone;
+}
+
+[reflect]
+class ModelSkinnedMeshObject{
+    public SkeletonJointMatrix transform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public Name name = s_NameNone;
+    public AssetRef<Skin> skin;
+    public AssetRef<Material> material;
+    public Name skeletonObject = s_NameNone;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

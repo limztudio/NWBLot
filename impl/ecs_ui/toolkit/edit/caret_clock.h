@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,9 +18,6 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// The caret is visible for the first half of its one-second cycle.
-inline constexpr f64 s_CaretVisiblePhaseEnd = 0.5;
 
 // The caret has a one-second cycle. Invalid or nonpositive deltas leave its phase unchanged.
 [[nodiscard]] f64 AdvanceCaretPhase(f64 phase, f64 deltaSeconds)noexcept;

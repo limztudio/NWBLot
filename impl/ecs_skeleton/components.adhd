@@ -19,6 +19,9 @@ b8 ValidSkeletonSkinningMode(in u32 mode){
 }
 
 const u32 s_SkeletonRootParent = s_SkeletonInvalidJointIndex;
+const f32 s_SkeletonAffineEpsilon = 0.000001f;
+const f32 s_SkeletonJointDeterminantEpsilon = 0.000000000001f;
+const f32 s_SkeletonRigidJointEpsilon = 0.001f;
 
 [reflect]
 class SkeletonJointPaletteComponent{
@@ -31,6 +34,10 @@ class SkeletonPoseComponent{
     public Vector<u32> parentJoints;
     public Vector<SkeletonJointMatrix> localJoints;
     public u32 skinningMode = cast<u32>(SkeletonSkinningMode::Enum::LinearBlend);
+}
+
+b8 HasSkeletonPoseData(in SkeletonPoseComponent pose){
+    return !pose.localJoints.empty() || !pose.parentJoints.empty();
 }
 
 

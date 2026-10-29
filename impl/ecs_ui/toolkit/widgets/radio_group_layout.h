@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group_style.adhd.h>
 #include "../paint.h"
 
 
@@ -13,46 +13,6 @@
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr u32 s_RadioGroupMaxChoices = 64u;
-
-struct RadioGroupChoices;
-struct RadioGroupOptions;
-class RadioGroupStyle;
-
-struct RadioGroupMetrics{
-    f32 rowHeight = 0.0f;
-    f32 indicatorExtent = s_StyleControlExtent;
-    f32 gap = s_StyleSpacingMedium;
-    f32 rowGap = s_StyleSpacingSmall;
-    f32 markInset = s_StyleMarkInset;
-    Insets padding;
-    // Complete intrinsic group size, including its outer padding.
-    Point contentSize;
-    u32 count = 0u;
-};
-
-struct RadioGroupChoicePlacement{
-    u64 key = 0u;
-    b8 enabled = false;
-    Rect rectangle;
-    Rect clip;
-    Rect indicator;
-    Rect mark;
-    Rect textClip;
-};
-
-struct RadioGroupPlacement{
-    Rect bounds;
-    Rect clip;
-    Rect content;
-    Array<RadioGroupChoicePlacement, s_RadioGroupMaxChoices> rows{};
-    u32 count = 0u;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

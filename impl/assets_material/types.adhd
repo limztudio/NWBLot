@@ -2,6 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u32 s_MaterialBinaryMagic = 0x4D544C41u; // MTLA
+
+[reflect]
+enum<u32> MaterialFlag{
+    enum None = 0u,
+    flag Transparent,
+    flag TwoSided,
+    flag Refractive,
+    enum All = Transparent | TwoSided | Refractive
+}
+
 [reflect]
 enum<u32> MaterialParameterValueType{
     enum None = 0u,

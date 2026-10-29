@@ -20,20 +20,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ReflectionHistoryResetReason{
-    enum Enum : u8{
-        None,
-        FirstSample,
-        SceneChanged,
-        ViewChanged,
-        SettingsChanged,
-        HardwareChanged,
-        UntrustedScene,
-        Disabled,
-        ResourcesChanged,
-    };
-};
-
 // A completed accepted reflection copy, regardless of later presentation outcome.
 struct ReflectionStatistics{
     u64 sequence = 0u;

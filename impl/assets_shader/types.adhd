@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_SpvMagic = 0x07230203u;
+const usize s_SpvWordBytes = 4u;
+const usize s_SpvWordByteMask = s_SpvWordBytes - 1u;
+const u32 s_AssetPayloadMagic = 0x53484431u; // SHD1
+const u32 s_AssetPayloadVersion = 1u;
+const usize s_AssetPayloadHeaderBytes = 8u;
+
+[reflect]
+enum<u8> BytecodeValidationFailure{
+    enum None,
+    enum InvalidSize,
+    enum InvalidMagic
+}
+
+[reflect]
+enum<u8> AssetPayloadEncodeFailure{
+    enum None,
+    enum InvalidEntryPoint,
+    enum InvalidBytecode,
+    enum OutputSizeOverflow
+}
+
+[reflect]
+enum<u8> AssetPayloadDecodeFailure{
+    enum InvalidHeader,
+    enum UnsupportedVersion,
+    enum InvalidEntryPoint,
+    enum InvalidBytecode
+}
+
+b8 IsValidBytecodeSize(in usize byteSize){
+    return byteSize >= s_SpvWordBytes && (byteSize % s_SpvWordBytes) == 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

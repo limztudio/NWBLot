@@ -17,10 +17,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace EditAction{
-    enum Enum : u8{ Submit, Cancel, Blur, Abandon };
-};
-
 // Actions run between copied input events while the matching model is lent. Neither reference may be retained.
 interface IEditActionSink : private NoCopy{
 public:

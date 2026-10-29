@@ -1,0 +1,258 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../input/commands.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The caret is visible for the first half of its one-second cycle.
+const f64 s_CaretVisiblePhaseEnd = 0.5;
+
+const usize s_EditDefaultMaxBytes = 4096u;
+const usize s_EditDefaultMaxHistoryRecords = 64u;
+const usize s_EditDefaultMaxHistoryBytes = 131072u;
+
+const usize s_NumericEditMaxBytes = 128u;
+const usize s_NumericEditMaxHistoryRecords = 64u;
+const usize s_NumericEditHistoryBytesFactor = 128u;
+
+const i64 s_NumericEditMaxI64 = 9223372036854775807ll;
+const i64 s_NumericEditMinI64 = -s_NumericEditMaxI64 - 1ll;
+const f64 s_NumericEditMaxF64 = 1.79769313486231570815e+308;
+const f64 s_NumericEditMinF64 = -s_NumericEditMaxF64;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> EditAction{
+    enum Submit,
+    enum Cancel,
+    enum Blur,
+    enum Abandon,
+}
+
+enum<u8> EditTextMode{
+    enum SingleLine,
+    enum Multiline,
+}
+
+enum<u8> EditMove{
+    enum Left,
+    enum Right,
+    enum Home,
+    enum End,
+    enum WordLeft,
+    enum WordRight,
+    enum DocumentHome,
+    enum DocumentEnd,
+}
+
+class EditLimits{
+    public usize maxBytes = s_EditDefaultMaxBytes;
+    public usize maxHistoryRecords = s_EditDefaultMaxHistoryRecords;
+    public usize maxHistoryBytes = s_EditDefaultMaxHistoryBytes;
+}
+
+class EditWordRange{
+    public usize begin = 0u;
+    public usize end = 0u;
+}
+
+class EditCompositionView{
+    public StringView text = "";
+    public usize anchor = 0u;
+    public usize caret = 0u;
+    public usize replacementStart = 0u;
+    public usize replacementEnd = 0u;
+    public b8 active = false;
+}
+
+enum<u8> EditCommand{
+    enum None,
+    enum Left,
+    enum Right,
+    enum Home,
+    enum End,
+    enum WordLeft,
+    enum WordRight,
+    enum Backspace,
+    enum Delete,
+    enum WordBackspace,
+    enum WordDelete,
+    enum SelectAll,
+    enum Copy,
+    enum Cut,
+    enum Paste,
+    enum Undo,
+    enum Redo,
+    enum Submit,
+    enum Cancel,
+    enum DocumentHome,
+    enum DocumentEnd,
+    enum Newline,
+}
+
+enum<u8> EditClipboardAction{
+    enum None,
+    enum Copy,
+    enum Cut,
+    enum Paste,
+    enum PublishSelection,
+}
+
+class EditCommandRequest{
+    public EditCommand command = EditCommand::Enum::None;
+    public b8 extend = false;
+    public b8 repeat = false;
+}
+
+class EditCommandResult{
+    public EditClipboardAction clipboard = EditClipboardAction::Enum::None;
+    public b8 handled = false;
+    public b8 textChanged = false;
+    public b8 selectionChanged = false;
+    public b8 compositionChanged = false;
+    public b8 submitted = false;
+    public b8 cancelled = false;
+}
+
+enum<u8> EditNavigationDirection{
+    enum Up,
+    enum Down,
+    enum PageUp,
+    enum PageDown,
+}
+
+class EditNavigationSnapshot{
+    public u64 instanceGeneration = 0u;
+    public u64 generation = 0u;
+    public f32 preferredX = 0.0f;
+    public b8 valid = false;
+}
+
+class EditNavigationResult{
+    public usize committedByte = 0u;
+    public f32 preferredX = 0.0f;
+}
+
+enum<u8> NumericParseStatus{
+    enum Complete,
+    enum Incomplete,
+    enum Invalid,
+    enum OutOfRange,
+}
+
+enum<u8> NumericBoundsPolicy{
+    enum Reject,
+    enum Clamp,
+}
+
+class IntegerBounds{
+    public i64 minimum = s_NumericEditMinI64;
+    public i64 maximum = s_NumericEditMaxI64;
+    public NumericBoundsPolicy policy = NumericBoundsPolicy::Enum::Reject;
+}
+
+class FloatBounds{
+    public f64 minimum = s_NumericEditMinF64;
+    public f64 maximum = s_NumericEditMaxF64;
+    public NumericBoundsPolicy policy = NumericBoundsPolicy::Enum::Reject;
+}
+
+class NumericEditResult{
+    public b8 valid = false;
+    public b8 committed = false;
+    public b8 valueChanged = false;
+    public b8 cancelled = false;
+    public b8 rejected = false;
+    public b8 clamped = false;
+    public b8 restored = false;
+}
+
+enum<u8> EditTextStatus{
+    enum Accepted,
+    enum InvalidText,
+    enum TooLarge,
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Bindings or device adapters supply admitted editing intent; native-consumed input is filtered before translation.
+// Accept inserts LF in multiline mode and submits in single-line mode; Submit always submits.
+EditCommandRequest TranslateEditCommand(in InputCommandIntent intent, in b8 repeat, in EditTextMode mode){
+    EditCommandRequest request;
+    request.command = EditCommand::Enum::None;
+    request.extend = intent.extend;
+    request.repeat = repeat;
+    if(!intent.edit || cast<u8>(mode) > cast<u8>(EditTextMode::Enum::Multiline)){
+        return request;
+    }
+    switch(intent.command){
+    case InputCommand::Enum::Left: request.command = EditCommand::Enum::Left; break;
+    case InputCommand::Enum::Right: request.command = EditCommand::Enum::Right; break;
+    case InputCommand::Enum::Home: request.command = EditCommand::Enum::Home; break;
+    case InputCommand::Enum::End: request.command = EditCommand::Enum::End; break;
+    case InputCommand::Enum::WordLeft: request.command = EditCommand::Enum::WordLeft; break;
+    case InputCommand::Enum::WordRight: request.command = EditCommand::Enum::WordRight; break;
+    case InputCommand::Enum::DocumentHome:
+        if(mode == EditTextMode::Enum::Multiline){
+            request.command = EditCommand::Enum::DocumentHome;
+        }
+        else{
+            request.command = EditCommand::Enum::Home;
+        }
+        break;
+    case InputCommand::Enum::DocumentEnd:
+        if(mode == EditTextMode::Enum::Multiline){
+            request.command = EditCommand::Enum::DocumentEnd;
+        }
+        else{
+            request.command = EditCommand::Enum::End;
+        }
+        break;
+    case InputCommand::Enum::Backspace: request.command = EditCommand::Enum::Backspace; break;
+    case InputCommand::Enum::Delete: request.command = EditCommand::Enum::Delete; break;
+    case InputCommand::Enum::WordBackspace: request.command = EditCommand::Enum::WordBackspace; break;
+    case InputCommand::Enum::WordDelete: request.command = EditCommand::Enum::WordDelete; break;
+    case InputCommand::Enum::SelectAll: request.command = EditCommand::Enum::SelectAll; break;
+    case InputCommand::Enum::Copy: request.command = EditCommand::Enum::Copy; break;
+    case InputCommand::Enum::Cut: request.command = EditCommand::Enum::Cut; break;
+    case InputCommand::Enum::Paste: request.command = EditCommand::Enum::Paste; break;
+    case InputCommand::Enum::Undo: request.command = EditCommand::Enum::Undo; break;
+    case InputCommand::Enum::Redo: request.command = EditCommand::Enum::Redo; break;
+    case InputCommand::Enum::Accept:
+        if(mode == EditTextMode::Enum::Multiline){
+            request.command = EditCommand::Enum::Newline;
+        }
+        else{
+            request.command = EditCommand::Enum::Submit;
+        }
+        break;
+    case InputCommand::Enum::Submit: request.command = EditCommand::Enum::Submit; break;
+    case InputCommand::Enum::Cancel: request.command = EditCommand::Enum::Cancel; break;
+    case InputCommand::Enum::Newline: request.command = EditCommand::Enum::Newline; break;
+    default: break;
+    }
+    return request;
+}
+
+EditCommandRequest TranslateEditCommand(in InputCommandIntent intent, in b8 repeat){
+    return TranslateEditCommand(intent, repeat, EditTextMode::Enum::SingleLine);
+}
+
+b8 ValidateIntegerBounds(in IntegerBounds bounds){
+    return bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Enum::Reject || bounds.policy == NumericBoundsPolicy::Enum::Clamp);
+}
+
+b8 ValidateFloatBounds(in FloatBounds bounds){
+    return isFinite(bounds.minimum) && isFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Enum::Reject || bounds.policy == NumericBoundsPolicy::Enum::Clamp);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

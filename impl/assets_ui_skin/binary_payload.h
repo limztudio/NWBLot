@@ -23,9 +23,9 @@ namespace UiSkinBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_UiSkinMagic = 0x55495331u; // UIS1
-inline constexpr u32 s_UiSkinVersion = 3u;
-inline constexpr u32 s_UiSkinPaletteColorCount = 17u;
+inline constexpr u32 s_UiSkinMagic = s_UiSkinBinaryMagic; // UIS1
+inline constexpr u32 s_UiSkinVersion = s_UiSkinBinaryVersion;
+using Impl::s_UiSkinPaletteColorCount;
 inline constexpr TStringView s_UiSkinAssetKindLabel = NWB_TEXT("UI skin");
 inline constexpr TStringView s_UiSkinLoadBinaryContext = NWB_TEXT("UiSkin::loadBinary");
 
@@ -61,18 +61,10 @@ struct RegionBinary{
     u32 drawMode = 0u;
     u32 reserved = 0u;
 };
-
-struct ColorBinary{
-    f32 r = 0.0f;
-    f32 g = 0.0f;
-    f32 b = 0.0f;
-    f32 a = 0.0f;
-};
-
-struct TypographyBinary{
-    f32 defaultFontSize = s_UiSkinDefaultFontSize;
-};
 #pragma pack(pop)
+
+using ColorBinary = UiSkinColorBinary;
+using TypographyBinary = UiSkinTypographyBinary;
 
 static_assert(sizeof(HeaderBinary) == sizeof(NameHash) + 32u, "UI skin header layout drifted");
 static_assert(sizeof(RegionBinary) == sizeof(NameHash) + 64u, "UI skin region layout drifted");

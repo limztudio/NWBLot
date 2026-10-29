@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_ui/components.adhd.h>
 
 #include <core/os/clipboard.h>
 
@@ -18,18 +19,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace UiClipboardPublicationStatus{
-    enum Enum : u8{ Idle, Pending, Published, Unsupported, InvalidText, TooLarge, NativeFailure, WrongThread, QueueFull };
-};
-
-struct UiClipboardPublicationResult{
-    UiClipboardPublicationStatus::Enum status = UiClipboardPublicationStatus::Idle;
-    usize published = 0u;
-    usize failed = 0u;
-};
-
-inline constexpr usize s_UiClipboardMaxPublications = 16u;
 
 // Copies are immutable native publications.
 // Their owned OS requests survive later edits, focus and widget removal.

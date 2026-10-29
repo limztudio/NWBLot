@@ -7,6 +7,7 @@
 
 #include "../global.h"
 
+#include <impl/assets_model/types.adhd.h>
 #include <impl/assets_skeleton/joint_types.adhd.h>
 
 
@@ -25,7 +26,7 @@ namespace ModelBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_ModelMagic = 0x4D444C32u; // MDL2
+inline constexpr u32 s_ModelMagic = s_ModelBinaryMagic; // MDL2
 inline constexpr TStringView s_ModelAssetKindLabel = NWB_TEXT("model");
 inline constexpr TStringView s_ModelLoadBinaryContext = NWB_TEXT("Model::loadBinary");
 inline constexpr TStringView s_ModelSerializeContext = NWB_TEXT("ModelAssetCodec::serialize");

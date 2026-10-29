@@ -6,6 +6,7 @@
 
 
 #include "../assets_font/asset.h"
+#include <impl/assets_font_atlas/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/ref.h>
@@ -22,53 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_FontAtlasMaxGlyphCount = 65535u;
-inline constexpr u32 s_FontAtlasMaxGroupCount = 8u;
-inline constexpr u32 s_FontAtlasMaxChannelCount = 4u;
-inline constexpr u32 s_FontAtlasMaxPositioningTableCount = 3u; // kern, GPOS and GDEF.
-inline constexpr u32 s_FontAtlasMinUnitsPerEm = 16u;
-inline constexpr u32 s_FontAtlasMaxUnitsPerEm = 16384u;
-inline constexpr u32 s_FontAtlasMaxExtent = 2048u;
-inline constexpr u32 s_FontAtlasBytesPerKilobyte = 1024u;
-inline constexpr u32 s_FontAtlasMaxPixelMegabytes = 128u;
-inline constexpr u32 s_FontAtlasMaxPixelBytes = s_FontAtlasMaxPixelMegabytes * s_FontAtlasBytesPerKilobyte * s_FontAtlasBytesPerKilobyte;
-inline constexpr u32 s_FontAtlasMinBakePpem = 16u;
-inline constexpr u32 s_FontAtlasMaxBakePpem = 256u;
-inline constexpr u32 s_FontAtlasMinSpreadPixels = 2u;
-inline constexpr u32 s_FontAtlasMaxSpreadPixels = 32u;
-inline constexpr u32 s_FontAtlasDistanceEncoding = 1u;
-inline constexpr u32 s_FontAtlasMaxPositioningMegabytes = 32u;
-inline constexpr u32 s_FontAtlasMaxPositioningBytes = s_FontAtlasMaxPositioningMegabytes * s_FontAtlasBytesPerKilobyte * s_FontAtlasBytesPerKilobyte;
-inline constexpr u32 s_FontAtlasDefaultBakePpem = 64u;
-inline constexpr u32 s_FontAtlasDefaultSpreadPixels = 8u;
-inline constexpr u32 s_FontAtlasDefaultGuardTexels = 1u;
-inline constexpr u32 s_FontAtlasKernTag = 0x6b65726eu;
-inline constexpr u32 s_FontAtlasGposTag = 0x47504f53u;
-inline constexpr u32 s_FontAtlasGdefTag = 0x47444546u;
 inline constexpr TStringView s_FontAtlasValidatePayloadContext = NWB_TEXT("FontAtlas::validatePayload");
-
-namespace FontAtlasRasterMode{
-    enum Enum : u32{
-        Outline = 0u,
-        Bitmap = 1u,
-    };
-};
-
-struct FontAtlasGlyph{
-    u32 glyphId = 0u;
-    u32 group = 0u;
-    u32 channel = 0u;
-    u32 x = 0u;
-    u32 y = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-    f32 planeLeft = 0.f;
-    f32 planeTop = 0.f;
-    f32 planeRight = 0.f;
-    f32 planeBottom = 0.f;
-    f32 advanceUnits = 0.f;
-    u32 drawable = 0u;
-};
 
 struct FontAtlasGroup{
     u32 width = 0u;

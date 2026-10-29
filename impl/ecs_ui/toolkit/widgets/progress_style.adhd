@@ -2,11 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../paint_types.adhd"
+#include "style.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+class ProgressOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public f32 height = s_StyleControlHeight;
+}
 
 class ProgressStyle{
     public Name track = Name("progress.track");
@@ -16,6 +21,28 @@ class ProgressStyle{
     public Insets padding;
     public Color trackTint;
     public Color fillTint;
+}
+
+class ProgressMetrics{
+    public Insets padding;
+    public Point fillMinimum;
+    public Point contentSize;
+}
+
+class ProgressPlacement{
+    public Rect bounds;
+    public Rect clip;
+    public Rect content;
+    public Rect fillReveal;
+    public Rect fillCanvas;
+}
+
+// Each declaration owns its value, policy, resolved semantic names and skin metrics.
+class ProgressFrame{
+    public f64 fraction = 0.0;
+    public ProgressOptions options;
+    public ProgressStyle style;
+    public ProgressMetrics metrics;
 }
 
 

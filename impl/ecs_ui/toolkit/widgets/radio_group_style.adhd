@@ -30,5 +30,93 @@ class RadioGroupStyle{
     public f32 markInset = s_StyleMarkInset;
 }
 
+const u32 s_RadioGroupMaxChoices = 64u;
+
+class RadioGroupOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public b8 enabled = true;
+}
+
+class RadioGroupResult{
+    public b8 valid = false;
+    public b8 selectionChanged = false;
+    public b8 activated = false;
+    public b8 focused = false;
+}
+
+class RadioGroupChoice{
+    public u64 key = 0u;
+    public b8 enabled = false;
+}
+
+class RadioGroupChoices{
+    public Array<RadioGroupChoice, s_RadioGroupMaxChoices> rows;
+    public u64 sourceGeneration = 0u;
+    public u64 sourceRevision = 0u;
+    public u32 count = 0u;
+}
+
+class RadioGroupSnapshot{
+    public u64 instanceGeneration = 0u;
+    public u64 inputGeneration = 0u;
+    public u64 revision = 0u;
+    public u64 selectedKey = 0u;
+    public u64 cursorKey = 0u;
+    public u64 sourceGeneration = 0u;
+    public u64 sourceRevision = 0u;
+
+    public b8 operator==(in RadioGroupSnapshot rhs)const{
+        return
+            this.instanceGeneration == rhs.instanceGeneration
+            && this.inputGeneration == rhs.inputGeneration
+            && this.revision == rhs.revision
+            && this.selectedKey == rhs.selectedKey
+            && this.cursorKey == rhs.cursorKey
+            && this.sourceGeneration == rhs.sourceGeneration
+            && this.sourceRevision == rhs.sourceRevision;
+    }
+
+    public b8 operator!=(in RadioGroupSnapshot rhs)const{
+        return
+            this.instanceGeneration != rhs.instanceGeneration
+            || this.inputGeneration != rhs.inputGeneration
+            || this.revision != rhs.revision
+            || this.selectedKey != rhs.selectedKey
+            || this.cursorKey != rhs.cursorKey
+            || this.sourceGeneration != rhs.sourceGeneration
+            || this.sourceRevision != rhs.sourceRevision;
+    }
+}
+
+class RadioGroupMetrics{
+    public f32 rowHeight = 0.0f;
+    public f32 indicatorExtent = s_StyleControlExtent;
+    public f32 gap = s_StyleSpacingMedium;
+    public f32 rowGap = s_StyleSpacingSmall;
+    public f32 markInset = s_StyleMarkInset;
+    public Insets padding;
+    // Complete intrinsic group size, including its outer padding.
+    public Point contentSize;
+    public u32 count = 0u;
+}
+
+class RadioGroupChoicePlacement{
+    public u64 key = 0u;
+    public b8 enabled = false;
+    public Rect rectangle;
+    public Rect clip;
+    public Rect indicator;
+    public Rect mark;
+    public Rect textClip;
+}
+
+class RadioGroupPlacement{
+    public Rect bounds;
+    public Rect clip;
+    public Rect content;
+    public Array<RadioGroupChoicePlacement, s_RadioGroupMaxChoices> rows;
+    public u32 count = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

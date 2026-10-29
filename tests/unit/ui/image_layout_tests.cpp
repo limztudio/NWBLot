@@ -4,7 +4,7 @@
 
 #include "widget_fixture.h"
 
-#include <impl/ecs_ui/toolkit/widgets/image.h>
+#include <impl/ecs_ui/toolkit/widgets/image_layout.h>
 
 #include <gtest/gtest.h>
 

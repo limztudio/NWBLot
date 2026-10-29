@@ -40,7 +40,7 @@ Expected<SharedImageSource> MakeSeededImage(Core::Alloc::GlobalArena& arena, con
         const auto plane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, mipWidth, mipHeight);
         if(!plane)
             return MakeUnexpected(plane.error());
-        mips.push_back({ mipWidth, mipHeight, plane->blocksX, plane->blocksY, offset, plane->planeByteCount, 1u });
+        mips.push_back({ offset, plane->planeByteCount, mipWidth, mipHeight, plane->blocksX, plane->blocksY, 1u });
         offset += plane->planeByteCount;
         mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
         mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;

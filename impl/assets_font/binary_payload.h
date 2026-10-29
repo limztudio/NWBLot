@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include <impl/assets_font/types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,19 +24,11 @@ namespace FontBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_FontMagic = 0x464f4e31u; // FON1
-inline constexpr u32 s_FontVersion = 1u;
+inline constexpr u32 s_FontMagic = s_FontBinaryMagic;
+inline constexpr u32 s_FontVersion = s_FontBinaryVersion;
 inline constexpr TStringView s_FontAssetKindLabel = NWB_TEXT("font");
 
-#pragma pack(push, 1)
-struct HeaderBinary{
-    u32 magic = s_FontMagic;
-    u32 version = s_FontVersion;
-    u32 faceIndex = 0u;
-    u32 reserved = 0u;
-    u64 byteCount = 0u;
-};
-#pragma pack(pop)
+using HeaderBinary = FontBinaryHeader;
 
 static_assert(sizeof(HeaderBinary) == 24u && alignof(HeaderBinary) == 1u, "Font payload header layout drifted");
 static_assert(IsStandardLayout_V<HeaderBinary> && IsTriviallyCopyable_V<HeaderBinary>, "Font header must stay binary-serializable");

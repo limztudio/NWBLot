@@ -24,16 +24,16 @@ namespace SkeletonRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_AffineEpsilon = 0.000001f;
-static constexpr f32 s_JointDeterminantEpsilon = 0.000000000001f;
-static constexpr f32 s_RigidJointEpsilon = 0.001f;
+static constexpr f32 s_AffineEpsilon = s_SkeletonAffineEpsilon;
+static constexpr f32 s_JointDeterminantEpsilon = s_SkeletonJointDeterminantEpsilon;
+static constexpr f32 s_RigidJointEpsilon = s_SkeletonRigidJointEpsilon;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] NWB_INLINE b8 HasSkeletonPose(const SkeletonPoseComponent* pose)noexcept{
-    return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
+    return pose && HasSkeletonPoseData(*pose);
 }
 
 [[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkinningJointMatrix(const SIMDMatrix& poseJoint, const b8 hasInverseBind, const SIMDMatrix& inverseBind, const f32 inverseBindDeterminantEpsilon)noexcept{

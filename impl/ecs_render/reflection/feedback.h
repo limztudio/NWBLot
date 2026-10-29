@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "scene_content_stamp.h"
 #include <impl/ecs_render/reflection/settings.adhd.h>
 
 #include <core/alloc/global.h>
@@ -24,54 +23,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace ReflectionFeedbackResetReason{
-    enum Enum : u8{
-        None,
-        FirstObservation,
-        ResourcesChanged,
-        SettingsChanged,
-        SceneChanged,
-        ViewChanged,
-        Disabled,
-        UntrustedScene,
-        HardwareChanged,
-        InvalidAcceptance,
-    };
-};
-
-struct ReflectionFeedbackPlan{
-    ReflectionSceneContentStamp stamp;
-    ReflectionSettings settings;
-    u64 generation = 0u;
-    u64 sequence = 0u;
-    u64 acceptedSequence = 0u;
-    u64 epoch = 0u;
-    u64 graphicsFrameIndex = 0u;
-    u64 startGraphicsFrame = 0u;
-    u32 probeIndex = 0u;
-    u32 currentBank = 0u;
-    u32 previousBank = 0u;
-    b8 enabled = false;
-    b8 eligible = false;
-    b8 reused = false;
-    b8 reset = false;
-    b8 previousHardwareReady = false;
-    b8 quarantined = false;
-    ReflectionFeedbackResetReason::Enum resetReason = ReflectionFeedbackResetReason::None;
-};
-
-struct ReflectionFeedbackOutcome{
-    u64 epoch = 0u;
-    u64 startGraphicsFrame = 0u;
-    u32 probeIndex = 0u;
-    b8 eligible = false;
-    b8 reused = false;
-    b8 reset = false;
-    ReflectionFeedbackResetReason::Enum resetReason = ReflectionFeedbackResetReason::None;
-};
-
-[[nodiscard]] ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(const ReflectionFeedbackPlan& plan, b8 hardwareReady)noexcept;
 
 // Accepted writers publish feedback; writer-less classification only invalidates control.
 // One shared Graphics queue; declared hazards order reuse without CPU waits.

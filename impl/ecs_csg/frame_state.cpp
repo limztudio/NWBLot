@@ -184,24 +184,6 @@ Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& worl
     return MakeUnexpected(Failure{});
 }
 
-void AddCsgFrameReceiverWork(CsgFrameState& inOutState, const CsgReceiverKind::Enum receiverKind, const b8 opaqueWork, const b8 transparentWork, const u32 cutterCount)noexcept{
-    inOutState.receiverCount = AddSaturating<u32>(inOutState.receiverCount, 1u);
-    inOutState.cutterCount = AddSaturating<u32>(inOutState.cutterCount, cutterCount);
-
-    if(receiverKind == CsgReceiverKind::Static){
-        inOutState.hasOpaqueStaticWork = inOutState.hasOpaqueStaticWork || opaqueWork;
-        inOutState.hasTransparentStaticWork = inOutState.hasTransparentStaticWork || transparentWork;
-    }
-    else{
-        inOutState.hasOpaqueSkinnedWork = inOutState.hasOpaqueSkinnedWork || opaqueWork;
-        inOutState.hasTransparentSkinnedWork = inOutState.hasTransparentSkinnedWork || transparentWork;
-    }
-}
-
-void FinalizeCsgFrameState(CsgFrameState& inOutState)noexcept{
-    inOutState.hasAnyWork = inOutState.hasOpaqueStaticWork || inOutState.hasOpaqueSkinnedWork || inOutState.hasTransparentStaticWork || inOutState.hasTransparentSkinnedWork;
-}
-
 CsgFrameState BuildCsgFrameState(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const CsgFrameBuildDesc& desc){
     CsgFrameState state;
 

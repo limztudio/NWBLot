@@ -23,24 +23,6 @@ NWB_IMPL_BEGIN
 
 class Texture;
 
-inline constexpr UiSkinColor s_DefaultTextNormalColor = { 0.92f, 0.94f, 0.98f, 1.0f };
-inline constexpr UiSkinColor s_DefaultTextDisabledColor = { 0.48f, 0.5f, 0.55f, 1.0f };
-inline constexpr UiSkinColor s_DefaultTextTooltipColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-inline constexpr UiSkinColor s_DefaultEditBackgroundColor = { 0.08f, 0.1f, 0.14f, 1.0f };
-inline constexpr UiSkinColor s_DefaultEditSelectionColor = { 0.2f, 0.4f, 0.78f, 0.75f };
-inline constexpr UiSkinColor s_DefaultEditInactiveSelectionColor = { 0.28f, 0.31f, 0.38f, 0.55f };
-inline constexpr UiSkinColor s_DefaultEditCaretColor = { 0.95f, 0.97f, 1.0f, 1.0f };
-inline constexpr UiSkinColor s_DefaultEditPreeditColor = { 0.5f, 0.72f, 1.0f, 1.0f };
-inline constexpr UiSkinColor s_DefaultScrollbarTrackColor = { 0.08f, 0.1f, 0.14f, 1.0f };
-inline constexpr UiSkinColor s_DefaultScrollbarThumbColor = { 0.35f, 0.4f, 0.48f, 1.0f };
-inline constexpr UiSkinColor s_DefaultScrollbarDisabledColor = { 0.25f, 0.28f, 0.32f, 1.0f };
-inline constexpr UiSkinColor s_DefaultPopupBackdropColor = { 0.0f, 0.0f, 0.0f, 0.4f };
-inline constexpr UiSkinColor s_DefaultControlHoverTintColor = { 1.08f, 1.08f, 1.08f, 1.0f };
-inline constexpr UiSkinColor s_DefaultControlPressedTintColor = { 0.85f, 0.85f, 0.85f, 1.0f };
-inline constexpr UiSkinColor s_DefaultControlDisabledTintColor = { 0.55f, 0.55f, 0.55f, 0.6f };
-inline constexpr UiSkinColor s_DefaultProgressTrackTintColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-inline constexpr UiSkinColor s_DefaultProgressFillTintColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
 struct UiSkinPalette{
     Array<UiSkinColor, UiSkinColorRole::kCount> colors{{
         s_DefaultTextNormalColor, // TextNormal

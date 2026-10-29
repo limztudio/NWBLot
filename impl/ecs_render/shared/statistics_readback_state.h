@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/command.h>
@@ -23,16 +24,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct StatisticsReservationKey{
-    u64 sequence = 0u;
-    u64 generation = 0u;
-    u32 slot = 0u;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return sequence != 0u && generation != 0u; }
-};
 
 struct StatisticsPendingReadback{
     StatisticsReservationKey key;

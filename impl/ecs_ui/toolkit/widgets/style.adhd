@@ -4,6 +4,7 @@
 
 #include "../layout/types.adhd"
 #include "../text/types.adhd"
+#include "../input/input.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,6 +71,71 @@ class ContainerOptions{
     public LayoutSize height;
     public Insets padding;
     public f32 gap = s_StyleSpacingMedium;
+}
+
+// Content dimensions use atlas reference density for named regions and logical texel extent for engine sources.
+class ImageOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Content, 0.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Enum::Content, 0.0f);
+    public Color tint;
+}
+
+class ImageMetrics{
+    public Point contentSize;
+}
+
+class ImagePlacement{
+    public Rect bounds;
+    public Rect clip;
+}
+
+// Gesture baselines stay in the host model; frozen draw snapshots never borrow WindowState.
+class WindowGestureState{
+    public InputActionId id;
+    public Rect initialBounds;
+}
+
+class WindowState{
+    public Rect bounds;
+    public WindowGestureState moveGesture;
+    public WindowGestureState resizeGesture;
+    public b8 initialized = false;
+    public b8 collapsed = false;
+}
+
+const Rect s_WindowDefaultBounds = Rect(20.0f, 20.0f, 360.0f, 280.0f);
+const Point s_WindowDefaultMinimumSize = Point(160.0f, 80.0f);
+
+class WindowOptions{
+    public Rect initialBounds = s_WindowDefaultBounds;
+    public Point minimumSize = s_WindowDefaultMinimumSize;
+    public LayoutDirection direction = LayoutDirection::Enum::Column;
+    public b8 contentWidthFirstUse = false;
+    public b8 contentHeightFirstUse = false;
+    public b8 movable = true;
+    public b8 resizable = true;
+    public b8 collapsible = true;
+}
+
+class WindowMetrics{
+    public Insets contentPadding;
+    public Insets titlePadding;
+    public Point minimumSize;
+    public f32 titleHeight = 0.0f;
+    public f32 collapseExtent = 0.0f;
+    public f32 resizeExtent = 0.0f;
+}
+
+enum<u8> SeparatorDirection{
+    enum Horizontal,
+    enum Vertical,
+}
+
+class SeparatorOptions{
+    public LayoutSize length = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    // Zero uses the skin's minimum thickness, or one logical unit when no minimum is specified.
+    public f32 thickness = 0.0f;
+    public SeparatorDirection direction = SeparatorDirection::Enum::Horizontal;
 }
 
 

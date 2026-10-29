@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_ui/components.adhd.h>
 #include <impl/ecs_ui/toolkit/id.h>
 #include <impl/ecs_ui/toolkit/edit/model_snapshot.h>
 
@@ -37,16 +38,6 @@ public:
 [[nodiscard]] inline b8 operator==(const UiTextEditOwner& lhs, const UiTextEditOwner& rhs)noexcept{
     return lhs.widget == rhs.widget && lhs.declarationGeneration == rhs.declarationGeneration && lhs.modelGeneration == rhs.modelGeneration;
 }
-
-namespace UiTextEditStatus{
-    enum Enum : u8{ Idle, Applied, Cancelled, StaleOwner, StaleModel, StaleSurrounding, InvalidEvent, ModelRejected, NativeFailure, WrongThread };
-};
-
-struct UiTextEditResult{
-    UiTextEditStatus::Enum status = UiTextEditStatus::Idle;
-    b8 textChanged = false;
-    usize eventsApplied = 0u;
-};
 
 // The host validates token, sequence and owner before lending a model to a copied event.
 // Surrounding deletion additionally requires the exact native publication that the event addressed.

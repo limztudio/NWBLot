@@ -1,0 +1,31 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_SamplerBinaryMagic = 0x53414D31u; // SAM1
+const u32 s_SamplerBinaryVersion = 1u;
+const usize s_SamplerHeaderBinaryByteSize = 64u;
+const usize s_SamplerPackedAlignBytes = 1u;
+
+[serialize]
+class SamplerBinaryHeader{
+    public u32 magic = s_SamplerBinaryMagic;
+    public u32 version = s_SamplerBinaryVersion;
+    public f32 borderColorR = 0.0f;
+    public f32 borderColorG = 0.0f;
+    public f32 borderColorB = 0.0f;
+    public f32 borderColorA = 0.0f;
+    public f32 maxAnisotropy = 1.0f;
+    public f32 mipBias = 0.0f;
+    public u32 minFilter = 1u;
+    public u32 magFilter = 1u;
+    public u32 mipFilter = 1u;
+    public u32 addressU = 0u;
+    public u32 addressV = 0u;
+    public u32 addressW = 0u;
+    public u32 reductionType = 0u;
+    public u32 reserved = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

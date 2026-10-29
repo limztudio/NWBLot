@@ -18,24 +18,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ContextMenuOptions{
-    Point size = s_PopupDefaultSize;
-    f32 wheelRows = s_StyleScrollWheelStep;
-    b8 enabled = true;
-};
-
-struct ContextMenuResult{
-    b8 valid = false;
-    b8 opened = false;
-    b8 closed = false;
-    b8 activated = false;
-    u64 key = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class ContextMenuState final : NoCopy{
     friend class Builder;
 

@@ -1,3 +1,11 @@
+nwb_declare_static_library(nwb_assets_sampler_types)
+nwb_target_adhd_sources(nwb_assets_sampler_types
+    NAMESPACE NWB::Impl
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/types.adhd"
+)
+target_link_libraries(nwb_assets_sampler_types PUBLIC nwb_assets)
+
 nwb_declare_static_library(nwb_assets_sampler)
 target_sources(nwb_assets_sampler PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
@@ -8,7 +16,7 @@ target_sources(nwb_assets_sampler PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
-target_link_libraries(nwb_assets_sampler PUBLIC nwb_assets nwb_graphics)
+target_link_libraries(nwb_assets_sampler PUBLIC nwb_assets nwb_assets_sampler_types nwb_graphics)
 
 nwb_declare_static_library(nwb_assets_sampler_loader)
 target_sources(nwb_assets_sampler_loader PRIVATE
@@ -29,7 +37,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/*.inl"
         "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     )
-    target_link_libraries(nwb_assets_sampler_cook PUBLIC nwb_assets nwb_graphics nwb_metascript)
+    target_link_libraries(nwb_assets_sampler_cook PUBLIC nwb_assets nwb_assets_sampler_types nwb_graphics nwb_metascript)
     target_compile_definitions(nwb_assets_sampler_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_sampler_volume_entry)

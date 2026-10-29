@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <impl/assets_mesh/skin_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,7 +25,7 @@ namespace SkinBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SkinMagic = 0x534B4E31u; // SKN1
+inline constexpr u32 s_SkinMagic = s_SkinBinaryMagic; // SKN1
 inline constexpr TStringView s_SkinAssetKindLabel = NWB_TEXT("skin");
 inline constexpr TStringView s_SkinLoadBinaryContext = NWB_TEXT("Skin::loadBinary");
 inline constexpr TStringView s_SkinSerializeContext = NWB_TEXT("SkinAssetCodec::serialize");

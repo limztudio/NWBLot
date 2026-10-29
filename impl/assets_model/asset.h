@@ -10,6 +10,7 @@
 #include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/skin_asset.h>
+#include <impl/assets_model/types.adhd.h>
 #include <impl/assets_skeleton/asset.h>
 
 #include <core/assets/module.h>
@@ -20,36 +21,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ModelSkeletonObject{
-    Name name = s_NameNone;
-    Core::Assets::AssetRef<Skeleton> skeleton;
-    SkeletonJointMatrix transform = ::MatrixIdentity<Float34>();
-};
-
-struct ModelStaticMeshObject{
-    Name name = s_NameNone;
-    Core::Assets::AssetRef<Mesh> mesh;
-    Core::Assets::AssetRef<Material> material;
-    // Static attachment order: model owner * parent_object skeleton transform * parent_joint pose * transform.
-    // If parent_joint is empty, the joint pose term is omitted.
-    // If parent_object is empty, the model owner is used.
-    Name parentObject = s_NameNone;
-    Name parentJoint = s_NameNone;
-    SkeletonJointMatrix transform = ::MatrixIdentity<Float34>();
-};
-
-struct ModelSkinnedMeshObject{
-    Name name = s_NameNone;
-    Core::Assets::AssetRef<Skin> skin;
-    Core::Assets::AssetRef<Material> material;
-    Name skeletonObject = s_NameNone;
-    SkeletonJointMatrix transform = ::MatrixIdentity<Float34>();
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

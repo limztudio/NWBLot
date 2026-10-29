@@ -21,16 +21,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace UiEditClipboardStatus{
-    enum Enum : u8{ Idle, Pending, Applied, Published, Cancelled, StaleOwner, StaleModel, InvalidOwner, InvalidAction, ReadOnly, NoSelection, Unsupported, CompositionActive, InvalidText, TooLarge, ModelRejected, NativeFailure, WrongThread, QueueFull };
-};
-
-struct UiEditClipboardResult{
-    UiEditClipboardStatus::Enum status = UiEditClipboardStatus::Idle;
-    b8 textChanged = false;
-    b8 selectionChanged = false;
-};
-
 // The OS owns transfer and native selection.
 // This controller owns copied request fences, never a model pointer.
 // Cancel before any local edit/selection change, focus loss, owner removal or model replacement.

@@ -17,5 +17,46 @@ class PopupStyle{
     public Color backdrop = s_PopupBackdropColor;
 }
 
+enum<u8> PopupPlacementSide{
+    enum Below,
+    enum Above,
+    enum Right,
+    enum Left,
+    enum Center,
+}
+
+const Point s_PopupDefaultSize = Point(220.0f, 160.0f);
+
+class PopupOptions{
+    public Rect anchor;
+    public Point size = s_PopupDefaultSize;
+    public PopupPlacementSide side = PopupPlacementSide::Enum::Below;
+    public f32 gap = s_StyleSpacingSmall;
+    public b8 modal = false;
+    public b8 dismissOutside = true;
+    public b8 dismissCancel = true;
+    public b8 autofocus = true;
+}
+
+class PopupPlacement{
+    public Rect bounds;
+    public Rect viewport;
+    public PopupPlacementSide side = PopupPlacementSide::Enum::Below;
+}
+
+class ContextMenuOptions{
+    public Point size = s_PopupDefaultSize;
+    public f32 wheelRows = s_StyleScrollWheelStep;
+    public b8 enabled = true;
+}
+
+class ContextMenuResult{
+    public b8 valid = false;
+    public b8 opened = false;
+    public b8 closed = false;
+    public b8 activated = false;
+    public u64 key = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

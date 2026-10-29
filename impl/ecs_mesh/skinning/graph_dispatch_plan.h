@@ -5,9 +5,8 @@
 #pragma once
 
 
-#include "submission_state.h"
-
 #include <impl/ecs_mesh/runtime/mesh.h>
+#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include <impl/ecs_skeleton/components.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -23,37 +22,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mirrors bindless resources: five uint4 lanes; handles are StorageBuffer registrations.
-struct MeshSkinningBindlessResourceSlots{
-    u32 restPosition = 0u;
-    u32 skinnedPosition = 0u;
-    u32 restNormal = 0u;
-    u32 skinnedNormal = 0u;
-
-    u32 restTangent = 0u;
-    u32 skinnedTangent = 0u;
-    u32 meshletDesc = 0u;
-    u32 positionRefDeltas = 0u;
-
-    u32 attributeRefDeltas = 0u;
-    u32 attributeSkins = 0u;
-    u32 skinInfluences = 0u;
-    u32 jointPalette = 0u;
-
-    u32 localVertexRefs = 0u;
-    u32 primitiveIndices = 0u;
-    u32 meshletBounds = 0u;
-    u32 attributeBuffer = 0u;
-
-    u32 meshletLocalBounds = 0u;
-    u32 localBounds = 0u;
-    u32 reserved0 = 0u;
-    u32 reserved1 = 0u;
-
-
-public:
-    [[nodiscard]] constexpr b8 operator==(const MeshSkinningBindlessResourceSlots&)const noexcept = default;
-};
 static_assert(sizeof(MeshSkinningBindlessResourceSlots) == sizeof(u32) * 20u, "MeshSkinning bindless resource slots must stay five uint4 lanes");
 
 
@@ -99,7 +67,6 @@ struct MeshSkinningGraphDispatchPlan{
     b8 updatesMeshletBounds = false;
     b8 repacksNormals = false;
 };
-static constexpr usize s_MeshSkinningGraphDispatchPlanByteSize = 520u;
 static_assert(sizeof(MeshSkinningGraphDispatchPlan) == s_MeshSkinningGraphDispatchPlanByteSize, "Graph-owned skinning plans should stay compact");
 
 

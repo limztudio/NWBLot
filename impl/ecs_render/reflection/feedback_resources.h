@@ -38,19 +38,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ReflectionFeedbackExtent{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 tilesX = 0u;
-    u32 tilesY = 0u;
-    u32 entryCount = 0u;
-    u32 byteCount = 0u;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return byteCount != 0u; }
-};
-
 [[nodiscard]] Expected<ReflectionFeedbackExtent> ComputeReflectionFeedbackExtent(u32 width, u32 height)noexcept;
 
 struct ReflectionFeedbackBinding{

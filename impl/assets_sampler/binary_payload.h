@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <impl/assets_sampler/types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,34 +25,15 @@ namespace SamplerBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SamplerMagic = 0x53414D31u; // SAM1
-inline constexpr u32 s_SamplerVersion = 1u;
+inline constexpr u32 s_SamplerMagic = s_SamplerBinaryMagic; // SAM1
+inline constexpr u32 s_SamplerVersion = s_SamplerBinaryVersion;
 inline constexpr TStringView s_SamplerAssetKindLabel = NWB_TEXT("sampler");
 inline constexpr TStringView s_SamplerLoadBinaryContext = NWB_TEXT("Sampler::loadBinary");
 
-#pragma pack(push, 1)
-struct HeaderBinary{
-    u32 magic = s_SamplerMagic;
-    u32 version = s_SamplerVersion;
-    f32 borderColorR = 0.0f;
-    f32 borderColorG = 0.0f;
-    f32 borderColorB = 0.0f;
-    f32 borderColorA = 0.0f;
-    f32 maxAnisotropy = 1.0f;
-    f32 mipBias = 0.0f;
-    u32 minFilter = 1u;
-    u32 magFilter = 1u;
-    u32 mipFilter = 1u;
-    u32 addressU = 0u;
-    u32 addressV = 0u;
-    u32 addressW = 0u;
-    u32 reductionType = 0u;
-    u32 reserved = 0u;
-};
-#pragma pack(pop)
-static constexpr usize s_HeaderBinaryByteSize = 64u;
+using HeaderBinary = SamplerBinaryHeader;
+static constexpr usize s_HeaderBinaryByteSize = s_SamplerHeaderBinaryByteSize;
 static_assert(sizeof(HeaderBinary) == s_HeaderBinaryByteSize, "Sampler header layout drifted");
-static constexpr usize s_PackedAlignBytes = 1u;
+static constexpr usize s_PackedAlignBytes = s_SamplerPackedAlignBytes;
 static_assert(alignof(HeaderBinary) == s_PackedAlignBytes, "Sampler header must stay packed");
 static_assert(IsStandardLayout_V<HeaderBinary>, "Sampler header must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<HeaderBinary>, "Sampler header must stay binary-serializable");

@@ -110,5 +110,31 @@ class LightComponent{
     }
 }
 
+[reflect]
+class CameraProjection{
+    // Persistent projection payload; helpers convert at this boundary.
+    public f32x4 projectionParams(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 aspectRatio = 0.0f;
+    public f32 tanHalfVerticalFov = 0.0f;
+    public f32 nearPlane = 0.0f;
+    public f32 farPlane = 0.0f;
+}
+
+[reflect]
+class SceneLight{
+    // xyz = world position (point/spot); w = spot inner cone cosine.
+    public f32x4 position(0.0f, 0.0f, 0.0f, 1.0f);
+    // Directional: direction toward light. Spot: emission axis. w = outer cone cosine.
+    public f32x4 direction(0.0f, 0.0f, -1.0f, 1.0f);
+    // xyz = color, w = intensity.
+    public f32x4 colorIntensity(s_LightWhiteColorComponent, s_LightWhiteColorComponent, s_LightWhiteColorComponent, s_LightIntensity);
+    public f32 range = 0.0f;
+    // Soft-shadow source size: angular radius (radians) / punctual radius (world units).
+    public f32 angularRadius = s_LightDirectionalAngularRadius;
+    public f32 sourceRadius = s_LightPunctualSourceRadius;
+    public LightType type = LightType::Enum::Directional;
+    public b8 enableCaustics = s_LightEnableCaustics;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

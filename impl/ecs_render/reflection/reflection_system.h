@@ -50,15 +50,6 @@ NWB_IMPL_BEGIN
 class RendererShaderSystem;
 struct DeferredFrameTargets;
 
-inline constexpr StringView s_ReflectionHwOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=0";
-inline constexpr StringView s_ReflectionHwPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=0";
-inline constexpr StringView s_ReflectionHwUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=0";
-inline constexpr StringView s_ReflectionBuildArgsVariant = "NWB_RT_CSG_ENABLED=0";
-inline constexpr StringView s_ReflectionCsgBuildArgsVariant = "NWB_RT_CSG_ENABLED=1";
-inline constexpr StringView s_ReflectionHwCsgOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=1";
-inline constexpr StringView s_ReflectionHwCsgPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=1";
-inline constexpr StringView s_ReflectionHwCsgUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=1";
-
 struct ReflectionFrameParameters{
 #define NWB_REFLECTION_CPU_UINT_FIELD(name, value) u32 name = value;
     NWB_REFLECTION_FRAME_UINT_FIELDS(NWB_REFLECTION_CPU_UINT_FIELD)
@@ -73,14 +64,6 @@ static_assert(offsetof(ReflectionFrameParameters, maxRayDistance) == 128u);
 static_assert(offsetof(ReflectionFrameParameters, environmentTopR) == 140u);
 static_assert(offsetof(ReflectionFrameParameters, environmentBottomR) == 152u);
 static_assert(offsetof(ReflectionFrameParameters, screenThickness) == 164u);
-
-struct ReflectionDepthPyramidMip{
-    Name taskIdentity = s_NameNone;
-    u32 sampledSlot = 0u;
-    u32 storageSlot = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-};
 
 struct ReflectionDepthPyramidSnapshot{
     // A native mip chain for u32 extents cannot contain more than 32 levels.

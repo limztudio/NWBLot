@@ -1,0 +1,144 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+#include "../edit/types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Color s_EditBoxSelectionColor = Color(0.20f, 0.40f, 0.78f, 0.75f);
+const Color s_EditBoxInactiveSelectionColor = Color(0.28f, 0.31f, 0.38f, 0.55f);
+const Color s_EditBoxCaretColor = Color(0.95f, 0.97f, 1.0f, 1.0f);
+const Color s_EditBoxPreeditColor = Color(0.50f, 0.72f, 1.0f, 1.0f);
+
+const f32 s_TextAreaDefaultHeight = 160.0f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditBoxCaretStop{
+    public usize committedByte = 0u;
+    public usize displayByte = 0u;
+    public f32 x = 0.0f;
+    public u32 lineIndex = 0u;
+}
+
+class EditBoxRange{
+    public usize begin = 0u;
+    public usize end = 0u;
+}
+
+class EditCaretMapping{
+    public usize committedByte = 0u;
+    public usize displayByte = 0u;
+}
+
+class EditCaretLine{
+    public usize byteBegin = 0u;
+    public usize byteEnd = 0u;
+    public usize breakEnd = 0u;
+    public u32 firstStop = 0u;
+    public u32 stopCount = 0u;
+    public f32 top = 0.0f;
+    public f32 height = 0.0f;
+    public f32 advance = 0.0f;
+}
+
+class EditBoxPlacement{
+    public Rect bounds;
+    public Rect frameClip;
+    public Rect content;
+    public Rect clip;
+    public Point textOrigin;
+    public Rect caret;
+    public f32 scroll = 0.0f;
+    public f32 scrollY = 0.0f;
+}
+
+class EditBoxStyle{
+    public Name normal = Name("edit.normal");
+    public Name hover = Name("edit.hover");
+    public Name focused = Name("edit.focused");
+    public Name disabled = Name("edit.disabled");
+    public Name fallback = Name("button.normal");
+    public Name focus = Name("focus.overlay");
+    public Color background = s_StyleInsetColor;
+    public Color text = s_StyleTextColor;
+    public Color disabledText = s_StyleDisabledTextColor;
+    public Color selection = s_EditBoxSelectionColor;
+    public Color inactiveSelection = s_EditBoxInactiveSelectionColor;
+    public Color caret = s_EditBoxCaretColor;
+    public Color preedit = s_EditBoxPreeditColor;
+    public Insets padding = Insets(s_StyleSpacingMedium, s_StyleSpacingSmall, s_StyleSpacingMedium, s_StyleSpacingSmall);
+}
+
+class EditBoxPaintFlags{
+    public b8 enabled = true;
+    public b8 hovered = false;
+    public b8 focused = false;
+    public b8 readOnly = false;
+    public b8 caretVisible = true;
+    public b8 preeditCaretVisible = true;
+}
+
+class EditBoxOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize height;
+    public b8 enabled = true;
+    public b8 readOnly = false;
+}
+
+// The host keeps this value alive through the matching endPanel/endWindow; paint and GPU snapshots own their text.
+class EditBoxState{
+    public f64 caretElapsed = 0.0;
+    public u64 modelGeneration = 0u;
+    public u64 revision = 0u;
+    public u64 selectionGeneration = 0u;
+    public usize anchor = 0u;
+    public usize caret = 0u;
+    public EditBoxPlacement placement;
+    public f32 scroll = 0.0f;
+    public b8 focused = false;
+}
+
+class EditBoxResult{
+    public b8 valid = false;
+    public b8 textChanged = false;
+    public b8 selectionChanged = false;
+    public b8 submitted = false;
+    public b8 cancelled = false;
+    public b8 focused = false;
+    public b8 preeditCaretVisible = true;
+    public b8 blurred = false;
+    public b8 abandoned = false;
+}
+
+class IntegerEditOptions{
+    public EditBoxOptions edit;
+    public IntegerBounds bounds;
+}
+
+class FloatEditOptions{
+    public EditBoxOptions edit;
+    public FloatBounds bounds;
+}
+
+class NumericEditBoxResult{
+    public EditBoxResult edit;
+    public NumericEditResult numeric;
+}
+
+class TextAreaOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Enum::Fixed, s_TextAreaDefaultHeight);
+    public b8 enabled = true;
+    public b8 readOnly = false;
+    public f32 wheelLines = s_StyleScrollWheelStep;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

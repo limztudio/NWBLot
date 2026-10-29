@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_FontMaxSourceBytes = 32u * 1024u * 1024u;
+const u32 s_FontMaxTableCount = 256u;
+
+const usize s_FontSfntHeaderBytes = 12u;
+const u32 s_FontSfntHeadTag = 0x68656164u;
+const u32 s_FontSfntMaxpTag = 0x6d617870u;
+const usize s_FontSfntHeadUnitsPerEmOffset = 18u;
+const usize s_FontSfntMaxpGlyphCountOffset = 4u;
+
+const StringView s_PreparedFontExtension = ".font";
+
+const u32 s_FontBinaryMagic = 0x464f4e31u; // FON1
+const u32 s_FontBinaryVersion = 1u;
+
+[serialize]
+class FontBinaryHeader{
+    public u32 magic = s_FontBinaryMagic;
+    public u32 version = s_FontBinaryVersion;
+    public u32 faceIndex = 0u;
+    public u32 reserved = 0u;
+    public u64 byteCount = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

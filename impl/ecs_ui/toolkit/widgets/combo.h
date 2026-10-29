@@ -7,34 +7,13 @@
 
 #include "list.h"
 #include "popup.h"
+#include <impl/ecs_ui/toolkit/widgets/combo_style.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ComboOptions{
-    LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    LayoutSize height;
-    f32 popupHeight = s_ListDefaultHeight;
-    f32 wheelRows = s_StyleScrollWheelStep;
-    b8 enabled = true;
-    StringView placeholder = "Select...";
-};
-
-struct ComboResult{
-    b8 valid = false;
-    b8 selectionChanged = false;
-    b8 committed = false;
-    b8 opened = false;
-    b8 closed = false;
-    b8 focused = false;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

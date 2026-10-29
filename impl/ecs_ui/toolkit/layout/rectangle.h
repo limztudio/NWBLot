@@ -20,15 +20,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace UiRectPrecision{
-    enum Enum : u8{
-        RoundedEndpoints,
-        BoundedEndpoints,
-        PreciseExtents,
-        EmptyPaint,
-    };
-};
-
 // Preserve each consumer's endpoint admission and subprecision paint policy at compile time. Rectangle lanes are x, y, width, height.
 template<UiRectPrecision::Enum Precision>
 [[nodiscard]] NWB_INLINE Expected<Rect> MakeUiRect(const SIMDVectorDouble rectangle)noexcept{

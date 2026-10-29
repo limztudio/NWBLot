@@ -1,0 +1,110 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Ray tracing gathers emission targets before Deferred ranks lights. The root module brokers this contract between them.
+class RayTracingLightingClassificationInput{
+    public u32 refractiveInstanceCount = 0u;
+}
+
+class RayTracingLightingClassification{
+    public u32 causticLightCount = 0u;
+    public u32 softShadowSlotMask = 0u;
+}
+
+// Heap-slot indirection for the ray-tracing material context.
+class RayTraceMaterialContextSlots{
+    public u32 sceneBvhNodes = 0u;
+    public u32 sceneInstances = 0u;
+    public u32 instanceMaterial = 0u;
+    public u32 materialTyped = 0u;
+
+    public u32 meshInstances = 0u;
+    public u32 opticalScene = 0u;
+    public u32 opticalInstanceCount = 0u;
+    public u32 csgContext = 4294967295u;
+}
+
+// Eleven std140 uint4 lanes of ordinary-pass heap slots.
+class DeferredBindlessResourceSlots{
+    public u32 gbufferBaseColor = 0u;
+    public u32 gbufferNormal = 0u;
+    public u32 gbufferWorldPosition = 0u;
+    public u32 gbufferDepth = 0u;
+
+    public u32 shadowVisibility = 0u;
+    public u32 causticIrradiance = 0u;
+    public u32 surfelIrradiance = 0u;
+    public u32 sampler = 0u;
+
+    public u32 opaqueColor = 0u;
+    public u32 avboitAccumColor = 0u;
+    public u32 avboitAccumExtinction = 0u;
+    public u32 opaqueColorStorage = 0u;
+
+    public u32 avboitTransmittance = 0u;
+    public u32 avboitLinearSampler = 0u;
+    public u32 sceneShading = 0u;
+    public u32 lightList = 0u;
+
+    public u32 avboitCoverage = 0u;
+    public u32 avboitDepthWarp = 0u;
+    public u32 avboitControl = 0u;
+    public u32 avboitExtinction = 0u;
+
+    public u32 avboitExtinctionOverflow = 0u;
+    public u32 avboitTransmittanceStorage = 0u;
+    // Compute composite output sampled by the Graphics presentation blit.
+    public u32 compositeColor = 0u;
+    public u32 compositeColorStorage = 0u;
+
+    // CSG typed Texture2DArray aliases use the global StorageImage heap.
+    public u32 csgCapBackNormal = 0u;
+    public u32 csgIntervalDepth = 0u;
+    public u32 csgIntervalId = 0u;
+    public u32 csgReceiverEventData = 0u;
+
+    public u32 csgReceiverEventCount = 0u;
+    public u32 csgReceiverSpanData = 0u;
+    public u32 csgReceiverSpanCount = 0u;
+    public u32 csgRemovedIntervalDepth = 0u;
+
+    public u32 csgRemovedIntervalCapNormal = 0u;
+    public u32 csgRemovedIntervalData = 0u;
+    public u32 csgRemovedIntervalCount = 0u;
+    public u32 csgPadding = 0u;
+
+    public u32 refractionDepth = 0u;
+    public u32 refractionNormalIor = 0u;
+    public u32 refractionTintCoverage = 0u;
+    public u32 refractionResolveStorage = 0u;
+    public u32 refractionResolve = 0u;
+    public u32 avboitForegroundColor = 0u;
+    public u32 avboitForegroundExtinction = 0u;
+    public u32 refractionInstance = 0u;
+}
+
+class StatisticsReservationKey{
+    public u64 sequence;
+    public u64 generation;
+    public u32 slot;
+
+    public StatisticsReservationKey(){
+        this.sequence = 0u;
+        this.generation = 0u;
+        this.slot = 0u;
+    }
+
+    public StatisticsReservationKey(in u64 inSequence, in u64 inGeneration, in u32 inSlot){
+        this.sequence = inSequence;
+        this.generation = inGeneration;
+        this.slot = inSlot;
+    }
+
+    public b8 valid()const{
+        return this.sequence != 0u && this.generation != 0u;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

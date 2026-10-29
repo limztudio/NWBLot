@@ -21,43 +21,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct EditBoxOptions{
-    LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    LayoutSize height;
-    b8 enabled = true;
-    b8 readOnly = false;
-};
-
-// The host keeps this value alive through the matching endPanel/endWindow; paint and GPU snapshots own their text.
-// Members are ordered by alignment (8-byte, then 4-byte, then 1-byte) to minimize padding.
-struct EditBoxState{
-    f64 caretElapsed = 0.0;
-    u64 modelGeneration = 0u;
-    u64 revision = 0u;
-    u64 selectionGeneration = 0u;
-    usize anchor = 0u;
-    usize caret = 0u;
-    EditBoxPlacement placement;
-    f32 scroll = 0.0f;
-    b8 focused = false;
-};
-
-struct EditBoxResult{
-    b8 valid = false;
-    b8 textChanged = false;
-    b8 selectionChanged = false;
-    b8 submitted = false;
-    b8 cancelled = false;
-    b8 focused = false;
-    b8 preeditCaretVisible = true;
-    b8 blurred = false;
-    b8 abandoned = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // The toolkit lends a model only during edit(). Native services and asynchronous exchange belong to the host adapter.
 interface IEditBoxHost : private NoCopy{
 public:

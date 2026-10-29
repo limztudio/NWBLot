@@ -1,0 +1,103 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shadow/quality_settings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Semantic identities selected by the current scene preflight, including direct transform and material edits.
+// Runtime deformation is unstamped.
+// Static mesh, texture and shader resources remain immutable until invalidation.
+class RayTracingSceneContentStamp{
+    public u64 geometry;
+    public u64 material;
+    public b8 trusted;
+
+    public RayTracingSceneContentStamp(){
+        this.geometry = 0u;
+        this.material = 0u;
+        this.trusted = false;
+    }
+
+    public RayTracingSceneContentStamp(in u64 inGeometry, in u64 inMaterial, in b8 inTrusted){
+        this.geometry = inGeometry;
+        this.material = inMaterial;
+        this.trusted = inTrusted;
+    }
+}
+
+// CPU mirror of trace material ABI; HW and SW share instance IDs.
+class NwbRtInstanceMaterialGpu{
+    public u32 surfaceDispatchId = 4294967295u;
+    public u32 flags = 0u;
+    public u32 shadingModelId = 0u;
+    public u32 materialConstantByteOffset = 0u;
+    public u32 meshInstanceIndex = 0u;
+    // Global-heap geometry slots; nodeSlot is software-only.
+    public u32 indexSlot = 4294967295u;
+    public u32 attributeSlot = 4294967295u;
+    public u32 positionSlot = 4294967295u;
+    public u32 nodeSlot = 4294967295u;
+}
+
+const usize s_NwbRtInstanceMaterialGpuByteSize = 36u;
+
+// Shader-mirrored flags: transparent selects transmittance; refractive selects caustics.
+enum<u32> RtInstanceMaterialFlag{
+    flag None = 0u,
+    flag Transparent = 1u << 0u,
+    flag Refractive = 1u << 1u,
+    flag CsgShadow = 1u << 2u,
+    flag RefractionEntryCertified = 1u << 3u
+}
+
+// The caustic resolve chain works on targets reduced by this factor in each axis.
+const u32 s_CausticResolveDownscaleFactor = 2u;
+
+class CausticResolveActivityLayout{
+    public u64 bufferByteSize = 0u;
+    public u32 tilesX = 0u;
+    public u32 tilesY = 0u;
+}
+
+class ShadowCombinedTemporalPushConstants{
+    public f32x4x4 prevWorldToClip(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+    public u32 lightSlotCount = 0u;
+    public u32 historyValid = 0u;
+    public u32 geometryCurrSlot = 0u;
+    public u32 geometryPrevSlot = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 opaqueSoftTraceSlot = 0u;
+    public u32 opaqueHistoryInSlot = 0u;
+    public u32 opaqueMomentsInSlot = 0u;
+    public u32 opaqueHistoryOutSlot = 0u;
+    public u32 opaqueMomentsOutSlot = 0u;
+    public u32 transparentSoftTraceSlot = 0u;
+    public u32 transparentHistoryInSlot = 0u;
+    public u32 transparentMomentsInSlot = 0u;
+    public u32 transparentHistoryOutSlot = 0u;
+    public u32 transparentMomentsOutSlot = 0u;
+}
+
+enum<u8> SoftShadowOpaqueResolvePhase{
+    enum TemporalAndWavelet,
+    enum TemporalOnly,
+    enum WaveletOnly
+}
+
+// Soft resolve either overwrites visibility or multiplies transparent transmittance.
+enum<u32> SoftShadowUpsampleFold{
+    enum Overwrite = 0u,
+    enum Multiply
+}
+
+b8 CanCombineSoftShadowWavelets(in b8 combinedUpsample, in b8 pipelineReady, in b8 opaqueTemporalReady, in b8 transparentTemporalReady, in u32 opaquePassCount, in u32 transparentPassCount){
+    return combinedUpsample && pipelineReady && opaqueTemporalReady && transparentTemporalReady && opaquePassCount == 1u && transparentPassCount == 1u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

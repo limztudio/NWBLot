@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+class TextureMipLevel{
+    public u64 offsetBytes = 0u;
+    public u64 sizeBytes = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 blockCountX = 0u;
+    public u32 blockCountY = 0u;
+    // 2D payload planes per mip: one for 2D, six for cubemap, reduced Z extent for 3D.
+    public u32 sliceCount = 1u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

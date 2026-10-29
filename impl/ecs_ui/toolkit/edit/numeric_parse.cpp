@@ -77,14 +77,6 @@ namespace __hidden_ui_numeric_parse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateIntegerBounds(const IntegerBounds& bounds)noexcept{
-    return bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
-}
-
-b8 ValidateFloatBounds(const FloatBounds& bounds)noexcept{
-    return IsFinite(bounds.minimum) && IsFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
-}
-
 Expected<i64, NumericParseStatus::Enum> ParseIntegerDraft(const AStringView text)noexcept{
     const AStringView trimmed = TrimView(text);
     const NumericParseStatus::Enum status = __hidden_ui_numeric_parse::IntegerGrammar(trimmed);

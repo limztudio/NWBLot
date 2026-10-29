@@ -1,3 +1,11 @@
+nwb_declare_static_library(nwb_assets_font_types)
+nwb_target_adhd_sources(nwb_assets_font_types
+    NAMESPACE "NWB::Impl"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
+)
+target_link_libraries(nwb_assets_font_types PUBLIC nwb_assets)
+
 set(_nwb_font_runtime_sources
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/font_validation.cpp"
@@ -15,7 +23,7 @@ nwb_declare_static_library(nwb_assets_font)
 target_sources(nwb_assets_font PRIVATE
     ${_nwb_font_runtime_sources}
 )
-target_link_libraries(nwb_assets_font PUBLIC nwb_assets PRIVATE nwb::freetype)
+target_link_libraries(nwb_assets_font PUBLIC nwb_assets nwb_assets_font_types PRIVATE nwb::freetype)
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_font_cook)
@@ -23,7 +31,7 @@ if(NWB_BUILD_PIPELINE)
         ${_nwb_font_runtime_sources}
         "${CMAKE_CURRENT_LIST_DIR}/cook*.cpp"
     )
-    target_link_libraries(nwb_assets_font_cook PUBLIC nwb_assets nwb_metascript PRIVATE nwb::freetype)
+    target_link_libraries(nwb_assets_font_cook PUBLIC nwb_assets nwb_assets_font_types nwb_metascript PRIVATE nwb::freetype)
     target_compile_definitions(nwb_assets_font_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_font_volume_entry)

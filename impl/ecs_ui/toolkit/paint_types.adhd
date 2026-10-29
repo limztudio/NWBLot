@@ -57,5 +57,16 @@ class DrawCommand{
     public PaintMaterial material = PaintMaterial::Enum::Solid;
 }
 
+// Share of free space placed before an item to center it, or the midpoint of an extent.
+const f32 s_RectCenterFraction = 0.5f;
+const f64 s_RectCenterFractionF64 = 0.5;
+
+enum<u8> UiRectPrecision{
+    enum RoundedEndpoints,
+    enum BoundedEndpoints,
+    enum PreciseExtents,
+    enum EmptyPaint,
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <impl/ecs_ui/toolkit/paint_types.adhd.h>
+
 #include <global/simd/vector_arithmetic.h>
 
 
@@ -14,14 +16,6 @@
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Share of free space placed before an item to center it, or the midpoint of an extent.
-inline constexpr f32 s_RectCenterFraction = 0.5f;
-inline constexpr f64 s_RectCenterFractionF64 = 0.5;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

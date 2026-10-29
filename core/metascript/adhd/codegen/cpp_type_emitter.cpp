@@ -185,14 +185,15 @@ void CppTypeEmitter::emitMethodSignature(
 
 b8 CppTypeEmitter::isSmallValueType(MStringView typeName, const SymbolTable& symbols)noexcept{
     typeName = symbols.resolveBaseTypeName(typeName);
-    if(typeName == "b8"
-        || IsIntegerScalarType(typeName)
-        || IsFloatScalarType(typeName)
-        || typeName == "EntityID"
-        || typeName == "Name" || typeName == "StringView")
-    {
-        return true;
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if(typeName == adhdName) return true;
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if constexpr(isSmallValue){ \
+        if(typeName == adhdName) return true; \
     }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
     if(symbols.findEnum(typeName))
         return true;
     return false;

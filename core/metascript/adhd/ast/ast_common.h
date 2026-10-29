@@ -125,17 +125,13 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 }
 
 [[nodiscard]] constexpr b8 IsCompoundOrSimpleAssignment(const TokenType::Enum op)noexcept{
-    return op == TokenType::Equal
-        || op == TokenType::PlusEqual
-        || op == TokenType::MinusEqual
-        || op == TokenType::StarEqual
-        || op == TokenType::SlashEqual
-        || op == TokenType::PercentEqual
-        || op == TokenType::AmpersandEqual
-        || op == TokenType::PipeEqual
-        || op == TokenType::CaretEqual
-        || op == TokenType::LessLessEqual
-        || op == TokenType::GreaterGreaterEqual;
+#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, isCompoundAssignment) \
+    if constexpr(isAssignment){ \
+        if(op == tokenType) return true; \
+    }
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
+    return false;
 }
 
 [[nodiscard]] constexpr MStringView ExtractAdhdFileStem(const MStringView path)noexcept{

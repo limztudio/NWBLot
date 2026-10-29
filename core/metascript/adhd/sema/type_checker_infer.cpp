@@ -29,10 +29,10 @@ MStringView TypeChecker::inferExprTypeName(
         }
         if(const Stmt* gc = m_symbols.findGlobalConstant(expr.text); gc && gc->varType)
             return m_symbols.resolveBaseTypeName(gc->varType->name);
-        if(expr.text == "s_InvalidEntityId")
-            return "EntityID";
-        if(expr.text == "s_NameNone")
-            return "Name";
+#define NWB_ADHD_EXPORT_GLOBAL_CONSTANT(adhdName, cppExportName, adhdTypeName) \
+        if(expr.text == adhdName) return adhdTypeName;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
     }
     else if(expr.kind == ExprKind::ThisMember && ownerClass){
         if(const FieldDecl* field = findClassField(*ownerClass, expr.text)){
@@ -45,8 +45,10 @@ MStringView TypeChecker::inferExprTypeName(
         u32 simdLanes = 0u;
         if(SymbolTable::isSimdVectorType(lhsType, simdLanes) && expr.text.size() == 1u){
             const MChar c = expr.text[0];
-            if((c == 'w' || c == 'a') && (lhsType == "f32x3_i32" || lhsType == "f32x3_u32" || lhsType == "f64x3_i64" || lhsType == "f64x3_u64"))
-                return lhsType.substr(6u);
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+            if(lhsType == adhdName) return (c == 'w' || c == 'a') ? MStringView(wScalarType) : MStringView(xyzScalarType);
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
             return lhsType.substr(0u, 3u);
         }
         u32 unalignedLanes = 0u;
@@ -102,15 +104,25 @@ MStringView TypeChecker::inferExprTypeName(
             return m_symbols.resolveBaseTypeName(callType->name);
         if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const MStringView mName = expr.lhs->text;
-            if(mName == "size" || mName == "length" || mName == "capacity" || mName == "count" || mName == "max_size" || mName == "hash")
+            u8 memberRetRule = 0u;
+            constexpr u8 s_MemberRetNone = 0u;
+            constexpr u8 s_MemberRetVoid = 0u;
+            constexpr u8 s_MemberRetUsize = 1u;
+            constexpr u8 s_MemberRetBool = 2u;
+            constexpr u8 s_MemberRetStringView = 3u;
+            constexpr u8 s_MemberRetOptionalOrExpectedValue = 0u;
+            constexpr u8 s_MemberRetExpectedError = 0u;
+            constexpr u8 s_MemberRetFirstTypeArg = 0u;
+            constexpr u8 s_MemberRetAtomicValue = 0u;
+#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, adaptsFirstArgToElement, returnRule) \
+            if(mName == methodName) memberRetRule = s_MemberRet##returnRule;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_MEMBER_METHOD
+            if(memberRetRule == s_MemberRetUsize)
                 return "usize";
-            if(mName == "empty" || mName == "hasValue" || mName == "has_value" || mName == "valid"
-                || mName == "contains" || mName == "starts_with" || mName == "ends_with"
-                || mName == "compare_exchange_weak" || mName == "compare_exchange_strong")
-            {
+            if(memberRetRule == s_MemberRetBool)
                 return "b8";
-            }
-            if(mName == "c_str" || mName == "subview" || mName == "substr")
+            if(memberRetRule == s_MemberRetStringView)
                 return "StringView";
         }
         if(expr.lhs->kind == ExprKind::Identifier){
@@ -239,16 +251,21 @@ const TypeRef* TypeChecker::inferExprTypeRef(
         const TypeRef* containerType = inferExprTypeRef(ownerClass, method, *expr.lhs, scope);
         if(containerType){
             const MStringView baseName = m_symbols.resolveBaseTypeName(containerType->name);
-            if((baseName == "Map" || baseName == "HashMap" || baseName == "ParallelHashMap")
-                && containerType->templateArgs.size() >= 2u && containerType->templateArgs[1].type)
-            {
+            b8 isMapContainer = false;
+            b8 isIndexableSeq = false;
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+            if constexpr(isReflectedMap){ \
+                if(baseName == adhdName) isMapContainer = true; \
+            } \
+            if constexpr(isIndexableSequence){ \
+                if(baseName == adhdName) isIndexableSeq = true; \
+            }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+            if(isMapContainer && containerType->templateArgs.size() >= 2u && containerType->templateArgs[1].type)
                 return m_symbols.unwrapTypeAlias(containerType->templateArgs[1].type);
-            }
-            if((baseName == "Array" || baseName == "Vector" || baseName == "FixedVector" || baseName == "ParallelVector" || baseName == "Deque" || baseName == "Span")
-                && !containerType->templateArgs.empty() && containerType->templateArgs[0].type)
-            {
+            if(isIndexableSeq && !containerType->templateArgs.empty() && containerType->templateArgs[0].type)
                 return m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type);
-            }
         }
         const MStringView lhsType = containerType
             ? m_symbols.resolveBaseTypeName(containerType->name)
@@ -368,17 +385,27 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                 : inferExprTypeName(ownerClass, method, *expr.lhs->lhs, scope);
             const MStringView mName = expr.lhs->text;
             if(recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
-                if((lhsType == "Optional" || lhsType == "Expected") && mName == "value")
+                u8 memberRetRule = 0u;
+                constexpr u8 s_MemberRetNone = 0u;
+                constexpr u8 s_MemberRetVoid = 0u;
+                constexpr u8 s_MemberRetUsize = 0u;
+                constexpr u8 s_MemberRetBool = 0u;
+                constexpr u8 s_MemberRetStringView = 0u;
+                constexpr u8 s_MemberRetOptionalOrExpectedValue = 1u;
+                constexpr u8 s_MemberRetExpectedError = 2u;
+                constexpr u8 s_MemberRetFirstTypeArg = 3u;
+                constexpr u8 s_MemberRetAtomicValue = 4u;
+#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, adaptsFirstArgToElement, returnRule) \
+                if(mName == methodName) memberRetRule = s_MemberRet##returnRule;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_MEMBER_METHOD
+                if(memberRetRule == s_MemberRetOptionalOrExpectedValue && (lhsType == "Optional" || lhsType == "Expected"))
                     return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
-                if(lhsType == "Expected" && mName == "error" && recvTypeRef->templateArgs.size() >= 2u && recvTypeRef->templateArgs[1].type)
+                if(memberRetRule == s_MemberRetExpectedError && lhsType == "Expected" && recvTypeRef->templateArgs.size() >= 2u && recvTypeRef->templateArgs[1].type)
                     return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[1].type);
-                if((lhsType == "Vector" || lhsType == "FixedVector" || lhsType == "Array" || lhsType == "ParallelVector"
-                    || lhsType == "Deque" || lhsType == "List" || lhsType == "ForwardList" || lhsType == "Queue" || lhsType == "Span")
-                    && (mName == "front" || mName == "back"))
-                {
+                if(memberRetRule == s_MemberRetFirstTypeArg && (IsSingleTypeParamBuiltinGeneric(lhsType) || IsTypeAndCountBuiltinGeneric(lhsType)))
                     return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
-                }
-                if(lhsType == "Atomic" && (mName == "load" || mName == "exchange" || mName == "fetch_add" || mName == "fetch_sub"))
+                if(memberRetRule == s_MemberRetAtomicValue && lhsType == "Atomic")
                     return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
             }
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){

@@ -18,51 +18,37 @@ NWB_ADHD_BEGIN
 
 
 [[nodiscard]] constexpr b8 IsIntegerScalarType(const MStringView typeName)noexcept{
-    return typeName == "i8" || typeName == "u8"
-        || typeName == "i16" || typeName == "u16"
-        || typeName == "i32" || typeName == "u32"
-        || typeName == "i64" || typeName == "u64"
-        || typeName == "isize" || typeName == "usize";
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if constexpr(isInteger){ \
+        if(typeName == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
+    return false;
 }
 
 [[nodiscard]] constexpr b8 IsFloatScalarType(const MStringView typeName)noexcept{
-    return typeName == "f32" || typeName == "f64";
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if constexpr(isFloat){ \
+        if(typeName == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
+    return false;
 }
 
 [[nodiscard]] constexpr MStringView MapTokenTypeToOperatorSymbol(const TokenType::Enum op)noexcept{
     switch(op){
-    case TokenType::Plus: return "+";
-    case TokenType::Minus: return "-";
-    case TokenType::Star: return "*";
-    case TokenType::Slash: return "/";
-    case TokenType::Percent: return "%";
-    case TokenType::Ampersand: return "&";
-    case TokenType::Pipe: return "|";
-    case TokenType::Caret: return "^";
-    case TokenType::Tilde: return "~";
-    case TokenType::Bang: return "!";
-    case TokenType::LessLess: return "<<";
-    case TokenType::GreaterGreater: return ">>";
-    case TokenType::EqualEqual: return "==";
-    case TokenType::BangEqual: return "!=";
-    case TokenType::Less: return "<";
-    case TokenType::LessEqual: return "<=";
-    case TokenType::Greater: return ">";
-    case TokenType::GreaterEqual: return ">=";
-    case TokenType::PlusEqual: return "+=";
-    case TokenType::MinusEqual: return "-=";
-    case TokenType::StarEqual: return "*=";
-    case TokenType::SlashEqual: return "/=";
-    case TokenType::PercentEqual: return "%=";
-    case TokenType::AmpersandEqual: return "&=";
-    case TokenType::PipeEqual: return "|=";
-    case TokenType::CaretEqual: return "^=";
-    case TokenType::LessLessEqual: return "<<=";
-    case TokenType::GreaterGreaterEqual: return ">>=";
-    case TokenType::PlusPlus: return "++";
-    case TokenType::MinusMinus: return "--";
-    default: return {};
+#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, isCompoundAssignment) \
+    case tokenType: \
+        if constexpr(tokenType != TokenType::Equal) return symbol; \
+        break;
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
+    default:
+        return {};
     }
+    return {};
 }
 
 [[nodiscard]] b8 IsNonThreadSafeContainer(MStringView typeName)noexcept;
@@ -101,6 +87,12 @@ NWB_ADHD_BEGIN
     const SymbolTable& symbols
 )noexcept;
 [[nodiscard]] b8 TypeContainsArenaBackedContainer(const TypeRef& type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
+[[nodiscard]] i32 ScoreCallableParams(
+    const SymbolTable& symbols,
+    const MVector<ParamDecl>& params,
+    const MVector<MStringView>* argTypeNames,
+    const MVector<b8>* argIsMut
+)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

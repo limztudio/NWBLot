@@ -26,6 +26,16 @@ namespace __hidden_adhd_layout_optimizer{
     return (offset + alignment - 1u) & ~(alignment - 1u);
 }
 
+[[nodiscard]] constexpr b8 IsInlineValueGenericType(const MStringView name)noexcept{
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(byteSize == 0u){ \
+        if(name == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+    return false;
+}
+
 [[nodiscard]] b8 TypeReferencesClassByValue(
     const TypeRef& type,
     const MStringView targetClassName,
@@ -40,7 +50,7 @@ namespace __hidden_adhd_layout_optimizer{
     const MStringView name = unwrapped->name;
     if(name == targetClassName)
         return true;
-    if(name == "Array" || name == "FixedVector" || name == "Optional" || name == "Atomic" || name == "Expected"){
+    if(IsInlineValueGenericType(name)){
         for(const TypeArg& targ : unwrapped->templateArgs){
             if(targ.type && TypeReferencesClassByValue(*targ.type, targetClassName, symbols, depth + 1u))
                 return true;
@@ -96,7 +106,7 @@ namespace __hidden_adhd_layout_optimizer{
         return false;
     }
 
-    if(name == "Array" || name == "FixedVector" || name == "Optional" || name == "Expected"){
+    if(IsInlineValueGenericType(name)){
         for(const TypeArg& targ : unwrapped->templateArgs){
             if(targ.type && !IsTypeBinarySerializable(*targ.type, symbols, outReason, depth + 1u))
                 return false;
@@ -275,86 +285,51 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
         }
     }
 
-    if(name == "b8" || name == "i8" || name == "u8"){
-        outSize = 1u;
-        outAlign = 1u;
-        return;
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if(name == adhdName){ \
+        outSize = byteSize; \
+        outAlign = byteAlign; \
+        return; \
     }
-    if(name == "i16" || name == "u16"){
-        outSize = 2u;
-        outAlign = 2u;
-        return;
+#define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, laneScalarType) \
+    if(name == adhdName){ \
+        outSize = byteSize; \
+        outAlign = byteAlign; \
+        return; \
     }
-    if(name == "i32" || name == "u32" || name == "f32" || name == "EntityID"){
-        outSize = 4u;
-        outAlign = 4u;
-        return;
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if(name == adhdName){ \
+        outSize = byteSize; \
+        outAlign = byteAlign; \
+        return; \
     }
-    if(name == "i64" || name == "u64" || name == "isize" || name == "usize" || name == "f64"){
-        outSize = 8u;
-        outAlign = 8u;
-        return;
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    if(name == adhdName){ \
+        outSize = byteSize; \
+        outAlign = byteAlign; \
+        return; \
     }
-
-    u32 unalignedLanes = 0u;
-    if(SymbolTable::isUnalignedVectorType(name, unalignedLanes)){
-        const usize elemSize = (name.size() >= 3u && name.substr(1u, 2u) == "64") ? 8u : 4u;
-        outSize = elemSize * unalignedLanes;
-        outAlign = elemSize;
-        return;
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if(name == adhdName){ \
+        outSize = byteSize; \
+        outAlign = byteAlign; \
+        return; \
     }
-
-    if(name == "f32x4" || name == "i32x4" || name == "u32x4" || name == "f32x3_i32" || name == "f32x3_u32"){
-        outSize = 16u;
-        outAlign = 16u;
-        return;
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(byteSize > 0u){ \
+        if(name == adhdName){ \
+            outSize = byteSize; \
+            outAlign = byteAlign; \
+            return; \
+        } \
     }
-    if(name == "f32x3x4"){
-        outSize = 48u;
-        outAlign = 16u;
-        return;
-    }
-    if(name == "f32x4x4"){
-        outSize = 64u;
-        outAlign = 16u;
-        return;
-    }
-    if(name == "f64x2" || name == "f64x3" || name == "f64x4" || name == "i64x4" || name == "u64x4" || name == "f64x3_i64" || name == "f64x3_u64"){
-        outSize = 32u;
-        outAlign = 32u;
-        return;
-    }
-    if(name == "f64x3x3" || name == "f64x3x4"){
-        outSize = 96u;
-        outAlign = 32u;
-        return;
-    }
-    if(name == "f64x4x4"){
-        outSize = 128u;
-        outAlign = 32u;
-        return;
-    }
-
-    if(name == "Name" || name == "AssetRef"){
-        outSize = 8u;
-        outAlign = 8u;
-        return;
-    }
-    if(name == "StringView" || name == "Span"){
-        outSize = 16u;
-        outAlign = 8u;
-        return;
-    }
-    if(name == "String" || name == "Path"){
-        outSize = 32u;
-        outAlign = 8u;
-        return;
-    }
-    if(name == "CompactString"){
-        outSize = 256u;
-        outAlign = 1u;
-        return;
-    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
+#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+#undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
 
     if(name == "Atomic"){
         if(!type.templateArgs.empty() && type.templateArgs[0].type){
@@ -425,12 +400,6 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
         }
         outAlign = elemAlign > 4u ? elemAlign : 4u;
         outSize = __hidden_adhd_layout_optimizer::AlignUp(elemSize * count + 4u, outAlign);
-        return;
-    }
-
-    if(SymbolTable::isArenaBackedContainer(name)){
-        outSize = 32u;
-        outAlign = 8u;
         return;
     }
 

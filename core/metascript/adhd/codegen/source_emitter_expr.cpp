@@ -65,11 +65,16 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
             out.append(expr.text.data(), expr.text.size());
             out.push_back(')');
         }
-        else if(expr.text == "s_InvalidEntityId"){
-            out.append("::NWB::Core::ECS::s_InvalidEntityId");
-        }
         else{
-            out.append(expr.text.data(), expr.text.size());
+            MStringView globalConstCpp;
+#define NWB_ADHD_EXPORT_GLOBAL_CONSTANT(adhdName, cppExportName, adhdTypeName) \
+            if(expr.text == adhdName) globalConstCpp = cppExportName;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
+            if(!globalConstCpp.empty())
+                out.append(globalConstCpp.data(), globalConstCpp.size());
+            else
+                out.append(expr.text.data(), expr.text.size());
         }
         break;
     }

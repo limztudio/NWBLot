@@ -192,11 +192,18 @@ b8 TypeChecker::checkExpr(
                 b8 isSwizzlePattern = false;
                 b8 validLanes = true;
                 if(CheckSwizzlePattern(expr.text, simdLanes, isSwizzlePattern, validLanes) && isSwizzlePattern){
+                    b8 isMixedSimdVec = false;
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+                    if constexpr(isMixed){ \
+                        if(baseType == adhdName) isMixedSimdVec = true; \
+                    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
                     if(!validLanes){
                         reportError(errors, expr.span, "invalid SIMD swizzle component for vector width or mixed xyzw/rgba set");
                         ok = false;
                     }
-                    else if(expr.text.size() > 1u && (baseType == "f32x3_i32" || baseType == "f32x3_u32" || baseType == "f64x3_i64" || baseType == "f64x3_u64")){
+                    else if(expr.text.size() > 1u && isMixedSimdVec){
                         reportError(errors, expr.span, "multi-lane SIMD swizzling is not supported on mixed float/integer vector types");
                         ok = false;
                     }

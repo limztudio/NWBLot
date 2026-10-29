@@ -21,26 +21,12 @@ namespace __hidden_adhd_decl_parser{
 
 
 [[nodiscard]] b8 ResolveEnumUnderlyingType(const MStringView sizeTypeName, usize& outSize, usize& outAlign)noexcept{
-    if(sizeTypeName == "u8" || sizeTypeName == "i8"){
-        outSize = 1u;
-        outAlign = 1u;
-        return true;
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if constexpr(isFixedWidthInt){ \
+        if(sizeTypeName == adhdName){ outSize = byteSize; outAlign = byteAlign; return true; } \
     }
-    if(sizeTypeName == "u16" || sizeTypeName == "i16"){
-        outSize = 2u;
-        outAlign = 2u;
-        return true;
-    }
-    if(sizeTypeName == "u32" || sizeTypeName == "i32"){
-        outSize = 4u;
-        outAlign = 4u;
-        return true;
-    }
-    if(sizeTypeName == "u64" || sizeTypeName == "i64"){
-        outSize = 8u;
-        outAlign = 8u;
-        return true;
-    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
     return false;
 }
 
@@ -85,26 +71,13 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
 
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
 
-    if(m_cursor.checkIdentifier("namespace")){
-        m_cursor.error("explicit 'namespace' declarations are prohibited in adhd; namespaces are derived from file paths");
-        return false;
+#define NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD(keyword, errorMessage) \
+    if(m_cursor.checkIdentifier(keyword)){ \
+        m_cursor.error(errorMessage); \
+        return false; \
     }
-    if(m_cursor.checkIdentifier("struct")){
-        m_cursor.error("'struct' is prohibited in adhd; use 'class' (or '[serialize] class' for 1-byte packed binary layout)");
-        return false;
-    }
-    if(m_cursor.checkIdentifier("union")){
-        m_cursor.error("'union' is prohibited in adhd");
-        return false;
-    }
-    if(m_cursor.checkIdentifier("static")){
-        m_cursor.error("'static' is prohibited in adhd");
-        return false;
-    }
-    if(m_cursor.checkIdentifier("template")){
-        m_cursor.error("C++ 'template' keyword is prohibited in adhd; write '<T>' directly on declarations");
-        return false;
-    }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD
 
     if(m_cursor.matchIdentifier("native")){
         if(!attributes.empty()){
@@ -362,10 +335,13 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
                 return nullptr;
         }
 
-        if(m_cursor.checkIdentifier("public") || m_cursor.checkIdentifier("private") || m_cursor.checkIdentifier("protected")){
-            m_cursor.error("interface methods are implicitly public; do not write access specifiers inside 'interface'");
-            return nullptr;
+#define NWB_ADHD_EXPORT_ACCESS_SPECIFIER(adhdKeyword, astEnum) \
+        if(m_cursor.checkIdentifier(adhdKeyword)){ \
+            m_cursor.error("interface methods are implicitly public; do not write access specifiers inside 'interface'"); \
+            return nullptr; \
         }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_ACCESS_SPECIFIER
         if(m_cursor.checkIdentifier("virtual")){
             m_cursor.error("'virtual' keyword is prohibited in adhd; interface methods are implicitly abstract contracts");
             return nullptr;

@@ -487,17 +487,14 @@ b8 TypeChecker::checkStatement(
                 const TypeRef* containerType = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
                 if(isPar && containerType){
                     const MStringView containerBaseName = m_symbols.resolveBaseTypeName(containerType->name);
-                    if(containerBaseName == "Set"
-                        || containerBaseName == "HashSet"
-                        || containerBaseName == "ParallelHashSet"
-                        || containerBaseName == "Map"
-                        || containerBaseName == "HashMap"
-                        || containerBaseName == "ParallelHashMap"
-                        || containerBaseName == "List"
-                        || containerBaseName == "ForwardList"
-                        || containerBaseName == "Queue"
-                        || containerBaseName == "ParallelQueue")
-                    {
+                    b8 isNonRandomAccess = false;
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+                    if constexpr(isNonRandomAccessContainer){ \
+                        if(containerBaseName == adhdName) isNonRandomAccess = true; \
+                    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+                    if(isNonRandomAccess){
                         reportError(errors, stmt.span, "range-based 'parallel_for' requires a random-access indexable container (such as 'Vector', 'Array', or 'Span')");
                         ok = false;
                     }

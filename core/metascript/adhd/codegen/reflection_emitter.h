@@ -22,14 +22,23 @@ NWB_ADHD_BEGIN
 }
 
 [[nodiscard]] constexpr b8 IsReflectedLinearContainerType(const MStringView tname)noexcept{
-    return tname == "Array" || tname == "FixedVector" || tname == "Vector"
-        || tname == "Deque" || tname == "ParallelVector" || tname == "List"
-        || tname == "ForwardList" || tname == "Set" || tname == "HashSet"
-        || tname == "ParallelHashSet";
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(isReflectedLinear){ \
+        if(tname == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+    return false;
 }
 
 [[nodiscard]] constexpr b8 IsReflectedMapContainerType(const MStringView tname)noexcept{
-    return tname == "Map" || tname == "HashMap" || tname == "ParallelHashMap";
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(isReflectedMap){ \
+        if(tname == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+    return false;
 }
 
 [[nodiscard]] b8 IsAssetDependencyType(const TypeRef* type, const SymbolTable& symbols, u32 depth = 0u)noexcept;

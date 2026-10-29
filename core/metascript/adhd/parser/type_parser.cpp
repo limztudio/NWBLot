@@ -25,14 +25,13 @@ TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
             refMode = ParamPassingMode::Mut;
     }
 
-    if(m_cursor.checkIdentifier("const")){
-        m_cursor.error("C++-style 'const' type qualifier is prohibited in adhd; use 'in' for read-only parameters");
-        return nullptr;
+#define NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD(keyword, errorMessage) \
+    if(m_cursor.checkIdentifier(keyword)){ \
+        m_cursor.error(errorMessage); \
+        return nullptr; \
     }
-    if(m_cursor.checkIdentifier("bool")){
-        m_cursor.error("'bool' is prohibited in adhd; use 'b8'");
-        return nullptr;
-    }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD
 
     if(allowAuto && m_cursor.matchIdentifier("auto")){
         TypeRef* type = AllocateAstNode<TypeRef>(m_cursor.arena());

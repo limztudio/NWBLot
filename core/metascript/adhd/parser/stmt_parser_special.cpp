@@ -264,15 +264,12 @@ b8 StmtParser::applySchedulingAttributes(const MVector<ParsedAttribute>& attribu
                 return false;
             }
             const MStringView arg = attr.arguments[0].text;
-            if(arg == "Heavy")
-                outCore = ParallelCoreKind::Heavy;
-            else if(arg == "Light")
-                outCore = ParallelCoreKind::Light;
-            else if(arg == "MainThread")
-                outCore = ParallelCoreKind::MainThread;
-            else if(arg == "Any")
-                outCore = ParallelCoreKind::Any;
-            else{
+            b8 matchedCore = false;
+#define NWB_ADHD_EXPORT_PARALLEL_CORE(adhdName, astEnum, cppCostEnum, cppTargetEnum) \
+            if(arg == adhdName){ outCore = astEnum; matchedCore = true; }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PARALLEL_CORE
+            if(!matchedCore){
                 m_cursor.error(attr.line, attr.column, "invalid 'core' attribute value; expected Heavy, Light, MainThread, or Any");
                 return false;
             }
@@ -283,13 +280,12 @@ b8 StmtParser::applySchedulingAttributes(const MVector<ParsedAttribute>& attribu
                 return false;
             }
             const MStringView arg = attr.arguments[0].text;
-            if(arg == "Critical")
-                outPriority = ParallelPriorityKind::Critical;
-            else if(arg == "Normal")
-                outPriority = ParallelPriorityKind::Normal;
-            else if(arg == "Background")
-                outPriority = ParallelPriorityKind::Background;
-            else{
+            b8 matchedPriority = false;
+#define NWB_ADHD_EXPORT_PARALLEL_PRIORITY(adhdName, astEnum, cppPriorityEnum) \
+            if(arg == adhdName){ outPriority = astEnum; matchedPriority = true; }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PARALLEL_PRIORITY
+            if(!matchedPriority){
                 m_cursor.error(attr.line, attr.column, "invalid 'priority' attribute value; expected Critical, Normal, or Background");
                 return false;
             }

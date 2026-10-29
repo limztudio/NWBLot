@@ -230,16 +230,15 @@ b8 DeclParser::applyCallableAttributes(
     MethodDecl& decl
 ){
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "reflect" && attr.arguments.empty()){
-            decl.isReflect = true;
+        b8 matchedAttr = false;
+#define NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE(attrName, declField) \
+        if(attr.name == attrName && attr.arguments.empty()){ \
+            decl.declField = true; \
+            matchedAttr = true; \
         }
-        else if(attr.name == "inline" && attr.arguments.empty()){
-            decl.isForceInline = true;
-        }
-        else if(attr.name == "noinline" && attr.arguments.empty()){
-            decl.isNoInline = true;
-        }
-        else{
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE
+        if(!matchedAttr){
             m_cursor.error(attr.line, attr.column, "unsupported attribute on callable; expected 'reflect', 'inline', or 'noinline'");
             return false;
         }
@@ -265,41 +264,20 @@ b8 DeclParser::parseOperatorName(MStringView& outOpName){
     }
 
     const Token tok = m_cursor.current();
-    switch(tok.type){
-    case TokenType::Plus:
-    case TokenType::Minus:
-    case TokenType::Star:
-    case TokenType::Slash:
-    case TokenType::Percent:
-    case TokenType::PlusEqual:
-    case TokenType::MinusEqual:
-    case TokenType::StarEqual:
-    case TokenType::SlashEqual:
-    case TokenType::PercentEqual:
-    case TokenType::Ampersand:
-    case TokenType::Pipe:
-    case TokenType::Caret:
-    case TokenType::Tilde:
-    case TokenType::LessLess:
-    case TokenType::GreaterGreater:
-    case TokenType::AmpersandEqual:
-    case TokenType::PipeEqual:
-    case TokenType::CaretEqual:
-    case TokenType::LessLessEqual:
-    case TokenType::GreaterGreaterEqual:
-    case TokenType::EqualEqual:
-    case TokenType::BangEqual:
-    case TokenType::Less:
-    case TokenType::LessEqual:
-    case TokenType::Greater:
-    case TokenType::GreaterEqual:
+    b8 isOverloadableOp = false;
+#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, isCompoundAssignment) \
+    if constexpr(isOverloadable){ \
+        if(tok.type == tokenType) isOverloadableOp = true; \
+    }
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
+    if(isOverloadableOp){
         outOpName = tok.text;
         m_cursor.advance();
         return true;
-    default:
-        m_cursor.error("unsupported operator overload in adhd");
-        return false;
     }
+    m_cursor.error("unsupported operator overload in adhd");
+    return false;
 }
 
 

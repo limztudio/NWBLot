@@ -120,11 +120,18 @@ b8 TypeChecker::checkCallableArguments(
                 propagateFuncCaptureBytes(localCallable->lambdaExpr->lambdaParams[i].type, arg, scope, m_symbols);
             }
         }
-        else if(i == 0u && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type
-            && (calledMemberName == "push_back" || calledMemberName == "emplace_back" || calledMemberName == "emplace" || calledMemberName == "insert" || calledMemberName == "push"))
-        {
-            expectedParamTypeRef = recvTypeRef->templateArgs[0].type;
-            expectedParamType = m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
+        else if(i == 0u && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
+            b8 adaptsFirstArg = false;
+#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, adaptsFirstArgToElement, returnRule) \
+            if constexpr(adaptsFirstArgToElement){ \
+                if(calledMemberName == methodName) adaptsFirstArg = true; \
+            }
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_MEMBER_METHOD
+            if(adaptsFirstArg){
+                expectedParamTypeRef = recvTypeRef->templateArgs[0].type;
+                expectedParamType = m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
+            }
         }
         arg->isMutArg = paramIsMut;
         if(expectedParamType == "Path")
@@ -305,16 +312,13 @@ b8 TypeChecker::checkCallExpr(
             const MStringView mName = expr.lhs->text;
             calledMemberName = mName;
             const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope);
-            const b8 isMutatingContainerOp = (
-                mName == "push_back" || mName == "emplace_back" || mName == "pop_back"
-                || mName == "push_front" || mName == "emplace_front" || mName == "pop_front"
-                || mName == "push" || mName == "pop" || mName == "emplace"
-                || mName == "try_emplace" || mName == "insert_or_assign"
-                || mName == "clear" || mName == "insert" || mName == "erase"
-                || mName == "resize" || mName == "reserve" || mName == "shrink_to_fit"
-                || mName == "swap" || mName == "assign" || mName == "append"
-                || mName == "reset"
-            );
+            b8 isMutatingContainerOp = false;
+#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, adaptsFirstArgToElement, returnRule) \
+            if constexpr(isMutating){ \
+                if(mName == methodName) isMutatingContainerOp = true; \
+            }
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_MEMBER_METHOD
             if(const ClassDecl* targetCls = m_symbols.findClass(objType)){
                 targetOwnerCls = targetCls;
                 targetCallable = findClassMethod(*targetCls, mName, &callArgCount, recvIsConst, ownerClass != targetCls, &argTypeHints, &argIsMutHints);

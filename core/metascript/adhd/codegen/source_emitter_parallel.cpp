@@ -21,24 +21,25 @@ namespace __hidden_adhd_source_emitter_parallel{
 
 
 void AppendTaskOptions(MString& out, const Stmt& stmt){
+    MStringView costEnum = "Any";
+    MStringView targetEnum = "Worker";
+#define NWB_ADHD_EXPORT_PARALLEL_CORE(adhdName, astEnum, cppCostEnum, cppTargetEnum) \
+    if(stmt.parallelCore == astEnum){ costEnum = cppCostEnum; targetEnum = cppTargetEnum; }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PARALLEL_CORE
+
+    MStringView priorityEnum = "Normal";
+#define NWB_ADHD_EXPORT_PARALLEL_PRIORITY(adhdName, astEnum, cppPriorityEnum) \
+    if(stmt.parallelPriority == astEnum) priorityEnum = cppPriorityEnum;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PARALLEL_PRIORITY
+
     out.append("::NWB::Core::CpuTaskOptions{{}, ::NWB::Core::CpuTaskCost::");
-    switch(stmt.parallelCore){
-    case ParallelCoreKind::Heavy: out.append("Heavy"); break;
-    case ParallelCoreKind::Light: out.append("Light"); break;
-    case ParallelCoreKind::Any:
-    case ParallelCoreKind::MainThread: out.append("Any"); break;
-    }
+    out.append(costEnum.data(), costEnum.size());
     out.append(", ::NWB::Core::CpuTaskPriority::");
-    switch(stmt.parallelPriority){
-    case ParallelPriorityKind::Critical: out.append("Critical"); break;
-    case ParallelPriorityKind::Normal: out.append("Normal"); break;
-    case ParallelPriorityKind::Background: out.append("Background"); break;
-    }
+    out.append(priorityEnum.data(), priorityEnum.size());
     out.append(", ::NWB::Core::CpuTaskTarget::");
-    if(stmt.parallelCore == ParallelCoreKind::MainThread)
-        out.append("MainThread");
-    else
-        out.append("Worker");
+    out.append(targetEnum.data(), targetEnum.size());
     out.push_back('}');
 }
 
@@ -330,23 +331,17 @@ void SourceEmitter::emitParallelStmt(
     }
     case StmtKind::Diagnostic:{
         emitIndent(out, indent);
-        switch(stmt.diagnosticKind){
-        case DiagnosticKind::Assert:
-            if(stmt.arguments.size() > 1u)
-                out.append(stmt.isEssential ? "NWB_FATAL_ASSERT_MSG(" : "NWB_ASSERT_MSG(");
-            else
-                out.append(stmt.isEssential ? "NWB_FATAL_ASSERT(" : "NWB_ASSERT(");
-            break;
-        case DiagnosticKind::Info:
-            out.append(stmt.isEssential ? "NWB_LOGGER_ESSENTIAL_INFO(" : "NWB_LOGGER_INFO(");
-            break;
-        case DiagnosticKind::Warning:
-            out.append(stmt.isEssential ? "NWB_LOGGER_CRITICAL_WARNING(" : "NWB_LOGGER_WARNING(");
-            break;
-        case DiagnosticKind::Error:
-            out.append(stmt.isEssential ? "NWB_LOGGER_FATAL(" : "NWB_LOGGER_ERROR(");
-            break;
+        MStringView macroPrefix;
+#define NWB_ADHD_EXPORT_DIAGNOSTIC_KIND(adhdKeyword, astEnum, defaultMacroPrefix, essentialMacroPrefix, defaultMsgMacroPrefix, essentialMsgMacroPrefix) \
+        if(stmt.diagnosticKind == astEnum){ \
+            if(stmt.arguments.size() > 1u) \
+                macroPrefix = stmt.isEssential ? MStringView(essentialMsgMacroPrefix) : MStringView(defaultMsgMacroPrefix); \
+            else \
+                macroPrefix = stmt.isEssential ? MStringView(essentialMacroPrefix) : MStringView(defaultMacroPrefix); \
         }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_DIAGNOSTIC_KIND
+        out.append(macroPrefix.data(), macroPrefix.size());
         for(usize i = 0u; i < stmt.arguments.size(); ++i){
             if(i > 0u)
                 out.append(", ");

@@ -3,6 +3,7 @@
 
 
 #include "symbol_table.h"
+#include "type_utils.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -130,29 +131,8 @@ TypeRef* SubstituteAliasTypeRef(
     const MVector<MStringView>* argTypeNames,
     const MVector<b8>* argIsMut
 )noexcept{
-    i32 score = 0;
-    if(!preferredArgCount || params.size() == *preferredArgCount)
-        score += 64;
-    const usize count = params.size();
-    for(usize i = 0u; i < count; ++i){
-        if(argIsMut && i < argIsMut->size()){
-            const b8 paramMut = params[i].mode == ParamPassingMode::Mut;
-            if(paramMut == (*argIsMut)[i])
-                score += 8;
-        }
-        if(argTypeNames && i < argTypeNames->size() && !(*argTypeNames)[i].empty() && params[i].type){
-            const MStringView paramBase = symbols.resolveBaseTypeName(params[i].type->name);
-            const MStringView argBase = symbols.resolveBaseTypeName((*argTypeNames)[i]);
-            if(paramBase == argBase){
-                score += 16;
-            }
-            else if((paramBase == "StringView" && (argBase == "String" || argBase == "CompactString"))
-                || (paramBase == "Path" && argBase == "StringView"))
-            {
-                score += 8;
-            }
-        }
-    }
+    i32 score = (!preferredArgCount || params.size() == *preferredArgCount) ? 64 : 0;
+    score += ScoreCallableParams(symbols, params, argTypeNames, argIsMut);
     return score;
 }
 
@@ -457,76 +437,56 @@ b8 SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
         }
         return !hasAnyCtor;
     }
-    return isArenaBackedContainer(baseName)
-        || isUnalignedVectorType(baseName)
-        || findEnum(baseName) != nullptr
-        || baseName == "Optional"
-        || baseName == "FixedVector"
-        || baseName == "Array"
-        || baseName == "AssetRef"
-        || baseName == "EntityID"
-        || baseName == "CompactString"
-        || baseName == "Name"
-        || baseName == "Path";
+    if(isUnalignedVectorType(baseName) || findEnum(baseName) != nullptr)
+        return true;
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if constexpr(isSelfDefaulted){ \
+        if(baseName == adhdName) return true; \
+    }
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(isSelfDefaulted){ \
+        if(baseName == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
+    return false;
 }
 
 b8 SymbolTable::isArenaBackedContainer(const MStringView typeName)noexcept{
-    return typeName == "Vector"
-        || typeName == "ParallelVector"
-        || typeName == "ForwardList"
-        || typeName == "List"
-        || typeName == "Deque"
-        || typeName == "Set"
-        || typeName == "HashSet"
-        || typeName == "ParallelHashSet"
-        || typeName == "Map"
-        || typeName == "HashMap"
-        || typeName == "ParallelHashMap"
-        || typeName == "Queue"
-        || typeName == "ParallelQueue"
-        || typeName == "ParallelBlockQueue"
-        || typeName == "String";
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if constexpr(isArenaBacked){ \
+        if(typeName == adhdName) return true; \
+    }
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(isArenaBacked){ \
+        if(typeName == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
+    return false;
 }
 
 b8 SymbolTable::isSimdVectorType(const MStringView typeName, u32& outLanes)noexcept{
-    if(typeName == "f64x2"){
-        outLanes = 2u;
-        return true;
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if(typeName == adhdName){ \
+        outLanes = lanes; \
+        return true; \
     }
-    if(typeName == "f64x3"){
-        outLanes = 3u;
-        return true;
-    }
-    if(typeName == "f32x4" || typeName == "i32x4" || typeName == "u32x4"
-        || typeName == "f32x3_i32" || typeName == "f32x3_u32"
-        || typeName == "f64x4" || typeName == "i64x4" || typeName == "u64x4"
-        || typeName == "f64x3_i64" || typeName == "f64x3_u64")
-    {
-        outLanes = 4u;
-        return true;
-    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
     return false;
 }
 
 b8 SymbolTable::isUnalignedVectorType(const MStringView typeName, u32& outLanes)noexcept{
-    if(typeName == "f32x2u" || typeName == "i32x2u" || typeName == "u32x2u"
-        || typeName == "f64x2u" || typeName == "i64x2u" || typeName == "u64x2u")
-    {
-        outLanes = 2u;
-        return true;
+#define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, laneScalarType) \
+    if(typeName == adhdName){ \
+        outLanes = lanes; \
+        return true; \
     }
-    if(typeName == "f32x3u" || typeName == "i32x3u" || typeName == "u32x3u"
-        || typeName == "f64x3u" || typeName == "i64x3u" || typeName == "u64x3u")
-    {
-        outLanes = 3u;
-        return true;
-    }
-    if(typeName == "f32x4u" || typeName == "i32x4u" || typeName == "u32x4u"
-        || typeName == "f64x4u" || typeName == "i64x4u" || typeName == "u64x4u")
-    {
-        outLanes = 4u;
-        return true;
-    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
     return false;
 }
 
@@ -536,11 +496,11 @@ b8 SymbolTable::isUnalignedVectorType(const MStringView typeName)noexcept{
 }
 
 b8 SymbolTable::isSimdMatrixType(const MStringView typeName)noexcept{
-    return typeName == "f32x3x4"
-        || typeName == "f32x4x4"
-        || typeName == "f64x3x3"
-        || typeName == "f64x3x4"
-        || typeName == "f64x4x4";
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    if(typeName == adhdName) return true;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+    return false;
 }
 
 b8 SymbolTable::isSimdType(const MStringView typeName)noexcept{
@@ -549,53 +509,36 @@ b8 SymbolTable::isSimdType(const MStringView typeName)noexcept{
 }
 
 b8 SymbolTable::isStringSwitchType(const MStringView typeName)noexcept{
-    return typeName == "String"
-        || typeName == "StringView"
-        || typeName == "CompactString"
-        || typeName == "Name";
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if constexpr(isStringSwitch){ \
+        if(typeName == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
+    return false;
 }
 
 MStringView SymbolTable::mapBuiltinCppType(const MStringView typeName)noexcept{
-    if(typeName == "String") return "AString";
-    if(typeName == "StringView") return "AStringView";
-    if(typeName == "CompactString") return "ACompactString";
-    if(typeName == "AssetRef") return "::NWB::Core::Assets::AssetRef";
-    if(typeName == "EntityID") return "::NWB::Core::ECS::EntityID";
-    if(typeName == "f32x2u") return "Float2U";
-    if(typeName == "f32x3u") return "Float3U";
-    if(typeName == "f32x4u") return "Float4U";
-    if(typeName == "i32x2u") return "Int2U";
-    if(typeName == "i32x3u") return "Int3U";
-    if(typeName == "i32x4u") return "Int4U";
-    if(typeName == "u32x2u") return "UInt2U";
-    if(typeName == "u32x3u") return "UInt3U";
-    if(typeName == "u32x4u") return "UInt4U";
-    if(typeName == "f64x2u") return "Double2U";
-    if(typeName == "f64x3u") return "Double3U";
-    if(typeName == "f64x4u") return "Double4U";
-    if(typeName == "i64x2u") return "Int64x2U";
-    if(typeName == "i64x3u") return "Int64x3U";
-    if(typeName == "i64x4u") return "Int64x4U";
-    if(typeName == "u64x2u") return "UInt64x2U";
-    if(typeName == "u64x3u") return "UInt64x3U";
-    if(typeName == "u64x4u") return "UInt64x4U";
-    if(typeName == "f32x4") return "Float4";
-    if(typeName == "i32x4") return "Int4";
-    if(typeName == "u32x4") return "UInt4";
-    if(typeName == "f32x3_i32") return "Float3Int";
-    if(typeName == "f32x3_u32") return "Float3UInt";
-    if(typeName == "f32x3x4") return "Float34";
-    if(typeName == "f32x4x4") return "Float44";
-    if(typeName == "f64x2") return "Double2";
-    if(typeName == "f64x3") return "Double3";
-    if(typeName == "f64x4") return "Double4";
-    if(typeName == "i64x4") return "Int64x4";
-    if(typeName == "u64x4") return "UInt64x4";
-    if(typeName == "f64x3_i64") return "Double3Int";
-    if(typeName == "f64x3_u64") return "Double3UInt";
-    if(typeName == "f64x3x3") return "Double33";
-    if(typeName == "f64x3x4") return "Double34";
-    if(typeName == "f64x4x4") return "Double44";
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if constexpr(!MStringView(cppExportName).empty()){ \
+        if(typeName == adhdName) return cppExportName; \
+    }
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(!MStringView(cppExportName).empty()){ \
+        if(typeName == adhdName) return cppExportName; \
+    }
+#define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, laneScalarType) \
+    if(typeName == adhdName) return cppExportName;
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if(typeName == adhdName) return cppExportName;
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    if(typeName == adhdName) return cppExportName;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+#undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
     return {};
 }
 

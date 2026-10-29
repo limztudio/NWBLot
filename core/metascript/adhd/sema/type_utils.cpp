@@ -58,16 +58,18 @@ namespace __hidden_adhd_type_utils{
 
 
 [[nodiscard]] b8 IsKnownConcreteTypeName(const MStringView name, const SymbolTable& symbols)noexcept{
-    if(name == "b8" || name == "void"
-        || IsIntegerScalarType(name) || IsFloatScalarType(name)
-        || name == "Name" || name == "Path" || name == "String" || name == "StringView" || name == "CompactString"
-        || name == "EntityID"
-        || IsSingleTypeParamBuiltinGeneric(name)
-        || IsTwoTypeParamBuiltinGeneric(name)
-        || IsTypeAndCountBuiltinGeneric(name))
-    {
+    if(name == "void")
         return true;
-    }
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if(name == adhdName) return true;
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if(name == adhdName) return true;
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if(name == adhdName && MStringView(#paramKind) != "NotNullType") return true;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
     return SymbolTable::isSimdType(name)
         || SymbolTable::isUnalignedVectorType(name)
         || SymbolTable::isArenaBackedContainer(name)
@@ -82,17 +84,18 @@ namespace __hidden_adhd_type_utils{
 
 
 [[nodiscard]] b8 IsNonThreadSafeContainer(const MStringView typeName)noexcept{
-    return typeName == "Vector"
-        || typeName == "FixedVector"
-        || typeName == "ForwardList"
-        || typeName == "List"
-        || typeName == "Deque"
-        || typeName == "Set"
-        || typeName == "HashSet"
-        || typeName == "Map"
-        || typeName == "HashMap"
-        || typeName == "Queue"
-        || typeName == "String";
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if constexpr(isNonThreadSafeContainer){ \
+        if(typeName == adhdName) return true; \
+    }
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(isNonThreadSafeContainer){ \
+        if(typeName == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
+    return false;
 }
 
 [[nodiscard]] b8 CheckSwizzlePattern(const MStringView text, const u32 maxLanes, b8& outIsPattern, b8& outValidLanes)noexcept{
@@ -108,17 +111,22 @@ namespace __hidden_adhd_type_utils{
     for(usize i = 0u; i < text.size(); ++i){
         const MChar c = text[i];
         u32 lane = 0u;
-        if(c == 'x' || c == 'y' || c == 'z' || c == 'w'){
-            usesXYZW = true;
-            lane = (c == 'x') ? 0u : (c == 'y') ? 1u : (c == 'z') ? 2u : 3u;
+        b8 matchedChar = false;
+#define NWB_ADHD_EXPORT_SWIZZLE_COMPONENT(xyzwChar, rgbaChar, laneIndex) \
+        if(c == xyzwChar){ \
+            usesXYZW = true; \
+            lane = laneIndex; \
+            matchedChar = true; \
+        } \
+        else if(c == rgbaChar){ \
+            usesRGBA = true; \
+            lane = laneIndex; \
+            matchedChar = true; \
         }
-        else if(c == 'r' || c == 'g' || c == 'b' || c == 'a'){
-            usesRGBA = true;
-            lane = (c == 'r') ? 0u : (c == 'g') ? 1u : (c == 'b') ? 2u : 3u;
-        }
-        else{
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT
+        if(!matchedChar)
             return false;
-        }
 
         if(lane >= highestLane)
             highestLane = lane + 1u;
@@ -136,33 +144,36 @@ namespace __hidden_adhd_type_utils{
 }
 
 [[nodiscard]] b8 IsSingleTypeParamBuiltinGeneric(const MStringView name)noexcept{
-    return name == "Vector"
-        || name == "ParallelVector"
-        || name == "ForwardList"
-        || name == "List"
-        || name == "Deque"
-        || name == "Set"
-        || name == "HashSet"
-        || name == "ParallelHashSet"
-        || name == "Queue"
-        || name == "ParallelQueue"
-        || name == "Span"
-        || name == "Optional"
-        || name == "AssetRef"
-        || name == "Atomic";
+    enum class GenericParamKind : u8{ SingleType, TwoType, TypeAndCount, NotNullType };
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(GenericParamKind::paramKind == GenericParamKind::SingleType){ \
+        if(name == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+    return false;
 }
 
 [[nodiscard]] b8 IsTwoTypeParamBuiltinGeneric(const MStringView name)noexcept{
-    return name == "Map"
-        || name == "HashMap"
-        || name == "ParallelHashMap"
-        || name == "Expected";
+    enum class GenericParamKind : u8{ SingleType, TwoType, TypeAndCount, NotNullType };
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(GenericParamKind::paramKind == GenericParamKind::TwoType){ \
+        if(name == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+    return false;
 }
 
 [[nodiscard]] b8 IsTypeAndCountBuiltinGeneric(const MStringView name)noexcept{
-    return name == "Array"
-        || name == "FixedVector"
-        || name == "ParallelBlockQueue";
+    enum class GenericParamKind : u8{ SingleType, TwoType, TypeAndCount, NotNullType };
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if constexpr(GenericParamKind::paramKind == GenericParamKind::TypeAndCount){ \
+        if(name == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+    return false;
 }
 
 [[nodiscard]] b8 IsVoidTypeRef(const TypeRef* ref)noexcept{
@@ -518,6 +529,36 @@ namespace __hidden_adhd_type_utils{
             return true;
     }
     return false;
+}
+
+[[nodiscard]] i32 ScoreCallableParams(
+    const SymbolTable& symbols,
+    const MVector<ParamDecl>& params,
+    const MVector<MStringView>* argTypeNames,
+    const MVector<b8>* argIsMut
+)noexcept{
+    i32 score = 0;
+    const usize count = params.size();
+    for(usize i = 0u; i < count; ++i){
+        if(argIsMut && i < argIsMut->size()){
+            const b8 paramMut = params[i].mode == ParamPassingMode::Mut;
+            if(paramMut == (*argIsMut)[i])
+                score += 8;
+        }
+        if(argTypeNames && i < argTypeNames->size() && !(*argTypeNames)[i].empty() && params[i].type){
+            const MStringView paramBase = symbols.resolveBaseTypeName(params[i].type->name);
+            const MStringView argBase = symbols.resolveBaseTypeName((*argTypeNames)[i]);
+            if(paramBase == argBase){
+                score += 16;
+            }
+            else if((paramBase == "StringView" && (argBase == "String" || argBase == "CompactString"))
+                || (paramBase == "Path" && argBase == "StringView"))
+            {
+                score += 8;
+            }
+        }
+    }
+    return score;
 }
 
 

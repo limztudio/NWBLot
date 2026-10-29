@@ -83,22 +83,21 @@ Stmt* StmtParser::parseStatement(){
         return block;
     }
 
-    if(m_cursor.checkIdentifier("try") || m_cursor.checkIdentifier("catch") || m_cursor.checkIdentifier("throw")){
-        m_cursor.error("C++ exceptions ('try'/'catch'/'throw') are prohibited in adhd; use Optional<T> or Expected<T, E>");
-        return nullptr;
+#define NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD(keyword, errorMessage) \
+    if(m_cursor.checkIdentifier(keyword)){ \
+        m_cursor.error(errorMessage); \
+        return nullptr; \
     }
-    if(m_cursor.checkIdentifier("goto")){
-        m_cursor.error("'goto' is prohibited in adhd");
-        return nullptr;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD
+
+#define NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD(keyword, isClassNestedKeyword) \
+    if(m_cursor.checkIdentifier(keyword)){ \
+        m_cursor.error("local or nested type declarations are prohibited in adhd; declare types at top-level file scope"); \
+        return nullptr; \
     }
-    if(m_cursor.checkIdentifier("static")){
-        m_cursor.error("'static' variables are prohibited in adhd");
-        return nullptr;
-    }
-    if(m_cursor.checkIdentifier("class") || m_cursor.checkIdentifier("struct") || m_cursor.checkIdentifier("interface") || m_cursor.checkIdentifier("enum") || m_cursor.checkIdentifier("union") || m_cursor.checkIdentifier("type") || m_cursor.checkIdentifier("namespace")){
-        m_cursor.error("local or nested type declarations are prohibited in adhd; declare types at top-level file scope");
-        return nullptr;
-    }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD
 
     if(m_cursor.matchIdentifier("if")){
         if(!attributes.empty()){
@@ -183,14 +182,11 @@ Stmt* StmtParser::parseStatement(){
         return parseNativeStatement(span);
     }
 
-    if(m_cursor.matchIdentifier("assert"))
-        return parseDiagnosticStatement(span, DiagnosticKind::Assert, attributes);
-    if(m_cursor.matchIdentifier("info"))
-        return parseDiagnosticStatement(span, DiagnosticKind::Info, attributes);
-    if(m_cursor.matchIdentifier("warning"))
-        return parseDiagnosticStatement(span, DiagnosticKind::Warning, attributes);
-    if(m_cursor.matchIdentifier("error"))
-        return parseDiagnosticStatement(span, DiagnosticKind::Error, attributes);
+#define NWB_ADHD_EXPORT_DIAGNOSTIC_KIND(adhdKeyword, astEnum, defaultMacroPrefix, essentialMacroPrefix, defaultMsgMacroPrefix, essentialMsgMacroPrefix) \
+    if(m_cursor.matchIdentifier(adhdKeyword)) \
+        return parseDiagnosticStatement(span, astEnum, attributes);
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_DIAGNOSTIC_KIND
 
     if(m_cursor.matchIdentifier("const")){
         if(!attributes.empty()){

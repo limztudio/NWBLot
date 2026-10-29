@@ -387,15 +387,16 @@ Expr* ExprParser::parsePrimary(){
             const ParserCursor::Checkpoint cp = m_cursor.save();
             TypeRef* maybeType = m_typeParser.parseType(false, false);
             if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.match(TokenType::RightParen)){
+                b8 isScalarType = (maybeType->name == "void");
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+                if(maybeType->name == adhdName) isScalarType = true;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
                 const b8 looksLikeType = maybeType->refMode != ParamPassingMode::None
                     || maybeType->isFuncType
                     || !maybeType->templateArgs.empty()
                     || !SymbolTable::mapBuiltinCppType(maybeType->name).empty()
-                    || maybeType->name == "i8" || maybeType->name == "u8" || maybeType->name == "b8"
-                    || maybeType->name == "i16" || maybeType->name == "u16"
-                    || maybeType->name == "i32" || maybeType->name == "u32" || maybeType->name == "f32"
-                    || maybeType->name == "i64" || maybeType->name == "u64" || maybeType->name == "f64"
-                    || maybeType->name == "isize" || maybeType->name == "usize" || maybeType->name == "void"
+                    || isScalarType
                     || (!maybeType->name.empty() && maybeType->name[0] >= 'A' && maybeType->name[0] <= 'Z');
                 const b8 nextIsCastOperand = m_cursor.check(TokenType::Identifier)
                     || m_cursor.check(TokenType::IntegerLiteral)
@@ -424,22 +425,13 @@ Expr* ExprParser::parsePrimary(){
     }
 
     if(tok.type == TokenType::Identifier){
-        if(tok.text == "null" || tok.text == "nullptr"){
-            m_cursor.error("'null' and 'nullptr' are prohibited in adhd; use Optional<T>");
-            return nullptr;
+#define NWB_ADHD_EXPORT_PROHIBITED_EXPR_KEYWORD(keyword, errorMessage) \
+        if(tok.text == keyword){ \
+            m_cursor.error(errorMessage); \
+            return nullptr; \
         }
-        if(tok.text == "new" || tok.text == "delete"){
-            m_cursor.error("'new' and 'delete' are prohibited in adhd; use arena-backed containers");
-            return nullptr;
-        }
-        if(tok.text == "Move"){
-            m_cursor.error("'Move' is prohibited in adhd; parameters borrow with 'in'/'mut' and last-use moves are automatic");
-            return nullptr;
-        }
-        if(tok.text == "dynamic_cast" || tok.text == "static_cast" || tok.text == "reinterpret_cast" || tok.text == "const_cast"){
-            m_cursor.error("C++ cast keywords are prohibited in adhd; use 'cast<T>(x)' or 'bit_cast<T>(x)'");
-            return nullptr;
-        }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PROHIBITED_EXPR_KEYWORD
 
         if(tok.text == "true" || tok.text == "false"){
             m_cursor.advance();

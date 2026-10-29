@@ -57,8 +57,10 @@ namespace __hidden_adhd_type_checker{
         return true;
     if(expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier){
         const MStringView callee = expr->lhs->text;
-        if(callee == "assert" || callee == "log_info" || callee == "log_warning" || callee == "log_error" || callee == "log_debug" || callee == "log_essential_info")
-            return true;
+#define NWB_ADHD_EXPORT_DIAGNOSTIC_KIND(adhdKeyword, astEnum, defaultMacroPrefix, essentialMacroPrefix, defaultMsgMacroPrefix, essentialMsgMacroPrefix) \
+        if(callee == adhdKeyword) return true;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_DIAGNOSTIC_KIND
     }
     if(ExprUsesOutOfLineConstruct(expr->lhs) || ExprUsesOutOfLineConstruct(expr->rhs))
         return true;
@@ -125,36 +127,6 @@ namespace __hidden_adhd_type_checker{
     return StmtListIsAutoInlineable(fn.body, stmtCount);
 }
 
-[[nodiscard]] i32 ScoreClassCallableArgs(
-    const SymbolTable& symbols,
-    const MVector<ParamDecl>& params,
-    const MVector<MStringView>* argTypeNames,
-    const MVector<b8>* argIsMut
-)noexcept{
-    i32 score = 0;
-    const usize count = params.size();
-    for(usize i = 0u; i < count; ++i){
-        if(argIsMut && i < argIsMut->size()){
-            const b8 paramMut = params[i].mode == ParamPassingMode::Mut;
-            if(paramMut == (*argIsMut)[i])
-                score += 8;
-        }
-        if(argTypeNames && i < argTypeNames->size() && !(*argTypeNames)[i].empty() && params[i].type){
-            const MStringView paramName = symbols.resolveBaseTypeName(params[i].type->name);
-            const MStringView argName = (*argTypeNames)[i];
-            if(paramName == argName){
-                score += 16;
-            }
-            else if((paramName == "StringView" && (argName == "String" || argName == "CompactString"))
-                || (paramName == "Path" && argName == "StringView"))
-            {
-                score += 8;
-            }
-        }
-    }
-    return score;
-}
-
 [[nodiscard]] const MethodDecl* FindScoredClassCallable(
     const SymbolTable& symbols,
     const ClassDecl& classDecl,
@@ -176,7 +148,7 @@ namespace __hidden_adhd_type_checker{
             score += 64;
         if(!requirePublic || m->access == AccessSpecifier::Public)
             score += 32;
-        score += ScoreClassCallableArgs(symbols, m->params, argTypeNames, argIsMut);
+        score += ScoreCallableParams(symbols, m->params, argTypeNames, argIsMut);
         if(m->isConst == preferConst)
             score += 1;
         if(score > bestScore){
@@ -245,7 +217,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                         if(entry.valueExpr->kind == ExprKind::FloatLiteral
                             || entry.valueExpr->kind == ExprKind::StringLiteral
                             || IsFloatScalarType(valType)
-                            || valType == "String" || valType == "StringView" || valType == "CompactString")
+                            || SymbolTable::isStringSwitchType(valType))
                         {
                             reportError(errors, entry.span, "enum entry value must be an integral constant expression");
                             ok = false;
@@ -654,7 +626,7 @@ const MethodDecl* TypeChecker::findClassConstructor(
         if(!m || !m->isConstructor || m->params.size() != argCount)
             continue;
         i32 score = (!requirePublic || m->access == AccessSpecifier::Public) ? 32 : 1;
-        score += __hidden_adhd_type_checker::ScoreClassCallableArgs(m_symbols, m->params, argTypeNames, argIsMut);
+        score += ScoreCallableParams(m_symbols, m->params, argTypeNames, argIsMut);
         if(score > bestScore){
             bestScore = score;
             bestMatch = m;

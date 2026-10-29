@@ -288,13 +288,16 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         out.append("#include <impl/global.h>\r\n");
 
     b8 hasSubsystemDecl = false;
-    b8 hasSubsystemCsg = false;
-    b8 hasSubsystemFontAtlas = false;
-    b8 hasSubsystemSampler = false;
-    b8 hasSubsystemShader = false;
-    b8 hasSubsystemUiSkin = false;
     b8 hasComponentAssetDecl = false;
     b8 hasHeaderTaskScope = false;
+    MVector<MStringView> subsystemAssetIncludes(m_arena);
+    const auto addSubsystemInclude = [&](const MStringView includeDirective){
+        for(const MStringView existing : subsystemAssetIncludes){
+            if(existing == includeDirective)
+                return;
+        }
+        subsystemAssetIncludes.push_back(includeDirective);
+    };
     for(const ClassDecl* classDecl : unit.classes){
         if(!classDecl)
             continue;
@@ -323,32 +326,24 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                 else if(resolved && resolved->name == "AssetRef" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
                     assetName = resolved->templateArgs[0].type->name;
                 }
-                if(assetName == "CsgShape")
-                    hasSubsystemCsg = true;
-                else if(assetName == "FontAtlas")
-                    hasSubsystemFontAtlas = true;
-                else if(assetName == "Sampler")
-                    hasSubsystemSampler = true;
-                else if(assetName == "UiSkin")
-                    hasSubsystemUiSkin = true;
-                else if(assetName.size() >= 6u && assetName.substr(assetName.size() - 6u) == "Shader")
-                    hasSubsystemShader = true;
+#define NWB_ADHD_EXPORT_ASSET_INCLUDE(assetTypeName, includeDirective) \
+                if(assetName == assetTypeName) addSubsystemInclude(includeDirective);
+#define NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE(assetTypeSuffix, includeDirective) \
+                if(assetName.size() >= sizeof(assetTypeSuffix) - 1u && assetName.substr(assetName.size() - (sizeof(assetTypeSuffix) - 1u)) == assetTypeSuffix) \
+                    addSubsystemInclude(includeDirective);
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE
+#undef NWB_ADHD_EXPORT_ASSET_INCLUDE
             }
         }
         if(!classDecl->componentAssetTypeName.empty())
             hasComponentAssetDecl = true;
     }
     if(hasSubsystemDecl){
-        if(hasSubsystemCsg)
-            out.append("#include <impl/assets_csg/asset.h>\r\n");
-        if(hasSubsystemFontAtlas)
-            out.append("#include <impl/assets_font_atlas/asset.h>\r\n");
-        if(hasSubsystemSampler)
-            out.append("#include <impl/assets_sampler/asset.h>\r\n");
-        if(hasSubsystemShader)
-            out.append("#include <impl/assets_shader/asset.h>\r\n");
-        if(hasSubsystemUiSkin)
-            out.append("#include <impl/assets_ui_skin/asset.h>\r\n");
+        for(const MStringView inc : subsystemAssetIncludes){
+            out.append(inc.data(), inc.size());
+            out.append("\r\n");
+        }
         out.append("#include <impl/assets_subsystem/asset.h>\r\n");
     }
     if(hasComponentAssetDecl)

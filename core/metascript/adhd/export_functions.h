@@ -27,6 +27,16 @@
 #define NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION_AUTO_UNDEF
 #endif
 
+#ifndef NWB_ADHD_EXPORT_MEMBER_METHOD
+#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, adaptsFirstArgToElement, returnRule)
+#define NWB_ADHD_EXPORT_MEMBER_METHOD_AUTO_UNDEF
+#endif
+
+#ifndef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
+#define NWB_ADHD_EXPORT_GLOBAL_CONSTANT(adhdName, cppExportName, adhdTypeName)
+#define NWB_ADHD_EXPORT_GLOBAL_CONSTANT_AUTO_UNDEF
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -81,9 +91,71 @@ NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION("dot",      "Dot")
 NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION("length",   "Length")
 NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION("lengthSq", "LengthSq")
 
+NWB_ADHD_EXPORT_MEMBER_METHOD("push_back",               true,  true,  Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("emplace_back",            true,  true,  Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("pop_back",                true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("push_front",              true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("emplace_front",           true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("pop_front",               true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("push",                    true,  true,  Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("pop",                     true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("emplace",                 true,  true,  Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("try_emplace",             true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("insert_or_assign",        true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("clear",                   true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("insert",                  true,  true,  Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("erase",                   true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("resize",                  true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("reserve",                 true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("shrink_to_fit",           true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("swap",                    true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("assign",                  true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("append",                  true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("reset",                   true,  false, Void)
+NWB_ADHD_EXPORT_MEMBER_METHOD("find",                    false, false, None)
+NWB_ADHD_EXPORT_MEMBER_METHOD("size",                    false, false, Usize)
+NWB_ADHD_EXPORT_MEMBER_METHOD("length",                  false, false, Usize)
+NWB_ADHD_EXPORT_MEMBER_METHOD("capacity",                false, false, Usize)
+NWB_ADHD_EXPORT_MEMBER_METHOD("count",                   false, false, Usize)
+NWB_ADHD_EXPORT_MEMBER_METHOD("max_size",                false, false, Usize)
+NWB_ADHD_EXPORT_MEMBER_METHOD("hash",                    false, false, Usize)
+NWB_ADHD_EXPORT_MEMBER_METHOD("empty",                   false, false, Bool)
+NWB_ADHD_EXPORT_MEMBER_METHOD("hasValue",                false, false, Bool)
+NWB_ADHD_EXPORT_MEMBER_METHOD("has_value",               false, false, Bool)
+NWB_ADHD_EXPORT_MEMBER_METHOD("valid",                   false, false, Bool)
+NWB_ADHD_EXPORT_MEMBER_METHOD("contains",                false, false, Bool)
+NWB_ADHD_EXPORT_MEMBER_METHOD("starts_with",             false, false, Bool)
+NWB_ADHD_EXPORT_MEMBER_METHOD("ends_with",               false, false, Bool)
+NWB_ADHD_EXPORT_MEMBER_METHOD("compare_exchange_weak",   false, false, Bool)
+NWB_ADHD_EXPORT_MEMBER_METHOD("compare_exchange_strong", false, false, Bool)
+NWB_ADHD_EXPORT_MEMBER_METHOD("c_str",                   false, false, StringView)
+NWB_ADHD_EXPORT_MEMBER_METHOD("subview",                 false, false, StringView)
+NWB_ADHD_EXPORT_MEMBER_METHOD("substr",                  false, false, StringView)
+NWB_ADHD_EXPORT_MEMBER_METHOD("value",                   false, false, OptionalOrExpectedValue)
+NWB_ADHD_EXPORT_MEMBER_METHOD("error",                   false, false, ExpectedError)
+NWB_ADHD_EXPORT_MEMBER_METHOD("front",                   false, false, FirstTypeArg)
+NWB_ADHD_EXPORT_MEMBER_METHOD("back",                    false, false, FirstTypeArg)
+NWB_ADHD_EXPORT_MEMBER_METHOD("load",                    false, false, AtomicValue)
+NWB_ADHD_EXPORT_MEMBER_METHOD("exchange",                false, false, AtomicValue)
+NWB_ADHD_EXPORT_MEMBER_METHOD("fetch_add",               false, false, AtomicValue)
+NWB_ADHD_EXPORT_MEMBER_METHOD("fetch_sub",               false, false, AtomicValue)
+
+NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_InvalidEntityId", "::NWB::Core::ECS::s_InvalidEntityId", "EntityID")
+NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_NameNone",        "s_NameNone",                         "Name")
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+#ifdef NWB_ADHD_EXPORT_GLOBAL_CONSTANT_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
+#endif
+
+#ifdef NWB_ADHD_EXPORT_MEMBER_METHOD_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_MEMBER_METHOD_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_MEMBER_METHOD
+#endif
 
 #ifdef NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION_AUTO_UNDEF
@@ -112,4 +184,3 @@ NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION("lengthSq", "LengthSq")
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

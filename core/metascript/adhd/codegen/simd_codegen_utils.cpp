@@ -35,31 +35,24 @@ static constexpr const char* s_IntLaneGettersDouble[4] = {
 };
 
 [[nodiscard]] constexpr b8 IsFloatSimdVectorType(const MStringView simdType)noexcept{
-    return simdType == "f32x4"
-        || simdType == "f64x2"
-        || simdType == "f64x3"
-        || simdType == "f64x4"
-    ;
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(isFloatReg){ \
+        if(simdType == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    return false;
 }
 
 [[nodiscard]] constexpr b8 TryMapSwizzleCharToLane(const char c, u32& outLane)noexcept{
     switch(c){
-    case 'x':
-    case 'r':
-        outLane = 0u;
+#define NWB_ADHD_EXPORT_SWIZZLE_COMPONENT(xyzwChar, rgbaChar, laneIndex) \
+    case xyzwChar: \
+    case rgbaChar: \
+        outLane = laneIndex; \
         return true;
-    case 'y':
-    case 'g':
-        outLane = 1u;
-        return true;
-    case 'z':
-    case 'b':
-        outLane = 2u;
-        return true;
-    case 'w':
-    case 'a':
-        outLane = 3u;
-        return true;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT
     default:
         return false;
     }
@@ -76,50 +69,60 @@ static constexpr const char* s_IntLaneGettersDouble[4] = {
 
 
 [[nodiscard]] b8 IsRegisterPromotableSimdType(const MStringView simdType)noexcept{
-    return simdType == "f32x4"
-        || simdType == "i32x4"
-        || simdType == "u32x4"
-        || simdType == "f64x2"
-        || simdType == "f64x3"
-        || simdType == "f64x4"
-        || simdType == "i64x4"
-        || simdType == "u64x4"
-        || simdType == "f32x3x4"
-        || simdType == "f32x4x4"
-        || simdType == "f64x3x3"
-        || simdType == "f64x3x4"
-        || simdType == "f64x4x4"
-    ;
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(isFloatReg || isIntReg){ \
+        if(simdType == adhdName) return true; \
+    }
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    if(simdType == adhdName) return true;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    return false;
 }
 
 [[nodiscard]] b8 IsDoubleSimdType(const MStringView simdType)noexcept{
-    return simdType == "f64x2"
-        || simdType == "f64x3"
-        || simdType == "f64x4"
-        || simdType == "i64x4"
-        || simdType == "u64x4"
-        || simdType == "f64x3x3"
-        || simdType == "f64x3x4"
-        || simdType == "f64x4x4"
-    ;
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(isDoubleReg && (isFloatReg || isIntReg)){ \
+        if(simdType == adhdName) return true; \
+    }
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(isDoubleReg){ \
+        if(simdType == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    return false;
 }
 
 [[nodiscard]] b8 IsIntSimdType(const MStringView simdType)noexcept{
-    return simdType == "i32x4"
-        || simdType == "u32x4"
-        || simdType == "i64x4"
-        || simdType == "u64x4"
-    ;
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(isIntReg){ \
+        if(simdType == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    return false;
 }
 
 [[nodiscard]] b8 IsSignedIntSimdType(const MStringView simdType)noexcept{
-    return simdType == "i32x4" || simdType == "i64x4";
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(isIntReg && isSignedInt){ \
+        if(simdType == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    return false;
 }
 
 [[nodiscard]] MStringView IntSimdLaneType(const MStringView simdType)noexcept{
-    if(simdType == "i32x4") return "i32";
-    if(simdType == "u32x4") return "u32";
-    if(simdType == "i64x4") return "i64";
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(isIntReg){ \
+        if(simdType == adhdName) return xyzScalarType; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
     return "u64";
 }
 
@@ -148,10 +151,9 @@ void AppendIntSimdLaneExtract(
 [[nodiscard]] u32 InferEffectiveSimdLanes(const Expr& expr)noexcept{
     if(expr.kind == ExprKind::MemberAccess && expr.isSwizzle && expr.text.size() >= 2u && expr.text.size() <= 4u)
         return static_cast<u32>(expr.text.size());
-    if(expr.resolvedSimdType == "f64x2")
-        return 2u;
-    if(expr.resolvedSimdType == "f64x3")
-        return 3u;
+    u32 lanes = 4u;
+    if(SymbolTable::isSimdVectorType(expr.resolvedSimdType, lanes))
+        return lanes;
     return 4u;
 }
 
@@ -162,32 +164,41 @@ void AppendIntSimdLaneExtract(
 }
 
 [[nodiscard]] MStringView SimdRegisterCppType(const MStringView simdType)noexcept{
-    if(simdType == "f32x3x4" || simdType == "f32x4x4")
-        return "::SIMDMatrix";
-    if(simdType == "f64x3x3" || simdType == "f64x3x4" || simdType == "f64x4x4")
-        return "::SIMDMatrixDouble";
-    if(IsDoubleSimdType(simdType))
-        return "::SIMDVectorDouble";
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(!MStringView(regCppType).empty()){ \
+        if(simdType == adhdName) return regCppType; \
+    }
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    if(simdType == adhdName) return regCppType;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
     return "::SIMDVectorSingle";
 }
 
 [[nodiscard]] MStringView SimdLoadFunctionCpp(const MStringView simdType)noexcept{
-    if(simdType == "i32x4" || simdType == "u32x4")
-        return "::LoadInt";
-    if(simdType == "i64x4" || simdType == "u64x4")
-        return "::LoadDoubleInt";
-    if(IsDoubleSimdType(simdType))
-        return "::LoadDouble";
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(!MStringView(loadCppFunc).empty()){ \
+        if(simdType == adhdName) return loadCppFunc; \
+    }
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    if(simdType == adhdName) return loadCppFunc;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
     return "::LoadFloat";
 }
 
 [[nodiscard]] MStringView SimdStoreFunctionCpp(const MStringView simdType)noexcept{
-    if(simdType == "i32x4" || simdType == "u32x4")
-        return "::StoreInt";
-    if(simdType == "i64x4" || simdType == "u64x4")
-        return "::StoreDoubleInt";
-    if(IsDoubleSimdType(simdType))
-        return "::StoreDouble";
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(!MStringView(storeCppFunc).empty()){ \
+        if(simdType == adhdName) return storeCppFunc; \
+    }
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    if(simdType == adhdName) return storeCppFunc;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
     return "::StoreFloat";
 }
 
@@ -220,52 +231,25 @@ void AppendSimdLaneCountIntrinsicPrefix(
 }
 
 [[nodiscard]] b8 IsSimdAssignmentOp(const TokenType::Enum op)noexcept{
-    switch(op){
-    case TokenType::Equal:
-    case TokenType::PlusEqual:
-    case TokenType::MinusEqual:
-    case TokenType::StarEqual:
-    case TokenType::SlashEqual:
-    case TokenType::PercentEqual:
-    case TokenType::AmpersandEqual:
-    case TokenType::PipeEqual:
-    case TokenType::CaretEqual:
-    case TokenType::LessLessEqual:
-    case TokenType::GreaterGreaterEqual:
-        return true;
-    default:
-        return false;
-    }
+    return IsCompoundOrSimpleAssignment(op);
 }
 
 [[nodiscard]] TokenType::Enum MapSimdAssignToBinaryOp(const TokenType::Enum op)noexcept{
     switch(op){
-    case TokenType::PlusEqual: return TokenType::Plus;
-    case TokenType::MinusEqual: return TokenType::Minus;
-    case TokenType::StarEqual: return TokenType::Star;
-    case TokenType::SlashEqual: return TokenType::Slash;
-    case TokenType::PercentEqual: return TokenType::Percent;
-    case TokenType::AmpersandEqual: return TokenType::Ampersand;
-    case TokenType::PipeEqual: return TokenType::Pipe;
-    case TokenType::CaretEqual: return TokenType::Caret;
-    case TokenType::LessLessEqual: return TokenType::LessLess;
-    case TokenType::GreaterGreaterEqual: return TokenType::GreaterGreater;
+#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol, floatIntrinsic, doubleIntrinsic, int128Intrinsic, int256Intrinsic) \
+    case assignToken: return binaryToken;
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_SIMD_BINARY_OP
     default: return op;
     }
 }
 
 [[nodiscard]] MStringView SimdBinaryScalarOpSymbol(const TokenType::Enum binaryOp)noexcept{
     switch(binaryOp){
-    case TokenType::Plus: return " + ";
-    case TokenType::Minus: return " - ";
-    case TokenType::Star: return " * ";
-    case TokenType::Slash: return " / ";
-    case TokenType::Percent: return " % ";
-    case TokenType::Ampersand: return " & ";
-    case TokenType::Pipe: return " | ";
-    case TokenType::Caret: return " ^ ";
-    case TokenType::LessLess: return " << ";
-    case TokenType::GreaterGreater: return " >> ";
+#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol, floatIntrinsic, doubleIntrinsic, int128Intrinsic, int256Intrinsic) \
+    case binaryToken: return paddedBinarySymbol;
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_SIMD_BINARY_OP
     default: return {};
     }
 }

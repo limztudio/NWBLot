@@ -67,10 +67,13 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const MVector<Parse
 
     if(m_cursor.match(TokenType::Colon)){
         for(;;){
-            if(m_cursor.checkIdentifier("public") || m_cursor.checkIdentifier("private") || m_cursor.checkIdentifier("protected")){
-                m_cursor.error("do not write 'public'/'private'/'protected' before implemented interface names in adhd");
-                return nullptr;
+#define NWB_ADHD_EXPORT_ACCESS_SPECIFIER(adhdKeyword, astEnum) \
+            if(m_cursor.checkIdentifier(adhdKeyword)){ \
+                m_cursor.error("do not write 'public'/'private'/'protected' before implemented interface names in adhd"); \
+                return nullptr; \
             }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_ACCESS_SPECIFIER
             if(!m_cursor.check(TokenType::Identifier)){
                 m_cursor.errorExpected("expected implemented interface name after ':'");
                 return nullptr;
@@ -127,12 +130,11 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
 
     AccessSpecifier::Enum access = AccessSpecifier::None;
-    if(m_cursor.matchIdentifier("public"))
-        access = AccessSpecifier::Public;
-    else if(m_cursor.matchIdentifier("private"))
-        access = AccessSpecifier::Private;
-    else if(m_cursor.matchIdentifier("protected"))
-        access = AccessSpecifier::Protected;
+#define NWB_ADHD_EXPORT_ACCESS_SPECIFIER(adhdKeyword, astEnum) \
+    if(access == AccessSpecifier::None && m_cursor.matchIdentifier(adhdKeyword)) \
+        access = astEnum;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_ACCESS_SPECIFIER
 
     if(access != AccessSpecifier::None && m_cursor.check(TokenType::Colon)){
         m_cursor.error("C++-style 'public:' section labels are prohibited in adhd; write the access specifier on each member");
@@ -146,10 +148,15 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.error("'virtual' is prohibited in adhd; declare contracts in an 'interface' and mark implementations with 'override'");
         return false;
     }
-    if(m_cursor.checkIdentifier("class") || m_cursor.checkIdentifier("struct") || m_cursor.checkIdentifier("interface") || m_cursor.checkIdentifier("enum") || m_cursor.checkIdentifier("union") || m_cursor.checkIdentifier("type")){
-        m_cursor.error("nested type declarations inside a class are prohibited in adhd");
-        return false;
+#define NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD(keyword, isClassNestedKeyword) \
+    if constexpr(isClassNestedKeyword){ \
+        if(m_cursor.checkIdentifier(keyword)){ \
+            m_cursor.error("nested type declarations inside a class are prohibited in adhd"); \
+            return false; \
+        } \
     }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD
     if(access == AccessSpecifier::None){
         m_cursor.error("every class member in adhd must explicitly specify 'public', 'private', or 'protected'");
         return false;

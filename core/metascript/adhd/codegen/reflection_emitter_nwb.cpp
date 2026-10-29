@@ -25,7 +25,11 @@ namespace __hidden_adhd_reflection_emitter_nwb{
 }
 
 [[nodiscard]] constexpr u32 SimdMatrixElementCount(const MStringView matTypeName)noexcept{
-    return (matTypeName == "f64x3x3") ? 9u : ((matTypeName == "f32x3x4" || matTypeName == "f64x3x4") ? 12u : 16u);
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    if(matTypeName == adhdName) return elemCount;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+    return 16u;
 }
 
 void EmitNwbFieldFindPrefix(MString& out, const MStringView fieldName){
@@ -45,15 +49,16 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
 }
 
 [[nodiscard]] constexpr b8 IsScalarOrStringLikeNwbElement(const MStringView typeName)noexcept{
-    return typeName == "b8"
-        || IsIntegerScalarType(typeName)
-        || IsFloatScalarType(typeName)
-        || typeName == "EntityID"
-        || typeName == "String"
-        || typeName == "CompactString"
-        || typeName == "Path"
-        || typeName == "Name"
-        || typeName == "AssetRef";
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if(typeName == adhdName) return true;
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if constexpr(isSelfDefaulted){ \
+        if(typeName == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
+    return typeName == "AssetRef";
 }
 
 void EmitNwbValueConversionExpr(
@@ -114,14 +119,21 @@ void EmitNwbSimdVectorCtorExpr(
     const MStringView cppVecType = SymbolTable::mapBuiltinCppType(vecTypeName);
     const MStringView laneScalar = vecTypeName.substr(0u, 3u);
     const b8 isIntLane = (vecTypeName[0] == 'i' || vecTypeName[0] == 'u');
-    const b8 isMixedVec = (vecTypeName == "f32x3_i32" || vecTypeName == "f32x3_u32" || vecTypeName == "f64x3_i64" || vecTypeName == "f64x3_u64");
+    b8 isMixedVec = false;
+    MStringView wLaneScalar = laneScalar;
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if constexpr(isMixed){ \
+        if(vecTypeName == adhdName){ isMixedVec = true; wLaneScalar = wScalarType; } \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
     out.append(cppVecType.data(), cppVecType.size());
     out.push_back('(');
     for(u32 lane = 0u; lane < simdLanes; ++lane){
         if(lane > 0u)
             out.append(", ");
         const b8 laneIsInt = isIntLane || (isMixedVec && lane == 3u);
-        const MStringView curScalar = (isMixedVec && lane == 3u) ? vecTypeName.substr(6u) : laneScalar;
+        const MStringView curScalar = (isMixedVec && lane == 3u) ? wLaneScalar : laneScalar;
         out.append("static_cast<");
         out.append(curScalar.data(), curScalar.size());
         out.append(">(");
@@ -282,10 +294,10 @@ void EmitNwbListContainerFieldDeserialize(
     const MStringView elemName,
     const SymbolTable& symbols
 ){
-    const b8 isSetContainer = (containerTypeName == "Set" || containerTypeName == "HashSet" || containerTypeName == "ParallelHashSet");
+    const b8 isSetContainer = (containerTypeName.size() >= 3u && containerTypeName.substr(containerTypeName.size() - 3u) == "Set");
     const b8 isForwardList = (containerTypeName == "ForwardList");
     const b8 isFixedVec = (containerTypeName == "FixedVector");
-    const b8 isDynVec = (containerTypeName == "Vector" || containerTypeName == "Deque" || containerTypeName == "ParallelVector" || containerTypeName == "List" || isSetContainer);
+    const b8 isDynVec = !isForwardList && !isFixedVec && (containerTypeName != "Array");
     const b8 isPushContainer = isForwardList || isFixedVec || isDynVec;
     const MStringView elemAccessor = isForwardList ? "__f->asList()[__i - 1u]" : "__f->asList()[__i]";
     const MStringView elemListAccessor = isForwardList ? "__f->asList()[__i - 1u].asList()" : "__f->asList()[__i].asList()";
@@ -422,7 +434,13 @@ void EmitNwbMapFieldDeserialize(
     const MStringView valName,
     const SymbolTable& symbols
 ){
-    const b8 isStringLikeKey = (keyName == "String" || keyName == "CompactString" || keyName == "Name" || keyName == "Path");
+    b8 isStringLikeKey = false;
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if constexpr(isNwbMapKey){ \
+        if(keyName == adhdName) isStringLikeKey = true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
     const b8 isEnumKey = symbols.findEnum(keyName) != nullptr;
     if(!isStringLikeKey && !isEnumKey)
         return;

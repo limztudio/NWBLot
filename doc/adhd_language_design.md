@@ -77,7 +77,7 @@
   - Declares a type alias or generic type alias (lowers to C++ `using` / `template<...> using`):
     ```rust
     type EntityId = u64;
-    type CompareFn = Func<bool(in i32, in i32)>;
+    type CompareFn = Func<b8(in i32, in i32)>;
     type NameMap<V> = HashMap<Name, V>;
     ```
 - **No `namespace`, No `static`, & No Nested/Scoped Types (Strictly Top-Level File Scope Only)**:
@@ -104,7 +104,7 @@
         public f32x4 position;
         public f32x4 rotation;
         private u32 dirtyFlags;
-        private bool active;
+        private b8 active;
     }
     ```
   - Omitting the determiner is a compile-time error.
@@ -127,18 +127,18 @@
         public f32 b;
 
         public WeightPair operator+(in WeightPair rhs) const;
-        public bool operator==(in WeightPair rhs) const;
+        public b8 operator==(in WeightPair rhs) const;
         public void operator+=(in WeightPair rhs);
     }
     ```
-  - **No Free / Static Operator Overloads**: Defining a free or static two-argument operator such as `bool operator==(in A lhs, in B rhs)` is strictly prohibited.
+  - **No Free / Static Operator Overloads**: Defining a free or static two-argument operator such as `b8 operator==(in A lhs, in B rhs)` is strictly prohibited.
   - **Allowed Operators**:
     - Arithmetic: `+`, `-`, `*`, `/`, `%`, `+=`, `-=`, `*=`, `/=`, `%=`
     - Bitwise: `&`, `|`, `^`, `~`, `<<`, `>>`, `&=`, `|=`, `^=`, `<<=`, `>>=`
     - Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
     - Indexing: `[]`
   - **Forbidden User-Defined Operator Overloads**:
-    - Unary `*` (dereference), `->` (arrow), unary `&` (address-of), `,` (comma), user-defined `&&` / `||` (short-circuit logic—built-in boolean `&&`, `||`, and `!` remain supported in expressions), `new` / `delete`, and implicit type-conversion operators (`operator bool()`).
+    - Unary `*` (dereference), `->` (arrow), unary `&` (address-of), `,` (comma), user-defined `&&` / `||` (short-circuit logic—built-in boolean `&&`, `||`, and `!` remain supported in expressions), `new` / `delete`, and implicit type-conversion operators (`operator b8()`).
 
 ---
 
@@ -197,8 +197,8 @@
   - **Non-Null Callable Type (`Func<Ret(in A, mut B)>`)**:
     - Replaces raw C++ function pointers (`void(*)(int)`):
       ```cpp
-      // Non-null callable taking (in i32, in i32) and returning bool
-      Func<bool(in i32, in i32)> compare = lessThan;
+      // Non-null callable taking (in i32, in i32) and returning b8
+      Func<b8(in i32, in i32)> compare = lessThan;
 
       // Optional callback (when a callback may be unset)
       Optional<Func<void(mut TransformComponent)>> onUpdate;
@@ -207,7 +207,7 @@
     - Captures and parameters must explicitly specify `in` or `mut` (no implicit `[=]` or `[&]` captures):
       ```cpp
       // With captures: explicitly state 'in' or 'mut' for each captured variable
-      auto filter = lambda[in threshold, mut hitCount](in f32 distance) -> bool {
+      auto filter = lambda[in threshold, mut hitCount](in f32 distance) -> b8 {
           if(distance < threshold) {
               ++hitCount;
               return true;
@@ -216,7 +216,7 @@
       };
 
       // Without captures:
-      auto lessThan = lambda(in i32 a, in i32 b) -> bool {
+      auto lessThan = lambda(in i32 a, in i32 b) -> b8 {
           return a < b;
       };
       ```
@@ -225,7 +225,7 @@
     - Programmers only write `Func<Ret(in A, mut B)>` in `.adhd`; the compiler automatically chooses the lowering based on capture flow analysis:
       1. **Stateless Path (No Captures Flow In)**: Lowers to `InplaceFunction<0, Ret(Args...)>` (`8` bytes, copyable, zero wrapper overhead, and implicitly convertible to a raw C function pointer `Ret(*)(Args...) noexcept`).
       2. **Stateful Path (Captures Flow In)**: When a `lambda[in ..., mut ...](...)` flows into `Func<...>`, the compiler lowers it to `InplaceFunction<64, Ret(Args...)>`.
-    - **Primitive Scalar `in` ABI Rule**: Primitive scalars (`bool`, `i8`..`u64`, `isize`, `usize`, `f32`, `f64`) lower `in` to pass-by-value (`u32`, `f32`) while non-scalars (`f32x4`, `class`, `String`) lower `in` to `const T&`, so `Func<...>` signatures match C/C++ function pointer ABIs directly.
+    - **Primitive Scalar `in` ABI Rule**: Primitive scalars (`b8`, `i8`..`u64`, `isize`, `usize`, `f32`, `f64`) lower `in` to pass-by-value (`u32`, `f32`) while non-scalars (`f32x4`, `class`, `String`) lower `in` to `const T&`, so `Func<...>` signatures match C/C++ function pointer ABIs directly.
   - **No `Move` Keyword (Rust-Style Borrowing & Automatic Last-Use Move)**:
     - Like Rust, `adhd` has **no `Move(x)` or rvalue reference (`T&&`) syntax**.
     - Function parameters strictly use `in` (read-only borrow) or `mut` (mutable borrow).
@@ -254,7 +254,7 @@
 ### 5.1 Scalar Types
 | `adhd` Type | C++ Type (`global/type.h`) | Size / Align | Description |
 | :--- | :--- | :--- | :--- |
-| `bool` | `bool` | 1 B | Boolean |
+| `b8` | `b8` | 1 B | Boolean |
 | `i8` / `u8` | `i8` / `u8` | 1 B | 8-bit signed / unsigned integer |
 | `i16` / `u16` | `i16` / `u16` | 2 B | 16-bit signed / unsigned integer |
 | `i32` / `u32` | `i32` / `u32` | 4 B | 32-bit signed / unsigned integer |
@@ -411,7 +411,7 @@ All owning containers are automatically bound to the enclosing class's static ar
         private u32 runtimeHandle;
 
         [inline]
-        public void validate(in bool strict);
+        public void validate(in b8 strict);
     }
     ```
 - **Automatic `.nwb` & `[serialize]` Codegen**:

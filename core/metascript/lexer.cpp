@@ -22,6 +22,9 @@ namespace __hidden_metascript_lexer{
 
 inline constexpr MStringView s_NewlineInStringMessage = MStringView("newline in string literal");
 inline constexpr MStringView s_UnterminatedStringMessage = MStringView("unterminated string literal");
+inline constexpr MStringView s_EmptyCharMessage = MStringView("empty character literal");
+inline constexpr MStringView s_NewlineInCharMessage = MStringView("newline in character literal");
+inline constexpr MStringView s_UnterminatedCharMessage = MStringView("unterminated character literal");
 constexpr usize s_CompoundAssignmentTokenLength = 2u;
 constexpr usize s_ThreeCharTokenLength = 3u;
 
@@ -77,6 +80,9 @@ Token Lexer::next()noexcept{
 
     if(c == '"')
         return readString();
+
+    if(c == '\'')
+        return readCharLiteral();
 
     switch(c){
     case '+':
@@ -210,6 +216,32 @@ b8 Lexer::consumeBalancedBracesRaw(MStringView& outInnerCode)noexcept{
             }
             continue;
         }
+        if(c == '\'' && m_current > startOffset && __hidden_metascript_lexer::IsHexDigit(m_source[m_current - 1u])){
+            advance();
+            continue;
+        }
+        if(c == '"' && m_current > startOffset && m_source[m_current - 1u] == 'R'){
+            advance();
+            const usize delimStart = m_current;
+            while(!isAtEnd() && peek() != '(' && peek() != '"' && peek() != '\n')
+                advance();
+            if(!isAtEnd() && peek() == '('){
+                const MStringView delim = m_source.substr(delimStart, m_current - delimStart);
+                advance();
+                while(!isAtEnd()){
+                    if(peek() == ')' && m_current + 1u + delim.size() < m_source.size()
+                        && m_source.substr(m_current + 1u, delim.size()) == delim
+                        && m_source[m_current + 1u + delim.size()] == '"')
+                    {
+                        for(usize skip = 0u; skip < delim.size() + 2u; ++skip)
+                            advance();
+                        break;
+                    }
+                    advance();
+                }
+                continue;
+            }
+        }
         if(c == '"' || c == '\''){
             const MChar quote = advance();
             while(!isAtEnd() && peek() != quote){
@@ -272,6 +304,7 @@ void Lexer::skipWhitespaceAndComments()noexcept{
         }
 
         if(c == '/' && peekNext() == '*'){
+            const usize commentStart = m_current;
             const u32 commentLine = m_line;
             const u32 commentColumn = m_column;
             advance();
@@ -294,6 +327,18 @@ void Lexer::skipWhitespaceAndComments()noexcept{
                 m_errorColumn = commentColumn;
                 m_errorMessage = MStringView("unterminated block comment");
                 return;
+            }
+
+            const MStringView commentText = m_source.substr(commentStart, m_current - commentStart);
+            if(commentText == "/*__adhd_inc_push__*/"){
+                if(m_savedLineDepth < 64u)
+                    m_savedLines[m_savedLineDepth++] = m_line;
+                m_line = 1u;
+                m_column = 1u;
+            }
+            else if(commentText == "/*__adhd_inc_pop__*/"){
+                if(m_savedLineDepth > 0u)
+                    m_line = m_savedLines[--m_savedLineDepth];
             }
 
             continue;
@@ -339,6 +384,11 @@ Token Lexer::readNumber()noexcept{
             advance();
         while(!isAtEnd() && (peek() == 'u' || peek() == 'U' || peek() == 'l' || peek() == 'L'))
             advance();
+        if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.')){
+            while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
+                advance();
+            return makeErrorToken(MStringView("invalid suffix on hexadecimal integer literal"), startLine, startColumn);
+        }
         Token tok;
         tok.type = TokenType::IntegerLiteral;
         tok.text = m_source.substr(start, m_current - start);
@@ -356,6 +406,11 @@ Token Lexer::readNumber()noexcept{
             advance();
         while(!isAtEnd() && (peek() == 'u' || peek() == 'U' || peek() == 'l' || peek() == 'L'))
             advance();
+        if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.')){
+            while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
+                advance();
+            return makeErrorToken(MStringView("invalid suffix on binary integer literal"), startLine, startColumn);
+        }
         Token tok;
         tok.type = TokenType::IntegerLiteral;
         tok.text = m_source.substr(start, m_current - start);
@@ -395,6 +450,12 @@ Token Lexer::readNumber()noexcept{
     else if(!isDouble){
         while(!isAtEnd() && (peek() == 'u' || peek() == 'U' || peek() == 'l' || peek() == 'L'))
             advance();
+    }
+
+    if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || (isDouble && peek() == '.' && IsAsciiDigit(peekNext())))){
+        while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
+            advance();
+        return makeErrorToken(MStringView("invalid suffix on numeric literal"), startLine, startColumn);
     }
 
     Token tok;
@@ -439,6 +500,69 @@ Token Lexer::readString()noexcept{
     Token tok;
     tok.type = TokenType::StringLiteral;
     tok.text = m_source.substr(contentStart, contentEnd - contentStart);
+    tok.line = startLine;
+    tok.column = startColumn;
+    return tok;
+}
+
+Token Lexer::readCharLiteral()noexcept{
+    using namespace __hidden_metascript_lexer;
+
+    const usize start = m_current;
+    const u32 startLine = m_line;
+    const u32 startColumn = m_column;
+
+    advance();
+
+    if(isAtEnd())
+        return makeErrorToken(s_UnterminatedCharMessage, startLine, startColumn);
+    if(peek() == '\'')
+        return makeErrorToken(s_EmptyCharMessage, startLine, startColumn);
+    if(peek() == '\n' || peek() == '\r')
+        return makeErrorToken(s_NewlineInCharMessage, startLine, startColumn);
+
+    if(peek() == '\\'){
+        advance();
+        if(isAtEnd())
+            return makeErrorToken(s_UnterminatedCharMessage, startLine, startColumn);
+        if(peek() == '\n' || peek() == '\r')
+            return makeErrorToken(s_NewlineInCharMessage, startLine, startColumn);
+        const MChar esc = advance();
+        if(esc == 'x' || esc == 'X'){
+            if(isAtEnd() || !IsHexDigit(peek()))
+                return makeErrorToken(s_UnterminatedCharMessage, startLine, startColumn);
+            while(!isAtEnd() && IsHexDigit(peek()))
+                advance();
+        }
+        else if(esc == 'u' || esc == 'U'){
+            const usize expectedHex = (esc == 'u') ? 4u : 8u;
+            for(usize h = 0u; h < expectedHex; ++h){
+                if(isAtEnd() || !IsHexDigit(peek()))
+                    return makeErrorToken(s_UnterminatedCharMessage, startLine, startColumn);
+                advance();
+            }
+        }
+        else if(esc >= '0' && esc <= '7'){
+            for(usize oct = 0u; oct < 2u; ++oct){
+                if(!isAtEnd() && peek() >= '0' && peek() <= '7')
+                    advance();
+                else
+                    break;
+            }
+        }
+    }
+    else{
+        advance();
+    }
+
+    if(isAtEnd() || peek() != '\'')
+        return makeErrorToken(s_UnterminatedCharMessage, startLine, startColumn);
+
+    advance();
+
+    Token tok;
+    tok.type = TokenType::IntegerLiteral;
+    tok.text = m_source.substr(start, m_current - start);
     tok.line = startLine;
     tok.column = startColumn;
     return tok;

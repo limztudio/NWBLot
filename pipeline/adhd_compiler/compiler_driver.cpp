@@ -17,6 +17,51 @@ namespace __hidden_adhd_compiler_driver{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void AppendDepfileEscapedPath(NWB::Core::Metascript::MString& out, const NWB::Core::Metascript::MStringView pathText){
+    for(const NWB::Core::Metascript::MChar c : pathText){
+        if(c == ' ' || c == '#')
+            out.push_back('\\');
+        else if(c == '$')
+            out.push_back('$');
+        out.push_back(c);
+    }
+}
+
+[[nodiscard]] NWB::Core::Metascript::MString DeriveVirtualCompilePath(
+    NWB::Core::Metascript::MetaArena& arena,
+    const Path<NWB::Core::Metascript::MetaArena>& inputPath,
+    const NWB::Core::Metascript::MStringView rawInputView,
+    const NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString>& includeDirs
+){
+    using namespace NWB::Core::Metascript;
+
+    const MString genericInput = PathToGenericString<MChar>(arena, inputPath);
+    const MStringView genericView(genericInput.data(), genericInput.size());
+
+    MStringView bestRelView;
+    usize bestPrefixLen = 0u;
+    for(const MString& dirText : includeDirs){
+        const Path<MetaArena> incPath(arena, AStringView(dirText.data(), dirText.size()));
+        MString genericInc = PathToGenericString<MChar>(arena, incPath);
+        if(!genericInc.empty() && genericInc.back() == '/')
+            genericInc.pop_back();
+        if(genericInc.empty() || genericView.size() <= genericInc.size() + 1u)
+            continue;
+        if(genericView.substr(0u, genericInc.size()) == MStringView(genericInc.data(), genericInc.size())
+            && genericView[genericInc.size()] == '/'
+            && genericInc.size() > bestPrefixLen)
+        {
+            bestPrefixLen = genericInc.size();
+            bestRelView = genericView.substr(genericInc.size() + 1u);
+        }
+    }
+
+    if(!bestRelView.empty())
+        return MString(bestRelView.data(), bestRelView.size(), arena);
+    return MString(rawInputView.data(), rawInputView.size(), arena);
+}
+
+
 class FilesystemIncludeResolver final : public NWB::Core::Metascript::IIncludeResolver{
 public:
     FilesystemIncludeResolver(
@@ -71,6 +116,11 @@ public:
         return false;
     }
 
+    void popIncludeScope()noexcept override{
+        if(m_resolvedParentDirs.size() > 1u)
+            m_resolvedParentDirs.pop_back();
+    }
+
 
 private:
     NWB::Core::Metascript::MVector<Path<NWB::Core::Metascript::MetaArena>> m_resolvedParentDirs;
@@ -103,6 +153,7 @@ b8 RunAdhdCompilerDriver(
     }
 
     const MStringView customNs(options.customNamespace.data(), options.customNamespace.size());
+    MString combinedDepContent(arena);
 
     for(const MString& inputPathText : options.inputFiles){
         const MStringView inputView(inputPathText.data(), inputPathText.size());
@@ -119,11 +170,17 @@ b8 RunAdhdCompilerDriver(
 
         const Path<MetaArena> parentDir = inputPath.parentPath();
         __hidden_adhd_compiler_driver::FilesystemIncludeResolver resolver(arena, parentDir, options.includeDirectories);
+        const MString virtualPath = __hidden_adhd_compiler_driver::DeriveVirtualCompilePath(
+            arena,
+            inputPath,
+            inputView,
+            options.includeDirectories
+        );
 
         Adhd::CompileResult result(arena);
         if(!Adhd::Compiler::compile(
             MStringView(sourceContent.data(), sourceContent.size()),
-            inputView,
+            MStringView(virtualPath.data(), virtualPath.size()),
             arena,
             result,
             &resolver,
@@ -161,6 +218,36 @@ b8 RunAdhdCompilerDriver(
             NWB_LOGGER_ERROR(
                 NWB_TEXT("adhd_compiler: failed to write generated output for '{}'"),
                 ConvertString(AStringView(inputView.data(), inputView.size()))
+            );
+            return false;
+        }
+
+        if(!options.depfilePath.empty()){
+            const MString headerGeneric = PathToGenericString<MChar>(arena, headerOutPath);
+            const MString sourceGeneric = PathToGenericString<MChar>(arena, sourceOutPath);
+            const MString inputGeneric = PathToGenericString<MChar>(arena, inputPath);
+
+            __hidden_adhd_compiler_driver::AppendDepfileEscapedPath(combinedDepContent, MStringView(headerGeneric.data(), headerGeneric.size()));
+            combinedDepContent.push_back(' ');
+            __hidden_adhd_compiler_driver::AppendDepfileEscapedPath(combinedDepContent, MStringView(sourceGeneric.data(), sourceGeneric.size()));
+            combinedDepContent.append(": ");
+            __hidden_adhd_compiler_driver::AppendDepfileEscapedPath(combinedDepContent, MStringView(inputGeneric.data(), inputGeneric.size()));
+            for(const MString& depPath : result.unit.resolvedIncludedFiles){
+                combinedDepContent.push_back(' ');
+                __hidden_adhd_compiler_driver::AppendDepfileEscapedPath(combinedDepContent, MStringView(depPath.data(), depPath.size()));
+            }
+            combinedDepContent.push_back('\n');
+        }
+    }
+
+    if(!options.validateOnly && !options.depfilePath.empty()){
+        const Path<MetaArena> depfileOutPath(arena, AStringView(options.depfilePath.data(), options.depfilePath.size()));
+        if(!EnsureDirectories(depfileOutPath.parentPath())
+            || !WriteTextFile(depfileOutPath, AStringView(combinedDepContent.data(), combinedDepContent.size())))
+        {
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("adhd_compiler: failed to write depfile '{}'"),
+                ConvertString(AStringView(options.depfilePath.data(), options.depfilePath.size()))
             );
             return false;
         }

@@ -35,8 +35,22 @@ b8 TypeChecker::checkTemplateParamBounds(
                 break;
             }
         }
-        if(param.constValueType && !checkTypeRef(*param.constValueType, enclosingClass, effectiveMethod, errors))
-            ok = false;
+        if(param.constValueType){
+            if(!checkTypeRef(*param.constValueType, enclosingClass, effectiveMethod, errors)){
+                ok = false;
+            }
+            else{
+                const TypeRef* unwrappedConstType = m_symbols.unwrapTypeAlias(param.constValueType);
+                const MStringView baseConstName = unwrappedConstType ? m_symbols.resolveBaseTypeName(unwrappedConstType->name) : MStringView{};
+                if(!unwrappedConstType
+                    || m_symbols.resolveRefMode(param.constValueType) != ParamPassingMode::None
+                    || !(baseConstName == "b8" || IsIntegerScalarType(baseConstName) || m_symbols.findEnum(baseConstName) != nullptr))
+                {
+                    reportError(errors, param.span, "non-type template parameter must have an integer, b8, or enum value type");
+                    ok = false;
+                }
+            }
+        }
         for(usize bIdx = 0u; bIdx < param.interfaceBounds.size(); ++bIdx){
             const TypeRef* boundRef = param.interfaceBounds[bIdx];
             if(!boundRef)
@@ -265,9 +279,15 @@ b8 TypeChecker::checkTypeRef(
     else if(IsTypeAndCountBuiltinGeneric(typeRef.name)){
         if(typeRef.templateArgs.size() != 2u
             || !typeRef.templateArgs[0].type
-            || !NormalizeConstantTemplateArg(const_cast<TypeArg&>(typeRef.templateArgs[1]), enclosingClass, enclosingMethod, m_symbols))
+            || !NormalizeConstantTemplateArg(const_cast<TypeArg&>(typeRef.templateArgs[1]), enclosingClass, enclosingMethod, m_symbols)
+            || typeRef.templateArgs[1].constantText == "true"
+            || typeRef.templateArgs[1].constantText == "false"
+            || typeRef.templateArgs[1].constantText == "0"
+            || typeRef.templateArgs[1].constantText == "0u"
+            || typeRef.templateArgs[1].constantText == "0U"
+            || (!typeRef.templateArgs[1].constantText.empty() && typeRef.templateArgs[1].constantText[0] == '-'))
         {
-            reportError(errors, typeRef.span, "built-in bounded container requires 1 element type argument and 1 compile-time constant capacity argument");
+            reportError(errors, typeRef.span, "built-in bounded container requires 1 element type argument and 1 positive integer compile-time constant capacity argument");
             ok = false;
         }
     }
@@ -296,6 +316,14 @@ b8 TypeChecker::checkTypeRef(
 
     if(!checkTemplateArgTypes(typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
         ok = false;
+    if(!typeRef.isAuto && !typeRef.isFuncType && !typeRef.name.empty()){
+        if((m_symbols.findGlobalConstant(typeRef.name) != nullptr && !m_symbols.hasTypeSymbol(typeRef.name))
+            || HasConstValueTemplateParam(enclosingClass, enclosingMethod, typeRef.name))
+        {
+            reportError(errors, typeRef.span, "compile-time constant cannot be used as a type");
+            ok = false;
+        }
+    }
     return ok;
 }
 
@@ -340,18 +368,47 @@ b8 TypeChecker::verifyConcreteClassImplementsInterface(
     const MStringView errorMessage,
     MVector<ParseError>& errors
 ){
+    const TypeRef* resolvedExpected = m_symbols.unwrapTypeAlias(expectedInterfaceType);
+    if(!resolvedExpected)
+        return true;
+
     const TypeRef* rhsTypeRef = inferExprTypeRef(ownerClass, &method, rhsExpr, scope);
     const MStringView rhsType = rhsTypeRef
         ? m_symbols.resolveBaseTypeName(rhsTypeRef->name)
         : inferExprTypeName(ownerClass, &method, rhsExpr, scope);
+    if(rhsType.empty())
+        return true;
+
     if(const ClassDecl* rhsCls = m_symbols.findClass(rhsType)){
-        const TypeRef* resolvedExpected = m_symbols.unwrapTypeAlias(expectedInterfaceType);
-        if(!resolvedExpected || !classImplementsInterface(*rhsCls, rhsTypeRef, *resolvedExpected)){
+        if(!classImplementsInterface(*rhsCls, rhsTypeRef, *resolvedExpected)){
             reportError(errors, errorSpan, errorMessage);
             return false;
         }
+        return true;
     }
-    return true;
+
+    if(m_symbols.findInterface(rhsType)){
+        TypeRef fallbackRhsRef(m_arena);
+        fallbackRhsRef.name = rhsType;
+        const TypeRef& activeRhsRef = rhsTypeRef ? *rhsTypeRef : fallbackRhsRef;
+        if(!interfaceInheritsFrom(activeRhsRef, *resolvedExpected)){
+            reportError(errors, errorSpan, errorMessage);
+            return false;
+        }
+        return true;
+    }
+
+    if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, rhsType)){
+        for(const TypeRef* bound : tp->interfaceBounds){
+            if(bound && interfaceInheritsFrom(*bound, *resolvedExpected))
+                return true;
+        }
+        reportError(errors, errorSpan, errorMessage);
+        return false;
+    }
+
+    reportError(errors, errorSpan, errorMessage);
+    return false;
 }
 
 

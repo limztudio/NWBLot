@@ -96,16 +96,46 @@ void SourceEmitter::emitStmt(
             out.append("));\r\n");
         }
         else if(stmt.isCtorInit){
-            if(stmt.arguments.empty() && !stmt.usesScratchArena){
+            const MStringView baseVarType = stmt.varType ? m_symbols.resolveBaseTypeName(stmt.varType->name) : MStringView{};
+            if(!baseVarType.empty() && m_symbols.isSimdMatrixType(baseVarType)){
+                if(stmt.arguments.empty()){
+                    out.append("{};\r\n");
+                }
+                else{
+                    out.append("{ .raw = { ");
+                    for(usize i = 0u; i < stmt.arguments.size(); ++i){
+                        if(i > 0u)
+                            out.append(", ");
+                        if(stmt.arguments[i])
+                            emitExpr(out, *stmt.arguments[i]);
+                    }
+                    out.append(" } };\r\n");
+                }
+            }
+            else if(stmt.arguments.empty() && !stmt.usesScratchArena){
                 out.append("{};\r\n");
             }
             else{
                 out.push_back('(');
-                for(usize i = 0u; i < stmt.arguments.size(); ++i){
-                    if(i > 0u)
-                        out.append(", ");
-                    if(stmt.arguments[i])
-                        emitExpr(out, *stmt.arguments[i]);
+                u32 ctorVecLanes = 0u;
+                const b8 isScalarSplatCtor = !baseVarType.empty()
+                    && (m_symbols.isSimdVectorType(baseVarType, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseVarType, ctorVecLanes))
+                    && stmt.arguments.size() == 1u && stmt.arguments[0]
+                    && stmt.arguments[0]->resolvedSimdType.empty();
+                if(isScalarSplatCtor){
+                    for(u32 lane = 0u; lane < ctorVecLanes; ++lane){
+                        if(lane > 0u)
+                            out.append(", ");
+                        emitExpr(out, *stmt.arguments[0]);
+                    }
+                }
+                else{
+                    for(usize i = 0u; i < stmt.arguments.size(); ++i){
+                        if(i > 0u)
+                            out.append(", ");
+                        if(stmt.arguments[i])
+                            emitExpr(out, *stmt.arguments[i]);
+                    }
                 }
                 if(stmt.usesScratchArena){
                     if(!stmt.arguments.empty())

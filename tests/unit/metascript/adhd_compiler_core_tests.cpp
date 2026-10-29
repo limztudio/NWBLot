@@ -370,6 +370,292 @@ TEST(AdhdCompiler, EnforcesMutCallSiteAndParallelConcurrencySafety){
     EXPECT_TRUE(Compiler::compile(s_SafeParallelVector, "impl/test_par_good.adhd", arena.arena, safeParRes));
 }
 
+TEST(AdhdCompiler, SupportsCharLiteralsLineContinuationsInlineAttributesAndOverloadResolution){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_Source =
+        "#define MAKE_PAIR(a, \\\r\n"
+        "    b) ((a) + (b))\r\n"
+        "#if 'A' == 65 && '\\n' == 10 && '\\x10' == 16\r\n"
+        "const u32 s_CharConst = 'Z';\r\n"
+        "#endif\r\n"
+        "[inline]\r\n"
+        "i32 pickOverload(in i32 v) {\r\n"
+        "    return MAKE_PAIR(\r\n"
+        "        v,\r\n"
+        "        cast<i32>('!')\r\n"
+        "    );\r\n"
+        "}\r\n"
+        "[noinline]\r\n"
+        "f32 pickOverload(in f32 v) {\r\n"
+        "    return v + 1.0f;\r\n"
+        "}\r\n"
+        "class OverloadProbe {\r\n"
+        "    public i32 m_val;\r\n"
+        "    [inline]\r\n"
+        "    public OverloadProbe(in i32 v) {\r\n"
+        "        this.m_val = v;\r\n"
+        "    }\r\n"
+        "    [noinline]\r\n"
+        "    public OverloadProbe(in f32 v) {\r\n"
+        "        this.m_val = cast<i32>(v);\r\n"
+        "    }\r\n"
+        "    [inline]\r\n"
+        "    public i32 eval(in i32 x)const {\r\n"
+        "        return pickOverload(x);\r\n"
+        "    }\r\n"
+        "    [noinline]\r\n"
+        "    public f32 eval(in f32 x)const {\r\n"
+        "        return pickOverload(x);\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "void runProbe(mut f32x4 vec) {\r\n"
+        "    OverloadProbe pInt(10);\r\n"
+        "    OverloadProbe pFlt(2.5f);\r\n"
+        "    i32 ri = pInt.eval(4);\r\n"
+        "    f32 rf = pFlt.eval(1.5f);\r\n"
+        "    f32x3u splatU(2.0f);\r\n"
+        "    parallel_for(usize i = 0u; i < 16u; i += 4u) {\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "in f32x4 borrowSimdRef(in f32x4 v) {\r\n"
+        "    return v;\r\n"
+        "}\r\n";
+
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/test_char_inline_overload.adhd", arena.arena, res));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("inline constexpr u32 s_CharConst = 'Z';"), MStringView::npos);
+    EXPECT_NE(hdrView.find("NWB_FORCE_INLINE inline i32 pickOverload(const i32 v)"), MStringView::npos);
+    EXPECT_NE(hdrView.find("NWB_FORCE_INLINE OverloadProbe(const i32 v)noexcept"), MStringView::npos);
+    EXPECT_NE(hdrView.find("NWB_FORCE_INLINE i32 eval(const i32 x)const noexcept"), MStringView::npos);
+    EXPECT_NE(cppView.find("NWB_NOINLINE f32 pickOverload(const f32 v)"), MStringView::npos);
+    EXPECT_NE(cppView.find("NWB_NOINLINE OverloadProbe::OverloadProbe(const f32 v)noexcept"), MStringView::npos);
+    EXPECT_NE(cppView.find("NWB_NOINLINE f32 OverloadProbe::eval(const f32 x)const noexcept"), MStringView::npos);
+    EXPECT_NE(cppView.find("Float3U splatU(2.0f, 2.0f, 2.0f);"), MStringView::npos);
+    EXPECT_NE(cppView.find("static_cast<usize>(16u), static_cast<usize>(4u), [&](const usize __adhd_idx)noexcept"), MStringView::npos);
+    EXPECT_NE(cppView.find("return ::MakeNotNull(&(v));"), MStringView::npos);
+}
+
+TEST(AdhdCompiler, ValidatesNewSemanticConstraintsAndExtendedReflection){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ReflectSerializeSource =
+        "enum<u8> SlotKey {\r\n"
+        "    enum Primary = 0u,\r\n"
+        "    enum Secondary = 1u\r\n"
+        "}\r\n"
+        "[serialize]\r\n"
+        "class SubEntry {\r\n"
+        "    public u32 id = 0u;\r\n"
+        "}\r\n"
+        "class AssetBox<T> {\r\n"
+        "    public T item;\r\n"
+        "}\r\n"
+        "class TexAsset {}\r\n"
+        "[serialize, reflect]\r\n"
+        "class BundlePayload {\r\n"
+        "    public Array<Name, 2> tags;\r\n"
+        "    public Array<SubEntry, 2> subs;\r\n"
+        "}\r\n"
+        "[reflect]\r\n"
+        "class SceneTable {\r\n"
+        "    public Map<SlotKey, i32> slotWeights;\r\n"
+        "    public AssetBox<AssetRef<TexAsset>> boxedTex;\r\n"
+        "}\r\n";
+
+    CompileResult reflectRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_ReflectSerializeSource, "impl/test_bundle_reflect.adhd", arena.arena, reflectRes));
+    const MStringView reflectHdr(reflectRes.generatedHeader.data(), reflectRes.generatedHeader.size());
+    const MStringView reflectCpp(reflectRes.generatedSource.data(), reflectRes.generatedSource.size());
+
+    EXPECT_NE(reflectHdr.find("(sizeof(tags) / sizeof(tags[0])) * sizeof(::NameHash)"), MStringView::npos);
+    EXPECT_NE(reflectHdr.find("(sizeof(subs) / sizeof(subs[0])) * SubEntry::serializedBinarySize()"), MStringView::npos);
+    EXPECT_NE(reflectCpp.find("for(const auto& __elem : this->tags)"), MStringView::npos);
+    EXPECT_NE(reflectCpp.find("for(auto& __elem : this->subs)"), MStringView::npos);
+    EXPECT_NE(reflectHdr.find("if(const auto __ek = SlotKey::parseNamedEnum(__k)){ this->slotWeights[*__ek] = static_cast<i32>(__v.asInteger()); }"), MStringView::npos);
+    EXPECT_NE(reflectHdr.find("AssetBox<::NWB::Core::Assets::AssetRef<TexAsset>>::extractNwbAssetDependencies(*__f, callback)"), MStringView::npos);
+
+    static constexpr MStringView s_OverflowFlagEnum =
+        "enum<u8> TooManyFlags {\r\n"
+        "    flag F0,\r\n"
+        "    flag F1,\r\n"
+        "    flag F2,\r\n"
+        "    flag F3,\r\n"
+        "    flag F4,\r\n"
+        "    flag F5,\r\n"
+        "    flag F6,\r\n"
+        "    flag F7,\r\n"
+        "    flag F8\r\n"
+        "}\r\n";
+    CompileResult overflowFlagRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_OverflowFlagEnum, "impl/bad_flag_overflow.adhd", arena.arena, overflowFlagRes));
+
+    static constexpr MStringView s_BadFloatSwitch =
+        "void badSwitch(in f32 v) {\r\n"
+        "    switch(v) {\r\n"
+        "    default:\r\n"
+        "        break;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badSwitchRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BadFloatSwitch, "impl/bad_float_switch.adhd", arena.arena, badSwitchRes));
+
+    static constexpr MStringView s_DupCaseSwitch =
+        "void dupSwitch(in i32 v) {\r\n"
+        "    switch(v) {\r\n"
+        "    case 1:\r\n"
+        "        break;\r\n"
+        "    case 1:\r\n"
+        "        break;\r\n"
+        "    default:\r\n"
+        "        break;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult dupCaseRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DupCaseSwitch, "impl/bad_dup_case.adhd", arena.arena, dupCaseRes));
+
+    static constexpr MStringView s_PartialCtorInit =
+        "class PartialInit {\r\n"
+        "    public i32 x;\r\n"
+        "    public PartialInit(in b8 cond) {\r\n"
+        "        if(cond) {\r\n"
+        "            this.x = 1;\r\n"
+        "        }\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult partialCtorRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_PartialCtorInit, "impl/bad_partial_ctor.adhd", arena.arena, partialCtorRes));
+
+    static constexpr MStringView s_CallNonFuncField =
+        "class NonCallableField {\r\n"
+        "    public i32 value = 0;\r\n"
+        "    public void run() {\r\n"
+        "        this.value();\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult nonFuncFieldRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_CallNonFuncField, "impl/bad_call_field.adhd", arena.arena, nonFuncFieldRes));
+
+    static constexpr MStringView s_ConflictingInlineAttrs =
+        "[inline, noinline]\r\n"
+        "void badAttrs() {}\r\n";
+    CompileResult badAttrRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_ConflictingInlineAttrs, "impl/bad_inline_attrs.adhd", arena.arena, badAttrRes));
+}
+
+TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ValidPass2Source =
+        "/* leading block comment */ #define PICK_VAL(cond, a, b) ((cond) ? (a) : (b))\r\n"
+        "#if PICK_VAL(1, 10, 20) == 10 && '\\u0041' == 65\r\n"
+        "enum<u8> SemiEnum {\r\n"
+        "    enum First = 0u\r\n"
+        "};\r\n"
+        "interface ISemiInterface {\r\n"
+        "    i32 get()const;\r\n"
+        "};\r\n"
+        "class TexAsset {};\r\n"
+        "[reflect]\r\n"
+        "class OptionalContainerDeps {\r\n"
+        "    public Optional<Vector<AssetRef<TexAsset>>> optRefs;\r\n"
+        "};\r\n"
+        "[inline]\r\n"
+        "u32 inlineParallelAndRawVec(in f32x3u unalignedVec, mut Vector<f32x4> simdItems) {\r\n"
+        "    for(mut f32x4 item : simdItems) {\r\n"
+        "        item = item + f32x4(1.0f, 2.0f, 3.0f, 4.0f);\r\n"
+        "    }\r\n"
+        "    parallel LocalTask {\r\n"
+        "        Vector<i32> taskLocalVec;\r\n"
+        "        taskLocalVec.push_back(42);\r\n"
+        "    }\r\n"
+        "    wait();\r\n"
+        "    f32 firstLane = unalignedVec[0];\r\n"
+        "    native(in laneVal = firstLane) {\r\n"
+        "        const i32 sep = 1'000;\r\n"
+        "        const char* rawBrace = R\"(raw } brace)\";\r\n"
+        "        (void)sep;\r\n"
+        "        (void)rawBrace;\r\n"
+        "        (void)laneVal;\r\n"
+        "    }\r\n"
+        "    return bit_cast<u32>(firstLane);\r\n"
+        "}\r\n"
+        "#endif\r\n";
+
+    CompileResult validRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_ValidPass2Source, "impl/pass2_valid.adhd", arena.arena, validRes));
+    const MStringView hdrView(validRes.generatedHeader.data(), validRes.generatedHeader.size());
+    EXPECT_NE(hdrView.find("#include <core/task/cpu/scheduler.h>"), MStringView::npos);
+    EXPECT_NE(hdrView.find("unalignedVec.raw[0]"), MStringView::npos);
+    EXPECT_NE(hdrView.find("if(this->optRefs.has_value()){ for(const auto& __dep : *this->optRefs){ if(__dep.valid()) callback(__dep.virtualPath); } }"), MStringView::npos);
+
+    static constexpr MStringView s_BadHexLiteral =
+        "const u32 kBad = 0x1G;\r\n";
+    CompileResult badHexRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BadHexLiteral, "impl/bad_hex.adhd", arena.arena, badHexRes));
+
+    static constexpr MStringView s_DupMacroParam =
+        "#define BAD_MACRO(x, x) (x)\r\n"
+        "const i32 kVal = 1;\r\n";
+    CompileResult dupMacroRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DupMacroParam, "impl/bad_macro_param.adhd", arena.arena, dupMacroRes));
+
+    static constexpr MStringView s_UnaryCStyleCast =
+        "i32 badCast() {\r\n"
+        "    return (i32)-1;\r\n"
+        "}\r\n";
+    CompileResult unaryCastRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_UnaryCStyleCast, "impl/bad_unary_cast.adhd", arena.arena, unaryCastRes));
+
+    static constexpr MStringView s_BitCastSizeMismatch =
+        "u64 badBitCast(in f32 x) {\r\n"
+        "    return bit_cast<u64>(x);\r\n"
+        "}\r\n";
+    CompileResult bitCastRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BitCastSizeMismatch, "impl/bad_bit_cast.adhd", arena.arena, bitCastRes));
+
+    static constexpr MStringView s_DanglingLocalReturn =
+        "in i32 badReturnRef() {\r\n"
+        "    i32 localVal = 7;\r\n"
+        "    return localVal;\r\n"
+        "}\r\n";
+    CompileResult danglingRetRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_DanglingLocalReturn, "impl/bad_dangling_ret.adhd", arena.arena, danglingRetRes));
+
+    static constexpr MStringView s_RvalueMutArg =
+        "void mutateInt(mut i32 v) { v = v + 1; }\r\n"
+        "void caller(in i32 a, in i32 b) {\r\n"
+        "    mutateInt(a + b);\r\n"
+        "}\r\n";
+    CompileResult rvalueMutRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_RvalueMutArg, "impl/bad_rvalue_mut.adhd", arena.arena, rvalueMutRes));
+
+    static constexpr MStringView s_EarlyReturnCtor =
+        "class EarlyRetClass {\r\n"
+        "    public i32 x;\r\n"
+        "    public EarlyRetClass(in b8 skip) {\r\n"
+        "        if(skip) {\r\n"
+        "            return;\r\n"
+        "        }\r\n"
+        "        this.x = 5;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult earlyRetCtorRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_EarlyReturnCtor, "impl/bad_early_ret_ctor.adhd", arena.arena, earlyRetCtorRes));
+
+    static constexpr MStringView s_ParallelForSet =
+        "void badParSet(in Set<i32> items) {\r\n"
+        "    parallel_for(in i32 x : items) {\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult parSetRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_ParallelForSet, "impl/bad_par_set.adhd", arena.arena, parSetRes));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

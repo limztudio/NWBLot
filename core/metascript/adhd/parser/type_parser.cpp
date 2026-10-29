@@ -207,6 +207,18 @@ b8 TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
             arg.constantText = m_cursor.current().text;
             m_cursor.advance();
         }
+        else if(m_cursor.check(TokenType::Minus)){
+            const MChar* const negStartPtr = m_cursor.current().text.data();
+            m_cursor.advance();
+            if(!m_cursor.check(TokenType::IntegerLiteral)){
+                m_cursor.errorExpected("expected integer literal after '-' in template argument");
+                return false;
+            }
+            const Token& intTok = m_cursor.current();
+            const MChar* const negEndPtr = intTok.text.data() + intTok.text.size();
+            arg.constantText = MStringView(negStartPtr, static_cast<usize>(negEndPtr - negStartPtr));
+            m_cursor.advance();
+        }
         else{
             arg.type = parseType(true, false);
             if(!arg.type)

@@ -23,6 +23,7 @@ interface IIncludeResolver{
     virtual ~IIncludeResolver()noexcept = default;
 
     [[nodiscard]] virtual b8 resolveInclude(MStringView includePath, b8 isAngleBracket, MetaArena& arena, MString& outResolvedKey, MString& outContent) = 0;
+    virtual void popIncludeScope()noexcept{}
 };
 
 
@@ -73,6 +74,7 @@ public:
     [[nodiscard]] b8 process(MStringView source, MString& outProcessed);
 
     [[nodiscard]] const IncludedList& includedFiles()const noexcept{ return m_includedFiles; }
+    [[nodiscard]] const IncludedList& resolvedIncludedFiles()const noexcept{ return m_resolvedIncludedFiles; }
     [[nodiscard]] b8 isOffsetInIncludedRange(usize offset)const noexcept;
 
 
@@ -87,9 +89,9 @@ private:
 
 
 private:
-    [[nodiscard]] b8 processInternal(MStringView source, u32 depth, MString& outProcessed);
-    [[nodiscard]] b8 handleDirective(MStringView directiveLine, u32 line, u32 depth, Vector<ConditionalFrame, Alloc::ScratchArena>& condStack, MString& outProcessed);
-    [[nodiscard]] b8 handleInclude(MStringView rest, u32 line, u32 depth, MString& outProcessed);
+    [[nodiscard]] b8 processInternal(MStringView source, u32 depth, MStringView currentFileKey, MString& outProcessed);
+    [[nodiscard]] b8 handleDirective(MStringView directiveLine, u32 line, u32 depth, MStringView currentFileKey, Vector<ConditionalFrame, Alloc::ScratchArena>& condStack, MString& outProcessed);
+    [[nodiscard]] b8 handleInclude(MStringView rest, u32 line, u32 depth, MStringView currentFileKey, MString& outProcessed);
     [[nodiscard]] b8 handleDefine(MStringView rest, u32 line);
     [[nodiscard]] b8 handleUndef(MStringView rest, u32 line);
     [[nodiscard]] b8 evaluateCondition(MStringView exprText, u32 line, b8& outResult);
@@ -104,6 +106,7 @@ private:
     MacroMap m_macros;
     IncludedSet m_includedSet;
     IncludedList m_includedFiles;
+    IncludedList m_resolvedIncludedFiles;
     IncludedRangeList m_includedByteRanges;
 };
 

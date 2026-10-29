@@ -113,7 +113,11 @@ namespace __hidden_adhd_type_checker{
 }
 
 [[nodiscard]] b8 ShouldAutoInlineCallable(const MethodDecl& fn)noexcept{
-    if(!fn.hasBody || fn.isOutOfLine || fn.usesScratchArena || fn.usesTaskScope)
+    if(!fn.hasBody || fn.isNoInline)
+        return false;
+    if(fn.isForceInline)
+        return true;
+    if(fn.usesScratchArena || fn.usesTaskScope || fn.isOutOfLine)
         return false;
     if(!fn.templateParams.empty())
         return true;
@@ -121,13 +125,46 @@ namespace __hidden_adhd_type_checker{
     return StmtListIsAutoInlineable(fn.body, stmtCount);
 }
 
+[[nodiscard]] i32 ScoreClassCallableArgs(
+    const SymbolTable& symbols,
+    const MVector<ParamDecl>& params,
+    const MVector<MStringView>* argTypeNames,
+    const MVector<b8>* argIsMut
+)noexcept{
+    i32 score = 0;
+    const usize count = params.size();
+    for(usize i = 0u; i < count; ++i){
+        if(argIsMut && i < argIsMut->size()){
+            const b8 paramMut = params[i].mode == ParamPassingMode::Mut;
+            if(paramMut == (*argIsMut)[i])
+                score += 8;
+        }
+        if(argTypeNames && i < argTypeNames->size() && !(*argTypeNames)[i].empty() && params[i].type){
+            const MStringView paramName = symbols.resolveBaseTypeName(params[i].type->name);
+            const MStringView argName = (*argTypeNames)[i];
+            if(paramName == argName){
+                score += 16;
+            }
+            else if((paramName == "StringView" && (argName == "String" || argName == "CompactString"))
+                || (paramName == "Path" && argName == "StringView"))
+            {
+                score += 8;
+            }
+        }
+    }
+    return score;
+}
+
 [[nodiscard]] const MethodDecl* FindScoredClassCallable(
+    const SymbolTable& symbols,
     const ClassDecl& classDecl,
     const MStringView name,
     const b8 isOperator,
     const usize* preferredArgCount,
     const b8 preferConst,
-    const b8 requirePublic
+    const b8 requirePublic,
+    const MVector<MStringView>* argTypeNames,
+    const MVector<b8>* argIsMut
 )noexcept{
     const MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
@@ -136,9 +173,10 @@ namespace __hidden_adhd_type_checker{
             continue;
         i32 score = 0;
         if(!preferredArgCount || m->params.size() == *preferredArgCount)
-            score += 4;
+            score += 64;
         if(!requirePublic || m->access == AccessSpecifier::Public)
-            score += 2;
+            score += 32;
+        score += ScoreClassCallableArgs(symbols, m->params, argTypeNames, argIsMut);
         if(m->isConst == preferConst)
             score += 1;
         if(score > bestScore){
@@ -171,18 +209,56 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     for(const EnumDecl* enumDecl : unit.enums){
         if(!enumDecl)
             continue;
+        u32 autoFlagBitIndex = 0u;
+        MethodDecl dummyEnumCtx(m_arena);
+        MVector<ScopedVarInfo> enumScope(m_arena);
+        TypeRef* enumUnderlyingRef = AllocateAstNode<TypeRef>(m_arena);
+        enumUnderlyingRef->name = enumDecl->sizeTypeName;
+
         for(usize i = 0u; i < enumDecl->entries.size(); ++i){
-            if(enumDecl->entries[i].name == "Count"){
-                reportError(errors, enumDecl->entries[i].span, "use 'kCount' instead of 'Count' for enum count sentries");
+            const EnumEntry& entry = enumDecl->entries[i];
+            if(entry.name == "Count"){
+                reportError(errors, entry.span, "use 'kCount' instead of 'Count' for enum count sentries");
                 ok = false;
             }
             for(usize j = 0u; j < i; ++j){
-                if(enumDecl->entries[j].name == enumDecl->entries[i].name){
-                    reportError(errors, enumDecl->entries[i].span, "duplicate enumerator name in enum");
+                if(enumDecl->entries[j].name == entry.name){
+                    reportError(errors, entry.span, "duplicate enumerator name in enum");
                     ok = false;
                     break;
                 }
             }
+            if(!enumDecl->isImported){
+                if(entry.isFlag && !entry.valueExpr){
+                    if(autoFlagBitIndex >= static_cast<u32>(enumDecl->underlyingSize) * 8u){
+                        reportError(errors, entry.span, "auto-assigned 'flag' bit position exceeds underlying enum bit width");
+                        ok = false;
+                    }
+                    ++autoFlagBitIndex;
+                }
+                if(entry.valueExpr){
+                    if(!checkExpr(nullptr, dummyEnumCtx, *entry.valueExpr, enumScope, false, errors)){
+                        ok = false;
+                    }
+                    else{
+                        const MStringView valType = inferExprTypeName(nullptr, &dummyEnumCtx, *entry.valueExpr, enumScope);
+                        if(entry.valueExpr->kind == ExprKind::FloatLiteral
+                            || entry.valueExpr->kind == ExprKind::StringLiteral
+                            || IsFloatScalarType(valType)
+                            || valType == "String" || valType == "StringView" || valType == "CompactString")
+                        {
+                            reportError(errors, entry.span, "enum entry value must be an integral constant expression");
+                            ok = false;
+                        }
+                    }
+                }
+            }
+            ScopedVarInfo entryVar;
+            entryVar.name = entry.name;
+            entryVar.inferredTypeName = enumDecl->sizeTypeName;
+            entryVar.type = enumUnderlyingRef;
+            entryVar.isConst = true;
+            enumScope.push_back(entryVar);
         }
     }
 
@@ -344,9 +420,47 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
             ok = false;
             continue;
         }
+        b8 methodTemplateParamsMatch = true;
+        for(usize tIdx = 0u; tIdx < matched->templateParams.size(); ++tIdx){
+            const TemplateParamDecl& declTp = matched->templateParams[tIdx];
+            const TemplateParamDecl& oolTp = ool->templateParams[tIdx];
+            if(declTp.name != oolTp.name){
+                reportError(errors, ool->span, "out-of-line method template parameter name does not match class declaration");
+                ok = false;
+                methodTemplateParamsMatch = false;
+                break;
+            }
+            if((declTp.constValueType != nullptr) != (oolTp.constValueType != nullptr)
+                || (declTp.constValueType && oolTp.constValueType && !AreTypeRefsEquivalent(declTp.constValueType, oolTp.constValueType, m_symbols))
+                || declTp.interfaceBounds.size() != oolTp.interfaceBounds.size())
+            {
+                reportError(errors, ool->span, "out-of-line method template parameter constraints do not match class declaration");
+                ok = false;
+                methodTemplateParamsMatch = false;
+                break;
+            }
+            for(usize bIdx = 0u; bIdx < declTp.interfaceBounds.size(); ++bIdx){
+                if(!AreTypeRefsEquivalent(declTp.interfaceBounds[bIdx], oolTp.interfaceBounds[bIdx], m_symbols)){
+                    reportError(errors, ool->span, "out-of-line method template parameter constraints do not match class declaration");
+                    ok = false;
+                    methodTemplateParamsMatch = false;
+                    break;
+                }
+            }
+            if(!methodTemplateParamsMatch)
+                break;
+        }
+        if(!methodTemplateParamsMatch)
+            continue;
 
         if(matched->isConst != ool->isConst){
             reportError(errors, ool->span, "out-of-line method 'const' qualifier does not match class declaration");
+            ok = false;
+            continue;
+        }
+
+        if((matched->isForceInline && ool->isNoInline) || (matched->isNoInline && ool->isForceInline)){
+            reportError(errors, ool->span, "conflicting 'inline' and 'noinline' attributes between method declaration and definition");
             ok = false;
             continue;
         }
@@ -385,6 +499,10 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
         matched->hasBody = true;
         matched->isOutOfLine = true;
         matched->body = ool->body;
+        if(ool->isForceInline)
+            matched->isForceInline = true;
+        if(ool->isNoInline)
+            matched->isNoInline = true;
         if(ool->isReflect){
             matched->isReflect = true;
             cls->isReflect = true;
@@ -408,10 +526,23 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
                 ok = false;
                 continue;
             }
+            if((prev->isForceInline && fn->isNoInline) || (prev->isNoInline && fn->isForceInline)){
+                reportError(errors, fn->span, "conflicting 'inline' and 'noinline' attributes between function declaration and definition");
+                ok = false;
+                continue;
+            }
             if(prev->hasBody && fn->hasBody){
                 reportError(errors, fn->span, "duplicate free function definition with identical signature");
                 ok = false;
                 continue;
+            }
+            if(prev->isForceInline || fn->isForceInline){
+                prev->isForceInline = true;
+                fn->isForceInline = true;
+            }
+            if(prev->isNoInline || fn->isNoInline){
+                prev->isNoInline = true;
+                fn->isNoInline = true;
             }
             if(!prev->hasBody && fn->hasBody){
                 if(!prev->isImported){
@@ -424,6 +555,10 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
                     fn->isImported = true;
                     fn->hasBody = false;
                 }
+                else{
+                    fn->isOutOfLine = true;
+                    prev->hasBody = true;
+                }
             }
             else if(prev->hasBody && !fn->hasBody){
                 fn->isImported = true;
@@ -435,6 +570,35 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
     }
 
     return ok;
+}
+
+void TypeChecker::buildCallArgHints(
+    ClassDecl* ownerClass,
+    const MethodDecl* method,
+    const MVector<Expr*>& args,
+    const MVector<ScopedVarInfo>& scope,
+    MVector<MStringView>& outArgTypes,
+    MVector<b8>& outArgIsMut
+)const{
+    outArgTypes.clear();
+    outArgIsMut.clear();
+    outArgTypes.reserve(args.size());
+    outArgIsMut.reserve(args.size());
+    for(const Expr* arg : args){
+        b8 isMut = arg && arg->isMutArg;
+        if(!isMut && arg && method){
+            if(arg->kind == ExprKind::Identifier){
+                if(findScopedVar(scope, arg->text) != nullptr && !isReceiverConst(ownerClass, *method, *arg, scope))
+                    isMut = true;
+            }
+            else if(arg->kind == ExprKind::ThisMember || arg->kind == ExprKind::MemberAccess || arg->kind == ExprKind::Index){
+                if(!isReceiverConst(ownerClass, *method, *arg, scope))
+                    isMut = true;
+            }
+        }
+        outArgIsMut.push_back(isMut);
+        outArgTypes.push_back(arg ? inferExprTypeName(ownerClass, method, *arg, scope) : MStringView{});
+    }
 }
 
 const ScopedVarInfo* TypeChecker::findScopedVar(const MVector<ScopedVarInfo>& scope, const MStringView name)noexcept{
@@ -458,9 +622,11 @@ const MethodDecl* TypeChecker::findClassMethod(
     const MStringView name,
     const usize* preferredArgCount,
     const b8 preferConst,
-    const b8 requirePublic
-)noexcept{
-    return __hidden_adhd_type_checker::FindScoredClassCallable(classDecl, name, false, preferredArgCount, preferConst, requirePublic);
+    const b8 requirePublic,
+    const MVector<MStringView>* argTypeNames,
+    const MVector<b8>* argIsMut
+)const noexcept{
+    return __hidden_adhd_type_checker::FindScoredClassCallable(m_symbols, classDecl, name, false, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
 }
 
 const MethodDecl* TypeChecker::findClassOperator(
@@ -468,22 +634,27 @@ const MethodDecl* TypeChecker::findClassOperator(
     const MStringView opName,
     const usize* preferredArgCount,
     const b8 preferConst,
-    const b8 requirePublic
-)noexcept{
-    return __hidden_adhd_type_checker::FindScoredClassCallable(classDecl, opName, true, preferredArgCount, preferConst, requirePublic);
+    const b8 requirePublic,
+    const MVector<MStringView>* argTypeNames,
+    const MVector<b8>* argIsMut
+)const noexcept{
+    return __hidden_adhd_type_checker::FindScoredClassCallable(m_symbols, classDecl, opName, true, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
 }
 
 const MethodDecl* TypeChecker::findClassConstructor(
     const ClassDecl& classDecl,
     const usize argCount,
-    const b8 requirePublic
-)noexcept{
+    const b8 requirePublic,
+    const MVector<MStringView>* argTypeNames,
+    const MVector<b8>* argIsMut
+)const noexcept{
     const MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
     for(const MethodDecl* m : classDecl.methods){
         if(!m || !m->isConstructor || m->params.size() != argCount)
             continue;
-        i32 score = (!requirePublic || m->access == AccessSpecifier::Public) ? 2 : 1;
+        i32 score = (!requirePublic || m->access == AccessSpecifier::Public) ? 32 : 1;
+        score += __hidden_adhd_type_checker::ScoreClassCallableArgs(m_symbols, m->params, argTypeNames, argIsMut);
         if(score > bestScore){
             bestScore = score;
             bestMatch = m;

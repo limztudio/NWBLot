@@ -93,6 +93,8 @@ b8 Compiler::compile(
 
     for(const MString& inc : preprocessor.includedFiles())
         outResult.unit.includedAdhdFiles.push_back(inc);
+    for(const MString& resInc : preprocessor.resolvedIncludedFiles())
+        outResult.unit.resolvedIncludedFiles.push_back(resInc);
 
     const MStringView activeSource(outResult.preprocessedSource.data(), outResult.preprocessedSource.size());
     ParserCursor cursor(activeSource, arena, scratchArena, outResult.errors);

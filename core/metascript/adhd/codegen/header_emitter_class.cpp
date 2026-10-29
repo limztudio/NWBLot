@@ -330,6 +330,12 @@ void HeaderEmitter::emitClassMethodsCpp(
             out.append("    ");
         }
         const b8 emitInlineBody = forceInlineBody || method->isInline || !method->templateParams.empty();
+        if(emitInlineBody && method->hasBody){
+            if(method->isForceInline)
+                out.append("NWB_FORCE_INLINE ");
+            else if(method->isNoInline)
+                out.append("NWB_NOINLINE ");
+        }
         m_typeEmitter.emitMethodSignature(out, &decl, *method, true);
         if(emitInlineBody && method->hasBody){
             if(method->isConstructor)

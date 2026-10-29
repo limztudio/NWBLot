@@ -37,10 +37,22 @@ public:
     [[nodiscard]] InterfaceDecl* findInterface(MStringView name)const noexcept;
     [[nodiscard]] ClassDecl* findClass(MStringView name)const noexcept;
     [[nodiscard]] TypeAliasDecl* findTypeAlias(MStringView name)const noexcept;
-    [[nodiscard]] MethodDecl* findFreeFunction(MStringView name, const usize* preferredArgCount = nullptr)const noexcept;
+    [[nodiscard]] MethodDecl* findFreeFunction(
+        MStringView name,
+        const usize* preferredArgCount = nullptr,
+        const MVector<MStringView>* argTypeNames = nullptr,
+        const MVector<b8>* argIsMut = nullptr
+    )const noexcept;
     [[nodiscard]] Stmt* findGlobalConstant(MStringView name)const noexcept;
 
-    [[nodiscard]] MethodDecl* findInterfaceMethod(const TypeRef& ifaceType, MStringView methodName, const usize* preferredArgCount = nullptr, u32 depth = 0u)const noexcept;
+    [[nodiscard]] MethodDecl* findInterfaceMethod(
+        const TypeRef& ifaceType,
+        MStringView methodName,
+        const usize* preferredArgCount = nullptr,
+        u32 depth = 0u,
+        const MVector<MStringView>* argTypeNames = nullptr,
+        const MVector<b8>* argIsMut = nullptr
+    )const noexcept;
     void collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<MethodDecl*>& outMethods, u32 depth = 0u)const;
 
     [[nodiscard]] TypeRef* substituteTypeParams(
@@ -61,9 +73,6 @@ public:
     [[nodiscard]] static b8 isSimdType(MStringView typeName)noexcept;
     [[nodiscard]] static b8 isStringSwitchType(MStringView typeName)noexcept;
     [[nodiscard]] static MStringView mapBuiltinCppType(MStringView typeName)noexcept;
-
-
-private:
     [[nodiscard]] b8 hasTypeSymbol(MStringView name)const noexcept;
 
 

@@ -100,6 +100,19 @@ MStringView TypeChecker::inferExprTypeName(
     else if(expr.kind == ExprKind::Call && expr.lhs){
         if(const TypeRef* callType = inferExprTypeRef(ownerClass, method, expr, scope))
             return m_symbols.resolveBaseTypeName(callType->name);
+        if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
+            const MStringView mName = expr.lhs->text;
+            if(mName == "size" || mName == "length" || mName == "capacity" || mName == "count" || mName == "max_size" || mName == "hash")
+                return "usize";
+            if(mName == "empty" || mName == "hasValue" || mName == "has_value" || mName == "valid"
+                || mName == "contains" || mName == "starts_with" || mName == "ends_with"
+                || mName == "compare_exchange_weak" || mName == "compare_exchange_strong")
+            {
+                return "b8";
+            }
+            if(mName == "c_str" || mName == "subview" || mName == "substr")
+                return "StringView";
+        }
         if(expr.lhs->kind == ExprKind::Identifier){
             const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
             if(m_symbols.findClass(baseCallee) || SymbolTable::isSimdType(baseCallee)
@@ -302,8 +315,11 @@ const TypeRef* TypeChecker::inferExprTypeRef(
     }
     else if(expr.kind == ExprKind::Call && expr.lhs){
         const usize callArgCount = expr.arguments.size();
+        MVector<MStringView> argTypeHints(m_arena);
+        MVector<b8> argIsMutHints(m_arena);
+        buildCallArgHints(ownerClass, method, expr.arguments, scope, argTypeHints, argIsMutHints);
         if(expr.lhs->kind == ExprKind::Identifier){
-            if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount)){
+            if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount, &argTypeHints, &argIsMutHints)){
                 if(!fn->returnType)
                     return nullptr;
                 const TypeRef* rt = (!fn->templateParams.empty() && !expr.callTemplateArgs.empty())
@@ -329,7 +345,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(
             }
         }
         else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
-            if(const MethodDecl* m = findClassMethod(*ownerClass, expr.lhs->text, &callArgCount)){
+            const b8 isConstThis = method ? method->isConst : false;
+            if(const MethodDecl* m = findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false, &argTypeHints, &argIsMutHints)){
                 if(!m->returnType)
                     return nullptr;
                 const TypeRef* rt = (!m->templateParams.empty() && !expr.callTemplateArgs.empty())
@@ -364,7 +381,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
             }
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
                 const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs->lhs, scope) : false;
-                if(const MethodDecl* m = findClassMethod(*cls, mName, &callArgCount, recvIsConst, ownerClass != cls)){
+                if(const MethodDecl* m = findClassMethod(*cls, mName, &callArgCount, recvIsConst, ownerClass != cls, &argTypeHints, &argIsMutHints)){
                     if(!m->returnType)
                         return nullptr;
                     const TypeRef* rt = m->returnType;
@@ -383,7 +400,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                 }
             }
             else if(recvTypeRef && m_symbols.findInterface(lhsType)){
-                if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount); m && m->returnType){
+                if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, &argTypeHints, &argIsMutHints); m && m->returnType){
                     const TypeRef* rt = (!m->templateParams.empty() && !expr.callTemplateArgs.empty())
                         ? m_symbols.substituteTypeParams(*m->returnType, m->templateParams, expr.callTemplateArgs)
                         : m->returnType;
@@ -394,7 +411,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                 for(const TypeRef* boundRef : tp->interfaceBounds){
                     if(!boundRef)
                         continue;
-                    if(const MethodDecl* m = m_symbols.findInterfaceMethod(*boundRef, mName, &callArgCount)){
+                    if(const MethodDecl* m = m_symbols.findInterfaceMethod(*boundRef, mName, &callArgCount, 0u, &argTypeHints, &argIsMutHints)){
                         if(!m->returnType)
                             return nullptr;
                         const TypeRef* rt = (!m->templateParams.empty() && !expr.callTemplateArgs.empty())

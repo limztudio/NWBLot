@@ -158,7 +158,10 @@ b8 TypeChecker::checkVarDeclStatement(
         const MStringView baseVarTypeName = m_symbols.resolveBaseTypeName(stmt.varType->name);
         ctorCls = m_symbols.findClass(baseVarTypeName);
         if(ctorCls){
-            matchedCtor = findClassConstructor(*ctorCls, stmt.arguments.size(), ownerClass != ctorCls);
+            MVector<MStringView> argTypeHints(m_arena);
+            MVector<b8> argIsMutHints(m_arena);
+            buildCallArgHints(ownerClass, &method, stmt.arguments, scope, argTypeHints, argIsMutHints);
+            matchedCtor = findClassConstructor(*ctorCls, stmt.arguments.size(), ownerClass != ctorCls, &argTypeHints, &argIsMutHints);
             if(matchedCtor && ownerClass != ctorCls && matchedCtor->access != AccessSpecifier::Public){
                 reportError(errors, stmt.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
                 ok = false;
@@ -217,6 +220,7 @@ b8 TypeChecker::checkVarDeclStatement(
     info.mode = varRefMode;
     info.isConst = stmt.isConst || (varRefMode == ParamPassingMode::In);
     info.isParam = false;
+    info.declaredParallelDepth = m_parallelDepth;
     if(stmt.expr && stmt.expr->kind == ExprKind::Lambda)
         info.lambdaExpr = stmt.expr;
     scope.push_back(info);
@@ -254,6 +258,28 @@ b8 TypeChecker::checkReturnStatement(
             markStringToPathAdaptation(ownerClass, method, *stmt.expr, scope);
         if(retRefMode != ParamPassingMode::None){
             stmt.wrapReturnNotNull = true;
+            b8 isDanglingReturn = false;
+            if(stmt.expr->kind == ExprKind::Identifier){
+                const ScopedVarInfo* local = findScopedVar(scope, stmt.expr->text);
+                if(local && !local->isParam && m_symbols.resolveRefMode(local->type) == ParamPassingMode::None && local->mode == ParamPassingMode::None)
+                    isDanglingReturn = true;
+            }
+            else if(stmt.expr->kind == ExprKind::IntegerLiteral
+                || stmt.expr->kind == ExprKind::FloatLiteral
+                || stmt.expr->kind == ExprKind::DoubleLiteral
+                || stmt.expr->kind == ExprKind::StringLiteral
+                || stmt.expr->kind == ExprKind::BoolLiteral
+                || stmt.expr->kind == ExprKind::Binary
+                || stmt.expr->kind == ExprKind::Cast
+                || stmt.expr->kind == ExprKind::BitCast
+                || stmt.expr->kind == ExprKind::Lambda)
+            {
+                isDanglingReturn = true;
+            }
+            if(isDanglingReturn){
+                reportError(errors, stmt.span, "cannot return a reference to a temporary or stack-local variable");
+                ok = false;
+            }
             if(m_symbols.findInterface(baseRetTypeName)
                 && !verifyConcreteClassImplementsInterface(
                     ownerClass,
@@ -374,6 +400,15 @@ b8 TypeChecker::checkStatement(
             if(!checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
                 ok = false;
             const MStringView subjectType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
+            if(!subjectType.empty()
+                && (IsFloatScalarType(subjectType)
+                    || subjectType == "void"
+                    || SymbolTable::isSimdType(subjectType)
+                    || SymbolTable::isUnalignedVectorType(subjectType)))
+            {
+                reportError(errors, stmt.span, "invalid 'switch' subject type; floating-point, SIMD, and 'void' types cannot be switched on");
+                ok = false;
+            }
             if(SymbolTable::isStringSwitchType(subjectType)){
                 stmt.lowerSwitchToIfChain = true;
             }
@@ -393,12 +428,40 @@ b8 TypeChecker::checkStatement(
             }
         }
         ++m_switchDepth;
-        for(SwitchCase& sc : stmt.switchCases){
+        for(usize i = 0u; i < stmt.switchCases.size(); ++i){
+            SwitchCase& sc = stmt.switchCases[i];
             if(sc.matchExpr){
                 if(!checkExpr(ownerClass, method, *sc.matchExpr, scope, false, errors))
                     ok = false;
                 if(sc.matchExpr->kind == ExprKind::StringLiteral)
                     stmt.lowerSwitchToIfChain = true;
+                for(usize j = 0u; j < i; ++j){
+                    const SwitchCase& prevSc = stmt.switchCases[j];
+                    if(prevSc.isDefault || !prevSc.matchExpr)
+                        continue;
+                    b8 isDup = false;
+                    if(prevSc.matchExpr->kind == sc.matchExpr->kind){
+                        if(sc.matchExpr->kind == ExprKind::IntegerLiteral
+                            || sc.matchExpr->kind == ExprKind::BoolLiteral
+                            || sc.matchExpr->kind == ExprKind::StringLiteral
+                            || sc.matchExpr->kind == ExprKind::Identifier)
+                        {
+                            isDup = (prevSc.matchExpr->text == sc.matchExpr->text);
+                        }
+                        else if(sc.matchExpr->kind == ExprKind::ScopeAccess
+                            && !prevSc.matchExpr->scopeChain.empty()
+                            && !sc.matchExpr->scopeChain.empty())
+                        {
+                            isDup = (prevSc.matchExpr->scopeChain[0] == sc.matchExpr->scopeChain[0]
+                                && prevSc.matchExpr->scopeChain.back() == sc.matchExpr->scopeChain.back());
+                        }
+                    }
+                    if(isDup){
+                        reportError(errors, sc.matchExpr->span, "duplicate 'case' value in 'switch' statement");
+                        ok = false;
+                        break;
+                    }
+                }
             }
             if(!checkStatementList(ownerClass, method, sc.statements, scope, errors))
                 ok = false;
@@ -422,9 +485,30 @@ b8 TypeChecker::checkStatement(
         if(stmt.varType){
             if(stmt.expr){
                 const TypeRef* containerType = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
+                if(isPar && containerType){
+                    const MStringView containerBaseName = m_symbols.resolveBaseTypeName(containerType->name);
+                    if(containerBaseName == "Set"
+                        || containerBaseName == "HashSet"
+                        || containerBaseName == "ParallelHashSet"
+                        || containerBaseName == "Map"
+                        || containerBaseName == "HashMap"
+                        || containerBaseName == "ParallelHashMap"
+                        || containerBaseName == "List"
+                        || containerBaseName == "ForwardList"
+                        || containerBaseName == "Queue"
+                        || containerBaseName == "ParallelQueue")
+                    {
+                        reportError(errors, stmt.span, "range-based 'parallel_for' requires a random-access indexable container (such as 'Vector', 'Array', or 'Span')");
+                        ok = false;
+                    }
+                }
                 if(containerType && !containerType->templateArgs.empty() && containerType->templateArgs[0].type){
                     elemTypeRef = m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type);
                     if(elemTypeRef){
+                        if(stmt.rangeMode == ParamPassingMode::Mut && m_symbols.resolveRefMode(elemTypeRef) == ParamPassingMode::In){
+                            reportError(errors, stmt.span, "cannot iterate with 'mut' over a container of read-only 'in' references");
+                            ok = false;
+                        }
                         resolvedElemName = m_symbols.resolveBaseTypeName(elemTypeRef->name);
                         if(stmt.varType->isAuto){
                             if(elemTypeRef->templateArgs.empty() && !elemTypeRef->isFuncType && SymbolTable::isSimdType(resolvedElemName)){
@@ -473,8 +557,22 @@ b8 TypeChecker::checkStatement(
     case StmtKind::ForIndex:
     case StmtKind::ParallelForIndex:{
         const b8 isPar = (stmt.kind == StmtKind::ParallelForIndex);
-        if(isPar)
+        if(isPar){
             method.usesTaskScope = true;
+            const b8 validInit = stmt.initStmt && stmt.initStmt->kind == StmtKind::VarDecl && (stmt.initStmt->expr != nullptr || stmt.initStmt->isCtorInit);
+            const b8 validCond = stmt.condition && stmt.condition->kind == ExprKind::Binary
+                && (stmt.condition->op == TokenType::Less || stmt.condition->op == TokenType::LessEqual)
+                && stmt.condition->lhs != nullptr
+                && stmt.condition->lhs->kind == ExprKind::Identifier
+                && stmt.initStmt != nullptr
+                && stmt.condition->lhs->text == stmt.initStmt->name
+                && stmt.condition->rhs != nullptr;
+            const b8 validStep = stmt.stepExpr != nullptr;
+            if(!validInit || !validCond || !validStep){
+                reportError(errors, stmt.span, "indexed 'parallel_for' requires canonical bounds ('parallel_for(usize i = start; i < end; ++i)')");
+                ok = false;
+            }
+        }
         const usize saved = scope.size();
         if(stmt.initStmt && !checkStatement(ownerClass, method, *stmt.initStmt, scope, errors))
             ok = false;

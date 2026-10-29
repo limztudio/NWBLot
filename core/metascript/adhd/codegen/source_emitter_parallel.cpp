@@ -89,6 +89,12 @@ b8 SourceEmitter::tryEmitParallelWaitStmt(
             out.append(");\r\n");
         }
     }
+    if(m_activeSimdBindings){
+        for(const SimdVarBinding& binding : *m_activeSimdBindings){
+            if(binding.capturedByMutLambda)
+                emitSimdLoadReloadForBinding(out, binding, indent);
+        }
+    }
     return true;
 }
 
@@ -152,7 +158,31 @@ void SourceEmitter::emitParallelStmt(
             emitExpr(out, *stmt.condition);
         else
             out.append("0u");
-        out.append("), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
+        out.append("), ");
+        if(stmt.stepExpr && stmt.stepExpr->kind == ExprKind::Binary){
+            if(stmt.stepExpr->op == TokenType::PlusEqual && stmt.stepExpr->rhs){
+                out.append("static_cast<usize>(");
+                emitExpr(out, *stmt.stepExpr->rhs);
+                out.push_back(')');
+            }
+            else if(stmt.stepExpr->op == TokenType::Equal
+                && stmt.stepExpr->rhs
+                && stmt.stepExpr->rhs->kind == ExprKind::Binary
+                && stmt.stepExpr->rhs->op == TokenType::Plus
+                && stmt.stepExpr->rhs->rhs)
+            {
+                out.append("static_cast<usize>(");
+                emitExpr(out, *stmt.stepExpr->rhs->rhs);
+                out.push_back(')');
+            }
+            else{
+                out.append("1u");
+            }
+        }
+        else{
+            out.append("1u");
+        }
+        out.append(", [&](const usize __adhd_idx)noexcept{\r\n");
         if(stmt.initStmt && stmt.initStmt->varType){
             emitIndent(out, indent + 1u);
             out.append("const ");

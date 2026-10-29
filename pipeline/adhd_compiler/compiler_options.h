@@ -17,6 +17,7 @@ struct AdhdCompilerOptions{
     NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString> macroDefinitions;
     NWB::Core::Metascript::MString outputDirectory;
     NWB::Core::Metascript::MString customNamespace;
+    NWB::Core::Metascript::MString depfilePath;
     b8 validateOnly = false;
     b8 showHelp = false;
 
@@ -28,6 +29,7 @@ public:
         , macroDefinitions(arena)
         , outputDirectory(arena)
         , customNamespace(arena)
+        , depfilePath(arena)
     {}
 };
 

@@ -332,7 +332,7 @@ void ScanStmtsForSimdBindings(
             break;
         }
         case StmtKind::Return:{
-            AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, false, false);
+            AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, stmt->wrapReturnNotNull, false);
             ioHasSeenPossibleReturn = true;
             break;
         }
@@ -384,6 +384,17 @@ void ScanStmtsForSimdBindings(
         }
         case StmtKind::ParallelCall:{
             AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, true, false);
+            if(stmt->expr && stmt->expr->kind == ExprKind::Call){
+                for(const Expr* arg : stmt->expr->arguments){
+                    if(!arg || !arg->isMutArg)
+                        continue;
+                    if((arg->kind == ExprKind::Identifier || arg->kind == ExprKind::ThisMember) && IsRegisterPromotableSimdType(arg->resolvedSimdType)){
+                        SimdVarBinding* b = FindOrCreateBinding(arena, bindings, arg->kind == ExprKind::ThisMember, arg->text, arg->resolvedSimdType);
+                        b->needsStorageSync = true;
+                        b->capturedByMutLambda = true;
+                    }
+                }
+            }
             break;
         }
         case StmtKind::NativeBlock:{
@@ -422,6 +433,7 @@ void MarkLambdaCapturedSimdBindingsInExpr(MVector<SimdVarBinding>& bindings, con
         for(SimdVarBinding& b : bindings){
             if(b.isThisMember){
                 b.needsStorageSync = true;
+                b.capturedByMutLambda = true;
                 if(!b.unconditionallyWrittenFirst)
                     b.readBeforeWrite = true;
             }

@@ -382,6 +382,76 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
     EXPECT_FALSE(Compiler::compile(s_VoidReturnValueSource, "impl/bad_void_ret.adhd", arena.arena, badVoidRetRes));
 }
 
+TEST(AdhdCompiler, SupportsCrossFileSplitFunctionsTemplateClassOutOfLineMethodsAndTransitiveIncludes){
+    AdhdTestArena arena;
+
+    class TransitiveSplitResolver final : public NWB::Core::Metascript::IIncludeResolver{
+    public:
+        u32 popCount = 0u;
+
+        [[nodiscard]] b8 resolveInclude(
+            const MStringView includePath,
+            const b8,
+            MetaArena& rArena,
+            MString& outResolvedKey,
+            MString& outContent
+        )override{
+            if(includePath == "split_decl.adhd"){
+                outResolvedKey = MString("/abs/split_decl.adhd", rArena);
+                static constexpr MStringView s_DeclCode =
+                    "#include \"sub/leaf.adhd\"\r\n"
+                    "i32 computeCrossFile(in i32 x);\r\n"
+                    "class CrossBox<T> {\r\n"
+                    "    public T m_item;\r\n"
+                    "    public T fetch()const;\r\n"
+                    "}\r\n";
+                outContent = MString(s_DeclCode.data(), s_DeclCode.size(), rArena);
+                return true;
+            }
+            if(includePath == "sub/leaf.adhd"){
+                outResolvedKey = MString("/abs/sub/leaf.adhd", rArena);
+                static constexpr MStringView s_LeafCode =
+                    "const i32 s_LeafBias = 7;\r\n";
+                outContent = MString(s_LeafCode.data(), s_LeafCode.size(), rArena);
+                return true;
+            }
+            return false;
+        }
+
+        void popIncludeScope()noexcept override{
+            ++popCount;
+        }
+    };
+
+    static constexpr MStringView s_ImplSource =
+        "#include \"split_decl.adhd\"\r\n"
+        "i32 computeCrossFile(in i32 x) {\r\n"
+        "    return x + s_LeafBias;\r\n"
+        "}\r\n"
+        "T CrossBox<T>::fetch()const {\r\n"
+        "    return this.m_item;\r\n"
+        "}\r\n";
+
+    TransitiveSplitResolver resolver;
+    CompileResult res(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_ImplSource, "impl/split_impl.adhd", arena.arena, res, &resolver));
+
+    EXPECT_EQ(resolver.popCount, 2u);
+    ASSERT_EQ(res.unit.includedAdhdFiles.size(), 1u);
+    EXPECT_EQ(MStringView(res.unit.includedAdhdFiles[0].data(), res.unit.includedAdhdFiles[0].size()), MStringView("split_decl.adhd"));
+    ASSERT_EQ(res.unit.resolvedIncludedFiles.size(), 2u);
+    EXPECT_EQ(MStringView(res.unit.resolvedIncludedFiles[0].data(), res.unit.resolvedIncludedFiles[0].size()), MStringView("/abs/split_decl.adhd"));
+    EXPECT_EQ(MStringView(res.unit.resolvedIncludedFiles[1].data(), res.unit.resolvedIncludedFiles[1].size()), MStringView("/abs/sub/leaf.adhd"));
+
+    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
+    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
+
+    EXPECT_NE(hdrView.find("#include \"split_decl.adhd.h\""), MStringView::npos);
+    EXPECT_EQ(hdrView.find("#include \"sub/leaf.adhd.h\""), MStringView::npos);
+    EXPECT_NE(hdrView.find("template<typename T>\r\ninline T CrossBox<T>::fetch()const noexcept"), MStringView::npos);
+    EXPECT_NE(cppView.find("i32 computeCrossFile(const i32 x)noexcept"), MStringView::npos);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

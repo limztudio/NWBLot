@@ -94,6 +94,7 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const MVector<Parse
 
     if(!m_cursor.expect(TokenType::RightBrace, "expected '}' to close class declaration"))
         return nullptr;
+    while(m_cursor.match(TokenType::Semicolon)){}
 
     return decl;
 }
@@ -289,9 +290,15 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     if(m_cursor.check(TokenType::LeftParen)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         m_cursor.advance();
-        const b8 isMethodSig = m_cursor.check(TokenType::RightParen)
+        b8 isMethodSig = m_cursor.check(TokenType::RightParen)
             || m_cursor.checkIdentifier("in")
             || m_cursor.checkIdentifier("mut");
+        if(!isMethodSig && m_cursor.check(TokenType::Identifier)){
+            TypeRef* maybeParamType = m_typeParser.parseType(false, false);
+            if(maybeParamType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier))
+                isMethodSig = true;
+            m_typeParser.resetPendingRightAngles();
+        }
         m_cursor.restore(cp);
 
         if(isMethodSig){

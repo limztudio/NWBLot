@@ -24,6 +24,7 @@ struct ScopedVarInfo{
     TypeRef* type = nullptr;
     const Expr* lambdaExpr = nullptr;
     ParamPassingMode::Enum mode = ParamPassingMode::None;
+    u32 declaredParallelDepth = 0u;
     b8 isConst = false;
     b8 isParam = false;
 };
@@ -211,27 +212,41 @@ private:
         const MethodDecl* method,
         MStringView name
     )noexcept;
+    void buildCallArgHints(
+        ClassDecl* ownerClass,
+        const MethodDecl* method,
+        const MVector<Expr*>& args,
+        const MVector<ScopedVarInfo>& scope,
+        MVector<MStringView>& outArgTypes,
+        MVector<b8>& outArgIsMut
+    )const;
     [[nodiscard]] static const ScopedVarInfo* findScopedVar(const MVector<ScopedVarInfo>& scope, MStringView name)noexcept;
     [[nodiscard]] static const FieldDecl* findClassField(const ClassDecl& classDecl, MStringView name)noexcept;
-    [[nodiscard]] static const MethodDecl* findClassMethod(
+    [[nodiscard]] const MethodDecl* findClassMethod(
         const ClassDecl& classDecl,
         MStringView name,
         const usize* preferredArgCount = nullptr,
         b8 preferConst = false,
-        b8 requirePublic = false
-    )noexcept;
-    [[nodiscard]] static const MethodDecl* findClassOperator(
+        b8 requirePublic = false,
+        const MVector<MStringView>* argTypeNames = nullptr,
+        const MVector<b8>* argIsMut = nullptr
+    )const noexcept;
+    [[nodiscard]] const MethodDecl* findClassOperator(
         const ClassDecl& classDecl,
         MStringView opName,
         const usize* preferredArgCount = nullptr,
         b8 preferConst = false,
-        b8 requirePublic = false
-    )noexcept;
-    [[nodiscard]] static const MethodDecl* findClassConstructor(
+        b8 requirePublic = false,
+        const MVector<MStringView>* argTypeNames = nullptr,
+        const MVector<b8>* argIsMut = nullptr
+    )const noexcept;
+    [[nodiscard]] const MethodDecl* findClassConstructor(
         const ClassDecl& classDecl,
         usize argCount,
-        b8 requirePublic = false
-    )noexcept;
+        b8 requirePublic = false,
+        const MVector<MStringView>* argTypeNames = nullptr,
+        const MVector<b8>* argIsMut = nullptr
+    )const noexcept;
     void reportError(MVector<ParseError>& errors, SourceSpan span, MStringView message)const;
 
 

@@ -145,6 +145,15 @@ void CppTypeEmitter::emitMethodSignature(
 
     if(!isDeclarationInClass && ownerClass){
         out.append(ownerClass->name.data(), ownerClass->name.size());
+        if(!ownerClass->templateParams.empty()){
+            out.push_back('<');
+            for(usize i = 0u; i < ownerClass->templateParams.size(); ++i){
+                if(i > 0u)
+                    out.append(", ");
+                out.append(ownerClass->templateParams[i].name.data(), ownerClass->templateParams[i].name.size());
+            }
+            out.push_back('>');
+        }
         out.append("::");
     }
 

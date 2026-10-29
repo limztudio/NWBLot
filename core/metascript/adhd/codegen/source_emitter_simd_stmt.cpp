@@ -228,7 +228,7 @@ void SourceEmitter::emitSimdBlockStores(MString& out, const u32 indent, const b8
     for(const SimdVarBinding& binding : *m_activeSimdBindings){
         if(binding.isLocalDecl || !binding.written)
             continue;
-        if(loopElementsOnly && !binding.isLoopElement)
+        if(loopElementsOnly != binding.isLoopElement)
             continue;
         emitSimdStoreForBinding(out, binding, indent);
     }
@@ -492,6 +492,8 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
 }
 
 b8 SourceEmitter::tryEmitSimdReturnStmt(MString& out, const Stmt& stmt, const u32 indent)const{
+    if(stmt.wrapReturnNotNull)
+        return false;
     if(stmt.expr && IsRegisterPromotableSimdType(stmt.expr->resolvedSimdType)){
         const SimdVarBinding* retBinding = findSimdBindingForExpr(stmt.expr);
 

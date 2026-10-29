@@ -39,6 +39,111 @@ void CollectAssignedThisMembers(const MVector<Stmt*>& stmts, MVector<MStringView
     }
 }
 
+[[nodiscard]] b8 IsMemberDefinitelyInitializedInStmts(const MVector<Stmt*>& stmts, MStringView fieldName)noexcept;
+
+[[nodiscard]] b8 StmtListMayReturnWithoutInit(const MVector<Stmt*>& stmts, const MStringView fieldName)noexcept{
+    for(const Stmt* stmt : stmts){
+        if(!stmt)
+            continue;
+        if(stmt->kind == StmtKind::Return)
+            return true;
+        if(stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary && stmt->expr->op == TokenType::Equal){
+            if(stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::ThisMember && stmt->expr->lhs->text == fieldName)
+                return false;
+        }
+        if(stmt->kind == StmtKind::Block || stmt->kind == StmtKind::ParallelBlock){
+            if(StmtListMayReturnWithoutInit(stmt->statements, fieldName))
+                return true;
+            if(IsMemberDefinitelyInitializedInStmts(stmt->statements, fieldName))
+                return false;
+        }
+        else if(stmt->kind == StmtKind::If){
+            if(StmtListMayReturnWithoutInit(stmt->statements, fieldName) || StmtListMayReturnWithoutInit(stmt->elseStatements, fieldName))
+                return true;
+            if(!stmt->elseStatements.empty()
+                && IsMemberDefinitelyInitializedInStmts(stmt->statements, fieldName)
+                && IsMemberDefinitelyInitializedInStmts(stmt->elseStatements, fieldName))
+            {
+                return false;
+            }
+        }
+        else if(stmt->kind == StmtKind::Switch){
+            for(const SwitchCase& sc : stmt->switchCases){
+                if(StmtListMayReturnWithoutInit(sc.statements, fieldName))
+                    return true;
+            }
+        }
+        else if(stmt->kind == StmtKind::While || stmt->kind == StmtKind::DoWhile || stmt->kind == StmtKind::ForRange || stmt->kind == StmtKind::ForIndex){
+            if(StmtListMayReturnWithoutInit(stmt->statements, fieldName))
+                return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] b8 IsMemberDefinitelyInitializedInStmts(const MVector<Stmt*>& stmts, const MStringView fieldName)noexcept{
+    for(const Stmt* stmt : stmts){
+        if(!stmt)
+            continue;
+        if(stmt->kind == StmtKind::Return || stmt->kind == StmtKind::Break || stmt->kind == StmtKind::Continue)
+            return false;
+        if(stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary && stmt->expr->op == TokenType::Equal){
+            if(stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::ThisMember && stmt->expr->lhs->text == fieldName)
+                return true;
+        }
+        else if(stmt->kind == StmtKind::NativeBlock){
+            for(const NativeBinding& binding : stmt->nativeBindings){
+                if(binding.mode == ParamPassingMode::Mut
+                    && binding.sourceExpr
+                    && binding.sourceExpr->kind == ExprKind::ThisMember
+                    && binding.sourceExpr->text == fieldName)
+                {
+                    return true;
+                }
+            }
+        }
+        else if(stmt->kind == StmtKind::Block || stmt->kind == StmtKind::ParallelBlock){
+            if(IsMemberDefinitelyInitializedInStmts(stmt->statements, fieldName))
+                return true;
+            if(StmtListMayReturnWithoutInit(stmt->statements, fieldName))
+                return false;
+        }
+        else if(stmt->kind == StmtKind::If){
+            if(!stmt->elseStatements.empty()
+                && IsMemberDefinitelyInitializedInStmts(stmt->statements, fieldName)
+                && IsMemberDefinitelyInitializedInStmts(stmt->elseStatements, fieldName))
+            {
+                return true;
+            }
+            if(StmtListMayReturnWithoutInit(stmt->statements, fieldName) || StmtListMayReturnWithoutInit(stmt->elseStatements, fieldName))
+                return false;
+        }
+        else if(stmt->kind == StmtKind::Switch){
+            b8 hasDefault = false;
+            b8 allCasesInit = !stmt->switchCases.empty();
+            for(const SwitchCase& sc : stmt->switchCases){
+                if(sc.isDefault)
+                    hasDefault = true;
+                if(!IsMemberDefinitelyInitializedInStmts(sc.statements, fieldName)){
+                    allCasesInit = false;
+                    break;
+                }
+            }
+            if(hasDefault && allCasesInit)
+                return true;
+            for(const SwitchCase& sc : stmt->switchCases){
+                if(StmtListMayReturnWithoutInit(sc.statements, fieldName))
+                    return false;
+            }
+        }
+        else if(stmt->kind == StmtKind::While || stmt->kind == StmtKind::DoWhile || stmt->kind == StmtKind::ForRange || stmt->kind == StmtKind::ForIndex){
+            if(StmtListMayReturnWithoutInit(stmt->statements, fieldName))
+                return false;
+        }
+    }
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -202,6 +307,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
     }
 
+    MVector<const MethodDecl*> matchedOverrideImpls(m_arena);
     for(usize i = 0u; i < classDecl.implementedInterfaces.size(); ++i){
         const TypeRef* ifaceType = classDecl.implementedInterfaces[i];
         if(!ifaceType)
@@ -247,7 +353,14 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                         impl = m;
                         break;
                     }
-                    if(!impl || m->isConst == req->isConst)
+                    b8 alreadyMatched = false;
+                    for(const MethodDecl* prevMatched : matchedOverrideImpls){
+                        if(prevMatched == m){
+                            alreadyMatched = true;
+                            break;
+                        }
+                    }
+                    if(!alreadyMatched && (!impl || m->isConst == req->isConst))
                         impl = m;
                 }
             }
@@ -256,6 +369,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                 ok = false;
             }
             else{
+                matchedOverrideImpls.push_back(impl);
                 if(!impl->isOverride){
                     reportError(errors, impl->span, "method implementing an interface contract must be explicitly marked 'override'");
                     ok = false;
@@ -288,17 +402,18 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
     for(MethodDecl* m : classDecl.methods){
         if(m->isOverride){
             b8 matchesInterface = false;
-            const usize methodArity = m->params.size();
-            for(const TypeRef* ifaceType : classDecl.implementedInterfaces){
-                if(!ifaceType)
-                    continue;
-                const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
-                if(!m_symbols.findInterface(ifaceName)){
+            for(const MethodDecl* matchedImpl : matchedOverrideImpls){
+                if(matchedImpl == m){
                     matchesInterface = true;
                     break;
                 }
-                if(const MethodDecl* ifaceMatch = m_symbols.findInterfaceMethod(*ifaceType, m->name, &methodArity)){
-                    if(ifaceMatch->isOperator == m->isOperator && ifaceMatch->params.size() == methodArity){
+            }
+            if(!matchesInterface){
+                for(const TypeRef* ifaceType : classDecl.implementedInterfaces){
+                    if(!ifaceType)
+                        continue;
+                    const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
+                    if(!m_symbols.findInterface(ifaceName)){
                         matchesInterface = true;
                         break;
                     }
@@ -352,16 +467,42 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     arg->adaptToTChar = true;
             }
         }
-        if(field->defaultExpr || !field->ctorArgs.empty()){
+        if(field->defaultExpr || field->hasCtorInit){
             MethodDecl fieldInitDummy(m_arena);
             MVector<ScopedVarInfo> emptyScope(m_arena);
             const b8 savedClassArenaCtx = m_inClassArenaContext;
             m_inClassArenaContext = true;
             if(field->defaultExpr && !checkExpr(&classDecl, fieldInitDummy, *field->defaultExpr, emptyScope, false, errors))
                 ok = false;
-            for(Expr* arg : field->ctorArgs){
-                if(arg && !checkExpr(&classDecl, fieldInitDummy, *arg, emptyScope, false, errors))
+            if(field->hasCtorInit){
+                const ClassDecl* fieldCtorCls = unwrappedFieldType ? m_symbols.findClass(m_symbols.resolveBaseTypeName(unwrappedFieldType->name)) : nullptr;
+                const MethodDecl* matchedFieldCtor = nullptr;
+                if(fieldCtorCls){
+                    MVector<MStringView> argTypeHints(m_arena);
+                    MVector<b8> argIsMutHints(m_arena);
+                    buildCallArgHints(&classDecl, &fieldInitDummy, field->ctorArgs, emptyScope, argTypeHints, argIsMutHints);
+                    matchedFieldCtor = findClassConstructor(*fieldCtorCls, field->ctorArgs.size(), &classDecl != fieldCtorCls, &argTypeHints, &argIsMutHints);
+                    if(matchedFieldCtor && &classDecl != fieldCtorCls && matchedFieldCtor->access != AccessSpecifier::Public){
+                        reportError(errors, field->span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
+                        ok = false;
+                    }
+                }
+                if(!checkCallableArguments(
+                    &classDecl,
+                    fieldInitDummy,
+                    field->ctorArgs,
+                    emptyScope,
+                    matchedFieldCtor,
+                    fieldCtorCls,
+                    unwrappedFieldType,
+                    nullptr,
+                    nullptr,
+                    nullptr,
+                    MStringView{},
+                    errors
+                )){
                     ok = false;
+                }
             }
             m_inClassArenaContext = savedClassArenaCtx;
         }
@@ -432,14 +573,7 @@ b8 TypeChecker::checkConstructorInitialization(ClassDecl& classDecl, MethodDecl&
         if(hasFieldInlineOrAutoDefault(classDecl, *field))
             continue;
 
-        b8 initializedInCtor = false;
-        for(const MStringView& assigned : assignedMembers){
-            if(assigned == field->name){
-                initializedInCtor = true;
-                break;
-            }
-        }
-        if(!initializedInCtor){
+        if(!__hidden_adhd_type_checker::IsMemberDefinitelyInitializedInStmts(ctor.body, field->name)){
             reportError(errors, ctor.span, "constructor must initialize all class members that do not have an inline default value");
             ok = false;
         }

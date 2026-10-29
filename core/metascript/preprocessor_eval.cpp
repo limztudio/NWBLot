@@ -43,7 +43,7 @@ public:
 
 public:
     [[nodiscard]] b8 evaluate(i64& outValue){
-        outValue = parseLogicalOr();
+        outValue = parseTernary();
         if(m_failed)
             return false;
         if(m_current.type != TokenType::EndOfFile){
@@ -66,6 +66,22 @@ private:
             m_failed = true;
             m_errors.push_back(ParseError{m_line, 1u, MString(msg.data(), msg.size(), m_arena)});
         }
+    }
+
+    [[nodiscard]] i64 parseTernary(){
+        const i64 cond = parseLogicalOr();
+        if(!m_failed && m_current.type == TokenType::Question){
+            advance();
+            const i64 trueVal = parseTernary();
+            if(m_current.type != TokenType::Colon){
+                fail("expected ':' in preprocessor ternary expression");
+                return 0;
+            }
+            advance();
+            const i64 falseVal = parseTernary();
+            return cond != 0 ? trueVal : falseVal;
+        }
+        return cond;
     }
 
     [[nodiscard]] i64 parseLogicalOr(){
@@ -212,7 +228,7 @@ private:
     [[nodiscard]] i64 parsePrimary(){
         if(m_current.type == TokenType::LeftParen){
             advance();
-            const i64 val = parseLogicalOr();
+            const i64 val = parseTernary();
             if(m_current.type != TokenType::RightParen){
                 fail("expected ')' in preprocessor condition");
                 return 0;
@@ -223,6 +239,46 @@ private:
 
         if(m_current.type == TokenType::IntegerLiteral){
             MStringView text = m_current.text;
+            if(text.size() >= 3u && text.front() == '\'' && text.back() == '\''){
+                advance();
+                if(text[1] != '\\')
+                    return static_cast<i64>(static_cast<u8>(text[1]));
+                if(text.size() >= 4u){
+                    switch(text[2]){
+                    case 'n': return '\n';
+                    case 'r': return '\r';
+                    case 't': return '\t';
+                    case '\\': return '\\';
+                    case '\'': return '\'';
+                    case '"': return '"';
+                    case 'a': return '\a';
+                    case 'b': return '\b';
+                    case 'f': return '\f';
+                    case 'v': return '\v';
+                    case 'x':
+                    case 'X':
+                    case 'u':
+                    case 'U':{
+                        u64 val = 0u;
+                        for(usize i = 3u; i + 1u < text.size(); ++i){
+                            const MChar ch = text[i];
+                            const u32 digit = IsAsciiDigit(ch) ? static_cast<u32>(ch - '0') : static_cast<u32>((ch | 0x20) - 'a' + 10);
+                            val = (val << 4u) | digit;
+                        }
+                        return static_cast<i64>(val);
+                    }
+                    default:
+                        if(text[2] >= '0' && text[2] <= '7'){
+                            u64 val = 0u;
+                            for(usize i = 2u; i + 1u < text.size() && text[i] >= '0' && text[i] <= '7'; ++i)
+                                val = (val << 3u) | static_cast<u64>(text[i] - '0');
+                            return static_cast<i64>(val);
+                        }
+                        return static_cast<i64>(static_cast<u8>(text[2]));
+                    }
+                }
+                return 0;
+            }
             while(!text.empty() && (text.back() == 'u' || text.back() == 'U' || text.back() == 'l' || text.back() == 'L'))
                 text.remove_suffix(1u);
             advance();
@@ -371,6 +427,21 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
                 const auto it = m_macros.find(ident);
                 if(it == m_macros.end()){
                     next.append(ident.data(), ident.size());
+                    if(ident == "defined"){
+                        while(i < current.size() && (current[i] == ' ' || current[i] == '\t'))
+                            next.push_back(current[i++]);
+                        if(i < current.size() && current[i] == '('){
+                            next.push_back(current[i++]);
+                            while(i < current.size() && current[i] != ')')
+                                next.push_back(current[i++]);
+                            if(i < current.size())
+                                next.push_back(current[i++]);
+                        }
+                        else if(i < current.size() && IsAsciiIdentifierStart(current[i])){
+                            while(i < current.size() && IsAsciiIdentifierChar(current[i]))
+                                next.push_back(current[i++]);
+                        }
+                    }
                     continue;
                 }
 
@@ -404,6 +475,12 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
                             ++argScan;
                         }
                     }
+                    else if(argScan + 1u < current.size() && ch == '/' && current[argScan + 1u] == '*'){
+                        const usize closeComment = MStringView(current.data(), current.size()).find("*/", argScan + 2u);
+                        if(closeComment == MStringView::npos)
+                            break;
+                        argScan = closeComment + 1u;
+                    }
                     else if(ch == '(')
                         ++parenDepth;
                     else if(ch == ')'){
@@ -436,6 +513,34 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
                 i = argScan;
                 usize b = 0u;
                 while(b < macro.body.size()){
+                    if(macro.body[b] == '"' || macro.body[b] == '\''){
+                        const MChar quote = macro.body[b];
+                        next.push_back(macro.body[b++]);
+                        while(b < macro.body.size() && macro.body[b] != quote){
+                            if(macro.body[b] == '\\' && b + 1u < macro.body.size())
+                                next.push_back(macro.body[b++]);
+                            next.push_back(macro.body[b++]);
+                        }
+                        if(b < macro.body.size())
+                            next.push_back(macro.body[b++]);
+                        continue;
+                    }
+                    if(IsAsciiDigit(macro.body[b])){
+                        while(b < macro.body.size()){
+                            const MChar c = macro.body[b];
+                            if((c == 'e' || c == 'E' || c == 'p' || c == 'P') && b + 1u < macro.body.size() && (macro.body[b + 1u] == '+' || macro.body[b + 1u] == '-')){
+                                next.push_back(macro.body[b++]);
+                                next.push_back(macro.body[b++]);
+                                continue;
+                            }
+                            if(IsAsciiDigit(c) || IsAsciiIdentifierChar(c) || c == '.'){
+                                next.push_back(macro.body[b++]);
+                                continue;
+                            }
+                            break;
+                        }
+                        continue;
+                    }
                     if(IsAsciiIdentifierStart(macro.body[b])){
                         const usize pStart = b;
                         while(b < macro.body.size() && IsAsciiIdentifierChar(macro.body[b]))
@@ -478,6 +583,28 @@ b8 Preprocessor::evaluateCondition(const MStringView exprText, const u32 line, b
     MString expanded(m_arena);
     usize i = 0u;
     while(i < exprText.size()){
+        if(exprText[i] == '"' || exprText[i] == '\''){
+            const MChar quote = exprText[i];
+            expanded.push_back(exprText[i++]);
+            while(i < exprText.size() && exprText[i] != quote){
+                if(exprText[i] == '\\' && i + 1u < exprText.size())
+                    expanded.push_back(exprText[i++]);
+                expanded.push_back(exprText[i++]);
+            }
+            if(i < exprText.size())
+                expanded.push_back(exprText[i++]);
+            continue;
+        }
+        if(IsAsciiDigit(exprText[i])){
+            while(i < exprText.size()){
+                const MChar c = exprText[i];
+                if(IsAsciiDigit(c) || IsAsciiIdentifierChar(c) || c == '.')
+                    expanded.push_back(exprText[i++]);
+                else
+                    break;
+            }
+            continue;
+        }
         if(IsAsciiIdentifierStart(exprText[i])){
             const usize idStart = i;
             while(i < exprText.size() && IsAsciiIdentifierChar(exprText[i]))

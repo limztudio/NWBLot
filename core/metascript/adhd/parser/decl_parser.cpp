@@ -255,6 +255,7 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const MVector<ParsedA
     decl->sizeTypeName = sizeTypeName;
     decl->underlyingSize = underlyingSize;
     decl->underlyingAlign = underlyingAlign;
+    decl->isReflect = !attributes.empty();
     decl->span = span;
     m_cursor.advance();
 
@@ -298,15 +299,19 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const MVector<ParsedA
 
     if(!m_cursor.expect(TokenType::RightBrace, "expected '}' to close enum declaration"))
         return nullptr;
+    while(m_cursor.match(TokenType::Semicolon)){}
 
     return decl;
 }
 
 InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
     MStringView assetTypeName;
+    b8 isReflect = false;
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "reflect" && attr.arguments.empty())
+        if(attr.name == "reflect" && attr.arguments.empty()){
+            isReflect = true;
             continue;
+        }
         if(attr.name == "asset" && attr.arguments.size() == 1u && attr.arguments[0].kind == TokenType::StringLiteral){
             assetTypeName = attr.arguments[0].text;
             continue;
@@ -322,6 +327,7 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
     InterfaceDecl* decl = AllocateAstNode<InterfaceDecl>(m_cursor.arena());
     decl->name = m_cursor.current().text;
     decl->assetTypeName = assetTypeName;
+    decl->isReflect = isReflect;
     decl->span = span;
     m_cursor.advance();
 
@@ -376,6 +382,12 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
         method->span = methodSpan;
         if(!applyCallableAttributes(methodAttrs, *method))
             return nullptr;
+        if(method->isForceInline || method->isNoInline){
+            m_cursor.error(methodSpan.line, methodSpan.column, "'inline' and 'noinline' attributes are not permitted on abstract interface method declarations");
+            return nullptr;
+        }
+        if(method->isReflect)
+            decl->isReflect = true;
 
         if(m_cursor.matchIdentifier("operator")){
             MStringView opName;
@@ -393,6 +405,10 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
             return nullptr;
         }
 
+        if(m_cursor.check(TokenType::Less)){
+            m_cursor.error(methodSpan.line, methodSpan.column, "interface methods cannot be templated; parameterize the enclosing 'interface' instead");
+            return nullptr;
+        }
         if(!m_cursor.check(TokenType::LeftParen)){
             m_cursor.error(methodSpan.line, methodSpan.column, "data members are prohibited inside 'interface'; only method contracts are allowed");
             return nullptr;
@@ -428,6 +444,7 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
 
     if(!m_cursor.expect(TokenType::RightBrace, "expected '}' to close interface declaration"))
         return nullptr;
+    while(m_cursor.match(TokenType::Semicolon)){}
 
     return decl;
 }

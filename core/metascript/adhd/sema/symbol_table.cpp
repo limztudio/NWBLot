@@ -116,9 +116,44 @@ TypeRef* SubstituteAliasTypeRef(
     cloned->isConst = method->isConst;
     cloned->isOverride = method->isOverride;
     cloned->isInline = method->isInline;
+    cloned->isForceInline = method->isForceInline;
+    cloned->isNoInline = method->isNoInline;
     cloned->isOutOfLine = method->isOutOfLine;
     cloned->isReflect = method->isReflect;
     return cloned;
+}
+
+[[nodiscard]] i32 ScoreCandidateParams(
+    const SymbolTable& symbols,
+    const MVector<ParamDecl>& params,
+    const usize* preferredArgCount,
+    const MVector<MStringView>* argTypeNames,
+    const MVector<b8>* argIsMut
+)noexcept{
+    i32 score = 0;
+    if(!preferredArgCount || params.size() == *preferredArgCount)
+        score += 64;
+    const usize count = params.size();
+    for(usize i = 0u; i < count; ++i){
+        if(argIsMut && i < argIsMut->size()){
+            const b8 paramMut = params[i].mode == ParamPassingMode::Mut;
+            if(paramMut == (*argIsMut)[i])
+                score += 8;
+        }
+        if(argTypeNames && i < argTypeNames->size() && !(*argTypeNames)[i].empty() && params[i].type){
+            const MStringView paramBase = symbols.resolveBaseTypeName(params[i].type->name);
+            const MStringView argBase = symbols.resolveBaseTypeName((*argTypeNames)[i]);
+            if(paramBase == argBase){
+                score += 16;
+            }
+            else if((paramBase == "StringView" && (argBase == "String" || argBase == "CompactString"))
+                || (paramBase == "Path" && argBase == "StringView"))
+            {
+                score += 8;
+            }
+        }
+    }
+    return score;
 }
 
 
@@ -217,17 +252,31 @@ TypeAliasDecl* SymbolTable::findTypeAlias(const MStringView name)const noexcept{
     return nullptr;
 }
 
-MethodDecl* SymbolTable::findFreeFunction(const MStringView name, const usize* preferredArgCount)const noexcept{
-    MethodDecl* firstMatch = nullptr;
+MethodDecl* SymbolTable::findFreeFunction(
+    const MStringView name,
+    const usize* preferredArgCount,
+    const MVector<MStringView>* argTypeNames,
+    const MVector<b8>* argIsMut
+)const noexcept{
+    MethodDecl* bestMatch = nullptr;
+    i32 bestScore = -1;
     for(MethodDecl* fn : m_freeFunctions){
-        if(fn->name == name){
+        if(!fn || fn->name != name)
+            continue;
+        if(!argTypeNames && !argIsMut){
             if(!preferredArgCount || fn->params.size() == *preferredArgCount)
                 return fn;
-            if(!firstMatch)
-                firstMatch = fn;
+            if(!bestMatch)
+                bestMatch = fn;
+            continue;
+        }
+        const i32 score = __hidden_adhd_symbol_table::ScoreCandidateParams(*this, fn->params, preferredArgCount, argTypeNames, argIsMut);
+        if(score > bestScore){
+            bestScore = score;
+            bestMatch = fn;
         }
     }
-    return firstMatch;
+    return bestMatch;
 }
 
 Stmt* SymbolTable::findGlobalConstant(const MStringView name)const noexcept{
@@ -238,7 +287,14 @@ Stmt* SymbolTable::findGlobalConstant(const MStringView name)const noexcept{
     return nullptr;
 }
 
-MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MStringView methodName, const usize* preferredArgCount, const u32 depth)const noexcept{
+MethodDecl* SymbolTable::findInterfaceMethod(
+    const TypeRef& ifaceType,
+    const MStringView methodName,
+    const usize* preferredArgCount,
+    const u32 depth,
+    const MVector<MStringView>* argTypeNames,
+    const MVector<b8>* argIsMut
+)const noexcept{
     if(depth > 16u)
         return nullptr;
     const TypeRef* resolvedIface = unwrapTypeAlias(&ifaceType);
@@ -250,13 +306,23 @@ MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MSt
 
     const b8 hasSubst = !iface->templateParams.empty() && !resolvedIface->templateArgs.empty();
 
-    MethodDecl* firstMatch = nullptr;
+    MethodDecl* bestMatch = nullptr;
+    i32 bestScore = -1;
     for(MethodDecl* method : iface->methods){
-        if(method->name == methodName){
-            if(!preferredArgCount || method->params.size() == *preferredArgCount)
-                return __hidden_adhd_symbol_table::SubstituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena);
-            if(!firstMatch)
-                firstMatch = __hidden_adhd_symbol_table::SubstituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena);
+        if(method && method->name == methodName){
+            MethodDecl* subMethod = __hidden_adhd_symbol_table::SubstituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena);
+            if(!argTypeNames && !argIsMut){
+                if(!preferredArgCount || subMethod->params.size() == *preferredArgCount)
+                    return subMethod;
+                if(!bestMatch)
+                    bestMatch = subMethod;
+                continue;
+            }
+            const i32 score = __hidden_adhd_symbol_table::ScoreCandidateParams(*this, subMethod->params, preferredArgCount, argTypeNames, argIsMut);
+            if(score > bestScore){
+                bestScore = score;
+                bestMatch = subMethod;
+            }
         }
     }
 
@@ -268,16 +334,24 @@ MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MSt
             : baseType;
         if(!subBase)
             continue;
-        MethodDecl* inherited = findInterfaceMethod(*subBase, methodName, preferredArgCount, depth + 1u);
+        MethodDecl* inherited = findInterfaceMethod(*subBase, methodName, preferredArgCount, depth + 1u, argTypeNames, argIsMut);
         if(inherited){
-            if(!preferredArgCount || inherited->params.size() == *preferredArgCount)
-                return inherited;
-            if(!firstMatch)
-                firstMatch = inherited;
+            if(!argTypeNames && !argIsMut){
+                if(!preferredArgCount || inherited->params.size() == *preferredArgCount)
+                    return inherited;
+                if(!bestMatch)
+                    bestMatch = inherited;
+                continue;
+            }
+            const i32 score = __hidden_adhd_symbol_table::ScoreCandidateParams(*this, inherited->params, preferredArgCount, argTypeNames, argIsMut);
+            if(score > bestScore){
+                bestScore = score;
+                bestMatch = inherited;
+            }
         }
     }
 
-    return firstMatch;
+    return bestMatch;
 }
 
 void SymbolTable::collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<MethodDecl*>& outMethods, const u32 depth)const{

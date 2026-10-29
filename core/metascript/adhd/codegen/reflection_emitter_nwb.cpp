@@ -133,8 +133,10 @@ void EmitNwbSimdVectorCtorExpr(
     out.push_back(')');
 }
 
-void EmitNwbMapKeyExpr(MString& out, const MStringView keyName){
-    if(keyName == "String")
+void EmitNwbMapKeyExpr(MString& out, const MStringView keyName, const b8 isEnumKey = false){
+    if(isEnumKey)
+        out.append("*__ek");
+    else if(keyName == "String")
         out.append("AString(__k, s_ClassArena)");
     else if(keyName == "CompactString")
         out.append("ACompactString(__k)");
@@ -421,56 +423,90 @@ void EmitNwbMapFieldDeserialize(
     const SymbolTable& symbols
 ){
     const b8 isStringLikeKey = (keyName == "String" || keyName == "CompactString" || keyName == "Name" || keyName == "Path");
-    if(!isStringLikeKey)
+    const b8 isEnumKey = symbols.findEnum(keyName) != nullptr;
+    if(!isStringLikeKey && !isEnumKey)
         return;
+
+    const auto emitKeyGuardOpen = [&](){
+        if(isEnumKey){
+            out.append("if(const auto __ek = ");
+            out.append(keyName.data(), keyName.size());
+            out.append("::parseNamedEnum(__k)){ ");
+        }
+    };
+    const auto emitKeyGuardClose = [&](){
+        if(isEnumKey)
+            out.append(" }");
+    };
 
     if(symbols.findEnum(valName)){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());
-        out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ if(__v.isString()){ if(const auto __e = ");
+        out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ ");
+        emitKeyGuardOpen();
+        out.append("if(__v.isString()){ if(const auto __e = ");
         out.append(valName.data(), valName.size());
         out.append("::parseNamedEnum(__v.asString())) this->");
         out.append(fieldName.data(), fieldName.size());
         out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName);
-        out.append("] = *__e; } } }\r\n");
+        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
+        out.append("] = *__e; }");
+        emitKeyGuardClose();
+        out.append(" } }\r\n");
     }
     else if(IsScalarOrStringLikeNwbElement(valName)){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());
-        out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()) this->");
+        out.append(".clear(); for(const auto& [__k, __v] : __f->asMap())");
+        if(isEnumKey)
+            out.append("{ ");
+        else
+            out.push_back(' ');
+        emitKeyGuardOpen();
+        out.append("this->");
         out.append(fieldName.data(), fieldName.size());
         out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName);
+        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
         out.append("] = ");
         EmitNwbValueConversionExpr(out, valName, "__v");
-        out.append("; }\r\n");
+        out.push_back(';');
+        emitKeyGuardClose();
+        if(isEnumKey)
+            out.append(" }");
+        out.append(" }\r\n");
     }
     else if(IsDeserializableClass(symbols.findClass(valName))){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());
-        out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ if(!__v.isMap() || !this->");
+        out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ ");
+        emitKeyGuardOpen();
+        out.append("if(!__v.isMap() || !this->");
         out.append(fieldName.data(), fieldName.size());
         out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName);
-        out.append("].deserializeNwb(__v)) return false; } }\r\n");
+        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
+        out.append("].deserializeNwb(__v)) return false;");
+        emitKeyGuardClose();
+        out.append(" } }\r\n");
     }
     else if(u32 simdLanes = 0u; (SymbolTable::isSimdVectorType(valName, simdLanes) || SymbolTable::isUnalignedVectorType(valName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());
         out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ ");
+        emitKeyGuardOpen();
         EmitNwbListSizeContinueGuard(out, "__v", simdLanes);
         out.append("this->");
         out.append(fieldName.data(), fieldName.size());
         out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName);
+        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
         out.append("] = ");
         EmitNwbSimdVectorCtorExpr(out, valName, simdLanes, "__v.asList()");
-        out.append("; } }\r\n");
+        out.push_back(';');
+        emitKeyGuardClose();
+        out.append(" } }\r\n");
     }
     else if(SymbolTable::isSimdMatrixType(valName)){
         const u32 elemCount = SimdMatrixElementCount(valName);
@@ -478,13 +514,16 @@ void EmitNwbMapFieldDeserialize(
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());
         out.append(".clear(); for(const auto& [__k, __v] : __f->asMap()){ ");
+        emitKeyGuardOpen();
         EmitNwbListSizeContinueGuard(out, "__v", elemCount);
         EmitNwbSimdMatrixLocalInit(out, valName, "__v.asList()", "__i");
         out.append("this->");
         out.append(fieldName.data(), fieldName.size());
         out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName);
-        out.append("] = __m; } }\r\n");
+        EmitNwbMapKeyExpr(out, keyName, isEnumKey);
+        out.append("] = __m;");
+        emitKeyGuardClose();
+        out.append(" } }\r\n");
     }
 }
 

@@ -40,9 +40,11 @@ namespace __hidden_adhd_layout_optimizer{
     const MStringView name = unwrapped->name;
     if(name == targetClassName)
         return true;
-    if(name == "Array" || name == "FixedVector" || name == "Optional"){
-        if(!unwrapped->templateArgs.empty() && unwrapped->templateArgs[0].type)
-            return TypeReferencesClassByValue(*unwrapped->templateArgs[0].type, targetClassName, symbols, depth + 1u);
+    if(name == "Array" || name == "FixedVector" || name == "Optional" || name == "Atomic" || name == "Expected"){
+        for(const TypeArg& targ : unwrapped->templateArgs){
+            if(targ.type && TypeReferencesClassByValue(*targ.type, targetClassName, symbols, depth + 1u))
+                return true;
+        }
         return false;
     }
     if(const ClassDecl* subCls = symbols.findClass(name)){
@@ -89,14 +91,14 @@ namespace __hidden_adhd_layout_optimizer{
     }
 
     const MStringView name = unwrapped->name;
-    if(SymbolTable::isArenaBackedContainer(name) || name == "Path" || name == "StringView" || name == "Span"){
-        outReason = "'[serialize]' class cannot contain non-transient dynamic heap or view members; mark with '[transient]' or use fixed-size types";
+    if(SymbolTable::isArenaBackedContainer(name) || name == "Path" || name == "StringView" || name == "Span" || name == "Atomic"){
+        outReason = "'[serialize]' class cannot contain non-transient dynamic heap, view, or atomic members; mark with '[transient]' or use fixed-size types";
         return false;
     }
 
-    if(name == "Array" || name == "FixedVector" || name == "Optional"){
-        if(!unwrapped->templateArgs.empty() && unwrapped->templateArgs[0].type){
-            if(!IsTypeBinarySerializable(*unwrapped->templateArgs[0].type, symbols, outReason, depth + 1u))
+    if(name == "Array" || name == "FixedVector" || name == "Optional" || name == "Expected"){
+        for(const TypeArg& targ : unwrapped->templateArgs){
+            if(targ.type && !IsTypeBinarySerializable(*targ.type, symbols, outReason, depth + 1u))
                 return false;
         }
         return true;
@@ -239,7 +241,7 @@ void LayoutOptimizer::sortAndPackFields(
     usize currentOffset = hasInterfaces ? 8u : 0u;
     usize maxAlign = isSerialize ? 1u : (hasInterfaces ? 8u : 1u);
     for(FieldDecl* field : orderedFields){
-        const usize align = isSerialize ? 1u : field->resolvedAlign;
+        const usize align = (isSerialize && !field->isTransient) ? 1u : field->resolvedAlign;
         if(align > maxAlign)
             maxAlign = align;
         currentOffset = __hidden_adhd_layout_optimizer::AlignUp(currentOffset, align);
@@ -379,6 +381,18 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
     }
 
     if(name == "Expected"){
+        if(type.templateArgs.size() >= 2u && type.templateArgs[0].type && type.templateArgs[1].type){
+            usize valSize = 8u;
+            usize valAlign = 8u;
+            usize errSize = 8u;
+            usize errAlign = 8u;
+            resolveTypeSizeAndAlign(*type.templateArgs[0].type, valSize, valAlign, depth + 1u);
+            resolveTypeSizeAndAlign(*type.templateArgs[1].type, errSize, errAlign, depth + 1u);
+            outAlign = valAlign > errAlign ? valAlign : errAlign;
+            const usize payloadSize = valSize > errSize ? valSize : errSize;
+            outSize = __hidden_adhd_layout_optimizer::AlignUp(payloadSize + 1u, outAlign);
+            return;
+        }
         outSize = 24u;
         outAlign = 8u;
         return;

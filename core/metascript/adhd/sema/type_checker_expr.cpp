@@ -52,7 +52,7 @@ b8 TypeChecker::checkExpr(
                     reportError(errors, expr.span, "cannot mutate 'const' variable");
                     ok = false;
                 }
-                else if(m_parallelDepth > 0u && local->type && IsNonThreadSafeContainer(m_symbols.resolveBaseTypeName(local->type->name))){
+                else if(m_parallelDepth > 0u && local->declaredParallelDepth < m_parallelDepth && local->type && IsNonThreadSafeContainer(m_symbols.resolveBaseTypeName(local->type->name))){
                     reportError(errors, expr.span, "shared 'mut' access to non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers or disjoint element indexing");
                     ok = false;
                 }
@@ -235,6 +235,17 @@ b8 TypeChecker::checkExpr(
                         reportError(errors, expr.span, "cannot mutate 'in' reference member");
                         ok = false;
                     }
+                    else if(isMutationTarget && m_parallelDepth > 0u && ft && IsNonThreadSafeContainer(m_symbols.resolveBaseTypeName(ft->name))){
+                        b8 isTaskLocalOwner = false;
+                        if(expr.lhs->kind == ExprKind::Identifier){
+                            if(const ScopedVarInfo* lhsLocal = findScopedVar(scope, expr.lhs->text))
+                                isTaskLocalOwner = (lhsLocal->declaredParallelDepth == m_parallelDepth);
+                        }
+                        if(!isTaskLocalOwner){
+                            reportError(errors, expr.span, "shared 'mut' access to non-thread-safe member container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers or disjoint element indexing");
+                            ok = false;
+                        }
+                    }
                 }
             }
         }
@@ -242,7 +253,6 @@ b8 TypeChecker::checkExpr(
     }
     case ExprKind::Index:{
         const u32 savedParallelDepth = m_parallelDepth;
-        m_parallelDepth = 0u;
         b8 lhsNeedsMut = isMutationTarget;
         b8 rhsNeedsMut = false;
         const MethodDecl* customOpIdx = nullptr;
@@ -250,6 +260,11 @@ b8 TypeChecker::checkExpr(
         const MStringView lhsBaseType = containerTypeRef
             ? m_symbols.resolveBaseTypeName(containerTypeRef->name)
             : (expr.lhs ? inferExprTypeName(ownerClass, &method, *expr.lhs, scope) : MStringView{});
+        if(lhsBaseType != "Map" && lhsBaseType != "HashMap")
+            m_parallelDepth = 0u;
+        u32 vecIdxLanes = 0u;
+        if(SymbolTable::isSimdVectorType(lhsBaseType, vecIdxLanes) || SymbolTable::isUnalignedVectorType(lhsBaseType, vecIdxLanes))
+            expr.isVectorRawIndex = true;
         const b8 recvIsConst = expr.lhs ? isReceiverConst(ownerClass, method, *expr.lhs, scope) : false;
         const usize oneArg = 1u;
         if(const ClassDecl* cls = m_symbols.findClass(lhsBaseType)){
@@ -325,11 +340,19 @@ b8 TypeChecker::checkExpr(
         break;
     }
     case ExprKind::Binary:
+        if(isMutationTarget && !IsCompoundOrSimpleAssignment(expr.op)){
+            reportError(errors, expr.span, "cannot pass temporary or rvalue expression to a 'mut' target");
+            ok = false;
+        }
         if(!checkBinaryExpr(ownerClass, method, expr, scope, errors))
             ok = false;
         break;
     case ExprKind::Cast:
     case ExprKind::BitCast:{
+        if(isMutationTarget){
+            reportError(errors, expr.span, "cannot pass cast result (rvalue) to a 'mut' target");
+            ok = false;
+        }
         if(expr.targetType){
             if(!checkTypeRef(*expr.targetType, ownerClass, &method, errors))
                 ok = false;
@@ -346,10 +369,41 @@ b8 TypeChecker::checkExpr(
                 reportError(errors, expr.span, "downcasting from an 'interface' type is prohibited in adhd");
                 ok = false;
             }
+            if(expr.kind == ExprKind::BitCast && expr.targetType && !srcType.empty()){
+                const MStringView dstType = m_symbols.resolveBaseTypeName(expr.targetType->name);
+                const auto hasKnownFixedLayout = [&](const MStringView baseName)noexcept -> b8{
+                    if(baseName.empty() || findTemplateParam(ownerClass, &method, baseName))
+                        return false;
+                    return IsIntegerScalarType(baseName) || baseName == "b8" || IsFloatScalarType(baseName)
+                        || SymbolTable::isSimdType(baseName) || SymbolTable::isUnalignedVectorType(baseName)
+                        || m_symbols.findEnum(baseName) != nullptr;
+                };
+                if(m_symbols.resolveRefMode(expr.targetType) == ParamPassingMode::None
+                    && hasKnownFixedLayout(dstType)
+                    && hasKnownFixedLayout(srcType))
+                {
+                    TypeRef srcTypeRef(m_arena);
+                    srcTypeRef.name = srcType;
+                    usize dstSize = 0u;
+                    usize dstAlign = 0u;
+                    usize srcSize = 0u;
+                    usize srcAlign = 0u;
+                    m_layoutOptimizer.resolveTypeSizeAndAlign(*expr.targetType, dstSize, dstAlign);
+                    m_layoutOptimizer.resolveTypeSizeAndAlign(srcTypeRef, srcSize, srcAlign);
+                    if(dstSize != srcSize){
+                        reportError(errors, expr.span, "bit_cast requires source and target types to have identical byte sizes");
+                        ok = false;
+                    }
+                }
+            }
         }
         break;
     }
     case ExprKind::Lambda:
+        if(isMutationTarget){
+            reportError(errors, expr.span, "cannot pass lambda temporary to a 'mut' target");
+            ok = false;
+        }
         if(!checkLambdaExpr(ownerClass, method, expr, scope, errors))
             ok = false;
         break;
@@ -487,6 +541,19 @@ b8 TypeChecker::checkBinaryExpr(
                 }
             }
             propagateFuncCaptureBytes(local->type, expr.rhs, scope, m_symbols);
+            if(expr.rhs){
+                ScopedVarInfo* mutableLocal = const_cast<ScopedVarInfo*>(local);
+                if(expr.rhs->kind == ExprKind::Lambda){
+                    mutableLocal->lambdaExpr = expr.rhs;
+                }
+                else if(expr.rhs->kind == ExprKind::Identifier){
+                    const ScopedVarInfo* rhsLocal = findScopedVar(scope, expr.rhs->text);
+                    mutableLocal->lambdaExpr = rhsLocal ? rhsLocal->lambdaExpr : nullptr;
+                }
+                else{
+                    mutableLocal->lambdaExpr = nullptr;
+                }
+            }
         }
     }
     if(expr.op == TokenType::Equal && expr.lhs && (expr.lhs->kind == ExprKind::MemberAccess || expr.lhs->kind == ExprKind::Index)){
@@ -546,10 +613,12 @@ b8 TypeChecker::isReceiverConst(
 )const noexcept{
     if(recv.kind == ExprKind::Identifier){
         if(const ScopedVarInfo* local = findScopedVar(scope, recv.text)){
+            if(local->mode == ParamPassingMode::In || local->isConst)
+                return true;
             const ParamPassingMode::Enum localRefMode = m_symbols.resolveRefMode(local->type);
             if(localRefMode != ParamPassingMode::None)
                 return localRefMode == ParamPassingMode::In;
-            return local->mode == ParamPassingMode::In || local->isConst;
+            return false;
         }
         if(m_symbols.findGlobalConstant(recv.text))
             return true;

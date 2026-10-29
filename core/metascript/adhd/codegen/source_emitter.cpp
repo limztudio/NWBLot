@@ -97,12 +97,12 @@ MString SourceEmitter::emitSource(
             for(const MethodDecl* method : classDecl->methods){
                 if(!method)
                     continue;
-                const b8 emittedInHeader = !classDecl->isImported && (method->isInline || !method->templateParams.empty());
+                const b8 emittedInHeader = method->isInline || !method->templateParams.empty();
                 if(method->isImported || !method->hasBody || emittedInHeader)
                     continue;
 
-                if(classDecl->isImported && method->isInline)
-                    out.append("inline ");
+                if(method->isNoInline)
+                    out.append("NWB_NOINLINE ");
 
                 m_typeEmitter.emitMethodSignature(out, classDecl, *method, false);
                 if(method->isConstructor)
@@ -120,6 +120,9 @@ MString SourceEmitter::emitSource(
     for(const MethodDecl* fn : unit.freeFunctions){
         if(!fn || fn->isImported || !fn->hasBody || fn->isInline || !fn->templateParams.empty())
             continue;
+
+        if(fn->isNoInline)
+            out.append("NWB_NOINLINE ");
 
         m_typeEmitter.emitMethodSignature(out, nullptr, *fn, false);
         out.append("{\r\n");

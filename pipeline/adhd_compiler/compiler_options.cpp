@@ -109,6 +109,11 @@ b8 ParseAdhdCompilerOptions(
         if(matched)
             continue;
 
+        if(!TryConsumeOptionValue(arg, "-MF", "--depfile", i, argc, argv, arena, outOptions.depfilePath, matched))
+            return false;
+        if(matched)
+            continue;
+
         if(arg == "--validate-only"){
             outOptions.validateOnly = true;
             continue;

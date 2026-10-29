@@ -35,6 +35,7 @@ struct EnumDecl{
     SourceSpan span;
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
+    b8 isReflect = false;
     b8 isImported = false;
 
 
@@ -110,6 +111,8 @@ struct MethodDecl{
     b8 isDestructor = false;
     b8 isOperator = false;
     b8 isInline = false;
+    b8 isForceInline = false;
+    b8 isNoInline = false;
     b8 isOutOfLine = false;
     b8 isReflect = false;
     b8 usesScratchArena = false;
@@ -137,6 +140,7 @@ struct InterfaceDecl{
     MVector<MethodDecl*> methods;
     MStringView assetTypeName;
     SourceSpan span;
+    b8 isReflect = false;
     b8 isImported = false;
 
 
@@ -208,6 +212,7 @@ public:
 struct TranslationUnit{
     MVector<MStringView> topLevelNativeBlocks;
     MVector<MString> includedAdhdFiles;
+    MVector<MString> resolvedIncludedFiles;
     MVector<Stmt*> globalConstants;
     MVector<TypeAliasDecl*> typeAliases;
     MVector<EnumDecl*> enums;
@@ -222,6 +227,7 @@ public:
     explicit TranslationUnit(MetaArena& arena)noexcept
         : topLevelNativeBlocks(arena)
         , includedAdhdFiles(arena)
+        , resolvedIncludedFiles(arena)
         , globalConstants(arena)
         , typeAliases(arena)
         , enums(arena)

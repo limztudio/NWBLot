@@ -110,6 +110,7 @@ private:
     [[nodiscard]] Token readIdentifier()noexcept;
     [[nodiscard]] Token readNumber()noexcept;
     [[nodiscard]] Token readString()noexcept;
+    [[nodiscard]] Token readCharLiteral()noexcept;
     [[nodiscard]] Token makeToken(TokenType::Enum type, usize length)noexcept;
     [[nodiscard]] Token makeErrorToken(MStringView message)noexcept;
     [[nodiscard]] Token makeErrorToken(MStringView message, u32 line, u32 column)noexcept;
@@ -129,6 +130,8 @@ private:
     u32 m_column = 1;
     u32 m_errorLine = 1;
     u32 m_errorColumn = 1;
+    u32 m_savedLines[64] = {};
+    u32 m_savedLineDepth = 0;
     b8 m_hasPendingError = false;
 };
 

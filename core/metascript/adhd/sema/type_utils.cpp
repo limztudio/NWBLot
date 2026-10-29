@@ -20,11 +20,30 @@ namespace __hidden_adhd_type_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] b8 IsValidConstTemplateArgGlobal(const Stmt* globalConst, const SymbolTable& symbols)noexcept{
+    if(!globalConst || !globalConst->varType)
+        return false;
+    const MStringView baseName = symbols.resolveBaseTypeName(globalConst->varType->name);
+    return baseName == "b8" || IsIntegerScalarType(baseName) || symbols.findEnum(baseName) != nullptr;
+}
+
 [[nodiscard]] b8 IsConcreteConstTemplateArgText(const MStringView text, const SymbolTable& symbols)noexcept{
     if(text.empty())
         return false;
-    const b8 isNumericOrBoolConst = (text[0] >= '0' && text[0] <= '9') || text == "true" || text == "false";
-    return isNumericOrBoolConst || symbols.findGlobalConstant(text) != nullptr;
+    const b8 isCharConst = text.size() >= 3u && text.front() == '\'' && text.back() == '\'';
+    const b8 isNegInt = text.size() >= 2u && text[0] == '-' && text[1] >= '0' && text[1] <= '9';
+    const b8 isNumericOrBoolConst = (text[0] >= '0' && text[0] <= '9') || isNegInt || text == "true" || text == "false" || isCharConst;
+    return isNumericOrBoolConst || IsValidConstTemplateArgGlobal(symbols.findGlobalConstant(text), symbols);
+}
+
+[[nodiscard]] b8 AreConstantTemplateArgsEquivalent(const MStringView a, const MStringView b, const SymbolTable& symbols)noexcept{
+    if(a == b)
+        return true;
+    if(a.empty() || b.empty() || a == "true" || a == "false" || b == "true" || b == "false" || a[0] == '-' || b[0] == '-')
+        return false;
+    if(IsConcreteConstTemplateArgText(a, symbols) && IsConcreteConstTemplateArgText(b, symbols))
+        return ParseUnsignedConstant(a, symbols) == ParseUnsignedConstant(b, symbols);
+    return false;
 }
 
 
@@ -184,11 +203,30 @@ namespace __hidden_adhd_type_utils{
                     : subst->refMode;
                 if(actual->refMode != expectedRefMode)
                     return false;
-                return actual->name == subst->name
-                    && actual->isAuto == subst->isAuto
-                    && actual->isFuncType == subst->isFuncType
-                    && actual->templateArgs.size() == subst->templateArgs.size()
-                    && AreTypeRefsEquivalent(actual, subst, symbols);
+                if(actual->name != subst->name
+                    || actual->isAuto != subst->isAuto
+                    || actual->isFuncType != subst->isFuncType
+                    || actual->templateArgs.size() != subst->templateArgs.size())
+                {
+                    return false;
+                }
+                if(!AreTemplateArgListsEqual(actual->templateArgs, subst->templateArgs, symbols))
+                    return false;
+                if(actual->isFuncType){
+                    if(!AreTypeRefsEquivalent(actual->funcReturnType, subst->funcReturnType, symbols)
+                        || actual->funcParams.size() != subst->funcParams.size())
+                    {
+                        return false;
+                    }
+                    for(usize fi = 0u; fi < actual->funcParams.size(); ++fi){
+                        if(actual->funcParams[fi].mode != subst->funcParams[fi].mode
+                            || !AreTypeRefsEquivalent(actual->funcParams[fi].type, subst->funcParams[fi].type, symbols))
+                        {
+                            return false;
+                        }
+                    }
+                }
+                return true;
             }
         }
     }
@@ -204,8 +242,11 @@ namespace __hidden_adhd_type_utils{
     for(usize i = 0u; i < actual->templateArgs.size(); ++i){
         const TypeArg& ta = actual->templateArgs[i];
         const TypeArg& tb = pattern->templateArgs[i];
-        if(ta.constantText != tb.constantText || !AreTypeRefsEquivalentWithSubst(ta.type, tb.type, ifaceParams, ifaceArgs, symbols))
+        if(!__hidden_adhd_type_utils::AreConstantTemplateArgsEquivalent(ta.constantText, tb.constantText, symbols)
+            || !AreTypeRefsEquivalentWithSubst(ta.type, tb.type, ifaceParams, ifaceArgs, symbols))
+        {
             return false;
+        }
     }
     if(actual->isFuncType){
         if(!AreTypeRefsEquivalentWithSubst(actual->funcReturnType, pattern->funcReturnType, ifaceParams, ifaceArgs, symbols)
@@ -235,7 +276,7 @@ namespace __hidden_adhd_type_utils{
         else{
             const MStringView lhsName = a[i].type ? a[i].type->name : a[i].constantText;
             const MStringView rhsName = b[i].type ? b[i].type->name : b[i].constantText;
-            if(lhsName != rhsName)
+            if(!__hidden_adhd_type_utils::AreConstantTemplateArgsEquivalent(lhsName, rhsName, symbols))
                 return false;
         }
     }
@@ -299,7 +340,7 @@ namespace __hidden_adhd_type_utils{
         return false;
     const MStringView name = arg.type->name;
     if(name == "true" || name == "false"
-        || symbols.findGlobalConstant(name) != nullptr
+        || __hidden_adhd_type_utils::IsValidConstTemplateArgGlobal(symbols.findGlobalConstant(name), symbols)
         || HasConstValueTemplateParam(enclosingClass, enclosingMethod, name))
     {
         arg.constantText = name;
@@ -313,11 +354,66 @@ namespace __hidden_adhd_type_utils{
     if(text.empty())
         return 1u;
 
-    if(const Stmt* globalConst = symbols.findGlobalConstant(text)){
-        if(globalConst->expr && globalConst->expr->kind == ExprKind::IntegerLiteral)
-            return ParseUnsignedConstant(globalConst->expr->text, symbols);
-        if(globalConst->isCtorInit && globalConst->arguments.size() == 1u && globalConst->arguments[0] && globalConst->arguments[0]->kind == ExprKind::IntegerLiteral)
-            return ParseUnsignedConstant(globalConst->arguments[0]->text, symbols);
+    MStringView curText = text;
+    for(u32 depth = 0u; depth < 8u; ++depth){
+        const Stmt* globalConst = symbols.findGlobalConstant(curText);
+        if(!globalConst)
+            break;
+        const Expr* valExpr = globalConst->expr;
+        if(!valExpr && globalConst->isCtorInit && globalConst->arguments.size() == 1u)
+            valExpr = globalConst->arguments[0];
+        if(valExpr && (valExpr->kind == ExprKind::IntegerLiteral || valExpr->kind == ExprKind::Identifier)){
+            curText = valExpr->text;
+            continue;
+        }
+        break;
+    }
+    if(curText != text)
+        return ParseUnsignedConstant(curText, symbols);
+
+    if(text.size() >= 3u && text.front() == '\'' && text.back() == '\''){
+        const MStringView inner = text.substr(1u, text.size() - 2u);
+        if(inner.size() == 1u)
+            return static_cast<usize>(static_cast<u8>(inner[0]));
+        if(inner.size() >= 2u && inner[0] == '\\'){
+            switch(inner[1]){
+            case 'n': return static_cast<usize>('\n');
+            case 'r': return static_cast<usize>('\r');
+            case 't': return static_cast<usize>('\t');
+            case 'v': return static_cast<usize>('\v');
+            case 'b': return static_cast<usize>('\b');
+            case 'f': return static_cast<usize>('\f');
+            case 'a': return static_cast<usize>('\a');
+            case '\\': return static_cast<usize>('\\');
+            case '\'': return static_cast<usize>('\'');
+            case '"': return static_cast<usize>('"');
+            case '?': return static_cast<usize>('?');
+            case 'x':
+            case 'X':
+            case 'u':
+            case 'U': {
+                usize hexVal = 0u;
+                for(usize i = 2u; i < inner.size(); ++i){
+                    const MChar c = inner[i];
+                    if(c >= '0' && c <= '9')
+                        hexVal = (hexVal << 4u) | static_cast<usize>(c - '0');
+                    else if(c >= 'a' && c <= 'f')
+                        hexVal = (hexVal << 4u) | static_cast<usize>(10 + (c - 'a'));
+                    else if(c >= 'A' && c <= 'F')
+                        hexVal = (hexVal << 4u) | static_cast<usize>(10 + (c - 'A'));
+                }
+                return hexVal;
+            }
+            default:
+                if(inner[1] >= '0' && inner[1] <= '7'){
+                    usize octVal = 0u;
+                    for(usize i = 1u; i < inner.size() && inner[i] >= '0' && inner[i] <= '7'; ++i)
+                        octVal = (octVal << 3u) | static_cast<usize>(inner[i] - '0');
+                    return octVal;
+                }
+                return static_cast<usize>(static_cast<u8>(inner[1]));
+            }
+        }
     }
 
     usize val = 0u;

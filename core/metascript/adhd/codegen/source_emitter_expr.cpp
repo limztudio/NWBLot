@@ -176,7 +176,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
             out.append("(*(");
         if(expr.lhs)
             emitExpr(out, *expr.lhs);
-        out.push_back('[');
+        if(expr.isVectorRawIndex)
+            out.append(".raw[");
+        else
+            out.push_back('[');
         if(expr.rhs)
             emitExpr(out, *expr.rhs);
         out.push_back(']');

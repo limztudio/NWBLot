@@ -99,6 +99,7 @@ struct Expr{
     b8 lambdaUsesScratchArena = false;
     b8 lambdaUsesTaskScope = false;
     b8 hasMutLocalCapture = false;
+    b8 isVectorRawIndex = false;
 
 
 public:

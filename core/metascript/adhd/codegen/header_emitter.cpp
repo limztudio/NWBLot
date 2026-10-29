@@ -294,8 +294,19 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     b8 hasSubsystemShader = false;
     b8 hasSubsystemUiSkin = false;
     b8 hasComponentAssetDecl = false;
+    b8 hasHeaderTaskScope = false;
     for(const ClassDecl* classDecl : unit.classes){
-        if(!classDecl || classDecl->isImported)
+        if(!classDecl)
+            continue;
+        for(const MethodDecl* method : classDecl->methods){
+            if(!method || method->isImported || !method->hasBody || !method->usesTaskScope)
+                continue;
+            if(!classDecl->templateParams.empty() || !method->templateParams.empty() || method->isInline){
+                hasHeaderTaskScope = true;
+                break;
+            }
+        }
+        if(classDecl->isImported)
             continue;
         if(!classDecl->subsystemTypeName.empty()){
             hasSubsystemDecl = true;
@@ -342,6 +353,16 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     }
     if(hasComponentAssetDecl)
         out.append("#include <impl/assets_scene/components.h>\r\n");
+    if(!hasHeaderTaskScope){
+        for(const MethodDecl* fn : unit.freeFunctions){
+            if(fn && !fn->isImported && fn->hasBody && fn->usesTaskScope && (fn->isInline || !fn->templateParams.empty())){
+                hasHeaderTaskScope = true;
+                break;
+            }
+        }
+    }
+    if(hasHeaderTaskScope)
+        out.append("#include <core/task/cpu/scheduler.h>\r\n");
 
     for(const MString& inc : unit.includedAdhdFiles){
         const MStringView incView = StripAdhdExtension(MStringView(inc.data(), inc.size()));
@@ -592,6 +613,31 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         for(usize idx = 0u; idx < unit.templateInstantiations.size(); ++idx){
             if(instEmitted[idx] == 0u && unit.templateInstantiations[idx] && !unit.templateInstantiations[idx]->isImported)
                 emitClassTemplateSpecialization(out, *unit.templateInstantiations[idx]);
+        }
+        for(const ClassDecl* classDecl : sortedClasses){
+            if(!classDecl || !classDecl->isImported)
+                continue;
+            for(const MethodDecl* method : classDecl->methods){
+                if(!method || method->isImported || !method->hasBody)
+                    continue;
+                if(classDecl->templateParams.empty() && method->templateParams.empty() && !method->isInline)
+                    continue;
+                if(!classDecl->templateParams.empty())
+                    m_typeEmitter.emitTemplateHeaderCpp(out, classDecl->templateParams);
+                if(!method->templateParams.empty())
+                    m_typeEmitter.emitTemplateHeaderCpp(out, method->templateParams);
+                if(method->isForceInline)
+                    out.append("NWB_FORCE_INLINE ");
+                else if(method->isNoInline)
+                    out.append("NWB_NOINLINE ");
+                out.append("inline ");
+                m_typeEmitter.emitMethodSignature(out, classDecl, *method, false);
+                if(method->isConstructor)
+                    m_sourceEmitter.emitConstructorNotNullInitializers(out, classDecl->orderedFields, *method);
+                out.append("{\r\n");
+                m_sourceEmitter.emitMethodBodyBlock(out, *method, 1u);
+                out.append("}\r\n\r\n");
+            }
         }
     }
 

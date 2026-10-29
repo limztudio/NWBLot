@@ -242,8 +242,13 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
 void HeaderEmitter::emitFreeFunctionDecl(MString& out, const MethodDecl& fn)const{
     const b8 emitInlineBody = fn.isInline || !fn.templateParams.empty();
     m_typeEmitter.emitTemplateHeaderCpp(out, fn.templateParams);
-    if(emitInlineBody)
+    if(emitInlineBody && fn.hasBody){
+        if(fn.isForceInline)
+            out.append("NWB_FORCE_INLINE ");
+        else if(fn.isNoInline)
+            out.append("NWB_NOINLINE ");
         out.append("inline ");
+    }
 
     m_typeEmitter.emitMethodSignature(out, nullptr, fn, false);
     if(emitInlineBody && fn.hasBody){

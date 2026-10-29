@@ -191,7 +191,8 @@ function(nwb_target_adhd_sources target_name)
 
         add_custom_command(
             OUTPUT "${gen_h}" "${gen_cpp}"
-            COMMAND $<TARGET_FILE:nwb_adhd_compiler> --input "${adhd_abs}" -o "${out_dir}" -I "${CMAKE_CURRENT_LIST_DIR}" -I "${PROJECT_SOURCE_DIR}" ${extra_args}
+            COMMAND $<TARGET_FILE:nwb_adhd_compiler> --input "${adhd_abs}" -o "${out_dir}" --depfile "${gen_h}.d" -I "${CMAKE_CURRENT_LIST_DIR}" -I "${PROJECT_SOURCE_DIR}" ${extra_args}
+            DEPFILE "${gen_h}.d"
             DEPENDS nwb_adhd_compiler ${file_depends}
             COMMENT "Compiling adhd source ${adhd_file}"
             VERBATIM

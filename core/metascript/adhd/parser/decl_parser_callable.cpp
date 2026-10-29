@@ -230,12 +230,23 @@ b8 DeclParser::applyCallableAttributes(
     MethodDecl& decl
 ){
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "reflect" && attr.arguments.empty())
+        if(attr.name == "reflect" && attr.arguments.empty()){
             decl.isReflect = true;
+        }
+        else if(attr.name == "inline" && attr.arguments.empty()){
+            decl.isForceInline = true;
+        }
+        else if(attr.name == "noinline" && attr.arguments.empty()){
+            decl.isNoInline = true;
+        }
         else{
-            m_cursor.error(attr.line, attr.column, "unsupported attribute on callable; expected 'reflect'");
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on callable; expected 'reflect', 'inline', or 'noinline'");
             return false;
         }
+    }
+    if(decl.isForceInline && decl.isNoInline){
+        m_cursor.error(decl.span.line, decl.span.column, "callable cannot specify both 'inline' and 'noinline' attributes");
+        return false;
     }
     return true;
 }

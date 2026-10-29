@@ -5,6 +5,7 @@
 #include "expr_parser.h"
 
 #include "stmt_parser.h"
+#include "../sema/symbol_table.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -386,7 +387,27 @@ Expr* ExprParser::parsePrimary(){
             const ParserCursor::Checkpoint cp = m_cursor.save();
             TypeRef* maybeType = m_typeParser.parseType(false, false);
             if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.match(TokenType::RightParen)){
-                if(m_cursor.check(TokenType::Identifier) || m_cursor.check(TokenType::IntegerLiteral) || m_cursor.check(TokenType::FloatLiteral) || m_cursor.check(TokenType::DoubleLiteral) || m_cursor.check(TokenType::LeftParen)){
+                const b8 looksLikeType = maybeType->refMode != ParamPassingMode::None
+                    || maybeType->isFuncType
+                    || !maybeType->templateArgs.empty()
+                    || !SymbolTable::mapBuiltinCppType(maybeType->name).empty()
+                    || maybeType->name == "i8" || maybeType->name == "u8" || maybeType->name == "b8"
+                    || maybeType->name == "i16" || maybeType->name == "u16"
+                    || maybeType->name == "i32" || maybeType->name == "u32" || maybeType->name == "f32"
+                    || maybeType->name == "i64" || maybeType->name == "u64" || maybeType->name == "f64"
+                    || maybeType->name == "isize" || maybeType->name == "usize" || maybeType->name == "void"
+                    || (!maybeType->name.empty() && maybeType->name[0] >= 'A' && maybeType->name[0] <= 'Z');
+                const b8 nextIsCastOperand = m_cursor.check(TokenType::Identifier)
+                    || m_cursor.check(TokenType::IntegerLiteral)
+                    || m_cursor.check(TokenType::FloatLiteral)
+                    || m_cursor.check(TokenType::DoubleLiteral)
+                    || m_cursor.check(TokenType::StringLiteral)
+                    || m_cursor.check(TokenType::LeftParen)
+                    || m_cursor.check(TokenType::Plus)
+                    || m_cursor.check(TokenType::Minus)
+                    || m_cursor.check(TokenType::Bang)
+                    || m_cursor.check(TokenType::Tilde);
+                if(looksLikeType && nextIsCastOperand){
                     m_cursor.error("C-style '(T)x' cast is prohibited in adhd; use 'cast<T>(x)' or 'bit_cast<T>(x)'");
                     return nullptr;
                 }

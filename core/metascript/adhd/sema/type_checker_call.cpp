@@ -213,6 +213,9 @@ b8 TypeChecker::checkCallExpr(
     const ScopedVarInfo* localCallable = nullptr;
     const TypeRef* invokedFuncType = nullptr;
     const usize callArgCount = expr.arguments.size();
+    MVector<MStringView> argTypeHints(m_arena);
+    MVector<b8> argIsMutHints(m_arena);
+    buildCallArgHints(ownerClass, &method, expr.arguments, scope, argTypeHints, argIsMutHints);
     if(expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier){
             const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
@@ -230,7 +233,7 @@ b8 TypeChecker::checkCallExpr(
                     method.usesScratchArena = true;
                 }
             }
-            targetCallable = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount);
+            targetCallable = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount, &argTypeHints, &argIsMutHints);
             if(!targetCallable){
                 localCallable = findScopedVar(scope, expr.lhs->text);
                 if(localCallable && localCallable->type)
@@ -239,7 +242,7 @@ b8 TypeChecker::checkCallExpr(
             if(!targetCallable && !localCallable){
                 if(const ClassDecl* ctorCls = m_symbols.findClass(baseCallee)){
                     targetOwnerCls = ctorCls;
-                    targetCallable = findClassConstructor(*ctorCls, callArgCount, ownerClass != ctorCls);
+                    targetCallable = findClassConstructor(*ctorCls, callArgCount, ownerClass != ctorCls, &argTypeHints, &argIsMutHints);
                     if(targetCallable && ownerClass != ctorCls && targetCallable->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
                         ok = false;
@@ -288,10 +291,15 @@ b8 TypeChecker::checkCallExpr(
             const ScopedVarInfo* lambdaThis = m_inLambda ? findScopedVar(scope, "this") : nullptr;
             const b8 isConstThis = method.isConst || (lambdaThis && lambdaThis->isConst);
             targetOwnerCls = ownerClass;
-            targetCallable = findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false);
+            targetCallable = findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false, &argTypeHints, &argIsMutHints);
             if(!targetCallable){
-                if(const FieldDecl* field = findClassField(*ownerClass, expr.lhs->text))
+                if(const FieldDecl* field = findClassField(*ownerClass, expr.lhs->text)){
                     invokedFuncType = m_symbols.unwrapTypeAlias(field->type);
+                    if(field->type && (!invokedFuncType || !invokedFuncType->isFuncType) && !findTemplateParam(ownerClass, &method, field->type->name)){
+                        reportError(errors, expr.span, "class member field is not a callable function");
+                        ok = false;
+                    }
+                }
             }
             if(isConstThis && targetCallable && !targetCallable->isConst){
                 reportError(errors, expr.span, "cannot call non-'const' method on 'this' inside a 'const' method or 'in this' lambda");
@@ -306,10 +314,19 @@ b8 TypeChecker::checkCallExpr(
             const MStringView mName = expr.lhs->text;
             calledMemberName = mName;
             const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope);
-            const b8 isMutatingContainerOp = (mName == "push_back" || mName == "emplace_back" || mName == "pop_back" || mName == "clear" || mName == "insert" || mName == "erase" || mName == "resize");
+            const b8 isMutatingContainerOp = (
+                mName == "push_back" || mName == "emplace_back" || mName == "pop_back"
+                || mName == "push_front" || mName == "emplace_front" || mName == "pop_front"
+                || mName == "push" || mName == "pop" || mName == "emplace"
+                || mName == "try_emplace" || mName == "insert_or_assign"
+                || mName == "clear" || mName == "insert" || mName == "erase"
+                || mName == "resize" || mName == "reserve" || mName == "shrink_to_fit"
+                || mName == "swap" || mName == "assign" || mName == "append"
+                || mName == "reset"
+            );
             if(const ClassDecl* targetCls = m_symbols.findClass(objType)){
                 targetOwnerCls = targetCls;
-                targetCallable = findClassMethod(*targetCls, mName, &callArgCount, recvIsConst, ownerClass != targetCls);
+                targetCallable = findClassMethod(*targetCls, mName, &callArgCount, recvIsConst, ownerClass != targetCls, &argTypeHints, &argIsMutHints);
                 if(targetCallable){
                     if(ownerClass != targetCls && targetCallable->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot call 'private' or 'protected' method outside of its declaring class");
@@ -325,16 +342,24 @@ b8 TypeChecker::checkCallExpr(
                         ? m_symbols.substituteTypeParams(*field->type, targetCls->templateParams, recvTypeRef->templateArgs)
                         : field->type;
                     invokedFuncType = m_symbols.unwrapTypeAlias(ft);
+                    if(ft && (!invokedFuncType || !invokedFuncType->isFuncType) && !findTemplateParam(ownerClass, &method, ft->name)){
+                        reportError(errors, expr.span, "class member field is not a callable function");
+                        ok = false;
+                    }
                 }
             }
             else if(recvTypeRef && m_symbols.findInterface(objType)){
-                targetCallable = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount);
+                targetCallable = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, &argTypeHints, &argIsMutHints);
+                if(!targetCallable){
+                    reportError(errors, expr.span, "unknown method on interface");
+                    ok = false;
+                }
             }
             else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, objType)){
                 for(const TypeRef* boundRef : tp->interfaceBounds){
                     if(!boundRef)
                         continue;
-                    if(const MethodDecl* boundMethod = m_symbols.findInterfaceMethod(*boundRef, mName, &callArgCount)){
+                    if(const MethodDecl* boundMethod = m_symbols.findInterfaceMethod(*boundRef, mName, &callArgCount, 0u, &argTypeHints, &argIsMutHints)){
                         targetCallable = boundMethod;
                         break;
                     }
@@ -345,8 +370,15 @@ b8 TypeChecker::checkCallExpr(
                 }
             }
             else if(IsNonThreadSafeContainer(objType) && m_parallelDepth > 0u && isMutatingContainerOp){
-                reportError(errors, expr.span, "mutating non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers");
-                ok = false;
+                b8 isTaskLocalContainer = false;
+                if(expr.lhs->lhs->kind == ExprKind::Identifier){
+                    if(const ScopedVarInfo* recvLocal = findScopedVar(scope, expr.lhs->lhs->text))
+                        isTaskLocalContainer = (recvLocal->declaredParallelDepth == m_parallelDepth);
+                }
+                if(!isTaskLocalContainer){
+                    reportError(errors, expr.span, "mutating non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers");
+                    ok = false;
+                }
             }
 
             if((targetCallable && !targetCallable->isConst) || isMutatingContainerOp){
@@ -375,14 +407,27 @@ b8 TypeChecker::checkCallExpr(
     if(callRetRefMode != ParamPassingMode::None)
         expr.derefNotNull = true;
 
-    if(isMutationTarget && callReturnType){
-        if(callRetRefMode == ParamPassingMode::In){
-            reportError(errors, expr.span, "cannot mutate 'in' parameter or read-only borrow");
-            ok = false;
-        }
-        else if(callRetRefMode == ParamPassingMode::None){
+    if(isMutationTarget){
+        const b8 isCtorOrTypeConstruction = (targetCallable && targetCallable->isConstructor)
+            || (!targetCallable && !localCallable && expr.lhs && expr.lhs->kind == ExprKind::Identifier && (
+                m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.lhs->text)) != nullptr
+                || SymbolTable::isSimdType(m_symbols.resolveBaseTypeName(expr.lhs->text))
+                || SymbolTable::isArenaBackedContainer(m_symbols.resolveBaseTypeName(expr.lhs->text))
+                || m_symbols.isSelfDefaultedType(m_symbols.resolveBaseTypeName(expr.lhs->text))
+            ));
+        if(isCtorOrTypeConstruction){
             reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
             ok = false;
+        }
+        else if(callReturnType){
+            if(callRetRefMode == ParamPassingMode::In){
+                reportError(errors, expr.span, "cannot mutate 'in' parameter or read-only borrow");
+                ok = false;
+            }
+            else if(callRetRefMode == ParamPassingMode::None){
+                reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
+                ok = false;
+            }
         }
     }
 

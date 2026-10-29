@@ -192,42 +192,18 @@ void AppendIntSimdLaneExtract(
 }
 
 [[nodiscard]] MStringView MapBuiltinMathFunction(const MStringView name)noexcept{
-    if(name == "min") return "::Min";
-    if(name == "max") return "::Max";
-    if(name == "abs") return "::Abs";
-    if(name == "clamp") return "::Clamp";
-    if(name == "floor") return "::Floor";
-    if(name == "ceil") return "::Ceil";
-    if(name == "round") return "::Round";
-    if(name == "sqrt") return "::Sqrt";
-    if(name == "rsqrt") return "::VectorReciprocalSqrt";
-    if(name == "lerp") return "::VectorLerp";
-    if(name == "dot") return "::Vector4Dot";
-    if(name == "cross") return "::Vector3Cross";
-    if(name == "length") return "::Vector4Length";
-    if(name == "lengthSq") return "::Vector4LengthSq";
-    if(name == "normalize") return "::Vector4Normalize";
-    if(name == "mul") return "::MatrixMultiply";
-    if(name == "transpose") return "::MatrixTranspose";
-    if(name == "inverse") return "::MatrixInverse";
-    if(name == "sin") return "::Sin";
-    if(name == "cos") return "::Cos";
-    if(name == "tan") return "::Tan";
-    if(name == "isFinite") return "::IsFinite";
-    if(name == "divideUp") return "::DivideUp";
+#define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule) \
+    if(name == adhdName) return cppExportName;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_FUNCTION
     return {};
 }
 
 [[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(const MStringView callee, const b8 isDouble)noexcept{
-    if(callee == "abs") return isDouble ? "::VectorDoubleAbs(" : "::VectorAbs(";
-    if(callee == "floor") return isDouble ? "::VectorDoubleFloor(" : "::VectorFloor(";
-    if(callee == "ceil") return isDouble ? "::VectorDoubleCeiling(" : "::VectorCeiling(";
-    if(callee == "round") return isDouble ? "::VectorDoubleRound(" : "::VectorRound(";
-    if(callee == "sqrt") return isDouble ? "::VectorDoubleSqrt(" : "::VectorSqrt(";
-    if(callee == "rsqrt") return isDouble ? "::VectorDoubleReciprocalSqrt(" : "::VectorReciprocalSqrt(";
-    if(callee == "sin") return isDouble ? "::VectorDoubleSin(" : "::VectorSin(";
-    if(callee == "cos") return isDouble ? "::VectorDoubleCos(" : "::VectorCos(";
-    if(callee == "tan") return isDouble ? "::VectorDoubleTan(" : "::VectorTan(";
+#define NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC(adhdName, floatIntrinsicPrefix, doubleIntrinsicPrefix) \
+    if(callee == adhdName) return isDouble ? doubleIntrinsicPrefix : floatIntrinsicPrefix;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC
     return {};
 }
 

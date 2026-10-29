@@ -262,19 +262,10 @@ b8 TypeChecker::checkCallExpr(
             if(!targetCallable && !localCallable){
                 const MStringView fnName = expr.lhs->text;
                 usize expectedBuiltinArity = 0u;
-                if(fnName == "abs" || fnName == "floor" || fnName == "ceil" || fnName == "round"
-                    || fnName == "sqrt" || fnName == "rsqrt" || fnName == "length" || fnName == "lengthSq"
-                    || fnName == "normalize" || fnName == "transpose" || fnName == "inverse"
-                    || fnName == "sin" || fnName == "cos" || fnName == "tan" || fnName == "isFinite")
-                {
-                    expectedBuiltinArity = 1u;
-                }
-                else if(fnName == "min" || fnName == "max" || fnName == "dot" || fnName == "cross" || fnName == "mul" || fnName == "divideUp"){
-                    expectedBuiltinArity = 2u;
-                }
-                else if(fnName == "clamp" || fnName == "lerp"){
-                    expectedBuiltinArity = 3u;
-                }
+#define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule) \
+                if(fnName == adhdName) expectedBuiltinArity = arity;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_FUNCTION
                 if(expectedBuiltinArity > 0u && callArgCount != expectedBuiltinArity){
                     reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
                     ok = false;

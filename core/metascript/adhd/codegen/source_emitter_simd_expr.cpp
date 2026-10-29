@@ -345,7 +345,12 @@ void SourceEmitter::emitSimdRegExpr(
                 return;
             }
 
-            if(isInt && (callee == "min" || callee == "max" || callee == "clamp" || callee == "abs")){
+            b8 isIntFallbackCallee = false;
+#define NWB_ADHD_EXPORT_SIMD_INT_FALLBACK(adhdName) \
+            if(callee == adhdName) isIntFallbackCallee = true;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SIMD_INT_FALLBACK
+            if(isInt && isIntFallbackCallee){
                 const MStringView regType = SimdRegisterCppType(simdType);
                 const MStringView laneType = IntSimdLaneType(simdType);
                 const MStringView rawWordType = IntSimdRawWordType(isDouble);
@@ -385,27 +390,15 @@ void SourceEmitter::emitSimdRegExpr(
                 return;
             }
 
-            if(callee == "min" || callee == "max" || callee == "clamp"){
-                if(callee == "min")
-                    out.append(isDouble ? "::VectorDoubleMin(" : "::VectorMin(");
-                else if(callee == "max")
-                    out.append(isDouble ? "::VectorDoubleMax(" : "::VectorMax(");
-                else
-                    out.append(isDouble ? "::VectorDoubleClamp(" : "::VectorClamp(");
+            const MStringView unaryIntrinsic = MapSimdUnaryFloatIntrinsic(callee, isDouble);
+            if(!unaryIntrinsic.empty()){
+                out.append(unaryIntrinsic.data(), unaryIntrinsic.size());
                 for(usize i = 0u; i < expr.arguments.size(); ++i){
                     if(i > 0u)
                         out.append(", ");
                     if(expr.arguments[i])
                         emitSimdRegExpr(out, *expr.arguments[i], simdType);
                 }
-                out.push_back(')');
-                return;
-            }
-            const MStringView unaryIntrinsic = MapSimdUnaryFloatIntrinsic(callee, isDouble);
-            if(!unaryIntrinsic.empty()){
-                out.append(unaryIntrinsic.data(), unaryIntrinsic.size());
-                if(!expr.arguments.empty() && expr.arguments[0])
-                    emitSimdRegExpr(out, *expr.arguments[0], simdType);
                 out.push_back(')');
                 return;
             }
@@ -426,19 +419,21 @@ void SourceEmitter::emitSimdRegExpr(
                 out.push_back(')');
                 return;
             }
-            if(callee == "cross" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+            MStringView laneVectorSuffix;
+            u32 maxVectorLanes = 4u;
+#define NWB_ADHD_EXPORT_SIMD_LANE_VECTOR_INTRINSIC(adhdName, laneIntrinsicSuffix, maxLanes) \
+            if(callee == adhdName){ laneVectorSuffix = laneIntrinsicSuffix; maxVectorLanes = maxLanes; }
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SIMD_LANE_VECTOR_INTRINSIC
+            if(!laneVectorSuffix.empty() && !expr.arguments.empty() && expr.arguments[0]){
                 const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0]);
-                AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes == 2u ? 2u : 3u, "Cross");
-                emitSimdRegExpr(out, *expr.arguments[0], simdType);
-                out.append(", ");
-                emitSimdRegExpr(out, *expr.arguments[1], simdType);
-                out.push_back(')');
-                return;
-            }
-            if(callee == "normalize" && !expr.arguments.empty() && expr.arguments[0]){
-                const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0]);
-                AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "Normalize");
-                emitSimdRegExpr(out, *expr.arguments[0], simdType);
+                AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes > maxVectorLanes ? maxVectorLanes : effLanes, laneVectorSuffix);
+                for(usize i = 0u; i < expr.arguments.size(); ++i){
+                    if(i > 0u)
+                        out.append(", ");
+                    if(expr.arguments[i])
+                        emitSimdRegExpr(out, *expr.arguments[i], simdType);
+                }
                 out.push_back(')');
                 return;
             }
@@ -481,12 +476,6 @@ void SourceEmitter::emitSimdRegExpr(
                 }
                 out.append(isDouble ? "::MatrixDoubleTranspose(" : "::MatrixTranspose(");
                 emitSimdRegExpr(out, arg0, simdType);
-                out.push_back(')');
-                return;
-            }
-            if(callee == "inverse" && !expr.arguments.empty() && expr.arguments[0]){
-                out.append(isDouble ? "::MatrixDoubleInverse(nullptr, " : "::MatrixInverse(nullptr, ");
-                emitSimdRegExpr(out, *expr.arguments[0], simdType);
                 out.push_back(')');
                 return;
             }

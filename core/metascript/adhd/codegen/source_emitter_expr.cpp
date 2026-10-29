@@ -190,7 +190,12 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     case ExprKind::Call:{
         if(expr.lhs && expr.lhs->kind == ExprKind::Identifier){
             const MStringView callee = expr.lhs->text;
-            if((callee == "dot" || callee == "length" || callee == "lengthSq")
+            MStringView scalarReductionSuffix;
+#define NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION(adhdName, laneIntrinsicSuffix) \
+            if(callee == adhdName) scalarReductionSuffix = laneIntrinsicSuffix;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION
+            if(!scalarReductionSuffix.empty()
                 && !expr.arguments.empty() && expr.arguments[0]
                 && IsRegisterPromotableSimdType(expr.arguments[0]->resolvedSimdType))
             {
@@ -198,19 +203,14 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
                 const b8 isDouble = IsDoubleSimdType(argSimd);
                 const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0]);
                 out.append(isDouble ? "::VectorDoubleGetX(" : "::VectorGetX(");
-                if(callee == "dot"){
-                    AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "Dot");
-                    emitSimdRegExpr(out, *expr.arguments[0], argSimd);
-                    out.append(", ");
-                    if(expr.arguments.size() > 1u && expr.arguments[1])
-                        emitSimdRegExpr(out, *expr.arguments[1], argSimd);
-                    out.append("))");
+                AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, scalarReductionSuffix);
+                for(usize i = 0u; i < expr.arguments.size(); ++i){
+                    if(i > 0u)
+                        out.append(", ");
+                    if(expr.arguments[i])
+                        emitSimdRegExpr(out, *expr.arguments[i], argSimd);
                 }
-                else{
-                    AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, callee == "length" ? "Length" : "LengthSq");
-                    emitSimdRegExpr(out, *expr.arguments[0], argSimd);
-                    out.append("))");
-                }
+                out.append("))");
                 break;
             }
             if(callee == "lerp" && expr.arguments.size() == 3u

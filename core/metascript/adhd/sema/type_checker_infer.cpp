@@ -122,16 +122,25 @@ MStringView TypeChecker::inferExprTypeName(
             }
             if(!expr.arguments.empty() && expr.arguments[0]){
                 const MStringView fnName = expr.lhs->text;
-                if(fnName == "isFinite")
+                u8 returnRule = 0u;
+                constexpr u8 s_RulePromoteSimd = 1u;
+                constexpr u8 s_RuleLaneScalar = 2u;
+                constexpr u8 s_RuleMatrixMultiply = 3u;
+                constexpr u8 s_RuleBool = 4u;
+#define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, rule) \
+                if(fnName == adhdName) returnRule = s_Rule##rule;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_FUNCTION
+                if(returnRule == s_RuleBool)
                     return "b8";
-                if(fnName == "dot" || fnName == "length" || fnName == "lengthSq"){
+                if(returnRule == s_RuleLaneScalar){
                     const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
                     u32 simdLanes = 0u;
                     if(SymbolTable::isSimdVectorType(argType, simdLanes))
                         return argType.substr(0u, 3u);
                     return argType;
                 }
-                if(fnName == "mul"){
+                if(returnRule == s_RuleMatrixMultiply){
                     const MStringView lhsT = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
                     if(expr.arguments.size() == 2u && expr.arguments[1]){
                         const MStringView rhsT = inferExprTypeName(ownerClass, method, *expr.arguments[1], scope);
@@ -141,14 +150,7 @@ MStringView TypeChecker::inferExprTypeName(
                     }
                     return lhsT;
                 }
-                if(fnName == "min" || fnName == "max" || fnName == "abs" || fnName == "clamp"
-                    || fnName == "lerp" || fnName == "sqrt" || fnName == "rsqrt"
-                    || fnName == "floor" || fnName == "ceil" || fnName == "round"
-                    || fnName == "sin" || fnName == "cos" || fnName == "tan"
-                    || fnName == "cross" || fnName == "normalize"
-                    || fnName == "transpose" || fnName == "inverse"
-                    || fnName == "divideUp")
-                {
+                if(returnRule == s_RulePromoteSimd){
                     for(const Expr* arg : expr.arguments){
                         if(!arg)
                             continue;

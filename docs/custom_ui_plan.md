@@ -4,7 +4,7 @@ The engine-owned UI toolkit lives under `impl/ecs_ui/toolkit/`, with its ECS/run
 
 The stock controls include windows, panels, labels, separators, buttons, checkboxes, keyed lists, combo/searchable combo boxes, edit boxes, numeric editors, text areas, popups/modals, tooltips, context menus, radio groups, sliders, progress bars, and images. Native detached windows, docking, rich text, touch/pen, a full accessibility platform bridge, paragraph bidi/RTL editing, automatic wrapping, and generic variable-height scrolling require separate designs. Keep semantic roles, labels, values, and keyboard actions in the widget model. Platform capability reporting and native qualification determine which OS behavior is available.
 
-Current domain READMEs define detailed public APIs: [CPU toolkit](../impl/ecs_ui/toolkit/README.md), [ECS UI](../impl/ecs_ui/README.md), [OS services](../core/os/README.md), and [skin assets](../impl/assets_ui_skin/README.md). Recorded measurement and qualification evidence is in the separate [custom UI report](reports/custom_ui_measurement_and_qualification_report.md).
+Current domain READMEs define detailed public APIs: [CPU toolkit](../impl/ecs_ui/toolkit/README.md), [ECS UI](../impl/ecs_ui/README.md), [OS services](../core/os/README.md), and [skin assets](../impl/assets_ui_skin/README.md). Recorded measurement and qualification evidence lives in the separate performance workloads under [tests/performance/ui_input](../tests/performance/ui_input/README.md), not in this plan.
 
 ## Ownership and data flow
 

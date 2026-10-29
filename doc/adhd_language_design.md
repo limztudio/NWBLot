@@ -92,7 +92,7 @@
   - When a value can be absent or an operation can fail, code must explicitly use:
     - **`Optional<T>`** for optional values/lookups (`opt.hasValue()`, `opt.value()`).
     - **`Expected<T, E>`** (`global/expected.h`) for fallible results.
-    - **`AssetRef<T>`** (`core/assets/asset_ref.h`, `.valid()`) for asset references.
+    - **`AssetRef<T>`** (`core/assets/ref.h`, `.valid()`) for asset references.
 
 ---
 
@@ -278,7 +278,7 @@
   - Single-lane access via `.x`, `.y`, `.z`, `.w` and `.r`, `.g`, `.b`, `.a`.
   - Shader-style multi-lane swizzling (e.g., `v.xyz`, `v.zyx`, `v.xxxx`, `v.xyzw`, `v.rgba`) is supported and lowers directly to `global/simd/vector_swizzle.h`.
 - **Built-In Math & SIMD Intrinsics (No `native` Block Required)**:
-  - Scalar & SIMD vector/matrix intrinsics are available out of the box and lower directly to `global/math.h` and `global/simdmath.h`:
+  - Scalar & SIMD vector/matrix intrinsics are available out of the box and lower directly to `global/simplemath.h` and `global/simdmath.h`:
     - **Scalar & Vector**: `abs`, `min`, `max`, `clamp`, `lerp`, `sqrt`, `rsqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `round`
     - **SIMD Vector & Matrix**: `dot(a, b)`, `cross(a, b)`, `length(v)`, `lengthSq(v)`, `normalize(v)`, `mul(a, b)`, `transpose(m)`, `inverse(m)`
 
@@ -535,6 +535,7 @@ Every source and header file is strictly split by domain responsibility so that 
    - `value.*`, `operation_validator.*`, `expression_parser.*`, `statement_parser.*`, `parser.*`: `.nwb` document data evaluation.
 
 2. **`adhd` Language & Compiler Library (`core/metascript/adhd/`)**:
+   - `compiler.h` / `compiler.cpp`: Top-level `Compiler` pipeline entry (preprocess, parse, type-check, layout, emit); `export_functions.h` declares the X-macro exported-function table consumed by the semantic and SIMD emitters.
    - **AST (`core/metascript/adhd/ast/`)**:
      - `ast_common.h`: Source spans, attributes, access specifiers, and `in` / `mut` / `const` modifiers.
      - `ast_types.h`: Scalar, SIMD (`f32x4`, `f32x4x4`), `Func<...>`, `enum<SizeType>`, and template bound (`<T : IBar, const usize N>`) nodes.
@@ -555,8 +556,8 @@ Every source and header file is strictly split by domain responsibility so that 
    - **Code & Reflection Generation (`core/metascript/adhd/codegen/`)**:
      - `cpp_type_emitter.h` / `cpp_type_emitter.cpp`: Shared C++ type emission, arena-parameterized container mapping, and identifier/literal formatting.
      - `simd_binding_analyzer.h` / `simd_codegen_utils.cpp` / `simd_binding_analyzer.cpp`: SIMD intrinsic/type mapping and block-scoped SIMD register binding analysis.
-     - `header_emitter.h` / `header_emitter.cpp` / `header_emitter_decl.cpp`: Emits `.adhd.h` (`class ... final`, `namespace EnumName`, `NWB_DEFINE_ARENA_ALLOCATOR`, inline templates).
-     - `source_emitter.h` / `source_emitter.cpp` / `source_emitter_expr.cpp` / `source_emitter_parallel.cpp` / `source_emitter_simd_expr.cpp` / `source_emitter_simd_stmt.cpp`: Emits `.adhd.cpp` method bodies, `ScratchArena<>` injection, `CpuTaskScheduler` lowering for `parallel_for` / `parallel`, SIMD register lowering, and `native` blocks.
+     - `header_emitter.h` / `header_emitter.cpp` / `header_emitter_decl.cpp` / `header_emitter_class.cpp`: Emits `.adhd.h` (`class ... final`, `namespace EnumName`, `NWB_DEFINE_ARENA_ALLOCATOR`, inline templates).
+     - `source_emitter.h` / `source_emitter.cpp` / `source_emitter_expr.cpp` / `source_emitter_stmt.cpp` / `source_emitter_parallel.cpp` / `source_emitter_simd_expr.cpp` / `source_emitter_simd_stmt.cpp`: Emits `.adhd.cpp` method bodies, statement lists, `ScratchArena<>` injection, `CpuTaskScheduler` lowering for `parallel_for` / `parallel`, SIMD register lowering, and `native` blocks.
      - `reflection_emitter.h` / `reflection_emitter.cpp` / `reflection_emitter_nwb.cpp`: Emits `[serialize]` 1-byte packed binary serialization, `.nwb` property parsing, `AssetRef<T>` dependency extraction, and `[asset("...")]` registration.
 
 3. **CLI Executable (`pipeline/adhd_compiler/`)**:

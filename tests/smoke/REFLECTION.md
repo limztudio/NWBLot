@@ -38,7 +38,7 @@ The accepted-token measurements establish bounded hardware work and lower
 hardware ray counts in the floor fixture. They do not establish a GPU speedup.
 
 The public `ReflectionSettings` contract is declared in
-`impl/ecs_render/reflection/settings.h` and applied through
+`impl/ecs_render/reflection/settings.adhd` and applied through
 `RendererSystem::setReflectionSettings`. Material surface hooks explicitly supply
 RGB specular F0 and perceptual roughness. These values have their own G-buffer and
 primary-glass capture targets; project-defined BXDF `param0/param1` retain their

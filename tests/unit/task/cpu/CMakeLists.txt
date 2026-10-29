@@ -1,26 +1,19 @@
 nwb_declare_gtest_executable(nwb_cpu_task_tests)
 target_sources(nwb_cpu_task_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_profiling_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_cancellation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_range_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_wait_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_progress_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_scheduler_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_scheduler_cancellation_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_scheduler_rejection_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_cleanup_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_fanin_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_submission_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_mpmc_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.c"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
 target_link_libraries(nwb_cpu_task_tests PRIVATE nwb_cpu_task nwb_common)
 
 set(_nwb_cpu_task_tests_timeout_seconds 120)
 set_tests_properties(nwb_cpu_task_tests PROPERTIES TIMEOUT ${_nwb_cpu_task_tests_timeout_seconds})
 unset(_nwb_cpu_task_tests_timeout_seconds)
-
-target_sources(nwb_cpu_task_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/process_exit.h"
-    "${CMAKE_CURRENT_LIST_DIR}/task_wait.h"
-    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_scheduler_test_support.h"
-)

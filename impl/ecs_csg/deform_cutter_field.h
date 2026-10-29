@@ -5,7 +5,10 @@
 #pragma once
 
 
-#include "deform_types.h"
+#include "../global.h"
+
+#include <impl/ecs_csg/deform_types.adhd.h>
+#include <core/alloc/scratch.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,20 +21,6 @@ NWB_IMPL_BEGIN
 
 
 // Owns cutter classification and per-vertex distances with the shared epsilon snap; walls and caps agree.
-namespace CsgDeformShapeKind{
-    enum Enum : u8{
-        Invalid,
-        Plane,
-        Box,
-        Sphere,
-        Capsule,
-    };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class CsgDeformCutterField final : NoCopy{
 public:
     [[nodiscard]] static CsgDeformShapeKind::Enum ClassifyDeformShape(const Name& shapeType)noexcept;
@@ -55,4 +44,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

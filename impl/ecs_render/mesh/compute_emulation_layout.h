@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/assets_mesh/payload_types.h>
+#include <impl/assets_mesh/payload_types.adhd.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 
 

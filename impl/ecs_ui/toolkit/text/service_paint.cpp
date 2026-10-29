@@ -5,7 +5,7 @@
 #include "service.h"
 #include "atlas.h"
 #include "glyph_visibility.h"
-#include "../layout/validation.h"
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
 
 #include <core/alloc/scratch.h>
 

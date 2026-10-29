@@ -5,8 +5,9 @@
 #pragma once
 
 
-#include "style.h"
-#include "../input/input.h"
+#include "../paint.h"
+#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
+#include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -41,7 +41,7 @@ protected:
 
 
     [[nodiscard]] bool shapeCurrent(){
-        return m_view.snapshot(m_model) && m_view.shape(m_text, { {}, 14.0f }) == TextLayoutStatus::Success;
+        return m_view.snapshot(m_model) && m_view.shape(m_text, { .fontSize = 14.0f }) == TextLayoutStatus::Success;
     }
 
     [[nodiscard]] Expected<EditNavigationResult> resolve(const EditNavigationDirection::Enum direction, const f32 viewportHeight = 0.0f){
@@ -338,7 +338,7 @@ TEST_F(UiTextAreaNavigationTests, ExplicitHangulPolicyKeepsVerticalTargetAligned
     ASSERT_TRUE(installKoreanFallback());
     ASSERT_TRUE(m_model.setText("\xE1\x84\x92\xE1\x85\xA1\xE1\x86\xAB\naaa"));
     ASSERT_TRUE(m_model.setSelection(9u, 9u));
-    const ShapeRequest request{ {}, 14.0f, TextDirection::LeftToRight, TextScriptTag('H', 'a', 'n', 'g'), s_KoreanLanguage };
+    const ShapeRequest request{ {}, s_KoreanLanguage, 14.0f, TextScriptTag('H', 'a', 'n', 'g'), TextDirection::LeftToRight };
     EditBoxView visual(m_arena);
     ASSERT_TRUE(visual.snapshot(m_model));
     ASSERT_EQ(visual.shape(m_text, request), TextLayoutStatus::Success);

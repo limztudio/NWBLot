@@ -11,7 +11,7 @@
 #include <impl/ecs_render/raytrace/hardware_transparent_shadow_state.h>
 #include <impl/ecs_render/raytrace/soft_shadow_resolve_state.h>
 #include <impl/ecs_render/raytrace/software_transparent_sampling.h>
-#include <impl/ecs_render/shadow/transparent_sampling_history.h>
+#include <impl/ecs_render/shadow/transparent_sampling_history.adhd.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 

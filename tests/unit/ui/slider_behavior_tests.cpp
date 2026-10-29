@@ -3,7 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/widgets/slider.h>
-#include <impl/ecs_ui/toolkit/widgets/slider_style.h>
+#include <impl/ecs_ui/toolkit/widgets/slider_style.adhd.h>
 
 #include <global/simdmath.h>
 #include <global/simplemath.h>

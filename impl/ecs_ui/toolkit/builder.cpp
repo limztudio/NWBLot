@@ -143,7 +143,7 @@ bool Builder::setTextShaping(const u32 scriptTag, const StringView language){
         m_context.fail();
         return false;
     }
-    const ShapeRequest request{ {}, s_TextDefaultFontSize, TextDirection::LeftToRight, scriptTag, language };
+    const ShapeRequest request{ {}, language, s_TextDefaultFontSize, scriptTag, TextDirection::LeftToRight };
     if(ValidateTextRequest(request, false) != TextLayoutStatus::Success)
         return false;
     m_textLanguage.assign(language.data(), language.size());
@@ -233,7 +233,7 @@ void Builder::setPointerBusy(const bool busy)noexcept{
 }
 
 ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize)const noexcept{
-    return { text, fontSize, TextDirection::LeftToRight, m_textScriptTag, StringView(m_textLanguage.data(), m_textLanguage.size()) };
+    return { text, StringView(m_textLanguage.data(), m_textLanguage.size()), fontSize, m_textScriptTag, TextDirection::LeftToRight };
 }
 
 bool Builder::beginContainer(const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){

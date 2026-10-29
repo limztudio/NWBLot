@@ -189,12 +189,12 @@ protected:
         if(!accepted)
             return false;
         const Point point = Center(accepted->rectangle);
-        return send({ .type = InputEventType::PointerMove, .position = point }).hover == anchor(parent);
+        return send({ .position = point , .type = InputEventType::PointerMove }).hover == anchor(parent);
     }
 
     void secondaryClick(const Point& point){
-        EXPECT_TRUE(send({ .type = InputEventType::SecondaryDown, .position = point }).pointerConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::SecondaryUp, .position = point }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryDown }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryUp }).pointerConsumed);
     }
 
     [[nodiscard]] bool openBySecondary(const u64 generation){

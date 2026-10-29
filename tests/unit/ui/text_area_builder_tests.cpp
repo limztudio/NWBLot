@@ -102,11 +102,11 @@ TEST_F(UiTextAreaBuilderTests, RawPointerCapturePersistsOutsideWithoutGestureRec
     ASSERT_TRUE(area);
     const SIMDVectorSingle originValue = VectorAdd(VectorSet(area->rectangle.x, area->rectangle.y, 0.0f, 0.0f), VectorReplicate(10.0f));
     const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
     EXPECT_EQ(m_context.input().capture(), widget);
-    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 780.0f, 580.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 780.0f, 580.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
     EXPECT_EQ(m_context.input().capture(), widget);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 780.0f, 580.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 780.0f, 580.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FALSE(m_context.input().consumePointerGesture(widget, area->declarationGeneration));
 }
@@ -125,9 +125,9 @@ TEST_F(UiTextAreaBuilderTests, DisabledAreaRetainsAPointerBarrierAndDiscardsHost
     const SIMDVectorSingle pointValue = VectorAdd(VectorSet(area->rectangle.x, area->rectangle.y, 0.0f, 0.0f), VectorReplicate(5.0f));
     const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
     EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_TextAreaPanelKey)));
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
     EXPECT_FALSE(m_context.input().focus().valid());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     EXPECT_FALSE(m_state.focused());
     EXPECT_EQ(m_model.text(), "first\nsecond");
     EXPECT_FALSE(m_model.canUndo());
@@ -207,7 +207,7 @@ TEST_F(UiTextAreaBuilderTests, BorrowedPreferredColumnSurvivesShortLineThenRetur
     ASSERT_TRUE(m_model.setSelection(5u, 5u));
     EditBoxView reference(m_arena);
     ASSERT_TRUE(reference.snapshot(m_model));
-    ASSERT_EQ(reference.shape(m_text, { {}, 14.0f }), TextLayoutStatus::Success);
+    ASSERT_EQ(reference.shape(m_text, { .fontSize = 14.0f }), TextLayoutStatus::Success);
     const auto caret = reference.caretGeometry().caretRect(reference.displayCaret());
     ASSERT_TRUE(caret);
     m_host.seedColumn = true;

@@ -1,0 +1,61 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Point{
+    public f32 x = 0.0f;
+    public f32 y = 0.0f;
+}
+
+class Rect{
+    public f32 x = 0.0f;
+    public f32 y = 0.0f;
+    public f32 width = 0.0f;
+    public f32 height = 0.0f;
+}
+
+class Insets{
+    public f32 left = 0.0f;
+    public f32 top = 0.0f;
+    public f32 right = 0.0f;
+    public f32 bottom = 0.0f;
+}
+
+// Input colors use linear RGB and straight alpha; frozen vertices use premultiplied alpha.
+class Color{
+    public f32 r = 1.0f;
+    public f32 g = 1.0f;
+    public f32 b = 1.0f;
+    public f32 a = 1.0f;
+}
+
+class DisplayMetrics{
+    public f32 logicalWidth = 0.0f;
+    public f32 logicalHeight = 0.0f;
+    public f32 pixelScaleX = 1.0f;
+    public f32 pixelScaleY = 1.0f;
+}
+
+enum<u8> PaintMaterial{
+    enum Solid,
+    enum Skin,
+    enum Glyph,
+    enum SdfGlyph,
+    enum Image,
+}
+
+class DrawCommand{
+    public Rect clip;
+    public u32 firstIndex = 0u;
+    public u32 indexCount = 0u;
+    public u32 glyphPageIndex = 0xffffffffu;
+    public u32 sdfPageIndex = 0xffffffffu;
+    public u32 sdfChannel = 0u;
+    // Base paint is layer zero; higher layers render later without changing owned index or image bindings.
+    public u32 layer = 0u;
+    public u32 textureImageIndex = 0xffffffffu;
+    public PaintMaterial material = PaintMaterial::Enum::Solid;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

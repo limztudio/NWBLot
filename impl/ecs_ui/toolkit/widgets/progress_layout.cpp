@@ -5,7 +5,7 @@
 #include "progress_layout.h"
 
 #include "progress.h"
-#include "progress_style.h"
+#include <impl/ecs_ui/toolkit/widgets/progress_style.adhd.h>
 
 #include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>

@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class WidgetId{
+    public u64 value = 0u;
+
+    public bool valid()const{
+        return this.value != 0u;
+    }
+
+    public bool operator==(in WidgetId rhs)const{
+        return this.value == rhs.value;
+    }
+
+    public bool operator!=(in WidgetId rhs)const{
+        return this.value != rhs.value;
+    }
+}
+
+// Root identity comes from the host; include its lifetime generation rather than iteration order or an address.
+class WidgetRoot{
+    public u64 value = 0u;
+    public u64 generation = 1u;
+
+    public bool operator==(in WidgetRoot rhs)const{
+        return this.value == rhs.value && this.generation == rhs.generation;
+    }
+
+    public bool operator!=(in WidgetRoot rhs)const{
+        return this.value != rhs.value || this.generation != rhs.generation;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

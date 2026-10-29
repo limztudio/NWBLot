@@ -65,11 +65,11 @@ TEST_F(UiEditPointerCaptureTests, ScrollbarGestureFocusCannotCollapseCrossLineSe
     const auto navigation = m_navigation.snapshot();
     const u64 revision = m_navigationModel.revision();
     const u64 selection = m_navigationModel.selectionGeneration();
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = { 185.0f, 62.0f } }));
+    ASSERT_TRUE(dispatch({ .position = { 185.0f, 62.0f } , .type = Ui::InputEventType::PrimaryDown}));
     EXPECT_EQ(m_context.input().focus(), m_widget.id);
     EXPECT_EQ(m_context.input().capture(), m_otherWidget.id);
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PointerMove, .position = { 450.0f, 180.0f } }));
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = { 450.0f, 180.0f } }));
+    ASSERT_TRUE(dispatch({ .position = { 450.0f, 180.0f } , .type = Ui::InputEventType::PointerMove}));
+    ASSERT_TRUE(dispatch({ .position = { 450.0f, 180.0f } , .type = Ui::InputEventType::PrimaryUp}));
     ASSERT_TRUE(navigationFrame());
     EXPECT_EQ(m_navigationModel.anchor(), 2u);
     EXPECT_EQ(m_navigationModel.caret(), 9u);
@@ -122,10 +122,10 @@ TEST_F(UiEditPointerCaptureTests, MainEditorCaptureStillClampsAnOutOfBoundsCross
     ASSERT_TRUE(m_navigationModel.setSelection(0u, 0u));
     ASSERT_TRUE(activateNavigation());
     ASSERT_TRUE(publishPart(true));
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = { 20.0f, 26.0f } }));
+    ASSERT_TRUE(dispatch({ .position = { 20.0f, 26.0f } , .type = Ui::InputEventType::PrimaryDown}));
     EXPECT_EQ(m_context.input().capture(), m_widget.id);
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PointerMove, .position = { 30.0f, 120.0f } }));
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = { 30.0f, 120.0f } }));
+    ASSERT_TRUE(dispatch({ .position = { 30.0f, 120.0f } , .type = Ui::InputEventType::PointerMove}));
+    ASSERT_TRUE(dispatch({ .position = { 30.0f, 120.0f } , .type = Ui::InputEventType::PrimaryUp}));
     ASSERT_TRUE(navigationFrame());
     EXPECT_EQ(m_navigationModel.anchor(), 1u);
     EXPECT_EQ(m_navigationModel.caret(), 8u);

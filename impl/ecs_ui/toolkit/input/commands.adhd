@@ -1,0 +1,71 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> InputCommand{
+    enum None,
+    enum FocusNext,
+    enum FocusPrevious,
+    enum Activate,
+    enum Accept,
+    enum Submit,
+    enum Cancel,
+    enum Left,
+    enum Right,
+    enum Up,
+    enum Down,
+    enum PageUp,
+    enum PageDown,
+    enum Home,
+    enum End,
+    enum WordLeft,
+    enum WordRight,
+    enum DocumentHome,
+    enum DocumentEnd,
+    enum Backspace,
+    enum Delete,
+    enum WordBackspace,
+    enum WordDelete,
+    enum SelectAll,
+    enum Copy,
+    enum Cut,
+    enum Paste,
+    enum Undo,
+    enum Redo,
+    enum Newline,
+    enum ContextMenu,
+}
+
+enum<u8> InputPhase{
+    enum Press,
+    enum Release,
+    enum Repeat,
+}
+
+// Adapters assign device and control identities; control zero is invalid.
+class InputSource{
+    public u64 device = 0u;
+    public u64 control = 0u;
+
+    public bool valid()const{
+        return this.control != 0u;
+    }
+
+    public bool operator==(in InputSource rhs)const{
+        return this.device == rhs.device && this.control == rhs.control;
+    }
+
+    public bool operator!=(in InputSource rhs)const{
+        return this.device != rhs.device || this.control != rhs.control;
+    }
+}
+
+class InputCommandIntent{
+    public InputCommand command = InputCommand::Enum::None;
+    public bool extend = false;
+    public bool edit = true;
+    public bool allowText = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

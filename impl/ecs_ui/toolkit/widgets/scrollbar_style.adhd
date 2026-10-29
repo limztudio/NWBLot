@@ -1,0 +1,30 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Color s_ScrollbarThumbColor = Color(0.35f, 0.40f, 0.48f, 1.0f);
+const Color s_ScrollbarDisabledColor = Color(0.25f, 0.28f, 0.32f, 1.0f);
+
+class ScrollbarStyle{
+    public Name track = Name("scroll.track");
+    public Name trackFallback = Name("panel.normal");
+    public Name thumb = Name("scroll.thumb");
+    public Name thumbHover = Name("button.hover");
+    public Name thumbPressed = Name("button.pressed");
+    public Name thumbDisabled = Name("button.disabled");
+    public Name thumbFallback = Name("button.normal");
+    public Color trackColor = s_StyleInsetColor;
+    public Color thumbColor = s_ScrollbarThumbColor;
+    public Color disabledColor = s_ScrollbarDisabledColor;
+    public f32 thickness = s_StyleScrollbarThickness;
+    public f32 minimumThumb = s_StyleScrollbarMinimumThumb;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

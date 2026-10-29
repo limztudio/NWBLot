@@ -302,14 +302,14 @@ protected:
     }
 
     void click(const Point& point){
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     }
 
     void drag(const Point& origin, const Point& destination){
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = destination }).pointerConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = destination }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = destination , .type = InputEventType::PointerMove }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = destination , .type = InputEventType::PrimaryUp }).pointerConsumed);
     }
 
     void press(const Core::Key::Enum value, const bool repeat = false, const bool shift = false){

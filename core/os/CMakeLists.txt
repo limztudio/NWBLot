@@ -1,18 +1,16 @@
 nwb_declare_static_library(nwb_os)
 target_sources(nwb_os PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/clipboard.h"
-    "${CMAKE_CURRENT_LIST_DIR}/clipboard_service.h"
-    "${CMAKE_CURRENT_LIST_DIR}/clipboard_service.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/clipboard_factory.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/clipboard_text.h"
-    "${CMAKE_CURRENT_LIST_DIR}/clipboard_text.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/text_input.h"
-    "${CMAKE_CURRENT_LIST_DIR}/text_input_service.h"
-    "${CMAKE_CURRENT_LIST_DIR}/text_input_service.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/text_input_events.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/text_input_factory.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/text_input_text.h"
-    "${CMAKE_CURRENT_LIST_DIR}/text_input_text.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.c"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
     "${CMAKE_CURRENT_LIST_DIR}/linux/x11/text_input_dispatch.h"
     "${CMAKE_CURRENT_LIST_DIR}/linux/x11/text_input_key_history.h"
     "${CMAKE_CURRENT_LIST_DIR}/linux/x11/text_input_key_history.cpp"
@@ -24,44 +22,37 @@ target_sources(nwb_os PRIVATE
 target_link_libraries(nwb_os PUBLIC nwb_alloc PRIVATE nwb_common)
 if(WIN32)
     target_sources(nwb_os PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/win32/clipboard_service.h"
-        "${CMAKE_CURRENT_LIST_DIR}/win32/clipboard_service.cpp"
-    )
-    target_sources(nwb_os PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/win32/input_message.h"
-        "${CMAKE_CURRENT_LIST_DIR}/win32/text_input.h"
-        "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_context.h"
-        "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_service.h"
-        "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_service.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_messages.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_context_messages.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_fallback.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_composition.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_preedit.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.c"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.cc"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.cxx"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.h"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.hh"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.hxx"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.hpp"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.ipp"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/*.ixx"
     )
     target_link_libraries(nwb_os PRIVATE user32 imm32)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(nwb_os PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/linux/x11/clipboard.h"
-        "${CMAKE_CURRENT_LIST_DIR}/linux/x11/clipboard_service.h"
-        "${CMAKE_CURRENT_LIST_DIR}/linux/x11/clipboard_service.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/linux/x11/clipboard_read.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/linux/x11/clipboard_owner.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/linux/x11/x11_checked.h"
-        "${CMAKE_CURRENT_LIST_DIR}/linux/x11/x11_checked.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/linux/pipe_io.h"
-        "${CMAKE_CURRENT_LIST_DIR}/linux/pipe_io.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.c"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.cc"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.cxx"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.h"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.hh"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.hxx"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.hpp"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.ipp"
+        "${CMAKE_CURRENT_LIST_DIR}/linux/*.ixx"
     )
     target_link_libraries(nwb_os PRIVATE nwb::x11)
     include("${CMAKE_CURRENT_LIST_DIR}/linux/text_input.cmake")
 
     if(TARGET nwb::wayland)
-        target_sources(nwb_os PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/linux/wayland/clipboard.h"
-            "${CMAKE_CURRENT_LIST_DIR}/linux/wayland/clipboard_service.h"
-            "${CMAKE_CURRENT_LIST_DIR}/linux/wayland/clipboard_service.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/linux/wayland/clipboard_protocol.cpp"
-        )
         target_link_libraries(nwb_os PRIVATE nwb::wayland)
         target_compile_definitions(nwb_os PRIVATE NWB_OS_WITH_WAYLAND=1)
         include("${CMAKE_CURRENT_LIST_DIR}/linux/wayland/primary_selection.cmake")

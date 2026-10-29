@@ -21,7 +21,7 @@
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
-#include <impl/assets_mesh/skin_types.h>
+#include <impl/assets_mesh/skin_types.adhd.h>
 #include <impl/assets_mesh/asset.h>
 
 #include <core/common/module.h>

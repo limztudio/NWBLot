@@ -121,8 +121,8 @@ protected:
     }
 
     void click(const Point& point){
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     }
 
 
@@ -345,8 +345,8 @@ TEST_F(UiBuilderTests, PreparedFrameTargetsStayInaccessibleUntilExactCommit){
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
     EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), id(s_ApplyKey));
     EXPECT_FALSE(m_context.input().hitTest({ 160.0f, 60.0f }).valid());
-    EXPECT_FALSE(send({ .type = InputEventType::PrimaryDown, .position = { 160.0f, 60.0f } }).pointerConsumed);
-    EXPECT_FALSE(send({ .type = InputEventType::PrimaryUp, .position = { 160.0f, 60.0f } }).pointerConsumed);
+    EXPECT_FALSE(send({ .position = { 160.0f, 60.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    EXPECT_FALSE(send({ .position = { 160.0f, 60.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     EXPECT_TRUE(m_context.input().actions().empty());
     EXPECT_FALSE(m_context.beginFrame(3u));
     EXPECT_FALSE(m_context.commitFrame(1u));
@@ -366,21 +366,21 @@ TEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmiss
     u64 generation = 1u;
     for(const i32 key : { Core::Key::Unknown, Core::Key::Enter, Core::Key::Space }){
         if(!m_context.input().focus().valid()){
-            EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Tab }).commandConsumed);
-            EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Tab }).commandConsumed);
+            EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyDown }).commandConsumed);
+            EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyUp }).commandConsumed);
         }
         ASSERT_EQ(m_context.input().focus(), id(s_ApplyKey));
         const bool pointer = key == Core::Key::Unknown;
-        const InputEvent down{ .type = pointer ? InputEventType::PrimaryDown : InputEventType::KeyDown, .position = point, .key = key };
-        const InputEvent up{ .type = pointer ? InputEventType::PrimaryUp : InputEventType::KeyUp, .position = point, .key = key };
+        const InputEvent down{ .position = point, .key = key , .type = pointer ? InputEventType::PrimaryDown : InputEventType::KeyDown};
+        const InputEvent up{ .position = point, .key = key , .type = pointer ? InputEventType::PrimaryUp : InputEventType::KeyUp};
         const InputRoutingResult held = send(down);
         EXPECT_TRUE(pointer ? held.pointerConsumed : held.commandConsumed);
         ASSERT_TRUE(begin(++generation));
         EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
         ASSERT_TRUE(finish());
         ASSERT_TRUE(m_context.commitFrame(generation));
-        EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Escape }).commandConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Escape }).commandConsumed);
+        EXPECT_TRUE(send({ .key = Core::Key::Escape , .type = InputEventType::KeyDown}).commandConsumed);
+        EXPECT_TRUE(send({ .key = Core::Key::Escape , .type = InputEventType::KeyUp}).commandConsumed);
         const InputRoutingResult released = send(up);
         EXPECT_TRUE(pointer ? released.pointerConsumed : released.commandConsumed);
         ASSERT_TRUE(begin(++generation));
@@ -389,11 +389,11 @@ TEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmiss
         ASSERT_TRUE(m_context.commitFrame(generation));
         EXPECT_TRUE(m_context.input().actions().empty());
     }
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Tab }).commandConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Tab }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyDown}).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyUp}).commandConsumed);
     ASSERT_EQ(m_context.input().focus(), id(s_ApplyKey));
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).commandConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown}).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp}).commandConsumed);
     ASSERT_TRUE(begin(++generation));
     EXPECT_TRUE(m_builder.button(s_ApplyKey, "Apply"));
     ASSERT_TRUE(finish());
@@ -406,21 +406,21 @@ TEST_F(UiBuilderTests, FocusTransferWhileButtonSubmitIsHeldCannotActivateEitherB
     EXPECT_FALSE(m_builder.button("second", "Second"));
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Tab }).commandConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Tab }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyDown }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyUp }).commandConsumed);
     ASSERT_EQ(m_context.input().focus(), id("first"));
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).commandConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Tab }).commandConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Tab }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyDown }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyUp }).commandConsumed);
     ASSERT_EQ(m_context.input().focus(), id("second"));
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp }).commandConsumed);
     ASSERT_TRUE(begin(2u));
     EXPECT_FALSE(m_builder.button("first", "First"));
     EXPECT_FALSE(m_builder.button("second", "Second"));
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).commandConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp }).commandConsumed);
     ASSERT_TRUE(begin(3u));
     EXPECT_FALSE(m_builder.button("first", "First"));
     EXPECT_TRUE(m_builder.button("second", "Second"));

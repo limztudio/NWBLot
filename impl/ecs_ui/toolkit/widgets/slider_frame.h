@@ -6,7 +6,7 @@
 
 
 #include "slider.h"
-#include "slider_style.h"
+#include <impl/ecs_ui/toolkit/widgets/slider_style.adhd.h>
 #include "../state/store.h"
 
 

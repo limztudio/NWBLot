@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/csg/types.adhd.h>
 #include <impl/ecs_render/components.adhd.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
@@ -26,29 +27,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr i32 s_CsgBoundsValidFlag = NWB_CSG_BOUNDS_VALID_FLAG;
-inline constexpr i32 s_CsgBoundsFiniteFlag = NWB_CSG_BOUNDS_FINITE_FLAG;
+static_assert(s_CsgBoundsValidFlag == NWB_CSG_BOUNDS_VALID_FLAG, "s_CsgBoundsValidFlag must match NWB_CSG_BOUNDS_VALID_FLAG");
+static_assert(s_CsgBoundsFiniteFlag == NWB_CSG_BOUNDS_FINITE_FLAG, "s_CsgBoundsFiniteFlag must match NWB_CSG_BOUNDS_FINITE_FLAG");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct CsgBoundsGpuData{
-    Float3Int minBounds = Float3Int(0.f, 0.f, 0.f, 0);
-    Float3Int maxBounds = Float3Int(0.f, 0.f, 0.f, 0);
-
-
-public:
-    [[nodiscard]] bool valid()const noexcept{ return (minBounds.w & s_CsgBoundsValidFlag) != 0; }
-
-    [[nodiscard]] bool finite()const noexcept{ return (minBounds.w & s_CsgBoundsFiniteFlag) != 0; }
-};
-
-using CsgReceiverCpuBounds = CsgBoundsGpuData;
-
-[[nodiscard]] inline bool CsgReceiverBoundsCanCull(const CsgReceiverCpuBounds& bounds)noexcept{
-    return bounds.valid() && bounds.finite();
-}
 
 struct CsgReceiverRangeGpuData{
     // The CSG shaders pack these four scalars as a single uint4 (rangeInfo):
@@ -75,30 +59,6 @@ struct CsgCutterGpuData{
     Float34 worldToShape = ::MatrixIdentity<Float34>();
     Float4 parameter0 = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
-};
-
-// CSG context is one global UniformBuffer entry; no pass binds it locally.
-struct CsgClipContextSlots{
-    u32 receiverRanges = 0u;
-    u32 cutters = 0u;
-    u32 materialTyped = 0u;
-    u32 meshInstances = 0u;
-    u32 deferredBindlessResources = 0u;
-    u32 intervalSampleState = 0u;
-    u32 padding0 = 0u;
-    u32 padding1 = 0u;
-};
-
-// Interval-sampling payload via CsgClipContextSlots; immutable frame blob when active.
-struct CsgIntervalSampleStateGpuData{
-    u32 workMinX = 0u;
-    u32 workMinY = 0u;
-    u32 workMaxX = 0u;
-    u32 workMaxY = 0u;
-    u32 meshViewHeapSlot = 0u;
-    u32 resourceSlotPadding0 = 0u;
-    u32 resourceSlotPadding1 = 0u;
-    u32 resourceSlotPadding2 = 0u;
 };
 
 static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 12u + sizeof(Float34) + sizeof(CsgBoundsGpuData), "CsgReceiverRangeGpuData layout must match the CSG shader");
@@ -182,11 +142,6 @@ public:
     }
 };
 
-struct CsgReceiverClipDrawInfo{
-    u32 cutterCount = 0u;
-    Name evaluatorVariant = s_NameNone;
-};
-
 struct CsgFrameGpuData{
     CsgReceiverRangeGpuDataVector receiverRanges;
     CsgCutterGpuDataVector cutters;
@@ -241,4 +196,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

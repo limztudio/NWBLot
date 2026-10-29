@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../id.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The host supplies value lifetimes; the router retains no model or data-source address.
+class ControlToken{
+    public u64 instanceGeneration = 0u;
+    public u64 contentGeneration = 0u;
+    public u64 contentRevision = 0u;
+
+    public bool valid()const{
+        return this.instanceGeneration != 0u && this.contentGeneration != 0u && this.contentRevision != 0u;
+    }
+
+    public bool empty()const{
+        return this.instanceGeneration == 0u && this.contentGeneration == 0u && this.contentRevision == 0u;
+    }
+
+    public bool operator==(in ControlToken rhs)const{
+        return this.instanceGeneration == rhs.instanceGeneration && this.contentGeneration == rhs.contentGeneration && this.contentRevision == rhs.contentRevision;
+    }
+
+    public bool operator!=(in ControlToken rhs)const{
+        return this.instanceGeneration != rhs.instanceGeneration || this.contentGeneration != rhs.contentGeneration || this.contentRevision != rhs.contentRevision;
+    }
+}
+
+enum<u8> ControlActionKind{
+    enum Wheel,
+    enum Up,
+    enum Down,
+    enum PageUp,
+    enum PageDown,
+    enum Home,
+    enum End,
+    enum Submit,
+    enum Activate,
+    enum Left,
+    enum Right,
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

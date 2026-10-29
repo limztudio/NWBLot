@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/mesh/object_geometry_cache.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
@@ -28,12 +29,7 @@ class Mesh;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct InstanceGpuData{
-    Float4 rotation = Float4(0.f, 0.f, 0.f, 1.f);
-    Float3UInt translation = Float3UInt(0.f, 0.f, 0.f, 0u);
-    Float3UInt scale = Float3UInt(1.f, 1.f, 1.f, Limit<u32>::s_Max);
-    u32 geometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
-};
+static_assert(s_MeshInstanceGeometrySlotCount == NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT, "s_MeshInstanceGeometrySlotCount must match NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT");
 static_assert(offsetof(InstanceGpuData, rotation) == sizeof(f32) * NWB_MESH_INSTANCE_ROTATION_FLOAT_OFFSET, "InstanceGpuData rotation must be first");
 static_assert(offsetof(InstanceGpuData, translation) == sizeof(f32) * NWB_MESH_INSTANCE_TRANSLATION_FLOAT_OFFSET, "InstanceGpuData translation must follow rotation");
 static_assert(offsetof(InstanceGpuData, translation) + offsetof(Float3UInt, w) == sizeof(f32) * NWB_MESH_INSTANCE_MATERIAL_MUTABLE_BYTE_OFFSET_FLOAT_OFFSET, "InstanceGpuData mutable offset must pack into translation.w");
@@ -115,4 +111,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

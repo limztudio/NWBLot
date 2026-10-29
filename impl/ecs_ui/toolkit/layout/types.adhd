@@ -1,0 +1,69 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../paint_types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_LayoutNoParent = 0xffffffffu;
+const u32 s_LayoutMaxNodes = 4096u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> LayoutDirection{
+    enum Leaf,
+    enum Row,
+    enum Column,
+    enum Overlay,
+}
+
+enum<u8> LayoutSizePolicy{
+    enum Fixed,
+    enum Content,
+    enum Stretch,
+}
+
+class LayoutSize{
+    public LayoutSizePolicy policy;
+    // Fixed logical size, or a positive stretch weight. Content ignores this finite, nonnegative value.
+    public f32 value;
+
+    public LayoutSize(){
+        this.policy = LayoutSizePolicy::Enum::Content;
+        this.value = 0.0f;
+    }
+    public LayoutSize(in LayoutSizePolicy inPolicy){
+        this.policy = inPolicy;
+        this.value = 0.0f;
+    }
+    public LayoutSize(in LayoutSizePolicy inPolicy, in f32 inValue){
+        this.policy = inPolicy;
+        this.value = inValue;
+    }
+}
+
+class LayoutNodeDesc{
+    public LayoutDirection direction = LayoutDirection::Enum::Leaf;
+    public bool clipChildren = true;
+    public LayoutSize width;
+    public LayoutSize height;
+    public Insets padding;
+    public f32 gap = 0.0f;
+    public Point intrinsicSize;
+}
+
+class LayoutBox{
+    public Rect rectangle;
+    public Rect content;
+    public Rect clip;
+    public Rect hit;
+    public Point measuredSize;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

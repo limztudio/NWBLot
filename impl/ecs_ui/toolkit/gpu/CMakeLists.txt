@@ -1,22 +1,16 @@
 nwb_declare_static_library(nwb_ui_gpu)
 target_sources(nwb_ui_gpu PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/renderer.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_internal.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_resources.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_glyph_resources.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_image_cache.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_sdf_resources.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_sdf_resources.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_texture_resources.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_texture_resources.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_graph.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_command_ir.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_command_ir.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_raster.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_timing_task.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_timing_task.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_standalone.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.c"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
 target_link_libraries(nwb_ui_gpu PUBLIC nwb_assets_scene nwb_ui nwb_graphics nwb_assets_texture_loader)
 target_link_libraries(nwb_ui_gpu PRIVATE nwb_assets_shader_loader)

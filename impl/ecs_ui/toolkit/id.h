@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <impl/ecs_ui/toolkit/id.adhd.h>
+
 #include <global/expected.h>
 
 
@@ -18,28 +20,6 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct WidgetId{
-    u64 value = 0u;
-
-
-public:
-    [[nodiscard]] bool valid()const noexcept{ return value != 0u; }
-};
-
-// Root identity comes from the host; include its lifetime generation rather than iteration order or an address.
-struct WidgetRoot{
-    u64 value = 0u;
-    u64 generation = 1u;
-};
-
-[[nodiscard]] inline bool operator==(const WidgetId& lhs, const WidgetId& rhs)noexcept{ return lhs.value == rhs.value; }
-
-[[nodiscard]] inline bool operator!=(const WidgetId& lhs, const WidgetId& rhs)noexcept{ return lhs.value != rhs.value; }
-
-[[nodiscard]] inline bool operator==(const WidgetRoot& lhs, const WidgetRoot& rhs)noexcept{
-    return lhs.value == rhs.value && lhs.generation == rhs.generation;
-}
 
 // Stable keys of widget parts; builder, paint, and input code must derive the same ids.
 namespace WidgetPartKey{
@@ -65,4 +45,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

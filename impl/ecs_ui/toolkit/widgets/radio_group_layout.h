@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "style.h"
+#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
 #include "../paint.h"
 
 
@@ -22,7 +22,7 @@ inline constexpr u32 s_RadioGroupMaxChoices = 64u;
 
 struct RadioGroupChoices;
 struct RadioGroupOptions;
-struct RadioGroupStyle;
+class RadioGroupStyle;
 
 struct RadioGroupMetrics{
     f32 rowHeight = 0.0f;

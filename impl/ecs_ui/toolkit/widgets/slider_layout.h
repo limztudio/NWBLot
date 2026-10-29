@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "style.h"
+#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
 #include "../paint.h"
 
 
@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 
 
 struct SliderOptions;
-struct SliderStyle;
+class SliderStyle;
 
 struct SliderMetrics{
     Insets padding;

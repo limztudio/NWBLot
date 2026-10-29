@@ -47,9 +47,9 @@ TEST_F(UiEditNavigationHostTests, RepeatedVerticalMovementPreservesTheColumnAcro
     ASSERT_TRUE(m_navigationModel.setSelection(5u, 5u));
     ASSERT_TRUE(activateNavigation());
     const u64 revision = m_navigationModel.revision();
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::KeyDown, .key = Core::Key::Down, .shift = true }));
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::KeyDown, .key = Core::Key::Down, .shift = true, .repeat = true }));
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::KeyUp, .key = Core::Key::Down, .shift = true }));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Down, .type = Ui::InputEventType::KeyDown, .shift = true  }));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Down, .type = Ui::InputEventType::KeyDown, .shift = true, .repeat = true  }));
+    ASSERT_TRUE(dispatch({ .key = Core::Key::Down, .type = Ui::InputEventType::KeyUp, .shift = true  }));
     ASSERT_TRUE(navigationFrame());
     ASSERT_EQ(m_resolver.records.size(), 2u);
     ASSERT_TRUE(m_resolver.records[0u].result);

@@ -7,6 +7,8 @@
 
 #include "../paint.h"
 
+#include <impl/ecs_ui/toolkit/layout/types.adhd.h>
+
 #include <global/simd/type.h>
 
 
@@ -14,45 +16,6 @@
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr u32 s_LayoutNoParent = Limit<u32>::s_Max;
-inline constexpr u32 s_LayoutMaxNodes = 4096u;
-
-namespace LayoutDirection{
-    enum Enum : u8{ Leaf, Row, Column, Overlay };
-};
-
-namespace LayoutSizePolicy{
-    enum Enum : u8{ Fixed, Content, Stretch };
-};
-
-struct LayoutSize{
-    LayoutSizePolicy::Enum policy = LayoutSizePolicy::Content;
-    // Fixed logical size, or a positive stretch weight. Content ignores this finite, nonnegative value.
-    f32 value = 0.0f;
-};
-
-struct LayoutNodeDesc{
-    LayoutDirection::Enum direction = LayoutDirection::Leaf;
-    bool clipChildren = true;
-    LayoutSize width;
-    LayoutSize height;
-    Insets padding;
-    f32 gap = 0.0f;
-    Point intrinsicSize;
-};
-
-struct LayoutBox{
-    Rect rectangle;
-    Rect content;
-    Rect clip;
-    Rect hit;
-    Point measuredSize;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,4 +85,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

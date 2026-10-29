@@ -283,8 +283,8 @@ TEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyW
     ASSERT_NE(target(before), nullptr);
     const HitTarget accepted = *target(before);
     const usize count = m_context.input().targets().size();
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab }).commandConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab }).commandConsumed);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyDown}).commandConsumed);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyUp}).commandConsumed);
     ASSERT_EQ(m_context.input().focus(), before);
     ASSERT_TRUE(panel(2u));
     ImageOptions options = Fixed(0.0f, 0.0f);

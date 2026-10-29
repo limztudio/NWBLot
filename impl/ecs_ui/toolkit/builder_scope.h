@@ -8,25 +8,25 @@
 #include "context.h"
 #include "layout/tree.h"
 #include "text/service.h"
-#include "widgets/style.h"
+#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
 #include "widgets/window.h"
 #include "widgets/edit_box_state.h"
 #include "widgets/text_area.h"
-#include "widgets/scrollbar_style.h"
+#include <impl/ecs_ui/toolkit/widgets/scrollbar_style.adhd.h>
 #include "widgets/numeric_edit.h"
 #include "widgets/popup.h"
-#include "widgets/popup_style.h"
+#include <impl/ecs_ui/toolkit/widgets/popup_style.adhd.h>
 #include "widgets/list.h"
-#include "widgets/list_style.h"
+#include <impl/ecs_ui/toolkit/widgets/list_style.adhd.h>
 #include "widgets/radio_group_frame.h"
 #include "widgets/slider_frame.h"
 #include "widgets/progress_frame.h"
 #include "widgets/image_frame.h"
 #include "widgets/combo.h"
-#include "widgets/combo_style.h"
+#include <impl/ecs_ui/toolkit/widgets/combo_style.adhd.h>
 #include "widgets/search_combo.h"
 #include "widgets/tooltip.h"
-#include "widgets/tooltip_style.h"
+#include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd.h>
 #include "widgets/context_menu.h"
 
 

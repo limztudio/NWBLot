@@ -1,0 +1,70 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../id.adhd"
+#include "../paint_types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_InputMaxPopups = 8u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PopupToken{
+    public WidgetId widget;
+    public u64 declarationGeneration = 0u;
+    public u64 instanceGeneration = 0u;
+    public u64 openGeneration = 0u;
+
+    public bool valid()const{
+        return this.widget.valid() && this.declarationGeneration != 0u && this.instanceGeneration != 0u && this.openGeneration != 0u;
+    }
+
+    public bool empty()const{
+        return !this.widget.valid() && this.declarationGeneration == 0u && this.instanceGeneration == 0u && this.openGeneration == 0u;
+    }
+
+    public bool operator==(in PopupToken rhs)const{
+        return this.widget == rhs.widget && this.declarationGeneration == rhs.declarationGeneration && this.instanceGeneration == rhs.instanceGeneration && this.openGeneration == rhs.openGeneration;
+    }
+
+    public bool operator!=(in PopupToken rhs)const{
+        return this.widget != rhs.widget || this.declarationGeneration != rhs.declarationGeneration || this.instanceGeneration != rhs.instanceGeneration || this.openGeneration != rhs.openGeneration;
+    }
+}
+
+enum<u8> PopupDismissReason{
+    enum None,
+    enum Cancel,
+    enum OutsideClick,
+    enum FocusTraversal,
+    enum FocusLost,
+}
+
+class PopupScope{
+    public PopupToken token;
+    public Rect bounds;
+    public Rect viewport;
+    public u32 layer = 0u;
+    public bool modal = false;
+    public bool dismissOutside = true;
+    public bool dismissCancel = true;
+    public bool dismissFocusTraversal = false;
+    public bool autofocus = true;
+    public PopupToken parent;
+    public WidgetId focusAnchor;
+    public u64 focusAnchorDeclarationGeneration = 0u;
+}
+
+class PopupDismissal{
+    public PopupToken token;
+    public PopupDismissReason reason = PopupDismissReason::Enum::None;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

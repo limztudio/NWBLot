@@ -1,27 +1,20 @@
 nwb_declare_static_library(nwb_ecs_csg)
 target_sources(nwb_ecs_csg PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/deform_edit.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_validator.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_cutter_field.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_wall_builder.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_cap_builder.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_pipeline.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/frame_state.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/shape_registry.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_edit.h"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_types.h"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_validator.h"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_cutter_field.h"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_wall_builder.h"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_cap_builder.h"
-    "${CMAKE_CURRENT_LIST_DIR}/deform_pipeline.h"
-    "${CMAKE_CURRENT_LIST_DIR}/frame_state.h"
-    "${CMAKE_CURRENT_LIST_DIR}/module.h"
-    "${CMAKE_CURRENT_LIST_DIR}/shape_registry.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.c"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
 nwb_target_adhd_sources(nwb_ecs_csg
     NAMESPACE "NWB::Impl"
     SOURCES
-        "${CMAKE_CURRENT_LIST_DIR}/components.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
 target_link_libraries(nwb_ecs_csg PUBLIC nwb_ecs nwb_assets_csg)

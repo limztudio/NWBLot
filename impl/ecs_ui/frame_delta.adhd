@@ -1,0 +1,35 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_MaxUiFrameDeltaFloatSeconds = 3.40282346638528859812e+38f;
+const f64 s_MaxUiFrameDeltaSeconds = cast<f64>(s_MaxUiFrameDeltaFloatSeconds);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Retains CPU update time until a UI paint frame actually begins.
+class UiFrameDelta{
+    private f64 m_pendingSeconds = 0.0;
+
+    public void add(in f32 deltaSeconds){
+        if(!isFinite(deltaSeconds) || deltaSeconds < 0.0f){
+            return;
+        }
+        this.m_pendingSeconds = min(s_MaxUiFrameDeltaSeconds, this.m_pendingSeconds + cast<f64>(deltaSeconds));
+    }
+
+    public f32 consume(){
+        const f32 elapsed = cast<f32>(this.m_pendingSeconds);
+        this.m_pendingSeconds = 0.0;
+        return elapsed;
+    }
+
+    public void clear(){
+        this.m_pendingSeconds = 0.0;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

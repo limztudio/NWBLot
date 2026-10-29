@@ -7,8 +7,8 @@
 
 #include "deformation_state.h"
 
-#include <impl/assets_mesh/payload_types.h>
-#include <impl/assets_mesh/skin_types.h>
+#include <impl/assets_mesh/payload_types.adhd.h>
+#include <impl/assets_mesh/skin_types.adhd.h>
 
 #include <core/graphics/api.h>
 #include <core/mesh/classification.h>

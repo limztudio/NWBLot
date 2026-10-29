@@ -139,7 +139,7 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
         SIMDVectorSingle expected = VectorReplicate(metrics->minimum.y);
         const StringView language = change == 3u ? "ko" : "en";
         for(const StringView label : { StringView{}, StringView{ s_FirstRowText } }){
-            const auto layout = m_text.layout({ .text = label, .fontSize = m_builder.style().fontSize, .language = language });
+            const auto layout = m_text.layout({ .text = label, .language = language, .fontSize = m_builder.style().fontSize });
             ASSERT_TRUE(layout);
             const auto visual = m_text.measure(*layout, display);
             ASSERT_TRUE(visual);

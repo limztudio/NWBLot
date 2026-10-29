@@ -1,0 +1,130 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_DefaultDistanceEpsilon = 0.00001f;
+const f32x4 s_DefaultShapeParameter(0.0f, 1.0f, 0.0f, 0.0f);
+const f32 s_MinEpsilon = 0.0000001f;
+const f32 s_SplitDenominatorEpsilon = 0.0000001f;
+const f32 s_NormalizeEpsilon = 0.000001f;
+const f32 s_NormalizeEpsilonSq = s_NormalizeEpsilon * s_NormalizeEpsilon;
+const f32 s_LoopAreaEpsilonSq = s_MinEpsilon * s_MinEpsilon;
+const f32 s_OptionEpsilonLow = 0.0f;
+const f32 s_OptionEpsilonHigh = 1.0f;
+const f32 s_KeepDistanceZero = 0.0f;
+const f32 s_OneWeight = 1.0f;
+const f32 s_AffineW = 1.0f;
+const f32 s_ShapeWMask = 0.0f;
+const f32 s_NegativeOne = -1.0f;
+const f32x4 s_FallbackTangent(1.0f, 0.0f, 0.0f, 1.0f);
+const u32 s_DeformCapacityShift = 20u;
+const usize s_MaxDeformVertices = 1u << s_DeformCapacityShift;
+const usize s_MaxDeformTriangles = 1u << s_DeformCapacityShift;
+const u32 s_EdgeKeyHalfBits = 32u;
+const u32 s_EdgeHashShift = 33u;
+const u32 s_TriangleCornerCount = 3u;
+const u32 s_MinLoopVertices = 3u;
+const u32 s_EdgesPerTriangle = 3u;
+const u32 s_KeptReserveMultiplier = 2u;
+const u32 s_ReserveSlack = 1u;
+const usize s_RebuildReservePerCut = 16u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgDeformVertex{
+    public f32x3u position(0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 tangent(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x2u uv0(0.0f, 0.0f);
+    public f32x4 color(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class CsgDeformTriangle{
+    public Array<u32, 3u> indices;
+}
+
+class CsgDeformShape{
+    public Name shapeType = s_NameNone;
+    public f32x3x4 worldToShape(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public f32x4 parameter0 = s_DefaultShapeParameter;
+}
+
+class CsgDeformCutDesc{
+    public CsgDeformShape shape;
+    public bool active = true;
+}
+
+class CsgDeformBuildOptions{
+    public f32 distanceEpsilon = s_DefaultDistanceEpsilon;
+    public bool fillCaps = true;
+}
+
+enum<u8> CsgDeformShapeKind{
+    enum Invalid,
+    enum Plane,
+    enum Box,
+    enum Sphere,
+    enum Capsule,
+}
+
+enum<u8> CsgDeformViabilityReason{
+    enum Ok,
+    enum EmptyInput,
+    enum NonFiniteInput,
+    enum InvalidTopology,
+    enum InvalidCutter,
+    enum CapLoopFailed,
+    enum NoKeptGeometry,
+    enum TooLarge,
+    enum InvalidOutputArena,
+}
+
+class CsgDeformViability{
+    public bool viable = false;
+    public CsgDeformViabilityReason reason = CsgDeformViabilityReason::Enum::Ok;
+}
+
+class CsgDeformStats{
+    public u32 inputVertexCount = 0u;
+    public u32 inputTriangleCount = 0u;
+    public u32 outputVertexCount = 0u;
+    public u32 outputTriangleCount = 0u;
+    public u32 appliedCutCount = 0u;
+    public u32 capTriangleCount = 0u;
+}
+
+class CsgDeformFailure{
+    public CsgDeformViabilityReason reason = CsgDeformViabilityReason::Enum::Ok;
+    public CsgDeformStats stats;
+}
+
+class CsgDeformCutLoopEdge{
+    public u32 first = 0u;
+    public u32 second = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 CsgDeformEdgeKey(in u32 first, in u32 second){
+    const u32 lo = min(first, second);
+    const u32 hi = max(first, second);
+    return (cast<u64>(lo) << s_EdgeKeyHalfBits) | cast<u64>(hi);
+}
+
+usize CsgDeformEdgeKeyHash(in u64 key){
+    return cast<usize>(key ^ (key >> s_EdgeHashShift));
+}
+
+CsgDeformFailure MakeCsgDeformFailure(in CsgDeformViabilityReason reason, in CsgDeformStats stats){
+    CsgDeformFailure out;
+    out.reason = reason;
+    out.stats = stats;
+    return out;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

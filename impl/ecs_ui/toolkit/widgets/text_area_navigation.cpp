@@ -139,7 +139,7 @@ Expected<EditNavigationResult> TextAreaNavigationResolver::resolve(const EditMod
         return MakeUnexpected(Failure{});
     const __hidden_ui_text_area_navigation::ModelStamp expected(model);
     EditBoxView view(m_arena);
-    const ShapeRequest request{ {}, m_fontSize, TextDirection::LeftToRight, m_scriptTag, StringView(m_language.data(), m_language.size()) };
+    const ShapeRequest request{ {}, StringView(m_language.data(), m_language.size()), m_fontSize, m_scriptTag, TextDirection::LeftToRight };
     if(!view.snapshot(model) || view.shape(m_text, request) != TextLayoutStatus::Success)
         return MakeUnexpected(Failure{});
     if(!current() || !expected.matches(model) || !m_state.navigation().matches(preferred))

@@ -1,0 +1,76 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../layout/types.adhd"
+#include "../text/types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Default metrics and colors shared by the widget styles and options.
+const f32 s_StyleSpacingSmall = 4.0f;
+const f32 s_StyleSpacingMedium = 8.0f;
+const f32 s_StyleFieldPaddingY = 6.0f;
+const f32 s_StyleControlExtent = 24.0f;
+const f32 s_StyleControlHeight = 32.0f;
+const f32 s_StyleMinimumFieldWidth = 120.0f;
+const f32 s_StyleSliderTrackHeight = 12.0f;
+const f32 s_StyleScrollbarThickness = 14.0f;
+const f32 s_StyleScrollbarMinimumThumb = 20.0f;
+const f32 s_StyleScrollWheelStep = 3.0f;
+const f32 s_StyleMarkInset = 0.3f;
+const f32 s_StyleDisabledIconAlpha = 0.5f;
+const f32 s_StyleWindowCollapseExtent = 20.0f;
+const f32 s_StyleWindowResizeExtent = 16.0f;
+const Color s_StyleTextColor = Color(0.92f, 0.94f, 0.98f, 1.0f);
+const Color s_StyleDisabledTextColor = Color(0.48f, 0.50f, 0.55f, 1.0f);
+const Color s_StyleInsetColor = Color(0.08f, 0.10f, 0.14f, 1.0f);
+const Color s_StyleHoverTint = Color(1.08f, 1.08f, 1.08f, 1.0f);
+const Color s_StylePressedTint = Color(0.85f, 0.85f, 0.85f, 1.0f);
+const Color s_StyleDisabledTint = Color(0.55f, 0.55f, 0.55f, 0.6f);
+
+// Semantic atlas names let another skin replace imagery and control metrics without application changes.
+class WidgetStyle{
+    public Name panel = Name("panel.normal");
+    public Name window = Name("window.normal");
+    public Name windowTitle = Name("window.title");
+    public Name windowCollapse = Name("window.collapse");
+    public Name windowResize = Name("window.resize");
+    public Name separator = Name("separator");
+    public Name white = Name("white");
+    public Name button = Name("button.normal");
+    public Name buttonHover = Name("button.hover");
+    public Name buttonPressed = Name("button.pressed");
+    public Name buttonDisabled = Name("button.disabled");
+    public Name checkbox = Name("checkbox.normal");
+    public Name checkboxHover = Name("checkbox.hover");
+    public Name checkboxChecked = Name("checkbox.checked");
+    public Name checkboxDisabled = Name("checkbox.disabled");
+    public Name checkboxMark = Name("checkbox.mark");
+    public Name focus = Name("focus.overlay");
+    public Color text = s_StyleTextColor;
+    public Color disabledText = s_StyleDisabledTextColor;
+    public f32 fontSize = s_TextDefaultFontSize;
+    public f32 gap = s_StyleSpacingMedium;
+    public f32 checkboxExtent = s_StyleControlExtent;
+    public f32 windowCollapseExtent = s_StyleWindowCollapseExtent;
+    public f32 windowResizeExtent = s_StyleWindowResizeExtent;
+}
+
+class WidgetOptions{
+    public LayoutSize width;
+    public LayoutSize height;
+    public bool enabled = true;
+}
+
+class ContainerOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize height;
+    public Insets padding;
+    public f32 gap = s_StyleSpacingMedium;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

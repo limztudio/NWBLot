@@ -217,8 +217,8 @@ TEST_F(UiEditBoxHostTests, CandidateGeometryCannotMoveTheNativeCaretBeforeContex
     EXPECT_EQ(m_context.input().layoutGeneration(), m_generation - 1u);
     m_host.commitFrame(m_generation);
     EXPECT_EQ(m_textInput.nativeCaret().x, displayed.x);
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = { 20.0f, 25.0f } }));
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = { 20.0f, 25.0f } }));
+    ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryDown}));
+    ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryUp}));
     ASSERT_TRUE(commit());
     ASSERT_TRUE(frame(m_model));
     EXPECT_EQ(m_model.caret(), 1u);
@@ -243,8 +243,8 @@ TEST_F(UiEditBoxHostTests, RepeatedCandidatePublicationAcceptsOnlyTheLastGeometr
     EXPECT_FALSE(m_host.publish(m_widget, rejected, *placement, {}));
     m_host.commitFrame(m_generation);
     EXPECT_EQ(m_textInput.nativeCaret().x, displayed.x);
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = { 20.0f, 25.0f } }));
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = { 20.0f, 25.0f } }));
+    ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryDown}));
+    ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryUp}));
     ASSERT_TRUE(commit());
     EXPECT_EQ(m_textInput.nativeCaret().x, 240);
     ASSERT_TRUE(frame(m_model));
@@ -259,8 +259,8 @@ TEST_F(UiEditBoxHostTests, GeometryPublicationShrinksAndGrowsCaretStopsWithoutRe
         ASSERT_TRUE(m_model.setText(value));
         ASSERT_TRUE(prepare(m_model, {}, { 10.0f, 20.0f, 600.0f, 30.0f }));
         ASSERT_TRUE(commit());
-        ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = { 181.0f, 25.0f } }));
-        ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = { 181.0f, 25.0f } }));
+        ASSERT_TRUE(dispatch({ .position = { 181.0f, 25.0f } , .type = Ui::InputEventType::PrimaryDown}));
+        ASSERT_TRUE(dispatch({ .position = { 181.0f, 25.0f } , .type = Ui::InputEventType::PrimaryUp}));
         ASSERT_TRUE(frame(m_model));
         const usize expected = Min<usize>(value.size(), 17u);
         EXPECT_EQ(m_model.anchor(), expected);

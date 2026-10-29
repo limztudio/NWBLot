@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "style.h"
+#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
 #include "edit_caret_geometry.h"
 
 #include <impl/assets_ui_skin/region_names.h>

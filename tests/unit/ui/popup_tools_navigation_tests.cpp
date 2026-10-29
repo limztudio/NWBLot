@@ -100,8 +100,8 @@ TEST_F(UiPopupToolsNavigationTests, FocusLossAndRegainCannotRestorePreparedRowsF
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_TRUE(m_menu.isOpen());
 
-    EXPECT_FALSE(send({ .type = InputEventType::FocusLost, .position = {} }).focus.valid());
-    EXPECT_FALSE(send({ .type = InputEventType::FocusGained, .position = {} }).focus.valid());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusLost}).focus.valid());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
     ASSERT_TRUE(m_context.commitFrame(3u));
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_FALSE(m_context.input().capture().valid());

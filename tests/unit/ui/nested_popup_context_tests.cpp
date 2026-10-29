@@ -372,8 +372,8 @@ TEST_F(UiNestedPopupContextTests, AcceptedChildActionCanOnlyBeConsumedDuringThat
     ASSERT_TRUE(m_context.endPopupScope(true));
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 185.0f, 125.0f } }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 185.0f, 125.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 185.0f, 125.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 185.0f, 125.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     ASSERT_EQ(m_context.input().actions().size(), 1u);
     ASSERT_TRUE(begin(2u));
     const auto nextParentResult = reserve(s_ParentPopupKey);

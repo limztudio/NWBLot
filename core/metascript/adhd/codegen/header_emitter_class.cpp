@@ -425,12 +425,16 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& 
         else if(field->usesClassArena){
             out.append("{s_ClassArena}");
         }
-        else if(fieldRefMode == ParamPassingMode::None
-            && (m_symbols.resolveBaseTypeName(field->type->name) == "Array"
-                || SymbolTable::isUnalignedVectorType(m_symbols.resolveBaseTypeName(field->type->name))
-                || m_symbols.findEnum(m_symbols.resolveBaseTypeName(field->type->name)) != nullptr))
-        {
-            out.append("{}");
+        else if(fieldRefMode == ParamPassingMode::None){
+            const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
+            if(baseFieldType == "Array"
+                || baseFieldType == "StringView"
+                || SymbolTable::isUnalignedVectorType(baseFieldType)
+                || m_symbols.findEnum(baseFieldType) != nullptr
+                || m_symbols.findClass(baseFieldType) != nullptr)
+            {
+                out.append("{}");
+            }
         }
         out.append(";\r\n");
     }

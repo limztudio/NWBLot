@@ -73,8 +73,8 @@ protected:
     }
 
     InputRoutingResult click(const Point position = { 15.0f, 25.0f }){
-        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryDown, .position = position })));
-        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryUp, .position = position })));
+        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .position = position , .type = InputEventType::PrimaryDown })));
+        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .position = position , .type = InputEventType::PrimaryUp })));
         return m_context.input().process();
     }
 
@@ -274,7 +274,7 @@ TEST_F(UiContextTests, HiddenRootsRetireCaptureWhileTheHeldPointerSequenceStillO
     ASSERT_TRUE(originalResult);
     const WidgetState original = *originalResult;
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryDown, .position = { 15.0f, 25.0f } })));
+    ASSERT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .position = { 15.0f, 25.0f } , .type = InputEventType::PrimaryDown})));
     EXPECT_TRUE(m_context.input().process().pointerConsumed);
     EXPECT_EQ(m_context.input().capture(), original.id);
     EXPECT_TRUE(m_context.input().primaryDown());
@@ -289,7 +289,7 @@ TEST_F(UiContextTests, HiddenRootsRetireCaptureWhileTheHeldPointerSequenceStillO
     EXPECT_FALSE(m_context.input().hitTest({ 15.0f, 25.0f }).valid());
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_TRUE(m_context.input().targets().empty());
-    ASSERT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryUp, .position = { 15.0f, 25.0f } })));
+    ASSERT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .position = { 15.0f, 25.0f } , .type = InputEventType::PrimaryUp})));
     EXPECT_TRUE(m_context.input().process().pointerConsumed);
     EXPECT_FALSE(m_context.input().primaryDown());
     EXPECT_TRUE(m_context.input().actions().empty());
@@ -624,7 +624,7 @@ TEST_F(UiContextTests, RetiringAPassiveLabelPreservesLiveInputBeforeAndAfterPubl
     ASSERT_TRUE(m_context.finishFrame());
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_TRUE(click().pointerConsumed);
-    ASSERT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryDown, .position = { 15.0f, 25.0f } })));
+    ASSERT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .position = { 15.0f, 25.0f } , .type = InputEventType::PrimaryDown})));
     ASSERT_TRUE(m_context.input().process().pointerConsumed);
     const u64 hoverActivity = m_context.input().hoverActivityGeneration();
     ASSERT_EQ(m_context.input().actions().size(), 1u);
@@ -651,7 +651,7 @@ TEST_F(UiContextTests, RetiringAPassiveLabelPreservesLiveInputBeforeAndAfterPubl
     EXPECT_EQ(m_context.input().hoverActivityGeneration(), hoverActivity);
     EXPECT_TRUE(m_context.input().consumeActivation(retained.id));
     EXPECT_FALSE(m_context.input().consumeActivation(retained.id));
-    ASSERT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryUp, .position = { 15.0f, 25.0f } })));
+    ASSERT_TRUE(m_context.input().queue(UiTestSupport::NativeInput({ .position = { 15.0f, 25.0f } , .type = InputEventType::PrimaryUp})));
     EXPECT_TRUE(m_context.input().process().pointerConsumed);
     EXPECT_TRUE(m_context.input().consumeActivation(retained.id));
     EXPECT_FALSE(m_context.input().consumeActivation(retained.id));

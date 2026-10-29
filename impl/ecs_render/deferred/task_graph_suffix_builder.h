@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/reflection/composite_inputs.h>
+#include <impl/ecs_render/reflection/composite_inputs.adhd.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 

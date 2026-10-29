@@ -11,6 +11,7 @@
 #include "text/sdf_page.h"
 
 #include <impl/assets_ui_skin/asset.h>
+#include <impl/ecs_ui/toolkit/paint_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,61 +23,10 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct Point{
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-};
-
-struct Rect{
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-    f32 width = 0.0f;
-    f32 height = 0.0f;
-};
-
-struct Insets{
-    f32 left = 0.0f;
-    f32 top = 0.0f;
-    f32 right = 0.0f;
-    f32 bottom = 0.0f;
-};
-
-// Input colors use linear RGB and straight alpha; frozen vertices use premultiplied alpha.
-struct Color{
-    f32 r = 1.0f;
-    f32 g = 1.0f;
-    f32 b = 1.0f;
-    f32 a = 1.0f;
-};
-
 struct Vertex{
     Point position;
     Point texCoord;
     Color color;
-};
-
-struct DisplayMetrics{
-    f32 logicalWidth = 0.0f;
-    f32 logicalHeight = 0.0f;
-    f32 pixelScaleX = 1.0f;
-    f32 pixelScaleY = 1.0f;
-};
-
-namespace PaintMaterial{
-    enum Enum : u8{ Solid, Skin, Glyph, SdfGlyph, Image };
-};
-
-struct DrawCommand{
-    u32 firstIndex = 0u;
-    u32 indexCount = 0u;
-    Rect clip;
-    PaintMaterial::Enum material = PaintMaterial::Solid;
-    u32 glyphPageIndex = Limit<u32>::s_Max;
-    u32 sdfPageIndex = Limit<u32>::s_Max;
-    u32 sdfChannel = 0u;
-    // Base paint is layer zero; higher layers render later without changing owned index or image bindings.
-    u32 layer = 0u;
-    u32 textureImageIndex = Limit<u32>::s_Max;
 };
 
 // Typed references identify assets; this copy captures atlas metadata, not loaded/GPU resource ownership.
@@ -214,4 +164,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

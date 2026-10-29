@@ -1,0 +1,57 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/skin_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_MeshMissingStreamIndex = 0xffffffffu;
+const u32 s_MeshMaxMeshletVertices = 96u;
+const u32 s_MeshMaxMeshletTriangles = 126u;
+const u32 s_MeshletTriangleIndexCount = 3u;
+const u32 s_MeshletSolidTriangleWordBits = 32u;
+const u32 s_MeshletSolidTriangleWordRoundUp = 31u;
+const u32 s_MeshletConeFlagEnabled = 1u;
+
+class MeshletDesc{
+    public u32 localVertexOffset = 0u;
+    public u32 primitiveOffset = 0u;
+    public u32 positionRefOffset = 0u;
+    public u32 attributeRefOffset = 0u;
+    public u32 counts = 0u;
+    public u32 positionBase = 0u;
+    public u32 skinBase = s_MeshMissingStreamIndex;
+    public u32 normalBase = 0u;
+    public u32 tangentBase = 0u;
+    public u32 uv0Base = 0u;
+    public u32 colorBase = 0u;
+    public u32 encoding = 0u;
+}
+
+class MeshletBounds{
+    public f32x4u sphere(0.0f);
+    public u32 conePacked = 0u;
+}
+
+class MeshletPositionStreamRef{
+    public u32 position = s_MeshMissingStreamIndex;
+    public u32 skin = s_MeshMissingStreamIndex;
+}
+
+class MeshletAttributeStreamRef{
+    public u32 normal = s_MeshMissingStreamIndex;
+    public u32 tangent = s_MeshMissingStreamIndex;
+    public u32 uv0 = s_MeshMissingStreamIndex;
+    public u32 color = s_MeshMissingStreamIndex;
+}
+
+class MeshletLocalVertexRef{
+    public u16 localDeformedPosition = 0u;
+    public u16 localAttribute = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

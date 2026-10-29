@@ -18,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 
 
 struct ProgressOptions;
-struct ProgressStyle;
+class ProgressStyle;
 
 struct ProgressMetrics{
     Insets padding;

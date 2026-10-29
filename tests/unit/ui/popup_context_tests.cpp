@@ -194,8 +194,8 @@ protected:
     }
 
     void click(const Point& position){
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = position }).pointerConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = position }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = position , .type = InputEventType::PrimaryDown }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = position , .type = InputEventType::PrimaryUp }).pointerConsumed);
     }
 
     [[nodiscard]] Expected<PopupFrame> focusBase(){
@@ -208,8 +208,8 @@ protected:
         EXPECT_TRUE(committed);
         if(!committed)
             return MakeUnexpected(Failure{});
-        EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab }).commandConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab }).commandConsumed);
+        EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyDown}).commandConsumed);
+        EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyUp}).commandConsumed);
         EXPECT_EQ(m_context.input().focus(), frame.base.id);
         if(m_context.input().focus() != frame.base.id)
             return MakeUnexpected(Failure{});
@@ -584,8 +584,8 @@ TEST_F(UiPopupContextTests, AutofocusDisabledChangesFocusOnlyAtAcceptanceAndTabE
     EXPECT_TRUE(m_context.input().hasPopup());
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_TRUE(m_context.input().wantsCommands());
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab }).commandConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab }).commandConsumed);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyDown}).commandConsumed);
+    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyUp}).commandConsumed);
     EXPECT_EQ(m_context.input().focus(), candidate.child.id);
 }
 
@@ -628,7 +628,7 @@ TEST_F(UiPopupContextTests, FocusLossFencesPreparedOpenBeforeItsFirstAcceptance)
     const PopupFrame candidate = *candidateResult;
     EXPECT_EQ(m_context.input().focus(), base.base.id);
     EXPECT_FALSE(m_context.input().hasPopup());
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
+    EXPECT_TRUE(send({ .position = {} , .type = InputEventType::FocusLost}).commandConsumed);
     EXPECT_FALSE(m_context.input().focus().valid());
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().layoutGeneration(), 2u);
@@ -656,7 +656,7 @@ TEST_F(UiPopupContextTests, FocusLossFencesPreparedHigherPopupAboveAcceptedLower
     const PopupStack candidate = *candidateResult;
     EXPECT_TRUE(candidate.lower.scope.token == original.scope.token);
     EXPECT_EQ(m_context.input().focus(), original.child.id);
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
+    EXPECT_TRUE(send({ .position = {} , .type = InputEventType::FocusLost}).commandConsumed);
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_FALSE(m_context.input().hitTest({ 115.0f, 55.0f }).valid());
@@ -684,8 +684,8 @@ TEST_F(UiPopupContextTests, NativeFocusGainCannotReviveCandidatePreparedBeforeFo
     ASSERT_TRUE(candidateResult);
     const PopupFrame candidate = *candidateResult;
     EXPECT_EQ(m_context.input().focus(), base.base.id);
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
-    EXPECT_FALSE(send({ .type = InputEventType::FocusGained, .position = {} }).focus.valid());
+    EXPECT_TRUE(send({ .position = {} , .type = InputEventType::FocusLost}).commandConsumed);
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_FALSE(m_context.input().hitTest({ 115.0f, 55.0f }).valid());
@@ -701,8 +701,8 @@ TEST_F(UiPopupContextTests, FreshPopupPreparedAfterNativeFocusGainMayAutofocus){
     const auto baseResult = focusBase();
     ASSERT_TRUE(baseResult);
     const PopupFrame base = *baseResult;
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
-    EXPECT_FALSE(send({ .type = InputEventType::FocusGained, .position = {} }).focus.valid());
+    EXPECT_TRUE(send({ .position = {} , .type = InputEventType::FocusLost}).commandConsumed);
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
     const auto freshResult = prepare(2u, true);
     ASSERT_TRUE(freshResult);
     const PopupFrame fresh = *freshResult;
@@ -725,8 +725,8 @@ TEST_F(UiPopupContextTests, NativeFocusGainNeverRestoresAlreadyClosingScopes){
     const PopupFrame original = *originalResult;
     ASSERT_TRUE(m_context.commitFrame(2u));
     ASSERT_EQ(m_context.input().focus(), original.child.id);
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
-    EXPECT_FALSE(send({ .type = InputEventType::FocusGained, .position = {} }).focus.valid());
+    EXPECT_TRUE(send({ .position = {} , .type = InputEventType::FocusLost}).commandConsumed);
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
     EXPECT_FALSE(m_context.input().hitTest({ 115.0f, 55.0f }).valid());
     const auto retainedResult = prepare(3u, true);
     ASSERT_TRUE(retainedResult);
@@ -747,7 +747,7 @@ TEST_F(UiPopupContextTests, NativeFocusGainNeverRestoresAlreadyClosingScopes){
     ASSERT_TRUE(m_context.commitFrame(4u));
     EXPECT_FALSE(m_context.input().hasPopup());
     EXPECT_FALSE(m_context.input().focus().valid());
-    EXPECT_FALSE(send({ .type = InputEventType::FocusGained, .position = {} }).focus.valid());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
 }
 
 

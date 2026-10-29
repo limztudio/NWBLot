@@ -407,7 +407,13 @@ void InputRouter::appendActivation(const HitTarget& target, const InputActionSou
         result.activationOverflow = true;
         return;
     }
-    m_actions.push_back({ { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence }, origin, target.popup, target.control, inputSource });
+    InputAction action;
+    action.id = { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence };
+    action.origin = origin;
+    action.popup = target.popup;
+    action.control = target.control;
+    action.inputSource = inputSource;
+    m_actions.push_back(action);
     ++m_nextActionSequence;
 }
 

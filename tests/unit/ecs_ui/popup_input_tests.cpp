@@ -143,7 +143,7 @@ TEST_F(UiPopupInputTests, NativeFocusLossCancelsSessionAndRemovalDoesNotRestoreA
     focusPopup();
     const TextInputSessionToken popupSession = m_textInput.activeSession();
     ASSERT_TRUE(m_textInput.setFocused(false));
-    EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::FocusLost, .position = {} }).commandConsumed);
+    EXPECT_TRUE(dispatch({ .position = {} , .type = Ui::InputEventType::FocusLost}).commandConsumed);
     EXPECT_FALSE(m_textInput.activeSession().valid());
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_EQ(m_textInput.commit(popupSession, "late"), TextInputAdmission::InvalidSession);

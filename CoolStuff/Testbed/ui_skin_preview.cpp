@@ -148,7 +148,7 @@ UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena)
     const bool configured = ConfigureLabel(m_normal, "Normal") && ConfigureLabel(m_hover, "Hover")
         && ConfigureLabel(m_pressed, "Pressed") && ConfigureLabel(m_disabled, "Disabled")
         && ConfigureLabel(m_edit, "UTF-8 labels", s_LargeLabelFontSize) && ConfigureLabel(m_caption, "FreeType + HarfBuzz", s_LargeLabelFontSize)
-        && m_korean.setText(ShapeRequest{ .text = s_KoreanText, .fontSize = s_LabelFontSize, .scriptTag = NWB::Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'), .language = "ko" }) == NWB::Impl::Ui::TextLayoutStatus::Success;
+        && m_korean.setText(ShapeRequest{ .text = s_KoreanText, .language = "ko", .fontSize = s_LabelFontSize, .scriptTag = NWB::Impl::Ui::TextScriptTag('H', 'a', 'n', 'g') }) == NWB::Impl::Ui::TextLayoutStatus::Success;
     NWB_FATAL_ASSERT_MSG(configured, NWB_TEXT("Testbed UI labels must have valid constant text"));
 }
 

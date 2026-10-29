@@ -196,11 +196,11 @@ bool TypeChecker::checkExpr(
                         reportError(errors, expr.span, "invalid SIMD swizzle component for vector width or mixed xyzw/rgba set");
                         ok = false;
                     }
-                    else if(baseType == "f32x3_i32" || baseType == "f32x3_u32" || baseType == "f64x3_i64" || baseType == "f64x3_u64"){
+                    else if(expr.text.size() > 1u && (baseType == "f32x3_i32" || baseType == "f32x3_u32" || baseType == "f64x3_i64" || baseType == "f64x3_u64")){
                         reportError(errors, expr.span, "multi-lane SIMD swizzling is not supported on mixed float/integer vector types");
                         ok = false;
                     }
-                    else{
+                    else if(expr.text.size() > 1u){
                         expr.isSwizzle = true;
                     }
                 }

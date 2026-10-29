@@ -5,9 +5,9 @@
 #pragma once
 
 
-#include "style.h"
+#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
 #include "slider_layout.h"
-#include "../input/input.h"
+#include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

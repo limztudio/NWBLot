@@ -1,10 +1,16 @@
 nwb_declare_gtest_executable(nwb_crash_tests)
 target_sources(nwb_crash_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/crash_archive_upload_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_package_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_handler_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_test_support.h"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_snapshot_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.c"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
 target_link_libraries(nwb_crash_tests PRIVATE nwb_crash_package nwb_common nwb_alloc)
 if(TARGET nwb_crash_handler)

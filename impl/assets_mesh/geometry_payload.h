@@ -7,7 +7,7 @@
 
 #include "../global.h"
 #include "binary_payload_io.h"
-#include "payload_types.h"
+#include <impl/assets_mesh/payload_types.adhd.h>
 
 #include <core/assets/module.h>
 

@@ -1,11 +1,17 @@
 nwb_declare_executable(nwb_dependency_computer)
 target_sources(nwb_dependency_computer PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/../main.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/dependencies.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/dependencies.h"
-    "${CMAKE_CURRENT_LIST_DIR}/provider_catalog.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/provider_catalog.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.c"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
 nwb_target_link_libraries_whole_archive(nwb_dependency_computer
     nwb_assets_bunch_cook

@@ -100,8 +100,8 @@ Expected<ControlAction> UiPointerGestureValueTests::takeControl()noexcept{
 }
 
 void UiPointerGestureValueTests::focusHost(){
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 5.0f, 5.0f } }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 5.0f, 5.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 5.0f, 5.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 5.0f, 5.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
 }
 
@@ -117,7 +117,7 @@ TEST_F(UiPointerGestureValueTests, InitialPressCopiesAcceptedOpaqueBitsWithoutNu
         ASSERT_TRUE(publish());
         m_targets[1u].value = ~value;
         EXPECT_EQ(m_router.targets()[1u].value, value);
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
         PointerGesture gesture;
         const auto gestureResult1 = take();
         ASSERT_TRUE(gestureResult1);
@@ -125,7 +125,7 @@ TEST_F(UiPointerGestureValueTests, InitialPressCopiesAcceptedOpaqueBitsWithoutNu
         EXPECT_EQ(gesture.value, value);
         EXPECT_EQ(gesture.state, PointerGestureState::Active);
         EXPECT_EQ(gesture.id.layoutGeneration, m_generation);
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 30.0f, 30.0f } }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
         const auto gestureResult2 = take();
         ASSERT_TRUE(gestureResult2);
         gesture = *gestureResult2;
@@ -137,18 +137,18 @@ TEST_F(UiPointerGestureValueTests, InitialPressCopiesAcceptedOpaqueBitsWithoutNu
 
 TEST_F(UiPointerGestureValueTests, ActiveUpdatesAndOutsideCompletionKeepOriginalPayload){
     ASSERT_TRUE(publish());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     PointerGesture gesture;
     const auto gestureResult1 = take();
     ASSERT_TRUE(gestureResult1);
     gesture = *gestureResult1;
     const PointerGesture baseline = gesture;
     EXPECT_EQ(baseline.value, BitCast<u64>(-0.0));
-    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 30.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
     EXPECT_FALSE(take());
     m_targets[1u].value = 91u;
-    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 70.0f, 30.0f } }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 110.0f, 50.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 70.0f, 30.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 110.0f, 50.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
     const auto gestureResult2 = take();
     ASSERT_TRUE(gestureResult2);
     gesture = *gestureResult2;
@@ -161,7 +161,7 @@ TEST_F(UiPointerGestureValueTests, ActiveUpdatesAndOutsideCompletionKeepOriginal
     EXPECT_FLOAT_EQ(gesture.position.y, 50.0f);
     const u64 moveSequence = gesture.updateSequence;
     EXPECT_FALSE(take());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 260.0f, 180.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 260.0f, 180.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     const auto gestureResult3 = take();
     ASSERT_TRUE(gestureResult3);
     gesture = *gestureResult3;
@@ -177,7 +177,7 @@ TEST_F(UiPointerGestureValueTests, ActiveUpdatesAndOutsideCompletionKeepOriginal
 
 TEST_F(UiPointerGestureValueTests, RepaintingValueAndThumbGeometryDoesNotReplaceAnActivePressBaseline){
     ASSERT_TRUE(publish());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     PointerGesture gesture;
     const auto gestureResult1 = take();
     ASSERT_TRUE(gestureResult1);
@@ -191,7 +191,7 @@ TEST_F(UiPointerGestureValueTests, RepaintingValueAndThumbGeometryDoesNotReplace
     EXPECT_EQ(m_router.capture(), m_targets[1u].id);
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     EXPECT_EQ(m_router.targets()[1u].value, m_targets[1u].value);
-    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 140.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 140.0f, 30.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
     const auto gestureResult2 = take();
     ASSERT_TRUE(gestureResult2);
     gesture = *gestureResult2;
@@ -202,13 +202,13 @@ TEST_F(UiPointerGestureValueTests, RepaintingValueAndThumbGeometryDoesNotReplace
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.x, 10.0f);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.width, 180.0f);
     EXPECT_DOUBLE_EQ(gesture.maximum, 9.0);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 150.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 150.0f, 30.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     const auto gestureResult3 = take();
     ASSERT_TRUE(gestureResult3);
     gesture = *gestureResult3;
     EXPECT_EQ(gesture.value, baseline.value);
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 130.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 130.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     const auto gestureResult4 = take();
     ASSERT_TRUE(gestureResult4);
     gesture = *gestureResult4;
@@ -225,8 +225,8 @@ TEST_F(UiPointerGestureValueTests, SeveralCompletedPressesRetainTheirOwnPublishe
     for(usize index = 0u; index < values.size(); ++index){
         m_targets[1u].value = values[index];
         ASSERT_TRUE(publish());
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 35.0f, 30.0f } }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+        EXPECT_TRUE(send({ .position = { 35.0f, 30.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     }
     u64 previousSequence = 0u;
     for(usize index = 0u; index < values.size(); ++index){
@@ -246,13 +246,13 @@ TEST_F(UiPointerGestureValueTests, SeveralCompletedPressesRetainTheirOwnPublishe
 TEST_F(UiPointerGestureValueTests, CoalescedMoveUsesItsUpdateSequenceAmongOrderedControlActions){
     ASSERT_TRUE(publish());
     focusHost();
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::KeyDown, .key = Core::Key::Right })));
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::KeyUp, .key = Core::Key::Right })));
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } })));
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PointerMove, .position = { 50.0f, 30.0f } })));
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::KeyDown, .key = Core::Key::Left })));
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::KeyUp, .key = Core::Key::Left })));
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PointerMove, .position = { 80.0f, 30.0f } })));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .key = Core::Key::Right , .type = InputEventType::KeyDown})));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .key = Core::Key::Right , .type = InputEventType::KeyUp})));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown})));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .position = { 50.0f, 30.0f } , .type = InputEventType::PointerMove})));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .key = Core::Key::Left , .type = InputEventType::KeyDown})));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .key = Core::Key::Left , .type = InputEventType::KeyUp})));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .position = { 80.0f, 30.0f } , .type = InputEventType::PointerMove})));
     const InputRoutingResult result = m_router.process();
     EXPECT_TRUE(result.pointerConsumed);
     EXPECT_TRUE(result.commandConsumed);
@@ -278,7 +278,7 @@ TEST_F(UiPointerGestureValueTests, CoalescedMoveUsesItsUpdateSequenceAmongOrdere
     EXPECT_FLOAT_EQ(gesture.position.x, 80.0f);
     EXPECT_FALSE(take());
     const u64 moveSequence = gesture.updateSequence;
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 80.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 80.0f, 30.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     const auto gestureResult2 = take();
     ASSERT_TRUE(gestureResult2);
     gesture = *gestureResult2;
@@ -289,7 +289,7 @@ TEST_F(UiPointerGestureValueTests, CoalescedMoveUsesItsUpdateSequenceAmongOrdere
 
 TEST_F(UiPointerGestureValueTests, RejectedPublicationPreservesAcceptedPayloadAndActiveCapture){
     ASSERT_TRUE(publish());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     const HitTarget accepted = m_targets[1u];
     m_targets[1u].value = 91u;
     m_targets[1u].rectangle.width = -1.0f;
@@ -297,7 +297,7 @@ TEST_F(UiPointerGestureValueTests, RejectedPublicationPreservesAcceptedPayloadAn
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
     EXPECT_EQ(m_router.capture(), accepted.id);
     EXPECT_EQ(m_router.targets()[1u].value, accepted.value);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 70.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 70.0f, 30.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     PointerGesture gesture;
     const auto gestureResult = take();
     ASSERT_TRUE(gestureResult);
@@ -309,7 +309,7 @@ TEST_F(UiPointerGestureValueTests, RejectedPublicationPreservesAcceptedPayloadAn
 
 TEST_F(UiPointerGestureValueTests, ReplacedControlTokenRetiresPayloadAndRestorationCannotReviveHeldPress){
     ASSERT_TRUE(publish());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     const ControlToken original = m_targets[0u].control;
     for(auto& target : m_targets)
         ++target.control.contentRevision;
@@ -322,11 +322,11 @@ TEST_F(UiPointerGestureValueTests, ReplacedControlTokenRetiresPayloadAndRestorat
         target.control = original;
     m_targets[1u].value = 101u;
     ASSERT_TRUE(publish());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 70.0f, 30.0f } }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 70.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 70.0f, 30.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 70.0f, 30.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     EXPECT_FALSE(take());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     const auto gestureResult = take();
     ASSERT_TRUE(gestureResult);
     gesture = *gestureResult;
@@ -341,7 +341,7 @@ TEST_F(UiPointerGestureValueTests, DeclarationPolicyClipAndOmissionRetirePayload
         m_targets[1u] = original;
         m_targets[1u].value = variant + 17u;
         ASSERT_TRUE(publish());
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
         usize count = 2u;
         switch(variant){
         case 0u: ++m_targets[1u].declarationGeneration; break;
@@ -356,11 +356,11 @@ TEST_F(UiPointerGestureValueTests, DeclarationPolicyClipAndOmissionRetirePayload
         m_targets[1u] = original;
         m_targets[1u].value = variant + 101u;
         ASSERT_TRUE(publish());
-        EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 70.0f, 30.0f } }).pointerConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 70.0f, 30.0f } }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = { 70.0f, 30.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
+        EXPECT_TRUE(send({ .position = { 70.0f, 30.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
         EXPECT_FALSE(take());
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 30.0f, 30.0f } }).pointerConsumed);
+        EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+        EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
         const auto gestureResult = take();
         ASSERT_TRUE(gestureResult);
         gesture = *gestureResult;
@@ -372,11 +372,11 @@ TEST_F(UiPointerGestureValueTests, DeclarationPolicyClipAndOmissionRetirePayload
 TEST_F(UiPointerGestureValueTests, NativeCaptureLossDiscardsActivePayloadAndKeepsCompletedPressSnapshot){
     m_targets[1u].value = 17u;
     ASSERT_TRUE(publish());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 35.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 35.0f, 30.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     m_targets[1u].value = 91u;
     ASSERT_TRUE(publish());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::PointerCaptureLost }).pointerConsumed);
     EXPECT_FALSE(m_router.capture().valid());
     EXPECT_FALSE(m_router.primaryDown());
@@ -389,7 +389,7 @@ TEST_F(UiPointerGestureValueTests, NativeCaptureLossDiscardsActivePayloadAndKeep
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     const u64 previousSequence = gesture.id.sequence;
     EXPECT_FALSE(take());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     const auto gestureResult2 = take();
     ASSERT_TRUE(gestureResult2);
     gesture = *gestureResult2;

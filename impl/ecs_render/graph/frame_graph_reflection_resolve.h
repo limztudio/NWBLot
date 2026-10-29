@@ -13,7 +13,7 @@
 #include <impl/ecs_render/reflection/settings.adhd.h>
 #include <impl/ecs_render/reflection/scene_content_stamp.h>
 #include <impl/ecs_render/reflection/reflection_system.h>
-#include <impl/ecs_render/reflection/composite_inputs.h>
+#include <impl/ecs_render/reflection/composite_inputs.adhd.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
 

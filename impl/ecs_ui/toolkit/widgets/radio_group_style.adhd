@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RadioGroupStyle{
+    public Name normal = Name("radio.normal");
+    public Name hover = Name("radio.hover");
+    public Name pressed = Name("radio.pressed");
+    public Name checked = Name("radio.checked");
+    public Name disabled = Name("radio.disabled");
+    public Name mark = Name("radio.mark");
+    public Name fallback = Name("checkbox.normal");
+    public Name checkedFallback = Name("checkbox.checked");
+    public Name markFallback = Name("checkbox.mark");
+    public Name focus = Name("focus.overlay");
+    public Color hoverTint = s_StyleHoverTint;
+    public Color pressedTint = s_StylePressedTint;
+    public Color disabledTint = s_StyleDisabledTint;
+    public Insets padding = Insets(s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall);
+    public f32 rowGap = s_StyleSpacingSmall;
+    public f32 indicatorExtent = s_StyleControlExtent;
+    public f32 gap = s_StyleSpacingMedium;
+    // Fraction of the indicator extent inset on each side of its checked mark.
+    public f32 markInset = s_StyleMarkInset;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

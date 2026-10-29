@@ -1,0 +1,28 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_ComboArrowExtent = 20.0f;
+
+class ComboStyle{
+    public Name normal = Name("combo.normal");
+    public Name hover = Name("combo.hover");
+    public Name open = Name("combo.open");
+    public Name focused = Name("combo.focused");
+    public Name disabled = Name("combo.disabled");
+    public Name fallback = Name("button.normal");
+    public Name arrow = Name("combo.arrow");
+    public Name arrowFallback = Name("window.collapse");
+    public Insets padding = Insets(s_StyleSpacingMedium, s_StyleFieldPaddingY, s_StyleSpacingMedium, s_StyleFieldPaddingY);
+    public f32 arrowExtent = s_ComboArrowExtent;
+    public f32 arrowGap = s_StyleSpacingMedium;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

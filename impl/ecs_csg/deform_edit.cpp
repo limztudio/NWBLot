@@ -59,7 +59,7 @@ Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
     CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles
 ){
     if(outVertices.get_allocator().arenaPtr() != &commitArena || outTriangles.get_allocator().arenaPtr() != &commitArena)
-        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::InvalidOutputArena, {} });
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidOutputArena, {}));
     outVertices.clear();
     outTriangles.clear();
     // Commit reuses the preview entry point so both always observe the same rebuild, viability classifier, and stats for identical inputs.
@@ -85,4 +85,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -30,7 +30,7 @@ TEST_F(UiPopupToolsBuilderTests, TooltipDelayBeginsOnlyAfterTheAnchorLayoutIsAcc
     m_tooltipOptions.delaySeconds = 0.5f;
     m_deltaSeconds = 0.25f;
     ASSERT_TRUE(prepareTools(1u, true, false));
-    EXPECT_FALSE(send({ .type = InputEventType::PointerMove, .position = { 30.0f, 30.0f } }).hover.valid());
+    EXPECT_FALSE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::PointerMove}).hover.valid());
     EXPECT_FALSE(m_tooltip.visible());
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_TRUE(moveToAnchor());
@@ -89,7 +89,7 @@ TEST_F(UiPopupToolsBuilderTests, LeavingTheAnchorCancelsVisibleTooltipAndRequire
     ASSERT_TRUE(acceptTools(2u, true, false));
     ASSERT_TRUE(acceptTools(3u, true, false));
     ASSERT_TRUE(m_tooltip.visible());
-    EXPECT_NE(send({ .type = InputEventType::PointerMove, .position = { 790.0f, 590.0f } }).hover, anchor());
+    EXPECT_NE(send({ .position = { 790.0f, 590.0f } , .type = InputEventType::PointerMove}).hover, anchor());
     ASSERT_TRUE(acceptTools(4u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
     ASSERT_TRUE(moveToAnchor());
@@ -108,7 +108,7 @@ TEST_F(UiPopupToolsBuilderTests, LeaveAndReturnBetweenDeclarationsRestartsTheToo
     ASSERT_TRUE(acceptTools(3u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
     const u64 activity = m_context.input().hoverActivityGeneration();
-    EXPECT_NE(send({ .type = InputEventType::PointerMove, .position = { 790.0f, 590.0f } }).hover, anchor());
+    EXPECT_NE(send({ .position = { 790.0f, 590.0f } , .type = InputEventType::PointerMove}).hover, anchor());
     ASSERT_TRUE(moveToAnchor());
     EXPECT_GT(m_context.input().hoverActivityGeneration(), activity);
     ASSERT_TRUE(acceptTools(4u, true, false));
@@ -127,7 +127,7 @@ TEST_F(UiPopupToolsBuilderTests, SameAnchorPointerMotionKeepsTheTooltipDelay){
     ASSERT_TRUE(acceptTools(2u, true, false));
     const u64 activity = m_context.input().hoverActivityGeneration();
     const Point pointer = m_context.input().pointerPosition();
-    EXPECT_EQ(send({ .type = InputEventType::PointerMove, .position = { VectorGetX(VectorAdd(VectorReplicate(pointer.x), VectorReplicate(5.0f))), pointer.y } }).hover, anchor());
+    EXPECT_EQ(send({ .position = { VectorGetX(VectorAdd(VectorReplicate(pointer.x), VectorReplicate(5.0f))), pointer.y } , .type = InputEventType::PointerMove}).hover, anchor());
     EXPECT_EQ(m_context.input().hoverActivityGeneration(), activity);
     ASSERT_TRUE(acceptTools(3u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
@@ -146,8 +146,8 @@ TEST_F(UiPopupToolsBuilderTests, ClickBetweenDeclarationsRestartsTheTooltipDelay
     ASSERT_TRUE(m_tooltip.visible());
     const u64 activity = m_context.input().hoverActivityGeneration();
     const Point pointer = m_context.input().pointerPosition();
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = pointer }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = pointer }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::PrimaryDown }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::PrimaryUp }).pointerConsumed);
     EXPECT_GT(m_context.input().hoverActivityGeneration(), activity);
     ASSERT_TRUE(acceptTools(5u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
@@ -163,16 +163,16 @@ TEST_F(UiPopupToolsBuilderTests, PrimaryCaptureAndSecondaryPressSuppressTheToolt
     ASSERT_TRUE(acceptTools(2u, true, false));
     ASSERT_TRUE(m_tooltip.visible());
     const Point pointer = m_context.input().pointerPosition();
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = pointer }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::PrimaryDown }).pointerConsumed);
     ASSERT_TRUE(acceptTools(3u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = pointer }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::PrimaryUp }).pointerConsumed);
     ASSERT_TRUE(acceptTools(4u, true, false));
     ASSERT_TRUE(m_tooltip.visible());
-    EXPECT_TRUE(send({ .type = InputEventType::SecondaryDown, .position = pointer }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::SecondaryDown }).pointerConsumed);
     ASSERT_TRUE(acceptTools(5u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
-    EXPECT_TRUE(send({ .type = InputEventType::SecondaryUp, .position = pointer }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = pointer , .type = InputEventType::SecondaryUp }).pointerConsumed);
 }
 
 TEST_F(UiPopupToolsBuilderTests, DisabledTooltipAndDisabledAnchorCannotRetainVisibleHelp){
@@ -197,9 +197,9 @@ TEST_F(UiPopupToolsBuilderTests, UnknownPointerAndNativeFocusLossCannotQualifyTo
     ASSERT_TRUE(moveToAnchor());
     ASSERT_TRUE(acceptTools(2u, true, false));
     ASSERT_TRUE(m_tooltip.visible());
-    EXPECT_FALSE(send({ .type = InputEventType::FocusLost, .position = {} }).focus.valid());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusLost}).focus.valid());
     EXPECT_FALSE(m_context.input().capture().valid());
-    EXPECT_FALSE(send({ .type = InputEventType::FocusGained, .position = {} }).focus.valid());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
     ASSERT_TRUE(acceptTools(3u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
 }
@@ -299,8 +299,8 @@ TEST_F(UiPopupToolsBuilderTests, ExplicitTooltipResetBeforeScopeEndRejectsItsBor
 
 TEST_F(UiPopupToolsBuilderTests, SecondaryTriggerUsesOnlyTheExactlyAcceptedAnchorLayout){
     ASSERT_TRUE(prepareTools(1u, false));
-    EXPECT_FALSE(send({ .type = InputEventType::SecondaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
-    EXPECT_FALSE(send({ .type = InputEventType::SecondaryUp, .position = { 30.0f, 30.0f } }).pointerConsumed);
+    EXPECT_FALSE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::SecondaryDown}).pointerConsumed);
+    EXPECT_FALSE(send({ .position = { 30.0f, 30.0f } , .type = InputEventType::SecondaryUp}).pointerConsumed);
     EXPECT_FALSE(m_menu.isOpen());
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_TRUE(openBySecondary(2u));
@@ -315,12 +315,12 @@ TEST_F(UiPopupToolsBuilderTests, EscapeBeforeSecondaryReleaseCancelsThePendingCo
     ASSERT_TRUE(acceptTools(1u, false));
     ASSERT_TRUE(moveToAnchor());
     const Point point = m_context.input().pointerPosition();
-    EXPECT_TRUE(send({ .type = InputEventType::SecondaryDown, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryDown }).pointerConsumed);
     ASSERT_TRUE(acceptTools(2u, false));
     EXPECT_FALSE(m_menu.isOpen());
     EXPECT_FALSE(m_menuResult.opened);
     press(Core::Key::Escape);
-    EXPECT_TRUE(send({ .type = InputEventType::SecondaryUp, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryUp }).pointerConsumed);
     ASSERT_TRUE(acceptTools(3u, false));
     EXPECT_FALSE(m_menu.isOpen());
     EXPECT_FALSE(m_menuResult.opened);
@@ -393,9 +393,9 @@ TEST_F(UiPopupToolsBuilderTests, OutsideClickCancelsAndConsumesTheCompletePointe
 TEST_F(UiPopupToolsBuilderTests, NativeFocusLossCancelsMenuEvenIfFocusReturnsBeforeDeclaration){
     ASSERT_TRUE(acceptTools(1u, false));
     ASSERT_TRUE(openBySecondary(2u));
-    EXPECT_FALSE(send({ .type = InputEventType::FocusLost, .position = {} }).focus.valid());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusLost}).focus.valid());
     EXPECT_FALSE(m_context.input().capture().valid());
-    EXPECT_FALSE(send({ .type = InputEventType::FocusGained, .position = {} }).focus.valid());
+    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
     ASSERT_TRUE(acceptTools(3u, false));
     EXPECT_TRUE(m_menuResult.closed);
     EXPECT_FALSE(m_menuResult.activated);

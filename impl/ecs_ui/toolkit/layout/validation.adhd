@@ -1,0 +1,79 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../paint_types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_UiMaxFloat = 3.40282346638528859812e+38f;
+const f64 s_UiMaxFloatF64 = cast<f64>(s_UiMaxFloat);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool HasValidUiRectDimensions(in Rect rectangle){
+    return isFinite(rectangle.x) && isFinite(rectangle.y) && isFinite(rectangle.width) && rectangle.width >= 0.0f && isFinite(rectangle.height) && rectangle.height >= 0.0f;
+}
+
+// Inputs may be unchecked here, so the bottom sum runs only after the right sum is finite.
+bool HasPreciseUiRectEndpoints(in Rect rectangle){
+    const f32 right = rectangle.x + rectangle.width;
+    if(!isFinite(right)){
+        return false;
+    }
+    const f32 bottom = rectangle.y + rectangle.height;
+    return isFinite(bottom) && (rectangle.width == 0.0f || right > rectangle.x) && (rectangle.height == 0.0f || bottom > rectangle.y);
+}
+
+// Zero or subprecision extents remain valid when their rounded endpoints are finite.
+bool IsValidUiRect(in Rect rectangle){
+    if(!HasValidUiRectDimensions(rectangle)){
+        return false;
+    }
+    const f32 right = rectangle.x + rectangle.width;
+    const f32 bottom = rectangle.y + rectangle.height;
+    return isFinite(right) && isFinite(bottom);
+}
+
+// Controls with travel geometry additionally reject positive extents lost to coordinate precision.
+bool IsPreciseUiRect(in Rect rectangle){
+    return HasValidUiRectDimensions(rectangle) && HasPreciseUiRectEndpoints(rectangle);
+}
+
+// Image placements require both precise rounded extents and f64 endpoint sums inside the f32 upper bound.
+bool IsBoundedUiRect(in Rect rectangle){
+    if(!HasValidUiRectDimensions(rectangle)){
+        return false;
+    }
+    // Finite f32 inputs cannot overflow these f64 sums.
+    const f64x2 end = f64x2(cast<f64>(rectangle.x), cast<f64>(rectangle.y)) + f64x2(cast<f64>(rectangle.width), cast<f64>(rectangle.height));
+    return end.x <= s_UiMaxFloatF64 && end.y <= s_UiMaxFloatF64 && HasPreciseUiRectEndpoints(rectangle);
+}
+
+bool IsValidUiPadding(in Insets padding){
+    return isFinite(padding.left) && padding.left >= 0.0f && isFinite(padding.top) && padding.top >= 0.0f && isFinite(padding.right) && padding.right >= 0.0f && isFinite(padding.bottom) && padding.bottom >= 0.0f;
+}
+
+bool IsBoundedUiPadding(in Insets padding){
+    if(!IsValidUiPadding(padding)){
+        return false;
+    }
+    // Finite f32 inputs cannot overflow these f64 sums.
+    const f64x2 size = f64x2(cast<f64>(padding.left), cast<f64>(padding.top)) + f64x2(cast<f64>(padding.right), cast<f64>(padding.bottom));
+    return size.x <= s_UiMaxFloatF64 && size.y <= s_UiMaxFloatF64;
+}
+
+bool IsValidUiColor(in Color color){
+    return isFinite(color.r) && color.r >= 0.0f && isFinite(color.g) && color.g >= 0.0f && isFinite(color.b) && color.b >= 0.0f && isFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
+}
+
+bool IsValidUiExtent(in Point point){
+    return isFinite(point.x) && point.x >= 0.0f && isFinite(point.y) && point.y >= 0.0f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

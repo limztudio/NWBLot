@@ -249,7 +249,7 @@ TEST_F(HorizontalNavigationFixture, PreservedTextFenceClearsHorizontalCapability
     m_targets[0u].textEditable = true;
     m_targets[0u].scrollable = true;
     ASSERT_TRUE(publish(1u));
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 10.0f, 10.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     EXPECT_TRUE(keyDown(Core::Key::Left).commandConsumed);
     ASSERT_EQ(m_router.controlActions().size(), 1u);
     m_router.fenceControl(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control);
@@ -283,7 +283,7 @@ TEST_F(HorizontalNavigationFixture, PreservedTextFenceClearsHorizontalCapability
     action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
     EXPECT_EQ(action.control, m_targets[0u].control);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 10.0f, 10.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     EXPECT_FALSE(m_router.capture().valid());
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
 }

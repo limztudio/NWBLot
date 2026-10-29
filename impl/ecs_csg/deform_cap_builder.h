@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "deform_types.h"
+#include "deform_wall_builder.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,18 +18,6 @@ NWB_IMPL_BEGIN
 
 
 // Owns cut boundary loop collection, deterministic ordering, and fan fills with one cap orientation rule, so preview and commit caps always agree.
-struct CsgDeformCutLoopEdge{
-    u32 first = 0u;
-    u32 second = 0u;
-};
-
-static_assert(IsStandardLayout_V<CsgDeformCutLoopEdge>, "CsgDeformCutLoopEdge must stay layout-stable for cap loops");
-static_assert(IsTriviallyCopyable_V<CsgDeformCutLoopEdge>, "CsgDeformCutLoopEdge must stay cheap to copy in cap loops");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class CsgDeformCapBuilder final : NoCopy{
 public:
     // SIMD-domain cores: inputs and outputs stay on vector lanes, never touch storage.
@@ -63,4 +51,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

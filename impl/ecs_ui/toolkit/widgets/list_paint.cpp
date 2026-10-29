@@ -31,7 +31,7 @@ Expected<Builder::ListRow> Builder::prepareListRow(const ListFrame& frame, const
     const bool enabled = frame.options.enabled && frame.source->enabled(index);
     if(!listStateMatches(frame))
         return MakeUnexpected(Failure{});
-    const ShapeRequest request{ frame.source->text(index), frame.widgetStyle.fontSize, TextDirection::LeftToRight, frame.measureKey.scriptTag, StringView(frame.measureKey.language.data()) };
+    const ShapeRequest request{ frame.source->text(index), StringView(frame.measureKey.language.data()), frame.widgetStyle.fontSize, frame.measureKey.scriptTag, TextDirection::LeftToRight };
     if(!listStateMatches(frame))
         return MakeUnexpected(Failure{});
     // The source owns a temporary view; shaping must copy it before any further source callback.

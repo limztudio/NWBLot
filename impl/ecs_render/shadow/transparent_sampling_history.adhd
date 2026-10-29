@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Qualifies the accepted RGB history generation independently from opaque-only history advancement.
+class TransparentShadowSamplingHistory{
+    private u32 m_acceptedSlots = 0u;
+    private u32 m_pendingSlots = 0u;
+
+    public void reset(){
+        this.m_acceptedSlots = 0u;
+        this.m_pendingSlots = 0u;
+    }
+
+    public void record(in u32 slotMask){
+        this.m_pendingSlots |= slotMask;
+    }
+
+    public void accept(){
+        this.m_acceptedSlots = this.m_pendingSlots;
+        this.m_pendingSlots = 0u;
+    }
+
+    public void discardPending(){
+        this.m_pendingSlots = 0u;
+    }
+
+    public bool covers(in u32 slotMask)const{
+        return slotMask != 0u && (this.m_acceptedSlots & slotMask) == slotMask;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

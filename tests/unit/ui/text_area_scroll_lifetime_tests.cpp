@@ -113,7 +113,7 @@ protected:
             return false;
         const Point origin = UiWidgetTests::Center(thumb->rectangle);
         const Point destination{ origin.x, VectorGetX(VectorAdd(VectorReplicate(origin.y), VectorReplicate(24.0f))) };
-        return send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed && send({ .type = InputEventType::PointerMove, .position = destination }).pointerConsumed && m_context.input().capture() == thumbId;
+        return send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed && send({ .position = destination , .type = InputEventType::PointerMove }).pointerConsumed && m_context.input().capture() == thumbId;
     }
 
     void expectModel(const EditModel& model, const AreaModelSnapshot& before)const{
@@ -310,7 +310,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBef
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = release }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = release , .type = InputEventType::PrimaryUp }).pointerConsumed);
     expectModel(m_model, model);
     m_parent.open();
     ASSERT_TRUE(begin(3u));
@@ -376,7 +376,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, DisablingRetiresPendingWheelAndThumbWithou
     ASSERT_TRUE(frameArea(2u, disabled));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = release }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = release , .type = InputEventType::PrimaryUp }).pointerConsumed);
     expectModel(m_model, model);
     ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);

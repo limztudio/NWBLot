@@ -5,7 +5,9 @@
 #pragma once
 
 
-#include "commands.h"
+#include "../global.h"
+
+#include <impl/ecs_ui/toolkit/input/commands.adhd.h>
 
 #include <core/input/module.h>
 
@@ -71,4 +73,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

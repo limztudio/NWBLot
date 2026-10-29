@@ -1,0 +1,203 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "commands.adhd"
+#include "pointer.adhd"
+#include "../id.adhd"
+#include "../paint_types.adhd"
+#include "popup.adhd"
+#include "control.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const i32 s_InputKeyUnknown = -1;
+const usize s_InputMaxTargets = 4096u;
+const usize s_InputMaxEvents = 256u;
+const usize s_InputMaxSources = 256u;
+const usize s_InputMaxActions = 256u;
+const usize s_InputMaxPointerGestures = 256u;
+const usize s_InputMaxControlActions = 256u;
+const usize s_InputMaxContextMenuActions = 256u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> InputEventType{
+    enum PointerMove,
+    enum PrimaryDown,
+    enum PrimaryUp,
+    enum KeyDown,
+    enum KeyUp,
+    enum FocusLost,
+    enum PointerLeave,
+    enum PointerCaptureLost,
+    enum FocusGained,
+    enum PointerWheel,
+    enum SecondaryDown,
+    enum SecondaryUp,
+    enum CommandDown,
+    enum CommandUp,
+}
+
+enum<u8> InputActionSource{
+    enum Pointer,
+    enum Command,
+}
+
+enum<u8> PointerGestureState{
+    enum Active,
+    enum Completed,
+}
+
+class InputEvent{
+    public InputEventType type = InputEventType::Enum::PointerMove;
+    public InputCommand command = InputCommand::Enum::None;
+    public bool extend = false;
+    public bool edit = true;
+    public Point position;
+    public i32 key = s_InputKeyUnknown;
+    public bool shift = false;
+    public bool repeat = false;
+    public bool control = false;
+    public bool alt = false;
+    public bool super = false;
+    public bool allowText = false;
+    public bool hoverCapable = false;
+    public f64 scrollX = 0.0;
+    public f64 scrollY = 0.0;
+    // Optional monotonic timestamp at native ingress; zero leaves pointer clicks ungrouped.
+    public u64 timestampMs = 0u;
+    public InputSource source;
+}
+
+// Rectangle and clip use the same logical coordinates as painting; publication order provides the default focus traversal order.
+class HitTarget{
+    public WidgetId id;
+    public u64 declarationGeneration = 1u;
+    public PopupToken popup;
+    public ControlToken control;
+    public WidgetId owner;
+    public u64 ownerDeclarationGeneration = 0u;
+    public u64 value = 0u;
+    public f64 scrollStep = 0.0;
+    public u64 pageRows = 1u;
+    public f64 gestureMaximum = 0.0;
+    public WidgetId commandOwner;
+    public u64 commandOwnerDeclarationGeneration = 0u;
+    public ControlToken commandControl;
+    public f64 scrollStepX = 0.0;
+    public f64 gestureMaximumX = 0.0;
+    public Rect rectangle;
+    public Rect clip;
+    // Both zero dimensions omit the reference; a supplied reference has two positive dimensions.
+    public Rect gestureReference;
+    public u32 paintOrder = 0u;
+    public u32 layer = 0u;
+    public bool enabled = true;
+    public bool focusable = false;
+    public bool activatable = false;
+    public bool pointerGesture = false;
+    public bool textEditable = false;
+    public bool navigable = false;
+    public bool scrollable = false;
+    public bool focusOnCommit = false;
+    // A focused editor may borrow vertical navigation and submission from another accepted control lifetime.
+    public bool contextMenu = false;
+    public bool horizontalNavigation = false;
+}
+
+// Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.
+class InputActionId{
+    public WidgetId target;
+    public u64 declarationGeneration = 0u;
+    public u64 layoutGeneration = 0u;
+    public u64 sequence = 0u;
+
+    public bool valid()const{
+        return this.target.valid() && this.declarationGeneration != 0u && this.layoutGeneration != 0u && this.sequence != 0u;
+    }
+
+    public bool operator==(in InputActionId rhs)const{
+        return this.target == rhs.target && this.declarationGeneration == rhs.declarationGeneration && this.layoutGeneration == rhs.layoutGeneration && this.sequence == rhs.sequence;
+    }
+
+    public bool operator!=(in InputActionId rhs)const{
+        return this.target != rhs.target || this.declarationGeneration != rhs.declarationGeneration || this.layoutGeneration != rhs.layoutGeneration || this.sequence != rhs.sequence;
+    }
+}
+
+class InputAction{
+    public InputActionId id;
+    public InputActionSource origin = InputActionSource::Enum::Pointer;
+    public PopupToken popup;
+    public ControlToken control;
+    public InputSource inputSource;
+}
+
+// Context-menu triggers retain the accepted anchor and lifetime without borrowing the declaration.
+class ContextMenuAction{
+    public InputActionId id;
+    public PopupToken popup;
+    public ControlToken control;
+    public Point position;
+    public InputActionSource origin = InputActionSource::Enum::Pointer;
+    public InputSource inputSource;
+}
+
+// Ordered copied input addressed to a focusable host, including stable values selected by its parts.
+class ControlAction{
+    public InputActionId id;
+    public WidgetId source;
+    public PopupToken popup;
+    public ControlToken control;
+    public ControlActionKind kind = ControlActionKind::Enum::Wheel;
+    public f64 delta = 0.0;
+    public u64 value = 0u;
+    public f64 step = 0.0;
+    public u64 pageRows = 1u;
+    public f64 offset = 0.0;
+    public f64 maximum = 0.0;
+    public u64 sourceDeclarationGeneration = 0u;
+    public ControlToken sourceControl;
+    // Positive X moves right; positive Y moves up. Each wheel action carries one native event.
+    public f64 deltaX = 0.0;
+    public f64 stepX = 0.0;
+    public f64 maximumX = 0.0;
+}
+
+// One coalesced update per press retains the committed geometry; cancellation removes the gesture without delivery.
+class PointerGesture{
+    public InputActionId id;
+    public InputSource inputSource;
+    public Point origin;
+    public Point position;
+    public Rect targetRectangle;
+    public Rect referenceRectangle;
+    public PointerGestureState state = PointerGestureState::Enum::Active;
+    public PopupToken popup;
+    public ControlToken control;
+    public f64 maximum = 0.0;
+    public u64 updateSequence = 0u;
+    // Copied once from the accepted target at the initial press; later updates retain these opaque bits.
+    public u64 value = 0u;
+}
+
+class InputRoutingResult{
+    public bool pointerConsumed = false;
+    public bool commandConsumed = false;
+    public bool wantsPointer = false;
+    public bool wantsCommands = false;
+    public bool pointerRouted = false;
+    public bool activationOverflow = false;
+    public bool gestureOverflow = false;
+    public WidgetId hover;
+    public WidgetId focus;
+    public WidgetId capture;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

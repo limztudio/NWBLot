@@ -8,12 +8,12 @@
 #include <impl/ecs_ui/components.adhd.h>
 #include "paint_context.h"
 #include "edit_box_host.h"
-#include "frame_delta.h"
+#include <impl/ecs_ui/frame_delta.adhd.h>
 #include "skin_selection.h"
 
 #include <impl/assets_scene/asset.h>
 #include <impl/assets_ui_skin/subsystem.adhd.h>
-#include <impl/ecs_ui/toolkit/input/pointer.h>
+#include <impl/ecs_ui/toolkit/input/pointer.adhd.h>
 #include <impl/ecs_ui/toolkit/gpu/renderer.h>
 
 #include <core/ecs/system.h>

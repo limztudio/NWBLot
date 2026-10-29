@@ -1,10 +1,16 @@
 nwb_declare_executable(nwb_adhd_compiler)
 target_sources(nwb_adhd_compiler PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/compiler_options.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/compiler_options.h"
-    "${CMAKE_CURRENT_LIST_DIR}/compiler_driver.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/compiler_driver.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.c"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
 target_link_libraries(nwb_adhd_compiler PRIVATE
     nwb_metascript

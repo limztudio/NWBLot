@@ -8,7 +8,12 @@ if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_csg_cook)
     target_sources(nwb_assets_csg_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cook.h"
+        "${CMAKE_CURRENT_LIST_DIR}/*.h"
+        "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+        "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+        "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+        "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     )
     target_link_libraries(nwb_assets_csg_cook PUBLIC nwb_assets nwb_assets_csg nwb_metascript nwb_filesystem)
     target_compile_definitions(nwb_assets_csg_cook PRIVATE NWB_COOK=1)

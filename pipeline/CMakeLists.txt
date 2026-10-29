@@ -1,7 +1,12 @@
 nwb_declare_static_library(nwb_pipeline_command_line)
 target_sources(nwb_pipeline_command_line PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/command_line.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/command_line.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
 target_link_libraries(nwb_pipeline_command_line PUBLIC nwb_assets_cook nwb_common nwb::cli11_headers)
 target_compile_definitions(nwb_pipeline_command_line PRIVATE NWB_COOK=1)
@@ -12,4 +17,3 @@ add_subdirectory(asset_gatherer)
 add_subdirectory(adhd_compiler)
 
 add_custom_target(nwb_pipeline DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer nwb_adhd_compiler)
-

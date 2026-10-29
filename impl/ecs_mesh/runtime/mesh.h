@@ -6,8 +6,9 @@
 
 
 #include <impl/ecs_mesh/runtime/handle.adhd.h>
+#include <impl/ecs_mesh/runtime/types.adhd.h>
 
-#include <impl/assets_mesh/payload_types.h>
+#include <impl/assets_mesh/payload_types.adhd.h>
 
 #include <core/alloc/general.h>
 #include <core/assets/ref.h>
@@ -28,24 +29,6 @@ NWB_IMPL_BEGIN
 
 class Mesh;
 class RuntimeMeshRequestSet;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RuntimeMeshDirtyFlag{
-    static constexpr u8 s_RuntimeMeshDirtyFlagNoneBase = 0;
-    enum Enum : u8{
-        None = s_RuntimeMeshDirtyFlagNoneBase,
-        TopologyDirty = 1u << 0u,
-        AttributesDirty = 1u << 1u,
-        SkinningInputDirty = 1u << 2u,
-        GpuUploadDirty = 1u << 3u,
-        MeshletBoundsDirty = 1u << 4u,
-        All = TopologyDirty | AttributesDirty | SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty,
-    };
-};
-using RuntimeMeshDirtyFlags = u8;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,20 +64,6 @@ public:
             && meshletPrimitiveIndexBuffer != nullptr
         ;
     }
-};
-
-inline constexpr i32 s_RuntimeMeshBoundsValidFlag = 1 << 0;
-inline constexpr i32 s_RuntimeMeshBoundsFiniteFlag = 1 << 1;
-
-struct RuntimeMeshLocalBounds{
-    Float3Int minBounds = Float3Int(0.f, 0.f, 0.f, 0);
-    Float3Int maxBounds = Float3Int(0.f, 0.f, 0.f, 0);
-
-
-public:
-    [[nodiscard]] bool valid()const noexcept{ return (minBounds.w & s_RuntimeMeshBoundsValidFlag) != 0; }
-    // Non-finite bounds are conservative; keep payload for transforms, skip culling.
-    [[nodiscard]] bool finite()const noexcept{ return (minBounds.w & s_RuntimeMeshBoundsFiniteFlag) != 0; }
 };
 
 static_assert(alignof(RuntimeMeshLocalBounds) >= alignof(Float4), "RuntimeMeshLocalBounds must stay SIMD-friendly");
@@ -152,13 +121,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace RenderableMeshResolution{
-    enum Enum : u8{
-        Absent,
-        Unavailable,
-    };
-};
-
 struct RenderableMeshDesc{
     Core::Assets::AssetRef<Mesh> mesh;
     RuntimeMeshDesc runtimeMesh;
@@ -189,4 +151,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

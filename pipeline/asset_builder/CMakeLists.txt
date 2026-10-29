@@ -1,13 +1,13 @@
 nwb_declare_static_library(nwb_pipeline_asset_builder)
 target_sources(nwb_pipeline_asset_builder PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/global.h"
-    "${CMAKE_CURRENT_LIST_DIR}/build.h"
-    "${CMAKE_CURRENT_LIST_DIR}/build.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/build_options.h"
-    "${CMAKE_CURRENT_LIST_DIR}/build_inputs.h"
-    "${CMAKE_CURRENT_LIST_DIR}/build_inputs.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/cook_paths.h"
+    "${CMAKE_CURRENT_LIST_DIR}/build*.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cook_paths.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
 target_link_libraries(nwb_pipeline_asset_builder PUBLIC nwb_assets_volume_cook nwb_cpu_task)
 target_compile_definitions(nwb_pipeline_asset_builder PRIVATE NWB_COOK=1)

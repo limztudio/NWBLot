@@ -52,14 +52,14 @@ TEST_F(UiListBuilderTests, LatestThumbMotionFollowsAnInterveningWheelInNativeInp
     const Point origin = Center(accepted.rectangle);
     const SIMDVectorSingle trackEnd = VectorAdd(VectorReplicate(accepted.gestureReference.y), VectorReplicate(accepted.gestureReference.height));
     const Point destination{ origin.x, VectorGetX(VectorNegativeMultiplySubtractExpression(VectorReplicate(accepted.rectangle.height), VectorReplicate(0.5f), trackEnd)) };
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed);
     InputEvent event;
     event.type = InputEventType::PointerWheel;
     event.position = origin;
     event.scrollY = 1.0;
     EXPECT_TRUE(send(event).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = destination }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = destination }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = destination , .type = InputEventType::PointerMove }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = destination , .type = InputEventType::PrimaryUp }).pointerConsumed);
     ASSERT_TRUE(prepare(2u));
     EXPECT_DOUBLE_EQ(m_state.scrollOffset(), accepted.gestureMaximum);
     EXPECT_EQ(m_state.placement().endRow, 100000u);

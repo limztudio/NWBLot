@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SliderStyle{
+    public Name track = Name("slider.track");
+    public Name normal = Name("slider.thumb.normal");
+    public Name hover = Name("slider.thumb.hover");
+    public Name pressed = Name("slider.thumb.pressed");
+    public Name disabled = Name("slider.thumb.disabled");
+    public Name trackFallback = Name("scrollbar.track");
+    public Name thumbFallback = Name("scrollbar.thumb.normal");
+    public Name focus = Name("focus.overlay");
+    public Color hoverTint = s_StyleHoverTint;
+    public Color pressedTint = s_StylePressedTint;
+    public Color disabledTint = s_StyleDisabledTint;
+    public Insets padding = Insets(s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall);
+    public Point thumbExtent = Point(s_StyleControlExtent, s_StyleControlExtent);
+    public f32 trackHeight = s_StyleSliderTrackHeight;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

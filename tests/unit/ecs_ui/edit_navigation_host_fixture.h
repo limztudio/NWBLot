@@ -201,7 +201,7 @@ protected:
     }
 
     [[nodiscard]] bool click(const Ui::Point position, const bool shift = false){
-        return dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = position, .shift = shift }) && dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = position, .shift = shift });
+        return dispatch({ .position = position, .type = Ui::InputEventType::PrimaryDown, .shift = shift  }) && dispatch({ .position = position, .type = Ui::InputEventType::PrimaryUp, .shift = shift  });
     }
 
     [[nodiscard]] bool focusOther(){

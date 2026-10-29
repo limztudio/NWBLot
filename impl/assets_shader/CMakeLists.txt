@@ -1,9 +1,12 @@
 nwb_declare_static_library(nwb_assets_shader)
 target_sources(nwb_assets_shader PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/asset.h"
-    "${CMAKE_CURRENT_LIST_DIR}/shader_types.h"
-    "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
 target_link_libraries(nwb_assets_shader PUBLIC nwb_assets PRIVATE nwb_shader_bytecode)
 
@@ -16,20 +19,17 @@ target_link_libraries(nwb_assets_shader_loader INTERFACE nwb_assets_shader nwb_g
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_shader_cook)
     target_sources(nwb_assets_shader_cook PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/codec.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_checksum.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/slang_compiler.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/slang_compiler_workspace.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/source_dependencies.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/asset.h"
-        "${CMAKE_CURRENT_LIST_DIR}/shader_types.h"
-        "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cook.h"
-        "${CMAKE_CURRENT_LIST_DIR}/slang_compiler.h"
-        "${CMAKE_CURRENT_LIST_DIR}/slang_compiler_workspace.h"
-        "${CMAKE_CURRENT_LIST_DIR}/source_dependencies.h"
+        "${CMAKE_CURRENT_LIST_DIR}/*.c"
+        "${CMAKE_CURRENT_LIST_DIR}/*.cc"
+        "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
+        "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/*.h"
+        "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+        "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+        "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+        "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
+        "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
     )
     target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_metascript PRIVATE nwb_shader_bytecode)
     target_compile_definitions(nwb_assets_shader_cook PRIVATE NWB_COOK=1 NWB_SLANGC_EXECUTABLE="${NWB_SLANGC_EXECUTABLE}")

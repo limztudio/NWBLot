@@ -48,7 +48,7 @@ TEST_F(UiRadioGroupBuilderTests, TemporaryLabelsAreOwnedBeforeTheNextSourceCallb
         const Array<char, 4u> bytes{ static_cast<char>('A' + index), 'b', 'c', 'd' };
         TextLayout layout(m_arena);
         {
-            auto layoutResult = m_text.layout({ { bytes.data(), bytes.size() }, 14.0f });
+            auto layoutResult = m_text.layout({ .text = { bytes.data(), bytes.size() }, .fontSize = 14.0f });
             ASSERT_TRUE(layoutResult);
             layout = Move(*layoutResult);
         }
@@ -86,12 +86,12 @@ TEST_F(UiRadioGroupBuilderTests, TemporaryLabelsAreOwnedBeforeTheNextSourceCallb
 TEST_F(UiRadioGroupBuilderTests, SelectionCommitsOnReleaseAndNotOnPress){
     ASSERT_TRUE(accept(1u));
     const Point point = choicePoint(20u);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
     ASSERT_TRUE(accept(2u));
     EXPECT_EQ(m_state.selectedKey(), 10u);
     EXPECT_FALSE(m_result.selectionChanged);
     EXPECT_FALSE(m_result.activated);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(m_state.selectedKey(), 20u);
     EXPECT_TRUE(m_result.selectionChanged);
@@ -164,22 +164,22 @@ TEST_F(UiRadioGroupBuilderTests, HeldSubmitWaitsForReleaseWhileAnUnchangedChoice
 TEST_F(UiRadioGroupBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardSubmission){
     ASSERT_TRUE(accept(1u));
     const Point point = choicePoint(20u);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
     ASSERT_TRUE(accept(2u));
     EXPECT_FALSE(m_result.activated);
     press(Core::Key::Escape);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(m_state.selectedKey(), 10u);
     EXPECT_FALSE(m_result.activated);
     EXPECT_FALSE(m_result.selectionChanged);
     press(Core::Key::Tab);
     ASSERT_EQ(m_context.input().focus(), host());
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
     ASSERT_TRUE(accept(4u));
     EXPECT_FALSE(m_result.activated);
     press(Core::Key::Escape);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).commandConsumed);
+    EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyUp }).commandConsumed);
     ASSERT_TRUE(accept(5u));
     EXPECT_EQ(m_state.selectedKey(), 10u);
     EXPECT_FALSE(m_result.activated);
@@ -220,8 +220,8 @@ TEST_F(UiRadioGroupBuilderTests, WholeDisabledGroupKeepsThePanelBarrierAndRetire
     EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "choices")), 10u))), nullptr);
     const Point point = choicePoint(10u);
     EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_RadioPanelKey)));
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     ASSERT_TRUE(accept(3u, options));
     EXPECT_EQ(m_state.selectedKey(), 10u);
     EXPECT_FALSE(m_result.selectionChanged);

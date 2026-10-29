@@ -86,11 +86,11 @@ InputRoutingResult HorizontalNavigationFixture::send(const InputEvent& event){
 }
 
 InputRoutingResult HorizontalNavigationFixture::keyDown(const Core::Key::Enum key, const bool repeat){
-    return send({ .type = InputEventType::KeyDown, .key = key, .repeat = repeat });
+    return send({ .key = key, .type = InputEventType::KeyDown, .repeat = repeat  });
 }
 
 InputRoutingResult HorizontalNavigationFixture::keyUp(const Core::Key::Enum key){
-    return send({ .type = InputEventType::KeyUp, .key = key });
+    return send({ .key = key , .type = InputEventType::KeyUp });
 }
 
 void HorizontalNavigationFixture::press(const Core::Key::Enum key){
@@ -102,8 +102,8 @@ void HorizontalNavigationFixture::focusTarget(const usize index){
     const Rect& rectangle = m_targets[index].rectangle;
     const SIMDVectorSingle pointValue = VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorReplicate(10.0f));
     const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     EXPECT_EQ(m_router.focus(), m_targets[index].id);
 }
 

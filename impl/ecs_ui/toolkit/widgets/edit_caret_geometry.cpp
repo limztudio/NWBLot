@@ -262,7 +262,7 @@ bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expect
         return false;
     if(mode == EditTextMode::Multiline && !ValidateMultilineText(expectedText))
         return false;
-    const ShapeRequest request{ expectedText, layout.fontSize() };
+    const ShapeRequest request{ .text = expectedText, .fontSize = layout.fontSize() };
     if(ValidateTextRequest(request, mode == EditTextMode::Multiline) != TextLayoutStatus::Success || !__hidden_ui_edit_caret_geometry::ValidateLayout(layout, mode))
         return false;
     auto boundaries = GraphemeSegmentation::Build(*m_arena, expectedText, mode == EditTextMode::SingleLine);

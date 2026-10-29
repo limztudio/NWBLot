@@ -358,8 +358,8 @@ protected:
     }
 
     void key(const Core::Key::Enum value, const bool control = false){
-        EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::KeyDown, .position = {}, .key = value, .control = control }).commandConsumed);
-        EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::KeyUp, .position = {}, .key = value, .control = control }).commandConsumed);
+        EXPECT_TRUE(dispatch({ .position = {}, .key = value, .type = Ui::InputEventType::KeyDown, .control = control }).commandConsumed);
+        EXPECT_TRUE(dispatch({ .position = {}, .key = value, .type = Ui::InputEventType::KeyUp, .control = control }).commandConsumed);
     }
 
     void focusBase(){

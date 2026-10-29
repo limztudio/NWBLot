@@ -39,7 +39,7 @@ TextLayoutStatus::Enum Label::setText(const ShapeRequest& request){
 
 Expected<Rect> Label::measure(TextService& text, const DisplayMetrics& display){
     if(m_dirty || m_serviceIdentity != text.identity() || m_fontGeneration != text.generation()){
-        const ShapeRequest request{ StringView(m_text.data(), m_text.size()), m_fontSize, m_direction, m_scriptTag, StringView(m_language.data(), m_language.size()) };
+        const ShapeRequest request{ StringView(m_text.data(), m_text.size()), StringView(m_language.data(), m_language.size()), m_fontSize, m_scriptTag, m_direction };
         auto layout = text.layout(request);
         if(!layout)
             return MakeUnexpected(Failure{});

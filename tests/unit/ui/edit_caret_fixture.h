@@ -117,7 +117,7 @@ public:
 
 protected:
     [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const StringView text, const TextDirection::Enum direction = TextDirection::LeftToRight){
-        return m_builder.layout({ text, 16.0f, direction });
+        return m_builder.layout({ .text = text, .fontSize = 16.0f, .direction = direction });
     }
 
     [[nodiscard]] bool identityMapping(const StringView text){

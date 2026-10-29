@@ -1,20 +1,16 @@
 nwb_declare_static_library(nwb_graphics)
 target_sources(nwb_graphics PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/profile_names.h"
-    "${CMAKE_CURRENT_LIST_DIR}/render_pass.h"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_contract.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_frame.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_render_passes.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime.h"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_feature_options.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_feature_queries.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_graph_setup.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_internal.h"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_setup.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_standalone_graph.h"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_swap_chain.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_texture_upload.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.c"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
 
 target_link_libraries(nwb_graphics PUBLIC nwb_graphics_backend nwb_gpu_task)

@@ -2,17 +2,19 @@ nwb_declare_static_library(nwb_assets_material_types)
 nwb_target_adhd_sources(nwb_assets_material_types
     NAMESPACE "NWB::Impl"
     SOURCES
-        "${CMAKE_CURRENT_LIST_DIR}/types.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
 target_link_libraries(nwb_assets_material_types PUBLIC nwb_assets nwb_ecs)
 
 nwb_declare_static_library(nwb_assets_material)
 target_sources(nwb_assets_material PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/asset.h"
-    "${CMAKE_CURRENT_LIST_DIR}/material_typed_constants.h"
-    "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
-    "${CMAKE_CURRENT_LIST_DIR}/shader_stage_names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
 target_link_libraries(nwb_assets_material PUBLIC nwb_assets nwb_assets_material_types)
 
@@ -21,26 +23,14 @@ if(NWB_BUILD_PIPELINE)
     target_sources(nwb_assets_material_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/material_parse.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/material_parse_meta.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/material_bind_codegen.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/material_bind_dependency.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/material_dispatch_codegen.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/material_generated_shaders.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/bind.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/bind_parse.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/bind_typed_layout.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/bind_typed_value.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/bind_typed_value.h"
-        "${CMAKE_CURRENT_LIST_DIR}/asset.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cook.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_private.h"
-        "${CMAKE_CURRENT_LIST_DIR}/metadata.h"
-        "${CMAKE_CURRENT_LIST_DIR}/bind.h"
-        "${CMAKE_CURRENT_LIST_DIR}/bind_private.h"
-        "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_types.h"
-        "${CMAKE_CURRENT_LIST_DIR}/shader_stage_names.h"
+        "${CMAKE_CURRENT_LIST_DIR}/material_*.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/bind*.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/*.h"
+        "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+        "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+        "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+        "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     )
     target_link_libraries(nwb_assets_material_cook PUBLIC nwb_assets nwb_assets_material_types nwb_metascript)
     target_compile_definitions(nwb_assets_material_cook PRIVATE NWB_COOK=1)

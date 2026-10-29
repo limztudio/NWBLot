@@ -6,7 +6,7 @@
 
 
 #include "asset.h"
-#include "skin_types.h"
+#include <impl/assets_mesh/skin_types.adhd.h>
 
 #include <impl/assets_skeleton/asset.h>
 

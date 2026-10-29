@@ -42,20 +42,20 @@ Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialC
     stats.inputVertexCount = static_cast<u32>(inputVertexCount);
     stats.inputTriangleCount = static_cast<u32>(inputTriangleCount);
     if(inputVertexCount == 0u || inputTriangleCount == 0u){
-        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::EmptyInput, stats });
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::EmptyInput, stats));
     }
     if(inputVertexCount > s_MaxDeformVertices || inputTriangleCount > s_MaxDeformTriangles){
-        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::TooLarge, stats });
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::TooLarge, stats));
     }
     if(!CsgDeformValidator::ValidOptions(options)){
-        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::InvalidCutter, stats });
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidCutter, stats));
     }
     const auto finiteInput = CsgDeformValidator::FiniteInput(inputVertices, inputVertexCount);
     if(!finiteInput){
-        return MakeUnexpected(CsgDeformFailure{ finiteInput.error(), stats });
+        return MakeUnexpected(MakeCsgDeformFailure(finiteInput.error(), stats));
     }
     if(!CsgDeformValidator::ValidTopology(inputTriangles, inputTriangleCount, inputVertexCount)){
-        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::InvalidTopology, stats });
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidTopology, stats));
     }
 
     const SIMDVectorSingle epsilon = CsgDeformValidator::ShapeEpsilon(VectorReplicate(options.distanceEpsilon));
@@ -79,28 +79,28 @@ Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialC
             continue;
         const auto clipped = CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, scratchKept, scratchDistances, outVertices, outTriangles);
         if(!clipped){
-            return MakeUnexpected(CsgDeformFailure{ clipped.error(), stats });
+            return MakeUnexpected(MakeCsgDeformFailure(clipped.error(), stats));
         }
         ++appliedCuts;
         if(outTriangles.empty() || outVertices.size() > s_MaxDeformVertices || outTriangles.size() > s_MaxDeformTriangles){
             const auto reason = outTriangles.empty() ? CsgDeformViabilityReason::NoKeptGeometry : CsgDeformViabilityReason::TooLarge;
-            return MakeUnexpected(CsgDeformFailure{ reason, stats });
+            return MakeUnexpected(MakeCsgDeformFailure(reason, stats));
         }
         if(options.fillCaps){
             const auto cutCaps = CsgDeformCapBuilder::FillCutCaps(scratchArena, scratchEdges, outVertices, outTriangles);
             if(!cutCaps){
-                return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::CapLoopFailed, stats });
+                return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::CapLoopFailed, stats));
             }
             capTriangles += *cutCaps;
         }
     }
 
     if(outVertices.empty() || outTriangles.empty()){
-        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::NoKeptGeometry, stats });
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NoKeptGeometry, stats));
     }
     for(const CsgDeformVertex& vertex : outVertices){
         if(!CsgDeformValidator::FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color))){
-            return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::NonFiniteInput, stats });
+            return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NonFiniteInput, stats));
         }
     }
     stats.outputVertexCount = static_cast<u32>(outVertices.size());
@@ -118,4 +118,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -62,8 +62,8 @@ TEST_F(UiSearchComboBuilderTests, ReverseTabFromQueryCancelsPreeditAndKeepsTheCo
     ASSERT_TRUE(m_search.query().beginComposition());
     ASSERT_TRUE(m_search.query().updateComposition(s_PreeditText, 0u, 7u));
     ASSERT_TRUE(m_search.query().composition().active);
-    const InputEvent reverseDown{ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab, .shift = true };
-    const InputEvent reverseUp{ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab, .shift = true };
+    const InputEvent reverseDown{ .position = {}, .key = Core::Key::Tab, .type = InputEventType::KeyDown, .shift = true };
+    const InputEvent reverseUp{ .position = {}, .key = Core::Key::Tab, .type = InputEventType::KeyUp, .shift = true };
     EXPECT_TRUE(send(reverseDown).commandConsumed);
     EXPECT_TRUE(send(reverseUp).commandConsumed);
     ASSERT_TRUE(acceptSearch(3u));

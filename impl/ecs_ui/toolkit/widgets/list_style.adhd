@@ -1,0 +1,39 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SelectableStyle{
+    public Name normal = Name("list.row.normal");
+    public Name hover = Name("list.row.hover");
+    public Name selected = Name("list.row.selected");
+    public Name disabled = Name("list.row.disabled");
+    public Name fallback = Name("button.normal");
+    public Name hoverFallback = Name("button.hover");
+    public Name selectedFallback = Name("button.pressed");
+    public Name disabledFallback = Name("button.disabled");
+    public Name focus = Name("focus.overlay");
+    public Insets padding = Insets(s_StyleSpacingMedium, s_StyleSpacingSmall, s_StyleSpacingMedium, s_StyleSpacingSmall);
+}
+
+class ListStyle{
+    public SelectableStyle row;
+    public Name background = Name("list.background");
+    public Name backgroundFallback = Name("panel.normal");
+    public Name track = Name("scroll.track");
+    public Name trackFallback = Name("panel.normal");
+    public Name thumb = Name("scroll.thumb");
+    public Name thumbFallback = Name("button.normal");
+    public Name thumbHover = Name("button.hover");
+    public Insets padding = Insets(s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall);
+    public f32 scrollbarWidth = s_StyleScrollbarThickness;
+    public f32 minimumThumb = s_StyleScrollbarMinimumThumb;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

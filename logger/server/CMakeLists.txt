@@ -10,13 +10,12 @@ target_sources(nwb_logserver PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_aftermath.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_auth.h"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_ingest.h"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_internal.h"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_paths.h"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate.h"
-    "${CMAKE_CURRENT_LIST_DIR}/frame.h"
-    "${CMAKE_CURRENT_LIST_DIR}/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
 nwb_target_sources_standalone_runtime(nwb_logserver)
 if(WIN32)

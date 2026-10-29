@@ -5,12 +5,12 @@ target_sources(nwb_crash PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/request.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/spool.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
-    "${CMAKE_CURRENT_LIST_DIR}/global.h"
-    "${CMAKE_CURRENT_LIST_DIR}/internal.h"
-    "${CMAKE_CURRENT_LIST_DIR}/module.h"
-    "${CMAKE_CURRENT_LIST_DIR}/package_names.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reason_names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
 if(WIN32)
     target_sources(nwb_crash PRIVATE
@@ -26,12 +26,13 @@ target_link_libraries(nwb_crash PUBLIC nwb_alloc)
 nwb_declare_static_library(nwb_crash_package)
 target_sources(nwb_crash_package PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/handler.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/package.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/package_upload.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/handler.h"
-    "${CMAKE_CURRENT_LIST_DIR}/internal.h"
-    "${CMAKE_CURRENT_LIST_DIR}/package_internal.h"
-    "${CMAKE_CURRENT_LIST_DIR}/package_names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/package*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hh"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hxx"
+    "${CMAKE_CURRENT_LIST_DIR}/*.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/*.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
 target_link_libraries(nwb_crash_package PRIVATE nwb_crash)
 target_link_libraries(nwb_crash_package PRIVATE nwb::curl)

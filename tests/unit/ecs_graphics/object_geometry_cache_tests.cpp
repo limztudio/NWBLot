@@ -3,7 +3,7 @@
 
 
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
-#include <impl/assets_mesh/payload_types.h>
+#include <impl/assets_mesh/payload_types.adhd.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 
 #include <gtest/gtest.h>

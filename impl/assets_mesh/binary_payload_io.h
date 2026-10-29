@@ -6,7 +6,7 @@
 
 
 #include "meshlet_constants.h"
-#include "payload_types.h"
+#include <impl/assets_mesh/payload_types.adhd.h>
 
 #include <core/assets/binary_payload_io.h>
 

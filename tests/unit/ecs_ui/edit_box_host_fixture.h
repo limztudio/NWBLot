@@ -215,7 +215,7 @@ protected:
     }
 
     [[nodiscard]] bool key(Core::Key::Enum value, bool shift = false, bool control = false){
-        return dispatch({ .type = Ui::InputEventType::KeyDown, .key = value, .shift = shift, .control = control }) && dispatch({ .type = Ui::InputEventType::KeyUp, .key = value, .shift = shift, .control = control });
+        return dispatch({ .key = value, .type = Ui::InputEventType::KeyDown, .shift = shift, .control = control  }) && dispatch({ .key = value, .type = Ui::InputEventType::KeyUp, .shift = shift, .control = control  });
     }
 
     [[nodiscard]] bool activate(){

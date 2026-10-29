@@ -38,6 +38,13 @@ void TypeChecker::propagateFuncCaptureBytes(
                 break;
             }
         }
+        return;
+    }
+    if(rhs->kind == ExprKind::Call){
+        for(const Expr* arg : rhs->arguments){
+            if(arg)
+                propagateFuncCaptureBytes(targetType, arg, scope, symbols);
+        }
     }
 }
 
@@ -131,6 +138,7 @@ b8 TypeChecker::checkCallableArguments(
             if(adaptsFirstArg){
                 expectedParamTypeRef = recvTypeRef->templateArgs[0].type;
                 expectedParamType = m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
+                propagateFuncCaptureBytes(expectedParamTypeRef, arg, scope, m_symbols);
             }
         }
         arg->isMutArg = paramIsMut;
@@ -218,6 +226,7 @@ b8 TypeChecker::checkCallExpr(
     const TypeRef* recvTypeRef = nullptr;
     MStringView calledMemberName;
     const ScopedVarInfo* localCallable = nullptr;
+    ScopedVarInfo tempInlineLambdaVar;
     const TypeRef* invokedFuncType = nullptr;
     const usize callArgCount = expr.arguments.size();
     MVector<MStringView> argTypeHints(m_arena);
@@ -349,6 +358,10 @@ b8 TypeChecker::checkCallExpr(
                     reportError(errors, expr.span, "unknown method on interface");
                     ok = false;
                 }
+                else if(recvIsConst && !targetCallable->isConst){
+                    reportError(errors, expr.span, "cannot call non-'const' method on 'in' or 'const' interface receiver");
+                    ok = false;
+                }
             }
             else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, objType)){
                 for(const TypeRef* boundRef : tp->interfaceBounds){
@@ -361,6 +374,10 @@ b8 TypeChecker::checkCallExpr(
                 }
                 if(!targetCallable){
                     reportError(errors, expr.span, "method call on template parameter requires a matching interface bound ('<T : IInterface>')");
+                    ok = false;
+                }
+                else if(recvIsConst && !targetCallable->isConst){
+                    reportError(errors, expr.span, "cannot call non-'const' method on 'in' or 'const' bounded template parameter");
                     ok = false;
                 }
             }
@@ -383,6 +400,24 @@ b8 TypeChecker::checkCallExpr(
                 expr.lhs->lhs->derefNotNull = savedDeref;
             }
         }
+        else if(expr.lhs->kind == ExprKind::Lambda){
+            tempInlineLambdaVar.lambdaExpr = expr.lhs;
+            tempInlineLambdaVar.declaredParallelDepth = m_parallelDepth;
+            localCallable = &tempInlineLambdaVar;
+        }
+        else{
+            const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
+            invokedFuncType = m_symbols.unwrapTypeAlias(lhsTypeRef);
+        }
+    }
+    if(m_parallelDepth > 0u
+        && localCallable
+        && localCallable->lambdaExpr
+        && localCallable->lambdaExpr->hasMutContainerCapture
+        && localCallable->declaredParallelDepth < m_parallelDepth)
+    {
+        reportError(errors, expr.span, "calling lambda that captures outer non-thread-safe container as 'mut' inside 'parallel' or 'parallel_for' is prohibited");
+        ok = false;
     }
 
     const TypeRef* callReturnType = nullptr;
@@ -483,7 +518,7 @@ b8 TypeChecker::checkLambdaExpr(
         }
     }
     MVector<ScopedVarInfo> lambdaScope(m_arena);
-    for(const LambdaCapture& cap : expr.lambdaCaptures){
+    for(LambdaCapture& cap : expr.lambdaCaptures){
         if(!cap.name.empty() && findScopedVar(lambdaScope, cap.name)){
             reportError(errors, cap.span, "duplicate capture name in lambda");
             ok = false;
@@ -508,6 +543,7 @@ b8 TypeChecker::checkLambdaExpr(
         }
         const ScopedVarInfo* outer = findScopedVar(scope, cap.name);
         const Stmt* globalConst = outer ? nullptr : m_symbols.findGlobalConstant(cap.name);
+        cap.isGlobalConstant = (globalConst != nullptr);
         if(!outer && !globalConst){
             reportError(errors, cap.span, "unknown variable in lambda capture list");
             ok = false;
@@ -520,8 +556,19 @@ b8 TypeChecker::checkLambdaExpr(
             reportError(errors, cap.span, "cannot capture 'const' global variable as 'mut' in lambda");
             ok = false;
         }
-        if(outer && cap.mode == ParamPassingMode::Mut)
+        if(outer && cap.mode == ParamPassingMode::Mut){
             expr.hasMutLocalCapture = true;
+            const MStringView outerBaseType = !outer->inferredTypeName.empty()
+                ? outer->inferredTypeName
+                : (outer->type ? m_symbols.resolveBaseTypeName(outer->type->name) : MStringView{});
+            if(IsNonThreadSafeContainer(outerBaseType)){
+                expr.hasMutContainerCapture = true;
+                if(m_parallelDepth > 0u && outer->declaredParallelDepth < m_parallelDepth){
+                    reportError(errors, cap.span, "shared 'mut' capture of non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited");
+                    ok = false;
+                }
+            }
+        }
         ScopedVarInfo capVar;
         capVar.name = cap.name;
         capVar.type = outer ? outer->type : (globalConst ? globalConst->varType : nullptr);
@@ -529,6 +576,7 @@ b8 TypeChecker::checkLambdaExpr(
         capVar.mode = cap.mode;
         capVar.isConst = (cap.mode == ParamPassingMode::In) || (globalConst != nullptr);
         capVar.isParam = true;
+        capVar.declaredParallelDepth = outer ? outer->declaredParallelDepth : 0u;
         lambdaScope.push_back(capVar);
     }
     for(const ParamDecl& p : expr.lambdaParams){

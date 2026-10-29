@@ -285,6 +285,23 @@ Expr* ExprParser::parsePostfix(){
             }
             const Token memberTok = m_cursor.current();
             m_cursor.advance();
+            if(m_cursor.check(TokenType::ColonColon)){
+                Expr* scopeNode = AllocateAstNode<Expr>(m_cursor.arena());
+                scopeNode->kind = ExprKind::ScopeAccess;
+                scopeNode->lhs = expr;
+                scopeNode->span = SourceSpan{memberTok.line, memberTok.column};
+                scopeNode->scopeChain.push_back(memberTok.text);
+                while(m_cursor.match(TokenType::ColonColon)){
+                    if(!m_cursor.check(TokenType::Identifier)){
+                        m_cursor.errorExpected("expected identifier after '::'");
+                        return nullptr;
+                    }
+                    scopeNode->scopeChain.push_back(m_cursor.current().text);
+                    m_cursor.advance();
+                }
+                expr = scopeNode;
+                continue;
+            }
             Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
             node->kind = ExprKind::MemberAccess;
             node->lhs = expr;
@@ -392,23 +409,24 @@ Expr* ExprParser::parsePrimary(){
                 if(maybeType->name == adhdName) isScalarType = true;
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SCALAR_TYPE
-                const b8 looksLikeType = maybeType->refMode != ParamPassingMode::None
+                const b8 isKnownType = maybeType->refMode != ParamPassingMode::None
                     || maybeType->isFuncType
                     || !maybeType->templateArgs.empty()
                     || !SymbolTable::mapBuiltinCppType(maybeType->name).empty()
-                    || isScalarType
+                    || isScalarType;
+                const b8 looksLikeType = isKnownType
                     || (!maybeType->name.empty() && maybeType->name[0] >= 'A' && maybeType->name[0] <= 'Z');
-                const b8 nextIsCastOperand = m_cursor.check(TokenType::Identifier)
+                const b8 nextIsUnambiguousCastOperand = m_cursor.check(TokenType::Identifier)
                     || m_cursor.check(TokenType::IntegerLiteral)
                     || m_cursor.check(TokenType::FloatLiteral)
                     || m_cursor.check(TokenType::DoubleLiteral)
                     || m_cursor.check(TokenType::StringLiteral)
                     || m_cursor.check(TokenType::LeftParen)
-                    || m_cursor.check(TokenType::Plus)
-                    || m_cursor.check(TokenType::Minus)
                     || m_cursor.check(TokenType::Bang)
                     || m_cursor.check(TokenType::Tilde);
-                if(looksLikeType && nextIsCastOperand){
+                const b8 nextIsPlusOrMinus = m_cursor.check(TokenType::Plus)
+                    || m_cursor.check(TokenType::Minus);
+                if((looksLikeType && nextIsUnambiguousCastOperand) || (isKnownType && nextIsPlusOrMinus)){
                     m_cursor.error("C-style '(T)x' cast is prohibited in adhd; use 'cast<T>(x)' or 'bit_cast<T>(x)'");
                     return nullptr;
                 }
@@ -452,6 +470,22 @@ Expr* ExprParser::parsePrimary(){
             }
             const Token memberTok = m_cursor.current();
             m_cursor.advance();
+            if(m_cursor.check(TokenType::ColonColon)){
+                Expr* scopeNode = AllocateAstNode<Expr>(m_cursor.arena());
+                scopeNode->kind = ExprKind::ScopeAccess;
+                scopeNode->text = "this";
+                scopeNode->span = span;
+                scopeNode->scopeChain.push_back(memberTok.text);
+                while(m_cursor.match(TokenType::ColonColon)){
+                    if(!m_cursor.check(TokenType::Identifier)){
+                        m_cursor.errorExpected("expected identifier after '::'");
+                        return nullptr;
+                    }
+                    scopeNode->scopeChain.push_back(m_cursor.current().text);
+                    m_cursor.advance();
+                }
+                return scopeNode;
+            }
             Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
             node->kind = ExprKind::ThisMember;
             node->text = memberTok.text;

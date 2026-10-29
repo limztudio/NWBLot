@@ -32,11 +32,23 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     }
 
     if(IsRegisterPromotableSimdType(expr.resolvedSimdType)){
+        b8 isSimdCtorWithRegArg = false;
+        if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier
+            && m_symbols.isSimdType(m_symbols.resolveBaseTypeName(expr.lhs->text)))
+        {
+            for(const Expr* arg : expr.arguments){
+                if(arg && (findSimdBindingForExpr(arg) || ExprContainsSimdMath(arg, m_symbols))){
+                    isSimdCtorWithRegArg = true;
+                    break;
+                }
+            }
+        }
         const b8 isDirectSimdRegOp = (expr.kind == ExprKind::MemberAccess && expr.isSwizzle)
             || expr.kind == ExprKind::Unary
             || (expr.kind == ExprKind::Binary && expr.op != TokenType::Equal)
             || (expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier
-                && !MapBuiltinMathFunction(expr.lhs->text).empty());
+                && !MapBuiltinMathFunction(expr.lhs->text).empty())
+            || isSimdCtorWithRegArg;
         if(isDirectSimdRegOp){
             const MStringView simdType = expr.resolvedSimdType;
             const MStringView storeFn = SimdStoreFunctionCpp(simdType);
@@ -272,6 +284,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
             if(expr.arguments.empty()){
                 out.append("{}");
             }
+            else if(expr.arguments.size() == 1u && expr.arguments[0] && m_symbols.isSimdMatrixType(expr.arguments[0]->resolvedSimdType)){
+                out.push_back('(');
+                emitExpr(out, *expr.arguments[0]);
+                out.push_back(')');
+            }
             else{
                 out.append("{ .raw = { ");
                 for(usize i = 0u; i < expr.arguments.size(); ++i){
@@ -330,8 +347,14 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         }
         else{
             out.append(expr.text.data(), expr.text.size());
-            if(expr.lhs)
+            if(expr.lhs){
+                const b8 wrapPrefixChild = (expr.lhs->kind == ExprKind::Unary && !expr.lhs->isPostfix);
+                if(wrapPrefixChild)
+                    out.push_back('(');
                 emitExpr(out, *expr.lhs);
+                if(wrapPrefixChild)
+                    out.push_back(')');
+            }
         }
         break;
     }
@@ -379,10 +402,14 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     }
     case ExprKind::Lambda:{
         out.push_back('[');
+        b8 firstEmittedCap = true;
         for(usize i = 0u; i < expr.lambdaCaptures.size(); ++i){
-            if(i > 0u)
-                out.append(", ");
             const LambdaCapture& cap = expr.lambdaCaptures[i];
+            if(cap.isGlobalConstant)
+                continue;
+            if(!firstEmittedCap)
+                out.append(", ");
+            firstEmittedCap = false;
             if(cap.name == "this"){
                 out.append("this");
             }
@@ -416,7 +443,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         }
         if(expr.lambdaUsesTaskScope)
             emitTaskScopePrologue(out, 2u);
+        const b8 prevTaskScope = m_activeScopeUsesTaskScope;
+        m_activeScopeUsesTaskScope = expr.lambdaUsesTaskScope;
         emitScopedSimdBody(out, expr.lambdaBody, 2u);
+        m_activeScopeUsesTaskScope = prevTaskScope;
         out.append("    }");
         break;
     }

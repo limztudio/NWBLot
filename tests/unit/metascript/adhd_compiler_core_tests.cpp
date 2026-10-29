@@ -656,6 +656,164 @@ TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
     EXPECT_FALSE(Compiler::compile(s_ParallelForSet, "impl/bad_par_set.adhd", arena.arena, parSetRes));
 }
 
+TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ValidPass3Source =
+        "/* multi-line block comment\r\n"
+        "   closing before directive */ #define K_SHIFT 2\r\n"
+        "const i32 MaxCount = 8;\r\n"
+        "enum<u8> ExecMode {\r\n"
+        "    enum Slow = 0,\r\n"
+        "    enum Fast = 1,\r\n"
+        "}\r\n"
+        "class ModeHolder {\r\n"
+        "    public ExecMode mode = ExecMode::Enum::Fast;\r\n"
+        "    public Vector<Func<i32(in i32)>> callbacks;\r\n"
+        "    public Array<u32, (1 << K_SHIFT)> table = Array<u32, (1 << K_SHIFT)>();\r\n"
+        "    public i32 evaluate(in i32 x, in StringView tag) {\r\n"
+        "        ExecMode m0 = this.mode::Enum::Fast;\r\n"
+        "        i32 limit = (MaxCount) - 1;\r\n"
+        "        i32 dblNeg = - -x;\r\n"
+        "        auto fn = lambda[in MaxCount, in limit](in i32 v) -> i32 {\r\n"
+        "            return v + MaxCount + limit;\r\n"
+        "        };\r\n"
+        "        this.callbacks.push_back(fn);\r\n"
+        "        switch(x) {\r\n"
+        "        case 1: {\r\n"
+        "            dblNeg += 1;\r\n"
+        "        } break;\r\n"
+        "        default:\r\n"
+        "            break;\r\n"
+        "        }\r\n"
+        "        switch(tag) {\r\n"
+        "        default:\r\n"
+        "            break;\r\n"
+        "        case \"alpha\":\r\n"
+        "            if(x < 0) {\r\n"
+        "                break;\r\n"
+        "            }\r\n"
+        "            dblNeg += 2;\r\n"
+        "            break;\r\n"
+        "        }\r\n"
+        "        for(i32 k = 0; k < 2; ++k) {\r\n"
+        "            switch(tag) {\r\n"
+        "            case \"beta\":\r\n"
+        "                if(k == 0) {\r\n"
+        "                    continue;\r\n"
+        "                }\r\n"
+        "                if(x == 0) {\r\n"
+        "                    break;\r\n"
+        "                }\r\n"
+        "                dblNeg += 1;\r\n"
+        "                break;\r\n"
+        "            default:\r\n"
+        "                break;\r\n"
+        "            }\r\n"
+        "        }\r\n"
+        "        parallel {\r\n"
+        "            String taskNote = \"worker_a\";\r\n"
+        "            taskNote.clear();\r\n"
+        "        }\r\n"
+        "        parallel {\r\n"
+        "            String taskNote2 = \"worker_b\";\r\n"
+        "            taskNote2.clear();\r\n"
+        "        }\r\n"
+        "        wait();\r\n"
+        "        native {\r\n"
+        "            #pragma clang diagnostic push\r\n"
+        "            #pragma clang diagnostic pop\r\n"
+        "        }\r\n"
+        "        return dblNeg + cast<i32>(m0);\r\n"
+        "    }\r\n"
+        "}\r\n";
+
+    CompileResult validRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_ValidPass3Source, "impl/pass3_valid.adhd", arena.arena, validRes));
+    const MStringView hdrView(validRes.generatedHeader.data(), validRes.generatedHeader.size());
+    const MStringView cppView(validRes.generatedSource.data(), validRes.generatedSource.size());
+    EXPECT_NE(hdrView.find("Vector<::InplaceFunction<64u, i32(i32)>> callbacks{s_ClassArena};"), MStringView::npos);
+    EXPECT_NE(cppView.find("-(-x)"), MStringView::npos);
+    EXPECT_NE(cppView.find("[limit]("), MStringView::npos);
+    EXPECT_NE(cppView.find("goto __adhd_switch_break_"), MStringView::npos);
+    EXPECT_NE(cppView.find("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));"), MStringView::npos);
+
+    static constexpr MStringView s_SimdLoopScopeSource =
+        "void processSimdLoops(mut Vector<f32x4> vec) {\r\n"
+        "    for(in f32x4 item : vec) {\r\n"
+        "        f32x4 tmp = item + item;\r\n"
+        "    }\r\n"
+        "    for(mut f32x4 item : vec) {\r\n"
+        "        item = item + item;\r\n"
+        "        if(vec.size() > 4u) {\r\n"
+        "            continue;\r\n"
+        "        }\r\n"
+        "        break;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult simdLoopRes(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_SimdLoopScopeSource, "impl/simd_loop_scope.adhd", arena.arena, simdLoopRes));
+    const MStringView simdLoopCpp(simdLoopRes.generatedSource.data(), simdLoopRes.generatedSource.size());
+    EXPECT_NE(simdLoopCpp.find("::StoreFloat(__adhd_simd_item, item);\r\n            continue;"), MStringView::npos);
+    EXPECT_NE(simdLoopCpp.find("::StoreFloat(__adhd_simd_item, item);\r\n        break;"), MStringView::npos);
+
+    static constexpr MStringView s_BadSurrogateEscape =
+        "const u32 kSurrogate = '\\uD800';\r\n";
+    CompileResult badSurrogateRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BadSurrogateEscape, "impl/bad_surrogate.adhd", arena.arena, badSurrogateRes));
+
+    static constexpr MStringView s_BadEmptyAttrParens =
+        "[reflect()]\r\n"
+        "class BadAttr {\r\n"
+        "    public i32 x = 0;\r\n"
+        "}\r\n";
+    CompileResult badAttrRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BadEmptyAttrParens, "impl/bad_attr.adhd", arena.arena, badAttrRes));
+
+    static constexpr MStringView s_BadDupConstMethod =
+        "class DupConst {\r\n"
+        "    public i32 get()const const { return 0; }\r\n"
+        "}\r\n";
+    CompileResult badDupConstRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BadDupConstMethod, "impl/bad_dup_const.adhd", arena.arena, badDupConstRes));
+
+    static constexpr MStringView s_BadDependentBound =
+        "interface IBound {\r\n"
+        "    void step();\r\n"
+        "}\r\n"
+        "class ReqBound<T : IBound> {\r\n"
+        "    public T item;\r\n"
+        "}\r\n"
+        "class UnboundedWrapper<U> {\r\n"
+        "    public ReqBound<U> inner;\r\n"
+        "}\r\n";
+    CompileResult badDepBoundRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BadDependentBound, "impl/bad_dep_bound.adhd", arena.arena, badDepBoundRes));
+
+    static constexpr MStringView s_BadInInterfaceMutCall =
+        "interface IMutator {\r\n"
+        "    void mutate();\r\n"
+        "}\r\n"
+        "void callInInterface(in IMutator m) {\r\n"
+        "    m.mutate();\r\n"
+        "}\r\n";
+    CompileResult badInIfaceRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BadInInterfaceMutCall, "impl/bad_in_iface.adhd", arena.arena, badInIfaceRes));
+
+    static constexpr MStringView s_BadParallelContainerLambda =
+        "void badParLambda() {\r\n"
+        "    Vector<i32> items;\r\n"
+        "    auto pushFn = lambda[mut items](in i32 v) -> void {\r\n"
+        "        items.push_back(v);\r\n"
+        "    };\r\n"
+        "    parallel_for(u32 i = 0u; i < 4u; ++i) {\r\n"
+        "        pushFn(cast<i32>(i));\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badParLamRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_BadParallelContainerLambda, "impl/bad_par_lam.adhd", arena.arena, badParLamRes));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

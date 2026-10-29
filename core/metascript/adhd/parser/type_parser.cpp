@@ -117,17 +117,19 @@ TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
             return nullptr;
     }
 
-    if(m_cursor.check(TokenType::Star)){
-        m_cursor.error("raw pointer types ('*') are prohibited in adhd");
-        return nullptr;
-    }
-    if(m_cursor.check(TokenType::Ampersand)){
-        m_cursor.error("C++ reference syntax ('&') is prohibited in adhd; use 'in' or 'mut'");
-        return nullptr;
-    }
-    if(m_cursor.check(TokenType::LeftBracket)){
-        m_cursor.error("C-style array types ('T[N]') are prohibited in adhd; use 'Array<T, N>' or 'Vector<T>'");
-        return nullptr;
+    if(m_pendingRightAngles == 0u){
+        if(m_cursor.check(TokenType::Star)){
+            m_cursor.error("raw pointer types ('*') are prohibited in adhd");
+            return nullptr;
+        }
+        if(m_cursor.check(TokenType::Ampersand)){
+            m_cursor.error("C++ reference syntax ('&') is prohibited in adhd; use 'in' or 'mut'");
+            return nullptr;
+        }
+        if(m_cursor.check(TokenType::LeftBracket)){
+            m_cursor.error("C-style array types ('T[N]') are prohibited in adhd; use 'Array<T, N>' or 'Vector<T>'");
+            return nullptr;
+        }
     }
 
     return type;
@@ -206,22 +208,68 @@ b8 TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
             arg.constantText = m_cursor.current().text;
             m_cursor.advance();
         }
-        else if(m_cursor.check(TokenType::Minus)){
-            const MChar* const negStartPtr = m_cursor.current().text.data();
+        else if(m_cursor.check(TokenType::Minus) || m_cursor.check(TokenType::Plus)){
+            const MChar* const signStartPtr = m_cursor.current().text.data();
             m_cursor.advance();
-            if(!m_cursor.check(TokenType::IntegerLiteral)){
-                m_cursor.errorExpected("expected integer literal after '-' in template argument");
+            if(!m_cursor.check(TokenType::IntegerLiteral) && !m_cursor.check(TokenType::Identifier)){
+                m_cursor.errorExpected("expected integer literal or constant identifier after unary sign in template argument");
                 return false;
             }
-            const Token& intTok = m_cursor.current();
-            const MChar* const negEndPtr = intTok.text.data() + intTok.text.size();
-            arg.constantText = MStringView(negStartPtr, static_cast<usize>(negEndPtr - negStartPtr));
+            const Token& valTok = m_cursor.current();
+            const MChar* endPtr = valTok.text.data() + valTok.text.size();
             m_cursor.advance();
+            while(m_cursor.match(TokenType::ColonColon)){
+                if(!m_cursor.check(TokenType::Identifier)){
+                    m_cursor.errorExpected("expected identifier after '::' in template argument");
+                    return false;
+                }
+                endPtr = m_cursor.current().text.data() + m_cursor.current().text.size();
+                m_cursor.advance();
+            }
+            arg.constantText = MStringView(signStartPtr, static_cast<usize>(endPtr - signStartPtr));
+        }
+        else if(m_cursor.check(TokenType::LeftParen)){
+            const MChar* const parenStartPtr = m_cursor.current().text.data();
+            u32 parenDepth = 1u;
+            m_cursor.advance();
+            const MChar* parenEndPtr = parenStartPtr + 1u;
+            while(parenDepth > 0u && !m_cursor.check(TokenType::EndOfFile)){
+                if(m_cursor.check(TokenType::LeftParen))
+                    ++parenDepth;
+                else if(m_cursor.check(TokenType::RightParen))
+                    --parenDepth;
+                parenEndPtr = m_cursor.current().text.data() + m_cursor.current().text.size();
+                m_cursor.advance();
+            }
+            if(parenDepth != 0u){
+                m_cursor.errorExpected("unterminated '(' in template argument expression");
+                return false;
+            }
+            arg.constantText = MStringView(parenStartPtr, static_cast<usize>(parenEndPtr - parenStartPtr));
         }
         else{
             arg.type = parseType(true, false);
             if(!arg.type)
                 return false;
+            if(m_pendingRightAngles == 0u
+                && arg.type->refMode == ParamPassingMode::None
+                && !arg.type->isFuncType
+                && arg.type->templateArgs.empty()
+                && m_cursor.check(TokenType::ColonColon))
+            {
+                const MChar* const startPtr = arg.type->name.data();
+                const MChar* endPtr = startPtr + arg.type->name.size();
+                while(m_cursor.match(TokenType::ColonColon)){
+                    if(!m_cursor.check(TokenType::Identifier)){
+                        m_cursor.errorExpected("expected identifier after '::' in template argument");
+                        return false;
+                    }
+                    endPtr = m_cursor.current().text.data() + m_cursor.current().text.size();
+                    m_cursor.advance();
+                }
+                arg.constantText = MStringView(startPtr, static_cast<usize>(endPtr - startPtr));
+                arg.type = nullptr;
+            }
         }
 
         outArgs.push_back(arg);

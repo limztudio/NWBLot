@@ -43,6 +43,62 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
     out.push_back('}');
 }
 
+[[nodiscard]] b8 ExprUsesScratchArena(const Expr* expr)noexcept{
+    if(!expr || expr->kind == ExprKind::Lambda)
+        return false;
+    if(expr->injectScratchArena)
+        return true;
+    if(ExprUsesScratchArena(expr->lhs) || ExprUsesScratchArena(expr->rhs))
+        return true;
+    for(const Expr* arg : expr->arguments){
+        if(ExprUsesScratchArena(arg))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 StatementsUseScratchArena(const MVector<Stmt*>& statements)noexcept;
+
+[[nodiscard]] b8 StmtUsesScratchArena(const Stmt* stmt)noexcept{
+    if(!stmt)
+        return false;
+    if(stmt->kind == StmtKind::ParallelForRange
+        || stmt->kind == StmtKind::ParallelForIndex
+        || stmt->kind == StmtKind::ParallelBlock)
+    {
+        return false;
+    }
+    if(stmt->usesScratchArena)
+        return true;
+    if(stmt->initStmt && StmtUsesScratchArena(stmt->initStmt))
+        return true;
+    if(ExprUsesScratchArena(stmt->expr)
+        || ExprUsesScratchArena(stmt->condition)
+        || ExprUsesScratchArena(stmt->stepExpr))
+    {
+        return true;
+    }
+    for(const Expr* arg : stmt->arguments){
+        if(ExprUsesScratchArena(arg))
+            return true;
+    }
+    if(StatementsUseScratchArena(stmt->statements) || StatementsUseScratchArena(stmt->elseStatements))
+        return true;
+    for(const SwitchCase& sc : stmt->switchCases){
+        if(ExprUsesScratchArena(sc.matchExpr) || StatementsUseScratchArena(sc.statements))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 StatementsUseScratchArena(const MVector<Stmt*>& statements)noexcept{
+    for(const Stmt* s : statements){
+        if(StmtUsesScratchArena(s))
+            return true;
+    }
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -113,6 +169,10 @@ void SourceEmitter::emitParallelStmt(
         if(stmt.expr)
             emitExpr(out, *stmt.expr);
         out.append(").size(), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
+        if(StatementsUseScratchArena(stmt.statements)){
+            emitIndent(out, indent + 1u);
+            out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));\r\n");
+        }
         emitIndent(out, indent + 1u);
         if(stmt.rangeMode == ParamPassingMode::In)
             out.append("const ");
@@ -133,7 +193,7 @@ void SourceEmitter::emitParallelStmt(
 
         emitStatementList(out, stmt.statements, indent + 1u);
 
-        if(loopBinding && loopBinding->isLoopElement && loopBinding->written)
+        if(stmt.rangeMode == ParamPassingMode::Mut && loopBinding && loopBinding->isLoopElement && loopBinding->written)
             emitSimdStoreForBinding(out, *loopBinding, indent + 1u);
 
         emitIndent(out, indent);
@@ -147,6 +207,8 @@ void SourceEmitter::emitParallelStmt(
         out.append("(void)__adhd_task_scope.parallelFor(static_cast<usize>(");
         if(stmt.initStmt && stmt.initStmt->expr)
             emitExpr(out, *stmt.initStmt->expr);
+        else if(stmt.initStmt && stmt.initStmt->isCtorInit && !stmt.initStmt->arguments.empty() && stmt.initStmt->arguments[0])
+            emitExpr(out, *stmt.initStmt->arguments[0]);
         else
             out.append("0u");
         out.append("), static_cast<usize>(");
@@ -184,6 +246,10 @@ void SourceEmitter::emitParallelStmt(
             out.append("1u");
         }
         out.append(", [&](const usize __adhd_idx)noexcept{\r\n");
+        if(StatementsUseScratchArena(stmt.statements)){
+            emitIndent(out, indent + 1u);
+            out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));\r\n");
+        }
         if(stmt.initStmt && stmt.initStmt->varType){
             emitIndent(out, indent + 1u);
             out.append("const ");
@@ -202,10 +268,16 @@ void SourceEmitter::emitParallelStmt(
         break;
     }
     case StmtKind::ParallelBlock:{
+        auto appendBlockSuffix = [&](){
+            if(!stmt.name.empty())
+                out.append(stmt.name.data(), stmt.name.size());
+            else
+                AppendAdhdUnsigned(out, stmt.span.line);
+        };
         if(!stmt.parallelDependencies.empty()){
             emitIndent(out, indent);
             out.append("const ::NWB::Core::CpuTaskHandle __adhd_deps_");
-            out.append(stmt.name.data(), stmt.name.size());
+            appendBlockSuffix();
             out.append("[] = { ");
             for(usize i = 0u; i < stmt.parallelDependencies.size(); ++i){
                 if(i > 0u)
@@ -217,15 +289,19 @@ void SourceEmitter::emitParallelStmt(
         }
         emitIndent(out, indent);
         out.append("const auto __adhd_submit_");
-        out.append(stmt.name.data(), stmt.name.size());
+        appendBlockSuffix();
         out.append(" = __adhd_task_scope.submit([&]()noexcept{\r\n");
+        if(StatementsUseScratchArena(stmt.statements)){
+            emitIndent(out, indent + 1u);
+            out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));\r\n");
+        }
         emitStatementList(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
         out.append("}, ");
         AppendTaskOptions(out, stmt);
         if(!stmt.parallelDependencies.empty()){
             out.append(", __adhd_deps_");
-            out.append(stmt.name.data(), stmt.name.size());
+            appendBlockSuffix();
             out.append(", ");
             AppendAdhdUnsigned(out, stmt.parallelDependencies.size());
             out.push_back('u');
@@ -233,11 +309,11 @@ void SourceEmitter::emitParallelStmt(
         out.append(");\r\n");
         emitIndent(out, indent);
         out.append("[[maybe_unused]] const ::NWB::Core::CpuTaskHandle __adhd_task_");
-        out.append(stmt.name.data(), stmt.name.size());
+        appendBlockSuffix();
         out.append(" = __adhd_submit_");
-        out.append(stmt.name.data(), stmt.name.size());
+        appendBlockSuffix();
         out.append(".has_value() ? *__adhd_submit_");
-        out.append(stmt.name.data(), stmt.name.size());
+        appendBlockSuffix();
         out.append(" : ::NWB::Core::CpuTaskHandle{};\r\n");
         break;
     }
@@ -247,11 +323,10 @@ void SourceEmitter::emitParallelStmt(
             out.append("{\r\n");
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 const Expr* arg = stmt.expr->arguments[i];
-                emitIndent(out, indent + 1u);
                 if(arg && arg->isMutArg)
-                    out.append("auto& __adhd_arg_");
-                else
-                    out.append("const auto __adhd_arg_");
+                    continue;
+                emitIndent(out, indent + 1u);
+                out.append("const auto __adhd_arg_");
                 AppendAdhdUnsigned(out, i);
                 out.append(" = (");
                 if(arg)
@@ -276,8 +351,14 @@ void SourceEmitter::emitParallelStmt(
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 if(i > 0u)
                     out.append(", ");
-                out.append("__adhd_arg_");
-                AppendAdhdUnsigned(out, i);
+                const Expr* arg = stmt.expr->arguments[i];
+                if(arg && arg->isMutArg){
+                    emitExpr(out, *arg);
+                }
+                else{
+                    out.append("__adhd_arg_");
+                    AppendAdhdUnsigned(out, i);
+                }
             }
             out.append("); }, ");
             AppendTaskOptions(out, stmt);

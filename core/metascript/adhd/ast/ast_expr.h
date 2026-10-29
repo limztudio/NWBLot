@@ -53,6 +53,7 @@ struct LambdaCapture{
     ParamPassingMode::Enum mode = ParamPassingMode::None;
     MStringView name;
     SourceSpan span;
+    b8 isGlobalConstant = false;
 };
 
 
@@ -99,6 +100,7 @@ struct Expr{
     b8 lambdaUsesScratchArena = false;
     b8 lambdaUsesTaskScope = false;
     b8 hasMutLocalCapture = false;
+    b8 hasMutContainerCapture = false;
     b8 isVectorRawIndex = false;
 
 

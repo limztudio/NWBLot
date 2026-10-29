@@ -225,6 +225,23 @@ void SourceEmitter::emitSimdMutCallReloads(
 void SourceEmitter::emitSimdBlockStores(MString& out, const u32 indent, const b8 loopElementsOnly)const{
     if(!m_activeSimdBindings)
         return;
+    b8 hasPendingStore = (!loopElementsOnly && m_activeSimdLoopBinding != nullptr);
+    for(const SimdVarBinding& binding : *m_activeSimdBindings){
+        if(binding.isLocalDecl || !binding.written)
+            continue;
+        if(loopElementsOnly != binding.isLoopElement)
+            continue;
+        hasPendingStore = true;
+        break;
+    }
+    if(!hasPendingStore)
+        return;
+    if(!loopElementsOnly && m_activeScopeUsesTaskScope){
+        emitIndent(out, indent);
+        out.append("__adhd_task_scope.wait();\r\n");
+    }
+    if(!loopElementsOnly && m_activeSimdLoopBinding)
+        emitSimdStoreForBinding(out, *m_activeSimdLoopBinding, indent);
     for(const SimdVarBinding& binding : *m_activeSimdBindings){
         if(binding.isLocalDecl || !binding.written)
             continue;
@@ -243,7 +260,15 @@ void SourceEmitter::emitScopedSimdBody(
     CollectScopedSimdBindings(m_arena, simdBindings, statements, m_symbols);
 
     const MVector<SimdVarBinding>* prevBindings = m_activeSimdBindings;
+    const SimdVarBinding* prevLoopBinding = m_activeSimdLoopBinding;
+    const u32 prevInnerBreakDepth = m_activeSimdLoopInnerBreakDepth;
+    const u32 prevInnerContinueDepth = m_activeSimdLoopInnerContinueDepth;
+    const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
     m_activeSimdBindings = simdBindings.empty() ? nullptr : &simdBindings;
+    m_activeSimdLoopBinding = nullptr;
+    m_activeSimdLoopInnerBreakDepth = 0u;
+    m_activeSimdLoopInnerContinueDepth = 0u;
+    m_activeSwitchBreakLabelLine = 0u;
 
     for(const SimdVarBinding& binding : simdBindings){
         if(binding.isLocalDecl || binding.isLoopElement)
@@ -283,11 +308,24 @@ void SourceEmitter::emitScopedSimdBody(
         emitSimdBlockStores(out, indent, false);
 
     m_activeSimdBindings = prevBindings;
+    m_activeSimdLoopBinding = prevLoopBinding;
+    m_activeSimdLoopInnerBreakDepth = prevInnerBreakDepth;
+    m_activeSimdLoopInnerContinueDepth = prevInnerContinueDepth;
+    m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
 }
 
 b8 SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const u32 indent)const{
+    if(stmt.usesScratchArena || (stmt.varType && stmt.varType->refMode != ParamPassingMode::None))
+        return false;
     const SimdVarBinding* simdLocal = findSimdBinding(false, stmt.name);
     if(simdLocal && simdLocal->isLocalDecl){
+        MStringView varSimdType;
+        if(stmt.varType && IsRegisterPromotableSimdType(m_symbols.resolveBaseTypeName(stmt.varType->name)))
+            varSimdType = m_symbols.resolveBaseTypeName(stmt.varType->name);
+        else if(stmt.expr && IsRegisterPromotableSimdType(stmt.expr->resolvedSimdType))
+            varSimdType = stmt.expr->resolvedSimdType;
+        if(varSimdType != simdLocal->simdType)
+            return false;
         const MStringView regType = SimdRegisterCppType(simdLocal->simdType);
         emitIndent(out, indent);
         if(stmt.isConst && !simdLocal->written && !simdLocal->needsStorageSync)

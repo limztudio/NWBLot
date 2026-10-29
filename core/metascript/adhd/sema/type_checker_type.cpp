@@ -165,25 +165,30 @@ b8 TypeChecker::checkTemplateArgBounds(
             continue;
 
         const MStringView argTypeName = m_symbols.resolveBaseTypeName(arg.type->name);
-        b8 isDependentParam = false;
-        if(enclosingClass){
-            for(const TemplateParamDecl& tp : enclosingClass->templateParams){
-                if(tp.name == arg.type->name || tp.name == argTypeName){
-                    isDependentParam = true;
-                    break;
+        const TemplateParamDecl* dependentTp = findTemplateParam(enclosingClass, enclosingMethod, arg.type->name);
+        if(!dependentTp && argTypeName != arg.type->name)
+            dependentTp = findTemplateParam(enclosingClass, enclosingMethod, argTypeName);
+        if(dependentTp){
+            for(const TypeRef* boundRef : param.interfaceBounds){
+                if(!boundRef)
+                    continue;
+                const TypeRef* subBound = m_symbols.substituteTypeParams(*boundRef, params, args);
+                if(!subBound)
+                    continue;
+                b8 boundSatisfied = false;
+                for(const TypeRef* tpBound : dependentTp->interfaceBounds){
+                    if(tpBound && interfaceInheritsFrom(*tpBound, *subBound)){
+                        boundSatisfied = true;
+                        break;
+                    }
+                }
+                if(!boundSatisfied){
+                    reportError(errors, span, "dependent template type argument does not satisfy required interface bound");
+                    ok = false;
                 }
             }
-        }
-        if(!isDependentParam && enclosingMethod){
-            for(const TemplateParamDecl& tp : enclosingMethod->templateParams){
-                if(tp.name == arg.type->name || tp.name == argTypeName){
-                    isDependentParam = true;
-                    break;
-                }
-            }
-        }
-        if(isDependentParam)
             continue;
+        }
 
         const ClassDecl* argClass = m_symbols.findClass(argTypeName);
         const TypeRef* resolvedArgType = m_symbols.unwrapTypeAlias(arg.type);

@@ -311,21 +311,15 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
             return nullptr;
         }
 
-        if(m_cursor.check(TokenType::LeftBrace)){
-            if(!parseBlockStatements(switchCase.statements))
+        while(!m_cursor.check(TokenType::RightBrace)
+            && !m_cursor.check(TokenType::EndOfFile)
+            && !m_cursor.checkIdentifier("case")
+            && !m_cursor.checkIdentifier("default"))
+        {
+            Stmt* caseStmt = parseStatement();
+            if(!caseStmt)
                 return nullptr;
-        }
-        else{
-            while(!m_cursor.check(TokenType::RightBrace)
-                && !m_cursor.check(TokenType::EndOfFile)
-                && !m_cursor.checkIdentifier("case")
-                && !m_cursor.checkIdentifier("default"))
-            {
-                Stmt* caseStmt = parseStatement();
-                if(!caseStmt)
-                    return nullptr;
-                switchCase.statements.push_back(caseStmt);
-            }
+            switchCase.statements.push_back(caseStmt);
         }
 
         const b8 isStackedEmptyLabel = switchCase.statements.empty()

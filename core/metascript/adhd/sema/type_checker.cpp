@@ -431,6 +431,12 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
             continue;
         }
 
+        if(ool->isOverride && !matched->isOverride){
+            reportError(errors, ool->span, "out-of-line method cannot specify 'override' when class declaration is not marked 'override'");
+            ok = false;
+            continue;
+        }
+
         if((matched->isForceInline && ool->isNoInline) || (matched->isNoInline && ool->isForceInline)){
             reportError(errors, ool->span, "conflicting 'inline' and 'noinline' attributes between method declaration and definition");
             ok = false;

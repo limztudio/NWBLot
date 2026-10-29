@@ -107,9 +107,9 @@ void EmitSerializedBinarySizeMethod(
                 out.append(field->name.data(), field->name.size());
                 out.append("[0])) * ");
                 if(elemType && !elemType->templateArgs.empty()){
-                    out.append("decltype(");
+                    out.append("::RemoveCvRef_T<decltype(");
                     out.append(field->name.data(), field->name.size());
-                    out.append("[0])::serializedBinarySize()");
+                    out.append("[0])>::serializedBinarySize()");
                 }
                 else{
                     out.append(elemName.data(), elemName.size());

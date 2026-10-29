@@ -536,11 +536,18 @@ Token Lexer::readCharLiteral()noexcept{
         }
         else if(esc == 'u' || esc == 'U'){
             const usize expectedHex = (esc == 'u') ? 4u : 8u;
+            u32 codePoint = 0u;
             for(usize h = 0u; h < expectedHex; ++h){
                 if(isAtEnd() || !IsHexDigit(peek()))
                     return makeErrorToken(s_UnterminatedCharMessage, startLine, startColumn);
-                advance();
+                const MChar hc = advance();
+                const u32 nibble = IsAsciiDigit(hc)
+                    ? static_cast<u32>(hc - '0')
+                    : static_cast<u32>((hc >= 'a' && hc <= 'f') ? (hc - 'a' + 10) : (hc - 'A' + 10));
+                codePoint = (codePoint << 4u) | nibble;
             }
+            if(codePoint > 0x10FFFFu || (codePoint >= 0xD800u && codePoint <= 0xDFFFu))
+                return makeErrorToken(MStringView("invalid unicode code point in character literal"), startLine, startColumn);
         }
         else if(esc >= '0' && esc <= '7'){
             for(usize oct = 0u; oct < 2u; ++oct){

@@ -22,11 +22,55 @@ namespace __hidden_adhd_source_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] const Expr* FindConstructorFieldAssignment(const MVector<Stmt*>& stmts, const MStringView fieldName)noexcept{
+[[nodiscard]] const Expr* FindConstructorFieldAssignment(const MVector<Stmt*>& stmts, const MStringView fieldName, b8* outIsTopLevelUnique = nullptr)noexcept{
+    const Expr* firstFound = nullptr;
+    usize totalMatches = 0u;
+    b8 firstIsTopLevel = false;
+
+    auto countRecursive = [&](auto& self, const MVector<Stmt*>& list, const b8 topLevel)noexcept -> void{
+        for(const Stmt* stmt : list){
+            if(!stmt)
+                continue;
+            if(stmt->kind == StmtKind::ExprStmt
+                && stmt->expr
+                && stmt->expr->kind == ExprKind::Binary
+                && stmt->expr->op == TokenType::Equal
+                && stmt->expr->lhs
+                && stmt->expr->lhs->kind == ExprKind::ThisMember
+                && stmt->expr->lhs->text == fieldName
+                && stmt->expr->rhs)
+            {
+                if(!firstFound){
+                    firstFound = stmt->expr;
+                    firstIsTopLevel = topLevel;
+                }
+                ++totalMatches;
+            }
+            if(stmt->kind == StmtKind::Block || stmt->kind == StmtKind::If){
+                self(self, stmt->statements, false);
+                self(self, stmt->elseStatements, false);
+            }
+            else if(stmt->kind == StmtKind::Switch){
+                for(const SwitchCase& sc : stmt->switchCases)
+                    self(self, sc.statements, false);
+            }
+        }
+    };
+
+    countRecursive(countRecursive, stmts, true);
+    if(outIsTopLevelUnique)
+        *outIsTopLevelUnique = (firstFound != nullptr && firstIsTopLevel && totalMatches == 1u);
+    return firstFound ? firstFound->rhs : nullptr;
+}
+
+[[nodiscard]] const Expr* FindUniqueTopLevelCtorAssignExpr(const MVector<Stmt*>& stmts, const MStringView fieldName)noexcept{
+    b8 isTopLevelUnique = false;
+    (void)FindConstructorFieldAssignment(stmts, fieldName, &isTopLevelUnique);
+    if(!isTopLevelUnique)
+        return nullptr;
     for(const Stmt* stmt : stmts){
-        if(!stmt)
-            continue;
-        if(stmt->kind == StmtKind::ExprStmt
+        if(stmt
+            && stmt->kind == StmtKind::ExprStmt
             && stmt->expr
             && stmt->expr->kind == ExprKind::Binary
             && stmt->expr->op == TokenType::Equal
@@ -35,19 +79,7 @@ namespace __hidden_adhd_source_emitter{
             && stmt->expr->lhs->text == fieldName
             && stmt->expr->rhs)
         {
-            return stmt->expr->rhs;
-        }
-        if(stmt->kind == StmtKind::Block || stmt->kind == StmtKind::If){
-            if(const Expr* nested = FindConstructorFieldAssignment(stmt->statements, fieldName))
-                return nested;
-            if(const Expr* nestedElse = FindConstructorFieldAssignment(stmt->elseStatements, fieldName))
-                return nestedElse;
-        }
-        else if(stmt->kind == StmtKind::Switch){
-            for(const SwitchCase& sc : stmt->switchCases){
-                if(const Expr* nestedCase = FindConstructorFieldAssignment(sc.statements, fieldName))
-                    return nestedCase;
-            }
+            return stmt->expr;
         }
     }
     return nullptr;
@@ -152,7 +184,11 @@ void SourceEmitter::emitMethodBodyBlock(
     if(method.usesTaskScope)
         emitTaskScopePrologue(out, indent);
 
+    const b8 prevTaskScope = m_activeScopeUsesTaskScope;
+    m_activeScopeUsesTaskScope = method.usesTaskScope;
     emitScopedSimdBody(out, method.body, indent);
+    m_activeScopeUsesTaskScope = prevTaskScope;
+    m_skippedCtorAssignExprs = nullptr;
 }
 
 void SourceEmitter::emitConstructorNotNullInitializers(
@@ -160,9 +196,11 @@ void SourceEmitter::emitConstructorNotNullInitializers(
     const MVector<FieldDecl*>& orderedFields,
     const MethodDecl& ctor
 )const{
+    m_skippedCtorAssignExprs = nullptr;
     if(!ctor.isConstructor || !ctor.hasBody)
         return;
 
+    MVector<const Expr*>* skipped = AllocateAstNode<MVector<const Expr*>>(m_arena);
     b8 firstInit = true;
     for(const FieldDecl* field : orderedFields){
         if(!field || !field->type || m_symbols.resolveRefMode(field->type) == ParamPassingMode::None || field->defaultExpr || field->hasCtorInit)
@@ -170,6 +208,8 @@ void SourceEmitter::emitConstructorNotNullInitializers(
         const Expr* rhs = __hidden_adhd_source_emitter::FindConstructorFieldAssignment(ctor.body, field->name);
         if(!rhs)
             continue;
+        if(const Expr* uniqueAssign = __hidden_adhd_source_emitter::FindUniqueTopLevelCtorAssignExpr(ctor.body, field->name))
+            skipped->push_back(uniqueAssign);
         out.append(firstInit ? " : " : ", ");
         firstInit = false;
         out.append(field->name.data(), field->name.size());
@@ -177,6 +217,8 @@ void SourceEmitter::emitConstructorNotNullInitializers(
         emitExpr(out, *rhs);
         out.append(")))");
     }
+    if(!skipped->empty())
+        m_skippedCtorAssignExprs = skipped;
 }
 
 

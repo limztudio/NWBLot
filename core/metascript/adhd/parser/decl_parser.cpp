@@ -287,6 +287,7 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
         }
         if(attr.name == "asset" && attr.arguments.size() == 1u && attr.arguments[0].kind == TokenType::StringLiteral){
             assetTypeName = attr.arguments[0].text;
+            isReflect = true;
             continue;
         }
         m_cursor.error(attr.line, attr.column, "unsupported attribute on 'interface'; expected 'reflect' or 'asset(\"...\")'");
@@ -400,8 +401,13 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
             }
         }
 
-        if(m_cursor.matchIdentifier("const"))
+        if(m_cursor.matchIdentifier("const")){
             method->isConst = true;
+            if(m_cursor.checkIdentifier("const")){
+                m_cursor.error(methodSpan.line, methodSpan.column, "duplicate 'const' qualifier on interface method");
+                return nullptr;
+            }
+        }
         if(m_cursor.checkIdentifier("override")){
             m_cursor.error(methodSpan.line, methodSpan.column, "'override' is only permitted on 'class' methods implementing an 'interface', not inside 'interface' itself");
             return nullptr;

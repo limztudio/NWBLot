@@ -68,6 +68,12 @@ private:
     const SymbolTable& m_symbols;
     CppTypeEmitter m_typeEmitter;
     mutable const MVector<SimdVarBinding>* m_activeSimdBindings = nullptr;
+    mutable const SimdVarBinding* m_activeSimdLoopBinding = nullptr;
+    mutable u32 m_activeSimdLoopInnerBreakDepth = 0u;
+    mutable u32 m_activeSimdLoopInnerContinueDepth = 0u;
+    mutable u32 m_activeSwitchBreakLabelLine = 0u;
+    mutable const MVector<const Expr*>* m_skippedCtorAssignExprs = nullptr;
+    mutable b8 m_activeScopeUsesTaskScope = false;
 };
 
 

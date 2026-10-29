@@ -14,6 +14,75 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_source_emitter_stmt{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 StatementsContainBreak(const MVector<Stmt*>& statements)noexcept{
+    for(const Stmt* s : statements){
+        if(!s)
+            continue;
+        if(s->kind == StmtKind::Break)
+            return true;
+        if(s->kind == StmtKind::Block || s->kind == StmtKind::If){
+            if(StatementsContainBreak(s->statements) || StatementsContainBreak(s->elseStatements))
+                return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] b8 StatementsContainOuterLoopContinue(const MVector<Stmt*>& statements)noexcept{
+    for(const Stmt* s : statements){
+        if(!s)
+            continue;
+        if(s->kind == StmtKind::Continue)
+            return true;
+        if(s->kind == StmtKind::Block || s->kind == StmtKind::If){
+            if(StatementsContainOuterLoopContinue(s->statements) || StatementsContainOuterLoopContinue(s->elseStatements))
+                return true;
+        }
+        else if(s->kind == StmtKind::Switch){
+            for(const SwitchCase& sc : s->switchCases){
+                if(StatementsContainOuterLoopContinue(sc.statements))
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] b8 CaseNeedsDoWhileBreakLowering(const MVector<Stmt*>& statements)noexcept{
+    for(usize i = 0u; i < statements.size(); ++i){
+        const Stmt* s = statements[i];
+        if(!s)
+            continue;
+        const b8 isLast = (i + 1u == statements.size())
+            || (i + 2u == statements.size() && statements.back() && statements.back()->kind == StmtKind::Break);
+        if(s->kind == StmtKind::Break && !isLast)
+            return true;
+        if(s->kind == StmtKind::Block || s->kind == StmtKind::If){
+            if(!isLast && (StatementsContainBreak(s->statements) || StatementsContainBreak(s->elseStatements)))
+                return true;
+            if(CaseNeedsDoWhileBreakLowering(s->statements) || CaseNeedsDoWhileBreakLowering(s->elseStatements))
+                return true;
+        }
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void SourceEmitter::emitStatementList(
     MString& out,
     const MVector<Stmt*>& statements,
@@ -30,29 +99,44 @@ void SourceEmitter::emitSwitchIfChainStatements(
     const MVector<Stmt*>& statements,
     const u32 indent
 )const{
-    for(const Stmt* child : statements){
-        if(!child || child->kind == StmtKind::Break)
+    for(usize i = 0u; i < statements.size(); ++i){
+        const Stmt* child = statements[i];
+        if(!child)
+            continue;
+        const b8 isTrailingBreak = (child->kind == StmtKind::Break) && (i + 1u == statements.size());
+        if(isTrailingBreak)
             continue;
         if(child->kind == StmtKind::Block){
             emitIndent(out, indent);
             out.append("{\r\n");
-            emitSwitchIfChainStatements(out, child->statements, indent + 1u);
+            if(i + 1u == statements.size() || (i + 2u == statements.size() && statements.back() && statements.back()->kind == StmtKind::Break))
+                emitSwitchIfChainStatements(out, child->statements, indent + 1u);
+            else
+                emitStatementList(out, child->statements, indent + 1u);
             emitIndent(out, indent);
             out.append("}\r\n");
         }
         else if(child->kind == StmtKind::If){
+            const b8 isLastInCase = (i + 1u == statements.size())
+                || (i + 2u == statements.size() && statements.back() && statements.back()->kind == StmtKind::Break);
             emitIndent(out, indent);
             out.append("if(");
             if(child->condition)
                 emitExpr(out, *child->condition);
             out.append("){\r\n");
-            emitSwitchIfChainStatements(out, child->statements, indent + 1u);
+            if(isLastInCase)
+                emitSwitchIfChainStatements(out, child->statements, indent + 1u);
+            else
+                emitStatementList(out, child->statements, indent + 1u);
             emitIndent(out, indent);
             out.append("}\r\n");
             if(!child->elseStatements.empty()){
                 emitIndent(out, indent);
                 out.append("else{\r\n");
-                emitSwitchIfChainStatements(out, child->elseStatements, indent + 1u);
+                if(isLastInCase)
+                    emitSwitchIfChainStatements(out, child->elseStatements, indent + 1u);
+                else
+                    emitStatementList(out, child->elseStatements, indent + 1u);
                 emitIndent(out, indent);
                 out.append("}\r\n");
             }
@@ -100,6 +184,11 @@ void SourceEmitter::emitStmt(
             if(!baseVarType.empty() && m_symbols.isSimdMatrixType(baseVarType)){
                 if(stmt.arguments.empty()){
                     out.append("{};\r\n");
+                }
+                else if(stmt.arguments.size() == 1u && stmt.arguments[0] && m_symbols.isSimdMatrixType(stmt.arguments[0]->resolvedSimdType)){
+                    out.push_back('(');
+                    emitExpr(out, *stmt.arguments[0]);
+                    out.append(");\r\n");
                 }
                 else{
                     out.append("{ .raw = { ");
@@ -172,6 +261,17 @@ void SourceEmitter::emitStmt(
         break;
     }
     case StmtKind::ExprStmt:{
+        if(m_skippedCtorAssignExprs && stmt.expr){
+            b8 skip = false;
+            for(const Expr* skippedExpr : *m_skippedCtorAssignExprs){
+                if(skippedExpr == stmt.expr){
+                    skip = true;
+                    break;
+                }
+            }
+            if(skip)
+                break;
+        }
         if(tryEmitSimdAssignStmt(out, stmt, indent))
             break;
         if(tryEmitParallelWaitStmt(out, stmt, indent))
@@ -207,13 +307,22 @@ void SourceEmitter::emitStmt(
         break;
     }
     case StmtKind::Break:{
-        emitSimdBlockStores(out, indent, true);
+        if(m_activeSimdLoopBinding && m_activeSimdLoopInnerBreakDepth == 0u && m_activeSwitchBreakLabelLine == 0u)
+            emitSimdStoreForBinding(out, *m_activeSimdLoopBinding, indent);
         emitIndent(out, indent);
-        out.append("break;\r\n");
+        if(m_activeSwitchBreakLabelLine != 0u){
+            out.append("goto __adhd_switch_break_");
+            AppendAdhdUnsigned(out, m_activeSwitchBreakLabelLine);
+            out.append(";\r\n");
+        }
+        else{
+            out.append("break;\r\n");
+        }
         break;
     }
     case StmtKind::Continue:{
-        emitSimdBlockStores(out, indent, true);
+        if(m_activeSimdLoopBinding && m_activeSimdLoopInnerContinueDepth == 0u)
+            emitSimdStoreForBinding(out, *m_activeSimdLoopBinding, indent);
         emitIndent(out, indent);
         out.append("continue;\r\n");
         break;
@@ -238,11 +347,31 @@ void SourceEmitter::emitStmt(
     }
     case StmtKind::Switch:{
         if(stmt.lowerSwitchToIfChain){
+            b8 needsEarlyBreakLowering = false;
+            b8 hasOuterContinue = false;
+            for(const SwitchCase& sc : stmt.switchCases){
+                if(__hidden_adhd_source_emitter_stmt::CaseNeedsDoWhileBreakLowering(sc.statements))
+                    needsEarlyBreakLowering = true;
+                if(__hidden_adhd_source_emitter_stmt::StatementsContainOuterLoopContinue(sc.statements))
+                    hasOuterContinue = true;
+            }
+            const b8 needsDoWhileWrap = needsEarlyBreakLowering && !hasOuterContinue;
+            const b8 needsBreakLabel = needsEarlyBreakLowering && hasOuterContinue;
             const b8 cacheSubject = stmt.expr
                 && stmt.expr->kind != ExprKind::Identifier
                 && stmt.expr->kind != ExprKind::ThisMember;
-            const u32 bodyIndent = cacheSubject ? (indent + 1u) : indent;
-            if(cacheSubject){
+            const u32 bodyIndent = (cacheSubject || needsDoWhileWrap) ? (indent + 1u) : indent;
+            if(needsDoWhileWrap){
+                emitIndent(out, indent);
+                out.append("do{\r\n");
+                if(cacheSubject){
+                    emitIndent(out, bodyIndent);
+                    out.append("const auto& __adhd_switch_subject = (");
+                    emitExpr(out, *stmt.expr);
+                    out.append(");\r\n");
+                }
+            }
+            else if(cacheSubject){
                 emitIndent(out, indent);
                 out.append("{\r\n");
                 emitIndent(out, bodyIndent);
@@ -251,7 +380,16 @@ void SourceEmitter::emitStmt(
                 out.append(");\r\n");
             }
 
+            const u32 prevBreakLabelLine = m_activeSwitchBreakLabelLine;
+            if(needsBreakLabel)
+                m_activeSwitchBreakLabelLine = stmt.span.line != 0u ? stmt.span.line : 1u;
+            else if(needsDoWhileWrap)
+                m_activeSwitchBreakLabelLine = 0u;
+            if(needsDoWhileWrap)
+                ++m_activeSimdLoopInnerBreakDepth;
+
             b8 firstBranch = true;
+            usize defaultGroupEnd = stmt.switchCases.size();
             usize idx = 0u;
             while(idx < stmt.switchCases.size()){
                 usize groupEnd = idx;
@@ -262,42 +400,67 @@ void SourceEmitter::emitStmt(
                         groupHasDefault = true;
                 }
 
-                emitIndent(out, bodyIndent);
                 if(groupHasDefault){
-                    out.append(firstBranch ? "{\r\n" : "else{\r\n");
-                    firstBranch = false;
+                    defaultGroupEnd = groupEnd;
+                    idx = groupEnd + 1u;
+                    continue;
                 }
-                else{
-                    out.append(firstBranch ? "if(" : "else if(");
-                    b8 firstCond = true;
-                    for(usize k = idx; k <= groupEnd; ++k){
-                        if(stmt.switchCases[k].isDefault)
-                            continue;
-                        if(!firstCond)
-                            out.append(" || ");
-                        firstCond = false;
-                        if(cacheSubject)
-                            out.append("__adhd_switch_subject");
-                        else if(stmt.expr)
-                            emitExpr(out, *stmt.expr);
-                        out.append(" == ");
-                        if(stmt.switchCases[k].matchExpr)
-                            emitExpr(out, *stmt.switchCases[k].matchExpr);
-                    }
-                    out.append("){\r\n");
-                    firstBranch = false;
+
+                emitIndent(out, bodyIndent);
+                out.append(firstBranch ? "if(" : "else if(");
+                b8 firstCond = true;
+                for(usize k = idx; k <= groupEnd; ++k){
+                    if(stmt.switchCases[k].isDefault)
+                        continue;
+                    if(!firstCond)
+                        out.append(" || ");
+                    firstCond = false;
+                    if(cacheSubject)
+                        out.append("__adhd_switch_subject");
+                    else if(stmt.expr)
+                        emitExpr(out, *stmt.expr);
+                    out.append(" == ");
+                    if(stmt.switchCases[k].matchExpr)
+                        emitExpr(out, *stmt.switchCases[k].matchExpr);
                 }
+                out.append("){\r\n");
+                firstBranch = false;
                 emitSwitchIfChainStatements(out, stmt.switchCases[groupEnd].statements, bodyIndent + 1u);
                 emitIndent(out, bodyIndent);
                 out.append("}\r\n");
                 idx = groupEnd + 1u;
             }
-            if(cacheSubject){
+            if(defaultGroupEnd < stmt.switchCases.size()){
+                emitIndent(out, bodyIndent);
+                out.append(firstBranch ? "{\r\n" : "else{\r\n");
+                emitSwitchIfChainStatements(out, stmt.switchCases[defaultGroupEnd].statements, bodyIndent + 1u);
+                emitIndent(out, bodyIndent);
+                out.append("}\r\n");
+            }
+
+            if(needsDoWhileWrap)
+                --m_activeSimdLoopInnerBreakDepth;
+            m_activeSwitchBreakLabelLine = prevBreakLabelLine;
+
+            if(needsBreakLabel){
+                emitIndent(out, bodyIndent);
+                out.append("__adhd_switch_break_");
+                AppendAdhdUnsigned(out, stmt.span.line != 0u ? stmt.span.line : 1u);
+                out.append(":;\r\n");
+            }
+            if(needsDoWhileWrap){
+                emitIndent(out, indent);
+                out.append("}while(false);\r\n");
+            }
+            else if(cacheSubject){
                 emitIndent(out, indent);
                 out.append("}\r\n");
             }
         }
         else{
+            const u32 prevBreakLabelLine = m_activeSwitchBreakLabelLine;
+            m_activeSwitchBreakLabelLine = 0u;
+            ++m_activeSimdLoopInnerBreakDepth;
             emitIndent(out, indent);
             out.append("switch(");
             if(stmt.expr)
@@ -326,6 +489,8 @@ void SourceEmitter::emitStmt(
             }
             emitIndent(out, indent);
             out.append("}\r\n");
+            --m_activeSimdLoopInnerBreakDepth;
+            m_activeSwitchBreakLabelLine = prevBreakLabelLine;
         }
         break;
     }
@@ -349,9 +514,29 @@ void SourceEmitter::emitStmt(
         if(loopBinding && loopBinding->isLoopElement)
             emitSimdLoopElementLoad(out, *loopBinding, indent + 1u);
 
+        const SimdVarBinding* prevSimdLoopBinding = m_activeSimdLoopBinding;
+        const u32 prevInnerBreakDepth = m_activeSimdLoopInnerBreakDepth;
+        const u32 prevInnerContinueDepth = m_activeSimdLoopInnerContinueDepth;
+        const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
+        m_activeSwitchBreakLabelLine = 0u;
+        if(stmt.rangeMode == ParamPassingMode::Mut && loopBinding && loopBinding->isLoopElement && loopBinding->written){
+            m_activeSimdLoopBinding = loopBinding;
+            m_activeSimdLoopInnerBreakDepth = 0u;
+            m_activeSimdLoopInnerContinueDepth = 0u;
+        }
+        else if(m_activeSimdLoopBinding){
+            ++m_activeSimdLoopInnerBreakDepth;
+            ++m_activeSimdLoopInnerContinueDepth;
+        }
+
         emitStatementList(out, stmt.statements, indent + 1u);
 
-        if(loopBinding && loopBinding->isLoopElement && loopBinding->written){
+        m_activeSimdLoopBinding = prevSimdLoopBinding;
+        m_activeSimdLoopInnerBreakDepth = prevInnerBreakDepth;
+        m_activeSimdLoopInnerContinueDepth = prevInnerContinueDepth;
+        m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
+
+        if(stmt.rangeMode == ParamPassingMode::Mut && loopBinding && loopBinding->isLoopElement && loopBinding->written){
             const b8 endsWithTerminal = !stmt.statements.empty() && stmt.statements.back() && (
                 stmt.statements.back()->kind == StmtKind::Return
                 || stmt.statements.back()->kind == StmtKind::Break
@@ -375,6 +560,13 @@ void SourceEmitter::emitStmt(
             out.append(" = ");
             if(stmt.initStmt->expr)
                 emitExpr(out, *stmt.initStmt->expr);
+            else if(stmt.initStmt->isCtorInit && !stmt.initStmt->arguments.empty() && stmt.initStmt->arguments[0])
+                emitExpr(out, *stmt.initStmt->arguments[0]);
+            else
+                out.append("0");
+        }
+        else if(stmt.initStmt && stmt.initStmt->kind == StmtKind::ExprStmt && stmt.initStmt->expr){
+            emitExpr(out, *stmt.initStmt->expr);
         }
         out.append("; ");
         if(stmt.condition)
@@ -383,7 +575,14 @@ void SourceEmitter::emitStmt(
         if(stmt.stepExpr)
             emitExpr(out, *stmt.stepExpr);
         out.append("){\r\n");
+        const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
+        m_activeSwitchBreakLabelLine = 0u;
+        ++m_activeSimdLoopInnerBreakDepth;
+        ++m_activeSimdLoopInnerContinueDepth;
         emitStatementList(out, stmt.statements, indent + 1u);
+        --m_activeSimdLoopInnerBreakDepth;
+        --m_activeSimdLoopInnerContinueDepth;
+        m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
         emitIndent(out, indent);
         out.append("}\r\n");
         break;
@@ -394,7 +593,14 @@ void SourceEmitter::emitStmt(
         if(stmt.condition)
             emitExpr(out, *stmt.condition);
         out.append("){\r\n");
+        const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
+        m_activeSwitchBreakLabelLine = 0u;
+        ++m_activeSimdLoopInnerBreakDepth;
+        ++m_activeSimdLoopInnerContinueDepth;
         emitStatementList(out, stmt.statements, indent + 1u);
+        --m_activeSimdLoopInnerBreakDepth;
+        --m_activeSimdLoopInnerContinueDepth;
+        m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
         emitIndent(out, indent);
         out.append("}\r\n");
         break;
@@ -402,7 +608,14 @@ void SourceEmitter::emitStmt(
     case StmtKind::DoWhile:{
         emitIndent(out, indent);
         out.append("do{\r\n");
+        const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
+        m_activeSwitchBreakLabelLine = 0u;
+        ++m_activeSimdLoopInnerBreakDepth;
+        ++m_activeSimdLoopInnerContinueDepth;
         emitStatementList(out, stmt.statements, indent + 1u);
+        --m_activeSimdLoopInnerBreakDepth;
+        --m_activeSimdLoopInnerContinueDepth;
+        m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
         emitIndent(out, indent);
         out.append("}while(");
         if(stmt.condition)

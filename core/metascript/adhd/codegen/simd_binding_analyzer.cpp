@@ -187,6 +187,92 @@ void PreRegisterLocalSimdDecls(
     }
 }
 
+void CollectLocalDeclConflicts(
+    const MVector<Stmt*>& statements,
+    const SymbolTable& symbols,
+    MVector<MStringView>& seenNames,
+    MVector<MStringView>& seenSimdTypes,
+    MVector<b8>& seenIsLoop,
+    MVector<MStringView>& conflictedNames
+){
+    auto recordLocal = [&](const MStringView name, const MStringView simdType, const b8 isLoop){
+        if(name.empty())
+            return;
+        for(usize i = 0u; i < seenNames.size(); ++i){
+            if(seenNames[i] == name){
+                if(!isLoop || !seenIsLoop[i] || seenSimdTypes[i] != simdType || simdType.empty()){
+                    b8 alreadyAdded = false;
+                    for(const MStringView existing : conflictedNames){
+                        if(existing == name){
+                            alreadyAdded = true;
+                            break;
+                        }
+                    }
+                    if(!alreadyAdded)
+                        conflictedNames.push_back(name);
+                }
+                return;
+            }
+        }
+        seenNames.push_back(name);
+        seenSimdTypes.push_back(simdType);
+        seenIsLoop.push_back(isLoop);
+    };
+
+    for(const Stmt* stmt : statements){
+        if(!stmt)
+            continue;
+        switch(stmt->kind){
+        case StmtKind::VarDecl:{
+            MStringView varSimdType;
+            if(!stmt->usesScratchArena && (!stmt->varType || stmt->varType->refMode == ParamPassingMode::None)){
+                if(stmt->varType && IsRegisterPromotableSimdType(symbols.resolveBaseTypeName(stmt->varType->name)))
+                    varSimdType = symbols.resolveBaseTypeName(stmt->varType->name);
+                else if(stmt->expr && IsRegisterPromotableSimdType(stmt->expr->resolvedSimdType))
+                    varSimdType = stmt->expr->resolvedSimdType;
+            }
+            recordLocal(stmt->name, varSimdType, false);
+            break;
+        }
+        case StmtKind::ForRange:
+        case StmtKind::ParallelForRange:{
+            MStringView loopSimdType;
+            if(stmt->varType){
+                const MStringView resolved = symbols.resolveBaseTypeName(stmt->varType->name);
+                if(IsRegisterPromotableSimdType(resolved))
+                    loopSimdType = resolved;
+            }
+            recordLocal(stmt->name, loopSimdType, true);
+            CollectLocalDeclConflicts(stmt->statements, symbols, seenNames, seenSimdTypes, seenIsLoop, conflictedNames);
+            break;
+        }
+        case StmtKind::ForIndex:
+        case StmtKind::ParallelForIndex:{
+            if(stmt->initStmt && stmt->initStmt->kind == StmtKind::VarDecl)
+                recordLocal(stmt->initStmt->name, {}, false);
+            CollectLocalDeclConflicts(stmt->statements, symbols, seenNames, seenSimdTypes, seenIsLoop, conflictedNames);
+            break;
+        }
+        case StmtKind::Block:
+        case StmtKind::ParallelBlock:
+        case StmtKind::While:
+        case StmtKind::DoWhile:
+            CollectLocalDeclConflicts(stmt->statements, symbols, seenNames, seenSimdTypes, seenIsLoop, conflictedNames);
+            break;
+        case StmtKind::If:
+            CollectLocalDeclConflicts(stmt->statements, symbols, seenNames, seenSimdTypes, seenIsLoop, conflictedNames);
+            CollectLocalDeclConflicts(stmt->elseStatements, symbols, seenNames, seenSimdTypes, seenIsLoop, conflictedNames);
+            break;
+        case StmtKind::Switch:
+            for(const SwitchCase& sc : stmt->switchCases)
+                CollectLocalDeclConflicts(sc.statements, symbols, seenNames, seenSimdTypes, seenIsLoop, conflictedNames);
+            break;
+        default:
+            break;
+        }
+    }
+}
+
 void AnalyzeSimdExprReads(
     MetaArena& arena,
     MVector<SimdVarBinding>& bindings,
@@ -492,6 +578,33 @@ void CollectScopedSimdBindings(
     b8 hasSeenPossibleReturn = false;
     ScanStmtsForSimdBindings(arena, bindings, statements, symbols, false, hasSeenPossibleReturn);
     MarkLambdaCapturedSimdBindingsInStmts(bindings, statements);
+
+    MVector<MStringView> seenNames(arena);
+    MVector<MStringView> seenSimdTypes(arena);
+    MVector<b8> seenIsLoop(arena);
+    MVector<MStringView> conflictedNames(arena);
+    CollectLocalDeclConflicts(statements, symbols, seenNames, seenSimdTypes, seenIsLoop, conflictedNames);
+    if(!conflictedNames.empty()){
+        usize writeIdx = 0u;
+        for(usize readIdx = 0u; readIdx < bindings.size(); ++readIdx){
+            b8 isConflicted = false;
+            if(!bindings[readIdx].isThisMember){
+                for(const MStringView cname : conflictedNames){
+                    if(bindings[readIdx].name == cname){
+                        isConflicted = true;
+                        break;
+                    }
+                }
+            }
+            if(!isConflicted){
+                if(writeIdx != readIdx)
+                    bindings[writeIdx] = bindings[readIdx];
+                ++writeIdx;
+            }
+        }
+        while(bindings.size() > writeIdx)
+            bindings.pop_back();
+    }
 }
 
 

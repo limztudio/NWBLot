@@ -27,22 +27,511 @@ namespace __hidden_adhd_type_utils{
     return baseName == "b8" || IsIntegerScalarType(baseName) || symbols.findEnum(baseName) != nullptr;
 }
 
+[[nodiscard]] MStringView TrimAsciiWhitespace(MStringView text)noexcept{
+    while(!text.empty() && (text.front() == ' ' || text.front() == '\t' || text.front() == '\r' || text.front() == '\n'))
+        text.remove_prefix(1u);
+    while(!text.empty() && (text.back() == ' ' || text.back() == '\t' || text.back() == '\r' || text.back() == '\n'))
+        text.remove_suffix(1u);
+    return text;
+}
+
+[[nodiscard]] b8 HasMatchingOuterParens(const MStringView text)noexcept{
+    if(text.size() < 2u || text.front() != '(' || text.back() != ')')
+        return false;
+    u32 depth = 0u;
+    for(usize i = 0u; i < text.size(); ++i){
+        if(text[i] == '('){
+            ++depth;
+        }
+        else if(text[i] == ')'){
+            if(depth == 0u)
+                return false;
+            --depth;
+            if(depth == 0u && i + 1u < text.size())
+                return false;
+        }
+    }
+    return depth == 0u;
+}
+
+[[nodiscard]] b8 IsValidScopedEnumTemplateArg(MStringView text, const SymbolTable& symbols, const EnumDecl** outEnum = nullptr, MStringView* outEntryName = nullptr)noexcept{
+    text = TrimAsciiWhitespace(text);
+    const usize firstSep = text.find("::");
+    if(firstSep == MStringView::npos || firstSep == 0u)
+        return false;
+    const MStringView enumName = TrimAsciiWhitespace(text.substr(0u, firstSep));
+    const EnumDecl* ed = symbols.findEnum(symbols.resolveBaseTypeName(enumName));
+    if(!ed)
+        return false;
+
+    const MStringView rest = TrimAsciiWhitespace(text.substr(firstSep + 2u));
+    MStringView entryName = rest;
+    const usize secondSep = rest.find("::");
+    if(secondSep != MStringView::npos){
+        const MStringView mid = TrimAsciiWhitespace(rest.substr(0u, secondSep));
+        if(mid != "Enum" && mid != "Flag")
+            return false;
+        entryName = TrimAsciiWhitespace(rest.substr(secondSep + 2u));
+        if(entryName.find("::") != MStringView::npos)
+            return false;
+    }
+    if(entryName.empty())
+        return false;
+
+    for(const EnumEntry& entry : ed->entries){
+        if(entry.name == entryName){
+            if(outEnum)
+                *outEnum = ed;
+            if(outEntryName)
+                *outEntryName = entryName;
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] b8 TryEvaluateTextConstant(MStringView text, const SymbolTable& symbols, i64& outVal, u32 depth = 0u, const EnumDecl* contextEnum = nullptr)noexcept;
+
+[[nodiscard]] b8 TryEvaluateExprConstant(const Expr* expr, const SymbolTable& symbols, i64& outVal, const u32 depth = 0u, const EnumDecl* contextEnum = nullptr)noexcept{
+    if(!expr || depth > 16u)
+        return false;
+
+    switch(expr->kind){
+    case ExprKind::IntegerLiteral:
+    case ExprKind::Identifier:
+        return TryEvaluateTextConstant(expr->text, symbols, outVal, depth + 1u, contextEnum);
+    case ExprKind::BoolLiteral:
+        outVal = (expr->text == "true") ? 1 : 0;
+        return true;
+    case ExprKind::ScopeAccess: {
+        if(expr->scopeChain.size() < 2u)
+            return false;
+        const EnumDecl* ed = symbols.findEnum(symbols.resolveBaseTypeName(expr->scopeChain[0]));
+        if(!ed)
+            return false;
+        const MStringView targetEntry = expr->scopeChain.back();
+        i64 nextSeq = 0;
+        usize flagBitIndex = 0u;
+        for(const EnumEntry& entry : ed->entries){
+            i64 curVal = 0;
+            if(entry.valueExpr){
+                if(!TryEvaluateExprConstant(entry.valueExpr, symbols, curVal, depth + 1u, ed))
+                    return false;
+                nextSeq = curVal + 1;
+            }
+            else if(entry.isFlag){
+                curVal = static_cast<i64>(usize(1) << flagBitIndex++);
+                nextSeq = curVal + 1;
+            }
+            else{
+                curVal = nextSeq++;
+            }
+            if(entry.name == targetEntry){
+                outVal = curVal;
+                return true;
+            }
+        }
+        return false;
+    }
+    case ExprKind::Unary: {
+        if(expr->isPostfix)
+            return false;
+        i64 inner = 0;
+        if(!TryEvaluateExprConstant(expr->lhs, symbols, inner, depth + 1u, contextEnum))
+            return false;
+        switch(expr->op){
+        case TokenType::Plus: outVal = +inner; return true;
+        case TokenType::Minus: outVal = -inner; return true;
+        case TokenType::Tilde: outVal = ~inner; return true;
+        case TokenType::Bang: outVal = (inner == 0) ? 1 : 0; return true;
+        default: return false;
+        }
+    }
+    case ExprKind::Binary: {
+        i64 lhsVal = 0;
+        i64 rhsVal = 0;
+        if(!TryEvaluateExprConstant(expr->lhs, symbols, lhsVal, depth + 1u, contextEnum)
+            || !TryEvaluateExprConstant(expr->rhs, symbols, rhsVal, depth + 1u, contextEnum))
+        {
+            return false;
+        }
+        switch(expr->op){
+        case TokenType::Plus: outVal = lhsVal + rhsVal; return true;
+        case TokenType::Minus: outVal = lhsVal - rhsVal; return true;
+        case TokenType::Star: outVal = lhsVal * rhsVal; return true;
+        case TokenType::Slash:
+            if(rhsVal == 0)
+                return false;
+            outVal = lhsVal / rhsVal;
+            return true;
+        case TokenType::Percent:
+            if(rhsVal == 0)
+                return false;
+            outVal = lhsVal % rhsVal;
+            return true;
+        case TokenType::LessLess:
+            if(rhsVal < 0 || rhsVal >= 63)
+                return false;
+            outVal = static_cast<i64>(static_cast<u64>(lhsVal) << static_cast<u64>(rhsVal));
+            return true;
+        case TokenType::GreaterGreater:
+            if(rhsVal < 0 || rhsVal >= 63)
+                return false;
+            outVal = lhsVal >> rhsVal;
+            return true;
+        case TokenType::Pipe: outVal = lhsVal | rhsVal; return true;
+        case TokenType::Caret: outVal = lhsVal ^ rhsVal; return true;
+        case TokenType::Ampersand: outVal = lhsVal & rhsVal; return true;
+        default: return false;
+        }
+    }
+    case ExprKind::Cast:
+        return TryEvaluateExprConstant(expr->lhs, symbols, outVal, depth + 1u, contextEnum);
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] b8 TryEvaluateTextConstant(MStringView text, const SymbolTable& symbols, i64& outVal, const u32 depth, const EnumDecl* contextEnum)noexcept{
+    if(depth > 16u)
+        return false;
+    text = TrimAsciiWhitespace(text);
+    while(HasMatchingOuterParens(text))
+        text = TrimAsciiWhitespace(text.substr(1u, text.size() - 2u));
+    if(text.empty())
+        return false;
+
+    auto findTopLevelBinary = [&](const MStringView op1, const MStringView op2, usize& outPos, usize& outLen)noexcept -> b8{
+        u32 parenDepth = 0u;
+        b8 inSingleQuote = false;
+        usize foundPos = MStringView::npos;
+        usize foundLen = 0u;
+        for(usize i = 0u; i < text.size(); ++i){
+            const MChar c = text[i];
+            if(c == '\'' && (i == 0u || text[i - 1u] != '\\'))
+                inSingleQuote = !inSingleQuote;
+            if(inSingleQuote)
+                continue;
+            if(c == '('){
+                ++parenDepth;
+                continue;
+            }
+            if(c == ')'){
+                if(parenDepth > 0u)
+                    --parenDepth;
+                continue;
+            }
+            if(parenDepth != 0u)
+                continue;
+
+            auto matchesAt = [&](const MStringView op)noexcept -> b8{
+                if(op.empty() || i + op.size() > text.size())
+                    return false;
+                if(text.substr(i, op.size()) != op)
+                    return false;
+                if(op.size() == 1u && (op[0] == '<' || op[0] == '>' || op[0] == '|' || op[0] == '&')){
+                    if(i + 1u < text.size() && text[i + 1u] == op[0])
+                        return false;
+                    if(i > 0u && text[i - 1u] == op[0])
+                        return false;
+                }
+                if(op.size() == 1u && (op[0] == '+' || op[0] == '-')){
+                    MStringView prefix = TrimAsciiWhitespace(text.substr(0u, i));
+                    if(prefix.empty())
+                        return false;
+                    const MChar prev = prefix.back();
+                    if(prev == '+' || prev == '-' || prev == '*' || prev == '/' || prev == '%' || prev == '<' || prev == '>' || prev == '|' || prev == '^' || prev == '&' || prev == '~' || prev == '!')
+                        return false;
+                }
+                return true;
+            };
+
+            if(matchesAt(op1)){
+                foundPos = i;
+                foundLen = op1.size();
+            }
+            else if(!op2.empty() && matchesAt(op2)){
+                foundPos = i;
+                foundLen = op2.size();
+            }
+        }
+        if(foundPos != MStringView::npos){
+            outPos = foundPos;
+            outLen = foundLen;
+            return true;
+        }
+        return false;
+    };
+
+    usize opPos = 0u;
+    usize opLen = 0u;
+    if(findTopLevelBinary("|", "", opPos, opLen)){
+        i64 l = 0, r = 0;
+        if(!TryEvaluateTextConstant(text.substr(0u, opPos), symbols, l, depth + 1u, contextEnum)
+            || !TryEvaluateTextConstant(text.substr(opPos + opLen), symbols, r, depth + 1u, contextEnum))
+            return false;
+        outVal = l | r;
+        return true;
+    }
+    if(findTopLevelBinary("^", "", opPos, opLen)){
+        i64 l = 0, r = 0;
+        if(!TryEvaluateTextConstant(text.substr(0u, opPos), symbols, l, depth + 1u, contextEnum)
+            || !TryEvaluateTextConstant(text.substr(opPos + opLen), symbols, r, depth + 1u, contextEnum))
+            return false;
+        outVal = l ^ r;
+        return true;
+    }
+    if(findTopLevelBinary("&", "", opPos, opLen)){
+        i64 l = 0, r = 0;
+        if(!TryEvaluateTextConstant(text.substr(0u, opPos), symbols, l, depth + 1u, contextEnum)
+            || !TryEvaluateTextConstant(text.substr(opPos + opLen), symbols, r, depth + 1u, contextEnum))
+            return false;
+        outVal = l & r;
+        return true;
+    }
+    if(findTopLevelBinary("<<", ">>", opPos, opLen)){
+        i64 l = 0, r = 0;
+        if(!TryEvaluateTextConstant(text.substr(0u, opPos), symbols, l, depth + 1u, contextEnum)
+            || !TryEvaluateTextConstant(text.substr(opPos + opLen), symbols, r, depth + 1u, contextEnum)
+            || r < 0 || r >= 63)
+            return false;
+        outVal = (text.substr(opPos, opLen) == "<<")
+            ? static_cast<i64>(static_cast<u64>(l) << static_cast<u64>(r))
+            : (l >> r);
+        return true;
+    }
+    if(findTopLevelBinary("+", "-", opPos, opLen)){
+        i64 l = 0, r = 0;
+        if(!TryEvaluateTextConstant(text.substr(0u, opPos), symbols, l, depth + 1u, contextEnum)
+            || !TryEvaluateTextConstant(text.substr(opPos + opLen), symbols, r, depth + 1u, contextEnum))
+            return false;
+        outVal = (text[opPos] == '+') ? (l + r) : (l - r);
+        return true;
+    }
+    if(findTopLevelBinary("*", "/", opPos, opLen) || findTopLevelBinary("%", "", opPos, opLen)){
+        i64 l = 0, r = 0;
+        if(!TryEvaluateTextConstant(text.substr(0u, opPos), symbols, l, depth + 1u, contextEnum)
+            || !TryEvaluateTextConstant(text.substr(opPos + opLen), symbols, r, depth + 1u, contextEnum))
+            return false;
+        if(text[opPos] == '*'){
+            outVal = l * r;
+            return true;
+        }
+        if(r == 0)
+            return false;
+        outVal = (text[opPos] == '/') ? (l / r) : (l % r);
+        return true;
+    }
+
+    if(text[0] == '+' || text[0] == '-' || text[0] == '~' || text[0] == '!'){
+        i64 inner = 0;
+        if(!TryEvaluateTextConstant(text.substr(1u), symbols, inner, depth + 1u, contextEnum))
+            return false;
+        switch(text[0]){
+        case '+': outVal = +inner; return true;
+        case '-': outVal = -inner; return true;
+        case '~': outVal = ~inner; return true;
+        case '!': outVal = (inner == 0) ? 1 : 0; return true;
+        default: return false;
+        }
+    }
+
+    if(text == "true"){
+        outVal = 1;
+        return true;
+    }
+    if(text == "false"){
+        outVal = 0;
+        return true;
+    }
+
+    if(text.size() >= 3u && text.front() == '\'' && text.back() == '\''){
+        const MStringView inner = text.substr(1u, text.size() - 2u);
+        if(inner.size() == 1u){
+            outVal = static_cast<i64>(static_cast<u8>(inner[0]));
+            return true;
+        }
+        if(inner.size() >= 2u && inner[0] == '\\'){
+            switch(inner[1]){
+            case 'n': outVal = static_cast<i64>('\n'); return true;
+            case 'r': outVal = static_cast<i64>('\r'); return true;
+            case 't': outVal = static_cast<i64>('\t'); return true;
+            case 'v': outVal = static_cast<i64>('\v'); return true;
+            case 'b': outVal = static_cast<i64>('\b'); return true;
+            case 'f': outVal = static_cast<i64>('\f'); return true;
+            case 'a': outVal = static_cast<i64>('\a'); return true;
+            case '\\': outVal = static_cast<i64>('\\'); return true;
+            case '\'': outVal = static_cast<i64>('\''); return true;
+            case '"': outVal = static_cast<i64>('"'); return true;
+            case '?': outVal = static_cast<i64>('?'); return true;
+            case 'x':
+            case 'X':
+            case 'u':
+            case 'U': {
+                u64 hexVal = 0u;
+                for(usize i = 2u; i < inner.size(); ++i){
+                    const MChar c = inner[i];
+                    if(c >= '0' && c <= '9')
+                        hexVal = (hexVal << 4u) | static_cast<u64>(c - '0');
+                    else if(c >= 'a' && c <= 'f')
+                        hexVal = (hexVal << 4u) | static_cast<u64>(10 + (c - 'a'));
+                    else if(c >= 'A' && c <= 'F')
+                        hexVal = (hexVal << 4u) | static_cast<u64>(10 + (c - 'A'));
+                }
+                outVal = static_cast<i64>(hexVal);
+                return true;
+            }
+            default:
+                if(inner[1] >= '0' && inner[1] <= '7'){
+                    u64 octVal = 0u;
+                    for(usize i = 1u; i < inner.size() && inner[i] >= '0' && inner[i] <= '7'; ++i)
+                        octVal = (octVal << 3u) | static_cast<u64>(inner[i] - '0');
+                    outVal = static_cast<i64>(octVal);
+                    return true;
+                }
+                outVal = static_cast<i64>(static_cast<u8>(inner[1]));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if(text[0] >= '0' && text[0] <= '9'){
+        u64 val = 0u;
+        if(text.size() > 2u && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')){
+            for(usize i = 2u; i < text.size(); ++i){
+                const MChar c = text[i];
+                if(c == '\'')
+                    continue;
+                if(c >= '0' && c <= '9')
+                    val = val * 16u + static_cast<u64>(c - '0');
+                else if(c >= 'a' && c <= 'f')
+                    val = val * 16u + static_cast<u64>(10 + (c - 'a'));
+                else if(c >= 'A' && c <= 'F')
+                    val = val * 16u + static_cast<u64>(10 + (c - 'A'));
+                else
+                    break;
+            }
+            outVal = static_cast<i64>(val);
+            return true;
+        }
+        if(text.size() > 2u && text[0] == '0' && (text[1] == 'b' || text[1] == 'B')){
+            for(usize i = 2u; i < text.size(); ++i){
+                const MChar c = text[i];
+                if(c == '\'')
+                    continue;
+                if(c == '0' || c == '1')
+                    val = val * 2u + static_cast<u64>(c - '0');
+                else
+                    break;
+            }
+            outVal = static_cast<i64>(val);
+            return true;
+        }
+        for(usize i = 0u; i < text.size(); ++i){
+            const MChar c = text[i];
+            if(c == '\'')
+                continue;
+            if(c >= '0' && c <= '9')
+                val = val * 10u + static_cast<u64>(c - '0');
+            else
+                break;
+        }
+        outVal = static_cast<i64>(val);
+        return true;
+    }
+
+    const EnumDecl* scopedEnum = nullptr;
+    MStringView scopedEntryName;
+    if(IsValidScopedEnumTemplateArg(text, symbols, &scopedEnum, &scopedEntryName)){
+        i64 nextSeq = 0;
+        usize flagBitIndex = 0u;
+        for(const EnumEntry& entry : scopedEnum->entries){
+            i64 curVal = 0;
+            if(entry.valueExpr){
+                if(!TryEvaluateExprConstant(entry.valueExpr, symbols, curVal, depth + 1u, scopedEnum))
+                    return false;
+                nextSeq = curVal + 1;
+            }
+            else if(entry.isFlag){
+                curVal = static_cast<i64>(usize(1) << flagBitIndex++);
+                nextSeq = curVal + 1;
+            }
+            else{
+                curVal = nextSeq++;
+            }
+            if(entry.name == scopedEntryName){
+                outVal = curVal;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if(contextEnum){
+        i64 nextSeq = 0;
+        usize flagBitIndex = 0u;
+        for(const EnumEntry& entry : contextEnum->entries){
+            i64 curVal = 0;
+            if(entry.valueExpr){
+                if(!TryEvaluateExprConstant(entry.valueExpr, symbols, curVal, depth + 1u, contextEnum))
+                    return false;
+                nextSeq = curVal + 1;
+            }
+            else if(entry.isFlag){
+                curVal = static_cast<i64>(usize(1) << flagBitIndex++);
+                nextSeq = curVal + 1;
+            }
+            else{
+                curVal = nextSeq++;
+            }
+            if(entry.name == text){
+                outVal = curVal;
+                return true;
+            }
+        }
+    }
+
+    if(const Stmt* globalConst = symbols.findGlobalConstant(text)){
+        if(!IsValidConstTemplateArgGlobal(globalConst, symbols))
+            return false;
+        const Expr* valExpr = globalConst->expr;
+        if(!valExpr && globalConst->isCtorInit && globalConst->arguments.size() == 1u)
+            valExpr = globalConst->arguments[0];
+        if(valExpr)
+            return TryEvaluateExprConstant(valExpr, symbols, outVal, depth + 1u, contextEnum);
+    }
+
+    return false;
+}
+
 [[nodiscard]] b8 IsConcreteConstTemplateArgText(const MStringView text, const SymbolTable& symbols)noexcept{
     if(text.empty())
         return false;
-    const b8 isCharConst = text.size() >= 3u && text.front() == '\'' && text.back() == '\'';
-    const b8 isNegInt = text.size() >= 2u && text[0] == '-' && text[1] >= '0' && text[1] <= '9';
-    const b8 isNumericOrBoolConst = (text[0] >= '0' && text[0] <= '9') || isNegInt || text == "true" || text == "false" || isCharConst;
-    return isNumericOrBoolConst || IsValidConstTemplateArgGlobal(symbols.findGlobalConstant(text), symbols);
+    i64 dummyVal = 0;
+    if(TryEvaluateTextConstant(text, symbols, dummyVal))
+        return true;
+    if(IsValidScopedEnumTemplateArg(text, symbols))
+        return true;
+    MStringView ident = TrimAsciiWhitespace(text);
+    if(!ident.empty() && (ident.front() == '+' || ident.front() == '-'))
+        ident = TrimAsciiWhitespace(ident.substr(1u));
+    return IsValidConstTemplateArgGlobal(symbols.findGlobalConstant(ident), symbols);
 }
 
 [[nodiscard]] b8 AreConstantTemplateArgsEquivalent(const MStringView a, const MStringView b, const SymbolTable& symbols)noexcept{
     if(a == b)
         return true;
-    if(a.empty() || b.empty() || a == "true" || a == "false" || b == "true" || b == "false" || a[0] == '-' || b[0] == '-')
+    if(a.empty() || b.empty())
         return false;
-    if(IsConcreteConstTemplateArgText(a, symbols) && IsConcreteConstTemplateArgText(b, symbols))
-        return ParseUnsignedConstant(a, symbols) == ParseUnsignedConstant(b, symbols);
+    const b8 aIsBool = (a == "true" || a == "false");
+    const b8 bIsBool = (b == "true" || b == "false");
+    if(aIsBool != bIsBool)
+        return false;
+    i64 valA = 0;
+    i64 valB = 0;
+    if(TryEvaluateTextConstant(a, symbols, valA) && TryEvaluateTextConstant(b, symbols, valB))
+        return valA == valB;
     return false;
 }
 
@@ -314,7 +803,9 @@ namespace __hidden_adhd_type_utils{
                 continue;
             }
         }
-        if(type->name == "Optional" && !type->templateArgs.empty() && type->templateArgs[0].type){
+        if((IsSingleTypeParamBuiltinGeneric(type->name) || IsTypeAndCountBuiltinGeneric(type->name))
+            && !type->templateArgs.empty() && type->templateArgs[0].type)
+        {
             type = type->templateArgs[0].type;
             continue;
         }
@@ -345,13 +836,20 @@ namespace __hidden_adhd_type_utils{
     const MethodDecl* enclosingMethod,
     const SymbolTable& symbols
 )noexcept{
-    if(!arg.constantText.empty())
-        return true;
+    if(!arg.constantText.empty()){
+        const MStringView ctext = __hidden_adhd_type_utils::TrimAsciiWhitespace(arg.constantText);
+        if(__hidden_adhd_type_utils::IsConcreteConstTemplateArgText(ctext, symbols))
+            return true;
+        MStringView stripped = ctext;
+        if(!stripped.empty() && (stripped.front() == '+' || stripped.front() == '-'))
+            stripped = __hidden_adhd_type_utils::TrimAsciiWhitespace(stripped.substr(1u));
+        return HasConstValueTemplateParam(enclosingClass, enclosingMethod, stripped);
+    }
     if(!arg.type || arg.type->refMode != ParamPassingMode::None || !arg.type->templateArgs.empty() || arg.type->isFuncType)
         return false;
     const MStringView name = arg.type->name;
     if(name == "true" || name == "false"
-        || __hidden_adhd_type_utils::IsValidConstTemplateArgGlobal(symbols.findGlobalConstant(name), symbols)
+        || __hidden_adhd_type_utils::IsConcreteConstTemplateArgText(name, symbols)
         || HasConstValueTemplateParam(enclosingClass, enclosingMethod, name))
     {
         arg.constantText = name;
@@ -365,101 +863,10 @@ namespace __hidden_adhd_type_utils{
     if(text.empty())
         return 1u;
 
-    MStringView curText = text;
-    for(u32 depth = 0u; depth < 8u; ++depth){
-        const Stmt* globalConst = symbols.findGlobalConstant(curText);
-        if(!globalConst)
-            break;
-        const Expr* valExpr = globalConst->expr;
-        if(!valExpr && globalConst->isCtorInit && globalConst->arguments.size() == 1u)
-            valExpr = globalConst->arguments[0];
-        if(valExpr && (valExpr->kind == ExprKind::IntegerLiteral || valExpr->kind == ExprKind::Identifier)){
-            curText = valExpr->text;
-            continue;
-        }
-        break;
-    }
-    if(curText != text)
-        return ParseUnsignedConstant(curText, symbols);
-
-    if(text.size() >= 3u && text.front() == '\'' && text.back() == '\''){
-        const MStringView inner = text.substr(1u, text.size() - 2u);
-        if(inner.size() == 1u)
-            return static_cast<usize>(static_cast<u8>(inner[0]));
-        if(inner.size() >= 2u && inner[0] == '\\'){
-            switch(inner[1]){
-            case 'n': return static_cast<usize>('\n');
-            case 'r': return static_cast<usize>('\r');
-            case 't': return static_cast<usize>('\t');
-            case 'v': return static_cast<usize>('\v');
-            case 'b': return static_cast<usize>('\b');
-            case 'f': return static_cast<usize>('\f');
-            case 'a': return static_cast<usize>('\a');
-            case '\\': return static_cast<usize>('\\');
-            case '\'': return static_cast<usize>('\'');
-            case '"': return static_cast<usize>('"');
-            case '?': return static_cast<usize>('?');
-            case 'x':
-            case 'X':
-            case 'u':
-            case 'U': {
-                usize hexVal = 0u;
-                for(usize i = 2u; i < inner.size(); ++i){
-                    const MChar c = inner[i];
-                    if(c >= '0' && c <= '9')
-                        hexVal = (hexVal << 4u) | static_cast<usize>(c - '0');
-                    else if(c >= 'a' && c <= 'f')
-                        hexVal = (hexVal << 4u) | static_cast<usize>(10 + (c - 'a'));
-                    else if(c >= 'A' && c <= 'F')
-                        hexVal = (hexVal << 4u) | static_cast<usize>(10 + (c - 'A'));
-                }
-                return hexVal;
-            }
-            default:
-                if(inner[1] >= '0' && inner[1] <= '7'){
-                    usize octVal = 0u;
-                    for(usize i = 1u; i < inner.size() && inner[i] >= '0' && inner[i] <= '7'; ++i)
-                        octVal = (octVal << 3u) | static_cast<usize>(inner[i] - '0');
-                    return octVal;
-                }
-                return static_cast<usize>(static_cast<u8>(inner[1]));
-            }
-        }
-    }
-
-    usize val = 0u;
-    if(text.size() > 2u && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')){
-        for(usize i = 2u; i < text.size(); ++i){
-            const MChar c = text[i];
-            if(c >= '0' && c <= '9')
-                val = val * 16u + static_cast<usize>(c - '0');
-            else if(c >= 'a' && c <= 'f')
-                val = val * 16u + static_cast<usize>(10 + (c - 'a'));
-            else if(c >= 'A' && c <= 'F')
-                val = val * 16u + static_cast<usize>(10 + (c - 'A'));
-            else
-                break;
-        }
-        return val > 0u ? val : 1u;
-    }
-    if(text.size() > 2u && text[0] == '0' && (text[1] == 'b' || text[1] == 'B')){
-        for(usize i = 2u; i < text.size(); ++i){
-            const MChar c = text[i];
-            if(c == '0' || c == '1')
-                val = val * 2u + static_cast<usize>(c - '0');
-            else
-                break;
-        }
-        return val > 0u ? val : 1u;
-    }
-    for(usize i = 0u; i < text.size(); ++i){
-        const MChar c = text[i];
-        if(c >= '0' && c <= '9')
-            val = val * 10u + static_cast<usize>(c - '0');
-        else
-            break;
-    }
-    return val > 0u ? val : 1u;
+    i64 evaluated = 0;
+    if(__hidden_adhd_type_utils::TryEvaluateTextConstant(text, symbols, evaluated))
+        return evaluated > 0 ? static_cast<usize>(evaluated) : 1u;
+    return 1u;
 }
 
 [[nodiscard]] b8 IsConcreteTypeRef(const TypeRef& type, const SymbolTable& symbols)noexcept{

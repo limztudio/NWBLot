@@ -54,11 +54,13 @@ b8 ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVect
 
         switch(stmt->kind){
         case StmtKind::ParallelBlock:{
-            for(const MStringView& existing : declaredTaskNames){
-                if(existing == stmt->name){
-                    ReportAdhdDiagnostic(m_arena, errors, stmt->span, "duplicate 'parallel' task name in the same scope");
-                    ok = false;
-                    break;
+            if(!stmt->name.empty()){
+                for(const MStringView& existing : declaredTaskNames){
+                    if(existing == stmt->name){
+                        ReportAdhdDiagnostic(m_arena, errors, stmt->span, "duplicate 'parallel' task name in the same scope");
+                        ok = false;
+                        break;
+                    }
                 }
             }
 
@@ -71,7 +73,7 @@ b8 ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVect
                         break;
                     }
                 }
-                if(dep == stmt->name){
+                if(!stmt->name.empty() && dep == stmt->name){
                     ReportAdhdDiagnostic(m_arena, errors, stmt->span, "'parallel' task cannot depend on itself");
                     ok = false;
                     continue;
@@ -90,7 +92,8 @@ b8 ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVect
                 }
             }
 
-            declaredTaskNames.push_back(stmt->name);
+            if(!stmt->name.empty())
+                declaredTaskNames.push_back(stmt->name);
             if(!validateBlock(stmt->statements, errors))
                 ok = false;
             break;

@@ -20,6 +20,17 @@ Stmt* StmtParser::parseParallelStatement(const SourceSpan span, const MVector<Pa
     if(!applySchedulingAttributes(attributes, coreKind, priorityKind))
         return nullptr;
 
+    if(m_cursor.check(TokenType::LeftBrace)){
+        Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
+        stmt->kind = StmtKind::ParallelBlock;
+        stmt->span = span;
+        stmt->parallelCore = coreKind;
+        stmt->parallelPriority = priorityKind;
+        if(!parseBlockStatements(stmt->statements))
+            return nullptr;
+        return stmt;
+    }
+
     const ParserCursor::Checkpoint cp = m_cursor.save();
     if(m_cursor.check(TokenType::Identifier) && !m_cursor.checkIdentifier("this")){
         const MStringView maybeTaskName = m_cursor.current().text;

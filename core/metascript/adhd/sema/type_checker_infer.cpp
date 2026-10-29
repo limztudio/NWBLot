@@ -179,6 +179,41 @@ MStringView TypeChecker::inferExprTypeName(
         return m_symbols.resolveBaseTypeName(expr.targetType->name);
     }
     else if(expr.kind == ExprKind::ScopeAccess && !expr.scopeChain.empty()){
+        if(expr.text == "this" && ownerClass){
+            if(const FieldDecl* field = findClassField(*ownerClass, expr.scopeChain[0]); field && field->type){
+                const MStringView fieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
+                if(m_symbols.findEnum(fieldTypeName))
+                    return fieldTypeName;
+            }
+        }
+        else if(expr.lhs){
+            const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, method, *expr.lhs, scope);
+            const MStringView lhsBase = lhsTypeRef
+                ? m_symbols.resolveBaseTypeName(lhsTypeRef->name)
+                : inferExprTypeName(ownerClass, method, *expr.lhs, scope);
+            if(const ClassDecl* targetCls = m_symbols.findClass(lhsBase)){
+                if(const FieldDecl* field = findClassField(*targetCls, expr.scopeChain[0]); field && field->type){
+                    const TypeRef* ft = (lhsTypeRef && !targetCls->templateParams.empty() && !lhsTypeRef->templateArgs.empty())
+                        ? m_symbols.substituteTypeParams(*field->type, targetCls->templateParams, lhsTypeRef->templateArgs)
+                        : field->type;
+                    const MStringView fieldTypeName = ft ? m_symbols.resolveBaseTypeName(ft->name) : MStringView{};
+                    if(!fieldTypeName.empty() && m_symbols.findEnum(fieldTypeName))
+                        return fieldTypeName;
+                }
+            }
+        }
+        if(const ScopedVarInfo* local = findScopedVar(scope, expr.scopeChain[0])){
+            const MStringView localTypeName = !local->inferredTypeName.empty()
+                ? local->inferredTypeName
+                : (local->type ? m_symbols.resolveBaseTypeName(local->type->name) : MStringView{});
+            if(!localTypeName.empty() && m_symbols.findEnum(localTypeName))
+                return localTypeName;
+        }
+        if(const Stmt* gc = m_symbols.findGlobalConstant(expr.scopeChain[0]); gc && gc->varType){
+            const MStringView gcTypeName = m_symbols.resolveBaseTypeName(gc->varType->name);
+            if(!gcTypeName.empty() && m_symbols.findEnum(gcTypeName))
+                return gcTypeName;
+        }
         const MStringView resolvedRoot = m_symbols.resolveBaseTypeName(expr.scopeChain[0]);
         if(m_symbols.findEnum(resolvedRoot))
             return resolvedRoot;
@@ -451,6 +486,16 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                 }
             }
         }
+        else if(expr.lhs->kind == ExprKind::Lambda){
+            if(expr.lhs->lambdaReturnType)
+                return m_symbols.unwrapTypeAlias(expr.lhs->lambdaReturnType);
+        }
+        else{
+            if(const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, method, *expr.lhs, scope)){
+                if(const TypeRef* uft = m_symbols.unwrapTypeAlias(lhsTypeRef); uft && uft->isFuncType && uft->funcReturnType)
+                    return m_symbols.unwrapTypeAlias(uft->funcReturnType);
+            }
+        }
     }
     else if((expr.kind == ExprKind::Cast || expr.kind == ExprKind::BitCast) && expr.targetType){
         return m_symbols.unwrapTypeAlias(expr.targetType);
@@ -474,6 +519,8 @@ namespace __hidden_adhd_type_checker_infer{
     if(!expr)
         return false;
     if(expr->kind == ExprKind::Identifier && expr->text == varName)
+        return true;
+    if(expr->kind == ExprKind::ScopeAccess && !expr->scopeChain.empty() && expr->scopeChain[0] == varName)
         return true;
     if(expr->kind == ExprKind::Lambda){
         for(const LambdaCapture& cap : expr->lambdaCaptures){
@@ -532,6 +579,79 @@ namespace __hidden_adhd_type_checker_infer{
     return false;
 }
 
+[[nodiscard]] b8 ExprHasMutLambdaCapture(const Expr* expr, const MStringView varName)noexcept{
+    if(!expr)
+        return false;
+    if(expr->kind == ExprKind::Lambda){
+        for(const LambdaCapture& cap : expr->lambdaCaptures){
+            if(cap.mode == ParamPassingMode::Mut && cap.name == varName)
+                return true;
+        }
+        for(const Stmt* child : expr->lambdaBody){
+            if(child && child->expr && ExprHasMutLambdaCapture(child->expr, varName))
+                return true;
+        }
+    }
+    if(ExprHasMutLambdaCapture(expr->lhs, varName) || ExprHasMutLambdaCapture(expr->rhs, varName))
+        return true;
+    for(const Expr* arg : expr->arguments){
+        if(ExprHasMutLambdaCapture(arg, varName))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 StmtPreventsMoveAtLastUse(const Stmt* stmt, const MStringView varName, const SymbolTable& symbols)noexcept{
+    if(!stmt)
+        return false;
+    if((stmt->kind == StmtKind::ParallelBlock || stmt->kind == StmtKind::ParallelCall)
+        && StmtReferencesIdentifier(stmt, varName))
+    {
+        return true;
+    }
+    if(stmt->kind == StmtKind::VarDecl
+        && stmt->name != varName
+        && stmt->varType
+        && symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None
+        && StmtReferencesIdentifier(stmt, varName))
+    {
+        return true;
+    }
+    if(ExprHasMutLambdaCapture(stmt->expr, varName)
+        || ExprHasMutLambdaCapture(stmt->condition, varName)
+        || ExprHasMutLambdaCapture(stmt->stepExpr, varName))
+    {
+        return true;
+    }
+    for(const Expr* arg : stmt->arguments){
+        if(ExprHasMutLambdaCapture(arg, varName))
+            return true;
+    }
+    for(const NativeBinding& nb : stmt->nativeBindings){
+        if(ExprHasMutLambdaCapture(nb.sourceExpr, varName))
+            return true;
+    }
+    if(stmt->initStmt && StmtPreventsMoveAtLastUse(stmt->initStmt, varName, symbols))
+        return true;
+    for(const Stmt* child : stmt->statements){
+        if(StmtPreventsMoveAtLastUse(child, varName, symbols))
+            return true;
+    }
+    for(const Stmt* child : stmt->elseStatements){
+        if(StmtPreventsMoveAtLastUse(child, varName, symbols))
+            return true;
+    }
+    for(const SwitchCase& sc : stmt->switchCases){
+        if(ExprHasMutLambdaCapture(sc.matchExpr, varName))
+            return true;
+        for(const Stmt* child : sc.statements){
+            if(StmtPreventsMoveAtLastUse(child, varName, symbols))
+                return true;
+        }
+    }
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -564,20 +684,26 @@ void TypeChecker::analyzeBlockMoveAtLastUse(
         if(SymbolTable::isSimdType(resolvedLocalType))
             continue;
 
-        b8 capturedByMutLambda = false;
+        b8 capturedOrAsyncOrAliased = false;
         for(usize j = savedScopeSize; j < scope.size(); ++j){
             if(const Expr* lam = scope[j].lambdaExpr){
                 for(const LambdaCapture& cap : lam->lambdaCaptures){
                     if(cap.mode == ParamPassingMode::Mut && cap.name == local.name){
-                        capturedByMutLambda = true;
+                        capturedOrAsyncOrAliased = true;
                         break;
                     }
                 }
             }
-            if(capturedByMutLambda)
+            if(capturedOrAsyncOrAliased)
                 break;
         }
-        if(capturedByMutLambda || lastUseIndex >= statements.size())
+        for(usize s = 0u; !capturedOrAsyncOrAliased && s < statements.size(); ++s){
+            if(__hidden_adhd_type_checker_infer::StmtPreventsMoveAtLastUse(statements[s], local.name, m_symbols)){
+                capturedOrAsyncOrAliased = true;
+                break;
+            }
+        }
+        if(capturedOrAsyncOrAliased || lastUseIndex >= statements.size())
             continue;
 
         Stmt* lastStmt = statements[lastUseIndex];

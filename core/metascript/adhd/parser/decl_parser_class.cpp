@@ -104,10 +104,16 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const MVector<Parse
 
 void DeclParser::parseClassMethodQualifiers(MethodDecl& method)noexcept{
     while(m_cursor.checkIdentifier("const") || m_cursor.checkIdentifier("override")){
-        if(m_cursor.matchIdentifier("const"))
+        if(m_cursor.matchIdentifier("const")){
+            if(method.isConst)
+                m_cursor.error("duplicate 'const' qualifier on method");
             method.isConst = true;
-        else if(m_cursor.matchIdentifier("override"))
+        }
+        else if(m_cursor.matchIdentifier("override")){
+            if(method.isOverride)
+                m_cursor.error("duplicate 'override' qualifier on method");
             method.isOverride = true;
+        }
     }
 }
 

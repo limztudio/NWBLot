@@ -34,7 +34,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         }
         else if(entry.isFlag){
             hasFlags = true;
-            out.append(" = (static_cast<");
+            out.append(" = (static_cast<::");
             out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
             out.append(">(1) << ");
             AppendAdhdUnsigned(out, flagBitIndex++);
@@ -46,30 +46,29 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     }
 
     out.append("    };\r\n");
-    if(hasFlags){
-        out.append("    using Flag = Enum;\r\n");
-        out.append("    [[nodiscard]] constexpr Enum operator|(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(a) | static_cast<");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(b)); }\r\n");
-        out.append("    [[nodiscard]] constexpr Enum operator&(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(a) & static_cast<");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(b)); }\r\n");
-        out.append("    [[nodiscard]] constexpr Enum operator^(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(a) ^ static_cast<");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(b)); }\r\n");
-        out.append("    [[nodiscard]] constexpr Enum operator~(const Enum a)noexcept{ return static_cast<Enum>(~static_cast<");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(a)); }\r\n");
-        out.append("    constexpr Enum& operator|=(Enum& a, const Enum b)noexcept{ a = (a | b); return a; }\r\n");
-        out.append("    constexpr Enum& operator&=(Enum& a, const Enum b)noexcept{ a = (a & b); return a; }\r\n");
-        out.append("    constexpr Enum& operator^=(Enum& a, const Enum b)noexcept{ a = (a ^ b); return a; }\r\n");
-    }
+    out.append("    using Flag = Enum;\r\n");
+    out.append("    [[nodiscard]] constexpr Enum operator|(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<::");
+    out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+    out.append(">(a) | static_cast<::");
+    out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+    out.append(">(b)); }\r\n");
+    out.append("    [[nodiscard]] constexpr Enum operator&(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<::");
+    out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+    out.append(">(a) & static_cast<::");
+    out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+    out.append(">(b)); }\r\n");
+    out.append("    [[nodiscard]] constexpr Enum operator^(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<::");
+    out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+    out.append(">(a) ^ static_cast<::");
+    out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+    out.append(">(b)); }\r\n");
+    out.append("    [[nodiscard]] constexpr Enum operator~(const Enum a)noexcept{ return static_cast<Enum>(~static_cast<::");
+    out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+    out.append(">(a)); }\r\n");
+    out.append("    constexpr Enum& operator|=(Enum& a, const Enum b)noexcept{ a = (a | b); return a; }\r\n");
+    out.append("    constexpr Enum& operator&=(Enum& a, const Enum b)noexcept{ a = (a & b); return a; }\r\n");
+    out.append("    constexpr Enum& operator^=(Enum& a, const Enum b)noexcept{ a = (a ^ b); return a; }\r\n");
+    (void)hasFlags;
     usize reflectedEntryCount = 0u;
     for(const EnumEntry& entry : decl.entries){
         if(entry.name != "kCount")

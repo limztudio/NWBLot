@@ -296,12 +296,17 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
             const b8 isNativeInclude = (nativeBraceDepth > 0u)
                 && afterHash.starts_with("include")
                 && (afterHash.size() == 7u || !IsAsciiIdentifierChar(afterHash[7u]));
-            if(isNativeInclude){
+            const b8 isNativePragma = (nativeBraceDepth > 0u)
+                && afterHash.starts_with("pragma")
+                && (afterHash.size() == 6u || !IsAsciiIdentifierChar(afterHash[6u]));
+            if(isNativeInclude || isNativePragma){
                 if(isActive)
                     outProcessed.append(rawLine.data(), rawLine.size());
                 outProcessed.push_back('\n');
             }
             else{
+                if(isActive && !commentPrefix.empty())
+                    outProcessed.append(commentPrefix.data(), commentPrefix.size());
                 if(!handleDirective(afterHash, startLine, depth, currentFileKey, condStack, outProcessed))
                     return false;
                 outProcessed.push_back('\n');
@@ -365,6 +370,9 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                 else if(ch == '}'){
                     if(nativeBraceDepth > 0u)
                         --nativeBraceDepth;
+                }
+                else if(ch == ';' && nativeBraceDepth == 0u){
+                    inNativeKeywordPendingBrace = false;
                 }
                 ++scanIdx;
             }

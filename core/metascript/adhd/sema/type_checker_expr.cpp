@@ -52,9 +52,14 @@ b8 TypeChecker::checkExpr(
                     reportError(errors, expr.span, "cannot mutate 'const' variable");
                     ok = false;
                 }
-                else if(m_parallelDepth > 0u && local->declaredParallelDepth < m_parallelDepth && local->type && IsNonThreadSafeContainer(m_symbols.resolveBaseTypeName(local->type->name))){
-                    reportError(errors, expr.span, "shared 'mut' access to non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers or disjoint element indexing");
-                    ok = false;
+                else if(m_parallelDepth > 0u && local->declaredParallelDepth < m_parallelDepth){
+                    const MStringView localBaseType = !local->inferredTypeName.empty()
+                        ? local->inferredTypeName
+                        : (local->type ? m_symbols.resolveBaseTypeName(local->type->name) : MStringView{});
+                    if(IsNonThreadSafeContainer(localBaseType)){
+                        reportError(errors, expr.span, "shared 'mut' access to non-thread-safe container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers or disjoint element indexing");
+                        ok = false;
+                    }
                 }
             }
         }
@@ -120,12 +125,58 @@ b8 TypeChecker::checkExpr(
             ok = false;
         }
         if(!expr.scopeChain.empty()){
-            if(const ScopedVarInfo* local = findScopedVar(scope, expr.scopeChain[0])){
+            if(expr.text == "this"){
+                if(!ownerClass){
+                    reportError(errors, expr.span, "'this' cannot be used in a free function");
+                    ok = false;
+                }
+                else{
+                    if(m_inLambda && !findScopedVar(scope, "this")){
+                        reportError(errors, expr.span, "accessing 'this' inside a lambda requires capturing 'in this' or 'mut this'");
+                        ok = false;
+                    }
+                    if(const FieldDecl* field = findClassField(*ownerClass, expr.scopeChain[0]); field && field->type){
+                        const MStringView fieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
+                        if(m_symbols.findEnum(fieldTypeName))
+                            expr.scopeChain[0] = fieldTypeName;
+                    }
+                }
+                expr.text = {};
+            }
+            else if(expr.lhs){
+                if(!checkExpr(ownerClass, method, *expr.lhs, scope, false, errors))
+                    ok = false;
+                const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
+                const MStringView lhsBase = lhsTypeRef
+                    ? m_symbols.resolveBaseTypeName(lhsTypeRef->name)
+                    : inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
+                if(const ClassDecl* targetCls = m_symbols.findClass(lhsBase)){
+                    if(const FieldDecl* field = findClassField(*targetCls, expr.scopeChain[0]); field && field->type){
+                        if(ownerClass != targetCls && field->access != AccessSpecifier::Public){
+                            reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
+                            ok = false;
+                        }
+                        const TypeRef* ft = (lhsTypeRef && !targetCls->templateParams.empty() && !lhsTypeRef->templateArgs.empty())
+                            ? m_symbols.substituteTypeParams(*field->type, targetCls->templateParams, lhsTypeRef->templateArgs)
+                            : field->type;
+                        const MStringView fieldTypeName = ft ? m_symbols.resolveBaseTypeName(ft->name) : MStringView{};
+                        if(!fieldTypeName.empty() && m_symbols.findEnum(fieldTypeName))
+                            expr.scopeChain[0] = fieldTypeName;
+                    }
+                }
+                expr.lhs = nullptr;
+            }
+            else if(const ScopedVarInfo* local = findScopedVar(scope, expr.scopeChain[0])){
                 const MStringView localTypeName = !local->inferredTypeName.empty()
                     ? local->inferredTypeName
                     : (local->type ? m_symbols.resolveBaseTypeName(local->type->name) : MStringView{});
                 if(!localTypeName.empty() && m_symbols.findEnum(localTypeName))
                     expr.scopeChain[0] = localTypeName;
+            }
+            else if(const Stmt* gc = m_symbols.findGlobalConstant(expr.scopeChain[0]); gc && gc->varType){
+                const MStringView gcTypeName = m_symbols.resolveBaseTypeName(gc->varType->name);
+                if(!gcTypeName.empty() && m_symbols.findEnum(gcTypeName))
+                    expr.scopeChain[0] = gcTypeName;
             }
             else{
                 const MStringView resolvedRoot = m_symbols.resolveBaseTypeName(expr.scopeChain[0]);
@@ -298,6 +349,19 @@ b8 TypeChecker::checkExpr(
                     rhsNeedsMut = true;
             }
         }
+        else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, lhsBaseType)){
+            for(const TypeRef* boundRef : tp->interfaceBounds){
+                if(!boundRef)
+                    continue;
+                if(const MethodDecl* boundOp = m_symbols.findInterfaceMethod(*boundRef, "[]", &oneArg)){
+                    customOpIdx = boundOp;
+                    lhsNeedsMut = !customOpIdx->isConst;
+                    if(!customOpIdx->params.empty() && customOpIdx->params[0].mode == ParamPassingMode::Mut)
+                        rhsNeedsMut = true;
+                    break;
+                }
+            }
+        }
         if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, lhsNeedsMut, errors))
             ok = false;
         m_parallelDepth = savedParallelDepth;
@@ -327,11 +391,14 @@ b8 TypeChecker::checkExpr(
     case ExprKind::Unary:{
         b8 mutates = (expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus);
         if(expr.lhs){
-            const MStringView lhsType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
+            const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
+            const MStringView lhsType = lhsTypeRef
+                ? m_symbols.resolveBaseTypeName(lhsTypeRef->name)
+                : inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
+            const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
+            const usize zeroArgs = 0u;
+            const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
-                const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
-                const usize zeroArgs = 0u;
-                const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
                 if(const MethodDecl* opMethod = findClassOperator(*cls, opSym, &zeroArgs, recvIsConst, ownerClass != cls)){
                     if(ownerClass != cls && opMethod->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
@@ -340,9 +407,38 @@ b8 TypeChecker::checkExpr(
                     if(!opMethod->isConst)
                         mutates = true;
                 }
+                else{
+                    reportError(errors, expr.span, "unary operator is not defined on custom class");
+                    ok = false;
+                }
+            }
+            else if(lhsTypeRef && m_symbols.findInterface(lhsType)){
+                if(const MethodDecl* opMethod = m_symbols.findInterfaceMethod(*lhsTypeRef, opSym, &zeroArgs)){
+                    if(!opMethod->isConst)
+                        mutates = true;
+                }
+            }
+            else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, lhsType)){
+                for(const TypeRef* boundRef : tp->interfaceBounds){
+                    if(!boundRef)
+                        continue;
+                    if(const MethodDecl* opMethod = m_symbols.findInterfaceMethod(*boundRef, opSym, &zeroArgs)){
+                        if(!opMethod->isConst)
+                            mutates = true;
+                        break;
+                    }
+                }
             }
             if(!checkExpr(ownerClass, method, *expr.lhs, scope, mutates, errors))
                 ok = false;
+        }
+        const TypeRef* unaryRetType = inferExprTypeRef(ownerClass, &method, expr, scope);
+        const ParamPassingMode::Enum unaryRetRefMode = m_symbols.resolveRefMode(unaryRetType);
+        if(unaryRetRefMode != ParamPassingMode::None)
+            expr.derefNotNull = true;
+        if(isMutationTarget && unaryRetRefMode != ParamPassingMode::Mut){
+            reportError(errors, expr.span, "cannot pass unary expression result to a 'mut' target");
+            ok = false;
         }
         break;
     }
@@ -438,11 +534,14 @@ b8 TypeChecker::checkBinaryExpr(
     b8 lhsNeedsMut = isAssign;
     b8 rhsNeedsMut = false;
     if(expr.lhs && expr.op != TokenType::Equal){
-        const MStringView lhsType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
+        const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
+        const MStringView lhsType = lhsTypeRef
+            ? m_symbols.resolveBaseTypeName(lhsTypeRef->name)
+            : inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
+        const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
+        const usize oneArg = 1u;
+        const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
         if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
-            const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
-            const usize oneArg = 1u;
-            const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
             if(const MethodDecl* opMethod = findClassOperator(*cls, opSym, &oneArg, recvIsConst, ownerClass != cls)){
                 if(ownerClass != cls && opMethod->access != AccessSpecifier::Public){
                     reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
@@ -452,6 +551,27 @@ b8 TypeChecker::checkBinaryExpr(
                     lhsNeedsMut = true;
                 if(!opMethod->params.empty() && opMethod->params[0].mode == ParamPassingMode::Mut)
                     rhsNeedsMut = true;
+            }
+        }
+        else if(lhsTypeRef && m_symbols.findInterface(lhsType)){
+            if(const MethodDecl* opMethod = m_symbols.findInterfaceMethod(*lhsTypeRef, opSym, &oneArg)){
+                if(!opMethod->isConst)
+                    lhsNeedsMut = true;
+                if(!opMethod->params.empty() && opMethod->params[0].mode == ParamPassingMode::Mut)
+                    rhsNeedsMut = true;
+            }
+        }
+        else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, lhsType)){
+            for(const TypeRef* boundRef : tp->interfaceBounds){
+                if(!boundRef)
+                    continue;
+                if(const MethodDecl* opMethod = m_symbols.findInterfaceMethod(*boundRef, opSym, &oneArg)){
+                    if(!opMethod->isConst)
+                        lhsNeedsMut = true;
+                    if(!opMethod->params.empty() && opMethod->params[0].mode == ParamPassingMode::Mut)
+                        rhsNeedsMut = true;
+                    break;
+                }
             }
         }
     }
@@ -565,6 +685,8 @@ b8 TypeChecker::checkBinaryExpr(
     }
     if(expr.op == TokenType::Equal && expr.lhs && (expr.lhs->kind == ExprKind::MemberAccess || expr.lhs->kind == ExprKind::Index)){
         const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
+        if(lhsTypeRef)
+            propagateFuncCaptureBytes(const_cast<TypeRef*>(lhsTypeRef), expr.rhs, scope, m_symbols);
         const ParamPassingMode::Enum lhsRefMode = m_symbols.resolveRefMode(lhsTypeRef);
         const MStringView baseLhsTypeName = lhsTypeRef ? m_symbols.resolveBaseTypeName(lhsTypeRef->name) : MStringView{};
         if(lhsRefMode != ParamPassingMode::None && m_symbols.findInterface(baseLhsTypeName)){

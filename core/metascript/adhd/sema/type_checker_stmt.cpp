@@ -129,6 +129,12 @@ b8 TypeChecker::checkVarDeclStatement(
             method.usesScratchArena = true;
         }
         propagateFuncCaptureBytes(stmt.varType, stmt.expr, scope, m_symbols);
+        if(stmt.isCtorInit){
+            for(const Expr* arg : stmt.arguments){
+                if(arg)
+                    propagateFuncCaptureBytes(stmt.varType, arg, scope, m_symbols);
+            }
+        }
         if(baseVarTypeName == "Path"){
             if(stmt.expr)
                 markStringToPathAdaptation(ownerClass, method, *stmt.expr, scope);
@@ -425,6 +431,23 @@ b8 TypeChecker::checkStatement(
                     ok = false;
                 }
                 stmt.lowerSwitchToIfChain = true;
+            }
+            else if(const TypeRef* subjTypeRef = stmt.expr ? inferExprTypeRef(ownerClass, &method, *stmt.expr, scope) : nullptr; subjTypeRef && m_symbols.findInterface(subjectType)){
+                const usize oneArg = 1u;
+                if(!m_symbols.findInterfaceMethod(*subjTypeRef, "==", &oneArg)){
+                    reportError(errors, stmt.span, "switch on interface requires 'operator==' to be declared on the interface");
+                    ok = false;
+                }
+                stmt.lowerSwitchToIfChain = true;
+            }
+            else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, subjectType)){
+                const usize oneArg = 1u;
+                for(const TypeRef* boundRef : tp->interfaceBounds){
+                    if(boundRef && m_symbols.findInterfaceMethod(*boundRef, "==", &oneArg)){
+                        stmt.lowerSwitchToIfChain = true;
+                        break;
+                    }
+                }
             }
         }
         ++m_switchDepth;

@@ -9,6 +9,8 @@
 #include "memory_report.h"
 
 #include <core/alloc/scratch.h>
+#include <core/telemetry/diagnostic.h>
+#include <core/telemetry/text_log.h>
 
 #include <global/bit.h>
 #include <global/csv_text.h>

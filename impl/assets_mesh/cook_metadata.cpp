@@ -70,7 +70,7 @@ ScratchString MeshCookMetadata::MakeIndexedLabel(Core::Alloc::ScratchArena& aren
 
 
 Expected<NotNull<const Core::Metascript::Value*>> MeshCookMetadata::FindRequiredMetadataListField(const Path& nwbFilePath, const Core::Metascript::Value& map, const TStringView metaKind, const AStringView fieldName){
-    const Core::Metascript::Value* field = FindField(map, fieldName);
+    const Core::Metascript::Value* field = map.findField(fieldName);
     if(field && field->isList())
         return MakeNotNull(field);
 

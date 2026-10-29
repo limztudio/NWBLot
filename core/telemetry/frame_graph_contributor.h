@@ -80,10 +80,6 @@ public:
         return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphPassMetadata{}, flags);
     }
 
-    [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const FrameGraphQueueAssignment& queueAssignment, const u8 flags = 0u){
-        return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphPassMetadata{ .queueAssignment = queueAssignment, .compiledTask = {}, .runtimeStatistics = {} }, flags);
-    }
-
     [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const FrameGraphPassMetadata& metadata, const u8 flags = 0u){
         return addNode(scope, label, FrameGraphNodeKind::Pass, metadata, flags);
     }

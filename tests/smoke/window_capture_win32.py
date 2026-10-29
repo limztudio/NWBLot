@@ -4,7 +4,7 @@
 import ctypes
 import time
 from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure, write_status  # noqa: E402
-from window_capture_image import TransparentCsgAnalysis, TextureSmokeAnalysis, write_bmp_24, capture_result_from_rgb_rows, write_capture_rows, read_bmp_24, read_bmp_24_rows, validate_surfel_coverage_probe, analyze_rgb_rows, transparent_csg_regions, analyze_transparent_csg_rows, analyze_texture_smoke_rows, estimate_background_rgb, count_foreground_pixels_in_region, ximage_rgb_rows, bgra_rgb_rows  # noqa: E402
+from window_capture_image import write_capture_rows, bgra_rgb_rows  # noqa: E402
 
 
 LIT_WINDOW_POLL_SECONDS = 0.1
@@ -60,12 +60,12 @@ def require_windows_interactive_desktop(user32=None):
     user32.GetUserObjectInformationW.restype = ctypes.c_int
     station = user32.GetProcessWindowStation()
     if not station:
-        raise SmokeFailure(f"GetProcessWindowStation failed: {ctypes.get_last_error()}")
+        raise SmokeFailure(f"GetProcessWindowStation failed: {getattr(ctypes, "get_last_error", ctypes.get_errno)()}")
     flags = WindowsUserObjectFlags()
     length_needed = ctypes.c_uint32()
     # Check WSF_VISIBLE on the borrowed process window station handle.
     if not user32.GetUserObjectInformationW(ctypes.c_void_p(station), 1, ctypes.byref(flags), ctypes.sizeof(flags), ctypes.byref(length_needed)):
-        raise SmokeFailure(f"GetUserObjectInformationW(UOI_FLAGS) failed: {ctypes.get_last_error()}")
+        raise SmokeFailure(f"GetUserObjectInformationW(UOI_FLAGS) failed: {getattr(ctypes, "get_last_error", ctypes.get_errno)()}")
     if not flags.dwFlags & 0x0001:
         raise WindowsDesktopUnavailable("the Windows process window station has no visible display surfaces; native window/input smoke requires an interactive desktop")
 
@@ -122,7 +122,7 @@ class WindowsCapture:
         self.user32.SetThreadDpiAwarenessContext(self.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
         context = ctypes.c_void_p(self.user32.GetThreadDpiAwarenessContext())
         if not self.user32.AreDpiAwarenessContextsEqual(context, self.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2):
-            raise SmokeFailure(f"SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2) failed: {ctypes.get_last_error()}")
+            raise SmokeFailure(f"SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2) failed: {getattr(ctypes, "get_last_error", ctypes.get_errno)()}")
 
     def close(self):
         pass

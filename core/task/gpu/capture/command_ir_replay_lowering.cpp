@@ -275,10 +275,6 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
     }
 }
 
-GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const BinaryByteView bytes, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, const GpuSubmissionPacketId packet, CommandList& commandList){
-    return ReplayPacketImpl(bytes, nullptr, graph, compiledGraph, packet, commandList);
-}
-
 GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, const GpuSubmissionPacketId packet, CommandList& commandList){
     return ReplayPacketImpl(stream.bytes(), &stream, graph, compiledGraph, packet, commandList);
 }

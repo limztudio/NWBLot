@@ -35,8 +35,6 @@ public:
 
     [[nodiscard]] b8 record(CaptureSession& session);
 
-    [[nodiscard]] usize contributorCount()const noexcept{ return m_contributors.size(); }
-
 
 private:
     List<NotNull<IFrameGraphContributor*>, Alloc::GlobalArena> m_contributors;

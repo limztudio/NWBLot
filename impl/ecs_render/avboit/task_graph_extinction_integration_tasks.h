@@ -30,8 +30,6 @@ NWB_IMPL_BEGIN
 
 class RendererMaterialSystem;
 class RendererAvboitSystem;
-class RendererTaskTimingFeedback;
-struct AvboitFrameTargets;
 struct DeferredFrameTargets;
 
 

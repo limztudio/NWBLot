@@ -4,25 +4,13 @@
 
 #include "system.h"
 #include "arena_names.h"
-#include "graph_resource_uses.h"
 #include "live_state_buffers.h"
-#include "resource_names.h"
 #include "runtime_mesh_liveness.h"
-#include "skin_payload.h"
-#include "timing_names.h"
-
-#include <impl/ecs_skeleton/runtime_helpers.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/world.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/gpu_timing.h>
 #include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/compiler.h>
-#include <core/task/gpu/scheduler.h>
-
-#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

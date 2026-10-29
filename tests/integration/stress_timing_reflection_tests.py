@@ -7,11 +7,11 @@ import sys
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke
-from stress_timing_test_support import reflection_log, reflection_record, shadow_quality_record, valid_log, workload_record
+from stress_timing_test_support import reflection_log, reflection_record, valid_log
 
 
 LIT_ALL_REJECTED = "all_rejected"

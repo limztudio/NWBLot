@@ -534,17 +534,6 @@ namespace RayTracingClusterOperationFlags{
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
-namespace RayTracingClusterOperationIndexFormat{
-    static constexpr u8 s_IndexFormat8bitBytes = 1;
-    static constexpr u8 s_IndexFormat16bitBytes = 2;
-    static constexpr u8 s_IndexFormat32bitBytes = 4;
-    enum Enum : u8{
-        IndexFormat8bit = s_IndexFormat8bitBytes,
-        IndexFormat16bit = s_IndexFormat16bitBytes,
-        IndexFormat32bit = s_IndexFormat32bitBytes,
-    };
-};
-
 struct RayTracingClusterOperationSizeInfo{
     u64 resultMaxSizeInBytes = 0;
     u64 scratchSizeInBytes = 0;

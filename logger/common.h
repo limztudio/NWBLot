@@ -40,8 +40,6 @@ namespace ArgCommand{
     enum Enum : u8{
         LogAddress,
         LogPort,
-
-        Count,
     };
 };
 inline constexpr StringView s_ArgCmd[] = { "-a,--logaddress", "-p,--logport", };
@@ -286,7 +284,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, const TStringView& LoggerName>
+template<typename T>
 class LoggerWorkerBase{
 public:
     explicit LoggerWorkerBase(const NameText<char> allocationLog)
@@ -364,13 +362,9 @@ protected:
     Atomic<b8> m_exit;
 };
 
-template<typename T, f32 UpdateIntervalSeconds, const TStringView& LoggerName>
-class IntervalLoggerWorkerBase : public LoggerWorkerBase<T, LoggerName>{
-    friend LoggerWorkerBase<T, LoggerName>;
-
-
-private:
-    static b8 s_GlobalInit;
+template<typename T, f32 UpdateIntervalSeconds>
+class IntervalLoggerWorkerBase : public LoggerWorkerBase<T>{
+    friend LoggerWorkerBase<T>;
 
 
 private:
@@ -398,30 +392,28 @@ private:
 
 public:
     explicit IntervalLoggerWorkerBase(const NameText<char> allocationLog)
-        : LoggerWorkerBase<T, LoggerName>(allocationLog)
+        : LoggerWorkerBase<T>(allocationLog)
         , m_lastUpdateTime(TimerNow())
     {}
 
 
 protected:
-    inline void enqueue(MessageType&& data){ return LoggerWorkerBase<T, LoggerName>::m_messageQueue.emplace(Move(data)); }
+    inline void enqueue(MessageType&& data){ return LoggerWorkerBase<T>::m_messageQueue.emplace(Move(data)); }
 
-    inline void enqueue(const MessageType& data){ return LoggerWorkerBase<T, LoggerName>::m_messageQueue.emplace(data); }
+    inline void enqueue(const MessageType& data){ return LoggerWorkerBase<T>::m_messageQueue.emplace(data); }
 
 
 private:
     Timer m_lastUpdateTime;
 };
-template<typename T, f32 UpdateIntervalSeconds, const TStringView& LoggerName>
-b8 IntervalLoggerWorkerBase<T, UpdateIntervalSeconds, LoggerName>::s_GlobalInit = false;
 
-template<typename T, const TStringView& LoggerName>
-class QueuedLoggerWorkerBase : public LoggerWorkerBase<T, LoggerName>{
-    friend LoggerWorkerBase<T, LoggerName>;
+template<typename T>
+class QueuedLoggerWorkerBase : public LoggerWorkerBase<T>{
+    friend LoggerWorkerBase<T>;
 
 
 private:
-    static b8 s_GlobalInit;
+    static inline b8 s_GlobalInit = false;
 
 
 private:
@@ -444,7 +436,7 @@ private:
 
 public:
     explicit QueuedLoggerWorkerBase(const NameText<char> allocationLog)
-        : LoggerWorkerBase<T, LoggerName>(allocationLog)
+        : LoggerWorkerBase<T>(allocationLog)
         , m_semaphore(0)
     {}
 
@@ -456,16 +448,14 @@ protected:
 
 
 protected:
-    inline void enqueue(MessageType&& data){ LoggerWorkerBase<T, LoggerName>::m_messageQueue.emplace(Move(data)); m_semaphore.release(); }
+    inline void enqueue(MessageType&& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(Move(data)); m_semaphore.release(); }
 
-    inline void enqueue(const MessageType& data){ LoggerWorkerBase<T, LoggerName>::m_messageQueue.emplace(data); m_semaphore.release(); }
+    inline void enqueue(const MessageType& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(data); m_semaphore.release(); }
 
 
 protected:
     Semaphore<> m_semaphore;
 };
-template<typename T, const TStringView& LoggerName>
-b8 QueuedLoggerWorkerBase<T, LoggerName>::s_GlobalInit = false;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

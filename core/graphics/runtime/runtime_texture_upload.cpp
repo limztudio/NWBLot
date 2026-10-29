@@ -38,6 +38,82 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
     return formatInfo.hasDepth || formatInfo.hasStencil;
 }
 
+[[nodiscard]] static Expected<usize> ComputeTextureUploadByteSize(const TextureDesc& textureDesc, const GraphicsRuntime::TextureUploadRegion& region)noexcept{
+    if(textureDesc.width == 0 || textureDesc.height == 0 || textureDesc.depth == 0 || textureDesc.mipLevels == 0 || textureDesc.arraySize == 0)
+        return MakeUnexpected(Failure{});
+    if(textureDesc.sampleCount != 1)
+        return MakeUnexpected(Failure{});
+    if(region.mipLevel >= textureDesc.mipLevels || region.mipLevel >= sizeof(u32) * s_BitsPerByte || region.arraySlice >= textureDesc.arraySize)
+        return MakeUnexpected(Failure{});
+    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::Count))
+        return MakeUnexpected(Failure{});
+
+    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
+    const auto aspectLayout = GetTextureUploadAspectLayout(formatInfo, region.aspect);
+    if(!aspectLayout)
+        return MakeUnexpected(Failure{});
+
+    const u32 width = Max<u32>(1u, textureDesc.width >> region.mipLevel);
+    const u32 height = Max<u32>(1u, textureDesc.height >> region.mipLevel);
+    const u32 depth = Max<u32>(1u, textureDesc.depth >> region.mipLevel);
+
+    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(aspectLayout->blockWidth));
+    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(aspectLayout->blockHeight));
+    if(blockCountX > Limit<u64>::s_Max / aspectLayout->bytesPerBlock)
+        return MakeUnexpected(Failure{});
+
+    const u64 naturalRowPitch = blockCountX * aspectLayout->bytesPerBlock;
+    const u64 effectiveRowPitch = region.rowPitch != 0 ? static_cast<u64>(region.rowPitch) : naturalRowPitch;
+    if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout->bytesPerBlock) != 0)
+        return MakeUnexpected(Failure{});
+    if(blockCountY > Limit<u64>::s_Max / effectiveRowPitch)
+        return MakeUnexpected(Failure{});
+
+    const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
+    const u64 effectiveDepthPitch = region.depthPitch != 0 ? static_cast<u64>(region.depthPitch) : packedSlicePitch;
+    if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0)
+        return MakeUnexpected(Failure{});
+
+    if(depth > 1 && static_cast<u64>(depth - 1) > (Limit<u64>::s_Max - packedSlicePitch) / effectiveDepthPitch)
+        return MakeUnexpected(Failure{});
+
+    const u64 requiredBytes = depth > 1 ? effectiveDepthPitch * static_cast<u64>(depth - 1) + packedSlicePitch : packedSlicePitch;
+    if(requiredBytes > static_cast<u64>(Limit<usize>::s_Max))
+        return MakeUnexpected(Failure{});
+
+    return static_cast<usize>(requiredBytes);
+}
+
+[[nodiscard]] static b8 ValidateTextureUploadRegion(const TextureDesc& textureDesc, const GraphicsRuntime::TextureUploadRegion& region){
+    if(!region.data && region.dataSize == 0)
+        return true;
+    if(!region.data || region.dataSize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload data and size must both be provided"), ConvertString(textureDesc.name.resolvedText()));
+        return false;
+    }
+
+    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
+    if(!ResolveTextureUploadAspect(formatInfo, region.aspect)){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload aspect must name one aspect present in the texture format; D24S8/D32S8 require Depth or Stencil"), ConvertString(textureDesc.name.resolvedText()));
+        return false;
+    }
+    const auto requiredBytes = ComputeTextureUploadByteSize(textureDesc, region);
+    if(!requiredBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': invalid upload layout"), ConvertString(textureDesc.name.resolvedText()));
+        return false;
+    }
+    if(textureDesc.keepInitialState && textureDesc.initialState == ResourceStates::Unknown){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': keep-initial-state uploads require a concrete initial state"), ConvertString(textureDesc.name.resolvedText()));
+        return false;
+    }
+    if(region.dataSize < *requiredBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload data size {} is smaller than required size {}"), ConvertString(textureDesc.name.resolvedText()), region.dataSize, *requiredBytes);
+        return false;
+    }
+
+    return true;
+}
+
 
 [[nodiscard]] static Expected<usize> ValidateTextureUploadBatch(const GraphicsRuntime::TextureUploadBatchDesc& desc){
     usize totalByteCount = 0u;
@@ -74,16 +150,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
 
     for(usize regionIndex = 0u; regionIndex < desc.regionCount; ++regionIndex){
         const GraphicsRuntime::TextureUploadRegion& region = desc.regions[regionIndex];
-        GraphicsRuntime::TextureSetupDesc regionDesc;
-        regionDesc.textureDesc = textureDesc;
-        regionDesc.data = region.data;
-        regionDesc.uploadDataSize = region.dataSize;
-        regionDesc.rowPitch = region.rowPitch;
-        regionDesc.depthPitch = region.depthPitch;
-        regionDesc.arraySlice = region.arraySlice;
-        regionDesc.mipLevel = region.mipLevel;
-        regionDesc.aspect = region.aspect;
-        if(!GraphicsModuleDetail::ValidateTextureSetupUpload(regionDesc))
+        if(!ValidateTextureUploadRegion(textureDesc, region))
             return MakeUnexpected(Failure{});
         if(AddOverflows<usize>(totalByteCount, region.dataSize)){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': byte count overflows"), ConvertString(textureDesc.name.resolvedText()));

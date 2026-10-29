@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets, const f32 decayFactor){
+b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.causticAccumulator || !targets.bindless.causticAccumulatorStorage.valid() || !m_rayTracingState.m_causticAccumulatorDecayPipeline)
         return false;
 
@@ -24,7 +24,7 @@ b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& 
     CausticAccumulatorDecayPushConstants decayPush;
     decayPush.width = targets.width;
     decayPush.height = targets.height;
-    decayPush.decayFactor = decayFactor;
+    decayPush.decayFactor = ECSRenderDetail::s_DefaultCausticTemporalDecay;
     decayPush.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();
 
     Core::ComputeState decayState;
@@ -69,7 +69,7 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandLi
 
     RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);
     const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, s_CausticResolveDownscaleFactor, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
-    const f32 temporalDecay = m_rayTracingState.m_causticTemporalDecay;
+    const f32 temporalDecay = ECSRenderDetail::s_DefaultCausticTemporalDecay;
     const f32 effectiveIntensity = VectorGetX(EffectiveCausticIntensity(VectorReplicate(temporalDecay)));
     // Alternate the prepare output and its counterpart while doubling the wavelet sampling distance.
     const b8 inputIsHalfB = ((static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) + passIndex) % 2u) == 0u;
@@ -113,7 +113,7 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(Core::CommandList&
     const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
 
     // Normalize temporal accumulation to retain non-temporal brightness.
-    const f32 temporalDecay = m_rayTracingState.m_causticTemporalDecay;
+    const f32 temporalDecay = ECSRenderDetail::s_DefaultCausticTemporalDecay;
     const f32 effectiveIntensity = VectorGetX(EffectiveCausticIntensity(VectorReplicate(temporalDecay)));
 
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{ targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };

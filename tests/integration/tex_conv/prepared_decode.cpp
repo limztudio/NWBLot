@@ -108,7 +108,7 @@ int Run(const int argc, char** argv){
         NWB_TCERR << NWB_TEXT("[tex_conv_prepared_decode] logger.init() failed\n");
         return 1;
     }
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
+    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
     constexpr int s_ExpectedArgCount = 4;
     if(argc != s_ExpectedArgCount || !Decode(argv[1], argv[2], argv[3])){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv_prepared_decode: expected valid texture metadata with its paired raw sidecar, output filename, and mip index."));

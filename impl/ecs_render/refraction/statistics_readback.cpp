@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RefractionStatisticsState::accept(const RefractionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
+void RefractionStatisticsState::accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = matchingSlot(key);
@@ -36,7 +36,7 @@ void RefractionStatisticsState::accept(const RefractionStatisticsReservationKey&
     // Never recycle memory whose GPU completion is unproved.
 }
 
-void RefractionStatisticsState::complete(const RefractionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept{
+void RefractionStatisticsState::complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = beginCompleteWithinLock(key, token);

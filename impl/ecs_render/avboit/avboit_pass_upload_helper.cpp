@@ -56,10 +56,8 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialS
 
     result.hasDrawItems = !drawItems.empty();
     result.hasCsgDrawItems = !drawItems.csg.empty();
-    if(!result.hasDrawItems){
-        result.ready = true;
+    if(!result.hasDrawItems)
         return result;
-    }
     const b8 csgReady = !result.hasCsgDrawItems || (
         csgFrameData.hasWork()
         && inputs.csgReceiverRanges.valid()
@@ -77,7 +75,6 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialS
         || !csgReady
     )
         return MakeUnexpected(Failure{});
-    result.ready = true;
     return result;
 }
 

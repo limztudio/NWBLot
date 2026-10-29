@@ -21,11 +21,10 @@ b8 RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList
         return false;
     NWB_ASSERT(meshView.bindingValid());
     NWB_ASSERT(targets.bindless.valid());
-    const f32 temporalDecay = m_rayTracingState.m_causticTemporalDecay;
     const auto& pipeline = m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_swCausticCsgPipeline : m_rayTracingState.m_swCausticPipeline;
-    if(!pipeline || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets, temporalDecay))
+    if(!pipeline || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets))
         return false;
-    const u32 temporalPhaseCount = temporalDecay <= 0.f ? NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT : s_CausticTemporalPhaseCount;
+    const u32 temporalPhaseCount = s_CausticTemporalPhaseCount;
     const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, s_CausticSwPhotonGridSide, temporalPhaseCount);
     const u32 photonCount = photonBudget.photonsPerFrame;
 

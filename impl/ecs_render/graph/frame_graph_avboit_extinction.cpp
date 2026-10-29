@@ -218,7 +218,6 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
     result.sharedComputeEmulationPlan = extinctionSharedComputeEmulationPlan;
     result.sharedComputeEmulationInstanceCount = extinctionSharedComputeEmulationInstanceCount;
     result.sharedComputeEmulationMaterialTypedByteCount = extinctionSharedComputeEmulationMaterialTypedByteCount;
-    result.declared = true;
     return result;
 }
 

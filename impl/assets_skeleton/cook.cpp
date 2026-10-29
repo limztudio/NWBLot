@@ -116,7 +116,7 @@ static constexpr AStringView s_SkeletonMetaDiagnosticPrefix = "Skeleton meta";
         return MakeUnexpected(Failure{});
     joint.parent = *parentResult;
 
-    const Value* localBindPose = FindField(jointValue, s_LocalBindPoseField);
+    const Value* localBindPose = jointValue.findField(s_LocalBindPoseField);
     if(!localBindPose)
         return joint;
 

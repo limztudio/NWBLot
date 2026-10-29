@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 
 import caustic_optical_smoke as caustic
 import caustic_optical_reference as caustic_reference
-from reflection_smoke import STATISTICS_FIELDS, SmokeFailure
+from reflection_smoke import SmokeFailure
 
 
 LIT_EXECUTABLE = "--executable"

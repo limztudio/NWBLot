@@ -1,8 +1,8 @@
 """Window-capture result validation: image oracles per smoke mode and required, rejected, and skip log messages."""
 
 
-from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure, write_status  # noqa: E402
-from window_capture_logs import choose_free_port, wait_for_tcp_port, snapshot_log_files, collect_log_delta, standalone_log_pattern, wait_for_log_message, wait_for_log_drain  # noqa: E402
+from window_capture_outcome import SmokeFailure  # noqa: E402
+from window_capture_logs import collect_log_delta  # noqa: E402
 
 
 FRAMEBUFFER_CAPTURE_READY_MESSAGE = "FramebufferCapture: capture ready"

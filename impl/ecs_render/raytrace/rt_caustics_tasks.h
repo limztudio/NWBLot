@@ -40,13 +40,9 @@ static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
 template<typename Payload>
 static void ConfirmCausticAccumulatorClears(Payload& payload)noexcept(
-    noexcept(static_cast<b8>(payload.graphOwnsNonTemporalAccumulatorClear))
-    && noexcept(payload.raytracingSystem.confirmCausticAccumulatorNonTemporalClear())
-    && noexcept(static_cast<b8>(payload.graphOwnsAccumulatorBootstrapClear && payload.causticProducerDispatched))
+    noexcept(static_cast<b8>(payload.graphOwnsAccumulatorBootstrapClear && payload.causticProducerDispatched))
     && noexcept(payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear())
 ){
-    if(payload.graphOwnsNonTemporalAccumulatorClear)
-        payload.raytracingSystem.confirmCausticAccumulatorNonTemporalClear();
     if(payload.graphOwnsAccumulatorBootstrapClear && payload.causticProducerDispatched)
         payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear();
 }
@@ -64,7 +60,6 @@ struct CausticAccumulatorDecayGraphTask{
         const b8& shadowVisibilityPrepared;
         Core::GpuTimingSubmissionTicket& timingTicket;
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
-        f32 decayFactor = 0.f;
         b8 hardwareCaustics = false;
     };
 
@@ -86,7 +81,7 @@ public:
         payload.causticPhotonTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, payload.graphics.getDevice(), commandList);
         if(!Core::FinishSplitGpuTimingMarker(&payload.causticPhotonTiming))
             return false;
-        const b8 dispatched = payload.raytracingSystem.dispatchCausticAccumulatorDecay(commandList, payload.targets, payload.decayFactor);
+        const b8 dispatched = payload.raytracingSystem.dispatchCausticAccumulatorDecay(commandList, payload.targets);
         if(!dispatched){
             Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned caustic accumulator decay pass failed"));
@@ -115,7 +110,6 @@ struct CausticProducerGraphTask{
         const b8& shadowVisibilityPrepared;
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
         b8 graphOwnsAccumulatorBootstrapClear = false;
-        b8 graphOwnsNonTemporalAccumulatorClear = false;
         b8& causticProducerDispatched;
     };
 

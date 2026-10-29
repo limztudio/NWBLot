@@ -5,66 +5,21 @@
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/reflection/scene_content_stamp.h>
-#include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
-#include <impl/ecs_render/raytrace/task_graph_shadow_prepare_finalize_task.h>
-#include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
-#include <impl/ecs_render/raytrace/task_graph_float_clear_tasks.h>
-#include <impl/ecs_render/raytrace/task_graph_refraction_resolve.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/raytrace/task_graph_optical_scene_upload.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
-#include <impl/ecs_render/avboit/task_graph_refraction_capture.h>
-#include <impl/ecs_render/avboit/generated_geometry_reuse.h>
+#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
-#include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
-#include <impl/ecs_render/kernel/task_graph_frame_recovery_task.h>
-#include <impl/ecs_render/kernel/task_graph_frame_timing_end_task.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.h>
-#include <impl/ecs_render/kernel/task_graph_clear_timing.h>
-#include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
-#include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
-#include <impl/ecs_render/deferred/task_graph_present_task.h>
 #include <impl/ecs_render/deferred/task_graph_suffix_builder.h>
-#include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
-#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
-#include <impl/ecs_render/material/task_graph_resource_sets.h>
-#include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
-#include <impl/ecs_render/mesh/task_graph_prefix_tasks.h>
-#include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
-#include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.h>
-#include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.h>
-#include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.h>
-#include <impl/ecs_render/csg/transparent_csg_interval_builder.h>
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 #include <impl/ecs_render/deferred/lighting_stage_builder.h>
 #include <impl/ecs_render/deferred/frame_tail_builder.h>
 #include <impl/ecs_render/raytrace/hardware_caustics_stage_builder.h>
-#include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
-#include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
-#include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>
-#include <impl/ecs_render/avboit/task_graph_accumulation_tasks.h>
-#include <impl/ecs_render/avboit/task_graph_timing_metadata.h>
-#include <impl/ecs_render/avboit/clear_chain_builder.h>
-#include <impl/ecs_render/avboit/compute_effect_chain_builder.h>
-#include <impl/ecs_render/avboit/occupancy_record_builder.h>
-#include <impl/ecs_render/avboit/extinction_record_builder.h>
-#include <impl/ecs_render/avboit/accumulation_record_builder.h>
 #include <impl/ecs_render/graph/frame_graph_software_bvh_build_state.h>
 #include <impl/ecs_render/graph/frame_graph_trace_geometry.h>
 #include <impl/ecs_render/graph/frame_graph_avboit_stage.h>
-#include <impl/ecs_render/graph/frame_graph_transparent_csg_tasks.h>
-#include <impl/ecs_render/graph/frame_graph_avboit_occupancy.h>
-#include <impl/ecs_render/graph/frame_graph_avboit_extinction.h>
-#include <impl/ecs_render/graph/frame_graph_avboit_accumulation.h>
 #include <impl/ecs_render/graph/frame_graph_reflection_resolve.h>
-#include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
-#include <impl/ecs_render/avboit/material_upload_builder.h>
-#include <impl/ecs_render/avboit/geometry_preparation_builder.h>
-#include <impl/ecs_render/avboit/compute_emulation_capture.h>
 
-#include <core/task/gpu/capture/command_ir.h>
-#include <core/task/gpu/scheduler.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/hash_utils.h>
@@ -510,7 +465,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             return;
         }
         m_deferredCausticIrradianceClearTask = hardwareCausticsStageResult->causticIrradianceClearTask;
-        m_deferredCausticAccumulatorNonTemporalClearTask = hardwareCausticsStageResult->causticAccumulatorNonTemporalClearTask;
         m_deferredCausticAccumulatorBootstrapClearTask = hardwareCausticsStageResult->causticAccumulatorBootstrapClearTask;
         m_deferredCausticAccumulatorDecayTask = hardwareCausticsStageResult->causticAccumulatorDecayTask;
         m_deferredCausticPhotonTask = hardwareCausticsStageResult->causticPhotonTask;
@@ -679,9 +633,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .presentationFrame = presentationFrame,
             .presentationFramebufferDesc = presentationFramebufferDesc,
         },
-        reflectionCompositeInputs,
         m_deferredShadowVisibilityTask,
-        deferredTargets,
         compositeTimingTicket,
         presentTimingTicket,
         asyncFinalTiming,

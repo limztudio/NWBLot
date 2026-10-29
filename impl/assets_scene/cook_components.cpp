@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include <impl/assets_scene/component_assets.adhd.h>
 
 #include <core/common/log.h>
 

@@ -114,8 +114,6 @@ public:
 
     void append(Value&& val);
 
-    [[nodiscard]] MString copyString()const;
-
     template<typename Container>
     [[nodiscard]] b8 copyStringList(Container& outList)const noexcept([]()consteval noexcept{
         constexpr b8 s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
@@ -229,14 +227,6 @@ private:
         MapType* m_map;
     } m_data{};
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline const Value* FindField(const Value& map, const AStringView fieldName)noexcept{
-    return map.findField(MStringView(fieldName.data(), fieldName.size()));
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

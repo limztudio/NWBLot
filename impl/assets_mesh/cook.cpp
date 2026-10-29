@@ -17,20 +17,13 @@
 #include "cook_meshlets.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"
-#include "meshlet_ref_codec.h"
-#include "meshlet_payload_packing.h"
 #include "meshlet_triangle_indices.h"
 #include "cook_topology.h"
 
 #include <core/alloc/scratch.h>
-#include <core/task/cpu/scheduler.h>
 #include <core/assets/paths.h>
 #include <core/metascript/parser.h>
 #include <core/common/log.h>
-
-#include <global/simd/frame.h>
-#include <global/binary.h>
-#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

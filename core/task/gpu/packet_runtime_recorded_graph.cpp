@@ -406,34 +406,6 @@ Optional<GpuRecordedPacket> GpuRecordedGraph::packetSnapshot(const GpuSubmission
     return recordedPacket ? Optional<GpuRecordedPacket>(*recordedPacket) : Optional<GpuRecordedPacket>();
 }
 
-b8 GpuRecordedGraph::hasTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId task)const noexcept{
-    if(!planAccess.validFor(compiledGraph))
-        return false;
-    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
-    if(!artifactOperation.valid())
-        return false;
-    if(!validForWithinArtifactOperation(compiledGraph, planAccess, artifactOperation) || !planAccess.findTask(task).valid())
-        return false;
-
-    const GpuSubmissionPacketId packet = planAccess.packetForTask(task);
-    const CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet, artifactOperation);
-    return findWithinArtifactOperation(packet, artifactOperation) && stateSeed && stateSeed->validForDeviceGeneration(m_activeStorage->deviceGeneration);
-}
-
-b8 GpuRecordedGraph::copyTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId task, CommandListResourceStateHandoff& outStateSeed)const{
-    if(!planAccess.validFor(compiledGraph))
-        return false;
-    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
-    if(!artifactOperation.valid())
-        return false;
-    if(!validForWithinArtifactOperation(compiledGraph, planAccess, artifactOperation) || !planAccess.findTask(task).valid())
-        return false;
-
-    const GpuSubmissionPacketId packet = planAccess.packetForTask(task);
-    const CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet, artifactOperation);
-    return findWithinArtifactOperation(packet, artifactOperation) && stateSeed && stateSeed->validForDeviceGeneration(m_activeStorage->deviceGeneration) && outStateSeed.copyFrom(*stateSeed);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

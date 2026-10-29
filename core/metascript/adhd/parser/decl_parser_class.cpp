@@ -168,7 +168,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         dtor->isDestructor = true;
         dtor->span = span;
 
-        if(!applyCallableAttributes(attributes, span, *dtor))
+        if(!applyCallableAttributes(attributes, *dtor))
             return false;
         if(dtor->isReflect)
             classDecl.isReflect = true;
@@ -195,7 +195,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
             ctor->isConstructor = true;
             ctor->span = span;
 
-            if(!applyCallableAttributes(attributes, span, *ctor))
+            if(!applyCallableAttributes(attributes, *ctor))
                 return false;
             if(ctor->isReflect)
                 classDecl.isReflect = true;
@@ -238,7 +238,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         method->isOperator = true;
         method->span = span;
 
-        if(!applyCallableAttributes(attributes, span, *method))
+        if(!applyCallableAttributes(attributes, *method))
             return false;
         if(method->isReflect)
             classDecl.isReflect = true;
@@ -303,7 +303,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
             method->name = memberName;
             method->span = span;
 
-            if(!applyCallableAttributes(attributes, span, *method))
+            if(!applyCallableAttributes(attributes, *method))
                 return false;
             if(method->isReflect)
                 classDecl.isReflect = true;

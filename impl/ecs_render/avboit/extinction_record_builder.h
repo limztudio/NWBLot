@@ -59,12 +59,6 @@ public:
 };
 
 
-struct AvboitExtinctionRecordResult{
-    Core::GpuTaskId extinctionTask;
-    b8 declared = false;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -74,7 +68,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<AvboitExtinctionRecordResult> declare(
+    [[nodiscard]] b8 declare(
         Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         ObjectGeometryCacheGraph& objectGeometry,

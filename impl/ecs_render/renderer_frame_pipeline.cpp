@@ -7,8 +7,6 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
-#include <core/graphics/gpu_timing.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -107,11 +105,6 @@ Expected<ReflectionStatistics> RendererFramePipeline::tryGetLatestReflectionStat
 b8 RendererFramePipeline::setPresentationSettings(const PresentationSettings& settings)noexcept{
     return m_deferredSystem.setPresentationSettings(settings);
 }
-
-b8 RendererFramePipeline::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
-    return m_deferredTaskTimingFeedback.setPolicy(policy);
-}
-
 
 Core::GpuTaskGraphRuntimeStatistics RendererFramePipeline::deferredTaskGraphRuntimeStatistics()const noexcept{
     const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);

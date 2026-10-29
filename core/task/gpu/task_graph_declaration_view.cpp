@@ -140,14 +140,6 @@ ComputePipeline* GpuTaskGraphDeclarationReadView::computePipelineFor(const GpuGr
     return m_graph ? m_graph->computePipelineFor(pipeline) : nullptr;
 }
 
-MeshletPipeline* GpuTaskGraphDeclarationReadView::meshletPipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept{
-    return m_graph ? m_graph->meshletPipelineFor(pipeline) : nullptr;
-}
-
-RayTracingPipeline* GpuTaskGraphDeclarationReadView::rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept{
-    return m_graph ? m_graph->rayTracingPipelineFor(pipeline) : nullptr;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

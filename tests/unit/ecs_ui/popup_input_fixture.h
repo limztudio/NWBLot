@@ -173,7 +173,6 @@ protected:
         if(!baseEdit)
             return false;
         m_baseWidget = baseEdit->widget;
-        m_baseResult = baseEdit->result;
         return true;
     }
 
@@ -404,7 +403,6 @@ protected:
     u64 m_generation = 0u;
     const Ui::Rect m_viewport{ 0.0f, 0.0f, 500.0f, 200.0f };
     Ui::EditBoxResult m_childResult;
-    Ui::EditBoxResult m_baseResult;
     Ui::EditBoxResult m_popupResult;
 };
 

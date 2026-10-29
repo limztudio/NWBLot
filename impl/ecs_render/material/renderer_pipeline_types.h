@@ -91,10 +91,6 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE b8 MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass)noexcept{
-    return pass == MaterialPipelinePass::Opaque || MaterialPipelinePassUsesRendererAvboit(pass);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -122,16 +118,12 @@ struct MaterialPipelineKey{
 struct MaterialPipelineCsgBindingUse{
     b8 clip = false;
     b8 avboitClip = false;
-    b8 receiverSurface = false;
-    b8 intervalSample = false;
 };
 
 [[nodiscard]] NWB_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(const MaterialPipelineKey& pipelineKey, const MaterialPipelinePass::Enum pass)noexcept{
     MaterialPipelineCsgBindingUse result;
     result.clip = pipelineKey.csgMode != MaterialPipelineCsgMode::None && MaterialPipelinePassUsesRendererCsgShaderVariant(pass);
     result.avboitClip = result.clip && MaterialPipelinePassUsesRendererAvboit(pass);
-    result.receiverSurface = result.clip && pass == MaterialPipelinePass::CsgReceiverSurface;
-    result.intervalSample = result.clip && MaterialPipelinePassUsesRendererCsgIntervalSample(pass);
     return result;
 }
 struct MaterialPipelineKeyHasher{

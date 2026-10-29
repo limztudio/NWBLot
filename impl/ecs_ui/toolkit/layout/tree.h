@@ -26,7 +26,6 @@ class LayoutTree final : NoCopy{
 private:
     struct Node{
         LayoutNodeDesc description;
-        u32 parent = s_LayoutNoParent;
         u32 firstChild = s_LayoutNoParent;
         u32 lastChild = s_LayoutNoParent;
         u32 nextSibling = s_LayoutNoParent;

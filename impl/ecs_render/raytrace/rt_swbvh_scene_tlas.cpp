@@ -295,7 +295,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
 
     m_rayTracingState.m_tlasInstanceCount = static_cast<u32>(instances.size());
     if(instances.empty()){
-        m_rayTracingState.m_tlasDeviceAddress = 0u;
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
         m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
         return false;
@@ -363,8 +362,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         m_rayTracingState.m_tlasMaxInstances = capacity;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created scene TLAS (capacity {} instances)"), static_cast<u64>(capacity));
     }
-
-    m_rayTracingState.m_tlasDeviceAddress = m_rayTracingState.m_tlas->getDeviceAddress();
 
     // Allocate a heap block only for a new TLAS generation.
     if(!IsAccelStructHeapHandle(m_rayTracingState.m_tlasHeapHandle)){

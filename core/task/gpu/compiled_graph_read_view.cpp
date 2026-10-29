@@ -215,15 +215,6 @@ GpuTaskGraphCompileStatistics GpuCompiledGraph::ReadView::compileStatistics()con
     return m_graph ? m_graph->m_compileStatistics : GpuTaskGraphCompileStatistics{};
 }
 
-GpuCompiledExternalResourceExportView GpuCompiledGraph::ReadView::externalResourceExportAt(const usize index)const & noexcept{
-    if(!m_graph)
-        return {};
-    const GpuCompiledExternalResourceExport* const plan = m_graph->externalResourceExportAt(index);
-    if(!plan)
-        return {};
-    return GpuCompiledExternalResourceExportView{ .plan = plan, .sources = m_graph->externalResourceExportSources(*plan), };
-}
-
 GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::ReadView::physicalQueueCompileStatistics(const GpuPhysicalQueueId& queue)const noexcept{
     return m_graph ? m_graph->physicalQueueCompileStatistics(queue) : GpuTaskGraphPhysicalQueueCompileStatistics{};
 }

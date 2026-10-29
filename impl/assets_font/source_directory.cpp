@@ -3,6 +3,7 @@
 
 
 #include "source_directory.h"
+#include "asset.h"
 
 #include <global/binary_big_endian.h>
 

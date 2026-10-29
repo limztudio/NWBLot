@@ -38,10 +38,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ReflectionStatisticsReservationKey = StatisticsReservationKey;
-using ReflectionStatisticsPendingReadback = StatisticsPendingReadback;
-
-
 // CPU lifecycle shared by owner and leases; completion follows GPU token completion.
 class ReflectionStatisticsState : public StatisticsReadbackStateBase<ReflectionStatistics>{
 public:
@@ -49,8 +45,8 @@ public:
 
 
 public:
-    void accept(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, b8 hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
-    void complete(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept;
+    void accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, b8 hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
+    void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept;
 };
 
 using ReflectionStatisticsControl = RefCounter<ReflectionStatisticsState>;

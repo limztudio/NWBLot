@@ -374,7 +374,7 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
         method->access = AccessSpecifier::Public;
         method->returnType = retType;
         method->span = methodSpan;
-        if(!applyCallableAttributes(methodAttrs, methodSpan, *method))
+        if(!applyCallableAttributes(methodAttrs, *method))
             return nullptr;
 
         if(m_cursor.matchIdentifier("operator")){

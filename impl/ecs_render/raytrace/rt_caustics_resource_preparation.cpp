@@ -35,7 +35,7 @@ b8 RendererRayTracingSystem::prepareCausticResources(const ECSRenderDetail::Mesh
     const b8 producerReady = ensureRayTraceMaterialContextSlotsHeapHandle() && (hardware ? ensureCausticRtPipeline() : ensureSwCausticPipeline());
     // Prepare shared resolve and temporal resources even when the producer is unavailable.
     const b8 resolveReady = ensureCausticGeometryDownsamplePipeline() && ensureCausticResolvePipeline();
-    const b8 temporalReady = m_rayTracingState.m_causticTemporalDecay <= 0.f || ensureCausticAccumulatorDecayPipeline();
+    const b8 temporalReady = ensureCausticAccumulatorDecayPipeline();
     return producerReady && resolveReady && temporalReady;
 }
 

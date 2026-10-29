@@ -331,7 +331,6 @@ public:
     [[nodiscard]] b8 buildResourceSubset(const CommandListResourceStateHandoff& source, Texture* const* textures, usize textureCount, Buffer* const* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
     // Reuses one completed selection across multiple filtered snapshots without retaining its scratch storage.
     [[nodiscard]] b8 buildResourceSubset(const CommandListResourceStateHandoff& source, const CommandListResourceSelection& selection);
-    [[nodiscard]] b8 buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* texture, Alloc::ScratchArena& scratchArena);
     [[nodiscard]] b8 buildTextureRangeSubset(const CommandListResourceStateHandoff& source, Texture* texture, TextureSubresourceSet subresources);
     // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges.
     [[nodiscard]] b8 buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
@@ -342,9 +341,6 @@ public:
     // Copies a valid state snapshot without exposing backend tracker storage.
     // Packet recording retains graph-owned producer seeds while individual command-list consumers request their own final handoff.
     [[nodiscard]] b8 copyFrom(const CommandListResourceStateHandoff& source);
-    // Compares immutable snapshot contents rather than the address of a producer-owned snapshot.
-    // This is suitable for declaration deduplication across producer-storage retirement and same-address allocator reuse.
-    [[nodiscard]] b8 equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept;
     // Swaps snapshot storage with no alloc. Both snapshots must share one arena.
     [[nodiscard]] b8 exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
     [[nodiscard]] b8 hasPendingBufferReleases()const noexcept;

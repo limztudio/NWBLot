@@ -215,7 +215,6 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
     result.sharedComputeEmulationPlan = occupancySharedComputeEmulationPlan;
     result.sharedComputeEmulationInstanceCount = occupancySharedComputeEmulationInstanceCount;
     result.sharedComputeEmulationMaterialTypedByteCount = occupancySharedComputeEmulationMaterialTypedByteCount;
-    result.declared = true;
     return result;
 }
 

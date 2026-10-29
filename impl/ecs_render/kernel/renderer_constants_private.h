@@ -39,7 +39,6 @@ inline constexpr Core::Color s_GBufferWorldPositionClearColor = Core::Color(0.f,
 inline constexpr Core::Color s_GBufferSpecularRoughnessClearColor = Core::Color(0.f, 0.f, 0.f, 1.f);
 inline constexpr Core::Color s_SurfelIrradianceClearColor = Core::Color(0.f, 0.f, 0.f, 0.f);
 // Runtime quality defaults shared by init and push-constant construction.
-inline constexpr f32 s_DefaultSwShadowEdgeThreshold = 0.1f;
 inline constexpr f32 s_DefaultCausticTemporalDecay = 0.85f;
 // Full-screen triangle vertex count; VS reconstructs position from SV_VertexID.
 inline constexpr u32 s_FullscreenTriangleVertexCount = 3u;

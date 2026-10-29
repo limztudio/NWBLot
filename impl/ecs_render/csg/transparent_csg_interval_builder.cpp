@@ -356,7 +356,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
     }
     result.materialGeometrySet = transparentCsgMaterialGeometrySet;
     result.materialSampledTextureSet = transparentCsgMaterialSampledTextureSet;
-    result.produced = avboitPrePayload.transparentCsgStreamsUploaded;
     return result;
 }
 

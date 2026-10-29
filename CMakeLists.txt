@@ -100,6 +100,4 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     string(JOIN ", " _nwb_linux_targets_text ${_nwb_linux_targets})
     message(STATUS "Linux targets enabled: ${_nwb_linux_targets_text}.")
-elseif(NOT WIN32)
-    message(STATUS "Windows-only targets are disabled on non-Windows platforms: none")
 endif()

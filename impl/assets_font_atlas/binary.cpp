@@ -3,6 +3,7 @@
 
 
 #include "binary_payload.h"
+#include "model.h"
 
 #include <global/binary_little_endian.h>
 

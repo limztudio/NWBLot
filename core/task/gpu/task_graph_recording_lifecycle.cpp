@@ -364,8 +364,6 @@ b8 GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noexc
         if(
             (pipeline.graphicsPipeline != nullptr && pipeline.deviceGeneration != deviceGeneration)
             || (pipeline.computePipeline != nullptr && pipeline.deviceGeneration != deviceGeneration)
-            || (pipeline.meshletPipeline != nullptr && pipeline.deviceGeneration != deviceGeneration)
-            || (pipeline.rayTracingPipeline != nullptr && pipeline.deviceGeneration != deviceGeneration)
         )
             return false;
     }

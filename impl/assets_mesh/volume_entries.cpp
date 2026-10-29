@@ -49,8 +49,6 @@ static Expected<MeshCookEntry> ParseMeshValue(const Name virtualPath, const Path
     return ParseMeshCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.cpuScheduler, context.scratchArena);
 }
 
-static b8 RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry);
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

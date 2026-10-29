@@ -42,7 +42,6 @@ struct AvboitClearChainInputs{
 
 struct AvboitClearChainResult{
     Core::GpuTaskId clearTask;
-    Core::GpuTaskId clearFirstTask;
 };
 
 

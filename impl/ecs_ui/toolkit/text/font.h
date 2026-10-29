@@ -8,6 +8,7 @@
 #include "types.h"
 #include "baked_atlas.h"
 
+#include <impl/ecs_ui/toolkit/paint.h>
 #include <impl/assets_font/asset.h>
 
 #include <core/alloc/scratch.h>

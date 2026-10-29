@@ -39,13 +39,12 @@ b8 RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, co
             return false;
         }
     }
-    const f32 temporalDecay = m_rayTracingState.m_causticTemporalDecay;
     const b8 csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     const auto& pipeline = csg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline;
     const auto& shaderTable = csg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable;
-    if(!pipeline || !shaderTable || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets, temporalDecay))
+    if(!pipeline || !shaderTable || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets))
         return false;
-    const u32 temporalPhaseCount = temporalDecay <= 0.f ? NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT : s_CausticTemporalPhaseCount;
+    const u32 temporalPhaseCount = s_CausticTemporalPhaseCount;
     const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, s_CausticHwPhotonGridSide, temporalPhaseCount);
     const u32 photonCount = photonBudget.photonsPerFrame;
 
@@ -97,7 +96,7 @@ b8 RendererRayTracingSystem::hasCommonCausticWork(const ECSRenderDetail::MeshVie
     return
         m_shadowVisibilityTraceResourcesPreflighted
         && m_shadowVisibilityPreparedTargets
-        && causticResolveResourcesReady(*m_shadowVisibilityPreparedTargets, m_rayTracingState.m_causticTemporalDecay)
+        && causticResolveResourcesReady(*m_shadowVisibilityPreparedTargets)
         && m_rayTracingState.m_causticLightCount > 0u
         && m_unsupportedCausticVolumeCount == 0u
         && m_rayTracingState.m_causticRefractiveInstanceCount > 0u

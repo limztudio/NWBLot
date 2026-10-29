@@ -83,7 +83,6 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
         }
     }
     result.buildStateResources = Move(softwareBvhBuildStateResources);
-    result.declared = true;
     return result;
 }
 

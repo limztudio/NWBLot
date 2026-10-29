@@ -53,7 +53,7 @@ struct Resolution{
 
 
 [[nodiscard]] static Expected<u32> ReadUnsignedField(const Path& nwbFilePath, const Value& asset, const AStringView fieldName, const u32 minimum, const u32 maximum){
-    const Value* const field = Core::Metascript::FindField(asset, fieldName);
+    const Value* const field = asset.findField(fieldName);
     if(!field){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
@@ -108,7 +108,7 @@ struct Resolution{
 }
 
 [[nodiscard]] static Expected<Resolution> ReadResolution(const Path& nwbFilePath, const Value& asset, const TextureDimension::Enum dimension){
-    const Value* const field = Core::Metascript::FindField(asset, s_ResolutionField);
+    const Value* const field = asset.findField(s_ResolutionField);
     const usize componentCount = dimension == TextureDimension::Texture3D ? s_VolumeResolutionComponentCount : s_PlanarResolutionComponentCount;
     if(!field || !field->isList() || field->asList().size() != componentCount){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': resolution must contain exactly {} positive integer dimensions"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), componentCount);

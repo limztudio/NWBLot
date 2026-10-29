@@ -3,9 +3,7 @@
 
 
 #include "manager.h"
-#include "arena_names.h"
 
-#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
 
@@ -22,14 +20,7 @@ AssetManager::AssetManager(AssetArena& arena, const AssetRegistry& registry, con
     : m_registry(registry)
     , m_binarySource(binarySource)
     , m_arena(arena)
-    , m_requests(0, Hasher<u64>(), EqualTo<u64>(), arena)
 {}
-
-
-void AssetManager::setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor)noexcept{
-    ScopedLock lock(m_mutex);
-    m_asyncExecutor = asyncExecutor;
-}
 
 
 Expected<UniquePtr<IAsset>> AssetManager::loadSync(const Name& assetType, const Name& virtualPath)const{
@@ -56,170 +47,6 @@ Expected<UniquePtr<IAsset>> AssetManager::loadSync(const Name& assetType, const 
     }
 
     return asset;
-}
-
-
-Expected<u64> AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
-    if(!assetType || !virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: rejected async load request with empty asset type or virtual path"));
-        return MakeUnexpected(Failure{});
-    }
-
-    const auto requestId = allocateRequestId();
-    if(!requestId){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: async load request ids are exhausted"));
-        return MakeUnexpected(requestId.error());
-    }
-
-    IAssetAsyncExecutor* asyncExecutor = nullptr;
-    {
-        ScopedLock lock(m_mutex);
-
-        RequestRecord request;
-        request.result.requestId = *requestId;
-        request.result.state = AssetLoadState::Pending;
-        request.assetType = assetType;
-        request.virtualPath = virtualPath;
-        if(!m_requests.emplace(*requestId, Move(request)).second){
-            NWB_ASSERT(false);
-            return MakeUnexpected(Failure{});
-        }
-
-        asyncExecutor = m_asyncExecutor;
-    }
-
-    if(asyncExecutor != nullptr)
-        dispatchAsync(*requestId, *asyncExecutor);
-
-    return *requestId;
-}
-
-
-void AssetManager::processPending(){
-    Alloc::ScratchArena scratchArena(AssetsArenaScope::s_ProcessPendingScratch);
-    Vector<u64, Alloc::ScratchArena> pendingRequestIds{scratchArena};
-    {
-        ScopedLock lock(m_mutex);
-        pendingRequestIds.reserve(m_requests.size());
-        for(const auto& [requestId, request] : m_requests){
-            if(request.result.state == AssetLoadState::Pending)
-                pendingRequestIds.push_back(requestId);
-        }
-    }
-
-    for(const u64 requestId : pendingRequestIds)
-        processRequest(requestId);
-}
-
-
-Expected<AssetLoadResult> AssetManager::tryPopResult(const u64 requestId)noexcept{
-
-    ScopedLock lock(m_mutex);
-
-    auto found = m_requests.find(requestId);
-    if(found == m_requests.end())
-        return MakeUnexpected(Failure{});
-
-    RequestRecord& request = found.value();
-    if(request.result.state != AssetLoadState::Completed)
-        return MakeUnexpected(Failure{});
-
-    AssetLoadResult result = Move(request.result);
-
-    m_requests.erase(found);
-    return result;
-}
-
-
-void AssetManager::clear()noexcept{
-    ScopedLock lock(m_mutex);
-    m_requests.clear();
-}
-
-
-u64 AssetManager::pendingRequestCount()const noexcept{
-    ScopedLock lock(m_mutex);
-
-    u64 pendingCount = 0;
-    for(const auto& [_, request] : m_requests){
-        if(request.result.state == AssetLoadState::Pending || request.result.state == AssetLoadState::InFlight)
-            ++pendingCount;
-    }
-
-    return pendingCount;
-}
-
-
-u64 AssetManager::completedRequestCount()const noexcept{
-    ScopedLock lock(m_mutex);
-
-    u64 completedCount = 0;
-    for(const auto& [_, request] : m_requests){
-        if(request.result.state == AssetLoadState::Completed)
-            ++completedCount;
-    }
-
-    return completedCount;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<u64> AssetManager::allocateRequestId()noexcept{
-    u64 requestId = m_nextRequestId.load(MemoryOrder::relaxed);
-    for(;;){
-        if(requestId == 0)
-            return MakeUnexpected(Failure{});
-
-        const u64 nextRequestId = requestId + 1;
-        if(m_nextRequestId.compare_exchange_weak(requestId, nextRequestId, MemoryOrder::relaxed, MemoryOrder::relaxed))
-            return requestId;
-    }
-}
-
-
-void AssetManager::dispatchAsync(const u64 requestId, IAssetAsyncExecutor& asyncExecutor){
-    asyncExecutor.enqueue([this, requestId](){
-        processRequest(requestId);
-    });
-}
-
-
-void AssetManager::processRequest(const u64 requestId){
-    Name assetType = s_NameNone;
-    Name virtualPath = s_NameNone;
-    {
-        ScopedLock lock(m_mutex);
-
-        auto found = m_requests.find(requestId);
-        if(found == m_requests.end())
-            return;
-
-        RequestRecord& request = found.value();
-        if(request.result.state != AssetLoadState::Pending)
-            return;
-
-        request.result.state = AssetLoadState::InFlight;
-        assetType = request.assetType;
-        virtualPath = request.virtualPath;
-    }
-
-    auto loadedAsset = loadSync(assetType, virtualPath);
-
-    {
-        ScopedLock lock(m_mutex);
-
-        auto found = m_requests.find(requestId);
-        if(found == m_requests.end())
-            return;
-
-        RequestRecord& request = found.value();
-        request.result.state = AssetLoadState::Completed;
-        request.result.success = loadedAsset.has_value();
-        if(loadedAsset)
-            request.result.asset = Move(*loadedAsset);
-    }
 }
 
 

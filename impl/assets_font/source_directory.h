@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "asset.h"
+#include "../global.h"
 
 #include <global/expected.h>
 #include <global/span.h>

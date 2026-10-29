@@ -5,7 +5,7 @@
 #include <loader/project_entry.h>
 
 #include <impl/ecs_render/module.h>
-#include <impl/ecs_mesh/skinning/module.h>
+#include <impl/ecs_mesh/skinning/system.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>

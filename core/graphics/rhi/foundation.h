@@ -124,7 +124,6 @@ inline constexpr u32 s_MaxBindlessRegisterSpaces = 16;
 inline constexpr u32 s_MaxPushConstantSize = 128;
 inline constexpr u32 s_PushConstantSizeAlignment = 4;
 inline constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
-inline constexpr i32 s_WindowPositionAuto = -1;
 inline constexpr u32 s_BackBufferWidth = 1280;
 inline constexpr u32 s_BackBufferHeight = 720;
 inline constexpr u32 s_SwapChainBufferCount = 3;
@@ -138,11 +137,7 @@ template<typename T>
 using GraphicsVector = Vector<T, GraphicsArena>;
 using GraphicsBytes = GraphicsVector<u8>;
 template<typename T>
-using GraphicsSet = Set<T, GraphicsArena>;
-template<typename T>
 using GraphicsDeque = Deque<T, GraphicsArena>;
-template<typename T, typename V>
-using GraphicsHashMap = HashMap<T, V, GraphicsArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

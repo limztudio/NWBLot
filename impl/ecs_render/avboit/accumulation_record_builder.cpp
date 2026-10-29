@@ -60,7 +60,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitAccumulationRecordResult> AvboitAccumulationRecordBuilder::declare(
+[[nodiscard]] b8 AvboitAccumulationRecordBuilder::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     ObjectGeometryCacheGraph& objectGeometry,
@@ -69,14 +69,13 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask::Payload& computeEmulationPayload
 ){
     using namespace RendererTaskGraphDetail;
-    AvboitAccumulationRecordResult result{};
     if(!inputs.integrationTask.valid() || !inputs.uploadTask.valid())
-        return MakeUnexpected(Failure{});
+        return false;
 
 
     const b8 generatedGeometryReused = inputs.generatedGeometryReused();
     if(!inputs.generatedGeometryReusePlansValid())
-        return MakeUnexpected(Failure{});
+        return false;
     accumulationPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_accumulationReusedGeometryProducer = inputs.reusedGeometryProducer;
 
@@ -115,7 +114,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT Accumulation compute-emulation output states"));
     }
     if(generatedGeometryReused && !accumulationComputeEmulationOutputStatesGraphOwned)
-        return MakeUnexpected(Failure{});
+        return false;
     accumulationPayload.accumulationComputeEmulationOutputStatesGraphOwned = inputs.regularComputeEmulationPlanCaptured && accumulationComputeEmulationOutputStatesGraphOwned;
     accumulationPayload.accumulationCsgComputeEmulationOutputStatesGraphOwned = inputs.csgComputeEmulationPlanCaptured && accumulationComputeEmulationOutputStatesGraphOwned;
     accumulationPayload.accumulationComputeEmulationTiming = accumulationComputeEmulationOutputStatesGraphOwned ? &inputs.accumulationComputeEmulationTiming : nullptr;
@@ -225,12 +224,12 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         accumulationPayload.accumulationSnapshot.regularIndexedDrawItems,
         frameBindings, inputs.targets, scratchArena, accumulationDependency, accumulationResourceUses, &inputs.accumulationTimingTicket
     ))
-        return MakeUnexpected(Failure{});
+        return false;
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         accumulationPayload.accumulationSnapshot.csgIndexedDrawItems,
         frameBindings, inputs.targets, scratchArena, accumulationDependency, accumulationResourceUses, &inputs.accumulationTimingTicket
     ))
-        return MakeUnexpected(Failure{});
+        return false;
 
     if(accumulationComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
         computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;
@@ -284,7 +283,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         if(!accumulationComputeEmulationTaskResult){
             m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Accumulation compute-emulation producer"));
-            return MakeUnexpected(Failure{});
+            return false;
         }
         m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask = *accumulationComputeEmulationTaskResult;
         accumulationDependency = m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask;
@@ -390,7 +389,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
             if(!accumulationSharedComputeEmulationTaskResult){
                 m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex] = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Accumulation shared compute-emulation phase"));
-                return MakeUnexpected(Failure{});
+                return false;
             }
             m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex] = *accumulationSharedComputeEmulationTaskResult;
             accumulationSharedComputeEmulationDependency = m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex];
@@ -415,7 +414,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         if(!accumulationTaskResult){
             m_avboitSystem.taskGraphStage().m_accumulationTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
-            return MakeUnexpected(Failure{});
+            return false;
         }
         m_avboitSystem.taskGraphStage().m_accumulationTask = *accumulationTaskResult;
     }
@@ -445,13 +444,11 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     if(!accumulationFinalizeTaskResult){
         m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation finalizer graph task"));
-        return MakeUnexpected(Failure{});
+        return false;
     }
     m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask = *accumulationFinalizeTaskResult;
 
-    result.accumulationTask = m_avboitSystem.taskGraphStage().m_accumulationTask;
-    result.declared = true;
-    return result;
+    return true;
 }
 
 

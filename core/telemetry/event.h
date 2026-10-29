@@ -112,8 +112,6 @@ public:
 
     [[nodiscard]] constexpr b8 enabled()const noexcept{ return AnyCapture(flags); }
 
-    [[nodiscard]] constexpr b8 textLogEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::TextLog); }
-
     [[nodiscard]] constexpr b8 diagnosticEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::Diagnostic); }
 
     [[nodiscard]] constexpr b8 perfEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::Perf); }

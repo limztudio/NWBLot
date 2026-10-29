@@ -14,7 +14,7 @@
 
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
-#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_mesh/system.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material/material_instance.h>
 

@@ -41,12 +41,6 @@ NWB_IMPL_UI_BEGIN
 // Transient declarations shape text, arrange a panel, then freeze paint and hit targets in the same order.
 class Builder final : NoCopy{
 private:
-    struct ItemDeclarationFailure{
-        TextLayoutStatus::Enum textLayout = TextLayoutStatus::Success;
-    };
-
-
-private:
     using Item = BuilderScopeFrame::Item;
     using TextAreaFrame = BuilderScopeFrame::TextAreaFrame;
     using NumericEditFrame = BuilderScopeFrame::NumericEditFrame;
@@ -147,7 +141,7 @@ private:
     [[nodiscard]] b8 declarationBlocked()const noexcept{ return m_finalizing || m_declaring; }
     [[nodiscard]] ShapeRequest textShapeRequest(StringView text, f32 fontSize)const noexcept;
     [[nodiscard]] b8 beginContainer(AStringView stableKey, LayoutDirection::Enum direction, const ContainerOptions& options);
-    [[nodiscard]] Expected<NotNull<Item*>, ItemDeclarationFailure> addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
+    [[nodiscard]] Expected<NotNull<Item*>> addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
     [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const noexcept;
     void loadButtonMetrics(SIMDVectorSingle& size, SIMDVectorSingle& padding)const noexcept;
     [[nodiscard]] b8 paintPanel();

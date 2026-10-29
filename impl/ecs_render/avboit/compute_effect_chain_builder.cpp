@@ -113,17 +113,15 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitIntegrationStageResult> AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationStageInputs& inputs){
+[[nodiscard]] b8 AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationStageInputs& inputs){
     using namespace RendererTaskGraphDetail;
-    AvboitIntegrationStageResult result{};
-
 
     if(!inputs.extinctionTask.valid())
-        return MakeUnexpected(Failure{});
+        return false;
     if(!inputs.extinction.valid() || !inputs.control.valid() || !inputs.extinctionOverflow.valid())
-        return MakeUnexpected(Failure{});
+        return false;
     if(!inputs.transmittance.valid() || !inputs.currentBindlessSlots.valid())
-        return MakeUnexpected(Failure{});
+        return false;
 
     const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain_builder::ComputeEffectScheduling();
     const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(inputs.targets);
@@ -152,12 +150,10 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
     if(!integrationTaskResult){
         m_avboitSystem.taskGraphStage().m_integrationTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
-        return MakeUnexpected(Failure{});
+        return false;
     }
     m_avboitSystem.taskGraphStage().m_integrationTask = *integrationTaskResult;
-
-    result.integrationTask = m_avboitSystem.taskGraphStage().m_integrationTask;
-    return result;
+    return true;
 }
 
 

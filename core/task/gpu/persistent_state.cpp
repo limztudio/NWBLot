@@ -130,20 +130,6 @@ b8 GpuPersistentResourceStateCache::replaceResourceSubset(
     return true;
 }
 
-b8 GpuPersistentResourceStateCache::mergeResourceSubset(
-    const CommandListResourceStateHandoff& source,
-    const TextureHandle* const textures,
-    const usize textureCount,
-    const BufferHandle* const buffers,
-    const usize bufferCount,
-    Alloc::ScratchArena& scratchArena
-){
-    Candidate candidate(*this);
-    if(!buildMergedResourceSubset(candidate, source, textures, textureCount, buffers, bufferCount, scratchArena))
-        return false;
-    return commit(candidate);
-}
-
 b8 GpuPersistentResourceStateCache::buildMergedResourceSubset(
     Candidate& outCandidate,
     const CommandListResourceStateHandoff& source,

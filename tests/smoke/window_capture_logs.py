@@ -3,7 +3,7 @@
 
 import socket
 import time
-from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure, write_status  # noqa: E402
+from window_capture_outcome import SmokeFailure  # noqa: E402
 
 
 LIT_PORT_PROBE_TIMEOUT_SECONDS = 0.2

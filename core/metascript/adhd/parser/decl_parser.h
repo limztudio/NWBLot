@@ -52,7 +52,7 @@ private:
     [[nodiscard]] b8 parseClassMemberCallableBody(MethodDecl& method, MStringView missingTerminatorMessage);
     [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, const MVector<ParsedAttribute>& attributes);
     [[nodiscard]] b8 parseCallableOwnerOrTemplateHeader(MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outTemplateParams, b8 failOnInvalidTemplateParams);
-    [[nodiscard]] b8 applyCallableAttributes(const MVector<ParsedAttribute>& attributes, SourceSpan span, MethodDecl& decl);
+    [[nodiscard]] b8 applyCallableAttributes(const MVector<ParsedAttribute>& attributes, MethodDecl& decl);
     [[nodiscard]] b8 parseOperatorName(MStringView& outOpName);
     [[nodiscard]] static b8 validateMemberOperatorArity(MStringView opName, usize paramCount, MStringView& outErrorMsg)noexcept;
     [[nodiscard]] b8 isCurrentTokenImported()const noexcept;

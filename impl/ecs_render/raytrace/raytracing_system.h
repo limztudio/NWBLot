@@ -380,7 +380,6 @@ public:
         b8& transparentTraceProduced
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    void confirmCausticAccumulatorNonTemporalClear()noexcept;
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing caustic producer packet accepts.
     void confirmCausticAccumulatorBootstrapClear()noexcept;
     // A warm accumulator decays in its own task before the photon producer, sharing its packet; the compiler owns the UAV handoff.
@@ -389,14 +388,13 @@ public:
         const Core::GpuTaskDesc& desc,
         const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         const b8& shadowVisibilityPrepared,
-        f32 decayFactor,
         b8 hardwareCaustics,
         DeferredFrameTargets& targets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming
     );
     // Record the decay dispatch itself. Graph callers leave entry state lowering and the following producer's UAV dependency to the compiler.
-    [[nodiscard]] b8 dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor);
+    [[nodiscard]] b8 dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // Software visibility consumes graph-declared traversal inputs for opaque shadows and transparent transmittance.
     [[nodiscard]] Expected<u32> renderGpuBvhShadowVisibility(
         Core::CommandList& commandList,
@@ -416,7 +414,6 @@ public:
         const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         const b8& shadowVisibilityPrepared,
         b8 graphOwnsAccumulatorBootstrapClear,
-        b8 graphOwnsNonTemporalAccumulatorClear,
         DeferredFrameTargets& targets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
@@ -432,7 +429,6 @@ public:
         const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         const b8& shadowVisibilityPrepared,
         b8 graphOwnsAccumulatorBootstrapClear,
-        b8 graphOwnsNonTemporalAccumulatorClear,
         DeferredFrameTargets& targets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
@@ -675,7 +671,7 @@ private:
     [[nodiscard]] b8 prepareCausticResolveActivity(u32 halfWidth, u32 halfHeight);
     void releaseCausticResolveActivity();
     [[nodiscard]] b8 ensureCausticGeometryDownsamplePipeline();
-    [[nodiscard]] b8 causticResolveResourcesReady(const DeferredFrameTargets& targets, f32 temporalDecay)const noexcept;
+    [[nodiscard]] b8 causticResolveResourcesReady(const DeferredFrameTargets& targets)const noexcept;
     [[nodiscard]] b8 hasCommonCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
     [[nodiscard]] b8 ensureCausticAccumulatorDecayPipeline();
     [[nodiscard]] b8 ensureCausticRtPipeline();

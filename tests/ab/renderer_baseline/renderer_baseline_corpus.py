@@ -9,18 +9,15 @@ import json
 import math
 import os
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Mapping, Optional, Tuple
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
-from profiles import BaselineProfile, corpus_profile_names, get_profile, profile_names  # noqa: E402
-from window_capture_smoke import (  # noqa: E402
-    FRAMEBUFFER_CAPTURE_SKIP_MESSAGE, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, read_bmp_24, wait_for_application_capture_exit,
-    build_launch_environment, make_runtime_launch_args, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process, validate_capture_result, wait_for_log_message,)
+from profiles import BaselineProfile, corpus_profile_names, get_profile  # noqa: E402
+from window_capture_smoke import SmokeFailure  # noqa: E402
 
 
 LIT_FRAME_LOCKED = "frame-locked"

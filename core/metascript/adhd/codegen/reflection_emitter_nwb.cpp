@@ -44,11 +44,10 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
     out.append("u) continue; ");
 }
 
-[[nodiscard]] b8 IsScalarOrStringLikeNwbElement(const MStringView typeName, const SymbolTable& symbols)noexcept{
+[[nodiscard]] constexpr b8 IsScalarOrStringLikeNwbElement(const MStringView typeName)noexcept{
     return typeName == "b8"
         || IsIntegerScalarType(typeName)
         || IsFloatScalarType(typeName)
-        || symbols.findEnum(typeName) != nullptr
         || typeName == "EntityID"
         || typeName == "String"
         || typeName == "CompactString"
@@ -60,8 +59,7 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
 void EmitNwbValueConversionExpr(
     MString& out,
     const MStringView typeName,
-    const MStringView valueAccessor,
-    const SymbolTable& symbols
+    const MStringView valueAccessor
 ){
     if(typeName == "b8"){
         out.push_back('(');
@@ -74,13 +72,6 @@ void EmitNwbValueConversionExpr(
         out.append(">(");
         out.append(valueAccessor.data(), valueAccessor.size());
         out.append(IsIntegerScalarType(typeName) ? ".asInteger())" : ".toDouble())");
-    }
-    else if(symbols.findEnum(typeName)){
-        out.append("static_cast<");
-        out.append(typeName.data(), typeName.size());
-        out.append("::Enum>(");
-        out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asInteger())");
     }
     else if(typeName == "String"){
         out.append("AString(");
@@ -154,12 +145,6 @@ void EmitNwbMapKeyExpr(MString& out, const MStringView keyName){
 }
 
 void EmitNwbEnumFieldDeserialize(MString& out, const MStringView fieldName, const MStringView enumName){
-    EmitNwbFieldFindPrefix(out, fieldName);
-    out.append("__f->isNumeric()) this->");
-    out.append(fieldName.data(), fieldName.size());
-    out.append(" = static_cast<");
-    out.append(enumName.data(), enumName.size());
-    out.append("::Enum>(__f->asInteger());\r\n");
     EmitNwbFieldFindPrefix(out, fieldName);
     out.append("__f->isString()){ if(const auto __e = ");
     out.append(enumName.data(), enumName.size());
@@ -318,20 +303,14 @@ void EmitNwbListContainerFieldDeserialize(
         out.append("*__e");
         if(isPushContainer)
             out.push_back(')');
-        out.append("; } else this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.append(assignOrPushPrefix.data(), assignOrPushPrefix.size());
-        EmitNwbValueConversionExpr(out, elemName, elemAccessor, symbols);
-        if(isPushContainer)
-            out.push_back(')');
-        out.append("; } }\r\n");
+        out.append("; } } }\r\n");
     }
-    else if(IsScalarOrStringLikeNwbElement(elemName, symbols)){
+    else if(IsScalarOrStringLikeNwbElement(elemName)){
         EmitNwbListContainerLoopHeader(out, fieldName, isForwardList, isFixedVec, isDynVec);
         out.append(" this->");
         out.append(fieldName.data(), fieldName.size());
         out.append(assignOrPushPrefix.data(), assignOrPushPrefix.size());
-        EmitNwbValueConversionExpr(out, elemName, elemAccessor, symbols);
+        EmitNwbValueConversionExpr(out, elemName, elemAccessor);
         if(isPushContainer)
             out.push_back(')');
         out.append("; }\r\n");
@@ -455,15 +434,9 @@ void EmitNwbMapFieldDeserialize(
         out.append(fieldName.data(), fieldName.size());
         out.push_back('[');
         EmitNwbMapKeyExpr(out, keyName);
-        out.append("] = *__e; } else this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.push_back('[');
-        EmitNwbMapKeyExpr(out, keyName);
-        out.append("] = ");
-        EmitNwbValueConversionExpr(out, valName, "__v", symbols);
-        out.append("; } }\r\n");
+        out.append("] = *__e; } } }\r\n");
     }
-    else if(IsScalarOrStringLikeNwbElement(valName, symbols)){
+    else if(IsScalarOrStringLikeNwbElement(valName)){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());
@@ -472,7 +445,7 @@ void EmitNwbMapFieldDeserialize(
         out.push_back('[');
         EmitNwbMapKeyExpr(out, keyName);
         out.append("] = ");
-        EmitNwbValueConversionExpr(out, valName, "__v", symbols);
+        EmitNwbValueConversionExpr(out, valName, "__v");
         out.append("; }\r\n");
     }
     else if(IsDeserializableClass(symbols.findClass(valName))){

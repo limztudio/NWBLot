@@ -51,11 +51,9 @@ struct OpaqueUploadChainInputs{
 };
 
 struct OpaqueUploadChainResult{
-    Core::GpuTaskId materialUploadTask;
     Core::GpuTaskId csgUploadTask;
     b8 materialDrawBuffersUploaded = false;
     b8 csgFrameBuffersUploaded = false;
-    b8 hasOpaqueDrawItems = false;
     b8 hasCsgFrameGpuWork = false;
 };
 

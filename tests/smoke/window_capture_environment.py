@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 import platform
-from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure, write_status  # noqa: E402
-from window_capture_win32 import bind_windows_user32, create_windows_user32, WinRect, WinPoint, WindowsUserObjectFlags, require_windows_interactive_desktop, WindowsCapture  # noqa: E402
+from window_capture_outcome import SmokeSkip, SmokeFailure  # noqa: E402
+from window_capture_win32 import require_windows_interactive_desktop  # noqa: E402
 
 
 LIT_GPUDBG = "--gpudbg"

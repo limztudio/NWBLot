@@ -5,7 +5,7 @@
 #include "runtime_cache.h"
 
 #include <impl/assets_mesh/asset.h>
-#include <impl/assets_mesh/meshlet_ref_codec.h>
+#include <impl/assets_mesh/meshlet_ref_encode.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_asset.h>
 #include <impl/assets_mesh/meshlet_ref_validation.h>

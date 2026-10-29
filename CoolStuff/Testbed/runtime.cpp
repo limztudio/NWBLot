@@ -5,11 +5,11 @@
 #include "project.h"
 
 #include <impl/ecs_scene/module.h>
-#include <impl/ecs_mesh/module.h>
-#include <impl/ecs_mesh/skinning/module.h>
-#include <impl/ecs_model/module.h>
+#include <impl/ecs_mesh/system.h>
+#include <impl/ecs_mesh/skinning/system.h>
+#include <impl/ecs_model/system.h>
 #include <impl/ecs_render/module.h>
-#include <impl/ecs_ui/module.h>
+#include <impl/ecs_ui/layer_system.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -167,7 +167,7 @@ static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const 
 
 
 NotNullUniquePtr<NWB::Core::ECS::World> Project::CreateInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
-    auto world = NWB::CreateInitialProjectWorld(context);
+    auto world = CreateInitialProjectWorld(context);
     if(!world){
         NWB_LOGGER_FATAL(__hidden_testbed_runtime::s_InitWorldFailedText);
         throw RuntimeException(__hidden_testbed_runtime::s_InitWorldFailedNarrow.data());
@@ -425,7 +425,7 @@ void Project::destroyWorld(){
     if(!m_world.owner())
         return;
 
-    NWB::DestroyInitialProjectWorld(m_context, m_world.owner());
+    DestroyInitialProjectWorld(m_context, m_world.owner());
 }
 
 

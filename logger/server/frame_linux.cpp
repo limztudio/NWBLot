@@ -4,7 +4,7 @@
 
 #include "frame.h"
 
-#include <core/alloc/standalone_runtime.h>
+#include <core/alloc/module.h>
 
 #include <global/process.h>
 #include <global/thread.h>

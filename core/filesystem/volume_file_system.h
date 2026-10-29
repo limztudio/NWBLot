@@ -54,14 +54,8 @@ public:
     [[nodiscard]] virtual b8 mounted()const noexcept override;
     [[nodiscard]] virtual b8 writable()const noexcept override;
 
-    [[nodiscard]] AStringView volumeName()const noexcept;
-    [[nodiscard]] Path mountDirectory()const;
-
-    [[nodiscard]] u64 segmentSize()const noexcept;
-    [[nodiscard]] u64 metadataSize()const noexcept;
     [[nodiscard]] usize segmentCount()const noexcept;
     [[nodiscard]] virtual u64 fileCount()const noexcept override;
-    [[nodiscard]] Expected<u64> usedBytes()const noexcept;
     [[nodiscard]] Expected<u64> wastedBytes()const noexcept;
 
 
@@ -82,7 +76,6 @@ public:
     virtual b8 removeFile(const Name& virtualPath)override;
     virtual b8 fileExists(const Name& virtualPath)const noexcept override;
     [[nodiscard]] virtual Expected<u64> fileSize(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING)override;
-    virtual Vector<Name, VolumeArena> listFiles()const override;
     b8 compact(b8 shrinkSegments = true);
 
 
@@ -123,7 +116,6 @@ private:
     FileMap m_files;
     mutable Futex m_mutex;
 
-    VolumeUsage::Enum m_usage = VolumeUsage::RuntimeReadOnly;
     b8 m_mounted = false;
     b8 m_writable = false;
 };

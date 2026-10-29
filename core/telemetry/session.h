@@ -69,14 +69,6 @@ public:
 
     [[nodiscard]] EventView view()const noexcept{ return m_recorder.view(); }
 
-    [[nodiscard]] b8 recordFrameGraph(Alloc::ScratchArena& scratchArena, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges){
-        return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, m_streamId);
-    }
-
-    [[nodiscard]] b8 recordFrameGraph(Alloc::ScratchArena& scratchArena, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges, const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics){
-        return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, m_streamId);
-    }
-
     [[nodiscard]] b8 recordFrameGraph(
         Alloc::ScratchArena& scratchArena,
         const Span<const FrameGraphNodeDesc> nodes,

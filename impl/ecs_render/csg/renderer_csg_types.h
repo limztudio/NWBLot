@@ -8,7 +8,6 @@
 #include <impl/ecs_render/csg/types.adhd.h>
 #include <impl/ecs_render/components.adhd.h>
 #include <impl/assets/graphics/csg/constants.h>
-#include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_csg/frame_state.h>
 #include <impl/ecs_csg/shape_registry.h>
 

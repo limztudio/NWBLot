@@ -142,7 +142,6 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(Core::GpuTaskGraph& graph, Rend
         m_avboitSystem.taskGraphStage().m_clearTask = avboitClearTask;
     }
     result.clearTask = avboitClearTask;
-    result.clearFirstTask = inputs.clearTargets ? m_avboitSystem.taskGraphStage().m_clearFirstTask : Core::GpuTaskId{};
     return result;
 }
 

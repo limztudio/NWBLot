@@ -61,7 +61,6 @@ struct HardwareCausticsStageInputs{
 struct HardwareCausticsStageResult{
     Core::GpuTaskId hardwareCausticsTask;
     Core::GpuTaskId causticIrradianceClearTask;
-    Core::GpuTaskId causticAccumulatorNonTemporalClearTask;
     Core::GpuTaskId causticAccumulatorBootstrapClearTask;
     Core::GpuTaskId causticAccumulatorDecayTask;
     Core::GpuTaskId causticPhotonTask;
@@ -73,7 +72,6 @@ struct HardwareCausticsStageResult{
     Core::GpuTaskId causticResolveFourthWaveletTask;
     Core::GpuTaskId causticResolveFifthWaveletTask;
     Core::GpuTaskId causticResolveUpsampleTask;
-    b8 declared = false;
 };
 
 

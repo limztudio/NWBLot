@@ -51,12 +51,6 @@ inline void ToAsciiLowerInPlace(StringT& inOutText)noexcept(IsNothrowRangeFor<St
 }
 
 template<typename StringT>
-[[nodiscard]] inline StringT ToAsciiLowerCopy(StringT text)noexcept(noexcept(ToAsciiLowerInPlace(text)) && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>){
-    ToAsciiLowerInPlace(text);
-    return text;
-}
-
-template<typename StringT>
 [[nodiscard]] inline StringT UnquoteMatchingAsciiQuotes(StringT text)noexcept([]()consteval noexcept{
     using First = const Decay_T<decltype(DeclVal<StringT&>().front())>;
     using Last = const Decay_T<decltype(DeclVal<StringT&>().back())>;
@@ -216,23 +210,6 @@ inline void CanonicalizeTextInPlace(StringT& inOutText)noexcept(IsNothrowRangeFo
         ch = Canonicalize(ch);
 }
 
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> CanonicalizeText(ArenaT& arena, const BasicStringView<CharT> text){
-    if(text.empty())
-        return BasicString<CharT, ArenaT>(arena);
-
-    BasicString<CharT, ArenaT> output(text.data(), text.size(), arena);
-    CanonicalizeTextInPlace(output);
-    return output;
-}
-
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> CanonicalizeText(const BasicString<CharT, ArenaT>& text){
-    BasicString<CharT, ArenaT> output(text.data(), text.size(), text.get_allocator());
-    CanonicalizeTextInPlace(output);
-    return output;
-}
-
 template<typename CharT>
 [[nodiscard]] inline b8 HasEmbeddedNull(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(const CharT ch : text){
@@ -277,18 +254,6 @@ template<typename EnumT, typename ViewT = AStringView>
     for(const NamedEnumCase<EnumT>& item : cases){
         if(value == ViewT(item.text.data(), item.text.size()))
             return item.value;
-    }
-    return MakeUnexpected(Failure{});
-}
-
-template<typename EnumT, typename TextFunction, typename ViewT = AStringView>
-[[nodiscard]] inline Expected<EnumT> ParseNormalizedEnumText(const ViewT value, TextFunction textFunction, const Span<const EnumT> values)noexcept(
-    noexcept(static_cast<b8>(value == textFunction(values[DeclVal<usize&>()])))
-    && noexcept(Expected<EnumT>(values[DeclVal<usize&>()]))
-){
-    for(const EnumT& item : values){
-        if(value == textFunction(item))
-            return item;
     }
     return MakeUnexpected(Failure{});
 }

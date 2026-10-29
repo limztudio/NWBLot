@@ -24,16 +24,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GraphicsRuntime::addRenderPassToFront(IRenderPass& pass){
-    m_renderPasses.remove(MakeNotNull(&pass));
-    m_renderPasses.push_front(MakeNotNull(&pass));
-
-    pass.backBufferResizing();
-    pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
-    if(!pass.validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount))
-        NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: front render pass failed to validate resources after registration"));
-}
-
 void GraphicsRuntime::addRenderPassToBack(IRenderPass& pass){
     m_renderPasses.remove(MakeNotNull(&pass));
     m_renderPasses.push_back(MakeNotNull(&pass));

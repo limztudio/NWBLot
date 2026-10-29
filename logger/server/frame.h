@@ -32,7 +32,6 @@ namespace FrameDetail{
 inline constexpr usize s_FrameStoragePointerSlotCount = 2u;
 
 
-using FrameParam = FrameParamStorage<s_FrameStoragePointerSlotCount>;
 using FrameData = BasicFrameData<s_FrameStoragePointerSlotCount>;
 
 #if defined(NWB_PLATFORM_WINDOWS)

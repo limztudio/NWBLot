@@ -137,7 +137,6 @@ concept DeviceApi = requires(
     { device.createCommandList(commandListParams) }->SameAs<Expected<CommandListHandle>>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, submissionDesc) }->SameAs<Expected<QueueSubmissionReceipt>>;
     { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, submissionDesc) }->SameAs<Expected<QueueSubmissionReceipt>>;
-    device.queueWaitForCommandList(CommandQueue::Graphics, CommandQueue::Graphics, u64{});
     { device.getDeviceGeneration() }->SameAs<u16>;
     { device.getPhysicalQueueIndex(CommandQueue::Graphics) }->SameAs<u16>;
     { device.getPrimaryPhysicalQueue(CommandQueue::Graphics) }->SameAs<GpuPhysicalQueueId>;

@@ -7,7 +7,6 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/raytrace/caustics_resolve_chain.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_graph.h>

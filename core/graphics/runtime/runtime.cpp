@@ -25,31 +25,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_graphics_runtime{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
-    if(src.enableDebugRuntime && !CanEnableDebugRuntime())
-        return false;
-
-    static_cast<InstanceParameters&>(dst) = src;
-    return true;
-}
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler, GpuTaskScheduler& gpuTasks, Perf::TimingSink& gpuTiming)
     : GraphicsRuntime(allocator, cpuScheduler, gpuTasks, gpuTiming, nullptr)
 {}
@@ -139,50 +114,6 @@ b8 GraphicsRuntime::init(const Common::FrameData& data){
     return true;
 }
 
-b8 GraphicsRuntime::createHeadlessDevice(){
-    if(!registerCpuTimingScopes())
-        return false;
-
-    m_lastPresentationReceipt.reset();
-    m_acquiredPresentationFrame = {};
-    m_deviceCreationParams.headlessDevice = true;
-    m_hasPresentedFrame = false;
-
-    if(!m_instanceCreated){
-        if(!m_backend->createInstance())
-            return false;
-        m_instanceCreated = true;
-    }
-
-    if(!m_backend->createDevice())
-        return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: created device '{}'"), m_backend->getRendererString());
-    if(!m_gpuTasks.attachDevice(getDevice())){
-        requestDeviceRecreation();
-        return false;
-    }
-
-    m_deviceRecreationRequested = false;
-
-    m_previousFrameTimestamp = TimerNow();
-
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: headless device created"));
-    return validateRenderPassResources();
-}
-
-b8 GraphicsRuntime::createInstance(const InstanceParameters& params){
-    if(!__hidden_graphics_runtime::CopyInstanceParameters(m_deviceCreationParams, params)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: debug runtime is only available in non-final builds"));
-        return false;
-    }
-
-    if(!m_backend->createInstance())
-        return false;
-
-    m_instanceCreated = true;
-    return true;
-}
-
 void GraphicsRuntime::requestDeviceRecreation()const{
     if(m_deviceRecreationRequested)
         return;
@@ -210,12 +141,11 @@ b8 GraphicsRuntime::updateWindowState(u32 width, u32 height, b8 windowVisible, b
         return true;
     }
 
-    if(static_cast<i32>(m_swapChainState.backBufferWidth) != static_cast<i32>(width) || static_cast<i32>(m_swapChainState.backBufferHeight) != static_cast<i32>(height) || m_swapChainState.vsyncEnabled != m_requestedVSync){
-        if(!resizeBackBuffer(width, height, m_requestedVSync))
+    if(static_cast<i32>(m_swapChainState.backBufferWidth) != static_cast<i32>(width) || static_cast<i32>(m_swapChainState.backBufferHeight) != static_cast<i32>(height)){
+        if(!resizeBackBuffer(width, height))
             return false;
     }
 
-    m_swapChainState.vsyncEnabled = m_requestedVSync;
     return true;
 }
 
@@ -329,10 +259,7 @@ void GraphicsRuntime::notifyPointerScaleChanged()const{
     if(!m_pointerScaleChangedCallback)
         return;
 
-    if(m_deviceCreationParams.supportExplicitDisplayScaling)
-        m_pointerScaleChangedCallback(m_pointerScaleChangedUserData, 1.f, 1.f);
-    else
-        m_pointerScaleChangedCallback(m_pointerScaleChangedUserData, m_dpiScaleFactorX, m_dpiScaleFactorY);
+    m_pointerScaleChangedCallback(m_pointerScaleChangedUserData, m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
 
 

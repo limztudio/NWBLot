@@ -6,7 +6,6 @@
 #include "arena_names.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"
-#include "meshlet_ref_codec.h"
 #include "meshlet_payload_packing.h"
 #include "meshlet_ref_validation.h"
 #include "runtime_validation.h"

@@ -50,10 +50,6 @@ private:
     NWB::Impl::Ui::EditBoxState m_beforeEdit;
     NWB::Impl::Ui::EditBoxState m_afterEdit;
     NWB::Impl::Ui::EditBoxState m_childEdit;
-    u32 m_beforeClicks = 0u;
-    u32 m_afterClicks = 0u;
-    u32 m_childClicks = 0u;
-    u64 m_command = 0u;
 };
 
 

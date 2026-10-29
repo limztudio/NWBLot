@@ -114,8 +114,6 @@ public:
     [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateCommandBuffer(u64 recordingWorkerDomain = 0u, u32 recordingWorkerIndex = 0u);
     [[nodiscard]] GpuCommandArenaStatistics commandArenaStatistics()const noexcept;
     [[nodiscard]] GpuCommandArenaWorkerStatistics commandArenaWorkerStatistics(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
-    void addWaitSemaphore(VkSemaphore semaphore, u64 value);
-    void addSignalSemaphore(VkSemaphore semaphore, u64 value);
     [[nodiscard]] Expected<SubmissionReceipt, SubmissionFailure> submit(
         CommandList* const* ppCmd,
         usize numCmd,
@@ -148,7 +146,6 @@ private:
     [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateDirectCommandBuffer();
     [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     void destroyWorkerCommandArenas()noexcept;
-    void clearPendingSemaphores()noexcept;
     [[nodiscard]] CommandBufferList::iterator recycleCommandBuffer(CommandBufferList& source, CommandBufferList::iterator commandBuffer);
     [[nodiscard]] b8 coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, b8 prerequisiteObservedComplete, const SubmissionWait* localWaits, usize localWaitCount)const noexcept;
 
@@ -167,10 +164,6 @@ private:
     // Always acquire before m_nativeQueue.hostMutex when both are required.
     Futex m_mutex;
     Futex m_workerCommandArenasMutex;
-    Vector<VkSemaphore, Alloc::GlobalArena> m_waitSemaphores;
-    Vector<u64, Alloc::GlobalArena> m_waitSemaphoreValues;
-    Vector<VkSemaphore, Alloc::GlobalArena> m_signalSemaphores;
-    Vector<u64, Alloc::GlobalArena> m_signalSemaphoreValues;
     // Successful ALL_COMMANDS waits cover later commands on this exact queue.
     // Zero-valued entries only reserve owned tracking-semaphore identity before the native call; coverage advances solely on acceptance.
     Vector<SubmissionWait, Alloc::GlobalArena> m_acceptedTimelineWaits;

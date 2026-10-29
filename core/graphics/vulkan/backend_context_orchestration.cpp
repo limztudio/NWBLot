@@ -239,9 +239,7 @@ b8 BackendContext::createDevice(){
     deviceDesc.rayTracingSpheresSupported = m_rayTracingSpheresSupported;
     deviceDesc.rayTracingLinearSweptSpheresSupported = m_rayTracingLinearSweptSpheresSupported;
     deviceDesc.gpuCrashDiagnosticsEnabled = m_deviceParams.enableGpuCrashDiagnostics;
-    deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.bindlessHeapAbi = m_deviceParams.bindlessHeapAbi;
-    deviceDesc.vulkanLibraryName = m_deviceParams.backendLibraryName;
     deviceDesc.pipelineCacheDirectory = m_deviceParams.pipelineCacheDirectory;
     deviceDesc.filesystemFactory = m_deviceParams.filesystemFactory;
 
@@ -580,7 +578,6 @@ b8 BackendContext::createSwapChainResources(Alloc::ScratchArena& scratchArena){
 
     m_swapChainIndex = Limit<u32>::s_Max;
     m_acquireSyncSlotIndex = 0u;
-    m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
     {
         ScopedLock presentationLock(m_framePresentationMutex);
         resetFramePresentationSignal();

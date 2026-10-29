@@ -24,10 +24,6 @@ nwb_target_link_libraries_whole_archive(nwb_dependency_computer
     nwb_assets_graphics_volume_entry
     nwb_assets_ui_skin_volume_entry
 )
-get_property(_nwb_registered_pipeline_volume_entries GLOBAL PROPERTY NWB_PIPELINE_VOLUME_ENTRY_TARGETS)
-if(_nwb_registered_pipeline_volume_entries)
-    nwb_target_link_libraries_whole_archive(nwb_dependency_computer ${_nwb_registered_pipeline_volume_entries})
-endif()
 target_link_libraries(nwb_dependency_computer PRIVATE
     nwb_pipeline_command_line
     nwb_assets_cook

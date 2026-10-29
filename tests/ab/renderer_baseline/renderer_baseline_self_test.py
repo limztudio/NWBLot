@@ -5,12 +5,13 @@ from __future__ import annotations
 
 
 import struct
-import sys
 import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+
+from harness_test_support import make_abnormal_exit_terminator
 
 
 LIT_F = "f"
@@ -197,7 +198,7 @@ def run_self_test(harness) -> int:
         orchestration_args = SimpleNamespace(executable=executable, runtime_dir=root, no_logserver=False, logserver_executable=None, startup_timeout=1.0, gpu_validation=False, settle_seconds=0.0, profile=LIT_OPAQUE_TEXTURE, reject_log=[],)
         events = []
 
-        terminate = harness.make_abnormal_exit_terminator(app, events)
+        terminate = make_abnormal_exit_terminator(app, events)
 
         def shutdown(process, directory, received_baseline, pattern, shutdown_name="logserver"):
             assert process is logserver

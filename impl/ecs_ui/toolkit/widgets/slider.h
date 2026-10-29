@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
 #include "slider_layout.h"
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
 

@@ -25,10 +25,6 @@ class InputDispatcher;
 interface IClipboardService;
 interface ITextInputService;
 
-namespace ECS{
-    class World;
-};
-
 class CpuTaskScheduler;
 class GpuTaskScheduler;
 class CpuTaskScope;
@@ -139,9 +135,6 @@ ProjectFrameClientSize QueryProjectFrameClientSize();
 TStringView QueryProjectWindowTitle()noexcept;
 b8 ConfigureProjectRuntime(ProjectStartupContext& context)noexcept;
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
-
-Expected<UniquePtr<Core::ECS::World>, TStringView> CreateInitialProjectWorld(ProjectRuntimeContext& context);
-void DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

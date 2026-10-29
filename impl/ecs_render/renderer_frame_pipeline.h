@@ -25,7 +25,6 @@
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/task_graph_stage.h>
-#include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_graphics/csg/subsystem.adhd.h>
 #include <impl/assets_graphics/renderer/subsystem.adhd.h>
 #include <impl/assets_graphics/transparent/subsystem.adhd.h>
@@ -74,7 +73,6 @@ NWB_IMPL_BEGIN
 
 
 class ObjectGeometryCacheGraph;
-class Mesh;
 struct DeferredGraphResourceImportResult;
 struct GraphClearTimingRecordState;
 struct RayTracingSceneGraphReads;
@@ -215,8 +213,6 @@ public:
         resetLaggedLightingHistoryReadTracking();
     }
 
-    [[nodiscard]] b8 frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
-    [[nodiscard]] b8 setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
     // Telemetry for current deferred graph artifacts. Valid until the next graph/recording/transaction reset.
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
 
@@ -491,8 +487,6 @@ private:
     Core::GpuTaskId m_deferredCausticIrradianceClearTask;
     // The temporal bootstrap is conditional; when present it stays with the selected caustic producer, which commits only on acceptance.
     Core::GpuTaskId m_deferredCausticAccumulatorBootstrapClearTask;
-    // Non-temporal caustics reset the accumulator each frame via the producer packet; the CPU reset commits after that packet accepts.
-    Core::GpuTaskId m_deferredCausticAccumulatorNonTemporalClearTask;
     // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
     Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
     // Photon, downsample, resolve prepare, wavelets, upsample, and timing close stay in one packet with compiler-owned handoffs.

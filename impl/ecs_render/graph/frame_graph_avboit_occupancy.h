@@ -32,7 +32,6 @@ NWB_IMPL_BEGIN
 
 class RendererMaterialSystem;
 class RendererCsgSystem;
-class RendererAvboitSystem;
 class AvboitGeneratedGeometryReuse;
 
 
@@ -69,7 +68,6 @@ struct FrameGraphAvboitOccupancyUploadResult{
     b8 producesReusableGeometry = false;
     b8 csgComputeEmulationPlanCaptured = false;
     b8 sharedComputeEmulationPlanCaptured = false;
-    b8 declared = false;
 };
 
 

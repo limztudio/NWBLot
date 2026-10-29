@@ -206,9 +206,9 @@ TEST(AdhdCompiler, SupportsGlobalConstAndContainerIndexInferenceLambdaSyncAndOrd
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
 
-    EXPECT_NE(hdrView.find("this->tiers[__i] = static_cast<QualityLevel::Enum>(__f->asList()[__i].asInteger());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("if(const auto __e = QualityLevel::parseNamedEnum(__f->asList()[__i].asString())) this->tiers[__i] = *__e;"), MStringView::npos);
     EXPECT_NE(hdrView.find("this->toggles.push_back((__f->asList()[__i].asInteger() != 0));"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->overrideQuality = static_cast<QualityLevel::Enum>(__f->asInteger());"), MStringView::npos);
+    EXPECT_NE(hdrView.find("if(const auto __e = QualityLevel::parseNamedEnum(__f->asString())) this->overrideQuality = *__e;"), MStringView::npos);
     EXPECT_NE(hdrView.find("this->fallbackTex = {*__name};"), MStringView::npos);
 
     EXPECT_NE(cppView.find("if(index == 0u) return \"origin\";"), MStringView::npos);

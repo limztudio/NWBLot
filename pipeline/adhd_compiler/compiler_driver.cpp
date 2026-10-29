@@ -42,8 +42,7 @@ public:
         using namespace NWB::Core::Metascript;
 
         const b8 hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
-        const b8 hasNwbExt = includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
-        if(!hasAdhdExt && !hasNwbExt)
+        if(!hasAdhdExt)
             return false;
         const MString relPath(includePath.data(), includePath.size(), arena);
 

@@ -36,12 +36,6 @@ enum<u8> InputCommand{
     enum ContextMenu,
 }
 
-enum<u8> InputPhase{
-    enum Press,
-    enum Release,
-    enum Repeat,
-}
-
 // Adapters assign device and control identities; control zero is invalid.
 class InputSource{
     public u64 device = 0u;

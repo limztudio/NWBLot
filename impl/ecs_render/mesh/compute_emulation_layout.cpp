@@ -4,6 +4,9 @@
 
 #include "compute_emulation_layout.h"
 
+#include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/assets_mesh/asset.h>
+
 #include <global/algorithm.h>
 
 

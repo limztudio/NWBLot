@@ -7,7 +7,6 @@
 #include <logger/client/module.h>
 
 #include <core/common/application_entry.h>
-#include <core/common/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,7 +18,7 @@ static int RunTool(const int argc, char** argv){
         NWB_CERR << "[" NWB_PIPELINE_TOOL_NAME "] logger.init() failed\n";
         return s_PipelineExitFatal;
     }
-    NWB::Core::Common::LoggerRegistrationGuard guard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
+    NWB::Core::Common::LoggerRegistrationGuard guard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
     return RunPipelineTool(argc, argv);
 }
 

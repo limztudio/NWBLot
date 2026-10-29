@@ -31,14 +31,12 @@ class RendererRayTracingSystem;
 struct FrameGraphTraceGeometryResult{
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> traceGeometry;
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceGeometry;
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceAttributes;
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareTraceGeometry;
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildState;
     Core::GpuGraphResourceSetId shadowTraceGeometrySet;
     Core::GpuGraphResourceSetId softwareTraceGeometrySet;
     Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
     Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
-    Core::GpuGraphResourceSetId hardwareTraceAttributeSet;
     b8 softwareTraceResourcesPrepared = false;
 
 
@@ -46,7 +44,6 @@ public:
     explicit FrameGraphTraceGeometryResult(Core::Alloc::ScratchArena& scratchArena)noexcept
         : traceGeometry(scratchArena)
         , hardwareTraceGeometry(scratchArena)
-        , hardwareTraceAttributes(scratchArena)
         , softwareTraceGeometry(scratchArena)
         , softwareBvhBuildState(scratchArena)
     {}

@@ -15,7 +15,8 @@
 #include <pipeline/asset_gatherer/gather.h>
 
 #include <impl/assets_mesh/asset.h>
-#include <impl/assets_mesh/meshlet_ref_codec.h>
+#include <impl/assets_mesh/meshlet_ref_decode.h>
+#include <impl/assets_mesh/meshlet_ref_encode.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_graphics/gather.h>

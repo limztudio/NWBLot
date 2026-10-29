@@ -84,8 +84,6 @@ void SurfelCausticsMergeValidator::validate(
     outResult.causticResolveFifthWaveletMergedIntoCausticsPacket = pipeline.m_deferredCausticResolveFifthWaveletTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticResolveFifthWaveletTask, causticsTask);
     outResult.causticResolveUpsampleMergedIntoCausticsPacket = pipeline.m_deferredCausticResolveUpsampleTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticResolveUpsampleTask, causticsTask);
     outResult.causticIrradianceClearMergedIntoCausticsPacket = pipeline.m_deferredCausticIrradianceClearTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticIrradianceClearTask, causticsTask);
-    // CPU reset commits only after the shared packet accepts.
-    outResult.causticAccumulatorNonTemporalClearMergedIntoCausticsPacket = !pipeline.m_deferredCausticAccumulatorNonTemporalClearTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_deferredCausticAccumulatorNonTemporalClearTask, causticsTask);
     // Keep the bootstrap clear in the producer packet; no hidden writers.
     outResult.causticAccumulatorBootstrapClearMergedIntoCausticsPacket = !pipeline.m_deferredCausticAccumulatorBootstrapClearTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_deferredCausticAccumulatorBootstrapClearTask, causticsTask);
     // Keep decay in the packet; a split would break the UAV dependency.

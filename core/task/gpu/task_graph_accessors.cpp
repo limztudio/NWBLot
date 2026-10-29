@@ -129,9 +129,7 @@ GpuTaskGraphPipelineView GpuTaskGraph::pipelineAt(const usize index)const noexce
         .identity = pipeline.identity,
         .markerLabel = markerLabel(pipeline.markerLabelOffset, pipeline.markerLabelSize),
         .hasBackendPipeline = pipeline.graphicsPipeline != nullptr
-            || pipeline.computePipeline != nullptr
-            || pipeline.meshletPipeline != nullptr
-            || pipeline.rayTracingPipeline != nullptr,
+            || pipeline.computePipeline != nullptr,
         .type = pipeline.type,
     };
 }
@@ -194,20 +192,6 @@ ComputePipeline* GpuTaskGraph::computePipelineFor(const GpuGraphPipelineId& pipe
         return nullptr;
     const GpuGraphPipelineNode& node = m_pipelines[pipeline.index];
     return node.type == GpuGraphPipelineType::Compute ? node.computePipeline.get() : nullptr;
-}
-
-MeshletPipeline* GpuTaskGraph::meshletPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept{
-    if(!validPipeline(pipeline))
-        return nullptr;
-    const GpuGraphPipelineNode& node = m_pipelines[pipeline.index];
-    return node.type == GpuGraphPipelineType::Meshlet ? node.meshletPipeline.get() : nullptr;
-}
-
-RayTracingPipeline* GpuTaskGraph::rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept{
-    if(!validPipeline(pipeline))
-        return nullptr;
-    const GpuGraphPipelineNode& node = m_pipelines[pipeline.index];
-    return node.type == GpuGraphPipelineType::RayTracing ? node.rayTracingPipeline.get() : nullptr;
 }
 
 

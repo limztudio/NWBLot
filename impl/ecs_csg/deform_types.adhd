@@ -16,7 +16,6 @@ const f32 s_OneWeight = 1.0f;
 const f32 s_AffineW = 1.0f;
 const f32 s_ShapeWMask = 0.0f;
 const f32 s_NegativeOne = -1.0f;
-const f32x4 s_FallbackTangent(1.0f, 0.0f, 0.0f, 1.0f);
 const u32 s_DeformCapacityShift = 20u;
 const usize s_MaxDeformVertices = 1u << s_DeformCapacityShift;
 const usize s_MaxDeformTriangles = 1u << s_DeformCapacityShift;

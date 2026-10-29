@@ -9,8 +9,8 @@
 
 #include <impl/assets_model/asset.h>
 #include <impl/assets_skeleton/asset.h>
-#include <impl/ecs_mesh/skinning/module.h>
-#include <impl/ecs_model/module.h>
+#include <impl/ecs_mesh/skinning/system.h>
+#include <impl/ecs_model/system.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 

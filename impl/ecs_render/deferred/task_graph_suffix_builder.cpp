@@ -38,9 +38,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
 
 [[nodiscard]] Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     const DeferredGraphSuffixInputs& inputs,
-    const ReflectionCompositeInputs& compositeInputs,
     const Core::GpuTaskId& shadowVisibilityTask,
-    DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& compositeTimingTicket,
     Core::GpuTimingSubmissionTicket& presentTimingTicket,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
@@ -106,7 +104,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         desc.setInitialState(Core::ResourceStates::Unknown);
         return m_graph.importTexture(texture, desc);
     };
-    const auto compositeColorResult = importFirstWriteTexture(targets.compositeColor, Name("render.deferred_composite.composite_color"), "Composite Color");
+    const auto compositeColorResult = importFirstWriteTexture(inputs.targets.compositeColor, Name("render.deferred_composite.composite_color"), "Composite Color");
     const Core::GpuGraphResourceId compositeBindlessSlots = inputs.currentBindlessSlots;
     if(!compositeColorResult || !compositeBindlessSlots.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-composite graph resources"));
@@ -143,7 +141,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
     ;
     // Composite may share its compatible serial predecessor while retaining all graph-owned joins.
-    const auto compositeTaskResult = m_deferredSystem.declareDeferredCompositeTask(m_graph, compositeDesc, compositeInputs, targets, compositeTimingTicket);
+    const auto compositeTaskResult = m_deferredSystem.declareDeferredCompositeTask(m_graph, compositeDesc, inputs.reflectionCompositeInputs, inputs.targets, compositeTimingTicket);
     if(!compositeTaskResult){
         result.compositeTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-composite graph task"));
@@ -218,7 +216,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         DeferredPresentGraphTask::Payload{
             .deferredSystem = m_deferredSystem,
             .graphics = m_graphics,
-            .targets = targets,
+            .targets = inputs.targets,
             .presentationFrame = presentationFrame,
             .backBuffer = backbuffer,
             .outputLayer = outputLayer,
@@ -266,9 +264,6 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         return MakeUnexpected(Failure{});
     }
 
-    result.compositeColor = compositeColor;
-    result.compositeBindlessSlots = compositeBindlessSlots;
-    result.backbuffer = backbuffer;
     return result;
 }
 

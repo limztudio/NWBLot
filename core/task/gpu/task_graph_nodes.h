@@ -195,8 +195,6 @@ struct GpuGraphPipelineNode{
     GpuGraphPipelineType::Enum type = GpuGraphPipelineType::Count;
     GraphicsPipelineHandle graphicsPipeline;
     ComputePipelineHandle computePipeline;
-    MeshletPipelineHandle meshletPipeline;
-    RayTracingPipelineHandle rayTracingPipeline;
 };
 
 struct PipelinePointerKey{
@@ -219,8 +217,6 @@ struct PipelineImportMatch{
 struct PipelineBinding{
     const GraphicsPipelineHandle* graphicsPipeline = nullptr;
     const ComputePipelineHandle* computePipeline = nullptr;
-    const MeshletPipelineHandle* meshletPipeline = nullptr;
-    const RayTracingPipelineHandle* rayTracingPipeline = nullptr;
     u16 deviceGeneration = 0u;
 };
 

@@ -22,12 +22,6 @@ GraphicsPipelineDesc& GraphicsPipelineDesc::setInputLayout(const InputLayoutHand
 
 GraphicsPipelineDesc& GraphicsPipelineDesc::setVertexShader(const ShaderHandle& value)noexcept{ vertexShader = value; return *this; }
 
-GraphicsPipelineDesc& GraphicsPipelineDesc::setHullShader(const ShaderHandle& value)noexcept{ hullShader = value; return *this; }
-
-GraphicsPipelineDesc& GraphicsPipelineDesc::setDomainShader(const ShaderHandle& value)noexcept{ domainShader = value; return *this; }
-
-GraphicsPipelineDesc& GraphicsPipelineDesc::setGeometryShader(const ShaderHandle& value)noexcept{ geometryShader = value; return *this; }
-
 GraphicsPipelineDesc& GraphicsPipelineDesc::setPixelShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
 
 GraphicsPipelineDesc& GraphicsPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
@@ -47,8 +41,6 @@ ComputePipelineDesc& ComputePipelineDesc::addBindingLayout(const BindingLayoutHa
 
 
 MeshletPipelineDesc::~MeshletPipelineDesc()noexcept = default;
-
-MeshletPipelineDesc& MeshletPipelineDesc::setAmplificationShader(const ShaderHandle& value)noexcept{ amplificationShader = value; return *this; }
 
 MeshletPipelineDesc& MeshletPipelineDesc::setMeshShader(const ShaderHandle& value)noexcept{ meshShader = value; return *this; }
 
@@ -73,10 +65,6 @@ RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setBindingLayout(con
 RayTracingPipelineHitGroupDesc::~RayTracingPipelineHitGroupDesc()noexcept = default;
 
 RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setClosestHitShader(const ShaderHandle& value)noexcept{ closestHitShader = value; return *this; }
-
-RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setAnyHitShader(const ShaderHandle& value)noexcept{ anyHitShader = value; return *this; }
-
-RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setIntersectionShader(const ShaderHandle& value)noexcept{ intersectionShader = value; return *this; }
 
 RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setBindingLayout(const BindingLayoutHandle& value)noexcept{ bindingLayout = value; return *this; }
 

@@ -40,8 +40,6 @@ struct OptionPresence{
     b8 local = false;
     b8 ignoreColors = false;
     b8 flipWinding = false;
-    b8 separateAssets = false;
-    b8 refreshNwb = false;
 };
 
 inline constexpr int s_FbxToNwbExitSuccess = 0;
@@ -399,8 +397,8 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, b8& prompte
     CLI::Option& localOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbLocalFlag.data(), local, "Do not bake node transforms into mesh");
     CLI::Option& ignoreColorsOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbIgnoreColorsFlag.data(), ignoreColors, "Use the default color instead of FBX vertex colors");
     CLI::Option& flipWindingOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbFlipWindingFlag.data(), options.flipWinding, "Swap the second and third index of every triangle");
-    CLI::Option& separateAssetsOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbSeparateAssetsFlag.data(), options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
-    CLI::Option& refreshNwbOption = *app.add_flag(__hidden_fbx_command_line::s_FbxToNwbRefreshNwbFlag.data(), options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
+    app.add_flag(__hidden_fbx_command_line::s_FbxToNwbSeparateAssetsFlag.data(), options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
+    app.add_flag(__hidden_fbx_command_line::s_FbxToNwbRefreshNwbFlag.data(), options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
     app.add_flag(__hidden_fbx_command_line::s_FbxToNwbForceFlag.data(), options.forceOverwrite, "Overwrite an existing output file");
     app.add_flag(__hidden_fbx_command_line::s_FbxToNwbYesFlag.data(), options.acceptDefaults, "Use defaults for any import options that were not supplied");
     app.add_flag(__hidden_fbx_command_line::s_FbxToNwbListMeshesFlag.data(), options.listMeshes, "List importable mesh instances and exit");
@@ -430,8 +428,6 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, b8& prompte
         presence.local = localOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
         presence.ignoreColors = ignoreColorsOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
         presence.flipWinding = flipWindingOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
-        presence.separateAssets = separateAssetsOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
-        presence.refreshNwb = refreshNwbOption.count() > __hidden_fbx_command_line::s_CliOptionPresentCount;
 
         if(!__hidden_fbx_command_line::ConfigurePromptsBeforeLoad(presence, scratchArena, options, prompted))
             return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbInputOption, "Input FBX or NWB path is required.", scratchArena);

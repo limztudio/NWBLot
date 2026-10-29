@@ -8,7 +8,6 @@ six or more can additionally use the shared paired bootstrap interval helper.
 import argparse
 from dataclasses import dataclass, replace
 import itertools
-import json
 import math
 from pathlib import Path
 import re

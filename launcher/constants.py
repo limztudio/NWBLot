@@ -6,10 +6,10 @@ from pathlib import Path as _Path
 
 
 
-ARCH_X64_LITERAL = "x64"
-ARCH_ARM64_LITERAL = "arm64"
+ARCH_X64 = "x64"
+ARCH_ARM64 = "arm64"
 CONFIGURATIONS = ("dbg", "opt", "fin")
-SUPPORTED_ARCHITECTURES = (ARCH_X64_LITERAL, ARCH_ARM64_LITERAL)
+SUPPORTED_ARCHITECTURES = (ARCH_X64, ARCH_ARM64)
 WINDOWS_IMAGE_FILE_MACHINE_AMD64 = 0x8664
 WINDOWS_IMAGE_FILE_MACHINE_ARM64 = 0xAA64
 WINDOWS_NATIVE_MACHINE_NAMES = { WINDOWS_IMAGE_FILE_MACHINE_AMD64: "AMD64", WINDOWS_IMAGE_FILE_MACHINE_ARM64: "ARM64", }
@@ -41,8 +41,6 @@ PRESET_NAME_DOMAIN_FORMAT = "{platform_name}-{toolchain}-{domain}-{arch}"
 PRESET_PREFIX_FORMAT = "{platform_name}-{toolchain}-"
 FILE_API_OBJECTS_KEY = "objects"
 PROFILE_REQUIRED_DEFINES = { "NWB_BUILD_LOGSERVER": "ON", }
-ARCH_X64 = ARCH_X64_LITERAL
-ARCH_ARM64 = ARCH_ARM64_LITERAL
 ARCH_AMD64_ALIAS = "amd64"
 ARCH_X86_64_ALIAS = "x86_64"
 ARCH_X86_64_DASH_ALIAS = "x86-64"
@@ -234,7 +232,6 @@ MSG_BUILD_TARGETS_HELP = "One or more executable, library, or aggregate targets.
 MSG_BUILD_APPLICATION_ARGS = "build-only commands do not accept application arguments after --"
 MSG_BUILD_ONLY_SKIP_BUILD = "--build-only cannot be combined with --skip-build"
 CONFIGURE_CHOICES = (CONFIGURE_AUTO, CONFIGURE_ALWAYS, CONFIGURE_NEVER)
-MAIN_ENTRY = "__main__"
 HELP_REPO_ROOT = "Repository root. Defaults to the root launcher directory."
 HELP_PLATFORM = "Output platform directory, such as windows/linux/darwin."
 HELP_ARCH = "Target architecture. Defaults to the native architecture on Windows and x64 elsewhere."

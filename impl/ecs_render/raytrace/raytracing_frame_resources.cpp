@@ -134,7 +134,6 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
         .sceneBvhNodeBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneBvhNodeBuffer,
         .sceneInstanceBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneInstanceBuffer,
         .sceneTlas = state.m_tlas,
-        .causticTemporalDecay = state.m_causticTemporalDecay,
         .causticAccumulatorInitialized = state.m_causticAccumulatorInitialized,
         .surfelUsesHardwareTrace = state.m_surfelUseHwTrace,
         .surfelSplitGraphPipelinesReady =

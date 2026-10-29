@@ -306,7 +306,6 @@ private:
     Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
     u32 m_swapChainIndex = Limit<u32>::s_Max;
     u32 m_acquireSyncSlotIndex = 0u;
-    u32 m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
     u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
     u32 m_presentNativeQueueIndex = Limit<u32>::s_Max;

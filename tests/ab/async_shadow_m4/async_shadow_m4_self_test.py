@@ -6,11 +6,12 @@ from __future__ import annotations
 
 import math
 import struct
-import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+
+from harness_test_support import make_abnormal_exit_terminator
 
 
 LIT_SELF_TEST_TIMEOUT_SECONDS = 1.0
@@ -295,7 +296,7 @@ def run_self_test(harness) -> int:
         orchestration_lane = harness.LaneStatus(False, False, harness.PhysicalQueueId(0, 17), harness.PhysicalQueueId(1, 17), True, True, False)
         events = []
 
-        terminate = harness.make_abnormal_exit_terminator(app, events)
+        terminate = make_abnormal_exit_terminator(app, events)
 
         def shutdown(process, log_directory, received_baseline, pattern, shutdown_name="logserver"):
             assert process is logserver

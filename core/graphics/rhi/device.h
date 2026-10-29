@@ -110,10 +110,6 @@ struct QueueSubmissionReceipt{
     usize timelineWaitCount = 0u;
 };
 
-struct VariableRateShadingFeatureInfo{
-    u32 shadingRateImageTileSize;
-};
-
 struct WaveLaneCountRange{
     u32 minWaveLaneCount;
     u32 maxWaveLaneCount;
@@ -293,30 +289,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct InstanceParameters{
-    GraphicsString backendLibraryName;
-    GraphicsVector<GraphicsString> requiredBackendInstanceExtensions;
-    GraphicsVector<GraphicsString> requiredBackendLayers;
-    GraphicsVector<GraphicsString> optionalBackendInstanceExtensions;
-    GraphicsVector<GraphicsString> optionalBackendLayers;
-    b8 enableDebugRuntime = false;
-    b8 enableWarningsAsErrors = false;
-    b8 headlessDevice = false;
-    b8 enableGpuCrashDiagnostics = true;
-    b8 logBufferLifetime = false;
-    b8 enablePerMonitorDPI = false;
-
-
-public:
-    explicit InstanceParameters(GraphicsArena& arena)noexcept
-        : backendLibraryName(arena)
-        , requiredBackendInstanceExtensions(arena)
-        , requiredBackendLayers(arena)
-        , optionalBackendInstanceExtensions(arena)
-        , optionalBackendLayers(arena)
-    {}
-};
-
 // Windowed swap-chain encoding. HDR10 is 10-bit Rec.2020/PQ; scene color stays linear RGBA16F until present.
 namespace SwapChainOutputMode{
     static constexpr u8 s_SwapChainOutputModeSDRBase = 0;
@@ -326,22 +298,21 @@ namespace SwapChainOutputMode{
     };
 };
 
-struct DeviceCreationParameters : public InstanceParameters{
-    i32 windowPosX = s_WindowPositionAuto;
-    i32 windowPosY = s_WindowPositionAuto;
-    u32 refreshRate = 0;
+struct DeviceCreationParameters{
+    GraphicsVector<GraphicsString> requiredBackendInstanceExtensions;
+    GraphicsVector<GraphicsString> requiredBackendLayers;
+    GraphicsVector<GraphicsString> optionalBackendInstanceExtensions;
+    GraphicsVector<GraphicsString> optionalBackendLayers;
     u32 swapChainBufferCount = s_SwapChainBufferCount;
     u32 swapChainSampleCount = 1;
-    u32 swapChainSampleQuality = 0;
     u32 maxFramesInFlight = s_MaxFramesInFlight;
     i32 adapterIndex = -1;
     Format::Enum swapChainFormat = Format::RGBA8_UNORM_SRGB;
     // Low-level devices retain their conservative default; GraphicsRuntime selects Automatic unless overridden.
     HardwareRayTracingPolicy::Enum hardwareRayTracingPolicy = HardwareRayTracingPolicy::Disabled;
-    b8 startMaximized = false;
-    b8 startFullscreen = false;
-    b8 startBorderless = false;
-    b8 allowModeSwitch = false;
+    b8 enableDebugRuntime = false;
+    b8 headlessDevice = false;
+    b8 enableGpuCrashDiagnostics = true;
     // Without HDR10 on this surface, keep the requested SDR format instead of failing creation.
     b8 enableHDR10Output = false;
     // Presentation-image readback. Unsupported surfaces keep a presentable swap chain with swapChainReadbackAvailable=false.
@@ -362,8 +333,6 @@ struct DeviceCreationParameters : public InstanceParameters{
     b8 enableSameClassMultiQueue = false;
     // Auxiliary same-class transport from another compatible family. Tasks opt in before the compiler routes across it.
     b8 enableCrossFamilySameClassQueueRouting = false;
-    b8 supportExplicitDisplayScaling = false;
-    b8 resizeWindowWithDisplayScale = false;
 
     GraphicsVector<GraphicsString> requiredBackendDeviceExtensions;
     GraphicsVector<GraphicsString> optionalBackendDeviceExtensions;
@@ -377,7 +346,10 @@ struct DeviceCreationParameters : public InstanceParameters{
 
 public:
     explicit DeviceCreationParameters(GraphicsArena& arena)noexcept
-        : InstanceParameters(arena)
+        : requiredBackendInstanceExtensions(arena)
+        , requiredBackendLayers(arena)
+        , optionalBackendInstanceExtensions(arena)
+        , optionalBackendLayers(arena)
         , requiredBackendDeviceExtensions(arena)
         , optionalBackendDeviceExtensions(arena)
         , ignoredValidationMessageIds(arena)

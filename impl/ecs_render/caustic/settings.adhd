@@ -5,6 +5,8 @@
 // Base grid sides that MakeCausticPhotonBudget accepts.
 const u32 s_CausticReducedBaseGridSide = 128u;
 const u32 s_CausticFullBaseGridSide = 512u;
+const u32 s_CausticTemporalDisabledPhaseCount = 1u;
+const u32 s_CausticTemporalPhaseCount = 2u;
 
 [reflect]
 class CausticQualitySettings{
@@ -27,8 +29,6 @@ b8 ValidateCausticQualitySettings(in CausticQualitySettings settings){
 
 // Callers supply validated settings, a supported base grid, and the current 1/2 temporal phase count.
 CausticPhotonBudget MakeCausticPhotonBudget(in CausticQualitySettings settings, in u32 baseGridSide, in u32 temporalPhaseCount){
-    const u32 s_CausticTemporalDisabledPhaseCount = 1u;
-    const u32 s_CausticTemporalPhaseCount = 2u;
     assert(ValidateCausticQualitySettings(settings));
     assert(baseGridSide == s_CausticReducedBaseGridSide || baseGridSide == s_CausticFullBaseGridSide);
     assert(temporalPhaseCount == s_CausticTemporalDisabledPhaseCount || temporalPhaseCount == s_CausticTemporalPhaseCount);

@@ -258,14 +258,14 @@ b8 Builder::beginContainer(const AStringView stableKey, const LayoutDirection::E
     return true;
 }
 
-Expected<NotNull<Builder::Item*>, Builder::ItemDeclarationFailure> Builder::addItem(const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
+Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
     if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes){
         m_context.fail();
-        return MakeUnexpected(ItemDeclarationFailure{});
+        return MakeUnexpected(Failure{});
     }
     const auto state = m_context.declare(stableKey, kind);
     if(!state)
-        return MakeUnexpected(ItemDeclarationFailure{});
+        return MakeUnexpected(Failure{});
     Item item(m_arena);
     item.style = m_style;
     item.state = **state;
@@ -274,13 +274,13 @@ Expected<NotNull<Builder::Item*>, Builder::ItemDeclarationFailure> Builder::addI
     auto layout = m_text.layout(request);
     if(!layout){
         m_context.fail();
-        return MakeUnexpected(ItemDeclarationFailure{ layout.error() });
+        return MakeUnexpected(Failure{});
     }
     item.text = Move(*layout);
     const auto textBounds = m_text.measure(item.text, m_paint.displayMetrics());
     if(!textBounds){
         m_context.fail();
-        return MakeUnexpected(ItemDeclarationFailure{});
+        return MakeUnexpected(Failure{});
     }
     item.textBounds = *textBounds;
     SIMDVectorSingle minimum = VectorZero();
@@ -289,7 +289,7 @@ Expected<NotNull<Builder::Item*>, Builder::ItemDeclarationFailure> Builder::addI
         const auto metrics = SelectablePainter::Measure(*m_skin, m_listStyle.row);
         if(!metrics){
             m_context.fail();
-            return MakeUnexpected(ItemDeclarationFailure{});
+            return MakeUnexpected(Failure{});
         }
         item.padding = metrics->padding;
         const SIMDVectorSingle paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top), VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
@@ -299,7 +299,7 @@ Expected<NotNull<Builder::Item*>, Builder::ItemDeclarationFailure> Builder::addI
     else if(kind == WidgetKind::Button){
         if(!region(m_style.button, m_style.button)){
             m_context.fail();
-            return MakeUnexpected(ItemDeclarationFailure{});
+            return MakeUnexpected(Failure{});
         }
         SIMDVectorSingle paddingValue = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
         loadButtonMetrics(minimum, paddingValue);
@@ -312,7 +312,7 @@ Expected<NotNull<Builder::Item*>, Builder::ItemDeclarationFailure> Builder::addI
         SIMDVectorSingle checkboxExtent = VectorReplicate(m_style.checkboxExtent);
         if(!region(m_style.checkbox, m_style.checkbox)){
             m_context.fail();
-            return MakeUnexpected(ItemDeclarationFailure{});
+            return MakeUnexpected(Failure{});
         }
         for(const auto& name : names){
             const UiSkinRegion& skinRegion = *MakeNotNull(region(name, m_style.checkbox));
@@ -332,7 +332,7 @@ Expected<NotNull<Builder::Item*>, Builder::ItemDeclarationFailure> Builder::addI
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();
-        return MakeUnexpected(ItemDeclarationFailure{});
+        return MakeUnexpected(Failure{});
     }
     item.node = *admittedNode;
     m_scope->m_items.push_back(Move(item));

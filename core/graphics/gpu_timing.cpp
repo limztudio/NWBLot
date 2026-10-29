@@ -88,11 +88,6 @@ Expected<GpuTimingSampleAttribution> GpuTimingRecorder::allocateSampleAttributio
     return GpuTimingSampleAttribution(*identity);
 }
 
-b8 GpuTimingRecorder::queryCollectionEnabled()const noexcept{
-    NothrowScopedLock lock(m_mutex);
-    return m_enabled;
-}
-
 b8 GpuTimingRecorder::collectionActive()const noexcept{
     NothrowScopedLock lock(m_mutex);
     return (m_enabled && m_timing.enabled()) || !m_feedbackScopeDemands.empty();

@@ -6,7 +6,6 @@
 
 #include <core/common/application_entry.h>
 #include <core/common/log.h>
-#include <core/common/module.h>
 #include <logger/client/module.h>
 
 
@@ -19,7 +18,7 @@ static int RunAdhdCompiler(const int argc, char** argv){
         NWB_CERR << "[adhd_compiler] logger.init() failed\n";
         return -1;
     }
-    NWB::Core::Common::LoggerRegistrationGuard guard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
+    NWB::Core::Common::LoggerRegistrationGuard guard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
     NWB::Core::Metascript::MetaArena arena(Name("pipeline/adhd_compiler"));
     AdhdCompilerOptions options(arena);

@@ -233,7 +233,6 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     }
     result.intervalCompletionTask = avboitIntervalCompletionTask;
     result.intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned;
-    result.declared = true;
     return result;
 }
 

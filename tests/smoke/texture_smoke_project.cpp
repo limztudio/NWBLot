@@ -11,7 +11,7 @@
 #include <loader/project_entry.h>
 
 #include <impl/ecs_scene/module.h>
-#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_mesh/system.h>
 #include <impl/ecs_render/module.h>
 
 #include <core/common/log.h>

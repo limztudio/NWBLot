@@ -18,9 +18,7 @@
 #include <impl/ecs_render/execute/surfel_caustics_merge_validator.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
-#include <impl/ecs_render/shared/renderer_scene_private.h>
 
-#include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/scheduler.h>
 
@@ -357,7 +355,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const b8 causticResolveFifthWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveFifthWaveletMergedIntoCausticsPacket;
     const b8 causticResolveUpsampleMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveUpsampleMergedIntoCausticsPacket;
     const b8 causticIrradianceClearMergedIntoCausticsPacket = surfelCausticsMerge.causticIrradianceClearMergedIntoCausticsPacket;
-    const b8 causticAccumulatorNonTemporalClearMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorNonTemporalClearMergedIntoCausticsPacket;
     const b8 causticAccumulatorBootstrapClearMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorBootstrapClearMergedIntoCausticsPacket;
     const b8 causticAccumulatorDecayMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorDecayMergedIntoCausticsPacket;
     const b8 surfelGiSnapshotCopyAndTimingPacketsAreDistinct = surfelCausticsMerge.surfelGiSnapshotCopyAndTimingPacketsAreDistinct;
@@ -441,7 +438,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !m_deferredCausticResolveUpsampleTask.valid()
         || !causticResolveUpsampleMergedIntoCausticsPacket
         || !causticIrradianceClearMergedIntoCausticsPacket
-        || !causticAccumulatorNonTemporalClearMergedIntoCausticsPacket
         || !causticAccumulatorBootstrapClearMergedIntoCausticsPacket
         || !causticAccumulatorDecayMergedIntoCausticsPacket
         || !m_deferredSurfelGiTask.valid()

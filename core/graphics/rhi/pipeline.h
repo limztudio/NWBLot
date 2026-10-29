@@ -140,9 +140,6 @@ public:
     constexpr GraphicsPipelineDesc& setPatchControlPoints(u32 value)noexcept{ patchControlPoints = value; return *this; }
     GraphicsPipelineDesc& setInputLayout(const InputLayoutHandle& value)noexcept;
     GraphicsPipelineDesc& setVertexShader(const ShaderHandle& value)noexcept;
-    GraphicsPipelineDesc& setHullShader(const ShaderHandle& value)noexcept;
-    GraphicsPipelineDesc& setDomainShader(const ShaderHandle& value)noexcept;
-    GraphicsPipelineDesc& setGeometryShader(const ShaderHandle& value)noexcept;
     GraphicsPipelineDesc& setPixelShader(const ShaderHandle& value)noexcept;
     constexpr GraphicsPipelineDesc& setRenderState(const RenderState& value)noexcept{ renderState = value; return *this; }
 
@@ -187,7 +184,6 @@ public:
 
 public:
     constexpr MeshletPipelineDesc& setPrimType(PrimitiveType::Enum value)noexcept{ primType = value; return *this; }
-    MeshletPipelineDesc& setAmplificationShader(const ShaderHandle& value)noexcept;
     MeshletPipelineDesc& setMeshShader(const ShaderHandle& value)noexcept;
     MeshletPipelineDesc& setPixelShader(const ShaderHandle& value)noexcept;
     constexpr MeshletPipelineDesc& setRenderState(const RenderState& value)noexcept{ renderState = value; return *this; }
@@ -229,8 +225,6 @@ public:
 
 public:
     RayTracingPipelineHitGroupDesc& setClosestHitShader(const ShaderHandle& value)noexcept;
-    RayTracingPipelineHitGroupDesc& setAnyHitShader(const ShaderHandle& value)noexcept;
-    RayTracingPipelineHitGroupDesc& setIntersectionShader(const ShaderHandle& value)noexcept;
     RayTracingPipelineHitGroupDesc& setBindingLayout(const BindingLayoutHandle& value)noexcept;
     RayTracingPipelineHitGroupDesc& setExportName(AStringView value)noexcept{ exportName = value; return *this; }
 

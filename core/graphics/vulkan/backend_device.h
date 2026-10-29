@@ -311,19 +311,14 @@ public:
     b8 isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.nvDeviceDiagnosticCheckpoints; }
 
     b8 isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.amdBufferMarker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
-    // NV and AMD marker paths share one command-list tracker.
-    b8 isAnyGpuMarkerEnabled()const noexcept{ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
 
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker()noexcept{ return m_gpuCrashTracker; }
     void captureDeviceLoss(AStringView context);
 
     [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(const GpuPhysicalQueueId& queue, usize markerHash)noexcept;
 
-    void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value);
-    void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value);
     [[nodiscard]] Expected<u64> queueGetCompletedInstance(CommandQueue::Enum queue);
     [[nodiscard]] Expected<u64> queueGetCompletedInstance(const GpuPhysicalQueueId& queue);
-    void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
 
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType)noexcept;

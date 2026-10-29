@@ -224,7 +224,6 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             classifyPush.height = targets.height;
             classifyPush.coarseWidth = coarseWidth;
             classifyPush.coarseHeight = coarseHeight;
-            classifyPush.edgeThreshold = m_rayTracingState.m_swShadowEdgeThreshold;
             classifyPush.edgeCapacity = m_rayTracingState.m_swShadowEdgeListCapacity;
             commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentClassifyPipeline));
             bindPassHeap(m_rayTracingState.m_swShadowTransparentClassifyPipeline);
@@ -277,7 +276,6 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             resolvePush.height = targets.height;
             resolvePush.coarseWidth = coarseWidth;
             resolvePush.coarseHeight = coarseHeight;
-            resolvePush.edgeThreshold = m_rayTracingState.m_swShadowEdgeThreshold;
             commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentResolvePipeline));
             bindPassHeap(m_rayTracingState.m_swShadowTransparentResolvePipeline);
             commandList.setPushConstants(&resolvePush, sizeof(resolvePush));

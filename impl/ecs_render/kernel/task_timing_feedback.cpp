@@ -8,8 +8,6 @@
 
 #include <core/graphics/backend_selection.h>
 
-#include <global/scope_exit.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -252,37 +250,6 @@ void RendererTaskTimingFeedback::deactivate()noexcept{
     // Unsubscription removes this bridge's demand and waits for retaining callbacks.
     m_graphics.gpuTiming().unsubscribeSampleListener(subscription);
     reset();
-}
-
-b8 RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
-    if(!policy.valid())
-        return false;
-
-    ScopedLock lifecycleLock(m_lifecycleMutex);
-    RendererTaskTimingFeedbackPolicyTransition transition;
-    Core::GpuTimingSampleSubscription subscription;
-    {
-        ScopedLock lock(m_mutex);
-        transition = PrepareRendererTaskTimingFeedbackPolicyTransition(m_policy, policy, m_active);
-        if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
-            return true;
-
-        NWB_ASSERT(m_active && m_subscription.valid());
-        subscription = m_subscription;
-    }
-
-    b8 collectionUpdated = false;
-    ScopeExit resolvePolicy([&]()noexcept{
-        ScopedLock lock(m_mutex);
-        ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, collectionUpdated);
-    });
-
-    if(transition.action == RendererTaskTimingFeedbackCollectionAction::Enable){
-        collectionUpdated = m_graphics.gpuTiming().setFeedbackCollectionScopes(subscription, NotNull<const Name*>(m_feedbackCollectionScopes.data()), m_feedbackCollectionScopes.size());
-    }else{
-        collectionUpdated = m_graphics.gpuTiming().clearFeedbackCollectionScopes(subscription);
-    }
-    return collectionUpdated;
 }
 
 Expected<Core::GpuTimingSampleAttribution> RendererTaskTimingFeedback::beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, const b8 recordsNonCommittingTimingSample){

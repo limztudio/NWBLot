@@ -13,7 +13,6 @@
 
 #include "asset.h"
 
-#include <core/alloc/scratch.h>
 #include <core/metascript/parser.h>
 
 

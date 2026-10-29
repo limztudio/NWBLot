@@ -96,7 +96,6 @@ void RendererRayTracingState::invalidateResources()noexcept{
     m_tlasBackingFresh = false;
     m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_tlasMaxInstances = 0u;
-    m_tlasDeviceAddress = 0u;
     m_tlasInstanceCount = 0u;
     m_tlasStaticSceneHash = 0u;
     m_sceneSwBvhStaticSceneHash = 0u;

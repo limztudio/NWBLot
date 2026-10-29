@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/alloc/standalone_runtime.h>
+#include <core/alloc/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +53,6 @@ static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Lo
     NWB::Log::Server logger;
     if(!logger.init(logPort, __hidden_logger_server_main::s_LogFileNameBase, crashSymbolStoreDirectory, crashRetentionConfig, crashUploadToken))
         return __hidden_logger_server_main::s_LoggerServerExitFailure;
-    NWB::Log::ServerLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     return ::InvokeTerminalEntry<GeneralException>([&](){
         NWB::Log::Frame frame(inst);

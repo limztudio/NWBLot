@@ -180,7 +180,6 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
         return MakeUnexpected(Failure{});
     }
     result.sceneShadingSetupTask = *sceneShadingSetupTaskResult;
-    result.tailTask = result.sceneShadingSetupTask;
     result.lightingClassification = rayTracingLightingClassification;
     NWB_SIMD_MEMCPY(result.lightData, sizeof(result.lightData), sceneLightData, sizeof(sceneLightData));
     result.lightCount = sceneLightCount;

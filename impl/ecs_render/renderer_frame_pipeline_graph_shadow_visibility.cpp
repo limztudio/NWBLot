@@ -347,11 +347,6 @@ b8 RendererFramePipeline::declareDeferredShadowVisibilityTask(
         }
     }
     const RendererFramePipelineDetail::TraceResourceSetUses traceResourceSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet);
-    constexpr usize s_TraceResourceSetUseCapacity = 2u;
-    Core::GpuTaskResourceSetUse traceResourceSetUses[s_TraceResourceSetUseCapacity] = {};
-    usize traceResourceSetUseCount = 0u;
-    for(usize traceSetIndex = 0u; traceSetIndex < traceResourceSets.useCount; ++traceSetIndex)
-        traceResourceSetUses[traceResourceSetUseCount++] = traceResourceSets.uses[traceSetIndex];
     const Core::GpuTaskResourceSetUse traceGeometrySetUse = traceResourceSets.useCount != 0u ? traceResourceSets.uses[0u] : Core::GpuTaskResourceSetUse{};
 
     if(splitSoftTransparentFold){
@@ -406,7 +401,7 @@ b8 RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .opaqueFrameIndex = opaqueFrameIndex,
             .route = splitRoute,
             .traceGeometryResources = traceGeometryResources,
-            .traceResourceSetUses = Span<const Core::GpuTaskResourceSetUse>(traceResourceSetUses, traceResourceSetUseCount),
+            .traceResourceSetUses = Span<const Core::GpuTaskResourceSetUse>(traceResourceSets.uses, traceResourceSets.useCount),
             .traceGeometrySetUse = traceGeometrySetUse,
             .stateSources = Span<const Core::GpuTaskExternalStateSource>(shadowVisibilityStateSources, shadowVisibilityStateSourceCount),
             .historyWriterDrainDependencies = Span<const Core::GpuExternalCompletionId>(laggedLightingHistoryWriterDrainDependencies, laggedLightingHistoryWriterDrainDependencyCount),
@@ -507,7 +502,7 @@ b8 RendererFramePipeline::declareDeferredShadowVisibilityTask(
         .setDependencies(&shadowVisibilityDependency, 1u)
         .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
         .setResourceUses(resourceUses.data(), resourceUses.size())
-        .setResourceSetUses(traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr, traceResourceSetUseCount)
+        .setResourceSetUses(traceResourceSets.useCount != 0u ? traceResourceSets.uses : nullptr, traceResourceSets.useCount)
     ;
     const auto deferredShadowVisibilityTaskResult = m_raytracingSystem.declareShadowVisibilityTask(
         m_deferredLightingTaskGraph,

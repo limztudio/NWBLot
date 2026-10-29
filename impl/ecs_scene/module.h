@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "view.h"
 #include "camera.h"
 #include "lighting.h"
 

@@ -407,7 +407,6 @@ void BackendContext::commitPreparedSwapChainDestruction()noexcept{
     m_frameAcquired = false;
     m_frameAbandonmentComplete = false;
     m_swapChainIndex = Limit<u32>::s_Max;
-    m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
 
     for(SwapChainImage& swapChainImage : m_swapChainImages){
         if(swapChainImage.rhiHandle)

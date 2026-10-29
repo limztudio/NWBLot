@@ -97,14 +97,13 @@ void GraphicsRuntime::displayScaleChanged(){
         renderPass->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
 
-b8 GraphicsRuntime::resizeBackBuffer(const u32 width, const u32 height, const b8 vsyncEnabled){
+b8 GraphicsRuntime::resizeBackBuffer(const u32 width, const u32 height){
     auto transitionTicket = backBufferResizing();
     if(!transitionTicket)
         return false;
 
     m_swapChainState.backBufferWidth = width;
     m_swapChainState.backBufferHeight = height;
-    m_swapChainState.vsyncEnabled = vsyncEnabled;
     if(!m_backend->commitSwapChainResize(Move(*transitionTicket))){
         requestDeviceRecreation();
         return false;

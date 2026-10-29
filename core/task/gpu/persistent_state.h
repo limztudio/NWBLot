@@ -80,16 +80,8 @@ public:
 
     [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return m_states.valid() ? &m_states : nullptr; }
 
-    [[nodiscard]] usize retainedTextureCount()const noexcept{ return m_textures.size(); }
-
-    [[nodiscard]] usize retainedBufferCount()const noexcept{ return m_buffers.size(); }
-
     // Replaces the cache with `source` filtered to live imports, for pruning a removed runtime generation.
     [[nodiscard]] b8 replaceResourceSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
-
-    // Folds a graph packet's final native state into the retained accepted snapshot, then filters the result to the caller's current live resources.
-    // The retained cache is changed only after the new candidate is complete.
-    [[nodiscard]] b8 mergeResourceSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
 
     // Builds an acceptance-only candidate from the retained base state and `source`.
     // The caller must call commit() only after the packet that produced `source` is accepted; a rejected packet leaves this cache untouched.
@@ -111,18 +103,6 @@ public:
 
     [[nodiscard]] b8 replaceBufferSubset(const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena){
         return replaceResourceSubset(source, nullptr, 0u, buffers, bufferCount, scratchArena);
-    }
-
-    [[nodiscard]] b8 replaceTextureSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, const usize textureCount, Alloc::ScratchArena& scratchArena){
-        return replaceResourceSubset(source, textures, textureCount, nullptr, 0u, scratchArena);
-    }
-
-    [[nodiscard]] b8 replaceTextureSubset(const CommandListResourceStateHandoff& source, const TextureHandle& texture, Alloc::ScratchArena& scratchArena){
-        return replaceTextureSubset(source, &texture, 1u, scratchArena);
-    }
-
-    [[nodiscard]] b8 mergeBufferSubset(const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena){
-        return mergeResourceSubset(source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 
     [[nodiscard]] b8 buildMergedBufferSubset(Candidate& outCandidate, const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena)const{

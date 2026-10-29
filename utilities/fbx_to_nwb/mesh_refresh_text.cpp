@@ -50,7 +50,7 @@ struct AssignmentRange{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AssignmentRange> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName)noexcept{
+[[nodiscard]] static Expected<AssignmentRange> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName)noexcept{
     AssignmentRange outRange;
     Core::Metascript::Lexer lexer(source);
     Core::Metascript::Token token = lexer.next();
@@ -106,7 +106,7 @@ struct AssignmentRange{
 }
 
 template<typename Value, typename WriteValue>
-[[nodiscard]] ScratchString WriteValueList(const Span<const Value> values, WriteValue&& writeValue, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static ScratchString WriteValueList(const Span<const Value> values, WriteValue&& writeValue, Core::Alloc::ScratchArena& scratchArena){
     ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
@@ -119,7 +119,7 @@ template<typename Value, typename WriteValue>
     return Move(out).str();
 }
 
-[[nodiscard]] ScratchString WriteIndexList(const Span<const u32> indices, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static ScratchString WriteIndexList(const Span<const u32> indices, Core::Alloc::ScratchArena& scratchArena){
     ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
@@ -129,7 +129,7 @@ template<typename Value, typename WriteValue>
     return Move(out).str();
 }
 
-[[nodiscard]] ScratchString WriteVertexRefList(const Span<const SourceVertexRef> refs, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static ScratchString WriteVertexRefList(const Span<const SourceVertexRef> refs, Core::Alloc::ScratchArena& scratchArena){
     ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
@@ -140,7 +140,7 @@ template<typename Value, typename WriteValue>
     return Move(out).str();
 }
 
-[[nodiscard]] b8 AddReplacement(TextReplacements& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, ScratchString&& replacementText){
+[[nodiscard]] static b8 AddReplacement(TextReplacements& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, ScratchString&& replacementText){
     auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
     if(!replacementResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), ConvertString(variableName), ConvertString(fieldName));
@@ -198,7 +198,7 @@ void ApplyTextReplacements(ScratchString& inOutSource, const Span<TextReplacemen
     }
 }
 
-[[nodiscard]] b8 IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
+[[nodiscard]] static b8 IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
     if(value.isReference())
         return value.asReference() == variableName;
     if(value.isString())
@@ -218,7 +218,7 @@ void ApplyTextReplacements(ScratchString& inOutSource, const Span<TextReplacemen
         if(!skinAsset || !skinAsset->isMap())
             continue;
 
-        const Core::Metascript::Value* meshField = Core::Metascript::FindField(*skinAsset, s_MeshAssetTypeText);
+        const Core::Metascript::Value* meshField = skinAsset->findField(s_MeshAssetTypeText);
         if(!meshField || !IsReferenceTo(*meshField, meshVariableName))
             continue;
 

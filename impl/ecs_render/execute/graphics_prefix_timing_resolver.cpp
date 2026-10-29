@@ -72,7 +72,6 @@ void GraphicsPrefixTimingResolver::resolve(
     }
     // Measures are submission-local; skip the scope across a frontier.
     asyncSpansOnePacket = outResult.bindingsValid && compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixMeshViewSetupTask, pipeline.m_graphicsPrefixTask);
-    outResult.asyncSpansOnePacket = asyncSpansOnePacket;
 }
 
 

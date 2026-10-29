@@ -36,7 +36,6 @@ struct FrameGraphAvboitMaterialUploadResult{
     b8 producesReusableGeometry = false;
     b8 csgComputeEmulationPlanCaptured = false;
     b8 sharedComputeEmulationPlanCaptured = false;
-    b8 declared = false;
 };
 
 

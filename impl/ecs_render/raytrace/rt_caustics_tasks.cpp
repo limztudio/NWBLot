@@ -19,7 +19,6 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDec
     const Core::GpuTaskDesc& desc,
     const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     const b8& shadowVisibilityPrepared,
-    const f32 decayFactor,
     const b8 hardwareCaustics,
     DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
@@ -35,7 +34,6 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDec
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
             .timingTicket = timingTicket,
             .causticPhotonTiming = causticPhotonTiming,
-            .decayFactor = decayFactor,
             .hardwareCaustics = hardwareCaustics,
         }
     );
@@ -48,7 +46,6 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(
     const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     const b8& shadowVisibilityPrepared,
     const b8 graphOwnsAccumulatorBootstrapClear,
-    const b8 graphOwnsNonTemporalAccumulatorClear,
     DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
@@ -65,7 +62,6 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
             .causticPhotonTiming = causticPhotonTiming,
             .graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear,
-            .graphOwnsNonTemporalAccumulatorClear = graphOwnsNonTemporalAccumulatorClear,
             .causticProducerDispatched = causticProducerDispatched,
         }
     );
@@ -78,7 +74,6 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(
     const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     const b8& shadowVisibilityPrepared,
     const b8 graphOwnsAccumulatorBootstrapClear,
-    const b8 graphOwnsNonTemporalAccumulatorClear,
     DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
@@ -95,7 +90,6 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
             .causticPhotonTiming = causticPhotonTiming,
             .graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear,
-            .graphOwnsNonTemporalAccumulatorClear = graphOwnsNonTemporalAccumulatorClear,
             .causticProducerDispatched = causticProducerDispatched,
         }
     );

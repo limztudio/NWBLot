@@ -31,7 +31,6 @@ namespace LoggerServerCrash{
 
 
 using CrashTestText = AString<Core::Alloc::GlobalArena>;
-using CrashTestBytes = Vector<u8, Core::Alloc::GlobalArena>;
 using CrashTestPath = ::Path<Core::Alloc::GlobalArena>;
 
 

@@ -122,7 +122,6 @@ struct RayTracingDeferredGraphResourceSnapshot{
     Core::BufferHandle sceneInstanceBuffer;
     Core::RayTracingAccelStructHandle sceneTlas;
 
-    f32 causticTemporalDecay = 0.f;
     b8 causticAccumulatorInitialized = false;
     b8 surfelUsesHardwareTrace = false;
     b8 surfelSplitGraphPipelinesReady = false;

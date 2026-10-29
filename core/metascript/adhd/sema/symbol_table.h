@@ -62,6 +62,8 @@ public:
     [[nodiscard]] static b8 isStringSwitchType(MStringView typeName)noexcept;
     [[nodiscard]] static MStringView mapBuiltinCppType(MStringView typeName)noexcept;
 
+
+private:
     [[nodiscard]] b8 hasTypeSymbol(MStringView name)const noexcept;
 
 

@@ -10,7 +10,7 @@
 #include <impl/ecs_mesh/skinning/skin_payload.h>
 #include <impl/ecs_mesh/skinning/submission_state.h>
 #include <impl/ecs_skeleton/components.adhd.h>
-#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_mesh/system.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
@@ -19,7 +19,8 @@
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/assets_mesh/meshlet_ref_codec.h>
+#include <impl/assets_mesh/meshlet_ref_decode.h>
+#include <impl/assets_mesh/meshlet_ref_encode.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_types.adhd.h>
 #include <impl/assets_mesh/asset.h>

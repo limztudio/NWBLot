@@ -23,12 +23,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Mesh;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static_assert(s_MeshInstanceGeometrySlotCount == NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT, "s_MeshInstanceGeometrySlotCount must match NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT");
 static_assert(offsetof(InstanceGpuData, rotation) == sizeof(f32) * NWB_MESH_INSTANCE_ROTATION_FLOAT_OFFSET, "InstanceGpuData rotation must be first");
 static_assert(offsetof(InstanceGpuData, translation) == sizeof(f32) * NWB_MESH_INSTANCE_TRANSLATION_FLOAT_OFFSET, "InstanceGpuData translation must follow rotation");

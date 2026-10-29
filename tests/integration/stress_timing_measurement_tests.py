@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke
-from stress_timing_test_support import reflection_log, reflection_record, shadow_quality_record, shadow_record, stress_arguments, valid_log, workload_record
+from stress_timing_test_support import reflection_log, reflection_record, shadow_record, stress_arguments, valid_log
 
 
 LIT_QUERY_BUDGET_UNITS_PER_HARDWARE_RAY = "query_budget_units_per_hardware_ray"

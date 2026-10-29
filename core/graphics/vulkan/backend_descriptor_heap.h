@@ -357,8 +357,6 @@ public:
     [[nodiscard]] b8 hasAccelStructLayout()const noexcept{ return m_accelStructLayout != nullptr; }
     // SPIR-V binding number for a descriptor class.
     [[nodiscard]] u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass)const noexcept;
-    // Per-generation TLAS segment block bound at heap set 2.
-    [[nodiscard]] DescriptorBufferSegment getAccelStructBufferBlock(GpuDescriptorHandle handle)const noexcept;
 
 
 private:

@@ -5,6 +5,7 @@
 #include "scene_asset_test_helpers.h"
 
 #include <impl/assets_graphics/components.adhd.h>
+#include <impl/assets_scene/component_assets.adhd.h>
 #include <impl/assets_graphics/component_binary_payload.h>
 #include <impl/assets_graphics/renderer/subsystem.adhd.h>
 

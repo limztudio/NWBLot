@@ -8,7 +8,7 @@
 #include "frame.h"
 
 #include <core/crash/package_names.h>
-#include <core/alloc/standalone_runtime.h>
+#include <core/alloc/module.h>
 #include <core/common/name_symbols.h>
 
 #include <global/algorithm.h>
@@ -38,6 +38,7 @@ namespace __hidden_logger_server{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr TStringView s_ServerName = NWB_TEXT("Server");
 inline constexpr usize s_ConnectionInitialBufferCapacity = 256u;
 inline constexpr usize s_BytesPerMebibyte = 1024u * 1024u;
 inline constexpr usize s_MaxLogMessageUploadMebibytes = 1u;
@@ -316,24 +317,6 @@ static void RequestCompleted(void* serverContext, MHD_Connection* connection, vo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ServerLoggerDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Server* g_ServerLogger = nullptr;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress){
     static_cast<void>(version);
 
@@ -366,7 +349,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
 
         const auto info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, uploadKind);
         if(!info){
-            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), s_ServerName), Core::Common::LogType::Fatal);
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), __hidden_logger_server::s_ServerName), Core::Common::LogType::Fatal);
             return MHD_NO;
         }
 

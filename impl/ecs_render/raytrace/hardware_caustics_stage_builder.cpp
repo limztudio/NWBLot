@@ -247,36 +247,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     result.causticIrradianceClearTask = irradianceClearTask;
 
     Core::GpuTaskId causticsDependency = irradianceClearTask;
-    const b8 graphOwnsNonTemporalAccumulatorClear = inputs.rayTracingResources->causticTemporalDecay <= 0.f;
-    if(graphOwnsNonTemporalAccumulatorClear){
-        Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
-        accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
-        // Direct accumulator clear stays in the accepted producer/timing packet.
-        accumulatorNonTemporalClearScheduling.allowMergeAcrossConsumerFrontier = true;
-        EnableSameFamilyComputeEffectRouting(accumulatorNonTemporalClearScheduling);
-        Core::GpuTaskDesc accumulatorNonTemporalClearDesc;
-        accumulatorNonTemporalClearDesc
-            .setIdentity(Name("render.hardware_caustics.accumulator_non_temporal_clear"))
-            .setMarkerLabel("Hardware Caustics Accumulator Clear")
-            .setScheduling(accumulatorNonTemporalClearScheduling)
-            .setDependencies(&causticsDependency, 1u)
-            .setExternalStateSources(accumulatorStateSources, accumulatorStateSourceCount)
-        ;
-        Core::GpuClearTextureTaskDesc accumulatorNonTemporalClear;
-        accumulatorNonTemporalClear.destination = causticAccumulator;
-        accumulatorNonTemporalClear.subresources = ECSRenderDetail::s_CausticAccumulatorSubresources;
-        accumulatorNonTemporalClear.valueType = Core::GpuClearTextureTaskValueType::UInt;
-        accumulatorNonTemporalClear.uintValue = Core::UIntColor(0u);
-        const auto accumulatorNonTemporalClearTaskResult = m_graph.addClearTextureTask(accumulatorNonTemporalClearDesc, accumulatorNonTemporalClear);
-        if(!accumulatorNonTemporalClearTaskResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics non-temporal accumulator clear"));
-            return MakeUnexpected(Failure{});
-        }
-        const Core::GpuTaskId accumulatorNonTemporalClearTask = *accumulatorNonTemporalClearTaskResult;
-        result.causticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
-        causticsDependency = accumulatorNonTemporalClearTask;
-    }
-    const b8 graphOwnsAccumulatorBootstrapClear = !inputs.rayTracingResources->causticAccumulatorInitialized && inputs.rayTracingResources->causticTemporalDecay > 0.f;
+    const b8 graphOwnsAccumulatorBootstrapClear = !inputs.rayTracingResources->causticAccumulatorInitialized;
     if(graphOwnsAccumulatorBootstrapClear){
         Core::GpuTaskSchedulingHint accumulatorBootstrapClearScheduling;
         accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -309,7 +280,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         causticsDependency = accumulatorBootstrapClearTask;
     }
 
-    const b8 graphOwnsAccumulatorDecay = inputs.rayTracingResources->causticAccumulatorInitialized && inputs.rayTracingResources->causticTemporalDecay > 0.f;
+    const b8 graphOwnsAccumulatorDecay = inputs.rayTracingResources->causticAccumulatorInitialized;
     if(graphOwnsAccumulatorDecay){
         Core::GpuTaskSchedulingHint accumulatorDecayScheduling;
         accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -334,7 +305,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
             accumulatorDecayDesc,
             (*inputs.meshViewSnapshot),
             *inputs.shadowPreparationReady,
-            inputs.rayTracingResources->causticTemporalDecay,
             true,
             (*inputs.targets),
             (*inputs.timingTicket),
@@ -371,7 +341,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         (*inputs.meshViewSnapshot),
         *inputs.shadowPreparationReady,
         graphOwnsAccumulatorBootstrapClear,
-        graphOwnsNonTemporalAccumulatorClear,
         (*inputs.targets),
         (*inputs.timingTicket),
         *inputs.photonTiming,
@@ -426,7 +395,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     result.causticResolveFifthWaveletTask = resolveChainResult->causticResolveFifthWaveletTask;
     result.causticResolveUpsampleTask = resolveChainResult->causticResolveUpsampleTask;
     result.hardwareCausticsTask = resolveChainResult->hardwareCausticsTask;
-    result.declared = true;
     return result;
 }
 

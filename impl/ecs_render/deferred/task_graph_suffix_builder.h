@@ -62,9 +62,6 @@ struct DeferredGraphSuffixResult{
     Core::GpuTaskId presentTask;
     Core::GpuTaskId overlayTask;
     Core::GpuTaskId frameTimingEndTask;
-    Core::GpuGraphResourceId compositeColor;
-    Core::GpuGraphResourceId compositeBindlessSlots;
-    Core::GpuGraphResourceId backbuffer;
     b8 overlayRequired = false;
 };
 
@@ -86,9 +83,7 @@ public:
 public:
     [[nodiscard]] Expected<DeferredGraphSuffixResult> declare(
         const DeferredGraphSuffixInputs& inputs,
-        const ReflectionCompositeInputs& compositeInputs,
         const Core::GpuTaskId& shadowVisibilityTask,
-        DeferredFrameTargets& targets,
         Core::GpuTimingSubmissionTicket& compositeTimingTicket,
         Core::GpuTimingSubmissionTicket& presentTimingTicket,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,

@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReflectionStatisticsState::accept(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
+void ReflectionStatisticsState::accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = matchingSlot(key);
@@ -55,7 +55,7 @@ void ReflectionStatisticsState::accept(const ReflectionStatisticsReservationKey&
     // Never recycle memory whose GPU completion is unproved.
 }
 
-void ReflectionStatisticsState::complete(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept{
+void ReflectionStatisticsState::complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = beginCompleteWithinLock(key, token);

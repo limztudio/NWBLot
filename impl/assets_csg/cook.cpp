@@ -37,7 +37,6 @@ namespace __hidden_assets_csg_cook{
 
 namespace Metascript = Core::Metascript;
 using AssetsCsgCook::CsgShapeCookEntry;
-using AssetsCsgCook::CsgShapeCookEntryVector;
 using AssetsCsgCook::CookArena;
 using AssetsCsgCook::CookString;
 using ScratchArena = Core::Alloc::ScratchArena;

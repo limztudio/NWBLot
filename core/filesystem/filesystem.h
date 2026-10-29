@@ -73,7 +73,6 @@ public:
     [[nodiscard]] virtual Expected<u64> fileSize(const Name& virtualPath)const = 0;
     [[nodiscard]] virtual u64 fileCount()const = 0;
     virtual void reserveFileCapacity(usize fileCount) = 0;
-    virtual Vector<Name, VolumeArena> listFiles()const = 0;
 
 
 public:

@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/avboit/avboit_private.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 
 

@@ -6,7 +6,6 @@
 
 
 #include "compiled_graph.h"
-#include "packet_runtime_artifact.h"
 #include "packet_runtime_recorded_graph.h"
 #include "task_graph.h"
 #include "scheduler_callback_bindings.h"
@@ -29,30 +28,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GpuTimingRecorder;
 class GpuTimingSubmissionTicket;
 class GpuTaskScheduler;
-class GpuNativePacketRecorder;
 class GpuCommandIrCapture;
-struct GpuTaskGraphRuntimeStatistics;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace GpuPacketRuntimeDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Name s_ExternalResourceHandoffScratchArena("core/task/gpu/external_resource_handoff");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -393,7 +371,6 @@ public:
         , m_latestAcceptedQueueTokens(arena)
         , m_resetStagingPackets(arena)
         , m_resetStagingLatestAcceptedQueueTokens(arena)
-        , m_externalResourceHandoffBuildScratch(GpuPacketRuntimeDetail::s_ExternalResourceHandoffScratchArena)
         , m_transactionIdentity(GpuTaskGraph::AllocateGeneration())
     {}
     ~GpuGraphSubmissionTransaction()noexcept;
@@ -424,16 +401,6 @@ public:
     // Resolves the current compiler packet for semantic graph work before returning its accepted token.
     // Generation-checked: a task from an older compiled graph is never an accepted submission on a replacement device or packetization.
     [[nodiscard]] QueueSubmissionToken taskToken(const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task)const noexcept;
-    // Publishes the external handoff after every terminal producer packet accepts; the caller snapshot keeps state after admission.
-    [[nodiscard]] b8 externalResourceHandoff(
-        const GpuTaskGraph& graph,
-        const GpuTaskGraph::DeclarationReadView& declarationAccess,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuCompiledGraph::ReadView& planAccess,
-        const GpuRecordedGraph& recordedGraph,
-        GpuGraphResourceId resource,
-        GpuTaskGraphExternalResourceHandoffSnapshot& outSnapshot
-    )const;
 
 
 private:
@@ -445,7 +412,6 @@ private:
     [[nodiscard]] b8 hasUnresolvedSubmissionBinding(const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] b8 waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()const noexcept;
     [[nodiscard]] QueueSubmissionToken packetTokenLocked(const GpuSubmissionPacketId& packet)const noexcept;
-    [[nodiscard]] QueueSubmissionToken taskTokenLocked(const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task)const noexcept;
 
 
 private:
@@ -496,7 +462,6 @@ private:
     // Reset fills these under its exclusive barrier and swaps them with the live arrays. They stay empty between resets and only keep capacity.
     GraphicsVector<PacketRuntime> m_resetStagingPackets;
     GraphicsVector<LatestAcceptedQueueToken> m_resetStagingLatestAcceptedQueueTokens;
-    mutable Alloc::ScratchArena m_externalResourceHandoffBuildScratch;
     u64 m_generation = 0u;
     u64 m_planGeneration = 0u;
     u64 m_recordingAttemptGeneration = 0u;

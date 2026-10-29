@@ -8,7 +8,14 @@
 #include <tests/common/test_context.h>
 
 #include <core/alloc/scratch.h>
-#include <core/telemetry/module.h>
+#include <core/telemetry/codec.h>
+#include <core/telemetry/diagnostic.h>
+#include <core/telemetry/event.h>
+#include <core/telemetry/frame_graph.h>
+#include <core/telemetry/perf.h>
+#include <core/telemetry/recorder.h>
+#include <core/telemetry/session.h>
+#include <core/telemetry/text_log.h>
 
 #include <logger/telemetry/report.h>
 

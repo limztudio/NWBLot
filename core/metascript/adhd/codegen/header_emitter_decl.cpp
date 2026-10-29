@@ -46,8 +46,8 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     }
 
     out.append("    };\r\n");
-    out.append("    using Flag = Enum;\r\n");
     if(hasFlags){
+        out.append("    using Flag = Enum;\r\n");
         out.append("    [[nodiscard]] constexpr Enum operator|(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<");
         out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
         out.append(">(a) | static_cast<");

@@ -81,7 +81,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     MethodDecl* decl = AllocateAstNode<MethodDecl>(m_cursor.arena());
     decl->span = span;
 
-    if(!applyCallableAttributes(attributes, span, *decl))
+    if(!applyCallableAttributes(attributes, *decl))
         return nullptr;
 
     if(m_cursor.check(TokenType::Identifier)){
@@ -227,10 +227,8 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
 
 b8 DeclParser::applyCallableAttributes(
     const MVector<ParsedAttribute>& attributes,
-    const SourceSpan span,
     MethodDecl& decl
 ){
-    (void)span;
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "reflect" && attr.arguments.empty())
             decl.isReflect = true;

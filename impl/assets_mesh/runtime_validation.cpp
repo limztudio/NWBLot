@@ -5,6 +5,10 @@
 #include "runtime_validation.h"
 
 #include "binary_payload_io.h"
+#include "meshlet_payload_packing.h"
+#include "meshlet_ref_decode.h"
+#include "meshlet_ref_validation.h"
+#include "runtime_validation_diagnostics.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

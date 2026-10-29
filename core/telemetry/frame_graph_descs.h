@@ -123,15 +123,6 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
     Span<const FrameGraphNodeDesc> nodes,
     Span<const FrameGraphEdgeDesc> edges,
     Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
-    u32 streamId = 0u
-);
-[[nodiscard]] b8 RecordFrameGraph(
-    Recorder& recorder,
-    Alloc::ScratchArena& scratchArena,
-    u64 frameIndex,
-    Span<const FrameGraphNodeDesc> nodes,
-    Span<const FrameGraphEdgeDesc> edges,
-    Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
     u32 streamId = 0u
 );

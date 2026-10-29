@@ -69,7 +69,6 @@ public:
 };
 
 using DiscoveredNwbFileVector = CookVector<DiscoveredNwbFile>;
-using DiscoveredBindFileVector = CookVector<DiscoveredNwbFile>;
 
 struct ParsedAssetMetadata{
     CookArena& arena;

@@ -500,24 +500,6 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
     }
 }
 
-DescriptorBufferSegment GpuDescriptorHeap::getAccelStructBufferBlock(const GpuDescriptorHandle handle)const noexcept{
-    ScopedLock lock(m_mutex);
-    if(
-        !m_initialized
-        || !handle.valid()
-        || handle.descriptorClass() != GpuDescriptorClass::AccelStruct
-        || handle.slot() >= m_accelStructBufferBlocks.size()
-        || handle.slot() >= m_accelStructResources.size()
-        || handle.slot() >= m_accelStructSlots.slotStates.size()
-        || handle.slot() >= m_accelStructSlots.allocatedClasses.size()
-        || m_accelStructSlots.slotStates[handle.slot()] != SlotState::Live
-        || m_accelStructSlots.allocatedClasses[handle.slot()] != static_cast<u8>(GpuDescriptorClass::AccelStruct)
-        || !m_accelStructResources[handle.slot()]
-    )
-        return {};
-    return m_accelStructBufferBlocks[handle.slot()];
-}
-
 GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const GpuDescriptorClass::Enum descriptorClass)noexcept{
     // Ordinary resources share slots; TLAS selects immutable set-2 blocks.
     if(descriptorClass == GpuDescriptorClass::Sampler)

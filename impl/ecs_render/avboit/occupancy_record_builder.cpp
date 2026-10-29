@@ -60,7 +60,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitOccupancyRecordResult> AvboitOccupancyRecordBuilder::declare(
+[[nodiscard]] b8 AvboitOccupancyRecordBuilder::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     ObjectGeometryCacheGraph& objectGeometry,
@@ -69,13 +69,12 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& computeEmulationPayload
 ){
     using namespace RendererTaskGraphDetail;
-    AvboitOccupancyRecordResult result{};
     if(!inputs.clearTask.valid() || !inputs.uploadTask.valid())
-        return MakeUnexpected(Failure{});
+        return false;
 
     const b8 generatedGeometryReused = inputs.generatedGeometryReused();
     if(!inputs.generatedGeometryReusePlansValid())
-        return MakeUnexpected(Failure{});
+        return false;
     occupancyPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_occupancyReusedGeometryProducer = inputs.reusedGeometryProducer;
 
@@ -108,7 +107,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT Occupancy compute-emulation output states"));
     }
     if(generatedGeometryReused && !occupancyComputeEmulationOutputStatesGraphOwned)
-        return MakeUnexpected(Failure{});
+        return false;
     occupancyPayload.occupancyComputeEmulationOutputStatesGraphOwned = inputs.regularComputeEmulationPlanCaptured && occupancyComputeEmulationOutputStatesGraphOwned;
     occupancyPayload.occupancyCsgComputeEmulationOutputStatesGraphOwned = inputs.csgComputeEmulationPlanCaptured && occupancyComputeEmulationOutputStatesGraphOwned;
     occupancyPayload.occupancyComputeEmulationTiming = occupancyComputeEmulationOutputStatesGraphOwned ? &inputs.occupancyComputeEmulationTiming : nullptr;
@@ -200,12 +199,12 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         occupancyPayload.occupancySnapshot.regularIndexedDrawItems,
         frameBindings, inputs.targets, scratchArena, occupancyDependency, avboitPreResourceUses, &inputs.preTimingTicket
     ))
-        return MakeUnexpected(Failure{});
+        return false;
     if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
         occupancyPayload.occupancySnapshot.csgIndexedDrawItems,
         frameBindings, inputs.targets, scratchArena, occupancyDependency, avboitPreResourceUses, &inputs.preTimingTicket
     ))
-        return MakeUnexpected(Failure{});
+        return false;
 
 
     Core::GpuTaskSchedulingHint avboitOccupancyScheduling;
@@ -269,7 +268,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         if(!occupancyComputeEmulationTaskResult){
             m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Occupancy compute-emulation producer"));
-            return MakeUnexpected(Failure{});
+            return false;
         }
         m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask = *occupancyComputeEmulationTaskResult;
         occupancyDependency = m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask;
@@ -392,7 +391,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             if(!occupancySharedComputeEmulationTaskResult){
                 m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex] = {};
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT Occupancy shared compute-emulation phase"));
-                return MakeUnexpected(Failure{});
+                return false;
             }
             m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex] = *occupancySharedComputeEmulationTaskResult;
             occupancySharedComputeEmulationDependency = m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex];
@@ -417,14 +416,12 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         if(!occupancyTaskResult){
             m_avboitSystem.taskGraphStage().m_occupancyTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
-            return MakeUnexpected(Failure{});
+            return false;
         }
         m_avboitSystem.taskGraphStage().m_occupancyTask = *occupancyTaskResult;
     }
 
-    result.occupancyTask = m_avboitSystem.taskGraphStage().m_occupancyTask;
-    result.declared = true;
-    return result;
+    return true;
 }
 
 

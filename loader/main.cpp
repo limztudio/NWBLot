@@ -7,12 +7,9 @@
 #include "profile_names.h"
 
 #include <logger/client/module.h>
-#include <logger/common.h>
 
-#include <core/alloc/scratch.h>
-#include <core/alloc/standalone_runtime.h>
+#include <core/alloc/module.h>
 #include <core/common/application_entry.h>
-#include <core/common/module.h>
 #include <core/crash/module.h>
 #include <core/frame/module.h>
 #include <core/assets/registry.h>
@@ -249,8 +246,6 @@ b8 UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
 
 static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidden_loader::LoaderOptions& options, void* inst, NWB::Log::Client* telemetryClient){
     {
-        // The log server resolves Name tokens; release clients do not load .namesym files.
-
         const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
         if(frameClientSize.width == __hidden_loader::s_EmptyFrameClientExtent || frameClientSize.height == __hidden_loader::s_EmptyFrameClientExtent){
             NWB_LOGGER_FATAL(NWB_TEXT("Invalid project frame client size: {}x{}"), frameClientSize.width, frameClientSize.height);

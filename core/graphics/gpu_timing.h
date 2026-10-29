@@ -247,7 +247,6 @@ public:
     // Globally unique attribution identities remain unique across recorder reset, destruction, and recreation.
     // Allocation is lock-free so recording workers issue identities without listener/query locks.
     [[nodiscard]] Expected<GpuTimingSampleAttribution> allocateSampleAttribution()noexcept;
-    [[nodiscard]] b8 queryCollectionEnabled()const noexcept;
     // True when either normal Perf capture or an adaptive feedback consumer needs query pools to be materialized and reset for the current frame.
     [[nodiscard]] b8 collectionActive()const noexcept;
     [[nodiscard]] GpuTimingRecorderStatistics statistics(const Device& device)const noexcept;

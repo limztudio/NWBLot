@@ -74,15 +74,6 @@ public:
 public:
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; m_renderer.setActiveSceneSubsystems(subsystems); }
     void setGpuCommandRecordingMode(Ui::GpuCommandRecordingMode::Enum mode)noexcept;
-    // Main-thread request; last request wins. Empty selects the engine default. Safe from a UI paint callback.
-    void requestSkin(const Core::Assets::AssetRef<UiSkin>& skin)noexcept;
-    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& selectedSkin()const noexcept{ return m_skinSelection.selected(); }
-
-    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requestedSkin()const noexcept{ return m_skinSelection.requestedChange(); }
-
-    [[nodiscard]] b8 skinRequestPending()const noexcept{ return m_skinSelection.changePending(); }
-
-    [[nodiscard]] b8 skinRequestFailed()const noexcept{ return m_skinSelection.changeFailed(); }
 
     [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const noexcept override{
         return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
@@ -99,12 +90,6 @@ public:
 public:
     // Main-thread profile replacement copies bindings; an empty profile disables every default shortcut.
     [[nodiscard]] b8 setInputBindings(const Ui::InputKeyBinding* bindings, usize count);
-    void restoreDefaultInputBindings();
-    // Main-thread ingress uses semantic commands and identified pointer sequences; device zero belongs to the native adapter.
-    [[nodiscard]] b8 commandInput(Ui::InputSource source, Ui::InputCommand::Enum command, Ui::InputPhase::Enum phase, b8 extend = false);
-    [[nodiscard]] b8 pointerInput(const Ui::PointerInput& input);
-    // Main-thread provider termination cancels its active contact and retires its remaining held sources.
-    void cancelDeviceInput(u64 device);
     virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
     [[nodiscard]] virtual b8 blocksKeyboardText()const noexcept override{ return m_blockCommandChars; }
     virtual b8 keyboardCharInput(u32 unicode, i32 mods)override;
@@ -116,13 +101,12 @@ public:
     virtual void pointerCaptureLost()override;
     [[nodiscard]] b8 wantsKeyboard()const noexcept;
     [[nodiscard]] b8 wantsPointer()const noexcept;
-    [[nodiscard]] b8 wantsTextInput()const noexcept;
 
 
 private:
     [[nodiscard]] b8 collectRoots();
     void synchronizeInput();
-    void routeInput(const Ui::InputEvent& event, b8* consumed = nullptr, b8* blockText = nullptr);
+    void routeInput(const Ui::InputEvent& event, b8* blockText = nullptr);
     void routePointerInput(const Ui::PointerInput& input, b8* consumed = nullptr);
     void synchronizeNativeInput();
     [[nodiscard]] b8 loadFonts(Core::Alloc::ScratchArena& scratchArena);

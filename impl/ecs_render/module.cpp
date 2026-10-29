@@ -114,14 +114,6 @@ void RendererSystem::setFrameLaggedAsyncLightingEnabled(const b8 enabled)noexcep
     m_pipeline->setFrameLaggedAsyncLightingEnabled(enabled);
 }
 
-b8 RendererSystem::frameLaggedAsyncLightingEnabled()const noexcept{
-    return m_pipeline->frameLaggedAsyncLightingEnabled();
-}
-
-b8 RendererSystem::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
-    return m_pipeline->setTaskGraphTimingFeedbackPolicy(policy);
-}
-
 Core::GpuTaskGraphRuntimeStatistics RendererSystem::deferredTaskGraphRuntimeStatistics()const noexcept{
     return m_pipeline->deferredTaskGraphRuntimeStatistics();
 }

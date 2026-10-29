@@ -140,9 +140,7 @@ TextHit TextLayout::hitTest(Point point)const noexcept{
         }
     }
     const TextLine& line = m_lines[lineIndex];
-    hit.lineIndex = static_cast<u32>(lineIndex);
     hit.byteOffset = line.byteBegin;
-    hit.inside = point.x >= 0.0f && point.x <= line.advance && point.y >= line.top && point.y < VectorGetX(VectorAdd(VectorReplicate(line.top), VectorReplicate(line.height)));
     if(line.clusterCount == 0u)
         return hit;
     f32 nearest = Limit<f32>::s_Max;
@@ -155,12 +153,10 @@ TextHit TextLayout::hitTest(Point point)const noexcept{
         if(leadingDistance <= nearest){
             nearest = leadingDistance;
             hit.byteOffset = cluster.byteBegin;
-            hit.edge = TextCaretEdge::Leading;
         }
         if(trailingDistance < nearest){
             nearest = trailingDistance;
             hit.byteOffset = cluster.byteEnd;
-            hit.edge = TextCaretEdge::Trailing;
         }
     }
     return hit;

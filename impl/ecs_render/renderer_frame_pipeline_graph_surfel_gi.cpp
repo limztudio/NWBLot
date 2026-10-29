@@ -84,11 +84,6 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
     const b8 hasSurfelWork = m_raytracingSystem.hasSurfelWork();
     const b8 traceGeometryStatesGraphOwned = traceGeometrySet.valid();
     const RendererFramePipelineDetail::TraceResourceSetUses traceResourceSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet);
-    constexpr usize s_TraceResourceSetUseCapacity = 2u;
-    Core::GpuTaskResourceSetUse traceResourceSetUses[s_TraceResourceSetUseCapacity] = {};
-    usize traceResourceSetUseCount = 0u;
-    for(usize traceSetIndex = 0u; traceSetIndex < traceResourceSets.useCount; ++traceSetIndex)
-        traceResourceSetUses[traceResourceSetUseCount++] = traceResourceSets.uses[traceSetIndex];
 
     const Core::GpuTaskExternalStateSource surfelGiComputeStateSource{ .states = m_surfelGiComputePersistentState.source(), };
     const Core::GpuTaskExternalStateSource surfelGiCounterStateSource{ .states = m_surfelGiCounterPersistentState.source(), };
@@ -554,7 +549,7 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
             .setDependencies(&m_deferredSurfelGiTraceBuildArgsTask, 1u)
             .setExternalStateSources(traceStateSources.count != 0u ? traceStateSources.values : nullptr, traceStateSources.count)
             .setResourceUses(traceResourceUses.data(), traceResourceUses.size())
-            .setResourceSetUses(traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr, traceResourceSetUseCount)
+            .setResourceSetUses(traceResourceSets.useCount != 0u ? traceResourceSets.uses : nullptr, traceResourceSets.useCount)
         ;
         const auto deferredSurfelGiTraceTaskResult = surfelGiTasks.declareTraceTask(traceDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!deferredSurfelGiTraceTaskResult){
@@ -601,7 +596,7 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
         .setExternalDependencies(graphOwnsSurfelGiResolve ? nullptr : surfelGiExternalDependencies, graphOwnsSurfelGiResolve ? 0u : surfelGiExternalDependencyCount)
         .setExternalStateSources(terminalStateSources.count != 0u ? terminalStateSources.values : nullptr, terminalStateSources.count)
         .setResourceUses(resourceUses.data(), resourceUses.size())
-        .setResourceSetUses(!graphOwnsSurfelGiResolve && traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr, !graphOwnsSurfelGiResolve ? traceResourceSetUseCount : 0u)
+        .setResourceSetUses(!graphOwnsSurfelGiResolve && traceResourceSets.useCount != 0u ? traceResourceSets.uses : nullptr, !graphOwnsSurfelGiResolve ? traceResourceSets.useCount : 0u)
     ;
     const auto deferredSurfelGiTaskResult = surfelGiTasks.declareTerminalTask(desc, deferredLightingResources, deferredTargets, timingTicket, graphOwnsSurfelGiResolve ? &asyncTiming : nullptr);
     if(!deferredSurfelGiTaskResult){

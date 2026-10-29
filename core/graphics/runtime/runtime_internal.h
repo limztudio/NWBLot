@@ -44,7 +44,7 @@ using GraphTaskDeclaration = GraphicsRuntime::StandaloneTaskGraphDeclaration;
 
 [[nodiscard]] SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(GraphicsBackend::Device& device, CommandQueue::Enum consumerQueue, usize uploadBytes)noexcept;
 [[nodiscard]] ResourceQueueSharing::Mask ResolveSetupUploadConsumerSharing(ResourceQueueSharing::Mask requestedSharing, CommandQueue::Enum consumerQueue, b8 crossFamilySameClassRouting = false)noexcept;
-[[nodiscard]] CommandQueue::Enum ResolveSetupUploadConsumerQueue(GraphicsBackend::Device& device, CommandQueue::Enum requestedConsumerQueue, usize uploadBytes, b8 hasKnownFinalState, b8 requiresGraphicsConsumerQueue = false)noexcept;
+[[nodiscard]] CommandQueue::Enum ResolveSetupUploadConsumerQueue(GraphicsBackend::Device& device, CommandQueue::Enum requestedConsumerQueue, usize uploadBytes, b8 hasKnownFinalState)noexcept;
 [[nodiscard]] GpuTaskSchedulingHint SetupUploadGraphScheduling(usize byteCount, b8 sameClassRouting = false, b8 crossFamilySameClassRouting = false)noexcept;
 [[nodiscard]] ResourceStates::Mask SetupUploadGraphFinalState(ResourceStates::Mask declaredInitialState)noexcept;
 
@@ -71,8 +71,6 @@ using GraphTaskDeclaration = GraphicsRuntime::StandaloneTaskGraphDeclaration;
 [[nodiscard]] b8 SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing);
 
 b8 ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc);
-b8 ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc);
-b8 ValidateMeshSetupDesc(const GraphicsRuntime::MeshSetupDesc& desc);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

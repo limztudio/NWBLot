@@ -9,7 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from csg_shadow_reference import (  # noqa: E402
     ANALYTIC_ARMS, ANALYTIC_REGIONS, ANALYTIC_REGION_SPACING, ARMS, REGIONS, analytic_optical_length, clipped_union_length, compare_analytic_frames, compare_frames, expected_rgb, expected_sample_rgb, ray_box,
-    receiver_pixel_world, reference_optical_length, region_pixels,)
+    receiver_pixel_world, region_pixels,)
 from csg_shadow_smoke import capture_environment, parse_args  # noqa: E402
 from window_capture_smoke import SmokeFailure  # noqa: E402
 

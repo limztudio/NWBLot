@@ -54,12 +54,6 @@ public:
     }
 };
 
-struct AvboitOccupancyRecordResult{
-    Core::GpuTaskId occupancyTask;
-    b8 declared = false;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -69,7 +63,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<AvboitOccupancyRecordResult> declare(
+    [[nodiscard]] b8 declare(
         Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         ObjectGeometryCacheGraph& objectGeometry,

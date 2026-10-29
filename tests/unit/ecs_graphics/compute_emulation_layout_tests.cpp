@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_render/mesh/compute_emulation_layout.h>
+#include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/assets_mesh/asset.h>
 
 #include <gtest/gtest.h>
 

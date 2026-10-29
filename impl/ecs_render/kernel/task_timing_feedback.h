@@ -109,7 +109,6 @@ public:
 public:
     void activate();
     void deactivate()noexcept;
-    [[nodiscard]] b8 setPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
     [[nodiscard]] Expected<Core::GpuTimingSampleAttribution> beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, b8 recordsNonCommittingTimingSample);
     void acceptSubmission(Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token)noexcept;
     void discardRecording(Core::GpuTimingSampleAttribution attribution)noexcept;

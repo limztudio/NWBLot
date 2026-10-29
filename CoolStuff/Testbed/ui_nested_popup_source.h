@@ -32,21 +32,6 @@ private:
 
 public:
     using UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>::UiFilteredListSource;
-
-
-public:
-    virtual StringView text(const u64 index)const noexcept override{
-        ++m_labelReads;
-        return index < rowCount() ? s_Labels[index] : StringView{};
-    }
-
-    void beginFrame()noexcept{ m_labelReads = 0u; }
-
-    [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
-
-
-private:
-    mutable u32 m_labelReads = 0u;
 };
 
 

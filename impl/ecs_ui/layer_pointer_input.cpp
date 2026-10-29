@@ -16,32 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 UiLayerSystem::pointerInput(const Ui::PointerInput& input){
-    synchronizeNativeInput();
-    b8 consumed = false;
-    routePointerInput(input, &consumed);
-    return consumed;
-}
-
-void UiLayerSystem::cancelDeviceInput(const u64 device){
-    synchronizeNativeInput();
-    const Ui::InputSource source = m_context.input().activePointerSource();
-    if(source.valid() && source.device == device){
-        Ui::PointerInput input;
-        input.source = source;
-        input.phase = Ui::PointerPhase::Cancel;
-        routePointerInput(input);
-    }
-    m_context.input().cancelDeviceInput(device);
-    if(device == 0u){
-        m_pressedButtons = 0u;
-        m_pointerOwner = 0u;
-        m_nativeKeyOwners.fill(0u);
-        m_blockNativeChars = false;
-        m_blockCommandChars = false;
-    }
-}
-
 void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8* consumed){
     if(consumed)
         *consumed = false;

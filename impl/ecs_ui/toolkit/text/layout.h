@@ -54,9 +54,6 @@ struct TextLine{
 
 struct TextHit{
     u32 byteOffset = 0u;
-    u32 lineIndex = 0u;
-    TextCaretEdge::Enum edge = TextCaretEdge::Leading;
-    b8 inside = false;
 };
 
 

@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets, const f32 temporalDecay)const noexcept{
+b8 RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets)const noexcept{
     return
         m_rayTracingState.m_causticResolve.m_prepare.m_pipeline
         && m_rayTracingState.m_causticResolve.m_wavelet.m_pipeline
@@ -23,7 +23,7 @@ b8 RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTar
         && m_rayTracingState.m_causticResolve.m_waveletDirect.m_pipeline
         && m_rayTracingState.m_causticResolve.m_upsample.m_pipeline
         && m_rayTracingState.m_causticGeometryDownsamplePipeline
-        && (temporalDecay <= 0.f || m_rayTracingState.m_causticAccumulatorDecayPipeline)
+        && m_rayTracingState.m_causticAccumulatorDecayPipeline
         && targets.causticAccumulator
         && targets.causticIrradiance
         && targets.causticHistory

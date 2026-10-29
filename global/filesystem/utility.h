@@ -177,46 +177,18 @@ inline constexpr b8 IsSafeCacheNameChar(CharT ch)noexcept(IsArithmetic_V<CharT>)
     return alphaNum || safePunctuation;
 }
 
-template<b8 Canonical, typename StringT>
-inline void SanitizeSafeCacheName(StringT& text)noexcept(IsNothrowRangeFor<StringT, decltype([](typename StringT::value_type&)noexcept([]()consteval noexcept{
+template<typename StringT>
+inline void SanitizeCanonicalSafeCacheName(StringT& text)noexcept(IsNothrowRangeFor<StringT, decltype([](typename StringT::value_type&)noexcept([]()consteval noexcept{
     using CharT = typename StringT::value_type;
-    constexpr b8 s_ReplacementIsNothrow = noexcept(IsSafeCacheNameChar(DeclVal<CharT&>())) && noexcept(DeclVal<CharT&>() = CharT('_'));
-    if constexpr(Canonical)
-        return s_ReplacementIsNothrow && noexcept(DeclVal<CharT&>() = Canonicalize(DeclVal<CharT&>()));
-    else
-        return s_ReplacementIsNothrow;
+    return noexcept(IsSafeCacheNameChar(DeclVal<CharT&>())) && noexcept(DeclVal<CharT&>() = CharT('_')) && noexcept(DeclVal<CharT&>() = Canonicalize(DeclVal<CharT&>()));
 }()){})>()){
     using CharT = typename StringT::value_type;
     for(CharT& ch : text){
-        if constexpr(Canonical)
-            ch = Canonicalize(ch);
+        ch = Canonicalize(ch);
 
         if(!IsSafeCacheNameChar(ch))
             ch = CharT('_');
     }
-}
-
-template<typename CharT, typename ArenaT, b8 Canonical>
-[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheNameImpl(ArenaT& arena, const BasicStringView<CharT> text){
-    if(text.empty())
-        return BasicString<CharT, ArenaT>(arena);
-
-    BasicString<CharT, ArenaT> output(text.data(), text.size(), arena);
-    SanitizeSafeCacheName<Canonical>(output);
-    return output;
-}
-
-template<b8 Canonical, typename StringT>
-[[nodiscard]] inline StringT BuildSafeCacheNameCopy(const StringT& text)noexcept(
-    noexcept(static_cast<b8>(text.empty())) && noexcept(StringT(text.get_allocator())) && noexcept(StringT(text.data(), text.size(), text.get_allocator()))
-    && noexcept(SanitizeSafeCacheName<Canonical>(DeclVal<StringT&>())) && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>
-){
-    if(text.empty())
-        return StringT(text.get_allocator());
-
-    StringT output(text.data(), text.size(), text.get_allocator());
-    SanitizeSafeCacheName<Canonical>(output);
-    return output;
 }
 
 
@@ -230,66 +202,18 @@ template<b8 Canonical, typename StringT>
 
 
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheName(ArenaT& arena, const BasicStringView<CharT> text){
-    return GlobalFilesystemUtilityDetail::BuildSafeCacheNameImpl<CharT, ArenaT, false>(arena, text);
-}
-
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheName(const BasicString<CharT, ArenaT>& text){
-    return GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<false>(text);
-}
-
-template<typename StringT>
-    requires requires(const StringT& text){
-        typename StringT::value_type;
-        text.empty();
-        text.data();
-        text.size();
-        text.get_allocator();
-    }
-[[nodiscard]] inline StringT BuildSafeCacheName(const StringT& text)noexcept(noexcept(GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<false>(text))){
-    return GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<false>(text);
-}
-
-
-template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> BuildCanonicalSafeCacheName(ArenaT& arena, const BasicStringView<CharT> text){
-    return GlobalFilesystemUtilityDetail::BuildSafeCacheNameImpl<CharT, ArenaT, true>(arena, text);
-}
+    if(text.empty())
+        return BasicString<CharT, ArenaT>(arena);
 
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> BuildCanonicalSafeCacheName(const BasicString<CharT, ArenaT>& text){
-    return GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<true>(text);
-}
-
-template<typename StringT>
-    requires requires(const StringT& text){
-        typename StringT::value_type;
-        text.empty();
-        text.data();
-        text.size();
-        text.get_allocator();
-    }
-[[nodiscard]] inline StringT BuildCanonicalSafeCacheName(const StringT& text)noexcept(noexcept(GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<true>(text))){
-    return GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<true>(text);
+    BasicString<CharT, ArenaT> output(text.data(), text.size(), arena);
+    GlobalFilesystemUtilityDetail::SanitizeCanonicalSafeCacheName(output);
+    return output;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename StringT, typename PathT>
-[[nodiscard]] inline StringT LowerPathExtension(const PathT& path)noexcept([]()consteval noexcept{
-    if constexpr(requires{ DeclVal<const PathT&>().extensionView(); })
-        return noexcept(ToAsciiLowerCopy(PathToGenericString<StringT>(DeclVal<const PathT&>().extensionView())));
-    else
-        return noexcept(ToAsciiLowerCopy(PathToGenericString<StringT>(DeclVal<const PathT&>().extension())));
-}()){
-    if constexpr(requires{ path.extensionView(); })
-        return ToAsciiLowerCopy(PathToGenericString<StringT>(path.extensionView()));
-    else
-        return ToAsciiLowerCopy(PathToGenericString<StringT>(path.extension()));
-}
 
 template<typename PathT>
 [[nodiscard]] inline b8 PathHasListedExtension(const PathT& path, const Span<const AStringView> extensions)noexcept([]()consteval noexcept{

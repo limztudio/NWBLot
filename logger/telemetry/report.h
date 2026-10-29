@@ -8,10 +8,7 @@
 #include <logger/global.h>
 
 #include <core/alloc/scratch.h>
-#include <core/telemetry/diagnostic.h>
-#include <core/telemetry/frame_graph.h>
 #include <core/telemetry/perf.h>
-#include <core/telemetry/text_log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

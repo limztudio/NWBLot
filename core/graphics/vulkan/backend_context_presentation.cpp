@@ -95,7 +95,6 @@ BeginFrameResult BackendContext::beginFrame(){
     }
 
     slot.state = AcquireSyncSlotState::AcquirePending;
-    m_activeAcquireSyncSlotIndex = m_acquireSyncSlotIndex;
     m_acquireSyncSlotIndex = (m_acquireSyncSlotIndex + 1u) % static_cast<u32>(m_acquireSyncSlots.size());
     m_frameAcquired = true;
     const auto consumerToken = m_rhiDevice->consumeAcquiredImageSemaphore(slot.semaphore);
@@ -357,7 +356,6 @@ Expected<b8, PresentationFailure> BackendContext::present(){
     m_frameAcquired = false;
     m_frameAbandonmentComplete = false;
     m_swapChainIndex = Limit<u32>::s_Max;
-    m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
     presentationLock.unlock();
     if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present consumed synchronization but requires recreation. {}"), ResultToString(res));

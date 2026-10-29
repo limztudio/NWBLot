@@ -22,7 +22,6 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_ServerName = NWB_TEXT("Server");
 inline constexpr usize s_MaxPendingCrashUploadPathText = 1024u;
 inline constexpr f32 s_ServerUpdateIntervalSeconds = 0.1f;
 
@@ -32,12 +31,12 @@ struct PendingCrashUpload{
 
 using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;
 
-class Server final : public IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds, s_ServerName>{
-    template<typename, const TStringView&> friend class LoggerWorkerBase;
-    template<typename, f32, const TStringView&> friend class IntervalLoggerWorkerBase;
+class Server final : public IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds>{
+    template<typename> friend class LoggerWorkerBase;
+    template<typename, f32> friend class IntervalLoggerWorkerBase;
 
-    using BaseType = LoggerWorkerBase<Server, s_ServerName>;
-    using UpdateBaseType = IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds, s_ServerName>;
+    using BaseType = LoggerWorkerBase<Server>;
+    using UpdateBaseType = IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds>;
 
 
 private:
@@ -82,45 +81,6 @@ private:
     Semaphore<> m_crashIngestSemaphore;
     Atomic<b8> m_crashIngestExit;
     Thread m_crashIngestThread;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ServerLoggerDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-extern Server* g_ServerLogger;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ServerLoggerRegistrationGuard final : NoCopy{
-public:
-    explicit ServerLoggerRegistrationGuard(Server& logger)noexcept
-        : m_previous(ServerLoggerDetail::g_ServerLogger)
-    {
-        ServerLoggerDetail::g_ServerLogger = &logger;
-    }
-    ServerLoggerRegistrationGuard(ServerLoggerRegistrationGuard&&) = delete;
-    ~ServerLoggerRegistrationGuard()noexcept{
-        ServerLoggerDetail::g_ServerLogger = m_previous;
-    }
-
-
-private:
-    Server* m_previous = nullptr;
 };
 
 

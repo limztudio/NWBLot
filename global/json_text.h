@@ -61,17 +61,6 @@ inline void AppendJsonQuotedText(StringT& out, const AStringView text)noexcept(n
     out += '"';
 }
 
-template<typename StringT>
-[[nodiscard]] inline StringT MakeJsonEscapedText(const AStringView text)noexcept(
-    noexcept(StringT{}) && noexcept(DeclVal<StringT&>().reserve(text.size())) && noexcept(AppendJsonEscapedText(DeclVal<StringT&>(), text))
-    && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>
-){
-    StringT out;
-    out.reserve(text.size());
-    AppendJsonEscapedText(out, text);
-    return out;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -3,6 +3,7 @@
 
 
 #include "components.h"
+#include <impl/assets_scene/component_assets.adhd.h>
 #include "binary_payload.h"
 
 #include <impl/ecs_scene/camera.h>

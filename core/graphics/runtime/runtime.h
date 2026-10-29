@@ -52,24 +52,6 @@ public:
         CommandQueue::Enum queue = CommandQueue::kCount;
     };
 
-    struct TextureSetupDesc{
-        TextureDesc textureDesc;
-        const void* data = nullptr;
-        // Total upload payload size in bytes; validates the subresource upload layout.
-        usize uploadDataSize = 0;
-        usize rowPitch = 0;
-        usize depthPitch = 0;
-        QueueSubmissionToken* acceptedToken = nullptr;
-        u32 arraySlice = 0;
-        u32 mipLevel = 0;
-        // See BufferSetupDesc::queue for the native consumer readiness contract.
-        // A non-retained Unknown initial state publishes CopyDest; a retained upload requires a concrete initial state.
-        CommandQueue::Enum queue = CommandQueue::kCount;
-        // Automatic selects one aspect for color, depth-only, and stencil-only formats.
-        // D24S8/D32S8 need one caller-selected aspect; Vulkan copies depth/stencil from separate CPU layouts.
-        TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
-    };
-
     // One immutable CPU payload per subresource. Batch copies regions into graph blobs first, so callers may free decoded memory on return.
     // A 3D mip is one region at arraySlice 0 whose depthPitch covers a single Z slice; 2D/cube uploads provide one region per array slice.
     struct TextureUploadRegion{
@@ -97,34 +79,6 @@ public:
         b8 hasPhysicalInitialState = false;
     };
 
-    struct MeshSetupDesc{
-        const void* vertexData = nullptr;
-        usize vertexDataSize = 0;
-        const void* indexData = nullptr;
-        usize indexDataSize = 0;
-        Name vertexBufferName;
-        Name indexBufferName;
-        u32 vertexStride = 0;
-        // Forwarded to the constituent buffer setups' native consumer readiness contracts.
-        CommandQueue::Enum queue = CommandQueue::kCount;
-        b8 use32BitIndices = true;
-    };
-
-    struct MeshResource{
-        BufferHandle vertexBuffer;
-        BufferHandle indexBuffer;
-        u32 vertexStride = 0;
-        u32 vertexCount = 0;
-        u32 indexCount = 0;
-        Format::Enum indexFormat = Format::UNKNOWN;
-
-
-    public:
-        [[nodiscard]] b8 valid()const noexcept{
-            return vertexBuffer != nullptr;
-        }
-    };
-
 
 public:
     using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
@@ -148,27 +102,11 @@ public:
 
 public:
     b8 init(const Common::FrameData& data);
-    b8 createHeadlessDevice();
-    b8 createInstance(const InstanceParameters& params);
     b8 setDebugRuntimeEnabled(b8 enabled)noexcept;
     // Controls actual hardware RT extensions/features for the next logical device. Must precede instance creation.
     b8 setHardwareRayTracingPolicy(HardwareRayTracingPolicy::Enum policy)noexcept;
-    // Selects the native mesh-shader path when the backend supports it. Disabled configs use compute emulation.
-    // Must be configured before instance creation.
-    b8 setNativeMeshShadersEnabled(b8 enabled)noexcept;
     // Must be configured before device creation. Unsupported adapters retain the Graphics-only path.
     b8 setAsyncComputeLaneEnabled(b8 enabled)noexcept;
-    // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
-    b8 setTransferQueueEnabled(b8 enabled)noexcept;
-    // Must be configured before device creation.
-    // May expose extra queues per active family plus one auxiliary family per class when cross-family routing is on.
-    b8 setSameClassMultiQueueEnabled(b8 enabled)noexcept;
-    // Extends optional same-class discovery to distinct compatible Vulkan families.
-    // Individual graph tasks must still explicitly accept the resulting ownership-transfer route.
-    b8 setCrossFamilySameClassQueueRoutingEnabled(b8 enabled)noexcept;
-    // Selects a Vulkan adapter index, or -1 for the backend default.
-    // Must be configured before device creation so paired processes can reproduce a multi-adapter route.
-    b8 setAdapterIndex(i32 index)noexcept;
     // Requests HDR10/PQ presentation where the current display surface supports it.
     // Unsupported surfaces automatically retain the normal SDR swap chain.
     // Must be configured before device creation.
@@ -202,7 +140,6 @@ public:
     // Wave/subgroup size, or 64 when the device cannot report it. Sizes groupshared reductions and wave-intrinsic specializations.
     [[nodiscard]] u32 queryWaveLaneCount()const noexcept;
 
-    void addRenderPassToFront(IRenderPass& pass);
     void addRenderPassToBack(IRenderPass& pass);
     void removeRenderPass(IRenderPass& pass);
 
@@ -259,8 +196,6 @@ public:
 
     [[nodiscard]] b8 isSwapChainReadbackAvailable()const noexcept{ return m_swapChainState.swapChainReadbackAvailable; }
 
-    void setVSyncEnabled(b8 enabled)noexcept{ m_requestedVSync = enabled; }
-
     void getWindowDimensions(i32& width, i32& height)const noexcept;
     void getDPIScaleInfo(f32& x, f32& y)const noexcept;
     [[nodiscard]] TStringView getWindowTitle()const noexcept{ return m_windowTitle; }
@@ -278,7 +213,6 @@ public:
     [[nodiscard]] Expected<TextureHandle> createTexture(const TextureDesc& desc)const;
 
     [[nodiscard]] Expected<BufferHandle> setupBuffer(const BufferSetupDesc& desc)const;
-    [[nodiscard]] Expected<TextureHandle> setupTexture(const TextureSetupDesc& desc)const;
     [[nodiscard]] b8 uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
     // Compiles, records, and submits an isolated graph synchronously.
     // This is the graph-owned escape hatch for a standalone caller that has no renderer-owned frame graph but can still provide immutable task inputs.
@@ -289,7 +223,6 @@ public:
         GpuTimingRecorder* timingRecorder = nullptr,
         GpuTimingFrameTransaction* frameTimingTransaction = nullptr
     )const;
-    [[nodiscard]] Expected<MeshResource> setupMesh(const MeshSetupDesc& desc)const;
 
     [[nodiscard]] Expected<CooperativeVectorDeviceFeatures> queryCoopVecFeatures()const;
     [[nodiscard]] Expected<usize> getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
@@ -319,7 +252,7 @@ public:
 private:
     b8 animateRenderPresentInternal(CpuTimingPhaseBatch* phaseTiming);
     [[nodiscard]] b8 registerCpuTimingScopes();
-    [[nodiscard]] b8 resizeBackBuffer(u32 width, u32 height, b8 vsyncEnabled);
+    [[nodiscard]] b8 resizeBackBuffer(u32 width, u32 height);
 
 
 private:
@@ -355,7 +288,6 @@ private:
     b8 m_hasPresentedFrame = false;
     b8 m_windowVisible = false;
     b8 m_windowIsInFocus = true;
-    b8 m_requestedVSync = false;
     b8 m_instanceCreated = false;
     mutable b8 m_deviceRecreationRequested = false;
     b8 m_frameSubmissionSuspended = false;

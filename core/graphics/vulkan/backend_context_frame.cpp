@@ -131,7 +131,6 @@ void BackendContext::clearAcquireSyncSlots()noexcept{
     }
     m_acquireSyncSlots.clear();
     m_acquireSyncSlotIndex = 0u;
-    m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
 }
 
 b8 BackendContext::recreateAcquireSyncSlots(const usize count){

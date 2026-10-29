@@ -31,7 +31,6 @@ class RendererFramePipeline;
 struct GraphicsPrefixTimingResolutionResult{
     usize uniquePacketCount = 0u;
     b8 bindingsValid = true;
-    b8 asyncSpansOnePacket = true;
 };
 
 

@@ -57,11 +57,6 @@ struct AvboitIntegrationStageInputs{
     RendererTaskTimingFeedback& timingFeedback;
 };
 
-struct AvboitIntegrationStageResult{
-    Core::GpuTaskId integrationTask;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -73,7 +68,7 @@ public:
 public:
     [[nodiscard]] Expected<AvboitDepthWarpStageResult> declareDepthWarp(const AvboitDepthWarpStageInputs& inputs);
 
-    [[nodiscard]] Expected<AvboitIntegrationStageResult> declareIntegration(const AvboitIntegrationStageInputs& inputs);
+    [[nodiscard]] b8 declareIntegration(const AvboitIntegrationStageInputs& inputs);
 
 
 private:

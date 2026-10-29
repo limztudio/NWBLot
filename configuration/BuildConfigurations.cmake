@@ -1,7 +1,6 @@
 include_guard(GLOBAL)
 
 set(NWB_BUILD_CONFIGURATIONS dbg opt fin)
-set(NWB_IMPORTED_CONFIGURATIONS DBG OPT FIN)
 
 macro(nwb_configure_build_configs)
     if(CMAKE_CONFIGURATION_TYPES)

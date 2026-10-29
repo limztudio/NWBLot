@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 
 import reflection_optical_reference as reference
 import reflection_optical_smoke as smoke
-from reflection_smoke import STATISTICS_FIELDS, SmokeFailure
+from reflection_smoke import SmokeFailure
 
 
 LIT_QUERY_LIMIT = "query_limit"

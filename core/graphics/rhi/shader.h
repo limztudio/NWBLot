@@ -193,29 +193,6 @@ struct ShaderSpecialization{
         i32 i;
         f32 f;
     } value;
-
-
-public:
-    static constexpr ShaderSpecialization FromU32(u32 constantID, u32 u)noexcept{
-        ShaderSpecialization s;
-        s.constantID = constantID;
-        s.value.u = u;
-        return s;
-    }
-
-    static constexpr ShaderSpecialization FromI32(u32 constantID, i32 i)noexcept{
-        ShaderSpecialization s;
-        s.constantID = constantID;
-        s.value.i = i;
-        return s;
-    }
-
-    static constexpr ShaderSpecialization FromF32(u32 constantID, f32 f)noexcept{
-        ShaderSpecialization s;
-        s.constantID = constantID;
-        s.value.f = f;
-        return s;
-    }
 };
 
 typedef GraphicsBackend::Handle<Shader> ShaderHandle;

@@ -519,7 +519,6 @@ public:
 
 // Preflight then lowers only `packet`'s commands: list open on the packet's exact queue/class, no render pass, bytes+graph stable.
 // No seeds/barriers/submit; caller keeps the packet contract.
-[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(BinaryByteView bytes, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet, CommandList& commandList);
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(const GpuCommandIrOwnedStream& stream, const GpuTaskGraphDeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledGraph, GpuSubmissionPacketId packet, CommandList& commandList);
 
 

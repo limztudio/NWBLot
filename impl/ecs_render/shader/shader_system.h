@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include "shader_path_resolver.h"
-
 #include <impl/assets_scene/asset.h>
 #include <impl/assets_shader/loader.h>
 
@@ -60,6 +58,8 @@ NWB_IMPL_BEGIN
 
 
 inline constexpr TStringView s_RendererAssetOwnerName = NWB_TEXT("RendererSystem");
+
+using RendererShaderPathResolveCallback = Function< Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName) >;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

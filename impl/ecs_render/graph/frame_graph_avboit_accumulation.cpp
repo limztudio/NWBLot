@@ -221,7 +221,6 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
     result.sharedComputeEmulationPlan = accumulationSharedComputeEmulationPlan;
     result.sharedComputeEmulationInstanceCount = accumulationSharedComputeEmulationInstanceCount;
     result.sharedComputeEmulationMaterialTypedByteCount = accumulationSharedComputeEmulationMaterialTypedByteCount;
-    result.declared = true;
     return result;
 }
 

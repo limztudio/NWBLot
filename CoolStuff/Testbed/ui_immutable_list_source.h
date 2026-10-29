@@ -22,8 +22,7 @@ TESTBED_BEGIN
 
 
 // Immutable demo rows share key navigation without adding per-source row or label storage.
-// TextNoThrow is checked when the label reads are instantiated, after the source type is complete.
-template<typename Source, usize LabelCount, u64 DisabledKey, typename Interface = NWB::Impl::Ui::IListDataSource, b8 TextNoThrow = true>
+template<typename Source, usize LabelCount, u64 DisabledKey, typename Interface = NWB::Impl::Ui::IListDataSource>
 class UiImmutableListSource : public Interface, NoCopy{
 public:
     virtual u64 instanceGeneration()const noexcept override final{ return 1u; }
@@ -61,8 +60,7 @@ public:
         return index;
     }
 
-    virtual StringView text(const u64 index)const noexcept(TextNoThrow)override{
-        static_assert(!TextNoThrow || noexcept(StringView(index < LabelCount ? Source::s_Labels[index] : StringView{})), "throwing list labels require TextNoThrow = false");
+    virtual StringView text(const u64 index)const noexcept override final{
         return index < LabelCount ? Source::s_Labels[index] : StringView{};
     }
 
@@ -73,8 +71,8 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename Source, usize LabelCount, u64 DisabledKey, b8 TextNoThrow = true>
-class UiFilteredListSource : public UiImmutableListSource<Source, LabelCount, DisabledKey, NWB::Impl::Ui::ISearchableListDataSource, TextNoThrow>{
+template<typename Source, usize LabelCount, u64 DisabledKey>
+class UiFilteredListSource : public UiImmutableListSource<Source, LabelCount, DisabledKey, NWB::Impl::Ui::ISearchableListDataSource>{
 private:
     class View final : public NWB::Impl::Ui::IListDataSource, NoCopy{
     private:
@@ -118,9 +116,8 @@ private:
             return MakeUnexpected(Failure{});
         }
 
-        virtual StringView text(const u64 index)const noexcept(TextNoThrow)override{
-            static_assert(!TextNoThrow || noexcept(StringView(index < rowCount() ? static_cast<const Source&>(m_source).text(m_source.m_indices[index]) : StringView{})), "throwing list labels require TextNoThrow = false");
-            return index < rowCount() ? static_cast<const Source&>(m_source).text(m_source.m_indices[index]) : StringView{};
+        virtual StringView text(const u64 index)const noexcept override{
+            return index < rowCount() ? m_source.text(m_source.m_indices[index]) : StringView{};
         }
 
         virtual b8 enabled(const u64 index)const noexcept override{ return index < rowCount() && m_source.enabled(m_source.m_indices[index]); }

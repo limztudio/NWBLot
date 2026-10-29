@@ -4,7 +4,7 @@
 import ctypes
 from dataclasses import dataclass
 import struct
-from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure, write_status  # noqa: E402
+from window_capture_outcome import SmokeFailure  # noqa: E402
 
 
 LIT_B_BM = b"BM"

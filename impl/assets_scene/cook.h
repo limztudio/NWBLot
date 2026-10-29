@@ -198,7 +198,7 @@ template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
 }
 
 template<typename AssetT, typename EntryT>
-[[nodiscard]] Expected<AssetT> BuildComponentAssetFromEntry(EntryT& entry, Core::Assets::AssetArena& arena){
+[[nodiscard]] Expected<AssetT> BuildComponentAssetFromEntry(const EntryT& entry, Core::Assets::AssetArena& arena){
     AssetT asset(arena, entry.virtualPath);
     asset.component = entry.component;
     if(!asset.validatePayload())
@@ -208,7 +208,7 @@ template<typename AssetT, typename EntryT>
 
 template<typename AssetT, typename EntryT>
 [[nodiscard]] Expected<AssetT> BuildComponentCookAsset(EntryT& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    return BuildComponentAssetFromEntry<AssetT, EntryT>(entry, arena);
+    return BuildComponentAssetFromEntry<AssetT>(entry, arena);
 }
 
 template<typename EntryT, typename AssetT, ParseMetadataValueFn<EntryT> ParseValFn, const AStringView& DiagnosticPrefix>

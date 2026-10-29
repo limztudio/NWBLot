@@ -7,7 +7,7 @@
 #include "resource_names.h"
 
 #include <impl/ecs_mesh/runtime/resource_names.h>
-#include <impl/assets_mesh/meshlet_ref_codec.h>
+#include <impl/assets_mesh/meshlet_ref_decode.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.h>
 #include <impl/assets_mesh/meshlet_vertex_attributes.h>
 #include <impl/assets_mesh/skin_validation.h>

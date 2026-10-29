@@ -35,7 +35,6 @@ NWB_IMPL_BEGIN
 
 class RendererMaterialSystem;
 class RendererCsgSystem;
-class RendererAvboitSystem;
 class AvboitGeneratedGeometryReuse;
 
 

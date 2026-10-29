@@ -59,32 +59,6 @@ public:
     void notifyAll()noexcept{ m_storage.notify_all(); }
 };
 
-[[nodiscard]] inline b8 AtomicFlagTest(const AtomicFlag& flag)noexcept{ return flag.test(); }
-
-[[nodiscard]] inline b8 AtomicFlagTestExplicit(const AtomicFlag& flag, const MemoryOrder order)noexcept{
-    return flag.test(order);
-}
-
-inline b8 AtomicFlagTestAndSet(AtomicFlag& flag)noexcept{ return flag.testAndSet(); }
-
-inline b8 AtomicFlagTestAndSetExplicit(AtomicFlag& flag, const MemoryOrder order)noexcept{
-    return flag.testAndSet(order);
-}
-
-inline void AtomicFlagClear(AtomicFlag& flag)noexcept{ flag.clear(); }
-
-inline void AtomicFlagClearExplicit(AtomicFlag& flag, const MemoryOrder order)noexcept{ flag.clear(order); }
-
-inline void AtomicFlagWait(const AtomicFlag& flag, const b8 expected)noexcept{ flag.wait(expected); }
-
-inline void AtomicFlagWaitExplicit(const AtomicFlag& flag, const b8 expected, const MemoryOrder order)noexcept{
-    flag.wait(expected, order);
-}
-
-inline void AtomicFlagNotifyOne(AtomicFlag& flag)noexcept{ flag.notifyOne(); }
-
-inline void AtomicFlagNotifyAll(AtomicFlag& flag)noexcept{ flag.notifyAll(); }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

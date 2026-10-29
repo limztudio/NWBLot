@@ -261,7 +261,6 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     result.reflectionGraph = reflectionGraph;
     result.reflectionCompositeInputs = reflectionCompositeInputs;
     result.refractionResolveTask = *refractionResolveTask;
-    result.declared = true;
     return result;
 }
 

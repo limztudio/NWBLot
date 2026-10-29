@@ -23,8 +23,6 @@ namespace AssetsArenaScope{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_ProcessPendingScratch("core/assets/manager_process_pending_scratch");
-
 inline constexpr Name s_AutoCodecFactoryQueueArena("core/assets/auto_codec_factory_queue");
 inline constexpr Name s_RegisterCodecsScratch("core/assets/register_auto_collected_codecs_scratch");
 

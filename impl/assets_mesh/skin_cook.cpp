@@ -176,8 +176,8 @@ template<usize ComponentCount>
     if(!ValidateSkinInfluenceFields(nwbFilePath, influenceValue))
         return MakeUnexpected(Failure{});
 
-    const Value* joints = FindField(influenceValue, s_JointsField);
-    const Value* weights = FindField(influenceValue, s_WeightsField);
+    const Value* joints = influenceValue.findField(s_JointsField);
+    const Value* weights = influenceValue.findField(s_WeightsField);
     if(!joints || !weights){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}] requires 'joints' and 'weights'"), PathToString<tchar>(nwbFilePath), influenceIndex);
         return MakeUnexpected(Failure{});

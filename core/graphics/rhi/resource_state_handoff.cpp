@@ -154,11 +154,6 @@ b8 CommandListResourceStateHandoff::buildResourceSubset(const CommandListResourc
     return true;
 }
 
-b8 CommandListResourceStateHandoff::buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* const texture, Alloc::ScratchArena& scratchArena){
-    Texture* const textures[] = { texture };
-    return buildResourceSubset(source, textures, 1u, nullptr, 0u, scratchArena);
-}
-
 b8 CommandListResourceStateHandoff::buildTextureRangeSubset(const CommandListResourceStateHandoff& source, Texture* const texture, const TextureSubresourceSet subresources){
     if(!source.valid() || source.m_deviceGeneration == 0u || !texture)
         return false;
@@ -376,55 +371,6 @@ b8 CommandListResourceStateHandoff::copyFrom(const CommandListResourceStateHando
     AssignTriviallyCopyableVector(m_permanentBufferStates, source.m_permanentBufferStates);
     m_deviceGeneration = source.m_deviceGeneration;
     m_valid = true;
-    return true;
-}
-
-b8 CommandListResourceStateHandoff::equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept{
-    if(
-        m_valid != snapshot.m_valid
-        || m_deviceGeneration != snapshot.m_deviceGeneration
-        || m_textureStates.size() != snapshot.m_textureStates.size()
-        || m_bufferStates.size() != snapshot.m_bufferStates.size()
-        || m_permanentTextureStates.size() != snapshot.m_permanentTextureStates.size()
-        || m_permanentBufferStates.size() != snapshot.m_permanentBufferStates.size()
-    )
-        return false;
-
-    const auto sameTextureState = [](const TextureState& lhs, const TextureState& rhs)noexcept{
-        return
-            lhs.texture == rhs.texture
-            && lhs.mipLevel == rhs.mipLevel
-            && lhs.arraySlice == rhs.arraySlice
-            && lhs.state == rhs.state
-            && lhs.queueSharing == rhs.queueSharing
-            && lhs.ownerQueue == rhs.ownerQueue
-            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
-        ;
-    };
-    for(usize stateIndex = 0u; stateIndex < m_textureStates.size(); ++stateIndex){
-        if(!sameTextureState(m_textureStates[stateIndex], snapshot.m_textureStates[stateIndex]))
-            return false;
-    }
-
-    const auto sameBufferState = [](const BufferState& lhs, const BufferState& rhs)noexcept{
-        return lhs.buffer == rhs.buffer && lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue && lhs.range == rhs.range;
-    };
-    for(usize stateIndex = 0u; stateIndex < m_bufferStates.size(); ++stateIndex){
-        if(!sameBufferState(m_bufferStates[stateIndex], snapshot.m_bufferStates[stateIndex]))
-            return false;
-    }
-
-    const auto samePermanentTextureState = [](const PermanentTextureState& lhs, const PermanentTextureState& rhs)noexcept{
-        return lhs.texture == rhs.texture && lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue;
-    };
-    for(usize stateIndex = 0u; stateIndex < m_permanentTextureStates.size(); ++stateIndex){
-        if(!samePermanentTextureState(m_permanentTextureStates[stateIndex], snapshot.m_permanentTextureStates[stateIndex]))
-            return false;
-    }
-    for(usize stateIndex = 0u; stateIndex < m_permanentBufferStates.size(); ++stateIndex){
-        if(!sameBufferState(m_permanentBufferStates[stateIndex], snapshot.m_permanentBufferStates[stateIndex]))
-            return false;
-    }
     return true;
 }
 

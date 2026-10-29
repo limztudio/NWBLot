@@ -7,8 +7,6 @@
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_scene/components.adhd.h>
 
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/output_layer_contributor.h>
 
 
@@ -501,7 +499,6 @@ void RendererFramePipeline::resetDeferredCausticsTaskState()noexcept{
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
     m_deferredCausticAccumulatorBootstrapClearTask = {};
-    m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticPhotonTask = {};
     m_deferredCausticGeometryTask = {};

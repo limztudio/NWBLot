@@ -383,10 +383,7 @@ ResourceQueueSharing::Mask ResolveSetupUploadConsumerSharing(const ResourceQueue
     return static_cast<ResourceQueueSharing::Mask>(static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(consumerQueue)));
 }
 
-CommandQueue::Enum ResolveSetupUploadConsumerQueue(GraphicsBackend::Device& device, const CommandQueue::Enum requestedConsumerQueue, const usize uploadBytes, const b8 hasKnownFinalState, const b8 requiresGraphicsConsumerQueue)noexcept{
-    if(requiresGraphicsConsumerQueue)
-        return CommandQueue::Graphics;
-
+CommandQueue::Enum ResolveSetupUploadConsumerQueue(GraphicsBackend::Device& device, const CommandQueue::Enum requestedConsumerQueue, const usize uploadBytes, const b8 hasKnownFinalState)noexcept{
     switch(requestedConsumerQueue){
     case CommandQueue::kCount:
         if(uploadBytes < s_SetupUploadLargeMinimumBytes || !hasKnownFinalState)

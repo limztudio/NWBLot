@@ -46,7 +46,6 @@ struct SurfelCausticsMergeValidationResult{
     b8 causticResolveFifthWaveletMergedIntoCausticsPacket = false;
     b8 causticResolveUpsampleMergedIntoCausticsPacket = false;
     b8 causticIrradianceClearMergedIntoCausticsPacket = false;
-    b8 causticAccumulatorNonTemporalClearMergedIntoCausticsPacket = false;
     b8 causticAccumulatorBootstrapClearMergedIntoCausticsPacket = false;
     b8 causticAccumulatorDecayMergedIntoCausticsPacket = false;
     b8 surfelGiSnapshotCopyAndTimingPacketsAreDistinct = false;

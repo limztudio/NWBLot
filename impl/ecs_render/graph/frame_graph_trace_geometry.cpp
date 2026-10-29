@@ -35,7 +35,6 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
     FrameGraphTraceGeometryResult result(scratchArena);
     result.traceGeometry.reserve(preparedTraceGeometry.size());
     result.hardwareTraceGeometry.reserve(preparedTraceGeometry.size());
-    result.hardwareTraceAttributes.reserve(preparedTraceGeometry.size());
     result.softwareTraceGeometry.reserve(preparedTraceGeometry.size());
     for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
         Core::GpuGraphResourceDesc desc = BufferResourceDesc(preparedBuffer.identity, "Prepared Shadow Trace Geometry");
@@ -49,8 +48,6 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
         result.traceGeometry.push_back(resource);
         if(preparedBuffer.roles & (PreparedShadowTraceGeometryRole::s_HardwarePosition | PreparedShadowTraceGeometryRole::s_HardwareIndex | PreparedShadowTraceGeometryRole::s_HardwareAttribute))
             result.hardwareTraceGeometry.push_back(resource);
-        if(preparedBuffer.roles & PreparedShadowTraceGeometryRole::s_HardwareAttribute)
-            result.hardwareTraceAttributes.push_back(resource);
         if(preparedBuffer.roles & (PreparedShadowTraceGeometryRole::s_SoftwareNode | PreparedShadowTraceGeometryRole::s_SoftwarePosition | PreparedShadowTraceGeometryRole::s_SoftwareIndex | PreparedShadowTraceGeometryRole::s_SoftwareAttribute))
             result.softwareTraceGeometry.push_back(resource);
     }
@@ -90,7 +87,6 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
         result.traceMaterialSampledTextureSet = *traceMaterialSampledTextureSetResult;
     }
     result.hardwareTraceGeometrySet = importSet(result.hardwareTraceGeometry, Name("render.hardware_trace_geometry"), "Hardware Trace Geometry");
-    result.hardwareTraceAttributeSet = importSet(result.hardwareTraceAttributes, Name("render.hardware_trace_attributes"), "Hardware Trace Attributes");
 
     result.softwareTraceResourcesPrepared = !result.softwareTraceGeometry.empty();
     FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(m_graph, m_meshSystem);

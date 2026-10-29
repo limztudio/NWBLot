@@ -52,7 +52,6 @@ using RtMeshHeapHandleCache = HashMap<NotNull<const Core::Buffer*>, RtMeshHeapHa
 
 struct RtSceneBvhState{
     usize m_tlasMaxInstances = 0u;
-    u64 m_tlasDeviceAddress = 0u;
     // Runtime meshes invalidate static-scene reuse because their BVHs can update in place.
     u64 m_tlasStaticSceneHash = 0u;
     u64 m_sceneSwBvhStaticSceneHash = 0u;
@@ -204,7 +203,6 @@ struct RtShadowState{
     u32 m_shadowMeshHeapHighWater = 0u;
     u32 m_swShadowMeshCount = 0u;
     u32 m_swShadowMeshHeapHighWater = 0u;
-    f32 m_swShadowEdgeThreshold = ECSRenderDetail::s_DefaultSwShadowEdgeThreshold;
     u32 m_swShadowEdgeListCapacity = 0u;
     Core::GpuDescriptorHandle m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
@@ -305,8 +303,6 @@ struct RtCausticState{
     u32 m_causticRefractiveInstanceCount = 0u;
     // Producer runs only when refractive instances and caustic lights exist.
     u32 m_causticLightCount = 0u;
-    // Splat-space EMA avoids image-space reprojection ghosts; resolve normalizes steady-state brightness.
-    f32 m_causticTemporalDecay = ECSRenderDetail::s_DefaultCausticTemporalDecay;
 
     b8 m_causticEmissionGateLogged = false;
     b8 m_causticGeometryDownsamplePipelineFailed = false;

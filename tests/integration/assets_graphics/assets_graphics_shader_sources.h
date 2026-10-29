@@ -54,7 +54,7 @@ struct AssetsGraphicsShaderSources{
     NwbMeshSurface nwbMaterialSurface(){
     const uint2 materialLayoutHash = NWB_MATERIAL_BIND_LAYOUT_HASH;
     const uint2 materialInterfaceHash0 = NWB_MATERIAL_BIND_INTERFACE_HASH_0;
-    const b8 materialBindConstantsValid =
+    const bool materialBindConstantsValid =
         materialLayoutHash.x != 0u
         && materialInterfaceHash0.x != 0u
         && NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 44u

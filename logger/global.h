@@ -29,7 +29,6 @@ NWB_LOG_BEGIN
 
 using LogArena = ::NWB::Core::Common::LogArena;
 using LogString = ::NWB::Core::Common::LogString;
-namespace BreakPolicy = ::NWB::Core::Common::LoggerBreakPolicy;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

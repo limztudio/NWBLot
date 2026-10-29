@@ -92,7 +92,7 @@ Expected<u32> LayoutTree::addNode(const u32 parent, const LayoutNodeDesc& descri
         return MakeUnexpected(Failure{});
     }
     const u32 index = static_cast<u32>(m_nodes.size());
-    m_nodes.push_back({ description, parent });
+    m_nodes.push_back({ description });
     if(parent != s_LayoutNoParent){
         Node& parentNode = m_nodes[parent];
         if(parentNode.lastChild == s_LayoutNoParent)

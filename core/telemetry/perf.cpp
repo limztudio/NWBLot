@@ -116,7 +116,7 @@ static void RecordTimingView(const PerfTimingSource::Enum source, const Perf::Ti
         const Perf::TimingStats& stats = timing.statsAt(i);
         if(!stats.valid())
             continue;
-        if(!RecordPerfTiming(recorder, source, scopeName, stats, streamId)){
+        if(!RecordPerfTiming(recorder, source, scopeName, scopeName.resolvedText(), stats, streamId)){
             inOutSucceeded = false;
             continue;
         }
@@ -135,7 +135,7 @@ static void RecordMemoryView(const Perf::MemoryView& memory, const u32 streamId,
         const Perf::MemorySnapshot& snapshot = memory.snapshotAt(i);
         if(!snapshot.valid())
             continue;
-        if(!RecordPerfMemory(recorder, scopeName, snapshot, memory.deltaAt(i), streamId)){
+        if(!RecordPerfMemory(recorder, scopeName, scopeName.resolvedText(), snapshot, memory.deltaAt(i), streamId)){
             inOutSucceeded = false;
             continue;
         }
@@ -163,7 +163,7 @@ b8 IsValidPerfTimingSource(const PerfTimingSource::Enum source)noexcept{
     }
 }
 
-b8 BuildPerfTimingPayload(TelemetryArena&, const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats, TelemetryBytes& outPayload){
+b8 BuildPerfTimingPayload(const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats, TelemetryBytes& outPayload){
     outPayload.clear();
 
     if(!__hidden_telemetry_perf::ValidateTimingInput(source, scopeName, scopeText, stats))
@@ -183,10 +183,6 @@ b8 BuildPerfTimingPayload(TelemetryArena&, const PerfTimingSource::Enum source, 
     header.scopeNameBytes = static_cast<u32>(scopeText.size());
 
     return __hidden_telemetry_perf::AppendPerfPayloadWithScopeText(header, scopeText, outPayload);
-}
-
-b8 BuildPerfTimingPayload(TelemetryArena& arena, const PerfTimingSource::Enum source, const Name& scopeName, const Perf::TimingStats& stats, TelemetryBytes& outPayload){
-    return BuildPerfTimingPayload(arena, source, scopeName, scopeName.resolvedText(), stats, outPayload);
 }
 
 Expected<PerfTimingPayload> ParsePerfTimingPayload(const void* const payload, const usize payloadBytes)noexcept{
@@ -212,16 +208,12 @@ Expected<PerfTimingPayload> ParsePerfTimingPayload(const void* const payload, co
 }
 
 b8 RecordPerfTiming(Recorder& recorder, const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats, const u32 streamId){
-    return recorder.recordBuiltPayload(EventKind::PerfFrame, stats.publishFrameIndex, streamId, [source, &scopeName, scopeText, &stats](TelemetryArena& arena, TelemetryBytes& payload){
-        return BuildPerfTimingPayload(arena, source, scopeName, scopeText, stats, payload);
+    return recorder.recordBuiltPayload(EventKind::PerfFrame, stats.publishFrameIndex, streamId, [source, &scopeName, scopeText, &stats](TelemetryArena&, TelemetryBytes& payload){
+        return BuildPerfTimingPayload(source, scopeName, scopeText, stats, payload);
     });
 }
 
-b8 RecordPerfTiming(Recorder& recorder, const PerfTimingSource::Enum source, const Name& scopeName, const Perf::TimingStats& stats, const u32 streamId){
-    return RecordPerfTiming(recorder, source, scopeName, scopeName.resolvedText(), stats, streamId);
-}
-
-b8 BuildPerfMemoryPayload(TelemetryArena&, const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, TelemetryBytes& outPayload){
+b8 BuildPerfMemoryPayload(const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, TelemetryBytes& outPayload){
     outPayload.clear();
 
     if(!__hidden_telemetry_perf::ValidateMemoryInput(scopeName, scopeText, snapshot, delta))
@@ -251,10 +243,6 @@ b8 BuildPerfMemoryPayload(TelemetryArena&, const Name& scopeName, const AStringV
     }
 
     return __hidden_telemetry_perf::AppendPerfPayloadWithScopeText(header, scopeText, outPayload);
-}
-
-b8 BuildPerfMemoryPayload(TelemetryArena& arena, const Name& scopeName, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, TelemetryBytes& outPayload){
-    return BuildPerfMemoryPayload(arena, scopeName, scopeName.resolvedText(), snapshot, delta, outPayload);
 }
 
 Expected<PerfMemoryPayload> ParsePerfMemoryPayload(const void* const payload, const usize payloadBytes)noexcept{
@@ -293,13 +281,9 @@ Expected<PerfMemoryPayload> ParsePerfMemoryPayload(const void* const payload, co
 }
 
 b8 RecordPerfMemory(Recorder& recorder, const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, const u32 streamId){
-    return recorder.recordBuiltPayload(EventKind::MemoryFrame, snapshot.frameIndex, streamId, [&scopeName, scopeText, &snapshot, &delta](TelemetryArena& arena, TelemetryBytes& payload){
-        return BuildPerfMemoryPayload(arena, scopeName, scopeText, snapshot, delta, payload);
+    return recorder.recordBuiltPayload(EventKind::MemoryFrame, snapshot.frameIndex, streamId, [&scopeName, scopeText, &snapshot, &delta](TelemetryArena&, TelemetryBytes& payload){
+        return BuildPerfMemoryPayload(scopeName, scopeText, snapshot, delta, payload);
     });
-}
-
-b8 RecordPerfMemory(Recorder& recorder, const Name& scopeName, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, const u32 streamId){
-    return RecordPerfMemory(recorder, scopeName, scopeName.resolvedText(), snapshot, delta, streamId);
 }
 
 PerfSessionRecordResult RecordPerfSessionReport(Recorder& recorder, const Perf::SessionReport& report, const u32 streamId){

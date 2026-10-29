@@ -86,10 +86,6 @@ inline constexpr AStringView s_SurfelCounterReadbackLabel = "Surfel Counter Read
 inline constexpr AStringView s_BlasNameSuffix = ":blas";
 inline constexpr AStringView s_SoftwareSceneRefitInputsName = "software_scene_refit_inputs";
 
-// Caustic resolve geometry, prepare, and wavelet stages declare three resource uses each; upsample declares five.
-inline constexpr usize s_CausticResolveStageResourceUseCapacity = 3u;
-inline constexpr usize s_CausticResolveUpsampleResourceUseCapacity = 5u;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

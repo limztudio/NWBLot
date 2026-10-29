@@ -160,7 +160,7 @@ TEST(AllocationOwnerTelemetry, RejectsMalformedMemoryPayloadsWithoutInvalidating
     const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, Perf::MemorySource::Arena);
     const Perf::MemoryDelta delta = TelemetryTestDetail::MakeTestMemoryDelta(-1);
     Telemetry::TelemetryBytes bytes(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, "Payload Validation Owner", snapshot, delta, bytes));
+    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(owner, "Payload Validation Owner", snapshot, delta, bytes));
     Telemetry::EncodedPerfMemoryPayloadHeader validHeader;
     NWB_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
     auto parsed = Telemetry::ParsePerfMemoryPayload(bytes.data(), bytes.size());
@@ -197,7 +197,7 @@ TEST(AllocationOwnerTelemetry, RejectsMalformedMemoryPayloadsWithoutInvalidating
 
     Perf::MemorySnapshot invalidSnapshot = snapshot;
     invalidSnapshot.source = static_cast<Perf::MemorySource::Enum>(255u);
-    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, "Invalid Source", invalidSnapshot, delta, bytes));
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(owner, "Invalid Source", invalidSnapshot, delta, bytes));
     EXPECT_TRUE(bytes.empty());
 }
 

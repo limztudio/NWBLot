@@ -20,17 +20,6 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetLoadState{
-    static constexpr u8 s_AssetLoadStateInvalidBase = 0;
-    enum Enum : u8{
-        Invalid = s_AssetLoadStateInvalidBase,
-        Pending,
-        InFlight,
-        Completed
-    };
-};
-
-
 class IAssetBinarySource{
 public:
     virtual ~IAssetBinarySource()noexcept = default;
@@ -40,37 +29,8 @@ public:
     virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const = 0;
 };
 
-class IAssetAsyncExecutor{
-public:
-    virtual ~IAssetAsyncExecutor()noexcept = default;
-
-
-public:
-    virtual void enqueue(Function<void()>&& job) = 0;
-};
-
-
-struct AssetLoadResult{
-    u64 requestId = 0;
-    UniquePtr<IAsset> asset;
-    AssetLoadState::Enum state = AssetLoadState::Invalid;
-    b8 success = false;
-};
-
 
 class AssetManager final : NoCopy{
-private:
-    struct RequestRecord{
-        AssetLoadResult result;
-        Name assetType = s_NameNone;
-        Name virtualPath = s_NameNone;
-    };
-
-
-private:
-    using RequestMap = HashMap<u64, RequestRecord, Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>>;
-
-
 public:
     template<typename TAsset, typename TResource>
     [[nodiscard]] static b8 CheckLoaderEnter(const AssetRef<TAsset>& assetRef, const TResource& resource, const TStringView owner){
@@ -87,14 +47,7 @@ public:
 
 
 public:
-    void setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor)noexcept;
     [[nodiscard]] Expected<UniquePtr<IAsset>> loadSync(const Name& assetType, const Name& virtualPath)const;
-    [[nodiscard]] Expected<u64> enqueueLoad(const Name& assetType, const Name& virtualPath);
-    void processPending();
-    [[nodiscard]] Expected<AssetLoadResult> tryPopResult(u64 requestId)noexcept;
-    void clear()noexcept;
-    [[nodiscard]] u64 pendingRequestCount()const noexcept;
-    [[nodiscard]] u64 completedRequestCount()const noexcept;
 
     template<typename AssetT>
     [[nodiscard]] Expected<UniquePtr<AssetT>> loadTypedSync(const Name& virtualPath, const TStringView ownerName)const{
@@ -113,19 +66,9 @@ public:
 
 
 private:
-    [[nodiscard]] Expected<u64> allocateRequestId()noexcept;
-    void dispatchAsync(u64 requestId, IAssetAsyncExecutor& asyncExecutor);
-    void processRequest(u64 requestId);
-
-
-private:
     const AssetRegistry& m_registry;
     const IAssetBinarySource& m_binarySource;
-    IAssetAsyncExecutor* m_asyncExecutor = nullptr;
-    mutable Futex m_mutex;
     AssetArena& m_arena;
-    RequestMap m_requests;
-    Atomic<u64> m_nextRequestId{ 1 };
 };
 
 

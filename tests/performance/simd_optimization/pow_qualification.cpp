@@ -39,7 +39,6 @@ using UInt4 = u32 __attribute__((ext_vector_type(4)));
 using Int4 = i32 __attribute__((ext_vector_type(4)));
 using UInt64x4 = u64 __attribute__((ext_vector_type(4)));
 using Int64x4 = i64 __attribute__((ext_vector_type(4)));
-using Float4Packet = f32 __attribute__((ext_vector_type(4)));
 using Evaluate = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSingle)noexcept;
 
 inline constexpr f32 s_EncodeExponent = 1.0f / 2.4f;

@@ -4,18 +4,10 @@
 
 #include "csg_system.h"
 
-#include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_render/mesh/mesh_view_private.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
-#include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/ecs_render/csg/renderer_csg_state.h>
-#include <impl/assets/graphics/csg/constants.h>
 #include <impl/ecs_csg/module.h>
 
-#include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
-
-#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

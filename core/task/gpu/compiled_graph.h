@@ -30,8 +30,6 @@ class GpuGraphSubmissionTransaction;
 class GpuNativePacketRecorder;
 class GpuRecordedGraph;
 class GpuTaskScheduler;
-class GpuTaskGraphExternalResourceHandoffSnapshot;
-struct GpuTaskGraphRuntimeStatistics;
 
 
 // Tasks describe semantic work.
@@ -377,7 +375,6 @@ class GpuCompiledGraph final : NoCopy{
     friend class GpuRecordedGraph;
     friend class GpuTaskGraphQueueAssignmentTelemetryTracker;
     friend class GpuTaskScheduler;
-    friend class GpuTaskGraphExternalResourceHandoffSnapshot;
 
 
 private:
@@ -474,8 +471,6 @@ public:
         [[nodiscard]] const GpuCompiledPresentEndpoint* presentEndpoint()const & noexcept;
         const GpuCompiledPresentEndpoint* presentEndpoint()const && = delete;
         [[nodiscard]] GpuTaskGraphCompileStatistics compileStatistics()const noexcept;
-        [[nodiscard]] GpuCompiledExternalResourceExportView externalResourceExportAt(usize index)const & noexcept;
-        GpuCompiledExternalResourceExportView externalResourceExportAt(usize index)const && = delete;
         [[nodiscard]] GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(const GpuPhysicalQueueId& queue)const noexcept;
         [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const & noexcept;
         const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const && = delete;
@@ -546,7 +541,6 @@ private:
     [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const noexcept;
     [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const noexcept;
     [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExport(const GpuGraphResourceId& resource)const noexcept;
-    [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExportAt(usize index)const noexcept;
     [[nodiscard]] const GpuCompiledExternalResourceExportSource* externalResourceExportSources(const GpuCompiledExternalResourceExport& exportInfo)const noexcept;
     [[nodiscard]] GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const noexcept;

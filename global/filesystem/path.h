@@ -385,13 +385,6 @@ public:
     template<typename OutCharT>
     [[nodiscard]] std::basic_string<OutCharT> genericString()const{ return toStdString<OutCharT>(true); }
 
-    [[nodiscard]] std::wstring genericWString()const{ return toStdString<wchar>(true); }
-
-    [[nodiscard]] auto genericU8String()const{
-        const std::string text = genericString();
-        return std::u8string(reinterpret_cast<const char8_t*>(text.data()), text.size());
-    }
-
     [[nodiscard]] b8 isAbsolute()const noexcept{
         return IsAbsoluteView(native());
     }

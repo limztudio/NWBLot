@@ -23,8 +23,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererMaterialSystem;
-class RendererCsgSystem;
 class RendererAvboitSystem;
 class ObjectGeometryCacheGraph;
 
@@ -69,7 +67,6 @@ struct FrameGraphTransparentCsgTaskInputs{
     Core::TextureSubresourceSet csgRemovedIntervalSubresources;
     Core::TextureSubresourceSet csgRemovedIntervalCountSubresources;
     Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-    Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
     Core::GpuTaskId transparentCsgUploadTask;
     Core::GpuGraphResourceSetId transparentCsgMaterialGeometrySet;
     Core::GpuGraphResourceSetId transparentCsgMaterialSampledTextureSet;
@@ -78,7 +75,6 @@ struct FrameGraphTransparentCsgTaskInputs{
 struct FrameGraphTransparentCsgTaskResult{
     Core::GpuTaskId intervalCompletionTask;
     b8 intervalOutputsGraphOwned = false;
-    b8 declared = false;
 };
 
 

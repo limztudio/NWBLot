@@ -27,7 +27,6 @@ NWB_IMPL_BEGIN
 class Sampler;
 interface IShader;
 class PixelShader;
-class Texture;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -130,15 +129,13 @@ static_assert(
 
 class Material final : public Core::Assets::TypedAsset<Material>{
 public:
-    using StageShaderArray = Array<Core::Assets::AssetRef<IShader>, static_cast<usize>(Core::ShaderType::Count)>;
+    static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
+
+    using StageShaderArray = Array<Core::Assets::AssetRef<IShader>, s_ShaderStageCount>;
     using TypedLayoutBlockVector = Core::Assets::AssetVector<MaterialTypedLayoutBlock>;
     using TypedLayoutFieldVector = Core::Assets::AssetVector<MaterialTypedLayoutField>;
     using TypedBlockByteVector = Core::Assets::AssetVector<u8>;
     using ResourceReferenceVector = Core::Assets::AssetVector<MaterialResourceReference>;
-
-
-public:
-    static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
 
 
 public:

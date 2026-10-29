@@ -19,24 +19,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Queue::addWaitSemaphore(VkSemaphore semaphore, u64 value){
-    if(!semaphore)
-        return;
-
-    ScopedLock lock(m_mutex);
-    m_waitSemaphores.push_back(semaphore);
-    m_waitSemaphoreValues.push_back(value);
-}
-
-void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
-    if(!semaphore)
-        return;
-
-    ScopedLock lock(m_mutex);
-    m_signalSemaphores.push_back(semaphore);
-    m_signalSemaphoreValues.push_back(value);
-}
-
 Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     CommandList* const* ppCmd,
     const usize numCmd,
@@ -89,7 +71,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
 
-    const b8 hasPendingSemaphores = localWaitCount > 0u || localSignalCount > 0u || !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
+    const b8 hasPendingSemaphores = localWaitCount > 0u || localSignalCount > 0u;
     const b8 requiresNativeSubmission = forceNativeSubmission || hasCommands || hasPendingSemaphores;
 
     if(hasCommands && numCmd > UINT32_MAX){
@@ -98,9 +80,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     }
     if(
         localWaitCount > static_cast<usize>(Limit<u32>::s_Max)
-        || m_waitSemaphores.size() > static_cast<usize>(Limit<u32>::s_Max) - localWaitCount
         || localSignalCount >= static_cast<usize>(Limit<u32>::s_Max)
-        || m_signalSemaphores.size() >= static_cast<usize>(Limit<u32>::s_Max) - localSignalCount
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
@@ -244,7 +224,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     timelineSignal.value = submissionID;
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
-    waitInfos.reserve(localWaitCount + m_waitSemaphores.size());
+    waitInfos.reserve(localWaitCount);
     usize emittedTimelineWaitCount = 0u;
     for(usize i = 0u; i < localWaitCount; ++i){
         const SubmissionWait& wait = localWaits[i];
@@ -285,31 +265,14 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         waitInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         waitInfos.push_back(waitInfo);
     }
-    const usize waitSemaphoreCount = m_waitSemaphores.size();
-    for(usize i = 0u; i < waitSemaphoreCount; ++i){
-        VkSemaphoreSubmitInfo waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
-        waitInfo.semaphore = m_waitSemaphores[i];
-        waitInfo.value = m_waitSemaphoreValues[i];
-        waitInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-        waitInfos.push_back(waitInfo);
-    }
 
-    signalInfos.reserve(1u + localSignalCount + m_signalSemaphores.size());
+    signalInfos.reserve(1u + localSignalCount);
     signalInfos.push_back(timelineSignal);
 
     for(usize i = 0u; i < localSignalCount; ++i){
         VkSemaphoreSubmitInfo signalInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
         signalInfo.semaphore = localSignals[i].semaphore;
         signalInfo.value = localSignals[i].value;
-        signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-        signalInfos.push_back(signalInfo);
-    }
-
-    const usize signalSemaphoreCount = m_signalSemaphores.size();
-    for(usize i = 0u; i < signalSemaphoreCount; ++i){
-        VkSemaphoreSubmitInfo signalInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
-        signalInfo.semaphore = m_signalSemaphores[i];
-        signalInfo.value = m_signalSemaphoreValues[i];
         signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         signalInfos.push_back(signalInfo);
     }
@@ -416,10 +379,8 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     if(submissionSuppressed || res != VK_SUCCESS){
         releaseDescriptorBufferLifecycle();
         releaseDescriptorHeap();
-        if(res == VK_ERROR_DEVICE_LOST){
+        if(res == VK_ERROR_DEVICE_LOST)
             m_device.markDeviceLost();
-            clearPendingSemaphores();
-        }
         finalizeDetachedRecordingAttempts(false);
         auto rejectedCommandBuffer = submittedBatchBegin;
         for(usize i = 0u; i < numCmd; ++i)
@@ -455,7 +416,6 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         ticket.heap->commitCommandBufferUseSubmissionLocked(*ticket.commandBuffer, submissionToken, ticket.heapUseIndex);
     releaseDescriptorBufferLifecycle();
     releaseDescriptorHeap();
-    clearPendingSemaphores();
     finalizeDetachedRecordingAttempts(true);
 
     auto acceptedCommandBuffer = submittedBatchBegin;
@@ -507,17 +467,6 @@ void Queue::waitForIdle(){
         m_device.captureDeviceLoss("queue wait idle");
     if(res != VK_SUCCESS)
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue wait-for-idle failed: {}"), ResultToString(res));
-}
-
-void Queue::clearPendingSemaphores()noexcept{
-    static_assert(noexcept(m_waitSemaphores.clear()), "pending wait-semaphore release must be non-throwing");
-    static_assert(noexcept(m_waitSemaphoreValues.clear()), "pending wait-value release must be non-throwing");
-    static_assert(noexcept(m_signalSemaphores.clear()), "pending signal-semaphore release must be non-throwing");
-    static_assert(noexcept(m_signalSemaphoreValues.clear()), "pending signal-value release must be non-throwing");
-    m_waitSemaphores.clear();
-    m_waitSemaphoreValues.clear();
-    m_signalSemaphores.clear();
-    m_signalSemaphoreValues.clear();
 }
 
 Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList& source, const CommandBufferList::iterator commandBuffer){
@@ -578,37 +527,12 @@ b8 Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite,
         if(coveredBy(localWaits[waitIndex].semaphore, localWaits[waitIndex].value))
             return true;
     }
-    const usize waitSemaphoreCount = m_waitSemaphores.size();
-    for(usize waitIndex = 0u; waitIndex < waitSemaphoreCount; ++waitIndex){
-        if(coveredBy(m_waitSemaphores[waitIndex], m_waitSemaphoreValues[waitIndex]))
-            return true;
-    }
     return false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void Device::queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value){
-    SubmissionOperationLease submissionOperation(*this);
-    if(!submissionOperation.valid())
-        return;
-
-    Queue* q = getQueue(waitQueue);
-    if(q)
-        q->addWaitSemaphore(semaphore, value);
-}
-
-void Device::queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value){
-    SubmissionOperationLease submissionOperation(*this);
-    if(!submissionOperation.valid())
-        return;
-
-    Queue* q = getQueue(executionQueue);
-    if(q)
-        q->addSignalSemaphore(semaphore, value);
-}
 
 Expected<u64> Device::queueGetCompletedInstance(CommandQueue::Enum queue){
     return queueGetCompletedInstance(getPrimaryPhysicalQueue(queue));
@@ -638,19 +562,6 @@ Expected<u64> Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue)
     }
     return completedInstance;
 }
-
-void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance){
-    SubmissionOperationLease submissionOperation(*this);
-    if(!submissionOperation.valid())
-        return;
-
-    Queue* wait = getQueue(waitQueue);
-    Queue* exec = getQueue(executionQueue);
-
-    if(wait && exec)
-        wait->addWaitSemaphore(exec->m_trackingSemaphore, instance);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

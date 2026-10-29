@@ -50,7 +50,7 @@
 #include <impl/assets_shader/loader.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
-#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_mesh/system.h>
 
 #include <core/assets/manager.h>
 #include <core/common/log.h>
@@ -218,7 +218,7 @@ struct SwShadowHeapPushConstants{
     u32 frameIndex = 0u;
     u32 coarseWidth = 0u;
     u32 coarseHeight = 0u;
-    f32 edgeThreshold = ECSRenderDetail::s_DefaultSwShadowEdgeThreshold;
+    f32 edgeThreshold = 0.1f;
     u32 edgeCapacity = 0u;
     u32 traceGroupSize = 0u;
     u32 deferredResourcesHeapSlot = 0u;
@@ -441,7 +441,6 @@ inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;
 #endif
 
 // Frame-parity reuse retains the same two-phase checkerboard for both photon producers.
-inline constexpr u32 s_CausticTemporalPhaseCount = NWB_CAUSTIC_TEMPORAL_PHASE_COUNT;
 static_assert(s_CausticTemporalPhaseCount == 2u);
 static_assert(s_CausticTemporalPhaseCount > NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT);
 static_assert((s_CausticHwPhotonGridSide % s_CausticTemporalPhaseCount) == 0u);

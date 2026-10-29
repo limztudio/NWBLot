@@ -58,10 +58,6 @@ GpuTaskGraph::PipelinePointerKey GpuTaskGraph::MakePipelinePointerKey(const GpuG
         return { pipeline.graphicsPipeline.get(), pipeline.type };
     case GpuGraphPipelineType::Compute:
         return { pipeline.computePipeline.get(), pipeline.type };
-    case GpuGraphPipelineType::Meshlet:
-        return { pipeline.meshletPipeline.get(), pipeline.type };
-    case GpuGraphPipelineType::RayTracing:
-        return { pipeline.rayTracingPipeline.get(), pipeline.type };
     default:
         return {};
     }
@@ -119,42 +115,6 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::importComputePipeline(const ComputePi
     }
 
     return appendPipeline(desc, { .computePipeline = &pipeline, .deviceGeneration = pipeline->getDeviceGeneration() });
-}
-
-Expected<GpuGraphPipelineId> GpuTaskGraph::importMeshletPipeline(const MeshletPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc){
-    DeclarationMutationScope mutation(*this);
-    if(!mutation.valid())
-        return MakeUnexpected(Failure{});
-
-    if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::Meshlet)
-        return MakeUnexpected(Failure{});
-
-    const PipelineImportMatch match = findPipelineImportMatch(desc.identity, { pipeline.get(), desc.type });
-    if(match.index != s_InvalidImportIndex){
-        if(!match.samePointer || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc))
-            return MakeUnexpected(Failure{});
-        return GpuGraphPipelineId{ .generation = m_generation, .index = match.index };
-    }
-
-    return appendPipeline(desc, { .meshletPipeline = &pipeline, .deviceGeneration = pipeline->getDeviceGeneration() });
-}
-
-Expected<GpuGraphPipelineId> GpuTaskGraph::importRayTracingPipeline(const RayTracingPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc){
-    DeclarationMutationScope mutation(*this);
-    if(!mutation.valid())
-        return MakeUnexpected(Failure{});
-
-    if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::RayTracing)
-        return MakeUnexpected(Failure{});
-
-    const PipelineImportMatch match = findPipelineImportMatch(desc.identity, { pipeline.get(), desc.type });
-    if(match.index != s_InvalidImportIndex){
-        if(!match.samePointer || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc))
-            return MakeUnexpected(Failure{});
-        return GpuGraphPipelineId{ .generation = m_generation, .index = match.index };
-    }
-
-    return appendPipeline(desc, { .rayTracingPipeline = &pipeline, .deviceGeneration = pipeline->getDeviceGeneration() });
 }
 
 
@@ -252,10 +212,6 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::appendPipeline(const GpuGraphPipeline
         pipeline.graphicsPipeline = *binding.graphicsPipeline;
     if(binding.computePipeline)
         pipeline.computePipeline = *binding.computePipeline;
-    if(binding.meshletPipeline)
-        pipeline.meshletPipeline = *binding.meshletPipeline;
-    if(binding.rayTracingPipeline)
-        pipeline.rayTracingPipeline = *binding.rayTracingPipeline;
     const PipelinePointerKey pointerKey = MakePipelinePointerKey(pipeline);
     const NameHash& identityKey = desc.identity.identityHash();
 

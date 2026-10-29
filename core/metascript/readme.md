@@ -134,9 +134,9 @@ Each parse call clears the previous document contents and diagnostics. A failed 
 
 ### Values and ownership
 
-Use `isInteger()`, `isMap()`, and the other `is*()` predicates before calling the corresponding `as*()` accessors. These accessors assert their required types. `toDouble()` accepts either numeric type. `Value::findField(name)` requires a map and returns `nullptr` for a missing field. The free `FindField(value, AStringView)` helper forwards to that lookup.
+Use `isInteger()`, `isMap()`, and the other `is*()` predicates before calling the corresponding `as*()` accessors. These accessors assert their required types. `toDouble()` accepts either numeric type. `Value::findField(name)` requires a map and returns `nullptr` for a missing field.
 
-For programmatic construction, `field(name)` promotes `Null` to a map and creates missing `Null` fields; `append(Value&&)` promotes `Null` to a list. `makeMap()`, `makeList()`, and the `set*()` methods replace the current value. `copyString()` makes an owned string copy. `copyStringList(out)` first validates that every element is a string, then appends copies to the output container; it returns `false` for an incompatible value.
+For programmatic construction, `field(name)` promotes `Null` to a map and creates missing `Null` fields; `append(Value&&)` promotes `Null` to a list. `makeMap()`, `makeList()`, and the `set*()` methods replace the current value. `copyStringList(out)` first validates that every element is a string, then appends copies to the output container; it returns `false` for an incompatible value.
 
 The source buffer needs to remain valid only during the synchronous parse. Parsed text, keys, reference paths, declarations, and diagnostics are copied into the supplied arena. Keep the arena alive for the document and every value or copied string allocated from it. Views and pointers returned by the API borrow their underlying storage and can be invalidated by mutation, reparsing, or destruction.
 

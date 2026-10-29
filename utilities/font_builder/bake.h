@@ -19,7 +19,6 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_MetadataFileExtension = ".nwb";
 inline constexpr AStringView s_PreparedFontExtension = ".font";
 inline constexpr AStringView s_TrueTypeExtension = ".ttf";
 inline constexpr AStringView s_OpenTypeExtension = ".otf";

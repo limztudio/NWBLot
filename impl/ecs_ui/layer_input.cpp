@@ -62,7 +62,7 @@ b8 UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 ac
         event.alt = (mods & Core::InputModifier::Alt) != 0;
         event.super = (mods & Core::InputModifier::Super) != 0;
         event.repeat = action != Core::InputAction::Release && (action == Core::InputAction::Repeat || held);
-        routeInput(event, nullptr, action == Core::InputAction::Release ? nullptr : &m_blockCommandChars);
+        routeInput(event, action == Core::InputAction::Release ? nullptr : &m_blockCommandChars);
     }
     const u8 owner = held ? previousOwner : m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key) ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
     m_nativeKeyOwners[slot] = action == Core::InputAction::Release ? 0u : static_cast<u8>(owner + 1u);
@@ -222,13 +222,7 @@ b8 UiLayerSystem::wantsPointer()const noexcept{
     return m_resourcesReady && m_context.input().wantsPointer();
 }
 
-b8 UiLayerSystem::wantsTextInput()const noexcept{
-    return m_resourcesReady && m_editHost.wantsTextInput();
-}
-
-void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* consumed, b8* blockText){
-    if(consumed)
-        *consumed = false;
+void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
     if(blockText)
         *blockText = false;
     m_editHost.collectNative();
@@ -244,8 +238,6 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* consumed, b8* bl
     const b8 submit = m_editHost.prepareSubmit(*normalized);
     const Ui::InputRoutingResult result = m_context.input().process();
     m_editHost.input(*normalized, previousCapture, submit);
-    if(consumed)
-        *consumed = result.commandConsumed;
     if(blockText){
         // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
         *blockText = normalized->type == Ui::InputEventType::CommandDown && normalized->command != Ui::InputCommand::None && !normalized->allowText;

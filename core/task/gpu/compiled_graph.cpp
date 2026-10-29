@@ -330,10 +330,6 @@ const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExpor
     return nullptr;
 }
 
-const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExportAt(const usize index)const noexcept{
-    return index < m_externalResourceExports.size() ? &m_externalResourceExports[index] : nullptr;
-}
-
 const GpuCompiledExternalResourceExportSource* GpuCompiledGraph::externalResourceExportSources(const GpuCompiledExternalResourceExport& exportInfo)const noexcept{
     NWB_ASSERT(exportInfo.sourceCount != 0u && exportInfo.sourceOffset <= m_externalResourceExportSources.size() && exportInfo.sourceCount <= m_externalResourceExportSources.size() - exportInfo.sourceOffset);
     return m_externalResourceExportSources.data() + exportInfo.sourceOffset;

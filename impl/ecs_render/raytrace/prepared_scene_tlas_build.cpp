@@ -83,7 +83,6 @@ b8 PreparedSceneTlasBuild::record(RendererRayTracingState& state, Core::CommandL
     }
 
     commandList.buildTopLevelAccelStruct(m_tlas.get(), m_instances.data(), m_instances.size(), Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
-    state.m_tlasDeviceAddress = m_tlas->getDeviceAddress();
     return true;
 }
 

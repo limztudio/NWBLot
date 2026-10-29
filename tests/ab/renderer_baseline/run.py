@@ -29,8 +29,7 @@ LIT_ENABLED_FLAG = "1"
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
-from profiles import BaselineProfile, corpus_profile_names, get_profile, profile_names  # noqa: E402
-from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
+from profiles import BaselineProfile, get_profile, profile_names  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     FRAMEBUFFER_CAPTURE_SKIP_MESSAGE, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, read_bmp_24, wait_for_application_capture_exit,
     build_launch_environment, make_runtime_launch_args, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
@@ -79,27 +78,14 @@ LIT_FROZEN_ENVIRONMENT = "frozen_environment"
 LIT_REFERENCE_SOURCE_REVISION = "reference_source_revision"
 LIT_MANIFEST_JSON = "manifest.json"
 LIT_BASELINE = "baseline"
-LIT_CORPUS_ID = "corpus_id"
-LIT_ARTIFACT_ROOT = "artifact_root"
-LIT_PROFILES = "profiles"
-LIT_CAPTURE_ENVIRONMENT = "capture_environment"
-LIT_REFERENCE = "reference"
-LIT_DIRECTORY = "directory"
 LIT_RUNTIME_LOG = "runtime.log"
-LIT_MANIFEST_SHA256 = "manifest_sha256"
-LIT_RUNTIME_LOG_SHA256 = "runtime_log_sha256"
-LIT_LIMITS = "limits"
 LIT_MAXIMUM_MAX_ABS = "maximum_max_abs"
 LIT_MAXIMUM_MEAN_ABS = "maximum_mean_abs"
 LIT_MAXIMUM_CHANGED_FRACTION = "maximum_changed_fraction"
-LIT_SAME_REVISION_RECAPTURE = "same_revision_recapture"
 LIT_COMPARISON_JSON = "comparison.json"
-LIT_COMPARISON_SHA256 = "comparison_sha256"
 LIT_NWB_RENDERER_BASELINE_COMPARISON_V1 = "nwb.renderer-baseline-comparison.v1"
 LIT_CANDIDATE_SOURCE_REVISION = "candidate_source_revision"
 LIT_DIFFERENCE = "difference"
-LIT_MAX_ABS = "max_abs"
-LIT_MEAN_ABS = "mean_abs"
 LIT_CHANGED_FRACTION = "changed_fraction"
 LIT_CANDIDATE_BMP = "candidate.bmp"
 LIT_BASELINE_BMP = "baseline.bmp"

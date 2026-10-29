@@ -20,13 +20,13 @@ A primary press over a target starts logical capture and assigns focus when the 
 
 ## Identified pointer providers
 
-`pointer.h` defines `PointerInput`, `PointerPhase` and `PointerIntent`. A provider calls `UiLayerSystem::pointerInput(input)` or queues the same value with `InputRouter::queuePointer(input)`. Mouse, pen, touch, virtual-cursor and accessibility providers share this contract. Device/contact identity is stable for a sequence; its control component must be nonzero. Positions use UI logical coordinates. Press/Release express activation or context-menu intent; Move, Scroll, Leave and Cancel express spatial updates and exact-source termination. Selection extension is the semantic `extend` flag rather than a physical modifier.
+`pointer.h` defines `PointerInput`, `PointerPhase` and `PointerIntent`. A provider queues the value with `InputRouter::queuePointer(input)`. Mouse, pen, touch, virtual-cursor and accessibility providers share this contract. Device/contact identity is stable for a sequence; its control component must be nonzero. Positions use UI logical coordinates. Press/Release express activation or context-menu intent; Move, Scroll, Leave and Cancel express spatial updates and exact-source termination. Selection extension is the semantic `extend` flag rather than a physical modifier.
 
 Hover is an explicit provider capability and defaults to disabled. Touch positions hit-test controls directly without becoming cursor hover or changing tooltip anchor position. A hover-capable cursor keeps its own observation independently of the active contact. Controls consume resolved commands, copied activation intentions and pointer gestures rather than physical keys, mouse buttons or touch backend events.
 
 The current interaction policy admits one active spatial source. Its primary and context-menu roles share that source. Competing contacts retain their initial scene/UI ownership but stay inert until their own release; they cannot move, release or acquire the active capture after its owner ends. This policy preserves the current single-drag and editor-selection models. A future multi-contact policy can extend source capture records without changing provider input or control commands.
 
-A Release must match an admitted press. Logical `Cancel` disarms submissions while retaining consumed ownership until Release. `PointerPhase::Cancel` terminates only the identified provider source when its release may never arrive; `cancelDeviceInput(device)` terminates all pointer and command sequences from the explicitly named device. An editor bridge forwards a spatial event only when `pointerRouted` is true, so an inert foreign contact cannot alter selection or click tracking.
+A Release must match an admitted press. Logical `Cancel` disarms submissions while retaining consumed ownership until Release. `PointerPhase::Cancel` terminates only the identified provider source when its release may never arrive; `InputRouter::cancelDevice(device)` terminates all pointer and command sequences from the explicitly named device. An editor bridge forwards a spatial event only when `pointerRouted` is true, so an inert foreign contact cannot alter selection or click tracking.
 
 ## Configurable bindings and external devices
 
@@ -34,7 +34,7 @@ A Release must match an admitted press. Logical `Cancel` disarms submissions whi
 
 The default profile retains Tab/Shift+Tab traversal, Enter acceptance, Ctrl+Enter submission, Space activation, Escape cancellation, arrows/Home/End/Page navigation, word movement/deletion, clipboard/history shortcuts, and Menu/Shift+F10 context-menu requests. Shift extends selection on the default movement bindings. Alt editing combinations remain available to native input, including AltGr. Consumed commands suppress their ordinary key-produced character on Win32, X11, and Wayland unless the binding sets `allowText = true`. The default Space binding explicitly permits text, so it still enters a space while an editor is focused; a custom printable `Activate` binding suppresses its character by default. IME composition/commit and compositor text-input callbacks remain owned by native text services.
 
-`UiLayerSystem::setInputBindings()` and `restoreDefaultInputBindings()` expose the same profile boundary at the ECS host. Applications may load profiles from their settings store; the toolkit owns copied bindings and requires no file format.
+`UiLayerSystem::setInputBindings()` exposes the profile boundary at the ECS host. Applications may load profiles from their settings store; the toolkit owns copied bindings and requires no file format.
 
 ```cpp
 const Ui::InputKeyBinding profile[] = {
@@ -42,16 +42,10 @@ const Ui::InputKeyBinding profile[] = {
     { .key = Core::Key::S, .command = Ui::InputCommand::Down },
     { .key = Core::Key::F8, .command = Ui::InputCommand::FocusNext },
 };
-const bool accepted = uiLayer.setInputBindings(profile, LengthOf(profile));
+const b8 accepted = uiLayer.setInputBindings(profile, LengthOf(profile));
 ```
 
-External input uses `UiLayerSystem::commandInput(source, command, phase, extend)`. For example, a gamepad adapter sends `FocusNext`, `Down`, `Accept`, or `Cancel` using `Ui::InputPhase::Press`, `Repeat`, and `Release`. Supply a stable device identity and nonzero control identity. The native adapter assigns its own device identity; the router does not infer command behavior from that number. The adapter determines repeat timing and serializes delivery on the UI thread. `extend` requests selection extension independently of keyboard modifiers. `commandInput()` returns whether the UI consumed the event, allowing the adapter to retain scene/UI ownership through release.
-
-```cpp
-const Ui::InputSource nextControl{ .device = 1u, .control = 4u };
-const bool pressed = uiLayer.commandInput(nextControl, Ui::InputCommand::FocusNext, Ui::InputPhase::Press);
-const bool released = uiLayer.commandInput(nextControl, Ui::InputCommand::None, Ui::InputPhase::Release);
-```
+External input uses `InputEventType::CommandDown` and `InputEventType::CommandUp` via `InputRouter::queue(event)`. Supply a stable device identity and nonzero control identity in `InputSource`. The native adapter assigns its own device identity; the router does not infer command behavior from that number. The adapter determines repeat timing and serializes delivery on the UI thread. `extend` requests selection extension independently of keyboard modifiers.
 
 Each held source pins its command, selection/edit intent, and `allowText` policy on its first press. Rebinding or changing modifiers during the hold takes effect on the next press. Independent devices and controls retain independent ownership, even when they produce the same command. One accepted focus-owner record supplies the source widget, declaration, popup and control identity for edits, submissions, navigation and keyboard menu requests. A separate control-owner record stores only the navigable host lifetime and horizontal capability fence. Context-menu presses retain an armed flag and copied anchor position rather than a second source owner. Those accepted lifetimes fence repeated edits/navigation. Retiring an owner permanently retires that held intention; restoring a matching declaration cannot revive it. A source first pressed without UI ownership cannot acquire it on repeat after focus changes. `ownsKey(key)` and `ownsSource(source)` report consumed holds until release. Window focus loss cancels pending delivery and terminates native pointer sequences. Held command sources retain ownership through release until the native adapter explicitly retires device-zero keyboard sequences; nonzero controller sequences remain owned until release. Commands received while unfocused cannot navigate or activate the UI. After focus returns, a source pressed while unfocused requires release and a fresh press.
 
@@ -95,7 +89,7 @@ Cancellation has distinct meanings:
 | `FocusGained` | Marks the native window focused without reopening popups, restoring focus or inventing pointer geometry. |
 | `reset()` | Cancels interaction, queued events and the committed layout for resize, device or root invalidation; consumed holds keep their release owner, and action sequences never restart. |
 
-Native pointer capture loss terminates its identified source directly because the OS may never deliver its release. The native adapter follows focus loss with explicit device termination. An idle native capture-release notification preserves known hover. Native adapters call `cancelDeviceInput(device)` alongside their physical owner resets after focus or resource termination. This boundary ends only that device's pointer and command sequences, and invalidates its cursor geometry. The explicit API preserves completed actions and other devices' held sequences. Logical Escape cancellation and `reset()` retain consumed ownership until release; native termination explicitly ends the OS-owned sequences.
+Native pointer capture loss terminates its identified source directly because the OS may never deliver its release. The native adapter follows focus loss with explicit device termination. An idle native capture-release notification preserves known hover. Native adapters call `InputRouter::cancelDevice(device)` alongside their physical owner resets after focus or resource termination. This boundary ends only that device's pointer and command sequences, and invalidates its cursor geometry. The explicit API preserves completed actions and other devices' held sequences. Logical Escape cancellation and `reset()` retain consumed ownership until release; native termination explicitly ends the OS-owned sequences.
 
 Stable widget IDs derive from the host root identity and lifetime generation plus explicit scope/key hashes in `../id.h`. Labels and model values do not form identity. The retained context in `../context.h` validates current declaration lifetimes and retires removed ECS roots while a GPU frame remains pending.
 

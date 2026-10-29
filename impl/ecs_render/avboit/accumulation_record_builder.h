@@ -62,12 +62,6 @@ public:
 };
 
 
-struct AvboitAccumulationRecordResult{
-    Core::GpuTaskId accumulationTask;
-    b8 declared = false;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -77,7 +71,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<AvboitAccumulationRecordResult> declare(
+    [[nodiscard]] b8 declare(
         Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         ObjectGeometryCacheGraph& objectGeometry,

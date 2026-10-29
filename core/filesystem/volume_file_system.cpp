@@ -47,7 +47,6 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
 
     m_volumeName = desc.volumeName;
     m_mountDirectory = desc.mountDirectory.empty() ? Path(m_mountDirectory.arena(), ".") : desc.mountDirectory;
-    m_usage = desc.usage;
     m_writable = (desc.usage != VolumeUsage::RuntimeReadOnly);
     m_maxSegments = desc.maxSegments;
 
@@ -217,26 +216,6 @@ b8 VolumeFileSystem::writable()const noexcept{
     return m_mounted && m_writable;
 }
 
-AStringView VolumeFileSystem::volumeName()const noexcept{
-    NothrowScopedLock lock(m_mutex);
-    return m_volumeName.view();
-}
-
-Path VolumeFileSystem::mountDirectory()const{
-    ScopedLock lock(m_mutex);
-    return m_mountDirectory;
-}
-
-u64 VolumeFileSystem::segmentSize()const noexcept{
-    NothrowScopedLock lock(m_mutex);
-    return m_segmentSize;
-}
-
-u64 VolumeFileSystem::metadataSize()const noexcept{
-    NothrowScopedLock lock(m_mutex);
-    return m_metadataBytes;
-}
-
 usize VolumeFileSystem::segmentCount()const noexcept{
     NothrowScopedLock lock(m_mutex);
     return m_segmentPaths.size();
@@ -246,20 +225,6 @@ usize VolumeFileSystem::segmentCount()const noexcept{
 u64 VolumeFileSystem::fileCount()const noexcept{
     NothrowScopedLock lock(m_mutex);
     return static_cast<u64>(m_files.size());
-}
-
-Expected<u64> VolumeFileSystem::usedBytes()const noexcept{
-    NothrowScopedLock lock(m_mutex);
-
-    u64 totalUsedBytes = 0;
-    for(const auto& [_, record] : m_files){
-        const auto totalUsedBytesResult = ::AddNoOverflow(totalUsedBytes, record.size);
-        if(!totalUsedBytesResult)
-            return MakeUnexpected(totalUsedBytesResult.error());
-        totalUsedBytes = *totalUsedBytesResult;
-    }
-
-    return totalUsedBytes;
 }
 
 Expected<u64> VolumeFileSystem::wastedBytes()const noexcept{
@@ -408,18 +373,6 @@ Expected<u64> VolumeFileSystem::fileSize(const Name& virtualPath)const noexcept(
     return itr.value().size;
 }
 
-Vector<Name, VolumeArena> VolumeFileSystem::listFiles()const{
-    ScopedLock lock(m_mutex);
-
-    Vector<Name, VolumeArena> output{m_arena};
-    output.reserve(m_files.size());
-    for(const auto& [path, _] : m_files)
-        output.push_back(path);
-
-    Sort(output.begin(), output.end());
-    return output;
-}
-
 
 b8 VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, const usize bytes, const MetadataFlushMode::Enum flushMode){
     if(!m_mounted || !m_writable){
@@ -550,7 +503,6 @@ Expected<VolumeFileSystem::FileRecord> VolumeFileSystem::readFileRecordLocked(co
 void VolumeFileSystem::unmountLocked()noexcept{
     m_mounted = false;
     m_writable = false;
-    m_usage = VolumeUsage::RuntimeReadOnly;
 
     m_volumeName.clear();
     m_mountDirectory.clear();

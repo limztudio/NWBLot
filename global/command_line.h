@@ -60,20 +60,6 @@ template<typename CharT>
     return MakeUnexpected(Failure{});
 }
 
-template<typename StringT, typename EnumT, typename TextFunction>
-[[nodiscard]] inline StringT BuildEnumOptionTexts(TextFunction textFunction, const EnumT* values, const usize valueCount)noexcept(
-    noexcept(StringT{}) && noexcept(DeclVal<StringT&>() += DeclVal<const char*>()) && noexcept(DeclVal<StringT&>() += textFunction(DeclVal<const EnumT&>()))
-    && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT> && IsNothrowDestructible_V<TextFunction>
-){
-    StringT text;
-    for(usize i = 0u; i < valueCount; ++i){
-        if(i > 0u)
-            text += (i + 1u == valueCount) ? ", or " : ", ";
-        text += textFunction(values[i]);
-    }
-    return text;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

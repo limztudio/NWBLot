@@ -62,7 +62,6 @@ struct TransparentCsgIntervalProducerResult{
     Core::GpuTaskId uploadTask;
     Core::GpuGraphResourceSetId materialGeometrySet;
     Core::GpuGraphResourceSetId materialSampledTextureSet;
-    b8 produced = false;
 };
 
 

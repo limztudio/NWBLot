@@ -12,7 +12,7 @@
 
 #include <impl/assets_scene/asset.h>
 
-#include <core/ecs/module.h>
+#include <core/ecs/world.h>
 #include <core/input/module.h>
 
 
@@ -79,6 +79,9 @@ private:
     b8 m_mousePositionValid = false;
     Array<b8, s_KeyStateCount> m_keyPressed = {};
 };
+
+Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialProjectWorld(NWB::ProjectRuntimeContext& context);
+void DestroyInitialProjectWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NWB::Core::ECS::World>& world);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

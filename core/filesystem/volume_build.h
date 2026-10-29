@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "volume_types.h"
+#include "global.h"
 
 #include <global/expected.h>
 
@@ -19,10 +19,7 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using VolumeBuildFileMap = HashMap<VolumeString, VolumeBytes, VolumeArena>;
-
 [[nodiscard]] Expected<u64> ComputeVolumeMetadataRequirement(u64 fileCount)noexcept;
-[[nodiscard]] Expected<VolumeBuildInfo> BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const VolumeBuildFileMap& files);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

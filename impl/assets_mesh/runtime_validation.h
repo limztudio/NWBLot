@@ -6,13 +6,8 @@
 
 
 #include "asset.h"
-#include "meshlet_payload_packing.h"
-#include "meshlet_ref_codec.h"
-#include "meshlet_ref_validation.h"
-#include "runtime_validation_diagnostics.h"
 
 #include <core/alloc/scratch.h>
-#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

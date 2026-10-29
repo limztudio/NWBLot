@@ -304,7 +304,7 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
             beginFrameResult = m_backend->beginFrame();
             if(beginFrameResult.status != BeginFrameStatus::ResizeRequired)
                 break;
-            if(beginFrameResult.suggestedWidth == 0u || beginFrameResult.suggestedHeight == 0u || !resizeBackBuffer(beginFrameResult.suggestedWidth, beginFrameResult.suggestedHeight, m_requestedVSync))
+            if(beginFrameResult.suggestedWidth == 0u || beginFrameResult.suggestedHeight == 0u || !resizeBackBuffer(beginFrameResult.suggestedWidth, beginFrameResult.suggestedHeight))
                 break;
         }
         if(phaseTiming)

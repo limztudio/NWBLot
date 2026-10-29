@@ -9,7 +9,7 @@
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/optics/coincident_volumes.h>
-#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_mesh/system.h>
 #include <impl/ecs_csg/shape_registry.h>
 #include <impl/ecs_scene/module.h>
 

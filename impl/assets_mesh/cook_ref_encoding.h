@@ -6,7 +6,7 @@
 
 
 #include "cook.h"
-#include "meshlet_ref_codec.h"
+#include "meshlet_ref_encode.h"
 
 #include <core/common/log.h>
 

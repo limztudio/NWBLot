@@ -51,7 +51,6 @@ struct PrefixSceneUploadInputs{
 struct PrefixSceneUploadResult{
     Core::GpuTaskId meshViewSetupTask;
     Core::GpuTaskId sceneShadingSetupTask;
-    Core::GpuTaskId tailTask;
     RayTracingLightingClassification lightingClassification;
     ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
     u32 lightCount = 0u;

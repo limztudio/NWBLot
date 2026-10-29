@@ -54,22 +54,9 @@ function(nwb_target_link_libraries_whole_archive target)
     endforeach()
 endfunction()
 
-function(nwb_register_pipeline_volume_entries)
-    foreach(library IN LISTS ARGN)
-        set_property(GLOBAL APPEND PROPERTY NWB_PIPELINE_VOLUME_ENTRY_TARGETS "${library}")
-        if(TARGET nwb_dependency_computer)
-            nwb_target_link_libraries_whole_archive(nwb_dependency_computer "${library}")
-        endif()
-        if(TARGET nwb_asset_builder)
-            nwb_target_link_libraries_whole_archive(nwb_asset_builder "${library}")
-        endif()
-    endforeach()
-endfunction()
-
 function(nwb_target_sources_standalone_runtime target)
     target_sources(${target} PRIVATE
-        "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.cpp"
-        "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.h"
+        "${PROJECT_SOURCE_DIR}/core/alloc/new.cpp"
     )
 endfunction()
 

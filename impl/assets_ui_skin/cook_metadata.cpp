@@ -89,7 +89,7 @@ template<usize Count>
 [[nodiscard]] static Expected<Array<u32, Count>> ReadU32List(const Path& path, const Value& object, const AStringView fieldName, const b8 required){
     Array<u32, Count> values{};
 
-    const Value* field = FindField(object, fieldName);
+    const Value* field = object.findField(fieldName);
     if(!field && !required)
         return values;
     if(!field || !field->isList() || field->asList().size() != Count){
@@ -109,7 +109,7 @@ template<usize Count>
 [[nodiscard]] static Expected<Array<f32, Count>> ReadLogicalList(const Path& path, const Value& object, const AStringView fieldName){
     Array<f32, Count> values{};
 
-    const Value* field = FindField(object, fieldName);
+    const Value* field = object.findField(fieldName);
     if(!field)
         return values;
     if(!field->isList() || field->asList().size() != Count){
@@ -130,7 +130,7 @@ template<usize Count>
 
     if(!Core::Assets::CheckMetadataAssetMap(path, object, s_DiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(FindField(object, s_DrawModeField)){
+    if(object.findField(s_DrawModeField)){
         auto drawModeResult = Core::Assets::ParseNamedMetadataEnumField<UiSkinDrawMode::Enum>(path, object, s_DiagnosticPrefix, s_DrawModeField, s_DrawModeCases, s_DrawModeHint);
         if(!drawModeResult)
             return MakeUnexpected(Failure{});
@@ -198,7 +198,7 @@ template<usize Count>
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unknown or duplicate palette role '{}'"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
             return MakeUnexpected(Failure{});
         }
-        const Value* rgba = FindField(value, s_RgbaField);
+        const Value* rgba = value.findField(s_RgbaField);
         if(!rgba || !rgba->isList() || rgba->asList().size() != s_RgbaComponentCount){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs four RGBA components"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
             return MakeUnexpected(Failure{});
@@ -223,7 +223,7 @@ template<usize Count>
 [[nodiscard]] static Expected<UiSkinTypography> ParseTypography(const Path& path, const Value& asset){
     UiSkinTypography typographyResult{};
 
-    const Value* typography = FindField(asset, s_TypographyField);
+    const Value* typography = asset.findField(s_TypographyField);
     if(!typography){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': skins require typography.default_font_size"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});

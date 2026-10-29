@@ -92,8 +92,6 @@ public:
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const noexcept;
     [[nodiscard]] b8 setPresentationSettings(const PresentationSettings& settings)noexcept;
     void setFrameLaggedAsyncLightingEnabled(b8 enabled)noexcept;
-    [[nodiscard]] b8 frameLaggedAsyncLightingEnabled()const noexcept;
-    [[nodiscard]] b8 setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
 
 

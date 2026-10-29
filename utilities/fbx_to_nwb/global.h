@@ -75,14 +75,6 @@ using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
 using ScratchString = ::AString<Core::Alloc::ScratchArena>;
 using ScratchStringStream = ::AStringStream<Core::Alloc::ScratchArena>;
 
-template<
-    typename K,
-    typename V,
-    typename Hash = Hasher<K>,
-    typename Equal = EqualTo<K>
->
-using HashMap = DefaultHashMap<K, V, Core::Alloc::GlobalArena, UtilityDetail::Arena, Hash, Equal>;
-
 template<typename T>
 using UtilityVector = DefaultVector<T, Core::Alloc::GlobalArena, UtilityDetail::Arena>;
 

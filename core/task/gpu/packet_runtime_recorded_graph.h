@@ -6,7 +6,6 @@
 
 
 #include "compiled_graph.h"
-#include "packet_runtime_artifact.h"
 #include "task_graph.h"
 
 #include <core/alloc/scratch.h>
@@ -288,9 +287,6 @@ public:
     // Owned per-queue aggregate. Bad queue IDs or a foreign artifact give an empty result.
     [[nodiscard]] GpuTaskGraphPhysicalQueueRecordingStatistics physicalQueueRecordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] Optional<GpuRecordedPacket> packetSnapshot(const GpuSubmissionPacketId& packet)const noexcept;
-    // Checks this recorded graph against compiler output and resolves the task's packet to its native final state.
-    [[nodiscard]] b8 hasTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task)const noexcept;
-    [[nodiscard]] b8 copyTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task, CommandListResourceStateHandoff& outStateSeed)const;
 
 
 private:

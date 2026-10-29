@@ -6,8 +6,6 @@
 
 
 #include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/progress_style.adhd.h>
-#include "progress_layout.h"
 #include "../layout/tree.h"
 
 

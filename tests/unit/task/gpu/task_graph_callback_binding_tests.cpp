@@ -50,7 +50,6 @@ inline constexpr u64 s_AcceptedTokenValue = 7u;
 struct InvocationState{
     Vector<u32, Graphics::Alloc::ScratchArena>* m_order = nullptr;
     u64 m_count = 0u;
-    u64 m_checksum = 0u;
 };
 
 struct CallbackContext{
@@ -119,7 +118,6 @@ b8 CallbackGraph::prepare(const usize taskCount){
 
 void RecordInvocation(CallbackContext& context){
     ++context.m_state.m_count;
-    context.m_state.m_checksum += context.m_taskIndex + 1u;
     if(context.m_state.m_order)
         context.m_state.m_order->push_back(context.m_taskIndex);
 }

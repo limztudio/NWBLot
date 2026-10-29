@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "timing_names.h"
+#include <impl/global.h>
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/task_desc.h>

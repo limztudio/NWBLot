@@ -123,11 +123,8 @@ struct DeviceDesc{
     // True when VK_NV_ray_tracing_linear_swept_spheres linearSweptSpheres was enabled at device creation.
     b8 rayTracingLinearSweptSpheresSupported = false;
     b8 gpuCrashDiagnosticsEnabled = false;
-    b8 logBufferLifetime = false;
 
     GpuDescriptorHeapAbi bindlessHeapAbi;
-    // Borrowed for the synchronous CreateDevice call; the backing text must outlive that call.
-    AStringView vulkanLibraryName;
     Path pipelineCacheDirectory;
     Filesystem::FilesystemFactory filesystemFactory;
 

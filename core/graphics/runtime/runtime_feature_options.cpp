@@ -34,51 +34,11 @@ b8 GraphicsRuntime::setHardwareRayTracingPolicy(const HardwareRayTracingPolicy::
     return true;
 }
 
-b8 GraphicsRuntime::setNativeMeshShadersEnabled(const b8 enabled)noexcept{
-    if(m_instanceCreated)
-        return false;
-
-    m_deviceCreationParams.enableNativeMeshShaders = enabled;
-    return true;
-}
-
 b8 GraphicsRuntime::setAsyncComputeLaneEnabled(const b8 enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
     m_deviceCreationParams.enableAsyncComputeLane = enabled;
-    return true;
-}
-
-b8 GraphicsRuntime::setTransferQueueEnabled(const b8 enabled)noexcept{
-    if(m_backend->getDevice())
-        return false;
-
-    m_deviceCreationParams.enableTransferQueue = enabled;
-    return true;
-}
-
-b8 GraphicsRuntime::setSameClassMultiQueueEnabled(const b8 enabled)noexcept{
-    if(m_backend->getDevice())
-        return false;
-
-    m_deviceCreationParams.enableSameClassMultiQueue = enabled;
-    return true;
-}
-
-b8 GraphicsRuntime::setCrossFamilySameClassQueueRoutingEnabled(const b8 enabled)noexcept{
-    if(m_backend->getDevice())
-        return false;
-
-    m_deviceCreationParams.enableCrossFamilySameClassQueueRouting = enabled;
-    return true;
-}
-
-b8 GraphicsRuntime::setAdapterIndex(const i32 index)noexcept{
-    if(index < -1 || m_backend->getDevice())
-        return false;
-
-    m_deviceCreationParams.adapterIndex = index;
     return true;
 }
 

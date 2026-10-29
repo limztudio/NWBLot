@@ -26,11 +26,11 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, const TStringView& LoggerName>
-class ClientBase : public IClient, public QueuedLoggerWorkerBase<T, LoggerName>{
+template<typename T>
+class ClientBase : public IClient, public QueuedLoggerWorkerBase<T>{
 protected:
-    using BaseType = LoggerWorkerBase<T, LoggerName>;
-    using UpdateBaseType = QueuedLoggerWorkerBase<T, LoggerName>;
+    using BaseType = LoggerWorkerBase<T>;
+    using UpdateBaseType = QueuedLoggerWorkerBase<T>;
 
 
 protected:
@@ -59,12 +59,11 @@ namespace ClientPayloadKind{
     };
 };
 
-inline constexpr TStringView s_ClientName = NWB_TEXT("Client");
-class Client final : public ClientBase<Client, s_ClientName>{
-    template<typename, const TStringView&> friend class LoggerWorkerBase;
-    template<typename, const TStringView&> friend class QueuedLoggerWorkerBase;
+class Client final : public ClientBase<Client>{
+    template<typename> friend class LoggerWorkerBase;
+    template<typename> friend class QueuedLoggerWorkerBase;
 
-    using ClientBaseType = ClientBase<Client, s_ClientName>;
+    using ClientBaseType = ClientBase<Client>;
     using BaseType = ClientBaseType::BaseType;
     using UpdateBaseType = ClientBaseType::UpdateBaseType;
 
@@ -131,12 +130,11 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_ClientStandaloneName = NWB_TEXT("ClientStandalone");
-class ClientStandalone final : public ClientBase<ClientStandalone, s_ClientStandaloneName>{
-    template<typename, const TStringView&> friend class LoggerWorkerBase;
-    template<typename, const TStringView&> friend class QueuedLoggerWorkerBase;
+class ClientStandalone final : public ClientBase<ClientStandalone>{
+    template<typename> friend class LoggerWorkerBase;
+    template<typename> friend class QueuedLoggerWorkerBase;
 
-    using ClientBaseType = ClientBase<ClientStandalone, s_ClientStandaloneName>;
+    using ClientBaseType = ClientBase<ClientStandalone>;
     using BaseType = ClientBaseType::BaseType;
     using UpdateBaseType = ClientBaseType::UpdateBaseType;
 

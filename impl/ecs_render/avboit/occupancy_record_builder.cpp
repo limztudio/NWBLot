@@ -73,19 +73,19 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     if(!inputs.clearTask.valid() || !inputs.uploadTask.valid())
         return MakeUnexpected(Failure{});
 
-    const bool generatedGeometryReused = inputs.generatedGeometryReused();
+    const b8 generatedGeometryReused = inputs.generatedGeometryReused();
     if(!inputs.generatedGeometryReusePlansValid())
         return MakeUnexpected(Failure{});
     occupancyPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_occupancyReusedGeometryProducer = inputs.reusedGeometryProducer;
 
-    const bool hasCsgIntervalReads = inputs.csgStreamsUploaded;
+    const b8 hasCsgIntervalReads = inputs.csgStreamsUploaded;
     NWB_ASSERT(!hasCsgIntervalReads || (occupancyPayload.occupancyStreamsUploaded && occupancyPayload.occupancySnapshot.captured));
     occupancyPayload.occupancyMaterialFrameStatesGraphOwned = occupancyPayload.occupancyStreamsUploaded;
     occupancyPayload.occupancyMaterialGeometryStatesGraphOwned = occupancyPayload.occupancyStreamsUploaded && occupancyPayload.occupancyMaterialGeometryStatesGraphOwned;
     Core::GpuGraphResourceSetId occupancyComputeEmulationOutputSet;
-    const bool occupancyComputeEmulationPlanCaptured = inputs.regularComputeEmulationPlanCaptured || inputs.csgComputeEmulationPlanCaptured;
-    bool occupancyComputeEmulationOutputStatesGraphOwned = false;
+    const b8 occupancyComputeEmulationPlanCaptured = inputs.regularComputeEmulationPlanCaptured || inputs.csgComputeEmulationPlanCaptured;
+    b8 occupancyComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.regularComputeEmulationPlanCaptured){
         const auto occupancyComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(m_graph, computeEmulationPayload.plan, scratchArena, Name("render.avboit.occupancy.compute_emulation.outputs"), "AVBOIT Occupancy Compute Emulation Outputs");
         occupancyComputeEmulationOutputStatesGraphOwned = occupancyComputeEmulationOutputSetResult.has_value();
@@ -113,7 +113,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     occupancyPayload.occupancyCsgComputeEmulationOutputStatesGraphOwned = inputs.csgComputeEmulationPlanCaptured && occupancyComputeEmulationOutputStatesGraphOwned;
     occupancyPayload.occupancyComputeEmulationTiming = occupancyComputeEmulationOutputStatesGraphOwned ? &inputs.occupancyComputeEmulationTiming : nullptr;
     Core::GpuGraphResourceId occupancySharedComputeEmulationOutput;
-    bool occupancySharedComputeEmulationOutputStatesGraphOwned = false;
+    b8 occupancySharedComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.sharedComputeEmulationPlanCaptured){
         const auto occupancySharedComputeEmulationOutputResult = GatherRegularSharedComputeEmulationResource(m_graph, inputs.sharedComputeEmulationPlan, "AVBOIT Occupancy Shared Compute Emulation Output");
         occupancySharedComputeEmulationOutputStatesGraphOwned = occupancySharedComputeEmulationOutputResult.has_value();
@@ -319,8 +319,8 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             const Core::GpuTaskId& dependency,
             const AvboitOccupancySharedComputeEmulationGraphTask::Phase::Enum phase,
             const usize drawIndex,
-            const bool beginTiming,
-            const bool finishTiming,
+            const b8 beginTiming,
+            const b8 finishTiming,
             const Span<const Core::GpuTaskResourceUse> resourceUses,
             const Span<const Core::GpuTaskResourceSetUse> resourceSetUses
         ){
@@ -377,7 +377,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         Core::GpuTaskId occupancySharedComputeEmulationDependency = occupancyDependency;
         const Span<const Core::GpuTaskResourceSetUse> occupancyMaterialResourceSetUseSpan(occupancyMaterialResourceSetUses, occupancyMaterialResourceSetUseCount);
         for(usize phaseIndex = 0u; phaseIndex < occupancySharedComputeEmulationPhaseCount; ++phaseIndex){
-            const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
+            const b8 isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             const auto occupancySharedComputeEmulationTaskResult = addOccupancySharedComputeEmulationPhase(
                 occupancySharedComputeEmulationPhaseIdentities[phaseIndex],
                 occupancySharedComputeEmulationPhaseMarkers[phaseIndex],

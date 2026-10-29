@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureShadowPipeline(){
+b8 RendererRayTracingSystem::ensureShadowPipeline(){
     if(m_rayTracingState.m_shadowPipeline)
         return true;
     if(m_rayTracingState.m_shadowPipelineFailed)
@@ -72,7 +72,7 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
+b8 RendererRayTracingSystem::ensureShadowSoftPipeline(){
     if(m_rayTracingState.m_shadowSoftPipeline)
         return true;
     if(m_rayTracingState.m_shadowSoftPipelineFailed)
@@ -120,7 +120,7 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureSwShadowPipeline(){
+b8 RendererRayTracingSystem::ensureSwShadowPipeline(){
     if(m_rayTracingState.m_swShadowPipelineFailed)
         return false;
 
@@ -193,7 +193,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         }
     }
 
-    const bool heapResourcesReady =
+    const b8 heapResourcesReady =
         RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowEdgeCounterHeapHandle)
         && RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_swShadowIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowIndirectArgsHeapHandle)
     ;
@@ -203,7 +203,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         return false;
     }
 
-    const bool passesReady =
+    const b8 passesReady =
         ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowOpaquePrepassShader, m_rayTracingState.m_swShadowOpaquePrepassPipeline, &ShadowSubsystem::swShadowOpaquePrepassCs, "ECSRender_SwShadowOpaquePrepass")
         && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowSoftOpaqueShader, m_rayTracingState.m_swShadowSoftOpaquePipeline, &ShadowSubsystem::swShadowSoftOpaqueCs, "ECSRender_SwShadowSoftOpaque")
         && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentCoarseShader, m_rayTracingState.m_swShadowTransparentCoarsePipeline, &ShadowSubsystem::swShadowTransparentCoarseCs, "ECSRender_SwShadowTransparentCoarse")
@@ -220,7 +220,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* shaderMember, const NameText<char> debugLabel){
+b8 RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* shaderMember, const NameText<char> debugLabel){
     if(pipeline)
         return true;
 
@@ -245,7 +245,7 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
     return true;
 }
 
-bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instanceCount){
+b8 RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instanceCount){
     // CPU-uploaded material context is shared by the exclusive HW/SW backends.
     if(m_rayTracingState.m_shadowInstanceMaterialBuffer && m_rayTracingState.m_shadowInstanceMaterialCapacity >= instanceCount)
         return ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle);
@@ -273,7 +273,7 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
     return true;
 }
 
-bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceCount){
+b8 RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceCount){
     // Shadow tracing needs an instance record for every gathered occluder.
     if(instanceCount == 0u)
         return !m_rayTracingState.m_shadowInstanceBuffer || ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle);
@@ -302,7 +302,7 @@ bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceC
     return true;
 }
 
-bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
+b8 RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
     // Keep one word so the heap binding remains valid with no transparent occluders.
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
     requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));

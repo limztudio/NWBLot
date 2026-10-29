@@ -65,7 +65,7 @@ public:
 
 protected:
     virtual void startNativeRequest(const ClipboardRequestToken token, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)noexcept override{
-        const bool completed = completeNativeRequest(token, ClipboardStatus::Unsupported);
+        const b8 completed = completeNativeRequest(token, ClipboardStatus::Unsupported);
         NWB_FATAL_ASSERT(completed);
     }
 };
@@ -87,7 +87,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool setup(){
+    [[nodiscard]] b8 setup(){
         AString<Alloc::GlobalArena> text(m_arena);
         text.assign(m_stops - 1u, 'a');
         if(!m_model.setText(text) || !m_model.setSelection(0u, 0u) || !m_view.snapshot(m_model))
@@ -102,7 +102,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool operation(){
+    [[nodiscard]] b8 operation(){
         ++m_generation;
         if(!m_context.beginFrame(m_generation))
             return false;
@@ -177,7 +177,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool setup(){
+    [[nodiscard]] b8 setup(){
         UiSkin::RegionVector regions(m_arena);
         m_skin.setAtlas(Assets::AssetRef<Texture>("tests/performance/ui_input/texture"), 8u, 8u, 1.0f, Move(regions));
         AString<Alloc::GlobalArena> text(m_arena);
@@ -194,7 +194,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool operation(){
+    [[nodiscard]] b8 operation(){
         m_paint.begin({ 500.0f, 200.0f }, 1u, 1u, Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
         if(!m_view.paint(m_text, m_paint, m_skin, m_placement))
             return false;
@@ -238,7 +238,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RunEditBenchmarks(){
+b8 RunEditBenchmarks(){
     constexpr usize s_StopCounts[]{ 256u, 4096u, 16384u };
     constexpr AStringView s_PublicationNames[]{ "editor.publish.256", "editor.publish.4096", "editor.publish.16384" };
     constexpr usize s_LineCounts[]{ 100u, 1000u, 10000u };

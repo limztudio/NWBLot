@@ -41,7 +41,7 @@ namespace TerminalDependencyScenario{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void CheckTerminalDependencies(const usize readerCount, const TerminalDependencyScenario::Enum scenario, const bool lateFallback){
+static void CheckTerminalDependencies(const usize readerCount, const TerminalDependencyScenario::Enum scenario, const b8 lateFallback){
     ASSERT_GT(readerCount, 0u);
     if(lateFallback){
         ASSERT_EQ(scenario, TerminalDependencyScenario::ReadPairs);
@@ -153,7 +153,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
         EXPECT_EQ(packet.index, readerIndex);
         const Graphics::GpuCompiledPacketView view = plan.packet(packet);
         ASSERT_TRUE(view.valid());
-        const bool chained = scenario == TerminalDependencyScenario::Chain && readerIndex != 0u;
+        const b8 chained = scenario == TerminalDependencyScenario::Chain && readerIndex != 0u;
         ASSERT_EQ(view.plan->dependencyCount, chained ? 1u : 0u);
         if(chained)
             EXPECT_EQ(view.dependencies[0u].producer, plan.packetForTask(readers[readerIndex - 1u]));
@@ -165,7 +165,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
         const Graphics::GpuCompiledPacketView view = plan.packet(packet);
         ASSERT_TRUE(view.valid());
         EXPECT_EQ(view.plan->recordingFrontier, 0u);
-        const bool delayedFallback = lateFallback && pairIndex + 1u == pairCount;
+        const b8 delayedFallback = lateFallback && pairIndex + 1u == pairCount;
         usize dependencyCount = scenario == TerminalDependencyScenario::RootedStar ? readerCount : 1u;
         if(delayedFallback)
             dependencyCount = 2u;

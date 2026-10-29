@@ -49,8 +49,8 @@ struct TypeRef{
     MVector<FuncParamType> funcParams;
     usize inferredCaptureBytes = 0u;
     SourceSpan span;
-    bool isFuncType = false;
-    bool isAuto = false;
+    b8 isFuncType = false;
+    b8 isAuto = false;
 
 
 public:

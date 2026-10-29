@@ -127,7 +127,7 @@ static void AppendCommandArenaWorkerStatistics(AString<Core::Alloc::GlobalArena>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
+b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
     if(!m_frameTargets.valid())
         return false;
 
@@ -138,11 +138,11 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
     namespace Edge = Core::Telemetry::FrameGraphEdgeKind;
 
     const CsgFrameState& csgFrameState = m_preparedCsgFrameState;
-    const bool hasCsgFrameWork = m_preparedCsgFrameStateValid && !csgFrameState.empty();
-    const bool hasOpaqueCsgFrameWork = hasCsgFrameWork && (csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork);
-    const bool hasTransparentCsgFrameWork = hasCsgFrameWork && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork);
-    const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
-    const bool hasAvboitWork = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
+    const b8 hasCsgFrameWork = m_preparedCsgFrameStateValid && !csgFrameState.empty();
+    const b8 hasOpaqueCsgFrameWork = hasCsgFrameWork && (csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork);
+    const b8 hasTransparentCsgFrameWork = hasCsgFrameWork && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork);
+    const b8 hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
+    const b8 hasAvboitWork = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
 
     Core::GpuTaskGraphRuntimeStatistics deferredRuntimeStatistics{};
     if(builder.frameIndex() == m_frameGraphSourceFrameIndex)
@@ -313,8 +313,8 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueRuntimeStatistics = physicalQueueRuntimeStatistics[queueIndex];
             const Core::Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& queueStatistics = queueRuntimeStatistics.submission;
             const Core::Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& queueCompileStatistics = queueRuntimeStatistics.compile;
-            const bool hasTerminalSubmissionWork = queueStatistics.acceptedPacketCount != 0u || queueStatistics.rejectedPacketCount != 0u;
-            const bool hasLogicalOwnershipTelemetry =
+            const b8 hasTerminalSubmissionWork = queueStatistics.acceptedPacketCount != 0u || queueStatistics.rejectedPacketCount != 0u;
+            const b8 hasLogicalOwnershipTelemetry =
                 queueCompileStatistics.incomingLogicalOwnershipTransferCount != 0u
                 || queueCompileStatistics.outgoingLogicalOwnershipTransferCount != 0u
                 || queueCompileStatistics.incomingLogicalOwnershipTransferSignatureCount != 0u
@@ -417,7 +417,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 if(!recordedPacket || recordedPacket->recordingWorkerIndex == 0u)
                     continue;
 
-                bool alreadyAppended = false;
+                b8 alreadyAppended = false;
                 for(usize previousPacketIndex = 0u; previousPacketIndex < packetIndex; ++previousPacketIndex){
                     const Core::GpuSubmissionPacketId previousPacket = deferredCompiledPlan.packetIdAt(previousPacketIndex);
                     const Core::GpuCompiledPacketView previousPacketView = deferredCompiledPlan.packet(previousPacket);

@@ -75,7 +75,7 @@ TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresent
 
 TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending){
     NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
-    bool bindlessResourceSlotsUploaded = false;
+    b8 bindlessResourceSlotsUploaded = false;
     NWB::Impl::MeshSkinningSubmissionCommit commit;
     commit.editRevision = 17u;
     commit.handledDirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
@@ -94,7 +94,7 @@ TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending)
 
 TEST(EcsGraphics, MeshSkinningSubmissionCommitPreservesNewerEditRevision){
     NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
-    bool bindlessResourceSlotsUploaded = false;
+    b8 bindlessResourceSlotsUploaded = false;
     NWB::Impl::MeshSkinningSubmissionCommit commit;
     commit.editRevision = 17u;
     commit.handledDirtyFlags = dirtyFlags;
@@ -527,7 +527,7 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(NWB::Core::Al
     }
     for(const u32 index : MakeTriangleIndices())
         instance.meshletPrimitiveIndices.push_back(static_cast<u8>(index));
-    const bool meshletRefsEncoded = NWB::Impl::EncodeMeshletRefDeltas(
+    const b8 meshletRefsEncoded = NWB::Impl::EncodeMeshletRefDeltas(
         meshletPositionStreamRefs,
         meshletAttributeStreamRefs,
         true,

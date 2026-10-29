@@ -29,7 +29,7 @@ void UiPopupToolsGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::A
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = s_GalleryFontSize;
-    bool valid = ui.label(s_TitleKey, "Tooltip and context commands");
+    b8 valid = ui.label(s_TitleKey, "Tooltip and context commands");
     if(ui.button(s_AnchorKey, "Right-click / Menu / Shift+F10"))
         ++m_anchorClicks;
     valid = ui.tooltip("help", s_AnchorKey, "Open commands here; Delete is disabled.", m_tooltip) && valid;

@@ -76,21 +76,21 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
     }
 
 
-    const bool windowSmoke = IsUiLayerWindowSmokeEnabled();
-    const bool popupSmoke = IsUiLayerPopupSmokeEnabled();
-    const bool popupToolsSmoke = IsUiLayerPopupToolsSmokeEnabled();
-    const bool nestedPopupSmoke = IsUiLayerNestedPopupSmokeEnabled();
-    const bool radioGroupSmoke = IsUiLayerRadioGroupSmokeEnabled();
-    const bool sliderSmoke = IsUiLayerSliderSmokeEnabled();
-    const bool progressSmoke = IsUiLayerProgressSmokeEnabled();
-    const bool imageSmoke = IsUiLayerImageSmokeEnabled();
-    const bool textureImageSmoke = IsUiLayerTextureImageSmokeEnabled();
-    const bool textAreaSmoke = IsUiLayerTextAreaSmokeEnabled();
-    const bool numericEditSmoke = IsUiLayerNumericEditSmokeEnabled();
-    const bool listSmoke = IsUiLayerListSmokeEnabled();
-    const bool comboSmoke = IsUiLayerComboSmokeEnabled();
-    const bool searchComboSmoke = IsUiLayerSearchComboSmokeEnabled();
-    const bool alternateSkin = (windowSmoke && IsUiLayerWindowSkinSmokeEnabled())
+    const b8 windowSmoke = IsUiLayerWindowSmokeEnabled();
+    const b8 popupSmoke = IsUiLayerPopupSmokeEnabled();
+    const b8 popupToolsSmoke = IsUiLayerPopupToolsSmokeEnabled();
+    const b8 nestedPopupSmoke = IsUiLayerNestedPopupSmokeEnabled();
+    const b8 radioGroupSmoke = IsUiLayerRadioGroupSmokeEnabled();
+    const b8 sliderSmoke = IsUiLayerSliderSmokeEnabled();
+    const b8 progressSmoke = IsUiLayerProgressSmokeEnabled();
+    const b8 imageSmoke = IsUiLayerImageSmokeEnabled();
+    const b8 textureImageSmoke = IsUiLayerTextureImageSmokeEnabled();
+    const b8 textAreaSmoke = IsUiLayerTextAreaSmokeEnabled();
+    const b8 numericEditSmoke = IsUiLayerNumericEditSmokeEnabled();
+    const b8 listSmoke = IsUiLayerListSmokeEnabled();
+    const b8 comboSmoke = IsUiLayerComboSmokeEnabled();
+    const b8 searchComboSmoke = IsUiLayerSearchComboSmokeEnabled();
+    const b8 alternateSkin = (windowSmoke && IsUiLayerWindowSkinSmokeEnabled())
         || (popupSmoke && IsUiLayerPopupSkinSmokeEnabled()) || (listSmoke && IsUiLayerListSkinSmokeEnabled())
         || (comboSmoke && IsUiLayerComboSkinSmokeEnabled())
         || (searchComboSmoke && IsUiLayerSearchComboSkinSmokeEnabled())
@@ -287,7 +287,7 @@ void ClearUiLayerSmokeWorld(ProjectRuntimeContext& context, Core::ECS::World& wo
         return;
 
     context.graphics.removeRenderPass(*layer);
-    const bool deviceIdle = context.graphics.waitForIdle();
+    const b8 deviceIdle = context.graphics.waitForIdle();
     NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), NWB_TEXT("UI smoke teardown requires device idle or terminal loss"));
     world.clear();
 }

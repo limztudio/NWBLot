@@ -48,12 +48,12 @@ struct DeferredLightingGraphTask{
         RendererDeferredSystem& deferredSystem;
         DeferredFrameTargets& targets;
         Core::GpuTimingSubmissionTicket& timingTicket;
-        bool useLaggedLightingHistory = false;
+        b8 useLaggedLightingHistory = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         return ECSRenderDetail::RecordDeferredGraphTask(payload, commandList, [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
             return deferredSystem.renderDeferredLighting(taskCommandList, targets, payload.useLaggedLightingHistory);
@@ -100,7 +100,7 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
 
     const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
     NWB_ASSERT(lightByteCount <= sizeof(m_deferredState.m_lightGpuData));
-    const bool lightDataUnchanged = m_deferredState.m_lightGpuDataValid && m_deferredState.m_lightGpuDataCount == lightCount && NWB_MEMCMP(m_deferredState.m_lightGpuData, uploads.lightData, lightByteCount) == 0;
+    const b8 lightDataUnchanged = m_deferredState.m_lightGpuDataValid && m_deferredState.m_lightGpuDataCount == lightCount && NWB_MEMCMP(m_deferredState.m_lightGpuData, uploads.lightData, lightByteCount) == 0;
     // A zero-light scene has nothing to copy; still record the empty mirror.
     uploads.lightUploadRequired = !lightDataUnchanged && lightByteCount != 0u;
     uploads.lightCount = lightCount;
@@ -112,9 +112,9 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
 
 void RendererDeferredSystem::confirmSceneShadingBufferUploads(
     const Span<const ECSRenderDetail::SceneLightGpuData> lights,
-    const bool lightUploadRequired,
+    const b8 lightUploadRequired,
     const ECSRenderDetail::SceneShadingGpuData& sceneShadingState,
-    const bool sceneShadingUploadRequired
+    const b8 sceneShadingUploadRequired
 )noexcept{
     const u32 lightCount = static_cast<u32>(lights.size());
     const usize lightByteCount = lights.size() * sizeof(ECSRenderDetail::SceneLightGpuData);
@@ -132,7 +132,7 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
     }
 }
 
-bool RendererDeferredSystem::createDeferredLightingResources(){
+b8 RendererDeferredSystem::createDeferredLightingResources(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
@@ -209,7 +209,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
     return true;
 }
 
-bool RendererDeferredSystem::createDeferredLightingPipeline(){
+b8 RendererDeferredSystem::createDeferredLightingPipeline(){
     if(!createDeferredLightingResources())
         return false;
 
@@ -234,14 +234,14 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(){
     return true;
 }
 
-Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const bool useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket){
+Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const b8 useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket){
     return graph.addTask<__hidden_deferred_lighting::DeferredLightingGraphTask>(
         desc,
         __hidden_deferred_lighting::DeferredLightingGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .useLaggedLightingHistory = useLaggedLightingHistory, }
     );
 }
 
-bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, const bool useLaggedLightingHistory){
+b8 RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, const b8 useLaggedLightingHistory){
     NWB_ASSERT(m_deferredState.m_lightingPipeline);
 
     const DeferredLaggedLightingHistoryResources* const laggedHistory = useLaggedLightingHistory ? &targets.laggedLightingHistory : nullptr;

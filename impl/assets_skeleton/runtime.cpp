@@ -53,13 +53,13 @@ u32 Skeleton::findJointIndex(const Name jointName)const noexcept{
     return foundJoint.value();
 }
 
-bool Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
         return false;
     return AssetsSkeletonPayloadDetail::ValidateJoints<Core::Assets::AssetArena>(m_joints, m_jointIndices, scratchArena);
 }
 
-bool Skeleton::loadBinary(const Span<const u8> binary){
+b8 Skeleton::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(binary, SkeletonBinaryPayload::s_SkeletonMagic, SkeletonBinaryPayload::s_SkeletonLoadBinaryContext, SkeletonBinaryPayload::s_SkeletonAssetKindLabel, cursor);

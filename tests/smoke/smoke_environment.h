@@ -57,7 +57,7 @@ template<typename ArenaT>
 }
 
 // Truthy env reader for on/off flags: absent/empty/"0" -> false, anything else -> true.
-[[nodiscard]] inline bool ReadSmokeEnvironmentFlag(const AStringView variableName){
+[[nodiscard]] inline b8 ReadSmokeEnvironmentFlag(const AStringView variableName){
     Core::Alloc::ScratchArena arena(s_SmokeEnvironmentArena);
     const auto value = ReadSmokeEnvironmentText(arena, variableName);
     if(!value)

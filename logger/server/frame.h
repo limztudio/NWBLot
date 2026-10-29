@@ -76,9 +76,9 @@ public:
 
 
 public:
-    bool init()noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
+    b8 init()noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
     void showFrame();
-    bool mainLoop()noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
+    b8 mainLoop()noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
 
 
 public:

@@ -58,7 +58,7 @@ struct TextureCreateMetadata{
     VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
 };
 
-[[nodiscard]] inline bool TextureDescriptionsEqual(const TextureDesc& lhs, const TextureDesc& rhs)noexcept{
+[[nodiscard]] inline b8 TextureDescriptionsEqual(const TextureDesc& lhs, const TextureDesc& rhs)noexcept{
     return
         lhs.name == rhs.name
         && NWB_MEMCMP(&lhs.clearValue, &rhs.clearValue, sizeof(Color)) == 0
@@ -84,11 +84,11 @@ struct TextureCreateMetadata{
     ;
 }
 
-[[nodiscard]] constexpr bool IsTextureResourceStateMaskValid(const ResourceStates::Mask states)noexcept{
+[[nodiscard]] constexpr b8 IsTextureResourceStateMaskValid(const ResourceStates::Mask states)noexcept{
     return states != ResourceStates::Unknown && (states & ~s_ValidTextureResourceStates) == 0u;
 }
 
-[[nodiscard]] constexpr bool IsTextureCreationStateMaskValid(const ResourceStates::Mask states)noexcept{
+[[nodiscard]] constexpr b8 IsTextureCreationStateMaskValid(const ResourceStates::Mask states)noexcept{
     return states == ResourceStates::Unknown || IsTextureResourceStateMaskValid(states);
 }
 
@@ -122,11 +122,11 @@ inline u32 GetMaxMipLevels(const TextureDesc& desc)noexcept{
     return levels;
 }
 
-[[nodiscard]] inline bool IsTextureDescShapeValid(const TextureDesc& desc)noexcept{
+[[nodiscard]] inline b8 IsTextureDescShapeValid(const TextureDesc& desc)noexcept{
     if(desc.width == 0u || desc.height == 0u || desc.depth == 0u || desc.mipLevels == 0u || desc.arraySize == 0u)
         return false;
 
-    bool dimensionValid = false;
+    b8 dimensionValid = false;
     switch(desc.dimension){
     case TextureDimension::Texture1D:
         dimensionValid = desc.height == 1u && desc.depth == 1u && desc.arraySize == 1u;
@@ -252,7 +252,7 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
     return imageInfo;
 }
 
-[[nodiscard]] inline bool IsTextureImageInfoConsistent(const TextureDesc& desc, const VkImageCreateInfo& imageInfo, const VkImageUsageFlags requiredUsage = 0u)noexcept{
+[[nodiscard]] inline b8 IsTextureImageInfoConsistent(const TextureDesc& desc, const VkImageCreateInfo& imageInfo, const VkImageUsageFlags requiredUsage = 0u)noexcept{
     const auto expectedImageType = TryTextureDimensionToImageType(desc.dimension);
     if(!expectedImageType || !VulkanDetail::IsSupportedSampleCount(desc.sampleCount) || desc.sampleQuality != 0u)
         return false;
@@ -263,7 +263,7 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
     const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(GetFormatInfo(desc.format));
     const VkImageUsageFlags descriptionUsage = (PickImageUsage(desc, expectedAspectMask) & ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)) | RequiredImageUsageForResourceStates(desc.initialState);
     const VkImageCreateFlags requiredFlags = PickImageFlags(desc);
-    const bool sharingInfoConsistent =
+    const b8 sharingInfoConsistent =
         (imageInfo.sharingMode == VK_SHARING_MODE_EXCLUSIVE && imageInfo.queueFamilyIndexCount == 0u && imageInfo.pQueueFamilyIndices == nullptr)
         || (imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT && imageInfo.queueFamilyIndexCount >= 2u && imageInfo.pQueueFamilyIndices != nullptr)
     ;
@@ -287,7 +287,7 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
 }
 
 // Creation copies the cached aspect and block layout from the creation format.
-[[nodiscard]] inline bool TextureFormatMetadataMatches(const Format::Enum format, const VkImageAspectFlags aspectMask, const VulkanDetail::TextureFormatBlockLayout& formatLayout)noexcept{
+[[nodiscard]] inline b8 TextureFormatMetadataMatches(const Format::Enum format, const VkImageAspectFlags aspectMask, const VulkanDetail::TextureFormatBlockLayout& formatLayout)noexcept{
     const FormatInfo& formatInfo = GetFormatInfo(format);
     const auto expectedFormatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
     return
@@ -299,7 +299,7 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
     ;
 }
 
-[[nodiscard]] inline bool IsTextureImageWithinFormatLimits(const VkImageCreateInfo& imageInfo, const VkImageFormatProperties& formatProperties)noexcept{
+[[nodiscard]] inline b8 IsTextureImageWithinFormatLimits(const VkImageCreateInfo& imageInfo, const VkImageFormatProperties& formatProperties)noexcept{
     return
         imageInfo.extent.width <= formatProperties.maxExtent.width
         && imageInfo.extent.height <= formatProperties.maxExtent.height
@@ -310,7 +310,7 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
     ;
 }
 
-inline bool ValidateTextureViewShape(const TextureDimension::Enum dimension, const TextureSubresourceSet& subresources){
+inline b8 ValidateTextureViewShape(const TextureDimension::Enum dimension, const TextureSubresourceSet& subresources){
     if(dimension == TextureDimension::TextureCube && subresources.numArraySlices != s_TextureCubeLayerCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: cube views must include exactly 6 array layers"));
         return false;
@@ -323,14 +323,14 @@ inline bool ValidateTextureViewShape(const TextureDimension::Enum dimension, con
     return true;
 }
 
-inline Unexpected<Failure> ReportTextureCreateDescError(TStringView operationName, TStringView message, const bool assertFailure){
+inline Unexpected<Failure> ReportTextureCreateDescError(TStringView operationName, TStringView message, const b8 assertFailure){
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
     if(assertFailure)
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
     return MakeUnexpected(Failure{});
 }
 
-inline Expected<TextureCreateMetadata> ValidateTextureCreateDesc(const TextureDesc& desc, TStringView operationName, const bool assertFailure){
+inline Expected<TextureCreateMetadata> ValidateTextureCreateDesc(const TextureDesc& desc, TStringView operationName, const b8 assertFailure){
     TextureCreateMetadata metadata{};
     if(!ResourceQueueSharing::IsValid(desc.queueSharing))
         return ReportTextureCreateDescError(operationName, NWB_TEXT("queue sharing contains unknown bits"), assertFailure);

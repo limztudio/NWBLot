@@ -35,7 +35,7 @@ using namespace AssetsGraphicsCookDetail;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ValidateMaterialVariant(ShaderCook& shaderCook, const MaterialCookEntry& materialEntry, const PreparedShaderEntry& preparedShaderEntry, const Name& stageName, ScratchArena& scratchArena){
+static b8 ValidateMaterialVariant(ShaderCook& shaderCook, const MaterialCookEntry& materialEntry, const PreparedShaderEntry& preparedShaderEntry, const Name& stageName, ScratchArena& scratchArena){
     if(materialEntry.shaderVariant.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has empty shader_variant"), ConvertString(AStringView(materialEntry.virtualPath)));
         return false;
@@ -62,7 +62,7 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMaterials(ShaderCook& shaderCook, const Span<const PreparedShaderEntry> preparedEntries, const Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena){
+b8 ValidateMaterials(ShaderCook& shaderCook, const Span<const PreparedShaderEntry> preparedEntries, const Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena){
     HashMap<ShaderStageKey, NotNull<const PreparedShaderEntry*>, ScratchArena, ShaderStageKeyHasher, EqualTo<ShaderStageKey>> preparedShaderLookup(0, ShaderStageKeyHasher(), EqualTo<ShaderStageKey>(), scratchArena);
     preparedShaderLookup.reserve(preparedEntries.size());
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
@@ -84,8 +84,8 @@ bool ValidateMaterials(ShaderCook& shaderCook, const Span<const PreparedShaderEn
     }
 
     for(const MaterialCookEntry& materialEntry : materialEntries){
-        bool hasShaderStage = false;
-        bool hasInterfaceStage = false;
+        b8 hasShaderStage = false;
+        b8 hasInterfaceStage = false;
 
         for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
             hasShaderStage = true;

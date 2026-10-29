@@ -41,7 +41,7 @@ public:
     ~RejectingPacketUnwindScope()noexcept{
         if(UncaughtExceptionCount() <= m_uncaughtExceptionCount)
             return;
-        const bool abandoned = m_graph.abandonUnacceptedPacketWithoutCallbacks(m_compiledGraph, m_planAccess, m_packet, m_recordingAttemptGeneration, m_submissionBinding);
+        const b8 abandoned = m_graph.abandonUnacceptedPacketWithoutCallbacks(m_compiledGraph, m_planAccess, m_packet, m_recordingAttemptGeneration, m_submissionBinding);
         NWB_FATAL_ASSERT_MSG(abandoned, "throwing discard observer must leave an abandonable graph packet");
         m_transaction.completeRejectedPacketWithinSubmissionOperation(m_graph, m_compiledGraph, m_planAccess, m_packet, false);
     }
@@ -161,7 +161,7 @@ private:
     u64 m_recordingAttemptGeneration = 0u;
     GpuGraphSubmissionBinding m_submissionBinding;
     const i32 m_uncaughtExceptionCount = 0;
-    bool m_armed = false;
+    b8 m_armed = false;
 };
 
 
@@ -209,7 +209,7 @@ void GpuGraphSubmissionTransaction::rejectTask(GpuTaskGraph& graph, const GpuCom
     rejectTaskWithinSubmissionOperation(graph, declarationAccess, compiledGraph, planAccess, task, recordingAttemptGeneration);
 }
 
-bool GpuGraphSubmissionTransaction::discardUnaccepted(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration){
+b8 GpuGraphSubmissionTransaction::discardUnaccepted(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration){
     UnacceptedPacketsFinalizationScope finalizationScope(*this, graph, compiledGraph);
     SubmissionOperation submissionOperation(*this, SubmissionOperationMode::TryExclusiveBarrier);
     if(!submissionOperation.valid())
@@ -320,7 +320,7 @@ void GpuGraphSubmissionTransaction::rejectPacket(GpuTaskGraph& graph, const GpuC
     }
     RejectingPacketUnwindScope unwindScope(*this, graph, compiledGraph, planAccess, packetID, recordingAttemptGeneration, submissionBinding);
 
-    const bool packetDiscarded = graph.discardUnacceptedPacket(compiledGraph, planAccess, packetID, recordingAttemptGeneration, submissionBinding);
+    const b8 packetDiscarded = graph.discardUnacceptedPacket(compiledGraph, planAccess, packetID, recordingAttemptGeneration, submissionBinding);
     if(!packetDiscarded){
         ScopedLock lock(m_mutex);
         if(validForLocked(planAccess) && packetID.index < m_packets.size()){
@@ -377,7 +377,7 @@ void GpuGraphSubmissionTransaction::abandonSubmittingPacketAfterExceptionWithinS
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuSubmissionPacketId packetID
 )noexcept{
-    const bool inputValid = SubmissionOperation::ActiveFor(*this)
+    const b8 inputValid = SubmissionOperation::ActiveFor(*this)
         && planAccess.validFor(compiledGraph)
         && validFor(planAccess)
         && planAccess.validPacket(packetID)
@@ -390,12 +390,12 @@ void GpuGraphSubmissionTransaction::abandonSubmittingPacketAfterExceptionWithinS
 
     {
         NothrowScopedLock lock(m_mutex);
-        const bool runtimeValid = validForLocked(planAccess) && m_recordingAttemptGeneration == lease.m_recordingAttemptGeneration && packetID.index < m_packets.size() && m_packets[packetID.index].state == PacketRuntimeState::Submitting;
+        const b8 runtimeValid = validForLocked(planAccess) && m_recordingAttemptGeneration == lease.m_recordingAttemptGeneration && packetID.index < m_packets.size() && m_packets[packetID.index].state == PacketRuntimeState::Submitting;
         NWB_FATAL_ASSERT_MSG(runtimeValid, "pre-submit exception cleanup must retain its submitting packet runtime");
         m_packets[packetID.index].state = PacketRuntimeState::Rejecting;
     }
 
-    const bool abandoned = graph.abandonPacketSubmissionWithoutCallbacks(compiledGraph, planAccess, packetID, lease);
+    const b8 abandoned = graph.abandonPacketSubmissionWithoutCallbacks(compiledGraph, planAccess, packetID, lease);
     NWB_FATAL_ASSERT_MSG(abandoned && !lease.valid(), "pre-submit exception cleanup must consume its exact graph submission lease without observers");
     completeRejectedPacketWithinSubmissionOperation(graph, compiledGraph, planAccess, packetID, true);
 }
@@ -406,15 +406,15 @@ void GpuGraphSubmissionTransaction::completeRejectedPacketWithinSubmissionOperat
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuSubmissionPacketId packetID,
-    const bool nativeSubmissionRejected
+    const b8 nativeSubmissionRejected
 )noexcept{
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
-    const bool inputValid = SubmissionOperation::ActiveFor(*this) && planAccess.validFor(compiledGraph) && packetView.valid();
+    const b8 inputValid = SubmissionOperation::ActiveFor(*this) && planAccess.validFor(compiledGraph) && packetView.valid();
     NWB_FATAL_ASSERT_MSG(inputValid, "rejected packet completion requires its exact transaction operation and packet");
 
     const GpuSubmissionPacket& packet = *packetView.plan;
     NothrowScopedLock lock(m_mutex);
-    const bool runtimeValid = validForLocked(planAccess) && packetID.index < m_packets.size() && m_packets[packetID.index].state == PacketRuntimeState::Rejecting;
+    const b8 runtimeValid = validForLocked(planAccess) && packetID.index < m_packets.size() && m_packets[packetID.index].state == PacketRuntimeState::Rejecting;
     NWB_FATAL_ASSERT_MSG(runtimeValid, "rejected packet completion must retain its rejecting transaction state");
     PacketRuntime& runtime = m_packets[packetID.index];
     runtime.state = PacketRuntimeState::Rejected;
@@ -427,7 +427,7 @@ void GpuGraphSubmissionTransaction::completeRejectedPacketWithinSubmissionOperat
 }
 
 void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)noexcept{
-    const bool operationValid = SubmissionOperation::ActiveExclusiveFor(*this) && planAccess.validFor(compiledGraph);
+    const b8 operationValid = SubmissionOperation::ActiveExclusiveFor(*this) && planAccess.validFor(compiledGraph);
     NWB_FATAL_ASSERT_MSG(operationValid, "exception cleanup requires exclusive graph submission ownership");
 
     for(usize packetIndex = 0u; packetIndex < planAccess.packetCount(); ++packetIndex){
@@ -435,13 +435,13 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
         u64 recordingAttemptGeneration = 0u;
         {
             NothrowScopedLock lock(m_mutex);
-            const bool transactionValid = validForLocked(planAccess) && m_activeSubmissionBinding.valid() && m_recordingAttemptGeneration != 0u && packetIndex < m_packets.size();
+            const b8 transactionValid = validForLocked(planAccess) && m_activeSubmissionBinding.valid() && m_recordingAttemptGeneration != 0u && packetIndex < m_packets.size();
             NWB_FATAL_ASSERT_MSG(transactionValid, "exception cleanup must retain its graph submission binding");
 
             PacketRuntime& runtime = m_packets[packetIndex];
             if(runtime.state == PacketRuntimeState::Accepted || runtime.state == PacketRuntimeState::Rejected)
                 continue;
-            const bool packetReady = runtime.state == PacketRuntimeState::Declared;
+            const b8 packetReady = runtime.state == PacketRuntimeState::Declared;
             NWB_FATAL_ASSERT_MSG(packetReady, "exception cleanup cannot cross an active packet operation");
             runtime.state = PacketRuntimeState::Rejecting;
             submissionBinding = m_activeSubmissionBinding;
@@ -449,7 +449,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
         }
 
         const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
-        const bool abandoned = packetID.valid() && graph.abandonUnacceptedPacketWithoutCallbacks(compiledGraph, planAccess, packetID, recordingAttemptGeneration, submissionBinding);
+        const b8 abandoned = packetID.valid() && graph.abandonUnacceptedPacketWithoutCallbacks(compiledGraph, planAccess, packetID, recordingAttemptGeneration, submissionBinding);
         NWB_FATAL_ASSERT_MSG(abandoned, "exception cleanup must terminalize every unaccepted graph packet");
 
         const GpuCompiledPacketView packetView = planAccess.packet(packetID);
@@ -457,7 +457,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
             TerminateInvariant();
         const GpuSubmissionPacket& packet = *packetView.plan;
         NothrowScopedLock lock(m_mutex);
-        const bool runtimeValid = validForLocked(planAccess) && packetIndex < m_packets.size() && m_packets[packetIndex].state == PacketRuntimeState::Rejecting;
+        const b8 runtimeValid = validForLocked(planAccess) && packetIndex < m_packets.size() && m_packets[packetIndex].state == PacketRuntimeState::Rejecting;
         NWB_FATAL_ASSERT_MSG(runtimeValid, "exception cleanup must retain its packet transaction state");
         PacketRuntime& runtime = m_packets[packetIndex];
         runtime.state = PacketRuntimeState::Rejected;
@@ -467,7 +467,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
 
     NothrowScopedLock lock(m_mutex);
     resolveSubmissionBindingIfTerminalLocked(graph, compiledGraph);
-    const bool resolutionValid = allPacketsTerminalLocked() && m_submissionBindingResolved;
+    const b8 resolutionValid = allPacketsTerminalLocked() && m_submissionBindingResolved;
     NWB_FATAL_ASSERT_MSG(resolutionValid, "exception cleanup must resolve its complete graph submission attempt");
 }
 

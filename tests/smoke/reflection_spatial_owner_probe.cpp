@@ -33,7 +33,7 @@ ReflectionSpatialOwnerProbe::ReflectionSpatialOwnerProbe(ProjectRuntimeContext& 
     , m_renderer(renderer)
 {}
 
-bool ReflectionSpatialOwnerProbe::configure(const AStringView selection, Impl::ReflectionSettings& settings){
+b8 ReflectionSpatialOwnerProbe::configure(const AStringView selection, Impl::ReflectionSettings& settings){
     if(selection == "fresh1")
         m_radii[0] = 1u;
     else if(selection == "fresh2")
@@ -60,7 +60,7 @@ bool ReflectionSpatialOwnerProbe::configure(const AStringView selection, Impl::R
     return true;
 }
 
-bool ReflectionSpatialOwnerProbe::update(const Impl::ReflectionStatistics& statistics, const Core::Perf::TimingView& timing, Impl::ReflectionSettings& settings){
+b8 ReflectionSpatialOwnerProbe::update(const Impl::ReflectionStatistics& statistics, const Core::Perf::TimingView& timing, Impl::ReflectionSettings& settings){
     if(!observeTiming(timing))
         return false;
     if(m_finalReset || statistics.sequence == 0u || !statistics.hardwareReady || !statistics.historyEligible)
@@ -97,7 +97,7 @@ bool ReflectionSpatialOwnerProbe::update(const Impl::ReflectionStatistics& stati
     return true;
 }
 
-bool ReflectionSpatialOwnerProbe::canFinish(const Impl::ReflectionStatistics& statistics, const u64 capturedSource)const noexcept{
+b8 ReflectionSpatialOwnerProbe::canFinish(const Impl::ReflectionStatistics& statistics, const u64 capturedSource)const noexcept{
     return
         m_finalReset && capturedSource == m_finalSource && m_captureWork.valid()
         && statistics.hardwareReady && statistics.historyEligible && statistics.samplingSeed == 0u
@@ -106,7 +106,7 @@ bool ReflectionSpatialOwnerProbe::canFinish(const Impl::ReflectionStatistics& st
     ;
 }
 
-bool ReflectionSpatialOwnerProbe::observeTiming(const Core::Perf::TimingView& timing){
+b8 ReflectionSpatialOwnerProbe::observeTiming(const Core::Perf::TimingView& timing){
     const Core::Perf::TimingStats& work = timing.stats(Impl::ReflectionGpuTimingScope::s_Spatial.identity);
     if(!work.valid() || (m_hasPublication && work.publishFrameIndex == m_lastPublish))
         return true;
@@ -125,7 +125,7 @@ bool ReflectionSpatialOwnerProbe::observeTiming(const Core::Perf::TimingView& ti
     return true;
 }
 
-bool ReflectionSpatialOwnerProbe::beginPhase(Impl::ReflectionSettings& settings){
+b8 ReflectionSpatialOwnerProbe::beginPhase(Impl::ReflectionSettings& settings){
     settings.spatialRadius = m_radii[m_phase];
     settings.samplingSeed = 101u + m_phase;
     if(!m_renderer.setReflectionSettings(settings)){

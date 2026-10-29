@@ -69,8 +69,8 @@ constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value, 
 
 template<typename Sequence, typename Predicate>
 void RetainIf(Sequence& values, const Predicate& selected)noexcept(
-    noexcept(static_cast<bool>(DeclVal<usize&>() < values.size()))
-    && noexcept(static_cast<bool>(!selected(values[DeclVal<usize&>()])))
+    noexcept(static_cast<b8>(DeclVal<usize&>() < values.size()))
+    && noexcept(static_cast<b8>(!selected(values[DeclVal<usize&>()])))
     && noexcept(values[DeclVal<usize&>()] = values[DeclVal<usize&>()])
     && noexcept(values.resize(DeclVal<usize&>()))
 ){
@@ -105,7 +105,7 @@ inline void AssignVector(DestinationT& destination, const SourceT& source)noexce
 }
 
 template<typename T>
-    requires(IsIntegral_V<T> && !IsSigned_V<T> && !IsSame_V<T, bool>)
+    requires(IsIntegral_V<T> && !IsSigned_V<T> && !IsSame_V<T, b8>)
 [[nodiscard]] constexpr Expected<T> CommonAlignmentChecked(const T firstAlignment, const T secondAlignment)noexcept{
     if(firstAlignment == 0u || secondAlignment == 0u)
         return MakeUnexpected(Failure{});
@@ -120,12 +120,12 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool IsSupportedAlignmentValue(const T align)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] constexpr b8 IsSupportedAlignmentValue(const T align)noexcept(IsArithmetic_V<T>){
     return align <= static_cast<T>(1) || (align & (align - static_cast<T>(1))) == static_cast<T>(0);
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool IsAligned(const T value, const T alignment)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] constexpr b8 IsAligned(const T value, const T alignment)noexcept(IsArithmetic_V<T>){
     return alignment == 0 || value % alignment == 0;
 }
 

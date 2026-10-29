@@ -50,7 +50,7 @@ template<typename RectanglesT, typename IncludeIndexT>
     const IncludeIndexT& includeIndex
 )noexcept(
     noexcept(rectangles[DeclVal<u32&>()] = DeclVal<const Impl::Ui::Rect&>())
-    && noexcept(static_cast<bool>(!includeIndex(DeclVal<usize&>()) || rectangles[DeclVal<usize&>()].width == 0.0f))
+    && noexcept(static_cast<b8>(!includeIndex(DeclVal<usize&>()) || rectangles[DeclVal<usize&>()].width == 0.0f))
     && noexcept(SameSmokeRect(DeclVal<const Impl::Ui::Rect&>(), rectangles[DeclVal<usize&>()]))
 ){
     PassiveSmokeTargetObservation observation;
@@ -79,29 +79,29 @@ template<typename RectanglesT, typename IncludeIndexT>
 }
 
 struct PassiveSmokeSnapshotUpdate{
-    bool published = false;
-    bool displayChanged = false;
+    b8 published = false;
+    b8 displayChanged = false;
 };
 
 template<typename SnapshotT, typename StateChangedT>
 [[nodiscard]] inline PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(SnapshotT& current, SnapshotT& snapshot, const StateChangedT& stateChanged)noexcept(
     noexcept(DeclVal<void(*)(const Impl::Ui::DisplayMetrics&)noexcept>()(snapshot.display))
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(
+    && noexcept(DeclVal<void(*)(b8)noexcept>()(
         current.display.logicalWidth != DeclVal<const Impl::Ui::DisplayMetrics&>().logicalWidth
         || current.display.logicalHeight != DeclVal<const Impl::Ui::DisplayMetrics&>().logicalHeight
         || current.display.pixelScaleX != DeclVal<const Impl::Ui::DisplayMetrics&>().pixelScaleX
         || current.display.pixelScaleY != DeclVal<const Impl::Ui::DisplayMetrics&>().pixelScaleY
     ))
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(stateChanged()))
-    && noexcept(static_cast<bool>(DeclVal<usize&>() < current.rectangles.size()))
+    && noexcept(DeclVal<void(*)(b8)noexcept>()(stateChanged()))
+    && noexcept(static_cast<b8>(DeclVal<usize&>() < current.rectangles.size()))
     && noexcept(SameSmokeRect(current.rectangles[DeclVal<usize&>()], snapshot.rectangles[DeclVal<usize&>()]))
-    && noexcept(static_cast<bool>(snapshot.sequence != 0u && !bool{} && !bool{}))
+    && noexcept(static_cast<b8>(snapshot.sequence != 0u && !b8{} && !b8{}))
     && noexcept(current.sequence = snapshot.sequence + 1u)
     && noexcept(snapshot = current)
 ){
     const Impl::Ui::DisplayMetrics& previous = snapshot.display;
-    const bool displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
-    bool changed = stateChanged();
+    const b8 displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
+    b8 changed = stateChanged();
     for(usize index = 0u; index < current.rectangles.size(); ++index)
         changed |= !SameSmokeRect(current.rectangles[index], snapshot.rectangles[index]);
     if(snapshot.sequence != 0u && !changed && !displayChanged)
@@ -111,7 +111,7 @@ template<typename SnapshotT, typename StateChangedT>
     return { true, displayChanged };
 }
 
-[[nodiscard]] inline bool HandlePassiveSmokeKeyboard(const i32 key, const i32 action, bool& phase, Impl::Ui::PopupState& parent, Impl::Ui::PopupState& child)noexcept{
+[[nodiscard]] inline b8 HandlePassiveSmokeKeyboard(const i32 key, const i32 action, b8& phase, Impl::Ui::PopupState& parent, Impl::Ui::PopupState& child)noexcept{
     if(key != Core::Key::F4 && key != Core::Key::F5)
         return false;
     if(action != Core::InputAction::Press)

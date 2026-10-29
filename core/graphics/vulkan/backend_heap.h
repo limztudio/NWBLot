@@ -59,7 +59,7 @@ private:
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
     u32 m_memoryTypeIndex = UINT32_MAX;
-    bool m_requiresInvalidate = false;
+    b8 m_requiresInvalidate = false;
 };
 
 

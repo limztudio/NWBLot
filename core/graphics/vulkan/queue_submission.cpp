@@ -45,7 +45,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     const usize localWaitCount,
     const SubmissionSignal* const localSignals,
     const usize localSignalCount,
-    const bool forceNativeSubmission
+    const b8 forceNativeSubmission
 ){
     ScopedLock lock(m_mutex);
     DescriptorBufferManager* const descriptorBufferManager = m_context.descriptorBufferManager;
@@ -73,7 +73,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list array is null"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
-    const bool hasCommands = numCmd > 0u;
+    const b8 hasCommands = numCmd > 0u;
     if(hasCommands && !expectedCommandLists){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: expected command-list identity array is null"));
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
@@ -89,8 +89,8 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
 
-    const bool hasPendingSemaphores = localWaitCount > 0u || localSignalCount > 0u || !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
-    const bool requiresNativeSubmission = forceNativeSubmission || hasCommands || hasPendingSemaphores;
+    const b8 hasPendingSemaphores = localWaitCount > 0u || localSignalCount > 0u || !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
+    const b8 requiresNativeSubmission = forceNativeSubmission || hasCommands || hasPendingSemaphores;
 
     if(hasCommands && numCmd > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
@@ -174,7 +174,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         }
     }
 
-    bool requiresDescriptorBufferLifecycle = false;
+    b8 requiresDescriptorBufferLifecycle = false;
     if(hasCommands){
         for(usize i = 0u; i < numCmd; ++i){
             auto& tracked = *MakeNotNull(ppCmd[i]->m_currentCmdBuf.get());
@@ -361,7 +361,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     submitInfo.signalSemaphoreInfoCount = static_cast<uint32_t>(signalInfos.size());
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
 
-    const auto finalizeDetachedRecordingAttempts = [&](const bool accepted)noexcept{
+    const auto finalizeDetachedRecordingAttempts = [&](const b8 accepted)noexcept{
         for(usize i = 0u; i < numCmd; ++i){
             CommandList* const commandList = ppCmd[i];
             if(!commandList || commandList->m_recordingLeaseSerial != expectedCommandLists[i].recordingLeaseSerial)
@@ -405,7 +405,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     }
 
     VkResult res = VK_SUCCESS;
-    bool submissionSuppressed = false;
+    b8 submissionSuppressed = false;
     {
         ScopedLock hostLock(m_nativeQueue.hostMutex);
         submissionSuppressed = m_device.submissionsBlocked();
@@ -558,7 +558,7 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList
     return next;
 }
 
-bool Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, const bool prerequisiteObservedComplete, const SubmissionWait* const localWaits, const usize localWaitCount)const noexcept{
+b8 Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, const b8 prerequisiteObservedComplete, const SubmissionWait* const localWaits, const usize localWaitCount)const noexcept{
     if(!prerequisite.valid() || prerequisiteObservedComplete)
         return true;
     if(prerequisite.matchesPhysicalQueue(m_physicalQueue.index, m_physicalQueue.deviceGeneration))
@@ -571,7 +571,7 @@ bool Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisit
     if(producerQueue->m_queueID != prerequisite.queue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE)
         return false;
 
-    const auto coveredBy = [&](const VkSemaphore semaphore, const u64 value)noexcept -> bool {
+    const auto coveredBy = [&](const VkSemaphore semaphore, const u64 value)noexcept -> b8 {
         return semaphore == producerQueue->m_trackingSemaphore && value >= prerequisite.value;
     };
     for(usize waitIndex = 0u; waitIndex < localWaitCount; ++waitIndex){

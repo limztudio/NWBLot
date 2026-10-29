@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::paintPopup(){
+b8 Builder::paintPopup(){
     const LayoutBox* panel = m_scope->m_layout.box(0u);
     const UiSkinRegion* background = region(m_scope->m_popupPaintStyle.background, m_scope->m_popupPaintStyle.fallback);
     if(!panel || !background)
@@ -28,8 +28,8 @@ bool Builder::paintPopup(){
         m_paint.fillRect(m_scope->m_popupPlacement.viewport, color);
     }
     m_paint.pushClip(m_scope->m_popupPlacement.viewport);
-    const bool painted = m_paint.drawRegion(background->name, panel->rectangle);
-    const bool popped = m_paint.popClip();
+    const b8 painted = m_paint.drawRegion(background->name, panel->rectangle);
+    const b8 popped = m_paint.popClip();
     HitTarget barrier;
     barrier.rectangle = panel->rectangle;
     barrier.clip = m_scope->m_popupPlacement.viewport;

@@ -36,7 +36,7 @@ NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName)noe
 
 NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount = 0)noexcept;
 
-bool ContainsText(const AStringView text, const AStringView needle)noexcept;
+b8 ContainsText(const AStringView text, const AStringView needle)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -46,7 +46,7 @@ inline constexpr f32 s_EncodeExponent = 1.0f / 2.4f;
 inline constexpr f32 s_DecodeScale = 1.0f / 1.055f;
 
 struct FlagsSnapshot{
-    friend bool operator==(const FlagsSnapshot&, const FlagsSnapshot&)noexcept = default;
+    friend b8 operator==(const FlagsSnapshot&, const FlagsSnapshot&)noexcept = default;
     template<typename Stream>
     friend Stream& operator<<(Stream& stream, const FlagsSnapshot& value)noexcept(noexcept(DeclVal<void(*)(Stream&)noexcept>()(stream << value.standard << '/' << value.mapped << '/' << value.native))){
         return stream << value.standard << '/' << value.mapped << '/' << value.native;
@@ -194,12 +194,12 @@ NWB_NOINLINE SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDV
     return seed;
 }
 
-[[nodiscard]] bool Compare(Counts& counts, const StringView category, const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const bool quantize = false){
+[[nodiscard]] b8 Compare(Counts& counts, const StringView category, const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const b8 quantize = false){
     const auto expected = Observe(MakeNotNull<Evaluate>(Reference), x, y), actual = Observe(evaluate, x, y);
     if(!expected || !actual)
         return false;
     ++counts.vectors;
-    const bool flagsDiffer = expected->flags != actual->flags, errorDiffers = expected->error != actual->error;
+    const b8 flagsDiffer = expected->flags != actual->flags, errorDiffers = expected->error != actual->error;
     counts.flags += flagsDiffer;
     counts.errors += errorDiffers;
     for(usize lane = 0u; lane < 4u; ++lane){
@@ -338,7 +338,7 @@ void PrintCounts(const StringView category, const Counts& counts){
     const SIMDVectorSingle y[]{ VectorSet(0.5f, 1.0f, 1.0f, 1.0f), VectorSet(2.0f, 1.0f, 1.0f, 1.0f), VectorSet(-1.0f, 1.0f, 1.0f, 1.0f), VectorSet(2.0f, 0.5f, 1.0f, 1.0f), VectorSet(0.5f, 2.0f, 1.0f, 1.0f) };
     u32 failures = 0u;
     constexpr u32 s_ReferenceCategories[]{ EXCEPTION_FLT_INVALID_OPERATION, EXCEPTION_FLT_OVERFLOW, EXCEPTION_FLT_DIVIDE_BY_ZERO };
-    bool delivered = true;
+    b8 delivered = true;
     for(usize index = 0u; index < LengthOf(x); ++index){
         NWB_COUT << "trap case=" << index << " reference\n";
         const u32 expected = ObserveTrap(MakeNotNull<Evaluate>(Reference), x[index], y[index]);
@@ -358,7 +358,7 @@ void PrintCounts(const StringView category, const Counts& counts){
 
 #if defined(NWB_PLATFORM_WINDOWS)
 struct TrapEdgeObservation{
-    friend bool operator==(const TrapEdgeObservation&, const TrapEdgeObservation&)noexcept = default;
+    friend b8 operator==(const TrapEdgeObservation&, const TrapEdgeObservation&)noexcept = default;
 
 
     u32 code{}, flags{}, control{}, valueBits{};
@@ -437,7 +437,7 @@ struct TrapEdgeObservation{
     const SIMDVectorSingle x[]{ VectorSet(0.5f, 1.0f, 1.0f, 1.0f), VectorSet(0.5f, 1.0f, 1.0f, 1.0f), VectorSetInt(1u, 0x3f800000u, 0x3f800000u, 0x3f800000u) };
     const SIMDVectorSingle y[]{ VectorSet(149.0f, 1.0f, 1.0f, 1.0f), VectorSet(127.0f, 1.0f, 1.0f, 1.0f), VectorSet(0.0f, 1.0f, 1.0f, 1.0f) };
     u32 differences = 0u, cases = 0u;
-    bool delivered = true;
+    b8 delivered = true;
     for(const u32 denormalMode : s_DenormalModes){
         u32 control{};
         if(_controlfp_s(&control, denormalMode, _MCW_DN) != 0 || (control & _MCW_DN) != denormalMode)
@@ -452,7 +452,7 @@ struct TrapEdgeObservation{
                         return 2;
                     if(index < 2u && denormalMode == _DN_SAVE)
                         delivered = delivered && expected->code == EXCEPTION_FLT_UNDERFLOW;
-                    const bool different = *expected != *actual;
+                    const b8 different = *expected != *actual;
                     differences += different;
                     ++cases;
                     NWB_COUT << "trap_edge DN=" << denormalMode << " rounding=" << mode << " enabled=" << enabled << " case=" << index

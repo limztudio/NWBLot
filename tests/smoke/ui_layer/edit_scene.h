@@ -34,8 +34,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
 
 
 private:
@@ -58,16 +58,16 @@ private:
     Impl::Ui::DisplayMetrics m_lastDisplay;
     Array<u32, 12u> m_lastValues{};
     u32 m_sequence = 0u;
-    bool m_primaryFocused = false;
-    bool m_secondaryFocused = false;
-    bool m_readOnly = false;
-    bool m_visible = true;
-    bool m_displayChanged = false;
+    b8 m_primaryFocused = false;
+    b8 m_secondaryFocused = false;
+    b8 m_readOnly = false;
+    b8 m_visible = true;
+    b8 m_displayChanged = false;
 };
 
 using SharedUiEditSmokeScene = RefCountPtr< RefCounter<UiEditSmokeScene>, ArenaRefDeleter<RefCounter<UiEditSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerEditSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerEditSmokeEnabled();
 [[nodiscard]] SharedUiEditSmokeScene CreateUiEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 

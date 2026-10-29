@@ -19,7 +19,7 @@ class SurfelGiResolveSize{
     public u32 height = 0u;
 }
 
-bool ValidateSurfelGiQualitySettings(in SurfelGiQualitySettings settings){
+b8 ValidateSurfelGiQualitySettings(in SurfelGiQualitySettings settings){
     return settings.resolveResolution == SurfelGiResolveResolution::Enum::Half || settings.resolveResolution == SurfelGiResolveResolution::Enum::Quarter;
 }
 

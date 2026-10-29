@@ -35,15 +35,15 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:
-    [[nodiscard]] bool paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] bool paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] bool paintExternal(Impl::UiPaintContext& context, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] bool paintPopups(Impl::Ui::Builder& ui, f32 right);
+    [[nodiscard]] b8 paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
+    [[nodiscard]] b8 paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
+    [[nodiscard]] b8 paintExternal(Impl::UiPaintContext& context, const Impl::Ui::Rect& bounds);
+    [[nodiscard]] b8 paintPopups(Impl::Ui::Builder& ui, f32 right);
     void observeState(Impl::UiPaintContext& context);
     void paintMarkers(Impl::UiPaintContext& context)const;
 
@@ -56,13 +56,13 @@ private:
     UiImageSnapshot m_snapshot;
     u32 m_beforeClicks = 0u;
     u32 m_afterClicks = 0u;
-    bool m_phase = false;
+    b8 m_phase = false;
 };
 
 using SharedUiImageSmokeScene = RefCountPtr< RefCounter<UiImageSmokeScene>, ArenaRefDeleter<RefCounter<UiImageSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerImageSmokeEnabled();
-[[nodiscard]] bool IsUiLayerImageSkinSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerImageSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerImageSkinSmokeEnabled();
 [[nodiscard]] SharedUiImageSmokeScene CreateUiImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 

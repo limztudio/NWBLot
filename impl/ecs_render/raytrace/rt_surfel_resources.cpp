@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets){
+b8 RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets){
     const u32 factor = targets.surfelResolveFactor;
     const SurfelGiResolveSize resolveSize = MakeSurfelGiResolveSize(targets.width, targets.height, factor);
     if(resolveSize.width == 0u || resolveSize.height == 0u)
@@ -94,15 +94,15 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
-bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
+b8 RendererRayTracingSystem::hasSurfelWork()const noexcept{
     return m_rayTracingState.m_surfelEnabled;
 }
 
-bool RendererRayTracingSystem::needsSurfelResourceInitialization()const noexcept{
+b8 RendererRayTracingSystem::needsSurfelResourceInitialization()const noexcept{
     return hasSurfelWork() && m_rayTracingState.m_surfelResourcesNeedClear;
 }
 
-bool RendererRayTracingSystem::recordSurfelResourceInitializationLifecycle()noexcept{
+b8 RendererRayTracingSystem::recordSurfelResourceInitializationLifecycle()noexcept{
     if(!m_rayTracingState.m_surfelResourcesNeedClear)
         return false;
 
@@ -123,7 +123,7 @@ void RendererRayTracingSystem::discardSurfelResourceInitialization()noexcept{
     m_rayTracingState.m_surfelResourcesClearPending = false;
 }
 
-bool RendererRayTracingSystem::ensureSurfelResources(){
+b8 RendererRayTracingSystem::ensureSurfelResources(){
     // Persistent field storage survives window resizes.
     if(!hasSurfelWork())
         return true;
@@ -378,13 +378,13 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     }
 
     // Only tracing differs between hardware and software surfel paths.
-    const bool traceReady = m_rayTracingState.m_surfelUseHwTrace ? ensureSurfelTraceHwPipeline() : ensureSurfelTracePipeline();
+    const b8 traceReady = m_rayTracingState.m_surfelUseHwTrace ? ensureSurfelTraceHwPipeline() : ensureSurfelTracePipeline();
     if(!ensureSurfelSpawnPipeline() || !ensureSurfelAgeFreePipeline() || !ensureSurfelHashBuildPipeline() || !traceReady || !ensureSurfelResolvePipeline() || !ensureSurfelUpsamplePipeline() || !ensureSurfelTraceBuildArgsPipeline())
         return false;
     return true;
 }
 
-bool RendererRayTracingSystem::shouldCaptureSurfelCountReadback()const noexcept{
+b8 RendererRayTracingSystem::shouldCaptureSurfelCountReadback()const noexcept{
     return hasSurfelWork() && m_rayTracingState.m_surfelCounterBuffer && m_rayTracingState.m_surfelCounterReadback && !m_rayTracingState.m_surfelCountReadbackSubmissionToken.valid() && (m_rayTracingState.m_surfelFrameIndex % s_SurfelCountLogInterval) == 0u;
 }
 
@@ -392,7 +392,7 @@ void RendererRayTracingSystem::markSurfelCountReadbackScheduled()noexcept{
     m_rayTracingState.m_surfelCountReadbackFrame = m_rayTracingState.m_surfelFrameIndex;
 }
 
-bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targets){
+b8 RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targets){
     if(!hasSurfelWork())
         return true;
 

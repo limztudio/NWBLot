@@ -80,7 +80,7 @@ static GraphicsVolumeMetadata& GraphicsMetadata(Core::Assets::ParsedAssetMetadat
     return Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(metadata, s_GraphicsVolumeMetadataExtensionName, metadata.arena);
 }
 
-static bool AppendUniqueShaderEntry(const Path& nwbFilePath, ShaderCook::ShaderEntry& shaderEntry, GraphicsVolumeMetadata& graphicsMetadata, AssetsGraphicsCookDetail::ShaderEntryVector& outShaderEntries){
+static b8 AppendUniqueShaderEntry(const Path& nwbFilePath, ShaderCook::ShaderEntry& shaderEntry, GraphicsVolumeMetadata& graphicsMetadata, AssetsGraphicsCookDetail::ShaderEntryVector& outShaderEntries){
     if(shaderEntry.name.empty())
         return true;
 
@@ -170,7 +170,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
     return AssetMetadataParseResult::Unsupported;
 }
 
-static bool ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& graphicsMetadata){
+static b8 ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& graphicsMetadata){
     const auto bindFiles = Core::Assets::DiscoverFilesWithExtension(context.arena, context.resolvedPaths.assetRoots, MaterialBindNames::SourceExtensionText(), context.scratchArena);
     if(!bindFiles)
         return false;
@@ -193,7 +193,7 @@ static bool ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVo
     return true;
 }
 
-static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
+static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
     const GraphicsVolumeMetadata* selectedGraphics = Core::Assets::FindParsedMetadataExtension<GraphicsVolumeMetadata>(context.parsedMetadata, s_GraphicsVolumeMetadataExtensionName);
     const Core::Assets::ICookEntryBucket* materialBucket = context.parsedMetadata.entryRegistry.find(Material::AssetTypeName());
     // Only selected graphics metadata or materials require generated modules and the shader index.
@@ -247,7 +247,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     // Resolve each material bxdf/surface path to its absolute source (verbatim include, checksum-covered).
     static constexpr AStringView s_BxdfSourceLabel = "bxdf";
     static constexpr AStringView s_SurfaceSourceLabel = "surface";
-    const auto resolveMaterialVirtualSource = [&context](auto& virtualSource, const AStringView label, const AStringView materialName) -> bool {
+    const auto resolveMaterialVirtualSource = [&context](auto& virtualSource, const AStringView label, const AStringView materialName) -> b8 {
         if(virtualSource.empty())
             return true;
 
@@ -333,7 +333,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     graphicsMetadata.seenShaderIdentityKeys.reserve(shaderEntryCapacity);
 
     auto& shaderCookArena = graphicsMetadata.shaderEntries.get_allocator().arena();
-    const auto appendGeneratedPixelShaderEntry = [&](const GeneratedMaterialPixelShader& generatedPixelShader) -> bool{
+    const auto appendGeneratedPixelShaderEntry = [&](const GeneratedMaterialPixelShader& generatedPixelShader) -> b8{
         ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
         pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
         pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));

@@ -26,7 +26,7 @@ public:
 
 private:
     NWB::Impl::Ui::SliderState m_state;
-    bool m_enabled = true;
+    b8 m_enabled = true;
 };
 
 

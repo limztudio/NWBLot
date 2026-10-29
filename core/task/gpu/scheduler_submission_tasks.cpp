@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
+b8 GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
     const GpuSubmissionPacketRange& range,
@@ -83,7 +83,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
             return false;
         const GpuSubmissionPacket& packetPlan = *packetView.plan;
         GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packet, artifactOperation);
-        if(packetPlan.recordsTiming != static_cast<bool>(ownedTimingTicket) || !graph.packetReadyForSubmission(compiledGraph, planAccess, packet, recordingAttemptGeneration))
+        if(packetPlan.recordsTiming != static_cast<b8>(ownedTimingTicket) || !graph.packetReadyForSubmission(compiledGraph, planAccess, packet, recordingAttemptGeneration))
             return false;
     }
     Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena> resolvedTimingTickets{ scratchArena };

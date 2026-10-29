@@ -49,11 +49,11 @@ Atomic<u64> g_TemporarySequence{0u};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool BytesMatch(const Span<const u8> existing, const Span<const u8> bytes)noexcept{
+[[nodiscard]] static b8 BytesMatch(const Span<const u8> existing, const Span<const u8> bytes)noexcept{
     return existing.size() == bytes.size() && (bytes.empty() || NWB_MEMCMP(existing.data(), bytes.data(), bytes.size()) == 0);
 }
 
-static bool WriteIfChanged(ScratchBytes& existing, const ScratchPath& path, const Span<const u8> bytes, const bool replaceDifferent = true){
+static b8 WriteIfChanged(ScratchBytes& existing, const ScratchPath& path, const Span<const u8> bytes, const b8 replaceDifferent = true){
     const auto read = ReadBinaryFile(path, existing);
     if(read && BytesMatch(existing, bytes))
         return true;
@@ -97,7 +97,7 @@ namespace BuiltAssetDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Alloc::ScratchArena& scratchArena){
+b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Alloc::ScratchArena& scratchArena){
     if(manifest.entries.size() != manifest.plannedFileCount || !EnsureDirectories(outputDirectory)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid build manifest or output directory '{}'"), PathToString<tchar>(outputDirectory));
         return false;

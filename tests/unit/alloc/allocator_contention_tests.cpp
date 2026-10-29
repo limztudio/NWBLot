@@ -23,14 +23,14 @@ namespace __hidden_allocator_contention_tests{
 
 struct WorkerResult{
     ArenaMemoryStats stats;
-    bool allocationFailed = false;
-    bool contentsPreserved = true;
+    b8 allocationFailed = false;
+    b8 contentsPreserved = true;
 };
 
 struct PersistentArenaWorkerResult{
-    bool allocationFailed = false;
-    bool contentsPreserved = true;
-    bool alignmentPreserved = true;
+    b8 allocationFailed = false;
+    b8 contentsPreserved = true;
+    b8 alignmentPreserved = true;
 };
 
 
@@ -50,8 +50,8 @@ TEST(GlobalArenaTests, SharedOwnerAllocationChurnPreservesPayloadAndAccounting){
     for(usize threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
         workers[threadIndex] = Thread([&results, &workersReady, &start, threadIndex](){
             NWB::Core::Alloc::GlobalArena arena(s_OwnerName);
-            bool allocationFailed = false;
-            bool contentsPreserved = true;
+            b8 allocationFailed = false;
+            b8 contentsPreserved = true;
             workersReady.count_down();
             start.wait();
 
@@ -113,9 +113,9 @@ TEST(PersistentArenaTests, SharedArenaConcurrentAllocationCrossThreadFreeAndAcco
 
     for(usize threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
         workers[threadIndex] = Thread([&arena, &handoffs, &results, &workersReady, &start, &handoffsReady, &releaseHandoffs, threadIndex]()noexcept{
-            bool allocationFailed = false;
-            bool contentsPreserved = true;
-            bool alignmentPreserved = true;
+            b8 allocationFailed = false;
+            b8 contentsPreserved = true;
+            b8 alignmentPreserved = true;
             workersReady.count_down();
             start.wait();
 
@@ -213,9 +213,9 @@ TEST(PersistentArenaTests, SharedArenaConcurrentReallocationPreservesPayloadAndA
 
     for(usize threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
         workers[threadIndex] = Thread([&arena, &results, &workersReady, &start, threadIndex]()noexcept{
-            bool allocationFailed = false;
-            bool contentsPreserved = true;
-            bool alignmentPreserved = true;
+            b8 allocationFailed = false;
+            b8 contentsPreserved = true;
+            b8 alignmentPreserved = true;
             workersReady.count_down();
             start.wait();
 

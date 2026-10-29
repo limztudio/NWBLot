@@ -114,7 +114,7 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(cons
     return binary;
 }
 
-Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, Core::Assets::AssetArena& arena, const bool includePixels){
+Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, Core::Assets::AssetArena& arena, const b8 includePixels){
     using namespace __hidden_prepared_source;
     InputFileStream stream(path, InputFileStream::binary);
     if(!stream.is_open())

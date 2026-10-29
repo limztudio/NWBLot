@@ -37,23 +37,23 @@ namespace __hidden_transparent_interval_tasks{
 // Both transparent interval passes share one snapshot and gate on the same framebuffer, draw-buffer, CSG, and material readiness.
 struct TransparentIntervalReadiness{
     CsgFrameGpuDataView csgFrameData;
-    bool ready = false;
+    b8 ready = false;
 };
 
 [[nodiscard]] inline TransparentIntervalReadiness ResolveTransparentIntervalReadiness(const TransparentCsgIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem)noexcept{
     TransparentIntervalReadiness readiness{};
     const MaterialPassDrawItemsView receiverSurfaceDrawItems = payload.transparentCsgSnapshot.receiverSurfaceDrawItemsView();
     readiness.csgFrameData = payload.transparentCsgSnapshot.csgFrameDataView();
-    const bool drawBuffersReady = payload.frameBindings.frameReady(payload.transparentCsgSnapshot.instanceCount, payload.transparentCsgSnapshot.materialTypedByteCount);
-    const bool csgResourcesReady = payload.csgResources.frameReady(readiness.csgFrameData);
-    const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, payload.frameBindings);
+    const b8 drawBuffersReady = payload.frameBindings.frameReady(payload.transparentCsgSnapshot.instanceCount, payload.transparentCsgSnapshot.materialTypedByteCount);
+    const b8 csgResourcesReady = payload.csgResources.frameReady(readiness.csgFrameData);
+    const b8 receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, payload.frameBindings);
     readiness.ready = payload.csgFrameBuffersUploaded && payload.targets.framebuffer && !receiverSurfaceDrawItems.empty() && readiness.csgFrameData.hasWork() && drawBuffersReady && csgResourcesReady && receiverSurfaceDrawResourcesReady;
     return readiness;
 }
 
 
 template<typename Dispatch>
-[[nodiscard]] bool RecordTransparentInterval(const TransparentCsgIntervalRecordInputs& payload, Core::CommandList& commandList, Dispatch dispatch){
+[[nodiscard]] b8 RecordTransparentInterval(const TransparentCsgIntervalRecordInputs& payload, Core::CommandList& commandList, Dispatch dispatch){
     const TransparentIntervalReadiness readiness = ResolveTransparentIntervalReadiness(payload, payload.materialSystem);
     if(readiness.ready)
         dispatch(readiness);
@@ -93,7 +93,7 @@ TransparentCsgIntervalRecordInputs::TransparentCsgIntervalRecordInputs(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.transparentCsgSnapshot.captured)
         return false;
@@ -112,7 +112,7 @@ bool AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::Comman
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AvboitCsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 AvboitCsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.transparentCsgSnapshot.captured)
         return false;

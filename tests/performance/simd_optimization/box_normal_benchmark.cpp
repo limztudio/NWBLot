@@ -121,7 +121,7 @@ template<typename Scalar>
     return { position, extents, fallback, BitCast<Scalar>(words[12]) };
 }
 
-template<typename Scalar, bool Candidate>
+template<typename Scalar, b8 Candidate>
 [[nodiscard]] NWB_NOINLINE auto Run(const Case<Scalar>& input)noexcept{
     if constexpr(IsSame_V<Scalar, f64>){
         const SIMDVectorDouble position = LoadDouble(input.position);
@@ -167,7 +167,7 @@ template<typename Scalar>
             const auto candidate = Run<Scalar, true>(input);
             const i32 candidateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
             const i32 candidateErrno = errno;
-            bool equal = originalFlags == candidateFlags && originalErrno == candidateErrno;
+            b8 equal = originalFlags == candidateFlags && originalErrno == candidateErrno;
             for(usize lane = 0u; lane < 4u; ++lane)
                 equal &= BitCast<Bits>(static_cast<Scalar>(original[lane])) == BitCast<Bits>(static_cast<Scalar>(candidate[lane]));
             if(!equal && ++failures <= 8u)
@@ -177,7 +177,7 @@ template<typename Scalar>
     return failures;
 }
 
-template<typename Scalar, bool Candidate, bool Latency>
+template<typename Scalar, b8 Candidate, b8 Latency>
 [[nodiscard]] NWB_NOINLINE u64 Workload(const usize iterations)noexcept{
     using Vector = Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle>;
     Case<Scalar> data[s_DataCount];
@@ -234,7 +234,7 @@ template<typename Scalar, bool Candidate, bool Latency>
 }
 
 template<typename Scalar>
-[[nodiscard]] i32 Measure(const bool candidate, const bool latency, const usize iterations){
+[[nodiscard]] i32 Measure(const b8 candidate, const b8 latency, const usize iterations){
     const Timer begin = TimerNow();
     const u64 checksum = latency ? (candidate ? Workload<Scalar, true, true>(iterations) : Workload<Scalar, false, true>(iterations)) : (candidate ? Workload<Scalar, true, false>(iterations) : Workload<Scalar, false, false>(iterations));
     constexpr f64 s_NanosecondsPerSecond = 1.0e9;
@@ -270,9 +270,9 @@ int main(const int argc, const char* const* argv){
         return singleFailures || doubleFailures ? 1 : 0;
     }
     if(argc == 6 && StringView(argv[1]) == "measure"){
-        const bool single = StringView(argv[2]) == "single";
-        const bool candidate = StringView(argv[3]) == "candidate";
-        const bool latency = StringView(argv[4]) == "latency";
+        const b8 single = StringView(argv[2]) == "single";
+        const b8 candidate = StringView(argv[3]) == "candidate";
+        const b8 latency = StringView(argv[4]) == "latency";
         if((!single && StringView(argv[2]) != "double") || (!candidate && StringView(argv[3]) != "original") || (!latency && StringView(argv[4]) != "throughput"))
             return 2;
         const auto parsedIterations = ParseU64(AStringView(argv[5]));

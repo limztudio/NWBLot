@@ -69,7 +69,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool prepare(usize taskCount);
+    [[nodiscard]] b8 prepare(usize taskCount);
 };
 
 
@@ -82,7 +82,7 @@ CallbackGraph::CallbackGraph(TestArena& testArena, Graphics::Alloc::ScratchArena
     , m_tasks(scratch)
 {}
 
-bool CallbackGraph::prepare(const usize taskCount){
+b8 CallbackGraph::prepare(const usize taskCount){
     m_tasks.reserve(taskCount);
     for(usize index = 0u; index < taskCount; ++index){
         char suffix[s_NumberBufferBytes] = {};
@@ -124,12 +124,12 @@ void RecordInvocation(CallbackContext& context){
         context.m_state.m_order->push_back(context.m_taskIndex);
 }
 
-bool InvokeRecorded(void* const context, const Graphics::CommandListResourceStateHandoff*){
+b8 InvokeRecorded(void* const context, const Graphics::CommandListResourceStateHandoff*){
     RecordInvocation(*MakeNotNull(static_cast<CallbackContext*>(context)));
     return true;
 }
 
-bool InvokeAccepted(void* const context, const Graphics::QueueSubmissionToken& token){
+b8 InvokeAccepted(void* const context, const Graphics::QueueSubmissionToken& token){
     if(token.value != s_AcceptedTokenValue)
         return false;
     RecordInvocation(*MakeNotNull(static_cast<CallbackContext*>(context)));
@@ -149,7 +149,7 @@ template<typename Callback>
 }
 
 template<typename Callback>
-[[nodiscard]] bool InvokeBoundCallback(const Callback& callback)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(
+[[nodiscard]] b8 InvokeBoundCallback(const Callback& callback)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(
     callback.invoke(callback.context, DeclVal<Conditional_T<IsSame_V<Callback, Graphics::GpuTaskGraphTaskRecordedCallback>, decltype(nullptr), const Graphics::QueueSubmissionToken&>>())
 ))){
     if constexpr(IsSame_V<Callback, Graphics::GpuTaskGraphTaskRecordedCallback>)

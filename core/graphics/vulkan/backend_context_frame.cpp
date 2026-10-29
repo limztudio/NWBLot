@@ -24,7 +24,7 @@ Expected<QueueSubmissionNativeSignal> BackendContext::InvokeFramePresentationSig
     return MakeNotNull(static_cast<BackendContext*>(context))->prepareFramePresentationSignal(identity, executionQueue);
 }
 
-bool BackendContext::InvokeFramePresentationSignalResolution(void* const context, const u64 identity, const QueueSubmissionToken& token)noexcept{
+b8 BackendContext::InvokeFramePresentationSignalResolution(void* const context, const u64 identity, const QueueSubmissionToken& token)noexcept{
     if(!context)
         return false;
     return MakeNotNull(static_cast<BackendContext*>(context))->resolveFramePresentationSignal(identity, token);
@@ -59,7 +59,7 @@ QueueSubmissionPreSubmitHook BackendContext::claimFramePresentationSignal()noexc
     return QueueSubmissionPreSubmitHook{ .context = this, .identity = m_framePresentationClaimIdentity, .invoke = &BackendContext::InvokeFramePresentationSignalPreparation, .resolved = &BackendContext::InvokeFramePresentationSignalResolution, };
 }
 
-bool BackendContext::confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept{
+b8 BackendContext::confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept{
     NothrowScopedLock presentationLock(m_framePresentationMutex);
     return
         m_framePresentationClaimsEnabled
@@ -74,9 +74,9 @@ bool BackendContext::confirmFramePresentationSignal(const QueueSubmissionPreSubm
     ;
 }
 
-bool BackendContext::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
+b8 BackendContext::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
     UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
-    const bool result = cancelFramePresentationSignalDeferred(&claim, lifecycleLock);
+    const b8 result = cancelFramePresentationSignalDeferred(&claim, lifecycleLock);
     DeviceHandle device = m_rhiDevice;
     if(lifecycleLock.owns_lock())
         lifecycleLock.unlock();
@@ -96,7 +96,7 @@ void BackendContext::clearSemaphores(SemaphoreVector& semaphores)noexcept{
     semaphores.clear();
 }
 
-bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize count, const AStringView operationName){
+b8 BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize count, const AStringView operationName){
     VkResult res = VK_SUCCESS;
 
     clearSemaphores(semaphores);
@@ -134,7 +134,7 @@ void BackendContext::clearAcquireSyncSlots()noexcept{
     m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
 }
 
-bool BackendContext::recreateAcquireSyncSlots(const usize count){
+b8 BackendContext::recreateAcquireSyncSlots(const usize count){
     clearAcquireSyncSlots();
     m_acquireSyncSlots.reserve(count);
 
@@ -165,7 +165,7 @@ bool BackendContext::recreateAcquireSyncSlots(const usize count){
     return true;
 }
 
-bool BackendContext::prepareAcquireSyncSlot(AcquireSyncSlot& slot){
+b8 BackendContext::prepareAcquireSyncSlot(AcquireSyncSlot& slot){
     if(slot.state == AcquireSyncSlotState::Idle){
         return slot.semaphore != VK_NULL_HANDLE && slot.fence != VK_NULL_HANDLE && !slot.consumerToken.valid();
     }
@@ -187,7 +187,7 @@ bool BackendContext::prepareAcquireSyncSlot(AcquireSyncSlot& slot){
     return true;
 }
 
-bool BackendContext::waitAcquireSyncSlotsForLifecycle(){
+b8 BackendContext::waitAcquireSyncSlotsForLifecycle(){
     if(!m_vulkanDevice)
         return m_acquireSyncSlots.empty();
 
@@ -205,7 +205,7 @@ bool BackendContext::waitAcquireSyncSlotsForLifecycle(){
     return true;
 }
 
-bool BackendContext::createFrameSyncQueries(){
+b8 BackendContext::createFrameSyncQueries(){
     if(!m_rhiDevice)
         return false;
 
@@ -266,8 +266,8 @@ Expected<QueueSubmissionNativeSignal> BackendContext::prepareFramePresentationSi
     return signal;
 }
 
-bool BackendContext::resolveFramePresentationSignal(const u64 identity, const QueueSubmissionToken& token)noexcept{
-    bool resolved = false;
+b8 BackendContext::resolveFramePresentationSignal(const u64 identity, const QueueSubmissionToken& token)noexcept{
+    b8 resolved = false;
     {
         NothrowScopedLock presentationLock(m_framePresentationMutex);
         if(
@@ -307,7 +307,7 @@ bool BackendContext::resolveFramePresentationSignal(const u64 identity, const Qu
     return resolved;
 }
 
-bool BackendContext::replaceFramePresentationSemaphoreAfterIdle(){
+b8 BackendContext::replaceFramePresentationSemaphoreAfterIdle(){
     if(!m_vulkanDevice || m_framePresentationSemaphore == VK_NULL_HANDLE || m_framePresentationSwapChainIndex >= m_presentSemaphores.size() || m_presentSemaphores[m_framePresentationSwapChainIndex] != m_framePresentationSemaphore)
         return false;
 
@@ -336,7 +336,7 @@ void BackendContext::resetFramePresentationSignal()noexcept{
     m_framePresentationSignalState = FramePresentationSignalState::Idle;
 }
 
-bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmissionPreSubmitHook* const claim, UniqueLock<Futex>& lifecycleLock){
+b8 BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmissionPreSubmitHook* const claim, UniqueLock<Futex>& lifecycleLock){
     if(!lifecycleLock.owns_lock() || m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_lifecycleDrainActive)
         return false;
 
@@ -384,7 +384,7 @@ bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmission
     const u64 presentationClaimIdentity = m_framePresentationClaimIdentity;
     const u32 presentationSwapChainIndex = m_framePresentationSwapChainIndex;
     const u32 swapChainIndex = m_swapChainIndex;
-    const bool frameAcquired = m_frameAcquired;
+    const b8 frameAcquired = m_frameAcquired;
     if(!frameAcquired || presentationSemaphore == VK_NULL_HANDLE || presentationSwapChainIndex >= m_presentSemaphores.size() || m_presentSemaphores[presentationSwapChainIndex] != presentationSemaphore)
         return false;
 
@@ -400,7 +400,7 @@ bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmission
 
     lifecycleLock.lock();
     presentationLock.lock();
-    const bool retirementIdentityMatches =
+    const b8 retirementIdentityMatches =
         m_swapChainLifecycleState == SwapChainLifecycleState::RetiringPresentation
         && m_swapChainLifecycleEpoch == lifecycleEpoch
         && m_rhiDevice.get() == device.get()

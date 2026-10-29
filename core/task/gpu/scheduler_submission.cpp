@@ -107,7 +107,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
+b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuRecordedGraph& recordedGraph,
@@ -141,7 +141,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         return false;
     const GpuSubmissionPacket& packet = *packetView.plan;
     GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packetID, artifactAccess);
-    if(packet.recordsTiming != static_cast<bool>(ownedTimingTicket))
+    if(packet.recordsTiming != static_cast<b8>(ownedTimingTicket))
         return false;
     // Range admission resolved unique nonnull tickets and checked every artifact owner under this same lease.
     Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena> submissionTimingTickets(scratchArena);
@@ -264,7 +264,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     submittingPacketUnwind.release();
 
     if(!token.valid()){
-        bool timingResolved = true;
+        b8 timingResolved = true;
         for(const auto timingTicket : submissionTimingTickets){
             if(!timingTicket->resolveSubmission({}))
                 timingResolved = false;

@@ -32,8 +32,8 @@ public:
 
     [[nodiscard]] usize caretByte()const noexcept{ return m_caretByte; }
     void clear()noexcept;
-    [[nodiscard]] bool replace(usize firstCharacter, usize characterCount, AStringView insertion, usize caretCharacter);
-    [[nodiscard]] bool moveCaret(usize caretCharacter)noexcept;
+    [[nodiscard]] b8 replace(usize firstCharacter, usize characterCount, AStringView insertion, usize caretCharacter);
+    [[nodiscard]] b8 moveCaret(usize caretCharacter)noexcept;
     [[nodiscard]] usize moveCaretToEnd()noexcept;
 
 

@@ -43,11 +43,11 @@ struct ThrowingPositionStreamGeometry : Impl::MeshGeometryPayload{
 };
 
 struct NoThrowCornerVisitor{
-    [[nodiscard]] bool operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const noexcept;
+    [[nodiscard]] b8 operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const noexcept;
 };
 
 struct ThrowingCornerVisitor{
-    [[nodiscard]] bool operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const;
+    [[nodiscard]] b8 operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const;
 };
 
 struct NoThrowTriangleNormal{

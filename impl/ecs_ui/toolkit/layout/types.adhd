@@ -49,7 +49,7 @@ class LayoutSize{
 
 class LayoutNodeDesc{
     public LayoutDirection direction = LayoutDirection::Enum::Leaf;
-    public bool clipChildren = true;
+    public b8 clipChildren = true;
     public LayoutSize width;
     public LayoutSize height;
     public Insets padding;

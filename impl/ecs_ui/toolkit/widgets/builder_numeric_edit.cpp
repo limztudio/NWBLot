@@ -34,8 +34,8 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool apply(EditModel& draft, const EditAction::Enum action, const bool readOnly)noexcept(
-        noexcept(static_cast<bool>(DeclVal<const Context&>().failed() || &draft != &DeclVal<Model&>().draft() || DeclVal<Model&>().revision() != DeclVal<u64&>()))
+    [[nodiscard]] virtual b8 apply(EditModel& draft, const EditAction::Enum action, const b8 readOnly)noexcept(
+        noexcept(static_cast<b8>(DeclVal<const Context&>().failed() || &draft != &DeclVal<Model&>().draft() || DeclVal<Model&>().revision() != DeclVal<u64&>()))
         && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().submit(DeclVal<const Bounds&>()))
         && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().cancel())
         && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().abandon())

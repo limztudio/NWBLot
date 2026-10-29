@@ -5,17 +5,17 @@
 [reflect]
 class CsgReceiverComponent{
     public Name receiverGroup = s_NameNone;
-    public bool enabled = true;
-    public bool affectOpaquePass = true;
-    public bool affectTransparentPass = true;
+    public b8 enabled = true;
+    public b8 affectOpaquePass = true;
+    public b8 affectTransparentPass = true;
 }
 
 [reflect]
 class CsgMeshReceiverComponent<const u8 Kind>{
     public Name receiverGroup = s_NameNone;
-    public bool enabled = true;
-    public bool affectOpaquePass = true;
-    public bool affectTransparentPass = true;
+    public b8 enabled = true;
+    public b8 affectOpaquePass = true;
+    public b8 affectTransparentPass = true;
 
     public CsgReceiverComponent asReceiver()const{
         CsgReceiverComponent out;
@@ -37,7 +37,7 @@ class CsgCutterComponent{
     public f32x3x4 worldToShape(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     public f32x3x4 shapeToWorld(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     public Vector<u8> parameterBytes;
-    public bool active = true;
+    public b8 active = true;
 }
 
 

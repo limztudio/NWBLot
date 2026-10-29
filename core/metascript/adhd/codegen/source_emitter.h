@@ -45,20 +45,20 @@ private:
     void emitSwitchIfChainStatements(MString& out, const MVector<Stmt*>& statements, u32 indent)const;
     void emitStmt(MString& out, const Stmt& stmt, u32 indent)const;
     void emitTaskScopePrologue(MString& out, u32 indent)const;
-    [[nodiscard]] bool tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, u32 indent)const;
+    [[nodiscard]] b8 tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, u32 indent)const;
     void emitParallelStmt(MString& out, const Stmt& stmt, u32 indent)const;
-    [[nodiscard]] bool tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, u32 indent)const;
-    [[nodiscard]] bool tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, u32 indent)const;
-    [[nodiscard]] bool tryEmitSimdReturnStmt(MString& out, const Stmt& stmt, u32 indent)const;
-    [[nodiscard]] bool tryEmitSimdBinaryOpReg(MString& out, TokenType::Enum binaryOp, const Expr& lhs, const Expr& rhs, MStringView simdType)const;
+    [[nodiscard]] b8 tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, u32 indent)const;
+    [[nodiscard]] b8 tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, u32 indent)const;
+    [[nodiscard]] b8 tryEmitSimdReturnStmt(MString& out, const Stmt& stmt, u32 indent)const;
+    [[nodiscard]] b8 tryEmitSimdBinaryOpReg(MString& out, TokenType::Enum binaryOp, const Expr& lhs, const Expr& rhs, MStringView simdType)const;
     void emitSimdRegExpr(MString& out, const Expr& expr, MStringView expectedSimdType)const;
     void emitSimdVectorCtorReg(MString& out, MStringView simdType, const MVector<Expr*>& arguments)const;
     void emitSimdStoreForBinding(MString& out, const SimdVarBinding& binding, u32 indent)const;
     void emitSimdLoadReloadForBinding(MString& out, const SimdVarBinding& binding, u32 indent)const;
     void emitSimdLoopElementLoad(MString& out, const SimdVarBinding& loopBinding, u32 indent)const;
     void emitSimdMutCallReloads(MString& out, const Expr& expr, u32 indent)const;
-    void emitSimdBlockStores(MString& out, u32 indent, bool loopElementsOnly)const;
-    [[nodiscard]] const SimdVarBinding* findSimdBinding(bool isThisMember, MStringView name)const noexcept;
+    void emitSimdBlockStores(MString& out, u32 indent, b8 loopElementsOnly)const;
+    [[nodiscard]] const SimdVarBinding* findSimdBinding(b8 isThisMember, MStringView name)const noexcept;
     [[nodiscard]] const SimdVarBinding* findSimdBindingForExpr(const Expr* expr)const noexcept;
     void emitIndent(MString& out, u32 indent)const;
 

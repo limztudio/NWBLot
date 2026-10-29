@@ -63,7 +63,7 @@ RendererGatherBenchmarkProbe::RendererGatherBenchmarkProbe(Core::Alloc::GlobalAr
     m_gpu.reserve((s_WarmupFrames + s_SampleFrames + s_DrainFrames) * s_GpuScopeCount);
 }
 
-bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report, const bool memoryEnabled){
+b8 RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report, const b8 memoryEnabled){
     const auto& frame = report.cpuTiming.stats(Name(s_CpuNames[0u]));
     if(!frame.valid() || (m_hasPublication && frame.publishFrameIndex == m_lastPublish))
         return true;
@@ -129,8 +129,8 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
     return true;
 }
 
-bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringView workload, const bool memoryEnabled, const u32 renderers, const u32 runtimeRenderers, const u32 transparentRenderers, const u32 runtimeOwners)const{
-    const bool complete = finished() && m_cpu.size() == s_SampleFrames;
+b8 RendererGatherBenchmarkProbe::write(const AStringView path, const AStringView workload, const b8 memoryEnabled, const u32 renderers, const u32 runtimeRenderers, const u32 transparentRenderers, const u32 runtimeOwners)const{
+    const b8 complete = finished() && m_cpu.size() == s_SampleFrames;
     const AString<Core::Alloc::GlobalArena> outputPath(path, m_cpu.get_allocator());
     OutputFileStream output(outputPath.c_str(), s_FileOpenTruncate);
     if(!output.is_open())

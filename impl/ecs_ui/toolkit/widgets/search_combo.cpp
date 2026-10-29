@@ -44,11 +44,11 @@ struct QuerySnapshot{
     return { source.instanceGeneration(), source.revision(), source.rowCount() };
 }
 
-[[nodiscard]] static bool Matches(const IListDataSource& source, const SourceSnapshot& snapshot){
+[[nodiscard]] static b8 Matches(const IListDataSource& source, const SourceSnapshot& snapshot){
     return snapshot.generation != 0u && snapshot.revision != 0u && source.instanceGeneration() == snapshot.generation && source.revision() == snapshot.revision && source.rowCount() == snapshot.count;
 }
 
-[[nodiscard]] static bool Matches(const SearchComboState& state, const QuerySnapshot& query, const u64 comboGeneration, const u64 previewGeneration)noexcept{
+[[nodiscard]] static b8 Matches(const SearchComboState& state, const QuerySnapshot& query, const u64 comboGeneration, const u64 previewGeneration)noexcept{
     return
         state.query().instanceGeneration() == query.generation && state.query().externalRevision() == query.externalRevision
         && state.query().revision() == query.revision && state.query().compositionGeneration() == query.compositionGeneration
@@ -79,7 +79,7 @@ SearchComboState::SearchComboState(Core::Alloc::GlobalArena& arena)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SearchComboBehavior::Filter(SearchComboState& state, ISearchableListDataSource& source){
+b8 SearchComboBehavior::Filter(SearchComboState& state, ISearchableListDataSource& source){
     using namespace __hidden_ui_search_combo;
     const QuerySnapshot query{ state.m_query.instanceGeneration(), state.m_query.externalRevision(), state.m_query.revision(), state.m_query.compositionGeneration(), state.m_query.selectionGeneration(), state.m_query.anchor(), state.m_query.caret() };
     const u64 comboGeneration = state.m_combo.inputGeneration();
@@ -89,11 +89,11 @@ bool SearchComboBehavior::Filter(SearchComboState& state, ISearchableListDataSou
     const SourceSnapshot previous = Snapshot(previousView);
     if(full.generation == 0u || full.revision == 0u || !Matches(state, query, comboGeneration, previewGeneration))
         return false;
-    const bool fullChanged = !state.m_filterValid || state.m_sourceGeneration != full.generation || state.m_sourceRevision != full.revision || state.m_sourceCount != full.count;
-    const bool viewChanged = !state.m_filterValid || state.m_viewGeneration != previous.generation || state.m_viewRevision != previous.revision || state.m_viewCount != previous.count;
+    const b8 fullChanged = !state.m_filterValid || state.m_sourceGeneration != full.generation || state.m_sourceRevision != full.revision || state.m_sourceCount != full.count;
+    const b8 viewChanged = !state.m_filterValid || state.m_viewGeneration != previous.generation || state.m_viewRevision != previous.revision || state.m_viewCount != previous.count;
     const AStringView cachedQuery{ state.m_filteredQuery.data(), state.m_filteredQuery.size() };
-    const bool queryChanged = !state.m_filterValid || cachedQuery != state.m_query.text();
-    const bool rebuild = fullChanged || viewChanged || queryChanged;
+    const b8 queryChanged = !state.m_filterValid || cachedQuery != state.m_query.text();
+    const b8 rebuild = fullChanged || viewChanged || queryChanged;
     AString<Core::Alloc::GlobalArena> candidate(state.m_arena);
     if(rebuild){
         const AStringView text = state.m_query.text();
@@ -106,7 +106,7 @@ bool SearchComboBehavior::Filter(SearchComboState& state, ISearchableListDataSou
     const SourceSnapshot filtered = Snapshot(view);
     if(filtered.generation == 0u || filtered.revision == 0u || filtered.count > full.count || !Matches(view, filtered) || !Matches(source, full) || !Matches(state, query, comboGeneration, previewGeneration))
         return false;
-    const bool externalQueryChange = state.m_filterValid && (state.m_queryGeneration != query.generation || state.m_queryExternalRevision != query.externalRevision);
+    const b8 externalQueryChange = state.m_filterValid && (state.m_queryGeneration != query.generation || state.m_queryExternalRevision != query.externalRevision);
     if(rebuild || externalQueryChange){
         ListState& preview = ComboBehavior::Preview(state.m_combo);
         if(!preview.scrollTo(0.0))

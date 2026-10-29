@@ -41,7 +41,7 @@ namespace DirectPresentTransitionPolicy{
 };
 
 struct SwapChainImagePresentationState{
-    bool hasPresented = false;
+    b8 hasPresented = false;
 
 
 public:
@@ -66,7 +66,7 @@ struct SwapChainSurfaceFormatSelection{
 
 
 // Acceptance is narrower than binary-wait consumption: an out-of-date surface consumes its wait without presenting.
-[[nodiscard]] inline bool IsQueuePresentationAccepted(const VkResult result)noexcept{
+[[nodiscard]] inline b8 IsQueuePresentationAccepted(const VkResult result)noexcept{
     return result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
 }
 
@@ -103,15 +103,15 @@ inline DirectPresentTransitionPolicy::Enum ResolveDirectPresentTransitionPolicy(
 
 // Acquisition signals on the primary Graphics transport; a secondary transport needs an explicit sharing-contract extension first.
 // Kept separate from broad Graphics validation so same-class routing stays safe.
-inline bool IsPrimaryGraphicsPresentationQueue(const GpuPhysicalQueueId& primaryGraphicsQueue, const GpuPhysicalQueueInfo* const executionQueue)noexcept{
+inline b8 IsPrimaryGraphicsPresentationQueue(const GpuPhysicalQueueId& primaryGraphicsQueue, const GpuPhysicalQueueInfo* const executionQueue)noexcept{
     return primaryGraphicsQueue.valid() && executionQueue && executionQueue->queueClass == CommandQueue::Graphics && executionQueue->id == primaryGraphicsQueue;
 }
 
-inline bool SurfaceFormatSupports(const VkSurfaceFormatKHR& supported, const VkFormat format, const VkColorSpaceKHR colorSpace)noexcept{
+inline b8 SurfaceFormatSupports(const VkSurfaceFormatKHR& supported, const VkFormat format, const VkColorSpaceKHR colorSpace)noexcept{
     return supported.colorSpace == colorSpace && (supported.format == format || supported.format == VK_FORMAT_UNDEFINED);
 }
 
-[[nodiscard]] inline Expected<SwapChainSurfaceFormatSelection> SelectSurfaceFormat(const VkSurfaceFormatKHR* const supportedFormats, const u32 supportedFormatCount, const Format::Enum requestedSdrFormat, const bool hdr10Allowed)noexcept{
+[[nodiscard]] inline Expected<SwapChainSurfaceFormatSelection> SelectSurfaceFormat(const VkSurfaceFormatKHR* const supportedFormats, const u32 supportedFormatCount, const Format::Enum requestedSdrFormat, const b8 hdr10Allowed)noexcept{
     SwapChainSurfaceFormatSelection selection;
     if(!supportedFormats || supportedFormatCount == 0u)
         return MakeUnexpected(Failure{});

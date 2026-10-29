@@ -47,9 +47,9 @@ struct AvboitPassUploadInputs{
 };
 
 struct AvboitPassUploadResult{
-    bool hasDrawItems = false;
-    bool hasCsgDrawItems = false;
-    bool ready = false;
+    b8 hasDrawItems = false;
+    b8 hasCsgDrawItems = false;
+    b8 ready = false;
 };
 
 

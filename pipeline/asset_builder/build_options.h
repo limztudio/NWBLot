@@ -54,7 +54,7 @@ struct AssetBuildOptions{
     ACompactString assetType{ s_GraphicsAssetBuildType };
     AssetBuildServices services;
     Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
-    bool useExplicitInputs = false;
+    b8 useExplicitInputs = false;
 
 
 public:

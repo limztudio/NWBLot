@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PreparedShadowMaterialContext::StorageReady(const RendererRayTracingState& state, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
+b8 PreparedShadowMaterialContext::StorageReady(const RendererRayTracingState& state, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
     return
         state.m_shadowInstanceMaterialBuffer
         && state.m_shadowInstanceBuffer
@@ -35,10 +35,10 @@ bool PreparedShadowMaterialContext::StorageReady(const RendererRayTracingState& 
 }
 
 
-bool PreparedShadowMaterialContext::capture(
+b8 PreparedShadowMaterialContext::capture(
     const RendererRayTracingState& state,
     const PreparedShadowMaterialContextRoute::Enum route,
-    const bool staticScene,
+    const b8 staticScene,
     const u64 hash,
     const Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
     const Span<const InstanceGpuData> instances,
@@ -47,7 +47,7 @@ bool PreparedShadowMaterialContext::capture(
     const usize instanceMaterialCount = instanceMaterials.size();
     const usize instanceCount = instances.size();
     const usize materialTypedByteCount = materialTypedBytes.size();
-    const bool validStorage = StorageReady(state, instanceMaterialCount, instanceCount, materialTypedByteCount);
+    const b8 validStorage = StorageReady(state, instanceMaterialCount, instanceCount, materialTypedByteCount);
     if(
         route == PreparedShadowMaterialContextRoute::None
         || instanceMaterialCount == 0u
@@ -74,12 +74,12 @@ bool PreparedShadowMaterialContext::capture(
     return true;
 }
 
-bool PreparedShadowMaterialContext::captureCacheReuse(const RendererRayTracingState& state, const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
+b8 PreparedShadowMaterialContext::captureCacheReuse(const RendererRayTracingState& state, const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
     clear();
     if(instanceMaterialCount == 0u || instanceCount == 0u || materialTypedByteCount == 0u)
         return false;
 
-    const bool validStorage = StorageReady(state, instanceMaterialCount, instanceCount, materialTypedByteCount);
+    const b8 validStorage = StorageReady(state, instanceMaterialCount, instanceCount, materialTypedByteCount);
     if(!state.m_swShadowMaterialContextHashValid || state.m_swShadowMaterialContextHash != hash || !validStorage)
         return false;
 
@@ -186,7 +186,7 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
     return result;
 }
 
-bool PreparedShadowMaterialContext::publishAcceptedUpload(RendererRayTracingState& state)const noexcept{
+b8 PreparedShadowMaterialContext::publishAcceptedUpload(RendererRayTracingState& state)const noexcept{
     if(!m_ready || !m_uploadRequired)
         return false;
 
@@ -203,7 +203,7 @@ bool PreparedShadowMaterialContext::publishAcceptedUpload(RendererRayTracingStat
     return true;
 }
 
-bool PreparedShadowMaterialContext::storageMatches(const RendererRayTracingState& state)const noexcept{
+b8 PreparedShadowMaterialContext::storageMatches(const RendererRayTracingState& state)const noexcept{
     return
         state.m_shadowInstanceMaterialBuffer.get() == m_instanceMaterialBuffer.get()
         && state.m_shadowInstanceBuffer.get() == m_instanceBuffer.get()
@@ -214,11 +214,11 @@ bool PreparedShadowMaterialContext::storageMatches(const RendererRayTracingState
     ;
 }
 
-bool PreparedShadowMaterialContext::softwareSnapshotCovers(const usize sceneInstanceCount)const noexcept{
+b8 PreparedShadowMaterialContext::softwareSnapshotCovers(const usize sceneInstanceCount)const noexcept{
     return m_ready && m_route == PreparedShadowMaterialContextRoute::Software && m_instanceMaterialCount == sceneInstanceCount && m_instanceCount == sceneInstanceCount;
 }
 
-bool PreparedShadowMaterialContext::softwareSnapshotAccepted(const RendererRayTracingState& state)const noexcept{
+b8 PreparedShadowMaterialContext::softwareSnapshotAccepted(const RendererRayTracingState& state)const noexcept{
     return m_uploadRequired || (m_static && state.m_swShadowMaterialContextHashValid && state.m_swShadowMaterialContextHash == m_hash && state.m_sceneBvhInstanceCount == m_instanceCount);
 }
 

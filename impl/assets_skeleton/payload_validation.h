@@ -28,7 +28,7 @@ namespace AssetsSkeletonPayloadDetail{
 
 
 template<typename ArenaT>
-[[nodiscard]] inline bool ValidateJoints(const Span<const SkeletonJoint> joints, const HashMap<Name, u32, ArenaT, Hasher<Name>, EqualTo<Name>>& jointIndices, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] inline b8 ValidateJoints(const Span<const SkeletonJoint> joints, const HashMap<Name, u32, ArenaT, Hasher<Name>, EqualTo<Name>>& jointIndices, Core::Alloc::ScratchArena& scratchArena){
     if(joints.empty() || joints.size() > Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton joint count must fit nonzero u32"));
         return false;

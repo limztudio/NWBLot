@@ -80,7 +80,7 @@ NwbStandalonePixelOutput main(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool WriteStandaloneShaderProbe(const Path& assetRoot){
+static b8 WriteStandaloneShaderProbe(const Path& assetRoot){
     const auto shaderMetadata = StringFormat(assetRoot.arena(), "{}{}", s_ShaderAssetHead, s_AssetEntryMain);
     if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "standalone_ps.nwb", shaderMetadata))
         return false;
@@ -113,7 +113,7 @@ NwbBomCompilerProbeOutput main(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool WriteBomCompilerProbe(const Path& assetRoot){
+static b8 WriteBomCompilerProbe(const Path& assetRoot){
     const auto shaderMetadata = StringFormat(assetRoot.arena(), "{}{}", s_ShaderAssetHead, s_AssetEntryMain);
     if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.nwb", shaderMetadata))
         return false;
@@ -139,7 +139,7 @@ NwbExactEntryPointPixelOutput MainCase(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool WriteExactEntryPointShaderProbe(const Path& assetRoot){
+static b8 WriteExactEntryPointShaderProbe(const Path& assetRoot){
     const auto shaderMetadata = StringFormat(assetRoot.arena(), "{}{}", s_ShaderAssetHead, "asset.entry_point = \"MainCase\";\n");
     if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "exact_entry_point_ps.nwb", shaderMetadata))
         return false;
@@ -359,7 +359,7 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
     const Path assetRoot = root / s_AssetsDirectory;
     EXPECT_TRUE(WriteExactEntryPointShaderProbe(assetRoot));
 
-    const bool cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot });
+    const b8 cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot });
     EXPECT_TRUE(cooked);
     if(cooked){
         const Expected<Name> shaderVirtualPathResult = NWB::Core::ShaderArchive::BuildVirtualPathName(Name(s_ExactEntryPointShaderPath), NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));

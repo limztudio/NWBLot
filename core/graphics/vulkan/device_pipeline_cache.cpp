@@ -50,7 +50,7 @@ static constexpr usize s_PipelineCacheUuidOffset = 16u;
     ;
 }
 
-static Expected<UniquePtr<Filesystem::IFilesystem>> MountPipelineCacheVolume(const Path& directory, const AStringView volumeName, const bool createIfMissing, Filesystem::VolumeUsage::Enum usage, const Filesystem::FilesystemFactory& factory){
+static Expected<UniquePtr<Filesystem::IFilesystem>> MountPipelineCacheVolume(const Path& directory, const AStringView volumeName, const b8 createIfMissing, Filesystem::VolumeUsage::Enum usage, const Filesystem::FilesystemFactory& factory){
     Filesystem::VolumeMountDesc mountDesc(directory.arena());
     if(!mountDesc.volumeName.assign(volumeName))
         return MakeUnexpected(Failure{});

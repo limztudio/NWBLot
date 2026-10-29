@@ -23,7 +23,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuGraphSubmissionTransaction::hasAcceptedPackets()const noexcept{
+b8 GpuGraphSubmissionTransaction::hasAcceptedPackets()const noexcept{
     NothrowScopedLock lock(m_mutex);
     return m_valid && m_acceptedSubmissionCount != 0u;
 }

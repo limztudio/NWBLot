@@ -22,7 +22,7 @@ NWB_IMPL_UI_BEGIN
 struct SliderOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
     f32 height = s_StyleControlHeight;
-    bool enabled = true;
+    b8 enabled = true;
     f64 minimum = 0.0;
     f64 maximum = 1.0;
     // Zero chooses one hundredth of the range, with a representable fallback for tiny spans.
@@ -30,10 +30,10 @@ struct SliderOptions{
 };
 
 struct SliderResult{
-    bool valid = false;
-    bool valueChanged = false;
-    bool focused = false;
-    bool dragging = false;
+    b8 valid = false;
+    b8 valueChanged = false;
+    b8 focused = false;
+    b8 dragging = false;
 };
 
 struct SliderSnapshot{
@@ -43,10 +43,10 @@ struct SliderSnapshot{
     u64 admissionGeneration = 0u;
     u64 valueBits = 0u;
     InputActionId press;
-    bool pressMoved = false;
+    b8 pressMoved = false;
 };
 
-[[nodiscard]] bool operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs)noexcept;
+[[nodiscard]] b8 operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,8 +83,8 @@ public:
     [[nodiscard]] const SliderPlacement& placement()const noexcept{ return m_placement; }
     [[nodiscard]] ControlToken controlToken()const noexcept;
     [[nodiscard]] SliderSnapshot snapshot()const noexcept;
-    [[nodiscard]] bool matches(const SliderSnapshot& value)const noexcept;
-    [[nodiscard]] bool setValue(f64 value)noexcept;
+    [[nodiscard]] b8 matches(const SliderSnapshot& value)const noexcept;
+    [[nodiscard]] b8 setValue(f64 value)noexcept;
     void reset()noexcept;
 
 
@@ -106,21 +106,21 @@ private:
     InputActionId m_press;
     SliderResult m_result;
     SliderPlacement m_placement;
-    bool m_enabled = true;
-    bool m_admitted = false;
-    bool m_pressMoved = false;
+    b8 m_enabled = true;
+    b8 m_admitted = false;
+    b8 m_pressMoved = false;
 };
 
 class SliderBehavior final{
 public:
-    [[nodiscard]] static bool Validate(const SliderOptions& options)noexcept;
+    [[nodiscard]] static b8 Validate(const SliderOptions& options)noexcept;
     [[nodiscard]] static Expected<f64> Normalize(f64 minimum, f64 maximum, f64 value)noexcept;
     [[nodiscard]] static Expected<f64> Interpolate(f64 minimum, f64 maximum, f64 normalized)noexcept;
     // Admission includes stable geometry and policy, while thumb position and repaint-only value changes preserve its token.
-    [[nodiscard]] static bool Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept;
-    [[nodiscard]] static bool Apply(SliderState& state, SliderResult& result, const SliderOptions& options, const ControlAction& action)noexcept;
-    [[nodiscard]] static bool Seek(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept;
-    [[nodiscard]] static bool Drag(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept;
+    [[nodiscard]] static b8 Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept;
+    [[nodiscard]] static b8 Apply(SliderState& state, SliderResult& result, const SliderOptions& options, const ControlAction& action)noexcept;
+    [[nodiscard]] static b8 Seek(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept;
+    [[nodiscard]] static b8 Drag(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept;
 };
 
 

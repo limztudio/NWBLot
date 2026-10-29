@@ -39,17 +39,17 @@ struct SceneShadingSetupGraphTask{
     struct Payload{
         RendererDeferredSystem& deferredSystem;
         Core::GpuTimingSubmissionTicket*& timingTicket;
-        bool& ready;
+        b8& ready;
         u32 lightCount = 0u;
-        bool lightUploadRequired = false;
-        bool sceneShadingUploadRequired = false;
+        b8 lightUploadRequired = false;
+        b8 sceneShadingUploadRequired = false;
         ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
         ECSRenderDetail::SceneShadingGpuData sceneShadingState;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
     static void Discarded(Payload& payload)noexcept;
 };

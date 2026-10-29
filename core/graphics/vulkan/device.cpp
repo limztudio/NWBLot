@@ -49,7 +49,7 @@ static constexpr u32 s_CalibratedTimestampProbeAttemptCount = 4u;
 
 
 template<typename EnumerateTimeDomains, typename GetCalibratedTimestamps>
-[[nodiscard]] static bool ProbeComparableGpuTimestamps(const VkPhysicalDevice physicalDevice, const VkDevice device, EnumerateTimeDomains enumerateTimeDomains, GetCalibratedTimestamps getCalibratedTimestamps, Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static b8 ProbeComparableGpuTimestamps(const VkPhysicalDevice physicalDevice, const VkDevice device, EnumerateTimeDomains enumerateTimeDomains, GetCalibratedTimestamps getCalibratedTimestamps, Alloc::ScratchArena& scratchArena){
     if(!enumerateTimeDomains || !getCalibratedTimestamps){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Calibrated timestamp entry points are unavailable."));
         return false;
@@ -81,7 +81,7 @@ template<typename EnumerateTimeDomains, typename GetCalibratedTimestamps>
             return false;
         }
 
-        bool hasDeviceTimeDomain = false;
+        b8 hasDeviceTimeDomain = false;
         for(u32 domainIndex = 0u; domainIndex < writtenTimeDomainCount; ++domainIndex){
             if(timeDomains[domainIndex] == VK_TIME_DOMAIN_DEVICE_KHR){
                 hasDeviceTimeDomain = true;
@@ -185,7 +185,7 @@ Device::Device(const DeviceDesc& desc)
         }
         for(usize existingIndex = 0u; existingIndex < nativeQueueIndex; ++existingIndex){
             const VulkanNativeQueueDesc& existing = desc.nativeQueues[existingIndex];
-            const bool duplicateCoordinates = existing.familyIndex == nativeQueue.familyIndex && existing.queueIndex == nativeQueue.queueIndex;
+            const b8 duplicateCoordinates = existing.familyIndex == nativeQueue.familyIndex && existing.queueIndex == nativeQueue.queueIndex;
             if(duplicateCoordinates || existing.queue == nativeQueue.queue){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing conflicting canonical native queue registry identity."));
                 return;
@@ -298,7 +298,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     Alloc::ScratchArena calibratedTimestampProbeArena(VulkanArenaScope::s_DeviceExtensionSetupArena);
-    bool comparableGpuTimestamps = false;
+    b8 comparableGpuTimestamps = false;
     if(m_context.extensions.khrCalibratedTimestamps){
         comparableGpuTimestamps = __hidden_vulkan_device::ProbeComparableGpuTimestamps(
             m_context.physicalDevice,
@@ -466,7 +466,7 @@ Device::Device(const DeviceDesc& desc)
     probeCompressedTextureFormats();
 
     const VulkanDetail::DescriptorBufferStartupPrerequisites descriptorBufferPrerequisites = VulkanDetail::QueryDescriptorBufferStartupPrerequisites(m_context);
-    const bool descriptorBufferStartupReady = VulkanDetail::HasDescriptorBufferStartupPrerequisites(descriptorBufferPrerequisites);
+    const b8 descriptorBufferStartupReady = VulkanDetail::HasDescriptorBufferStartupPrerequisites(descriptorBufferPrerequisites);
 
     // Descriptor-buffer startup prerequisites are mandatory for this device.
     if(!descriptorBufferStartupReady){
@@ -561,9 +561,9 @@ Device::Device(const DeviceDesc& desc)
     }
 }
 Device::~Device()noexcept{
-    const bool lifecycleDestructionPrepared = m_lifecycleDestructionPrepared.load(MemoryOrder::acquire);
+    const b8 lifecycleDestructionPrepared = m_lifecycleDestructionPrepared.load(MemoryOrder::acquire);
     const VkResult nativeIdleResult = lifecycleDestructionPrepared ? VK_SUCCESS : waitForNativeIdle();
-    const bool nativeTeardownSafe = nativeIdleResult == VK_SUCCESS || nativeIdleResult == VK_ERROR_DEVICE_LOST;
+    const b8 nativeTeardownSafe = nativeIdleResult == VK_SUCCESS || nativeIdleResult == VK_ERROR_DEVICE_LOST;
     NWB_FATAL_ASSERT_MSG(nativeTeardownSafe, "Vulkan Device destruction requires a completed native idle join or terminal device loss");
     if(nativeIdleResult == VK_ERROR_DEVICE_LOST)
         markDeviceLost();

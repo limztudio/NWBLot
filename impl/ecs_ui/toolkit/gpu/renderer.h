@@ -47,20 +47,20 @@ public:
 
 public:
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept;
-    [[nodiscard]] bool validateResources(u32 width, u32 height);
+    [[nodiscard]] b8 validateResources(u32 width, u32 height);
     void invalidateResources()noexcept;
-    [[nodiscard]] bool setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const UiSkin& skin, u64 skinGeneration);
+    [[nodiscard]] b8 setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const UiSkin& skin, u64 skinGeneration);
     // Rejection leaves the caller's snapshot unmoved. One immutable pending generation is admitted at a time.
-    [[nodiscard]] bool submit(DrawSnapshot&& snapshot)noexcept;
+    [[nodiscard]] b8 submit(DrawSnapshot&& snapshot)noexcept;
     void setCommandRecordingMode(GpuCommandRecordingMode::Enum mode)noexcept;
-    [[nodiscard]] bool hasPendingFrame()const noexcept;
+    [[nodiscard]] b8 hasPendingFrame()const noexcept;
     [[nodiscard]] u64 lastAcceptedGeneration()const noexcept;
     [[nodiscard]] Core::PresentationReceiptStatus::Enum lastAcceptedPresentationStatus()const noexcept;
-    [[nodiscard]] bool renderStandalone(const Core::AcquiredPresentationFrame& frame);
+    [[nodiscard]] b8 renderStandalone(const Core::AcquiredPresentationFrame& frame);
 
 
 public:
-    [[nodiscard]] virtual bool prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame)override;
+    [[nodiscard]] virtual b8 prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame)override;
     [[nodiscard]] virtual Expected<Core::GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph)override;
     virtual void acceptTaskGraphOutputLayer(u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken)noexcept override;
 

@@ -19,7 +19,7 @@ class CausticPhotonBudget{
     public u32 photonsPerFrame = 0u;
 }
 
-bool ValidateCausticQualitySettings(in CausticQualitySettings settings){
+b8 ValidateCausticQualitySettings(in CausticQualitySettings settings){
     const u32 s_HalfPhotonGridDivisor = 2u;
     const u32 s_QuarterPhotonGridDivisor = 4u;
     return settings.photonGridDivisor == 1u || settings.photonGridDivisor == s_HalfPhotonGridDivisor || settings.photonGridDivisor == s_QuarterPhotonGridDivisor;

@@ -28,8 +28,8 @@ class PointerInput{
     public InputSource source;
     public PointerPhase phase = PointerPhase::Enum::Move;
     public PointerIntent intent = PointerIntent::Enum::Activate;
-    public bool extend = false;
-    public bool hoverCapable = false;
+    public b8 extend = false;
+    public b8 hoverCapable = false;
     public Point position;
     public f64 scrollX = 0.0;
     public f64 scrollY = 0.0;

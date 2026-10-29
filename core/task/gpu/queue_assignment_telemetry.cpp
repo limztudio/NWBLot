@@ -22,7 +22,7 @@ namespace __hidden_queue_assignment_telemetry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool MatchesAssignment(const GpuTaskQueueAssignment& lhs, const GpuTaskQueueAssignment& rhs)noexcept{
+[[nodiscard]] static b8 MatchesAssignment(const GpuTaskQueueAssignment& lhs, const GpuTaskQueueAssignment& rhs)noexcept{
     return
         lhs.task == rhs.task
         && lhs.initialQueue == rhs.initialQueue
@@ -61,7 +61,7 @@ void GpuTaskGraphQueueAssignmentTelemetryTracker::reset()noexcept{
     m_valid = false;
 }
 
-bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
+b8 GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     const GpuTaskGraph::DeclarationReadView& declarations,
     const GpuTaskGraphQueueAssignments& assignments,
     const GpuCompiledGraph::ReadView& compiledPlan,
@@ -71,15 +71,15 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     if(!compiledPlan.validFor(declarations))
         return false;
 
-    const bool currentMatchesPlan = validFor(declarations, assignments, compiledPlan);
+    const b8 currentMatchesPlan = validFor(declarations, assignments, compiledPlan);
     Expected<GpuGraphSubmissionAcceptanceSnapshot> acceptanceSnapshot = MakeUnexpected(Failure{});
     if(assignments.validFor(declarations, compiledPlan) && compiledPlan.deviceGeneration() != 0u)
         acceptanceSnapshot = transaction.copyAcceptedPacketTokens(compiledPlan, scratchArena);
-    const bool sourcesValid = acceptanceSnapshot.has_value();
+    const b8 sourcesValid = acceptanceSnapshot.has_value();
     if(sourcesValid && currentMatchesPlan && m_recordingAttemptGeneration == acceptanceSnapshot->recordingAttemptGeneration && m_acceptanceRevision == acceptanceSnapshot->acceptanceRevision)
         return true;
 
-    const bool sameAcceptanceAttempt = sourcesValid && currentMatchesPlan && m_recordingAttemptGeneration == acceptanceSnapshot->recordingAttemptGeneration && acceptanceSnapshot->recordingAttemptGeneration != 0u;
+    const b8 sameAcceptanceAttempt = sourcesValid && currentMatchesPlan && m_recordingAttemptGeneration == acceptanceSnapshot->recordingAttemptGeneration && acceptanceSnapshot->recordingAttemptGeneration != 0u;
     m_generation = 0u;
     m_declarationRevision = 0u;
     m_planGeneration = 0u;
@@ -97,7 +97,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
             return false;
     }
 
-    const bool hasCurrentGenerationHistory = m_deviceGeneration == compiledPlan.deviceGeneration();
+    const b8 hasCurrentGenerationHistory = m_deviceGeneration == compiledPlan.deviceGeneration();
     Vector<GpuTaskQueueAssignmentTelemetry, Alloc::ScratchArena> staged(scratchArena);
     staged.reserve(declarations.taskCount());
     for(usize taskIndex = 0u; taskIndex < declarations.taskCount(); ++taskIndex){
@@ -120,7 +120,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
 
         GpuTaskQueueAssignmentTelemetry telemetry{ .assignment = *assignment, .acceptedQueue = {}, .previousAcceptedQueue = {}, .acceptance = GpuTaskQueueAssignmentAcceptance::NotAccepted, };
         const auto previous = hasCurrentGenerationHistory ? m_history.find(task.identity) : m_history.end();
-        const bool hasPrevious = hasCurrentGenerationHistory && previous != m_history.end();
+        const b8 hasPrevious = hasCurrentGenerationHistory && previous != m_history.end();
         const QueueSubmissionToken& token = acceptanceSnapshot->packetTokens[packet.index];
         if(!token.valid()){
             if(hasPrevious)
@@ -182,7 +182,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     return true;
 }
 
-bool GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept{
+b8 GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept{
     if(!compiledPlan.validFor(declarations))
         return false;
 

@@ -152,7 +152,7 @@ namespace ContainerDetail{
 
 
 template<typename DestinationVector, typename SourceValue>
-[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceValue* sourceData, const usize sourceSize)noexcept(noexcept(static_cast<bool>(destination.empty() || sourceSize == 0u)) && noexcept(destination.data()) && noexcept(static_cast<bool>(DeclVal<const usize&>() >= destination.size()))){
+[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceValue* sourceData, const usize sourceSize)noexcept(noexcept(static_cast<b8>(destination.empty() || sourceSize == 0u)) && noexcept(destination.data()) && noexcept(static_cast<b8>(DeclVal<const usize&>() >= destination.size()))){
     if(destination.empty() || sourceSize == 0u)
         return MakeUnexpected(Failure{});
 
@@ -185,12 +185,12 @@ template<typename DestinationVector, typename SourceVector>
 template<typename Container>
 inline void ReserveGrowingCapacity(Container& container, const usize requiredCapacity)noexcept([]()consteval noexcept{
     if constexpr(requires(const Container& c){ c.capacity(); }){
-        constexpr bool s_ReserveIsNothrow =
-            noexcept(static_cast<bool>(DeclVal<const usize&>() <= DeclVal<Container&>().capacity()))
+        constexpr b8 s_ReserveIsNothrow =
+            noexcept(static_cast<b8>(DeclVal<const usize&>() <= DeclVal<Container&>().capacity()))
             && noexcept(static_cast<usize>(DeclVal<Container&>().capacity()))
             && noexcept(DeclVal<Container&>().reserve(DeclVal<usize&>()));
         if constexpr(requires(const Container& c){ c.max_size(); })
-            return s_ReserveIsNothrow && noexcept(static_cast<bool>(DeclVal<usize&>() > DeclVal<Container&>().max_size()));
+            return s_ReserveIsNothrow && noexcept(static_cast<b8>(DeclVal<usize&>() > DeclVal<Container&>().max_size()));
         else
             return s_ReserveIsNothrow;
     }

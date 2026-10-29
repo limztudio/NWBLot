@@ -41,7 +41,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool apply(Ui::EditModel& draft, const Ui::EditAction::Enum action, const bool readOnly)override{
+    [[nodiscard]] virtual b8 apply(Ui::EditModel& draft, const Ui::EditAction::Enum action, const b8 readOnly)override{
         ActionRecord record(m_arena);
         record.action = action;
         record.text.assign(draft.text().data(), draft.text().size());
@@ -72,9 +72,9 @@ public:
     AString<Alloc::GlobalArena> committed;
     Ui::PaintVector<ActionRecord> records;
     UiEditBoxHost* resetHost = nullptr;
-    bool canonicalizeSubmit = false;
-    bool failSubmit = false;
-    bool rejectBlur = false;
+    b8 canonicalizeSubmit = false;
+    b8 failSubmit = false;
+    b8 rejectBlur = false;
 };
 
 class UiEditActionHostTests : public UiEditBoxHostTests{
@@ -83,30 +83,30 @@ public:
 
 
 protected:
-    [[nodiscard]] bool actionFrame(const Ui::EditBoxOptions& options = {}){
+    [[nodiscard]] b8 actionFrame(const Ui::EditBoxOptions& options = {}){
         return prepare(m_model, options, { 10.0f, 20.0f, 180.0f, 30.0f }, &m_actions) && commit();
     }
 
-    [[nodiscard]] bool activateActions(){
+    [[nodiscard]] b8 activateActions(){
         if(!actionFrame() || !key(Core::Key::Tab) || !actionFrame() || !m_textInput.activeSession().valid())
             return false;
         m_actions.clear();
         return true;
     }
 
-    [[nodiscard]] bool commitNative(const AStringView text){
+    [[nodiscard]] b8 commitNative(const AStringView text){
         return m_textInput.commit(text) == TextInputAdmission::Accepted;
     }
 
-    [[nodiscard]] bool replaceNative(const AStringView text){
+    [[nodiscard]] b8 replaceNative(const AStringView text){
         return key(Core::Key::A, false, true) && commitNative(text);
     }
 
-    [[nodiscard]] bool focusOther(){
+    [[nodiscard]] b8 focusOther(){
         return key(Core::Key::Tab) && m_context.input().focus() == m_otherWidget.id;
     }
 
-    [[nodiscard]] bool focusEditor(){
+    [[nodiscard]] b8 focusEditor(){
         return key(Core::Key::Tab) && m_context.input().focus() == m_widget.id;
     }
 

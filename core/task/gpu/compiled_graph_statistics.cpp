@@ -45,7 +45,7 @@ struct OwnershipTransferSignatureHasher{
 };
 
 struct OwnershipTransferSignatureEqual{
-    bool operator()(const OwnershipTransferKey& lhs, const OwnershipTransferKey& rhs)const noexcept{
+    b8 operator()(const OwnershipTransferKey& lhs, const OwnershipTransferKey& rhs)const noexcept{
         return lhs->resource == rhs->resource && lhs->route == rhs->route && lhs->sourceTask == rhs->sourceTask && lhs->destinationTask == rhs->destinationTask && lhs->sourceQueue == rhs->sourceQueue && lhs->destinationQueue == rhs->destinationQueue;
     }
 };
@@ -214,7 +214,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
             continue;
 
         ++statistics.logicalOwnershipTransferSignatureCount;
-        const bool repeatedSignature = !resourceInsertion.second;
+        const b8 repeatedSignature = !resourceInsertion.second;
         if(repeatedSignature)
             ++statistics.repeatedOwnershipTransferSignatureCount;
         ++source.outgoingLogicalOwnershipTransferSignatureCount;

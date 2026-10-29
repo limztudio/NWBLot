@@ -59,7 +59,7 @@ static constexpr AStringView s_RasterModeOutline = "outline";
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] static bool ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload)noexcept{
+[[nodiscard]] static b8 ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload)noexcept{
     const Core::Assets::AssetBytes& bytes = font.fontBytes();
     const auto directoryResult = FontSfntDirectory::Read({ bytes.data(), bytes.size() });
     if(!directoryResult)
@@ -86,7 +86,7 @@ static constexpr AStringView s_RasterModeOutline = "outline";
     return payload.unitsPerEm >= s_FontAtlasMinUnitsPerEm && payload.unitsPerEm <= s_FontAtlasMaxUnitsPerEm && payload.sourceGlyphCount > 0u;
 }
 
-[[nodiscard]] static bool ReadSettings(const Path& path, const Value& asset, FontAtlasPayload& payload){
+[[nodiscard]] static b8 ReadSettings(const Path& path, const Value& asset, FontAtlasPayload& payload){
     auto bakePpemResult = ReadU32(path, asset, s_BakePpemField, s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem);
     if(!bakePpemResult)
         return false;

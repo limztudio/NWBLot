@@ -26,7 +26,7 @@ PositionKey FbxMeshBuild::MakePositionKey(const SIMDVectorSingle position)noexce
 }
 
 
-SIMDVectorSingle FbxMeshBuild::LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept{
+SIMDVectorSingle FbxMeshBuild::LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 position = {};
     if(options.bakeTransforms){
         position = ufbx_get_vertex_vec3(wantsSkinning ? &mesh.vertex_position : &mesh.skinned_position, cornerIndex);
@@ -41,7 +41,7 @@ SIMDVectorSingle FbxMeshBuild::LoadCornerOutputPositionVector(const ufbx_mesh& m
 }
 
 
-SIMDVectorSingle FbxMeshBuild::LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept{
+SIMDVectorSingle FbxMeshBuild::LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 normal = {};
     if(options.bakeTransforms){
         normal = ufbx_get_vertex_vec3(wantsSkinning ? &mesh.vertex_normal : &mesh.skinned_normal, cornerIndex);
@@ -57,7 +57,7 @@ SIMDVectorSingle FbxMeshBuild::LoadCornerOutputNormalVector(const ufbx_mesh& mes
 }
 
 
-Expected<SIMDVectorSingleResult> FbxMeshBuild::LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
+Expected<SIMDVectorSingleResult> FbxMeshBuild::LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
     if(!mesh.vertex_tangent.exists)
         return MakeUnexpected(Failure{});
 
@@ -87,19 +87,19 @@ Expected<SIMDVectorSingleResult> FbxMeshBuild::LoadCornerOutputTangentVector(con
 }
 
 
-bool FbxMeshBuild::IsFiniteSkinInfluence(const SIMDVectorSingle weights)noexcept{
+b8 FbxMeshBuild::IsFiniteSkinInfluence(const SIMDVectorSingle weights)noexcept{
     return VectorIsFinite(weights, VectorComponentMask::s_XYZW);
 }
 
 
-bool FbxMeshBuild::IsFiniteSourceTriangleCorner(
+b8 FbxMeshBuild::IsFiniteSourceTriangleCorner(
     const SIMDVectorSingle position,
     const SIMDVectorSingle normal,
     const SIMDVectorSingle tangent,
     const SIMDVectorSingle uv0,
     const SIMDVectorSingle color,
-    const bool hasTangent,
-    const bool wantsSkinning,
+    const b8 hasTangent,
+    const b8 wantsSkinning,
     const SIMDVectorSingle skinWeights
 )noexcept{
     if(!VectorIsFinite(position, VectorComponentMask::s_XYZ) || !VectorIsFinite(normal, VectorComponentMask::s_XYZ) || !VectorIsFinite(uv0, VectorComponentMask::s_XY) || !VectorIsFinite(color, VectorComponentMask::s_XYZW))
@@ -114,7 +114,7 @@ Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(
     const ufbx_mesh& mesh,
     const ufbx_node& node,
     const ImportOptions& options,
-    const bool wantsSkinning,
+    const b8 wantsSkinning,
     Core::Alloc::ScratchArena& scratchArena,
     UtilityScratchVector<u32>& inOutTriangleIndices
 ){
@@ -156,19 +156,19 @@ Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(
 }
 
 
-bool FbxMeshBuild::AppendInstanceMesh(
+b8 FbxMeshBuild::AppendInstanceMesh(
     const MeshInstance& instance,
     const ImportOptions& options,
-    const bool wantsSkinning,
+    const b8 wantsSkinning,
     const NormalMode::Enum normalMode,
     const Vec4& defaultColor,
     Core::Alloc::ScratchArena& scratchArena,
     UtilityScratchVector<u32>& inOutTriangleIndices,
     SourceMeshBuildContext& inOutMesh,
     FbxSkinDetail::ExportContext& inOutSkinContext,
-    bool& inOutSawVertexColors,
-    bool& inOutSawVertexUvs,
-    bool& inOutUsedDefaultUvs
+    b8& inOutSawVertexColors,
+    b8& inOutSawVertexUvs,
+    b8& inOutUsedDefaultUvs
 ){
     ufbx_mesh* mesh = instance.mesh;
     ufbx_node* node = instance.node;
@@ -186,9 +186,9 @@ bool FbxMeshBuild::AppendInstanceMesh(
     }
 
     const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
-    const bool importUvs = mesh->vertex_uv.exists;
-    const bool importColors = options.importColors && mesh->vertex_color.exists;
-    const bool importTangents = normalMode == NormalMode::Imported && mesh->vertex_tangent.exists;
+    const b8 importUvs = mesh->vertex_uv.exists;
+    const b8 importColors = options.importColors && mesh->vertex_color.exists;
+    const b8 importTangents = normalMode == NormalMode::Imported && mesh->vertex_tangent.exists;
     const SIMDVectorSingle defaultColorVector = LoadFloat(defaultColor);
     ufbx_skin_deformer* skin = nullptr;
     ::Vector<u16, Core::Alloc::ScratchArena> clusterJoints(scratchArena);

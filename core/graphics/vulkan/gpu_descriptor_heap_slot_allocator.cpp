@@ -24,7 +24,7 @@ usize GpuDescriptorHeap::SlotAllocator::RequiredBytes(const u32 capacity){
     return AddSize(AddSize(FixedTable<u32>::RequiredBytes(capacity), FixedTable<SlotState::Enum>::RequiredBytes(capacity)), FixedTable<u8>::RequiredBytes(capacity));
 }
 
-bool GpuDescriptorHeap::SlotAllocator::initialize(Alloc::PersistentArena& arena, const u32 newCapacity){
+b8 GpuDescriptorHeap::SlotAllocator::initialize(Alloc::PersistentArena& arena, const u32 newCapacity){
     clear();
     if(!freeList.initialize(arena, newCapacity) || !slotStates.initialize(arena, newCapacity) || !allocatedClasses.initialize(arena, newCapacity))
         return false;

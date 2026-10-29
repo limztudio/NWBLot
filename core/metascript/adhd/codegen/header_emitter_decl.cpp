@@ -24,7 +24,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     out.append("{\r\n");
 
     usize flagBitIndex = 0u;
-    bool hasFlags = false;
+    b8 hasFlags = false;
     for(const EnumEntry& entry : decl.entries){
         out.append("        ");
         out.append(entry.name.data(), entry.name.size());
@@ -209,7 +209,7 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
         else{
             out.push_back('(');
             u32 ctorVecLanes = 0u;
-            const bool isScalarSplatCtor = !baseConstType.empty()
+            const b8 isScalarSplatCtor = !baseConstType.empty()
                 && (m_symbols.isSimdVectorType(baseConstType, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseConstType, ctorVecLanes))
                 && c.arguments.size() == 1u && c.arguments[0]
                 && c.arguments[0]->resolvedSimdType.empty();
@@ -240,7 +240,7 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
 }
 
 void HeaderEmitter::emitFreeFunctionDecl(MString& out, const MethodDecl& fn)const{
-    const bool emitInlineBody = fn.isInline || !fn.templateParams.empty();
+    const b8 emitInlineBody = fn.isInline || !fn.templateParams.empty();
     m_typeEmitter.emitTemplateHeaderCpp(out, fn.templateParams);
     if(emitInlineBody)
         out.append("inline ");

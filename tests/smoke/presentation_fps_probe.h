@@ -59,7 +59,7 @@ public:
 
     [[nodiscard]] const PresentationFpsSample& total()const noexcept{ return m_total; }
 
-    [[nodiscard]] bool measurementStarted()const noexcept{ return m_measuring; }
+    [[nodiscard]] b8 measurementStarted()const noexcept{ return m_measuring; }
 
 
 private:
@@ -73,10 +73,10 @@ private:
     u64 m_intervalPresentationCount = 0u;
     PresentationFpsSample m_interval;
     PresentationFpsSample m_total;
-    bool m_started = false;
-    bool m_measuring = false;
-    bool m_complete = false;
-    bool m_invalid = false;
+    b8 m_started = false;
+    b8 m_measuring = false;
+    b8 m_complete = false;
+    b8 m_invalid = false;
 };
 
 

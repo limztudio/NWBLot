@@ -153,23 +153,23 @@ namespace Format{
         Count
     };
 
-    [[nodiscard]] constexpr bool IsBCCompressedFormat(const Enum format)noexcept{
+    [[nodiscard]] constexpr b8 IsBCCompressedFormat(const Enum format)noexcept{
         return format >= BC1_UNORM && format <= BC7_UNORM_SRGB;
     }
 
-    [[nodiscard]] constexpr bool IsASTCCompressedFormat(const Enum format)noexcept{
+    [[nodiscard]] constexpr b8 IsASTCCompressedFormat(const Enum format)noexcept{
         return format >= ASTC_4x4_UNORM && format <= ASTC_12x12_FLOAT;
     }
 
-    [[nodiscard]] constexpr bool IsASTCHdrFormat(const Enum format)noexcept{
+    [[nodiscard]] constexpr b8 IsASTCHdrFormat(const Enum format)noexcept{
         return IsASTCCompressedFormat(format) && (static_cast<u32>(format) - static_cast<u32>(ASTC_4x4_UNORM)) % s_AstcVariantsPerBlockFootprint == s_AstcHdrVariantOffset;
     }
 
-    [[nodiscard]] constexpr bool IsBlockCompressedFormat(const Enum format)noexcept{
+    [[nodiscard]] constexpr b8 IsBlockCompressedFormat(const Enum format)noexcept{
         return IsBCCompressedFormat(format) || IsASTCCompressedFormat(format);
     }
 
-    [[nodiscard]] constexpr bool IsHdrCompressedFormat(const Enum format)noexcept{
+    [[nodiscard]] constexpr b8 IsHdrCompressedFormat(const Enum format)noexcept{
         return format == ASTC_4x4_FLOAT || format == BC6H_UFLOAT;
     }
 };
@@ -194,14 +194,14 @@ struct FormatInfo{
     u8 bytesPerBlock;
     u8 blockSize;
     FormatKind::Enum kind;
-    bool hasRed : 1;
-    bool hasGreen : 1;
-    bool hasBlue : 1;
-    bool hasAlpha : 1;
-    bool hasDepth : 1;
-    bool hasStencil : 1;
-    bool isSigned : 1;
-    bool isSRGB : 1;
+    b8 hasRed : 1;
+    b8 hasGreen : 1;
+    b8 hasBlue : 1;
+    b8 hasAlpha : 1;
+    b8 hasDepth : 1;
+    b8 hasStencil : 1;
+    b8 isSigned : 1;
+    b8 isSRGB : 1;
     u8 nameLength;
 
 
@@ -213,14 +213,14 @@ public:
         const u8 bytesPerBlockValue,
         const u8 blockSizeValue,
         const FormatKind::Enum kindValue,
-        const bool hasRedValue,
-        const bool hasGreenValue,
-        const bool hasBlueValue,
-        const bool hasAlphaValue,
-        const bool hasDepthValue,
-        const bool hasStencilValue,
-        const bool isSignedValue,
-        const bool isSRGBValue
+        const b8 hasRedValue,
+        const b8 hasGreenValue,
+        const b8 hasBlueValue,
+        const b8 hasAlphaValue,
+        const b8 hasDepthValue,
+        const b8 hasStencilValue,
+        const b8 isSignedValue,
+        const b8 isSRGBValue
     )noexcept
         : name(nameValue)
         , format(formatValue)

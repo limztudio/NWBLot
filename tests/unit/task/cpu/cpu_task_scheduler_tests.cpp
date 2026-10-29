@@ -78,7 +78,7 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
     Atomic<u32> retirements{ 0u };
     Atomic<u32> total{ 0u };
     Atomic<u32> retirementsSeenByDependent{ 0u };
-    Atomic<bool> rejected{ false };
+    Atomic<b8> rejected{ false };
     CpuTaskScheduler scheduler(HomogeneousWorkers(s_ExpectedDualCount));
     ScopeExit releaseGrandchild([&]()noexcept{ grandchildGate.open(); });
     const auto cpuTaskAdmission = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, parentCapture = LifetimeProbe(retirements, 11u)]() mutable{
@@ -131,7 +131,7 @@ TEST(CpuTaskSchedulerTests, ScopeJoinDoesNotWaitForAnUnrelatedRunningScope){
     ASSERT_TRUE(unrelatedTaskAdmission);
     const auto unrelatedTask = *unrelatedTaskAdmission;
     EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(unrelatedGate.entered, s_GateTimeoutMS));
-    Atomic<bool> ownedFinished{ false };
+    Atomic<b8> ownedFinished{ false };
     const auto cpuTaskAdmission = owned.submit([&]()noexcept{ ownedFinished.store(true, MemoryOrder::release); });
     EXPECT_TRUE(cpuTaskAdmission);
     if(cpuTaskAdmission)
@@ -150,7 +150,7 @@ TEST(CpuTaskSchedulerTests, ScopeDestructionIncludesChildrenSubmittedDirectlyToT
     DeadlineGuard deadline;
     Atomic<u32> retired{ 0u };
     Atomic<u32> invoked{ 0u };
-    Atomic<bool> rejected{ false };
+    Atomic<b8> rejected{ false };
     CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     {
         CpuTaskScope scope(scheduler);
@@ -201,8 +201,8 @@ TEST(CpuTaskSchedulerTests, MainThreadTasksSubmittedByWorkersExecuteOnlyOnTheSch
     DeadlineGuard deadline;
     CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     const ThreadId owner = QueryCurrentThreadId();
-    Atomic<bool> published{ false };
-    Atomic<bool> rejected{ false };
+    Atomic<b8> published{ false };
+    Atomic<b8> rejected{ false };
     Atomic<u32> invocations{ 0u };
     ThreadId actual;
     usize workerIndex = Limit<usize>::s_Max;

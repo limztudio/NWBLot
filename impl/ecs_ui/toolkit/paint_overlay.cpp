@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PaintBuilder::beginOverlay(const u32 layer){
+b8 PaintBuilder::beginOverlay(const u32 layer){
     if(!m_recording || layer == 0u || m_overlayDepth == s_PaintMaxOverlayDepth)
         return false;
     const DisplayMetrics& display = m_snapshot.m_displayMetrics;
@@ -24,7 +24,7 @@ bool PaintBuilder::beginOverlay(const u32 layer){
     return true;
 }
 
-bool PaintBuilder::endOverlay()noexcept{
+b8 PaintBuilder::endOverlay()noexcept{
     if(!m_recording || m_overlayDepth == 0u || m_clips.size() != m_overlays[m_overlayDepth - 1u].clipDepth + 1u)
         return false;
     m_clips.pop_back();

@@ -111,7 +111,7 @@ static AssetVolumeObjectFileHeader BuildObjectFileHeader(const Core::Assets::IAs
     return header;
 }
 
-static bool HeaderMatches(const AssetVolumeObjectFileHeader& lhs, const AssetVolumeObjectFileHeader& rhs)noexcept{
+static b8 HeaderMatches(const AssetVolumeObjectFileHeader& lhs, const AssetVolumeObjectFileHeader& rhs)noexcept{
     return lhs.magic == rhs.magic && lhs.version == rhs.version && lhs.headerSize == rhs.headerSize && lhs.assetTypeHash == rhs.assetTypeHash && lhs.payloadSize == rhs.payloadSize && lhs.payloadHash == rhs.payloadHash && lhs.cookKeyHash == rhs.cookKeyHash;
 }
 
@@ -150,7 +150,7 @@ static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(const Path& object
     return DecodedObjectFileHeader{ .header = *header, .payloadOffset = cursor };
 }
 
-static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Span<const u8> payload, ScratchBytes& objectBytes){
+static b8 WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Span<const u8> payload, ScratchBytes& objectBytes){
     if(payload.size() > Limit<usize>::s_Max - sizeof(AssetVolumeObjectFileHeader)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache payload is too large for '{}'"), PathToString<tchar>(objectPath));
         return false;
@@ -174,7 +174,7 @@ static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileH
     return false;
 }
 
-static bool UpdateObjectFileIfChanged(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Span<const u8> payload, ScratchBytes& objectBytes){
+static b8 UpdateObjectFileIfChanged(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Span<const u8> payload, ScratchBytes& objectBytes){
     const auto cached = ReadObjectFileHeader(objectPath, objectBytes);
     if(cached && HeaderMatches(cached->header, header))
         return true;
@@ -196,7 +196,7 @@ public:
 
 
 public:
-    virtual bool writeCookedAsset(const TStringView assetKind, const Name& virtualPath, const Core::Assets::IAsset& asset, const Core::Assets::IAssetCodec& codec)override{
+    virtual b8 writeCookedAsset(const TStringView assetKind, const Name& virtualPath, const Core::Assets::IAsset& asset, const Core::Assets::IAssetCodec& codec)override{
         m_payloadBinary.clear();
         if(!codec.serialize(asset, m_payloadBinary)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to serialize {} '{}'"), assetKind, ConvertString(virtualPath.resolvedText()));
@@ -237,7 +237,7 @@ public:
 
 using RegistryObjectBucketManifestVector = Vector<RegistryObjectBucketManifest, Core::Assets::ScratchArena>;
 
-static bool BuildRegistryObjectBucketManifestEntries(
+static b8 BuildRegistryObjectBucketManifestEntries(
     Core::Alloc::GlobalArena& arena,
     const AssetsVolumeCookDetail::ResolvedCookPaths& resolvedPaths,
     const AStringView configurationSafeName,
@@ -253,7 +253,7 @@ static bool BuildRegistryObjectBucketManifestEntries(
     return entryRegistry.writeBucket(bucketIndex, cookEntryWriteContext);
 }
 
-static bool RegisterMergedManifestVirtualPath(const Name& virtualPath, AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes){
+static b8 RegisterMergedManifestVirtualPath(const Name& virtualPath, AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes){
     if(!virtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: registry manifest produced an empty virtual path"));
         return false;
@@ -266,7 +266,7 @@ static bool RegisterMergedManifestVirtualPath(const Name& virtualPath, AssetsVol
     return false;
 }
 
-static bool MergeRegistryObjectBucketManifests(const Span<RegistryObjectBucketManifest> bucketManifests, AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes){
+static b8 MergeRegistryObjectBucketManifests(const Span<RegistryObjectBucketManifest> bucketManifests, AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes){
     for(RegistryObjectBucketManifest& bucketManifest : bucketManifests){
         for(AssetsVolumeCookDetail::AssetVolumePackEntry& entry : bucketManifest.manifest.entries){
             if(!RegisterMergedManifestVirtualPath(entry.virtualPath, seenVirtualPathHashes))
@@ -295,7 +295,7 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildRegistryObjectManifestEntries(
+b8 BuildRegistryObjectManifestEntries(
     Core::Alloc::GlobalArena& arena,
     Core::CpuTaskScheduler& cpuScheduler,
     const ResolvedCookPaths& resolvedPaths,
@@ -315,7 +315,7 @@ bool BuildRegistryObjectManifestEntries(
         bucketManifests.emplace_back(arena);
 
     Futex objectCacheWriteMutex;
-    Atomic<bool> failed{ false };
+    Atomic<b8> failed{ false };
     const auto parallelWork = cpuScheduler.parallelFor(static_cast<usize>(0u), bucketCount, [&](const usize bucketIndex){
         if(failed.load(MemoryOrder::acquire))
             return;

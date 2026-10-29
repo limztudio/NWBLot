@@ -37,10 +37,10 @@ struct OpaqueComputeEmulationProducerInputs{
     Core::BufferRange csgCutterRange{};
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
-    bool materialDrawBuffersUploaded = false;
-    bool csgFrameBuffersUploaded = false;
-    bool materialFrameStatesGraphOwned = false;
-    bool materialGeometryStatesGraphOwned = false;
+    b8 materialDrawBuffersUploaded = false;
+    b8 csgFrameBuffersUploaded = false;
+    b8 materialFrameStatesGraphOwned = false;
+    b8 materialGeometryStatesGraphOwned = false;
 };
 
 

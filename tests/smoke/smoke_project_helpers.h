@@ -92,7 +92,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 
 class YawSpinController final{
 public:
-    void update(const f32 safeDelta, const f32 frozenYaw, const bool frozenYawValid, const ArrowYawInputHandler& arrowYawInput, const f32 manualYawSpeed, const f32 spinSpeed, const f32 maxSpinDelta)noexcept{
+    void update(const f32 safeDelta, const f32 frozenYaw, const b8 frozenYawValid, const ArrowYawInputHandler& arrowYawInput, const f32 manualYawSpeed, const f32 spinSpeed, const f32 maxSpinDelta)noexcept{
         if(frozenYawValid){
             m_yaw = frozenYaw;
             return;
@@ -113,14 +113,14 @@ public:
         return m_yaw;
     }
 
-    [[nodiscard]] bool manualControl()const noexcept{
+    [[nodiscard]] b8 manualControl()const noexcept{
         return m_manualControl;
     }
 
 
 private:
     f32 m_yaw = 0.0f;
-    bool m_manualControl = false;
+    b8 m_manualControl = false;
 };
 
 [[nodiscard]] inline SIMDVectorSingle CalculateSmokeYawDisplay(const SIMDVectorSingle yaw, const SIMDVectorSingle turn)noexcept{
@@ -130,7 +130,7 @@ private:
     return VectorSelect(wrapped, VectorMultiply(wrapped, VectorDivide(VectorReplicate(s_DegreesPerTurn), turn)), s_SIMDMaskY);
 }
 
-inline void SetSmokeYawWindowTitle(ProjectRuntimeContext& context, const f32 yaw, const bool manualControl, const f32 twoPi){
+inline void SetSmokeYawWindowTitle(ProjectRuntimeContext& context, const f32 yaw, const b8 manualControl, const f32 twoPi){
     const SIMDVectorSingle display = CalculateSmokeYawDisplay(VectorReplicate(yaw), VectorReplicate(twoPi));
 
     static constexpr usize s_TitleCapacity = 192u;

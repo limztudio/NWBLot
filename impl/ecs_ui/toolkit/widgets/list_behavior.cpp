@@ -26,7 +26,7 @@ namespace __hidden_ui_list_behavior{
 
 struct KeyResolution{
     u64 index = 0u;
-    bool present = false;
+    b8 present = false;
 };
 
 [[nodiscard]] static Expected<KeyResolution> ResolveKey(const IListDataSource& source, const u64 count, const u64 key){
@@ -40,15 +40,15 @@ struct KeyResolution{
     return KeyResolution{ *index, source.enabled(*index) };
 }
 
-[[nodiscard]] static bool SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision){
+[[nodiscard]] static b8 SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision){
     return generation != 0u && revision != 0u && source.instanceGeneration() == generation && source.revision() == revision;
 }
 
-[[nodiscard]] static bool ValidOptions(const ListOptions& options)noexcept{
+[[nodiscard]] static b8 ValidOptions(const ListOptions& options)noexcept{
     return options.enabled && IsFinite(options.wheelRows) && options.wheelRows > 0.0f;
 }
 
-[[nodiscard]] static bool IsReverse(const ControlActionKind::Enum kind)noexcept{
+[[nodiscard]] static b8 IsReverse(const ControlActionKind::Enum kind)noexcept{
     return kind == ControlActionKind::Up || kind == ControlActionKind::PageUp || kind == ControlActionKind::End;
 }
 
@@ -58,7 +58,7 @@ struct KeyResolution{
     const auto current = ResolveKey(source, count, cursor);
     if(!current)
         return MakeUnexpected(current.error());
-    const bool reverse = IsReverse(action.kind);
+    const b8 reverse = IsReverse(action.kind);
     u64 start = reverse ? count - 1u : 0u;
     if(action.kind == ControlActionKind::Home)
         start = 0u;
@@ -111,21 +111,21 @@ struct KeyResolution{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ListBehavior::Reconcile(ListState& state, const IListDataSource& source){
+b8 ListBehavior::Reconcile(ListState& state, const IListDataSource& source){
     using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     const u64 generation = source.instanceGeneration();
     const u64 revision = source.revision();
     if(generation == 0u || revision == 0u)
         return false;
-    const bool replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
+    const b8 replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
     u64 selected = replacement ? 0u : state.m_selected;
     u64 cursor = replacement ? 0u : state.m_cursor;
     const u64 count = source.rowCount();
     const auto selectedResolution = ResolveKey(source, count, selected);
     if(!selectedResolution)
         return false;
-    bool cursorPresent = selectedResolution->present;
+    b8 cursorPresent = selectedResolution->present;
     if(cursor != selected){
         const auto cursorResolution = ResolveKey(source, count, cursor);
         if(!cursorResolution)
@@ -138,7 +138,7 @@ bool ListBehavior::Reconcile(ListState& state, const IListDataSource& source){
         return false;
     if(replacement && !state.m_scroll.setOffset(0.0))
         return false;
-    const bool changed = state.m_sourceGeneration != generation || state.m_sourceRevision != revision;
+    const b8 changed = state.m_sourceGeneration != generation || state.m_sourceRevision != revision;
     state.m_selected = selected;
     state.m_cursor = cursor;
     state.m_ensureCursor = cursor != 0u && (state.m_ensureCursor || changed);
@@ -147,7 +147,7 @@ bool ListBehavior::Reconcile(ListState& state, const IListDataSource& source){
     return true;
 }
 
-bool ListBehavior::Apply(ListState& state, ListResult& result, const IListDataSource& source, const ListOptions& options, const ControlAction& action){
+b8 ListBehavior::Apply(ListState& state, ListResult& result, const IListDataSource& source, const ListOptions& options, const ControlAction& action){
     using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     const ControlToken token{ state.m_inputGeneration, state.m_sourceGeneration, state.m_sourceRevision };
@@ -168,7 +168,7 @@ bool ListBehavior::Apply(ListState& state, ListResult& result, const IListDataSo
     }
     const u64 count = source.rowCount();
     u64 candidate = 0u;
-    const bool activate = action.kind == ControlActionKind::Activate || action.kind == ControlActionKind::Submit;
+    const b8 activate = action.kind == ControlActionKind::Activate || action.kind == ControlActionKind::Submit;
     if(activate){
         candidate = action.kind == ControlActionKind::Activate ? action.value : state.m_cursor;
         const auto resolved = ResolveKey(source, count, candidate);

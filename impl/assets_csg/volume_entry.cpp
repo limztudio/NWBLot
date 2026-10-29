@@ -28,14 +28,14 @@ namespace __hidden_assets_csg_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ExtractCsgShapeDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
+static b8 ExtractCsgShapeDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
     if(!context.document)
         return false;
     const auto csgEntry = AssetsCsgCook::ParseCsgShapeCookMetadata(context.arena, context.nwbFilePath, *context.document, context.scratchArena);
-    return static_cast<bool>(csgEntry);
+    return static_cast<b8>(csgEntry);
 }
 
-static bool RegisterCsgShapeCookDependency(Core::Assets::CookDependencyRegistry& registry){
+static b8 RegisterCsgShapeCookDependency(Core::Assets::CookDependencyRegistry& registry){
     return registry.registerType(CsgShape::AssetTypeName(), &ExtractCsgShapeDependencies);
 }
 

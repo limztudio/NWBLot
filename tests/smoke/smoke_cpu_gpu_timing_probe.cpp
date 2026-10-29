@@ -30,8 +30,8 @@ SmokeCpuGpuTimingProbe::SmokeCpuGpuTimingProbe(const TStringView owner, Core::Al
     , m_records(arena)
 {}
 
-bool SmokeCpuGpuTimingProbe::initialize(const bool requested, const bool presentationTimingEnabled, const AStringView outputPath){
-    const bool hasOutput = !outputPath.empty();
+b8 SmokeCpuGpuTimingProbe::initialize(const b8 requested, const b8 presentationTimingEnabled, const AStringView outputPath){
+    const b8 hasOutput = !outputPath.empty();
     if(hasOutput != requested || (requested && !presentationTimingEnabled) || m_owner.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("SmokeCpuGpuTimingProbe: diagnostics require an owner, presentation timing and an explicit output path"));
         return false;
@@ -46,7 +46,7 @@ bool SmokeCpuGpuTimingProbe::initialize(const bool requested, const bool present
     return true;
 }
 
-bool SmokeCpuGpuTimingProbe::observe(const Core::Perf::Session& session, const PresentationFpsProbe& presentation, const u64 successfulPresentations, const bool complete){
+b8 SmokeCpuGpuTimingProbe::observe(const Core::Perf::Session& session, const PresentationFpsProbe& presentation, const u64 successfulPresentations, const b8 complete){
     if(!m_enabled || m_complete || !presentation.measurementStarted())
         return true;
     const Core::Perf::CaptureOptions options = session.captureOptions();
@@ -80,7 +80,7 @@ bool SmokeCpuGpuTimingProbe::observe(const Core::Perf::Session& session, const P
     return true;
 }
 
-bool SmokeCpuGpuTimingProbe::hasCompletedGpuSamples(const Name& name, const u64 minimumSamples)const noexcept{
+b8 SmokeCpuGpuTimingProbe::hasCompletedGpuSamples(const Name& name, const u64 minimumSamples)const noexcept{
     for(const Scope& scope : m_scopes[1u]){
         if(scope.recorded && scope.name == name)
             return scope.eligibleSamples >= minimumSamples;
@@ -88,7 +88,7 @@ bool SmokeCpuGpuTimingProbe::hasCompletedGpuSamples(const Name& name, const u64 
     return false;
 }
 
-bool SmokeCpuGpuTimingProbe::capture(const Core::Perf::TimingView& timing, const bool gpu, const u64 frame, const u64 presentations){
+b8 SmokeCpuGpuTimingProbe::capture(const Core::Perf::TimingView& timing, const b8 gpu, const u64 frame, const u64 presentations){
     if(!timing.valid() || timing.scopeCount() > s_MaxScopesPerDomain){
         NWB_LOGGER_ERROR(NWB_TEXT("SmokeCpuGpuTimingProbe: timing view invalid or scope capacity exceeded"));
         return false;
@@ -126,7 +126,7 @@ bool SmokeCpuGpuTimingProbe::capture(const Core::Perf::TimingView& timing, const
     return true;
 }
 
-bool SmokeCpuGpuTimingProbe::write(const PresentationFpsSample& presentation, const u64 endFrame){
+b8 SmokeCpuGpuTimingProbe::write(const PresentationFpsSample& presentation, const u64 endFrame){
     if(presentation.firstPresentationCount != m_firstPresentation || endFrame <= m_firstSourceFrame){
         NWB_LOGGER_ERROR(NWB_TEXT("SmokeCpuGpuTimingProbe: presentation and source-frame boundaries disagree"));
         return false;

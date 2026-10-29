@@ -118,7 +118,7 @@ SIMDVectorSingle Builder::loadEditMinimumSize()const noexcept{
     return minimum;
 }
 
-bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result){
+b8 Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result){
     if(state.modelGeneration != model.instanceGeneration() || state.revision != model.revision() || state.selectionGeneration != model.selectionGeneration() || state.anchor != model.anchor() || state.caret != model.caret() || state.focused != result.focused)
         state.caretElapsed = 0.0;
     else
@@ -155,7 +155,7 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
     return true;
 }
 
-bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation){
+b8 Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation){
     if(!numericEditMatches(item))
         return false;
     const f32 caretWidth = VectorGetX(VectorDivide(VectorSplatOne(), VectorReplicate(m_paint.displayMetrics().pixelScaleX)));
@@ -176,7 +176,7 @@ bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarg
     target.contextMenu = item.contextMenu;
     if(!m_context.addTarget(item.state, target))
         return false;
-    const bool published = !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);
+    const b8 published = !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);
     return published && numericEditMatches(item);
 }
 

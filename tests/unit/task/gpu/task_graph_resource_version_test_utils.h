@@ -113,7 +113,7 @@ struct VersionConsumerUses{
     return graph.addTask(desc);
 }
 
-[[nodiscard]] inline bool Assign(
+[[nodiscard]] inline b8 Assign(
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
@@ -126,7 +126,7 @@ struct VersionConsumerUses{
     return compiler.assignQueues(assignments, scratchArena, declarations, analysis, topology, options);
 }
 
-[[nodiscard]] inline bool Compile(Graphics::GpuTaskGraphAnalysis& analysis, Graphics::GpuTaskGraphQueueAssignments& assignments, Graphics::GpuCompiledGraph& compiledGraph, Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph){
+[[nodiscard]] inline b8 Compile(Graphics::GpuTaskGraphAnalysis& analysis, Graphics::GpuTaskGraphQueueAssignments& assignments, Graphics::GpuCompiledGraph& compiledGraph, Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph){
     const Graphics::GpuPhysicalQueueInfo queue = TaskGraphTestUtils::GraphicsQueue();
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     Graphics::GpuTaskGraphCompileOptions options;
@@ -146,7 +146,7 @@ inline void ExpectClosedCycle(const Graphics::GpuTaskGraphAnalysis& analysis){
     }
 }
 
-[[nodiscard]] inline bool HasResourceVersionEdge(
+[[nodiscard]] inline b8 HasResourceVersionEdge(
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuTaskId producer,
     const Graphics::GpuTaskId consumer,
@@ -165,7 +165,7 @@ inline void ExpectDiagnosticMatchesVersionCycleEdge(const Graphics::GpuTaskGraph
     const Graphics::GpuTaskGraphAnalysisDiagnostic& diagnostic = analysis.diagnostic();
     ASSERT_TRUE(diagnostic.resource.valid());
     ASSERT_TRUE(diagnostic.resourceVersion.valid());
-    bool matched = false;
+    b8 matched = false;
     for(const Graphics::GpuTaskDependencyEdge& edge : analysis.cycleEdges()){
         if(
             edge.producer == diagnostic.relatedTask

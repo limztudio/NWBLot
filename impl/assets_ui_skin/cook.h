@@ -34,7 +34,7 @@ struct UiSkinCookEntry{
     u32 atlasWidth = 0u;
     u32 atlasHeight = 0u;
     f32 referenceDensity = 1.0f;
-    bool completeToolkitSkin = false;
+    b8 completeToolkitSkin = false;
     UiSkinPalette palette;
     UiSkinTypography typography;
 

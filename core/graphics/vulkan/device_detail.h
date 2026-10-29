@@ -45,23 +45,23 @@ namespace PipelineCacheDataValidation{
 [[nodiscard]] PipelineCacheDataValidation::Enum ValidatePipelineCacheData(BinaryByteView cacheData, const VkPhysicalDeviceProperties& properties)noexcept;
 
 struct AstcHdrFeatureNegotiation{
-    bool apiSupportsVulkan13 = false;
-    bool vulkan13FeatureSupported = false;
-    bool extensionEnabled = false;
-    bool extensionFeatureSupported = false;
+    b8 apiSupportsVulkan13 = false;
+    b8 vulkan13FeatureSupported = false;
+    b8 extensionEnabled = false;
+    b8 extensionFeatureSupported = false;
 };
 
-[[nodiscard]] inline constexpr bool ShouldEnableAstcHdrFeature(const AstcHdrFeatureNegotiation& negotiation)noexcept{
+[[nodiscard]] inline constexpr b8 ShouldEnableAstcHdrFeature(const AstcHdrFeatureNegotiation& negotiation)noexcept{
     return negotiation.apiSupportsVulkan13 ? negotiation.vulkan13FeatureSupported : negotiation.extensionEnabled && negotiation.extensionFeatureSupported;
 }
 
 struct CompressedTextureFeatureState{
-    bool bcEnabled = false;
-    bool astcLdrEnabled = false;
-    bool astcHdrEnabled = false;
+    b8 bcEnabled = false;
+    b8 astcLdrEnabled = false;
+    b8 astcHdrEnabled = false;
 };
 
-[[nodiscard]] inline constexpr bool IsCompressedTextureFormatFeatureEnabled(const Format::Enum format, const CompressedTextureFeatureState& featureState)noexcept{
+[[nodiscard]] inline constexpr b8 IsCompressedTextureFormatFeatureEnabled(const Format::Enum format, const CompressedTextureFeatureState& featureState)noexcept{
     if(Format::IsBCCompressedFormat(format))
         return featureState.bcEnabled;
     if(Format::IsASTCHdrFormat(format))

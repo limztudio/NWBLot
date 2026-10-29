@@ -23,7 +23,7 @@ namespace __hidden_telemetry_text_log{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidatePayloadHeader(const EncodedTextLogPayloadHeader& header)noexcept{
+[[nodiscard]] static b8 ValidatePayloadHeader(const EncodedTextLogPayloadHeader& header)noexcept{
     return header.magic == s_TextLogPayloadMagic && header.version == s_TextLogPayloadVersion && header.reserved == 0u && IsValidTextLogType(static_cast<Common::LogType::Enum>(header.type));
 }
 
@@ -33,7 +33,7 @@ static void AppendUtf8Text(TelemetryBytes& outText, const TStringView message){
 }
 
 
-[[nodiscard]] static bool BuildUnaliasedPayload(const Common::LogType::Enum type, const TStringView message, TelemetryBytes& outPayload){
+[[nodiscard]] static b8 BuildUnaliasedPayload(const Common::LogType::Enum type, const TStringView message, TelemetryBytes& outPayload){
     if(!IsValidTextLogType(type)){
         outPayload.clear();
         return false;
@@ -65,7 +65,7 @@ static void AppendUtf8Text(TelemetryBytes& outText, const TStringView message){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsValidTextLogType(const Common::LogType::Enum type)noexcept{
+b8 IsValidTextLogType(const Common::LogType::Enum type)noexcept{
     switch(type){
     case Common::LogType::Info:
     case Common::LogType::EssentialInfo:
@@ -79,7 +79,7 @@ bool IsValidTextLogType(const Common::LogType::Enum type)noexcept{
     return false;
 }
 
-bool BuildTextLogPayload(Alloc::ScratchArena& scratchArena, const Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload){
+b8 BuildTextLogPayload(Alloc::ScratchArena& scratchArena, const Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload){
     if(!IsValidTextLogType(type)){
         outPayload.clear();
         return false;
@@ -128,7 +128,7 @@ Expected<TextLogPayload> ParseTextLogPayload(const void* const payload, const us
     return parsedPayload;
 }
 
-bool RecordTextLog(Recorder& recorder, const Common::LogType::Enum type, const TStringView message, const u64 frameIndex, const u32 streamId){
+b8 RecordTextLog(Recorder& recorder, const Common::LogType::Enum type, const TStringView message, const u64 frameIndex, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::TextLog, frameIndex, streamId, [type, message](TelemetryArena&, TelemetryBytes& payload){
         return __hidden_telemetry_text_log::BuildUnaliasedPayload(type, message, payload);
     });

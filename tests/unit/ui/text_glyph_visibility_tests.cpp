@@ -60,7 +60,7 @@ protected:
         ASSERT_FALSE(m_koreanFace->coverageInkReliable());
     }
 
-    [[nodiscard]] bool loadFont(Font& font, const StringView filename){
+    [[nodiscard]] b8 loadFont(Font& font, const StringView filename){
         const ::Path<Core::Alloc::GlobalArena> directory(m_arena, NWB_TEST_FONT_DIRECTORY);
         const ::Path<Core::Alloc::GlobalArena> path = directory / filename;
         Core::Assets::AssetBytes bytes(m_arena);

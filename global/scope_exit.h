@@ -39,7 +39,7 @@ public:
 
 private:
     Func m_function;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 

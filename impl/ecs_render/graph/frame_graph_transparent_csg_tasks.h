@@ -77,8 +77,8 @@ struct FrameGraphTransparentCsgTaskInputs{
 
 struct FrameGraphTransparentCsgTaskResult{
     Core::GpuTaskId intervalCompletionTask;
-    bool intervalOutputsGraphOwned = false;
-    bool declared = false;
+    b8 intervalOutputsGraphOwned = false;
+    b8 declared = false;
 };
 
 

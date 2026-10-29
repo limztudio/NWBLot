@@ -60,7 +60,7 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
     } };
 }
 
-[[nodiscard]] static bool ValidBar(const SIMDMatrixDouble& values, const ScrollAxis::Enum axis)noexcept{
+[[nodiscard]] static b8 ValidBar(const SIMDMatrixDouble& values, const ScrollAxis::Enum axis)noexcept{
     for(u32 index = 0u; index < s_BarValueRowCount; ++index){
         if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u)
             return false;
@@ -101,7 +101,7 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
     return viewportExtent == static_cast<f64>(trackHeight) && thumbX == trackX && thumbWidth == trackWidth && thumbY >= trackY && thumbHeight <= trackHeight && VectorGetW(end) <= VectorGetY(end);
 }
 
-[[nodiscard]] static Expected<SIMDVectorDoubleResult> MoveThumb(const SIMDVectorDouble offset, const SIMDVectorDouble maximum, const SIMDVectorSingle track, const bool visible)noexcept{
+[[nodiscard]] static Expected<SIMDVectorDoubleResult> MoveThumb(const SIMDVectorDouble offset, const SIMDVectorDouble maximum, const SIMDVectorSingle track, const b8 visible)noexcept{
     const SIMDVectorDouble acceptedOffset = VectorDoubleMin(offset, maximum);
     if(!visible)
         return SIMDVectorDoubleResult{ VectorDoubleSelect(VectorDoubleZero(), acceptedOffset, s_DoubleSIMDMaskX) };
@@ -117,7 +117,7 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
     return SIMDVectorDoubleResult{ VectorDoubleSelect(acceptedOffset, ConvertVectorSingleToDouble(origin), s_DoubleSIMDMaskY) };
 }
 
-[[nodiscard]] static bool StoreBarOffset(const SIMDVectorDouble offset, const ScrollAxis::Enum axis, ScrollbarPlacement& bar)noexcept{
+[[nodiscard]] static b8 StoreBarOffset(const SIMDVectorDouble offset, const ScrollAxis::Enum axis, ScrollbarPlacement& bar)noexcept{
     const SIMDVectorSingle track = axis == ScrollAxis::Horizontal ? VectorSet(bar.track.x, bar.track.width, bar.thumb.width, 0.0f) : VectorSet(bar.track.y, bar.track.height, bar.thumb.height, 0.0f);
     const auto values = MoveThumb(offset, VectorDoubleReplicate(bar.maximum), track, bar.visible);
     if(!values)
@@ -201,15 +201,15 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     const f64 contentHeight = contentMeasure.y;
     if(!IsFinite(contentWidth))
         return MakeUnexpected(Failure{});
-    bool horizontal = false;
-    bool vertical = false;
+    b8 horizontal = false;
+    b8 vertical = false;
     // Each axis can only add a reservation; the other axis is rechecked after either addition.
     for(u32 iteration = 0u; iteration < s_ReservationPassLimit; ++iteration){
         const SIMDVectorDouble viewportSize = VectorDoubleSubtract(VectorDoubleSet(availableWidth, availableHeight, 0.0, 0.0), VectorDoubleSet(vertical ? verticalWidth : 0.0, horizontal ? horizontalHeight : 0.0, 0.0, 0.0));
         const f64 viewportWidth = static_cast<f32>(VectorDoubleGetX(viewportSize));
         const f64 viewportHeight = static_cast<f32>(VectorDoubleGetY(viewportSize));
-        const bool nextHorizontal = horizontal || (horizontalHeight > 0.0 && availableWidth > 0.0 && contentWidth > viewportWidth);
-        const bool nextVertical = vertical || (verticalWidth > 0.0 && availableHeight > 0.0 && contentHeight > viewportHeight);
+        const b8 nextHorizontal = horizontal || (horizontalHeight > 0.0 && availableWidth > 0.0 && contentWidth > viewportWidth);
+        const b8 nextVertical = vertical || (verticalWidth > 0.0 && availableHeight > 0.0 && contentHeight > viewportHeight);
         if(nextHorizontal == horizontal && nextVertical == vertical)
             break;
         horizontal = nextHorizontal;
@@ -265,7 +265,7 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     return candidate;
 }
 
-bool ScrollbarLayout::UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out)noexcept{
+b8 ScrollbarLayout::UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out)noexcept{
     using namespace __hidden_ui_scrollbar;
     if(
         !IsValidUiExtent(scroll) || !IsValidUiRect(out.viewport) || !IsValidUiRect(out.contentClip) || !IsValidUiRect(out.corner)

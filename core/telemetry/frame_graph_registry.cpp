@@ -90,7 +90,7 @@ void FrameGraphRegistry::unregisterContributor(IFrameGraphContributor& contribut
     }
 }
 
-bool FrameGraphRegistry::record(CaptureSession& session){
+b8 FrameGraphRegistry::record(CaptureSession& session){
     if(!session.captureOptions().frameGraphEnabled())
         return false;
     if(m_recording || m_contributors.empty())
@@ -108,7 +108,7 @@ bool FrameGraphRegistry::record(CaptureSession& session){
     });
 
     FrameGraphBuilder builder(scratchArena, m_nodes, m_edges, m_pendingNameEdges, m_physicalQueueRuntimeStatistics, m_packetSubmissionStatistics, session.frameIndex());
-    bool hasGraph = false;
+    b8 hasGraph = false;
     for(const auto contributor : m_contributors){
         if(contributor->appendFrameGraph(builder))
             hasGraph = true;

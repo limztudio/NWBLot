@@ -32,15 +32,15 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
 
 
 private:
     void resetModel();
     void longDocument();
-    [[nodiscard]] bool seedClipboard();
-    [[nodiscard]] bool drainClipboard();
-    [[nodiscard]] bool observeState(Impl::UiPaintContext& context);
+    [[nodiscard]] b8 seedClipboard();
+    [[nodiscard]] b8 drainClipboard();
+    [[nodiscard]] b8 observeState(Impl::UiPaintContext& context);
     void paintMarkers(Impl::UiPaintContext& context)const;
 
 
@@ -59,16 +59,16 @@ private:
     u32 m_abandons = 0u;
     u32 m_outside = 0u;
     u32 m_clipboardSeeds = 0u;
-    bool m_enabled = true;
-    bool m_readOnly = false;
-    bool m_compact = false;
-    bool m_longDocument = false;
+    b8 m_enabled = true;
+    b8 m_readOnly = false;
+    b8 m_compact = false;
+    b8 m_longDocument = false;
 };
 
 using SharedUiTextAreaSmokeScene = RefCountPtr< RefCounter<UiTextAreaSmokeScene>, ArenaRefDeleter<RefCounter<UiTextAreaSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerTextAreaSmokeEnabled();
-[[nodiscard]] bool IsUiLayerTextAreaSkinSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerTextAreaSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerTextAreaSkinSmokeEnabled();
 [[nodiscard]] SharedUiTextAreaSmokeScene CreateUiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard);
 
 

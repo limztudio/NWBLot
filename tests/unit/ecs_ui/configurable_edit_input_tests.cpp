@@ -20,7 +20,7 @@ using UiEditActionTestSupport::UiEditActionHostTests;
 
 class UiConfigurableEditInputTests : public UiEditNavigationHostTests{
 protected:
-    [[nodiscard]] bool command(const Ui::InputCommand::Enum command, const bool extend = false, const Ui::InputSource source = { 7u, 3u }){
+    [[nodiscard]] b8 command(const Ui::InputCommand::Enum command, const b8 extend = false, const Ui::InputSource source = { 7u, 3u }){
         Ui::InputEvent event;
         event.type = Ui::InputEventType::CommandDown;
         event.source = source;

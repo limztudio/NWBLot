@@ -73,7 +73,7 @@ public:
 
 
 public:
-    [[nodiscard]] explicit operator bool()const noexcept{
+    [[nodiscard]] explicit operator b8()const noexcept{
         return !empty();
     }
 
@@ -119,11 +119,11 @@ public:
 
 
 public:
-    [[nodiscard]] bool assign(const value_type* text)noexcept(IsArithmetic_V<value_type>){
+    [[nodiscard]] b8 assign(const value_type* text)noexcept(IsArithmetic_V<value_type>){
         return text == nullptr ? clearAndReturn(true) : assign(view_type(text));
     }
 
-    [[nodiscard]] bool assign(const view_type text)noexcept(IsArithmetic_V<value_type>){
+    [[nodiscard]] b8 assign(const view_type text)noexcept(IsArithmetic_V<value_type>){
         const usize textSize = text.size();
         if(text.empty()){
             clear();
@@ -147,15 +147,15 @@ public:
     }
 
     template<typename ArenaT>
-    [[nodiscard]] bool assign(const BasicString<value_type, ArenaT>& text)noexcept(IsArithmetic_V<value_type>){
+    [[nodiscard]] b8 assign(const BasicString<value_type, ArenaT>& text)noexcept(IsArithmetic_V<value_type>){
         return assign(view_type(text.data(), text.size()));
     }
 
-    [[nodiscard]] bool append(const value_type* text)noexcept(IsArithmetic_V<value_type>){
+    [[nodiscard]] b8 append(const value_type* text)noexcept(IsArithmetic_V<value_type>){
         return text == nullptr ? true : append(view_type(text));
     }
 
-    [[nodiscard]] bool append(const view_type text)noexcept(IsArithmetic_V<value_type>){
+    [[nodiscard]] b8 append(const view_type text)noexcept(IsArithmetic_V<value_type>){
         const usize textSize = text.size();
         if(text.empty())
             return true;
@@ -176,15 +176,15 @@ public:
     }
 
     template<typename ArenaT>
-    [[nodiscard]] bool append(const BasicString<value_type, ArenaT>& text)noexcept(IsArithmetic_V<value_type>){
+    [[nodiscard]] b8 append(const BasicString<value_type, ArenaT>& text)noexcept(IsArithmetic_V<value_type>){
         return append(view_type(text.data(), text.size()));
     }
 
-    [[nodiscard]] bool append(const BasicCompactString& text)noexcept(IsArithmetic_V<value_type>){
+    [[nodiscard]] b8 append(const BasicCompactString& text)noexcept(IsArithmetic_V<value_type>){
         return append(text.view());
     }
 
-    [[nodiscard]] bool pushBack(const value_type ch)noexcept(IsArithmetic_V<value_type>){
+    [[nodiscard]] b8 pushBack(const value_type ch)noexcept(IsArithmetic_V<value_type>){
         if(ch == value_type{} || remainingCapacity() == 0)
             return false;
 
@@ -201,7 +201,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool empty()const noexcept{
+    [[nodiscard]] b8 empty()const noexcept{
         return m_size == 0;
     }
 
@@ -263,7 +263,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool clearAndReturn(const bool value)noexcept(IsArithmetic_V<value_type>){
+    [[nodiscard]] b8 clearAndReturn(const b8 value)noexcept(IsArithmetic_V<value_type>){
         clear();
         return value;
     }
@@ -285,17 +285,17 @@ static_assert(sizeof(WCompactString) == WCompactString::s_StorageBytes, "WCompac
 
 
 template<typename CharT>
-[[nodiscard]] inline bool operator==(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 operator==(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     return lhs.view() == rhs.view();
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool operator!=(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 operator!=(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     return !(lhs == rhs);
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool operator<(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 operator<(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     return lhs.view() < rhs.view();
 }
 

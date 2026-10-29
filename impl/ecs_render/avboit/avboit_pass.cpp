@@ -37,7 +37,7 @@ static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::Color
     return target;
 }
 
-static void DispatchAvboitCompute(Core::CommandList& commandList, Core::ComputePipeline& pipeline, Core::GpuDescriptorHeap& heap, const AvboitFrameTargets& targets, const u32 groupCountX, const bool hdr10OutputActive){
+static void DispatchAvboitCompute(Core::CommandList& commandList, Core::ComputePipeline& pipeline, Core::GpuDescriptorHeap& heap, const AvboitFrameTargets& targets, const u32 groupCountX, const b8 hdr10OutputActive){
     NWB_ASSERT(heap.isInitialized());
 
     Core::ComputeState computeState;
@@ -118,7 +118,7 @@ Core::RenderState BuildRendererAvboitRefractionCaptureRenderState()noexcept{
     return renderState;
 }
 
-RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, const bool hdr10OutputActive)noexcept{
+RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, const b8 hdr10OutputActive)noexcept{
     NWB_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
     NWB_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
 
@@ -144,12 +144,12 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererAvboitSystem::prepareAvboitPassResources(Core::Alloc::ScratchArena& scratchArena, const CsgFrameState& csgFrameState, DeferredFrameTargets& targets){
+b8 RendererAvboitSystem::prepareAvboitPassResources(Core::Alloc::ScratchArena& scratchArena, const CsgFrameState& csgFrameState, DeferredFrameTargets& targets){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return false;
 
-    const bool hasTransparentCsgWork = csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
+    const b8 hasTransparentCsgWork = csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
     if(hasTransparentCsgWork && !m_materialSystem.prepareMaterialPassResources(scratchArena, targets.framebuffer.get(), MaterialPipelinePass::CsgReceiverSurface, true, csgFrameState, nullptr))
         return false;
 
@@ -170,7 +170,7 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
-    const bool materialGeometryStatesGraphOwned,
+    const b8 materialGeometryStatesGraphOwned,
     Optional<Core::GpuTimingMeasure>& intervalTiming
 ){
     if(!targets.framebuffer || receiverSurfaceDrawItems.empty() || !csgFrameData.hasWork() || !csgResources.frameReady(csgFrameData) || !frameBindings.bindingValid())
@@ -183,8 +183,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     intervalTiming.emplace(m_graphics.gpuTiming(), RendererGpuTimingScope::s_TransparentCsgIntervals, m_graphics.getDevice(), commandList);
 
     // The native step only consumes graph-owned data; never rebuild it.
-    const bool drawBuffersReady = frameBindings.frameReady(instanceCount, materialTypedByteCount);
-    const bool receiverSurfaceDrawResourcesReady = m_materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, frameBindings);
+    const b8 drawBuffersReady = frameBindings.frameReady(instanceCount, materialTypedByteCount);
+    const b8 receiverSurfaceDrawResourcesReady = m_materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, frameBindings);
     if(!drawBuffersReady || !receiverSurfaceDrawResourcesReady){
         // Preserve the short interval; drop the unfinished reservation.
         if(!Core::FinishSplitGpuTimingMarker(&intervalTiming))
@@ -218,11 +218,11 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     const ECSRenderDetail::MeshFrameBindingSnapshot& preparedOccupancyFrameBindings,
     const usize preparedOccupancyInstanceCount,
     const usize preparedOccupancyMaterialTypedByteCount,
-    const bool occupancyMaterialFrameStatesGraphOwned,
-    const bool occupancyMaterialGeometryStatesGraphOwned,
-    const bool occupancyComputeEmulationOutputStatesGraphOwned,
-    const bool occupancyCsgComputeEmulationOutputStatesGraphOwned,
-    const bool generatedGeometryReused,
+    const b8 occupancyMaterialFrameStatesGraphOwned,
+    const b8 occupancyMaterialGeometryStatesGraphOwned,
+    const b8 occupancyComputeEmulationOutputStatesGraphOwned,
+    const b8 occupancyCsgComputeEmulationOutputStatesGraphOwned,
+    const b8 generatedGeometryReused,
     Optional<Core::GpuTimingMeasure>* const occupancyComputeEmulationTiming
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
@@ -260,11 +260,11 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     const ECSRenderDetail::MeshFrameBindingSnapshot& preparedExtinctionFrameBindings,
     const usize preparedExtinctionInstanceCount,
     const usize preparedExtinctionMaterialTypedByteCount,
-    const bool extinctionMaterialFrameStatesGraphOwned,
-    const bool extinctionMaterialGeometryStatesGraphOwned,
-    const bool extinctionComputeEmulationOutputStatesGraphOwned,
-    const bool extinctionCsgComputeEmulationOutputStatesGraphOwned,
-    const bool generatedGeometryReused,
+    const b8 extinctionMaterialFrameStatesGraphOwned,
+    const b8 extinctionMaterialGeometryStatesGraphOwned,
+    const b8 extinctionComputeEmulationOutputStatesGraphOwned,
+    const b8 extinctionCsgComputeEmulationOutputStatesGraphOwned,
+    const b8 generatedGeometryReused,
     Optional<Core::GpuTimingMeasure>* const extinctionComputeEmulationTiming
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
@@ -300,11 +300,11 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     const ECSRenderDetail::MeshFrameBindingSnapshot& preparedAccumulationFrameBindings,
     const usize preparedAccumulationInstanceCount,
     const usize preparedAccumulationMaterialTypedByteCount,
-    const bool accumulationMaterialFrameStatesGraphOwned,
-    const bool accumulationMaterialGeometryStatesGraphOwned,
-    const bool accumulationComputeEmulationOutputStatesGraphOwned,
-    const bool accumulationCsgComputeEmulationOutputStatesGraphOwned,
-    const bool generatedGeometryReused,
+    const b8 accumulationMaterialFrameStatesGraphOwned,
+    const b8 accumulationMaterialGeometryStatesGraphOwned,
+    const b8 accumulationComputeEmulationOutputStatesGraphOwned,
+    const b8 accumulationCsgComputeEmulationOutputStatesGraphOwned,
+    const b8 generatedGeometryReused,
     Optional<Core::GpuTimingMeasure>* const accumulationComputeEmulationTiming
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
@@ -331,7 +331,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     commandList.endRenderPass();
 }
 
-void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution timingAttribution, bool* const timingRecorded){
+void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution timingAttribution, b8* const timingRecorded){
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_AvboitDepthWarp, m_graphics.getDevice(), commandList, timingAttribution);
 
     if(timingRecorded)
@@ -342,7 +342,7 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandLis
     __hidden_avboit_pass::DispatchAvboitCompute(commandList, *m_avboitState.m_depthWarpPipeline.get(), heap, targets, NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X, m_graphics.isHDR10OutputActive());
 }
 
-void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution timingAttribution, bool* const timingRecorded){
+void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution timingAttribution, b8* const timingRecorded){
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_AvboitIntegration, m_graphics.getDevice(), commandList, timingAttribution);
 

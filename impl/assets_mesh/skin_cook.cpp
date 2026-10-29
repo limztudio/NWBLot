@@ -32,7 +32,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, SkinBinaryPayload::s_SkinSerializeContext))
         return false;
 
@@ -41,7 +41,7 @@ bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         return false;
 
     usize reserveBytes = sizeof(SkinBinaryPayload::HeaderBinary);
-    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, skin.influences()) && AddBinaryVectorReserveBytes(reserveBytes, skin.inverseBindMatrices());
+    const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, skin.influences()) && AddBinaryVectorReserveBytes(reserveBytes, skin.inverseBindMatrices());
 
     outBinary.clear();
     if(canReserve)
@@ -85,11 +85,11 @@ static constexpr AStringView s_SkinMetaDiagnosticPrefix = "Skin meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateSkinAssetFields(const Path& nwbFilePath, const Value& asset){
+[[nodiscard]] b8 ValidateSkinAssetFields(const Path& nwbFilePath, const Value& asset){
     return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, { s_MeshField, s_SkeletonField, s_InfluencesField, s_InverseBindMatricesField });
 }
 
-[[nodiscard]] bool ValidateSkinInfluenceFields(const Path& nwbFilePath, const Value& influence){
+[[nodiscard]] b8 ValidateSkinInfluenceFields(const Path& nwbFilePath, const Value& influence){
     return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, influence, "Skin influence", { s_JointsField, s_WeightsField });
 }
 
@@ -259,7 +259,7 @@ template<usize ComponentCount>
     return values;
 }
 
-[[nodiscard]] bool ValidateSkinInfluenceJointIndices(const Path& nwbFilePath, const SkinCookEntry& entry){
+[[nodiscard]] b8 ValidateSkinInfluenceJointIndices(const Path& nwbFilePath, const SkinCookEntry& entry){
     if(entry.inverseBindMatrices.size() > static_cast<usize>(Limit<u16>::s_Max) + 1u){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices count exceeds u16 joint index range"), PathToString<tchar>(nwbFilePath));
         return false;

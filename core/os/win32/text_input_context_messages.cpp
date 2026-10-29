@@ -39,7 +39,7 @@ void Win32TextInputService::replayContextVisibility(){
         return;
     // Activation may precede the edit session. Reapply the last native options when ownership changes.
     m_replayingContext = true;
-    const bool ownedBefore = activeSession().valid();
+    const b8 ownedBefore = activeSession().valid();
     SendMessageW(window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(m_nativeContextFlags));
     // Native forwarding may synchronously cancel the session. Restore the now-current policy once in that case.
     if(ownedBefore != activeSession().valid() && m_nativeContextActive && focused() && IsWindow(window))

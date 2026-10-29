@@ -100,7 +100,7 @@ Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(const AStringView volumeN
 }
 
 template<typename ChunkFunc>
-static bool ForEachSegmentChunk(const AStringView volumeName, const AStringView operation, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, ChunkFunc&& chunkFunc){
+static b8 ForEachSegmentChunk(const AStringView volumeName, const AStringView operation, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, ChunkFunc&& chunkFunc){
     if(segmentSize == 0){
         LogFailure(volumeName, operation, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
         return false;
@@ -152,7 +152,7 @@ static bool ForEachSegmentChunk(const AStringView volumeName, const AStringView 
 }
 
 template<typename Stream, typename SeekStream, typename TransferStream>
-static bool TransferSegmentChunk(
+static b8 TransferSegmentChunk(
     const AStringView volumeName,
     const Span<const Path> segmentPaths,
     const usize segmentIndex,
@@ -178,7 +178,7 @@ static bool TransferSegmentChunk(
 }
 
 template<typename Bytes, typename TransferChunk>
-static bool TransferVolumeBytes(const AStringView volumeName, const AStringView operation, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, TransferChunk&& transferChunk, Bytes& bytes){
+static b8 TransferVolumeBytes(const AStringView volumeName, const AStringView operation, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, TransferChunk&& transferChunk, Bytes& bytes){
     return ForEachSegmentChunk(
         volumeName,
         operation,
@@ -201,7 +201,7 @@ static bool TransferVolumeBytes(const AStringView volumeName, const AStringView 
     );
 }
 
-static bool ReadSegmentBytes(
+static b8 ReadSegmentBytes(
     const AStringView volumeName,
     const Span<const Path> segmentPaths,
     const usize segmentIndex,
@@ -239,7 +239,7 @@ static bool ReadSegmentBytes(
     );
 }
 
-static bool WriteSegmentBytes(
+static b8 WriteSegmentBytes(
     const AStringView volumeName,
     const Span<const Path> segmentPaths,
     const usize segmentIndex,
@@ -283,7 +283,7 @@ static bool WriteSegmentBytes(
 }
 
 struct ReadSegmentBytesOp{
-    bool operator()(
+    b8 operator()(
         const AStringView volumeName,
         const Span<const Path> segmentPaths,
         const usize segmentIndex,
@@ -297,7 +297,7 @@ struct ReadSegmentBytesOp{
 };
 
 struct WriteSegmentBytesOp{
-    bool operator()(
+    b8 operator()(
         const AStringView volumeName,
         const Span<const Path> segmentPaths,
         const usize segmentIndex,
@@ -320,7 +320,7 @@ struct WriteSegmentBytesOp{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
+b8 VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     if(m_maxSegments != 0 && segmentIndex >= m_maxSegments){
         NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} exceeds maxSegments {}"), ConvertString(m_volumeName), segmentIndex, m_maxSegments);
         return false;
@@ -374,7 +374,7 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     return true;
 }
 
-bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
+b8 VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
     if(m_segmentSize == 0){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpEnsureCapacity, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
         return false;
@@ -443,7 +443,7 @@ Expected<u64, ErrorCode> VolumeFileSystem::computePhysicalCapacityLocked()const 
     return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
 }
 
-bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 byteCount)const{
+b8 VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 byteCount)const{
     if(byteCount == 0)
         return true;
     if(data == nullptr){
@@ -455,7 +455,7 @@ bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 b
     return FilesystemVolumeDetail::TransferVolumeBytes(m_volumeName, FilesystemVolumeDetail::s_VolumeOpReadBytes, m_segmentPaths, m_segmentSize, offset, byteCount, FilesystemVolumeDetail::ReadSegmentBytesOp{}, outputBytes);
 }
 
-bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, const u64 byteCount){
+b8 VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, const u64 byteCount){
     if(byteCount == 0)
         return true;
     if(data == nullptr){

@@ -34,11 +34,11 @@ inline constexpr StringView s_LifecycleCategory = "telemetry_diagnostic_lifecycl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool AddTextBytes(usize& inOutPayloadBytes, const AStringView text)noexcept{
+[[nodiscard]] static b8 AddTextBytes(usize& inOutPayloadBytes, const AStringView text)noexcept{
     return FitsU32(text.size()) && AddBinaryReserveBytes(inOutPayloadBytes, text.size());
 }
 
-[[nodiscard]] static bool ValidateHeader(const EncodedDiagnosticPayloadHeader& header)noexcept{
+[[nodiscard]] static b8 ValidateHeader(const EncodedDiagnosticPayloadHeader& header)noexcept{
     constexpr u16 s_KnownFlags = DiagnosticPayloadFlag::TerminatesProcess;
     return header.magic == s_DiagnosticPayloadMagic && header.version == s_DiagnosticPayloadVersion && (header.flags & ~s_KnownFlags) == 0u;
 }
@@ -103,7 +103,7 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildDiagnosticPayload(TelemetryArena&, const DiagnosticEventRecord& record, TelemetryBytes& outPayload){
+b8 BuildDiagnosticPayload(TelemetryArena&, const DiagnosticEventRecord& record, TelemetryBytes& outPayload){
     outPayload.clear();
 
     const AStringView event = record.event;
@@ -178,7 +178,7 @@ Expected<DiagnosticPayload> ParseDiagnosticPayload(const void* const payload, co
     return parsedPayload;
 }
 
-bool RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, const u64 frameIndex, const u32 streamId){
+b8 RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, const u64 frameIndex, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::Diagnostic, frameIndex, streamId, [&record](TelemetryArena& arena, TelemetryBytes& payload){
         return BuildDiagnosticPayload(arena, record, payload);
     });
@@ -216,12 +216,12 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard()noexcept{
     }
 
     DiagnosticEventCallback expectedCallback = __hidden_telemetry_diagnostic::CaptureCallback;
-    const bool callbackOwnershipChanged = !::DiagnosticDetail::g_EventCallback.compare_exchange_strong(expectedCallback, nullptr, MemoryOrder::acq_rel);
+    const b8 callbackOwnershipChanged = !::DiagnosticDetail::g_EventCallback.compare_exchange_strong(expectedCallback, nullptr, MemoryOrder::acq_rel);
     if(callbackOwnershipChanged)
         NWB_ASSERT(false);
 
     DiagnosticCaptureGuard* expected = this;
-    const bool guardOwnershipChanged = !__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel);
+    const b8 guardOwnershipChanged = !__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel);
     if(guardOwnershipChanged)
         NWB_ASSERT(false);
 

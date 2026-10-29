@@ -76,10 +76,10 @@ private:
     [[nodiscard]] static Expected<u32> ParseMaterialParameterSignedToken(AStringView token, i64 minValue, i64 maxValue, u32 storageMask)noexcept;
     [[nodiscard]] static Expected<u32> ParseMaterialParameterUnsignedToken(AStringView token, u64 maxValue)noexcept;
     [[nodiscard]] static Expected<u32> ParseMaterialParameterToken(AStringView token, MaterialParameterValueType::Enum type)noexcept;
-    [[nodiscard]] static bool StoreMaterialTypedValueBytes(MaterialTypedValueData& outParameter, usize byteOffset, NotNull<const void*> bytes, usize byteSize)noexcept;
+    [[nodiscard]] static b8 StoreMaterialTypedValueBytes(MaterialTypedValueData& outParameter, usize byteOffset, NotNull<const void*> bytes, usize byteSize)noexcept;
     template<typename ValueType>
-    [[nodiscard]] static bool StoreMaterialTypedValueScalar(MaterialTypedValueData& outParameter, u32 componentIndex, u32 value)noexcept(IsArithmetic_V<ValueType>);
-    [[nodiscard]] static bool StoreMaterialTypedValueComponent(MaterialTypedValueData& outParameter, MaterialParameterValueType::Enum valueType, u32 componentIndex, u32 value)noexcept;
+    [[nodiscard]] static b8 StoreMaterialTypedValueScalar(MaterialTypedValueData& outParameter, u32 componentIndex, u32 value)noexcept(IsArithmetic_V<ValueType>);
+    [[nodiscard]] static b8 StoreMaterialTypedValueComponent(MaterialTypedValueData& outParameter, MaterialParameterValueType::Enum valueType, u32 componentIndex, u32 value)noexcept;
 
 
 public:

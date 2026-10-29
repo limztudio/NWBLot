@@ -56,10 +56,10 @@ private:
     Core::GraphicsPipelineHandle m_presentPipeline;
     u32 m_lightGpuDataCount = 0u;
     u8 m_sceneShadingGpuData[sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT] = {};
-    bool m_sceneShadingGpuDataValid = false;
+    b8 m_sceneShadingGpuDataValid = false;
     // Cached bytes avoid redundant light-buffer uploads.
     u8 m_lightGpuData[sizeof(f32) * NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT * NWB_SCENE_MAX_LIGHTS] = {};
-    bool m_lightGpuDataValid = false;
+    b8 m_lightGpuDataValid = false;
 };
 
 

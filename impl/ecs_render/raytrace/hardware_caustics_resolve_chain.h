@@ -31,12 +31,12 @@ struct HardwareCausticsResolveChainInputs : public CausticsResolveChainStageUseI
     DeferredFrameTargets& targets;
     Core::GpuTaskId geometryTask;
     Core::GpuTaskSchedulingHint baseScheduling;
-    bool& producerDispatched;
+    b8& producerDispatched;
     Core::GpuTimingSubmissionTicket& timingTicket;
     Optional<Core::GpuTimingMeasure>& resolveTiming;
 
 public:
-    HardwareCausticsResolveChainInputs(DeferredFrameTargets& targetsIn, bool& producerDispatchedIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& resolveTimingIn)noexcept
+    HardwareCausticsResolveChainInputs(DeferredFrameTargets& targetsIn, b8& producerDispatchedIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& resolveTimingIn)noexcept
         : targets(targetsIn)
         , producerDispatched(producerDispatchedIn)
         , timingTicket(timingTicketIn)

@@ -31,7 +31,7 @@ struct TextStep{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsCanonicalScalar(const u32 scalar)noexcept{
+[[nodiscard]] static b8 IsCanonicalScalar(const u32 scalar)noexcept{
     return scalar == '\n' || (scalar >= s_UnicodeSpace && (scalar < s_UnicodeDelete || scalar > s_UnicodeC1Last) && scalar != s_UnicodeLineSeparator && scalar != s_UnicodeParagraphSeparator);
 }
 
@@ -42,7 +42,7 @@ struct TextStep{
     const u32 scalar = decoded->codePoint;
     TextStep step;
     step.sourceBytes = static_cast<usize>(decoded->byteCount);
-    const bool lineBreak = scalar == '\r' || scalar == s_UnicodeNextLine || scalar == s_UnicodeLineSeparator || scalar == s_UnicodeParagraphSeparator;
+    const b8 lineBreak = scalar == '\r' || scalar == s_UnicodeNextLine || scalar == s_UnicodeLineSeparator || scalar == s_UnicodeParagraphSeparator;
     if(lineBreak || scalar == '\t'){
         step.replacement = lineBreak ? '\n' : ' ';
         step.outputBytes = 1u;
@@ -67,7 +67,7 @@ struct TextStep{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMultilineText(const AStringView text)noexcept{
+b8 ValidateMultilineText(const AStringView text)noexcept{
     if(!GraphemeSegmentation::Validate(text))
         return false;
     usize offset = 0u;

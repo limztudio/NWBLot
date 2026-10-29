@@ -54,7 +54,7 @@ UiRadioGroupSmokeScene::~UiRadioGroupSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiRadioGroupSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiRadioGroupSmokeScene::paint(Impl::UiPaintContext& context){
     m_source.beginFrame();
     auto& ui = context.ui;
     ui.style().fontSize = 14.0f;
@@ -66,7 +66,7 @@ bool UiRadioGroupSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiRadioGroupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
+b8 UiRadioGroupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key < Core::Key::F4 || key > Core::Key::F9)
@@ -98,7 +98,7 @@ bool UiRadioGroupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, c
     return true;
 }
 
-bool UiRadioGroupSmokeScene::paintMain(Impl::Ui::Builder& ui){
+b8 UiRadioGroupSmokeScene::paintMain(Impl::Ui::Builder& ui){
     using namespace Impl::Ui;
     if(!ui.beginPanel("radio_main", { 24.0f, 24.0f, 336.0f, 356.0f }))
         return false;
@@ -122,7 +122,7 @@ bool UiRadioGroupSmokeScene::paintMain(Impl::Ui::Builder& ui){
     return ui.endPanel();
 }
 
-bool UiRadioGroupSmokeScene::paintDisabled(Impl::Ui::Builder& ui){
+b8 UiRadioGroupSmokeScene::paintDisabled(Impl::Ui::Builder& ui){
     using namespace Impl::Ui;
     if(!ui.beginPanel("radio_disabled", { 392.0f, 24.0f, 300.0f, 240.0f }))
         return false;
@@ -135,7 +135,7 @@ bool UiRadioGroupSmokeScene::paintDisabled(Impl::Ui::Builder& ui){
     return result.valid && ui.endPanel();
 }
 
-bool UiRadioGroupSmokeScene::paintPopup(Impl::Ui::Builder& ui){
+b8 UiRadioGroupSmokeScene::paintPopup(Impl::Ui::Builder& ui){
     using namespace Impl::Ui;
     PopupOptions options;
     options.anchor = { 360.0f, 52.0f, 8.0f, 28.0f };
@@ -161,11 +161,11 @@ bool UiRadioGroupSmokeScene::paintPopup(Impl::Ui::Builder& ui){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerRadioGroupSmokeEnabled(){
+b8 IsUiLayerRadioGroupSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RADIO_GROUP");
 }
 
-bool IsUiLayerRadioGroupSkinSmokeEnabled(){
+b8 IsUiLayerRadioGroupSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RADIO_GROUP_SKIN");
 }
 

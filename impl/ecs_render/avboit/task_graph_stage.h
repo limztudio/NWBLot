@@ -61,11 +61,11 @@ public:
 // Host sees only this immutable result; task topology and queue/packet rules stay inside AVBOIT.
 struct RendererAvboitTaskGraphValidation{
     RendererTaskGraphTransparencyStage m_stage;
-    bool m_valid = false;
+    b8 m_valid = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
 
     [[nodiscard]] const RendererTaskGraphTransparencyStage& stage()const noexcept{ return m_stage; }
 };

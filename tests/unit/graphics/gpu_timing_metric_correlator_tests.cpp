@@ -52,7 +52,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool enabled()const noexcept override{ return true; }
+    [[nodiscard]] virtual b8 enabled()const noexcept override{ return true; }
 
     [[nodiscard]] virtual Expected<Core::Perf::TimingScopeId> registerScope(const Name& scopeName)override{
         ++m_registrationAttempt;
@@ -100,13 +100,13 @@ TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
         { .physicalQueue = { .index = 1u, .deviceGeneration = 7u }, .internalIdleScopeName = Name("tests/timing/large_idle_1") },
     };
     const NotNull<const Core::GpuPacketEnvelopeMetricScope*> scopeData = MakeNotNull(scopes.data());
-    const bool prepared = correlator.preparePacketEnvelopeMetrics(s_FrameIndex, scopeData, scopes.size(), overlapScope, MakeNotNull(&outputs[0u]), LengthOf(outputs));
+    const b8 prepared = correlator.preparePacketEnvelopeMetrics(s_FrameIndex, scopeData, scopes.size(), overlapScope, MakeNotNull(&outputs[0u]), LengthOf(outputs));
 
     ASSERT_TRUE(prepared);
 
     Core::GpuTimingSinkSampleVector samples{ scratchArena };
     samples.reserve(1u + LengthOf(outputs));
-    bool completedEarly = false;
+    b8 completedEarly = false;
     for(usize arrivalIndex = 0u; arrivalIndex < s_ScopeCount; ++arrivalIndex){
         // An odd stride permutes this power-of-two input count and separates arrival order from queue order.
         const usize scopeIndex = (arrivalIndex * 773u) % s_ScopeCount;
@@ -219,7 +219,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, PreservesPartialFramesAcrossGrowthRejectedP
     samples.reserve(3u);
     for(usize frameOffset = 0u; frameOffset < s_FrameCount; ++frameOffset){
         const u64 frameIndex = 100u + frameOffset;
-        const bool reverseOrder = frameOffset % s_ExpectedDualCount != 0u;
+        const b8 reverseOrder = frameOffset % s_ExpectedDualCount != 0u;
         ASSERT_TRUE(prepare(frameIndex, reverseOrder ? reversedScopes : scopes));
         correlator.recordTimestampRange(scopes[0u].scopeName, frameIndex, firstRange, scratchArena, samples);
         ASSERT_TRUE(samples.empty());

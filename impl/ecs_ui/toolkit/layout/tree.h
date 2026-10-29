@@ -39,8 +39,8 @@ private:
 
 
 private:
-    [[nodiscard]] static bool IsValidDescription(const LayoutNodeDesc& description)noexcept;
-    [[nodiscard]] static bool IsValidRectangle(const Rect& rectangle)noexcept;
+    [[nodiscard]] static b8 IsValidDescription(const LayoutNodeDesc& description)noexcept;
+    [[nodiscard]] static b8 IsValidRectangle(const Rect& rectangle)noexcept;
     [[nodiscard]] static SIMDVectorSingle Inset(SIMDVectorSingle rectangle, SIMDVectorSingle padding)noexcept;
 
 
@@ -55,7 +55,7 @@ public:
     // A failed admission poisons this build until reset().
     [[nodiscard]] Expected<u32> addNode(u32 parent, const LayoutNodeDesc& description);
     // Root sizing follows its policies against the viewport. All geometry stays in logical units.
-    [[nodiscard]] bool arrange(const Rect& viewport);
+    [[nodiscard]] b8 arrange(const Rect& viewport);
     [[nodiscard]] u32 nodeCount()const noexcept{ return static_cast<u32>(m_nodes.size()); }
 
     [[nodiscard]] const LayoutBox* box(u32 index)const noexcept{ return index < m_boxes.size() ? &m_boxes[index] : nullptr; }
@@ -64,8 +64,8 @@ public:
 
 
 private:
-    [[nodiscard]] bool measure()noexcept;
-    [[nodiscard]] bool arrangeNode(u32 index)noexcept;
+    [[nodiscard]] b8 measure()noexcept;
+    [[nodiscard]] b8 arrangeNode(u32 index)noexcept;
 
 
 private:
@@ -74,7 +74,7 @@ private:
     PaintVector<LayoutBox> m_boxes;
     PaintVector<LayoutBox> m_stagedBoxes;
     u32 m_maxNodes = 0u;
-    bool m_buildFailed = false;
+    b8 m_buildFailed = false;
 };
 
 

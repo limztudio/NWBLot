@@ -46,7 +46,7 @@ public:
         return ComboSource::indexOf(value);
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverseSearch)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverseSearch)const noexcept override{
         observeCallback();
         return ComboSource::findEnabled(start, reverseSearch);
     }
@@ -63,7 +63,7 @@ public:
         return value;
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         observeCallback();
         return ComboSource::enabled(index);
     }
@@ -92,7 +92,7 @@ TEST_F(UiTextAreaReentryTests, HostLoanResetRejectsWithoutClearingTheLentModel){
     ASSERT_TRUE(acceptBaseline());
     const AcceptedAreaFrame before = accepted();
     usize attempts = 0u;
-    bool failedAtAttempt = false;
+    b8 failedAtAttempt = false;
     m_host.loanHook = [&](){
         ++attempts;
         EXPECT_TRUE(m_model.setText("owned\nmutation"));
@@ -144,7 +144,7 @@ TEST_F(UiTextAreaReentryTests, PublicationResetRejectsBeforeLaterAreaPublication
     ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.textArea("other", otherModel, otherState, AreaOptions()).valid);
     usize attempts = 0u;
-    bool failedAtAttempt = false;
+    b8 failedAtAttempt = false;
     m_host.publishHook = [&](){
         ++attempts;
         EXPECT_TRUE(otherModel.setText("application\nmutation"));
@@ -182,9 +182,9 @@ TEST_F(UiTextAreaReentryTests, ChildRowScopeReentryRejectsBeforeSiblingAreaPubli
     ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.textArea("siblingArea", siblingModel, siblingState, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
-    bool beginAccepted = true;
-    bool endAccepted = true;
-    bool failedAtAttempt = false;
+    b8 beginAccepted = true;
+    b8 endAccepted = true;
+    b8 failedAtAttempt = false;
     source.rowHook = [&]()noexcept{
         beginAccepted = m_builder.beginPanel(s_ReenteredKey, { 0.0f, 0.0f, 100.0f, 80.0f });
         endAccepted = m_builder.endPanel();

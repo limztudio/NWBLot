@@ -47,7 +47,7 @@ using TaskGraphTestUtils::TestArena;
     return Graphics::GpuTaskResourceUse{ .resource = resource, .range = Graphics::GpuTaskResourceRange{ .bufferRange = Graphics::BufferRange(offset, size) }, .requiredState = state, .access = access, };
 }
 
-[[nodiscard]] static Expected<Graphics::GpuTaskId> AddRangeTask(Graphics::GpuTaskGraph& graph, const Name& identity, const Graphics::GpuTaskResourceUse* const uses, const usize useCount, const bool compute = false){
+[[nodiscard]] static Expected<Graphics::GpuTaskId> AddRangeTask(Graphics::GpuTaskGraph& graph, const Name& identity, const Graphics::GpuTaskResourceUse* const uses, const usize useCount, const b8 compute = false){
     Graphics::GpuTaskDesc desc;
     desc.setIdentity(identity).setMarkerLabel("Buffer Range Task").setResourceUses(uses, useCount);
     return graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ compute ? Graphics::GpuQueueCapability::Compute : Graphics::GpuQueueCapability::Graphics });
@@ -147,7 +147,7 @@ TEST(GpuTaskGraphBufferRange, WideConsumerCollectsOlderPrefixAndTailAfterPartial
         EXPECT_EQ(barrier->before, index == s_ExpectedDualCount ? Graphics::ResourceStates::UnorderedAccess : Graphics::ResourceStates::CopyDest);
         EXPECT_EQ(barrier->after, Graphics::ResourceStates::ShaderResource);
         const Graphics::GpuSubmissionPacketId producerPacket = plan.findTask(index == s_ExpectedDualCount ? middle : whole).plan->packet;
-        bool foundSeed = false;
+        b8 foundSeed = false;
         for(u32 seedIndex = 0u; seedIndex < readerView.plan->prologueStateSeedCount; ++seedIndex){
             const Graphics::GpuPacketStateSeed& seed = readerView.prologueStateSeeds[seedIndex];
             foundSeed = foundSeed || (seed.range.bufferRange == ranges[index] && seed.sourcePacket == producerPacket);
@@ -246,7 +246,7 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
         ASSERT_NE(stateExport, nullptr);
         EXPECT_EQ(stateExport->after, Graphics::ResourceStates::ShaderResource);
         EXPECT_NE(FindRangeBarrier(taskView.epilogueBarriers, taskView.plan->epilogueBarrierCount, ranges[index], Graphics::GpuCompiledBarrierType::BufferOwnershipRelease), nullptr);
-        bool foundSource = false;
+        b8 foundSource = false;
         for(u32 sourceIndex = 0u; sourceIndex < exportView.plan->sourceCount; ++sourceIndex){
             const Graphics::GpuCompiledExternalResourceExportSource& source = exportView.sources[sourceIndex];
             foundSource = foundSource || (source.producerTask == producer && source.range.bufferRange == ranges[index]);

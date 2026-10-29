@@ -46,7 +46,7 @@ public:
 
 public:
     // Descriptor-buffer metadata; layouts must be pure resource or sampler sets.
-    [[nodiscard]] bool isDescriptorBufferCompatible()const noexcept{ return m_descriptorBufferCompatible; }
+    [[nodiscard]] b8 isDescriptorBufferCompatible()const noexcept{ return m_descriptorBufferCompatible; }
 
     [[nodiscard]] u32 getDescriptorBufferSetSizeBytes()const noexcept{ return m_descriptorBufferSetSizeBytes; }
 
@@ -65,8 +65,8 @@ private:
     u32 m_descriptorBufferSetSizeBytes = 0;
     u32 m_pushConstantByteSize = 0;
     DescriptorBufferSegmentKind::Enum m_descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
-    bool m_isBindless = false;
-    bool m_descriptorBufferCompatible = false;
+    b8 m_isBindless = false;
+    b8 m_descriptorBufferCompatible = false;
     HashMap<u32, u32, Alloc::GlobalArena, Hasher<u32>, EqualTo<u32>> m_descriptorBufferBindingOffsets;
 
     const VulkanContext& m_context;
@@ -94,7 +94,7 @@ public:
 
     [[nodiscard]] ResourceQueueSharing::Mask getCreationQueueSharing()const noexcept{ return m_creationQueueSharing; }
 
-    [[nodiscard]] bool queueSharingMatchesCreation()const noexcept{ return m_desc.queueSharing == m_creationQueueSharing; }
+    [[nodiscard]] b8 queueSharingMatchesCreation()const noexcept{ return m_desc.queueSharing == m_creationQueueSharing; }
 
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
 
@@ -124,7 +124,7 @@ private:
 
     const VulkanContext& m_context;
     const ResourceQueueSharing::Mask m_creationQueueSharing;
-    bool m_isTopLevelAtCreation = false;
+    b8 m_isTopLevelAtCreation = false;
 };
 
 
@@ -155,7 +155,7 @@ private:
     u64 m_deviceAddress = 0;
 
     const VulkanContext& m_context;
-    Atomic<bool> m_acceptedConstructed{ false };
+    Atomic<b8> m_acceptedConstructed{ false };
     u32 m_maxOpacity2StateSubdivisionLevel = 0u;
     u32 m_maxOpacity4StateSubdivisionLevel = 0u;
 };
@@ -192,12 +192,12 @@ private:
 private:
     struct BufferUavBarrierPolicyValue{
         BufferHandle buffer;
-        bool enableBarriers = true;
+        b8 enableBarriers = true;
     };
 
     struct TextureUavBarrierPolicyValue{
         TextureHandle texture;
-        bool enableBarriers = true;
+        b8 enableBarriers = true;
     };
 
 
@@ -221,25 +221,25 @@ public:
     void setPermanentTextureState(Texture& texture, ResourceStates::Mask state);
     void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state);
 
-    [[nodiscard]] bool isPermanentTexture(Texture& texture)const noexcept;
-    [[nodiscard]] bool isPermanentBuffer(Buffer& buffer)const noexcept;
+    [[nodiscard]] b8 isPermanentTexture(Texture& texture)const noexcept;
+    [[nodiscard]] b8 isPermanentBuffer(Buffer& buffer)const noexcept;
     [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const noexcept;
     [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const noexcept;
     [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
     [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer)const noexcept;
     // Explicit state comes from this command list or an imported packet handoff.
     // A keep-initial-state descriptor fallback deliberately does not count: graph lowering can still declare the first known graph state.
-    [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
-    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const noexcept;
+    [[nodiscard]] b8 hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
+    [[nodiscard]] b8 hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, b8 requireKnown = false)const noexcept;
 
     void beginTrackingTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state, BufferRange range = s_EntireBuffer);
     void appendKeepInitialStateBarriers(TrackedCommandBuffer& commandBuffer, Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers, Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers);
 
-    [[nodiscard]] bool isUavBarrierEnabledForTexture(Texture& texture)const noexcept;
-    [[nodiscard]] bool isUavBarrierEnabledForBuffer(Buffer& buffer)const noexcept;
-    void setEnableUavBarriersForTexture(Texture& texture, bool enableBarriers);
-    void setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarriers);
+    [[nodiscard]] b8 isUavBarrierEnabledForTexture(Texture& texture)const noexcept;
+    [[nodiscard]] b8 isUavBarrierEnabledForBuffer(Buffer& buffer)const noexcept;
+    void setEnableUavBarriersForTexture(Texture& texture, b8 enableBarriers);
+    void setEnableUavBarriersForBuffer(Buffer& buffer, b8 enableBarriers);
 
 
 private:
@@ -248,7 +248,7 @@ private:
 
     void beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state);
-    void beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state, BufferRange range = s_EntireBuffer, bool seedOnly = false);
+    void beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state, BufferRange range = s_EntireBuffer, b8 seedOnly = false);
 
 
 private:
@@ -262,7 +262,7 @@ private:
     BufferUavBarrierPolicyMap m_bufferUavBarriers;
 
     const VulkanContext& m_context;
-    bool m_recordingAttemptActive = false;
+    b8 m_recordingAttemptActive = false;
 };
 
 

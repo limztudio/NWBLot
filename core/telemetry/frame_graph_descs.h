@@ -63,7 +63,7 @@ struct FrameGraphPayload{
     Vector<FrameGraphPhysicalQueueRuntimeStatisticsRecord, TelemetryArena> physicalQueueRuntimeStatistics;
     Vector<FrameGraphPacketSubmissionStatisticsRecord, TelemetryArena> packetSubmissionStatistics;
     u64 frameIndex = 0u;
-    bool packetSubmissionStatisticsPresent = false;
+    b8 packetSubmissionStatisticsPresent = false;
 
 
 public:
@@ -84,20 +84,20 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsValidFrameGraphNodeKind(FrameGraphNodeKind::Enum kind)noexcept;
-[[nodiscard]] bool IsValidFrameGraphEdgeKind(FrameGraphEdgeKind::Enum kind)noexcept;
-[[nodiscard]] bool IsValidFrameGraphQueueClass(FrameGraphQueueClass::Enum queueClass)noexcept;
-[[nodiscard]] bool IsValidFrameGraphQueueAssignmentReason(FrameGraphQueueAssignmentReason::Enum reason)noexcept;
-[[nodiscard]] bool IsValidFrameGraphQueueAssignmentAcceptance(FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept;
-[[nodiscard]] bool IsValidFrameGraphTaskPacketizationDecision(FrameGraphTaskPacketizationDecision::Enum decision)noexcept;
-[[nodiscard]] bool IsValidFrameGraphQueueAssignment(const FrameGraphQueueAssignment& assignment)noexcept;
-[[nodiscard]] bool IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)noexcept;
-[[nodiscard]] bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept;
-[[nodiscard]] bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept;
-[[nodiscard]] bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
-[[nodiscard]] bool IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept;
-[[nodiscard]] bool BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, u64 frameIndex, Span<const FrameGraphNodeDesc> nodes, Span<const FrameGraphEdgeDesc> edges, TelemetryBytes& outPayload);
-[[nodiscard]] bool BuildFrameGraphPayload(
+[[nodiscard]] b8 IsValidFrameGraphNodeKind(FrameGraphNodeKind::Enum kind)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphEdgeKind(FrameGraphEdgeKind::Enum kind)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphQueueClass(FrameGraphQueueClass::Enum queueClass)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphQueueAssignmentReason(FrameGraphQueueAssignmentReason::Enum reason)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphQueueAssignmentAcceptance(FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphTaskPacketizationDecision(FrameGraphTaskPacketizationDecision::Enum decision)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphQueueAssignment(const FrameGraphQueueAssignment& assignment)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
+[[nodiscard]] b8 IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept;
+[[nodiscard]] b8 BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, u64 frameIndex, Span<const FrameGraphNodeDesc> nodes, Span<const FrameGraphEdgeDesc> edges, TelemetryBytes& outPayload);
+[[nodiscard]] b8 BuildFrameGraphPayload(
     Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
     Span<const FrameGraphNodeDesc> nodes,
@@ -105,7 +105,7 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
     Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     TelemetryBytes& outPayload
 );
-[[nodiscard]] bool BuildFrameGraphPayload(
+[[nodiscard]] b8 BuildFrameGraphPayload(
     Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
     Span<const FrameGraphNodeDesc> nodes,
@@ -115,8 +115,8 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
     TelemetryBytes& outPayload
 );
 [[nodiscard]] Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc::ScratchArena& scratchArena, const void* payload, usize payloadBytes);
-[[nodiscard]] bool RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, u64 frameIndex, Span<const FrameGraphNodeDesc> nodes, Span<const FrameGraphEdgeDesc> edges, u32 streamId = 0u);
-[[nodiscard]] bool RecordFrameGraph(
+[[nodiscard]] b8 RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, u64 frameIndex, Span<const FrameGraphNodeDesc> nodes, Span<const FrameGraphEdgeDesc> edges, u32 streamId = 0u);
+[[nodiscard]] b8 RecordFrameGraph(
     Recorder& recorder,
     Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
@@ -125,7 +125,7 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
     Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     u32 streamId = 0u
 );
-[[nodiscard]] bool RecordFrameGraph(
+[[nodiscard]] b8 RecordFrameGraph(
     Recorder& recorder,
     Alloc::ScratchArena& scratchArena,
     u64 frameIndex,

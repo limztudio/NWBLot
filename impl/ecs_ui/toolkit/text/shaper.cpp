@@ -29,7 +29,7 @@ namespace __hidden_ui_text_shaper{
     return end;
 }
 
-[[nodiscard]] static bool HasMissing(const Span<const RawShapedGlyph> glyphs, usize begin, usize end)noexcept{
+[[nodiscard]] static b8 HasMissing(const Span<const RawShapedGlyph> glyphs, usize begin, usize end)noexcept{
     for(usize index = begin; index < end; ++index){
         if(glyphs[index].glyphId == 0u)
             return true;
@@ -62,7 +62,7 @@ TextShaper::TextShaper(Core::Alloc::GlobalArena& arena)noexcept
     , m_spans(arena)
 {}
 
-bool TextShaper::setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count){
+b8 TextShaper::setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count){
     if(!sources || count == 0u || count > s_TextMaxFontSources)
         return false;
     PaintVector<SharedFontFace> fonts(m_arena);

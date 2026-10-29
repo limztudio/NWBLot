@@ -90,10 +90,10 @@ static i32 TranslateKey(xkb_keysym_t keySym)noexcept{
 }
 
 static void ReleaseKeymapResources(const i32 fd, void* const map, const u32 size)noexcept{
-    const bool unmapFailed = map && munmap(map, size) != 0;
+    const b8 unmapFailed = map && munmap(map, size) != 0;
     const i32 unmapError = unmapFailed ? errno : 0;
     // Linux releases the descriptor before reporting close errors; retrying can close a reused descriptor.
-    const bool closeFailed = close(fd) != 0;
+    const b8 closeFailed = close(fd) != 0;
     const i32 closeError = closeFailed ? errno : 0;
     if(unmapFailed){
         const DiagnosticEventText message = MakeDiagnosticEventText("Frame Wayland keymap unmap failed; native_domain=POSIX native_code={}", unmapError);
@@ -471,7 +471,7 @@ WaylandFrameInput::~WaylandFrameInput()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool WaylandFrameInput::createKeymapContext()noexcept{
+b8 WaylandFrameInput::createKeymapContext()noexcept{
     m_xkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     return m_xkbContext != nullptr;
 }

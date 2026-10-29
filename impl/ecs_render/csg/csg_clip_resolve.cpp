@@ -116,8 +116,8 @@ struct CsgReceiverLocalSpace{
     SIMDVectorSingle localMinBounds = VectorZero();
     SIMDVectorSingle localMaxBounds = VectorZero();
     SIMDMatrix localToWorld = MatrixIdentity();
-    bool boundsCanCull = false;
-    bool hasLocalToWorld = false;
+    b8 boundsCanCull = false;
+    b8 hasLocalToWorld = false;
 
 
 public:
@@ -126,7 +126,7 @@ public:
     }
 };
 
-[[nodiscard]] static CsgReceiverLocalSpace BuildCsgReceiverLocalSpace(const bool boundsCanCull, const SIMDVectorSingle localMinBounds, const SIMDVectorSingle localMaxBounds, const SIMDMatrix* localToWorld)noexcept{
+[[nodiscard]] static CsgReceiverLocalSpace BuildCsgReceiverLocalSpace(const b8 boundsCanCull, const SIMDVectorSingle localMinBounds, const SIMDVectorSingle localMaxBounds, const SIMDMatrix* localToWorld)noexcept{
     CsgReceiverLocalSpace localSpace;
     localSpace.boundsCanCull = boundsCanCull;
     if(boundsCanCull){
@@ -142,7 +142,7 @@ public:
 }
 
 [[nodiscard]] static CsgReceiverLocalSpace LoadCsgReceiverLocalSpace(const CsgReceiverCpuBounds& receiverBounds, const Scene::TransformComponent* transform)noexcept{
-    const bool boundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
+    const b8 boundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
     const SIMDVectorSingle localMinBounds = boundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
     const SIMDVectorSingle localMaxBounds = boundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
     SIMDMatrix localToWorld;
@@ -173,7 +173,7 @@ static void BuildResolvedClipCutterGpuData(const CsgResolvedClipCutter& resolved
     const SIMDMatrix& cutterWorldToShape,
     const SIMDVectorSingle receiverLocalMinBounds,
     const SIMDVectorSingle receiverLocalMaxBounds,
-    const bool receiverBoundsCanCull,
+    const b8 receiverBoundsCanCull,
     const SIMDMatrix* receiverLocalToWorld
 ){
     auto shapeType = shapeRegistry.findShapeType(cutter.shapeType);
@@ -200,18 +200,18 @@ static void BuildResolvedClipCutterGpuData(const CsgResolvedClipCutter& resolved
 
 
 template<typename CutterTransformLoader, typename CutterHandler>
-[[nodiscard]] static bool ForEachReceiverClipCutter(
+[[nodiscard]] static b8 ForEachReceiverClipCutter(
     const CsgShapeRegistry& shapeRegistry,
     const CsgFrameReceiverLookup& receiverLookup,
     const CsgReceiverDrawState& receiverDrawState,
     const SIMDVectorSingle receiverLocalMinBounds,
     const SIMDVectorSingle receiverLocalMaxBounds,
-    const bool receiverBoundsCanCull,
+    const b8 receiverBoundsCanCull,
     const SIMDMatrix* receiverLocalToWorld,
     CutterTransformLoader&& loadCutterTransforms,
     CutterHandler&& handler
 ){
-    bool resolved = true;
+    b8 resolved = true;
     receiverLookup.forEachReceiverCutter(receiverDrawState, [&](const Core::ECS::EntityID, const CsgCutterComponent& cutter){
         if(!resolved)
             return;
@@ -237,11 +237,11 @@ template<typename CutterTransformLoader, typename CutterHandler>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CsgClipWorkBounds::resolveCutter(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize, const CsgClipWorkBounds& receiverBounds){
+b8 CsgClipWorkBounds::resolveCutter(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize, const CsgClipWorkBounds& receiverBounds){
     *this = CsgClipWorkBounds{};
     if(!receiverBounds.valid){
         const Name& shapeName = shapeType.desc.name;
-        const bool finiteBuiltIn = !shapeType.desc.shaderModule && (shapeName == s_CsgBoxShapeName || shapeName == s_CsgSphereShapeName || shapeName == s_CsgCapsuleShapeName);
+        const b8 finiteBuiltIn = !shapeType.desc.shaderModule && (shapeName == s_CsgBoxShapeName || shapeName == s_CsgSphereShapeName || shapeName == s_CsgCapsuleShapeName);
         if(!finiteBuiltIn)
             return true;
     }
@@ -355,7 +355,7 @@ Expected<CsgReceiverClipDrawInfo> RendererCsgSystem::resolveCsgReceiverClipDrawI
     CsgReceiverClipDrawInfo info;
     const __hidden_csg_clip_resolve::CsgReceiverLocalSpace receiverLocalSpace = __hidden_csg_clip_resolve::LoadCsgReceiverLocalSpace(receiverBounds, transform);
 
-    const bool resolved = __hidden_csg_clip_resolve::ForEachReceiverClipCutter(
+    const b8 resolved = __hidden_csg_clip_resolve::ForEachReceiverClipCutter(
         m_csgShapeRegistry,
         receiverLookup,
         receiverDrawState,
@@ -406,7 +406,7 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
     if(!worldToReceiver)
         return MakeUnexpected(Failure{});
 
-    bool meshViewReady = false;
+    b8 meshViewReady = false;
     SIMDMatrix worldToClip;
     if(csgWorkRegionMeshViewState){
         worldToClip = LoadFloat(csgWorkRegionMeshViewState->worldToClip);
@@ -423,7 +423,7 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
     range.localBounds = receiverBounds;
     range.firstCutter = static_cast<u32>(csgFrameData.cutters.size());
     CsgFrameWorkRegion receiverWorkRegion;
-    const bool appended = __hidden_csg_clip_resolve::ForEachReceiverClipCutter(
+    const b8 appended = __hidden_csg_clip_resolve::ForEachReceiverClipCutter(
         m_csgShapeRegistry,
         receiverLookup,
         receiverDrawState,

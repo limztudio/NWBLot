@@ -67,7 +67,7 @@ public:
         return m_lastType;
     }
 
-    [[nodiscard]] bool sawMessageContaining(const TStringView text)const noexcept{
+    [[nodiscard]] b8 sawMessageContaining(const TStringView text)const noexcept{
         ScopedLock lock(m_mutex);
 
         for(const LogString& message : m_messages){
@@ -77,7 +77,7 @@ public:
         return false;
     }
 
-    [[nodiscard]] bool sawErrorContaining(const TStringView text)const noexcept{
+    [[nodiscard]] b8 sawErrorContaining(const TStringView text)const noexcept{
         ScopedLock lock(m_mutex);
 
         for(const LogString& error : m_errors){

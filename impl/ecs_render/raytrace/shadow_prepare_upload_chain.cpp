@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShadowPrepareUploadChainBuilder::declare(Core::Alloc::ScratchArena& scratchArena, const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
+b8 ShadowPrepareUploadChainBuilder::declare(Core::Alloc::ScratchArena& scratchArena, const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
     return declareSelectorAndContextUploads(scratchArena, inputs, chain) && declareSurfelFrameConstantsUpload(inputs, chain) && declareShadowMaterialContextUploads(inputs, chain) && declareSceneBvhUploads(inputs, chain);
 }
 
@@ -29,7 +29,7 @@ Expected<Core::GpuGraphResourceId> ShadowPrepareUploadChainBuilder::importBuffer
     return m_graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(identity, label));
 }
 
-bool ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(Core::Alloc::ScratchArena& scratchArena, const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
+b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(Core::Alloc::ScratchArena& scratchArena, const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
     using namespace RendererTaskGraphDetail;
 
     chain.currentBindlessSlotsGraphOwned = !inputs.targets.bindless.slotsUploaded;
@@ -218,7 +218,7 @@ bool ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(Core::All
     return true;
 }
 
-bool ShadowPrepareUploadChainBuilder::declareSurfelFrameConstantsUpload(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
+b8 ShadowPrepareUploadChainBuilder::declareSurfelFrameConstantsUpload(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
     Expected<Optional<Core::GpuGraphResourceId>> surfelFrameConstantsResult = Optional<Core::GpuGraphResourceId>{};
     if(inputs.rayTracingResources.surfelFrameConstantsBuffer){
         const auto importedResource = importBuffer(inputs.rayTracingResources.surfelFrameConstantsBuffer, Name(RendererFramePipelineDetail::s_SurfelConstantsName), RendererFramePipelineDetail::s_SurfelConstantsLabel);
@@ -270,7 +270,7 @@ bool ShadowPrepareUploadChainBuilder::declareSurfelFrameConstantsUpload(const Sh
     return true;
 }
 
-bool ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
+b8 ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
     Expected<Optional<Core::GpuGraphResourceId>> shadowInstanceMaterialsResult = Optional<Core::GpuGraphResourceId>{};
     if(inputs.rayTracingResources.shadowInstanceMaterialBuffer){
         const auto importedResource = importBuffer(inputs.rayTracingResources.shadowInstanceMaterialBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName), RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel);
@@ -376,7 +376,7 @@ bool ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(const 
     return true;
 }
 
-bool ShadowPrepareUploadChainBuilder::declareSceneBvhUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
+b8 ShadowPrepareUploadChainBuilder::declareSceneBvhUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
     Expected<Optional<Core::GpuGraphResourceId>> sceneBvhNodesResult = Optional<Core::GpuGraphResourceId>{};
     if(inputs.rayTracingResources.sceneBvhNodeBuffer){
         const auto importedResource = importBuffer(inputs.rayTracingResources.sceneBvhNodeBuffer, Name(RendererFramePipelineDetail::s_SceneBvhNodesName), RendererFramePipelineDetail::s_SceneBvhNodesLabel);

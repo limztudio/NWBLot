@@ -40,20 +40,20 @@ struct ShadowPrepareGraphTask{
         ShadowPreparationOutcome& outcome;
         DeferredFrameTargets& targets;
         Core::GpuTimingSubmissionTicket& timingTicket;
-        bool deferredBindlessSlotsWereUploaded = false;
-        bool currentBindlessSlotsGraphOwned = false;
-        bool shadowMaterialContextBatchGraphOwned = false;
-        bool sceneBvhBatchGraphOwned = false;
-        bool sceneTlasBuildGraphOwned = false;
-        bool meshBlasBuildsGraphOwned = false;
-        bool meshBlasGeometryBuildInputStatesGraphOwned = false;
-        bool meshSwBvhBuildsGraphOwned = false;
-        bool preparedMeshSwBvhBuildsRecordedByGraph = false;
+        b8 deferredBindlessSlotsWereUploaded = false;
+        b8 currentBindlessSlotsGraphOwned = false;
+        b8 shadowMaterialContextBatchGraphOwned = false;
+        b8 sceneBvhBatchGraphOwned = false;
+        b8 sceneTlasBuildGraphOwned = false;
+        b8 meshBlasBuildsGraphOwned = false;
+        b8 meshBlasGeometryBuildInputStatesGraphOwned = false;
+        b8 meshSwBvhBuildsGraphOwned = false;
+        b8 preparedMeshSwBvhBuildsRecordedByGraph = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
     static void Discarded(Payload& payload);
 };
@@ -72,7 +72,7 @@ struct ShadowPrepareSoftwareBvhBuildGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 

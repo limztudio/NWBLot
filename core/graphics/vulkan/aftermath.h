@@ -41,12 +41,12 @@ struct GpuCrashDumpView{
 // Enable Aftermath GPU crash dump collection for Vulkan.
 // Idempotent and process-global; must be called before the Vulkan device is created.
 // Returns true if Aftermath is active afterwards.
-bool Initialize();
+b8 Initialize();
 
 // Disable Aftermath GPU crash dump collection. Safe to call when inactive.
 void Shutdown();
 
-[[nodiscard]] bool IsActive();
+[[nodiscard]] b8 IsActive();
 
 // On device-lost, block briefly for dump collection. Empty when inactive or no dump.
 [[nodiscard]] GpuCrashDumpView WaitForCrashDump();

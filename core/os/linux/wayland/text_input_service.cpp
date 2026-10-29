@@ -43,7 +43,7 @@ WaylandTextInputService::~WaylandTextInputService()noexcept{
 #endif
 }
 
-bool WaylandTextInputService::initialize(){
+b8 WaylandTextInputService::initialize(){
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     m_registry = wl_display_get_registry(&m_display);
     if(!m_registry)
@@ -84,7 +84,7 @@ void WaylandTextInputService::attachSeat(wl_seat* const seat, const u32 seatGlob
 #endif
 }
 
-bool WaylandTextInputService::setKeyboardFocused(const bool focused){
+b8 WaylandTextInputService::setKeyboardFocused(const b8 focused){
     m_keyboardFocused = focused;
     return setFocused(focused);
 }
@@ -99,7 +99,7 @@ void WaylandTextInputService::setBufferScale(const i32 scale){
         nativeFailure();
 }
 
-bool WaylandTextInputService::dispatchDirectCodePoint(const u32 codePoint){
+b8 WaylandTextInputService::dispatchDirectCodePoint(const u32 codePoint){
     NWB_ASSERT(isOwnerThread());
     const TextInputSessionToken token = activeSession();
     if(!token.valid())
@@ -124,7 +124,7 @@ bool WaylandTextInputService::dispatchDirectCodePoint(const u32 codePoint){
 
 TextInputCapabilities WaylandTextInputService::capabilities()const noexcept{
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
-    const bool protocol = m_manager != nullptr;
+    const b8 protocol = m_manager != nullptr;
     return { true, protocol, protocol, protocol, TextInputBackend::Wayland };
 #else
     return { true, false, false, false, TextInputBackend::Wayland };
@@ -260,7 +260,7 @@ void WaylandTextInputService::nativeFailure(){
         NWB_LOGGER_WARNING(NWB_TEXT("Wayland text input: native failure could not cancel current session"));
 }
 
-bool WaylandTextInputService::flush()noexcept{
+b8 WaylandTextInputService::flush()noexcept{
     return wl_display_flush(&m_display) >= 0 || errno == EAGAIN;
 }
 
@@ -280,7 +280,7 @@ void AttachWaylandTextInputSeat(ITextInputService& service, wl_seat* const seat,
         MakeNotNull(checked_cast<WaylandTextInputService*>(&service))->attachSeat(seat, seatGlobalName);
 }
 
-bool SetWaylandTextInputKeyboardFocus(ITextInputService& service, const bool focused){
+b8 SetWaylandTextInputKeyboardFocus(ITextInputService& service, const b8 focused){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Wayland)
         return false;
     return MakeNotNull(checked_cast<WaylandTextInputService*>(&service))->setKeyboardFocused(focused);
@@ -291,7 +291,7 @@ void SetWaylandTextInputBufferScale(ITextInputService& service, const i32 scale)
         MakeNotNull(checked_cast<WaylandTextInputService*>(&service))->setBufferScale(scale);
 }
 
-bool DispatchWaylandDirectTextInput(ITextInputService& service, const u32 codePoint){
+b8 DispatchWaylandDirectTextInput(ITextInputService& service, const u32 codePoint){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Wayland)
         return false;
     return MakeNotNull(checked_cast<WaylandTextInputService*>(&service))->dispatchDirectCodePoint(codePoint);

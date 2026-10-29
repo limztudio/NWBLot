@@ -74,7 +74,7 @@ inline constexpr u32 s_SinglePaddingUnusedMask = 3u;
         const u8 second = Base64Detail::Digit(source[offset + 1u]);
         if(first == Base64Detail::s_InvalidDigit || second == Base64Detail::s_InvalidDigit)
             return MakeUnexpected(Failure{});
-        const bool last = offset + Base64Detail::s_QuartetCharCount == source.size();
+        const b8 last = offset + Base64Detail::s_QuartetCharCount == source.size();
         if(source[offset + 2u] == '='){
             if(!last || source[offset + 3u] != '=' || (second & Base64Detail::s_DoublePaddingUnusedMask) != 0u)
                 return MakeUnexpected(Failure{});
@@ -96,7 +96,7 @@ inline constexpr u32 s_SinglePaddingUnusedMask = 3u;
 // The returned candidate owns its bytes; borrowed input may alias a caller-owned destination.
 template<typename ByteContainer>
 [[nodiscard]] inline Expected<ByteContainer> DecodeBase64(const AStringView source, const typename ByteContainer::allocator_type& allocator, const usize maxBytes)noexcept(
-    noexcept(ByteContainer(allocator)) && noexcept(static_cast<bool>(DeclVal<const usize&>() > DeclVal<ByteContainer&>().max_size()))
+    noexcept(ByteContainer(allocator)) && noexcept(static_cast<b8>(DeclVal<const usize&>() > DeclVal<ByteContainer&>().max_size()))
     && noexcept(DeclVal<ByteContainer&>().resize(DeclVal<const usize&>()))
     && noexcept(DeclVal<ByteContainer&>()[DeclVal<usize&>()] = static_cast<typename ByteContainer::value_type>(DeclVal<const u32&>() >> Base64Detail::s_FirstByteShift))
     && noexcept(DeclVal<ByteContainer&>()[DeclVal<usize&>()] = static_cast<typename ByteContainer::value_type>(DeclVal<const u32&>()))
@@ -134,7 +134,7 @@ template<typename ByteContainer>
 
 template<typename StringType>
 [[nodiscard]] inline Expected<StringType> EncodeBase64(const BinaryByteView source, const typename StringType::allocator_type& allocator)noexcept(
-    noexcept(StringType(allocator)) && noexcept(static_cast<bool>(DeclVal<usize>() > DeclVal<StringType&>().max_size()))
+    noexcept(StringType(allocator)) && noexcept(static_cast<b8>(DeclVal<usize>() > DeclVal<StringType&>().max_size()))
     && noexcept(DeclVal<StringType&>().resize(DeclVal<usize>()))
     && noexcept(DeclVal<StringType&>()[DeclVal<usize&>()] = DeclVal<const char&>()) && noexcept(DeclVal<StringType&>()[DeclVal<usize>()] = DeclVal<const char&>())
     && noexcept(DeclVal<StringType&>()[DeclVal<usize>()] = DeclVal<char>())

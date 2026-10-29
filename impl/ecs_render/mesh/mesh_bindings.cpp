@@ -25,7 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
+b8 RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     if(mesh.emulationVertexHeapHandle.valid())
         return true;
     if(!mesh.emulationVertexBuffer){
@@ -83,7 +83,7 @@ bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     return false;
 }
 
-bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers){
+b8 RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers){
     if(m_meshState.m_frameBindings.matches(materialBuffers, m_meshState.m_meshViewBuffer))
         return true;
 
@@ -113,7 +113,7 @@ bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::Materia
         return false;
     const Core::GpuDescriptorHandle viewHandle = *viewHandleResult;
     Core::GpuDescriptorRetirementGuard retireView(heap, viewHandle);
-    const bool registered =
+    const b8 registered =
         heap.write(instanceHandle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.instanceBuffer.get()))
         && heap.write(materialTypedHandle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.materialTypedBuffer.get()))
         && heap.write(viewHandle, Core::DescriptorWriteItem::ConstantBuffer(0u, m_meshState.m_meshViewBuffer.get()))
@@ -161,9 +161,9 @@ ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSn
     };
 }
 
-bool RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)const noexcept{
-    bool ready = true;
-    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
+b8 RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)const noexcept{
+    b8 ready = true;
+    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
         const Core::GpuDescriptorHandle handle = mesh.geometryHeapHandles[bindingSlot];
         ready = ready && handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
     });
@@ -174,7 +174,7 @@ void RendererMeshSystem::populateMeshGeometryHeapSlots(InstanceGpuData& outInsta
     NWB_ASSERT(meshGeometryHeapHandlesReady(mesh));
     for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
         outInstance.geometryHeapSlots[slotIndex] = 0u;
-    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
+    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
         outInstance.geometryHeapSlots[bindingSlot] = mesh.geometryHeapHandles[bindingSlot].slot();
     });
 }
@@ -243,7 +243,7 @@ void RendererMeshSystem::releaseMeshFrameHeapHandles(){
     m_meshState.m_frameBindings = {};
 }
 
-bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
+b8 RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
     if(!createMeshGeometryHeapHandles(mesh))
         return false;
 
@@ -257,7 +257,7 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
             return false;
         }
         const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        bool registered = false;
+        b8 registered = false;
         if(handle){
             Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
             registered = heap.write(*handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.get()));
@@ -296,7 +296,7 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
     return true;
 }
 
-bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const noexcept{
+b8 RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const noexcept{
     if(!mesh.valid() || !meshGeometryHeapHandlesReady(mesh))
         return false;
 
@@ -306,7 +306,7 @@ bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const
     return true;
 }
 
-bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
+b8 RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
     if(meshGeometryHeapHandlesReady(mesh))
         return true;
 
@@ -323,8 +323,8 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
 
     Core::GpuDescriptorHandle acquired[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
     Core::GpuDescriptorRetirementGuard retireAcquired(heap, acquired);
-    bool registered = true;
-    ForEachMeshSourceBuffer(mesh, [&](const u32 bindingSlot, const Core::BufferHandle& buffer, const bool){
+    b8 registered = true;
+    ForEachMeshSourceBuffer(mesh, [&](const u32 bindingSlot, const Core::BufferHandle& buffer, const b8){
         if(!registered)
             return;
         if(!buffer){
@@ -350,7 +350,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
     if(!registered)
         return false;
 
-    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
+    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
         mesh.geometryHeapHandles[bindingSlot] = acquired[bindingSlot];
     });
     retireAcquired.release();
@@ -358,7 +358,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
     return true;
 }
 
-bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
+b8 RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
     const auto inputsReady = [&mesh]()noexcept{
         return
             mesh.swBvhPositionHeapHandle.valid()

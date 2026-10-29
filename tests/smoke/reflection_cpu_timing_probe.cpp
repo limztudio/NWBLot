@@ -28,7 +28,7 @@ ReflectionCpuTimingProbe::ReflectionCpuTimingProbe(ProjectRuntimeContext& contex
     , m_publications(NWB_TEXT("reflection"), context.objectArena)
 {}
 
-bool ReflectionCpuTimingProbe::initialize(const AStringView caseName, Core::Alloc::ScratchArena& scratchArena){
+b8 ReflectionCpuTimingProbe::initialize(const AStringView caseName, Core::Alloc::ScratchArena& scratchArena){
     if((caseName != "optical_csg_cap" && caseName != "optical_csg_reference") || !m_context.requestQuit){
         NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: requires the cap or matched slab fixture and a quit callback"));
         return false;
@@ -40,7 +40,7 @@ bool ReflectionCpuTimingProbe::initialize(const AStringView caseName, Core::Allo
     return true;
 }
 
-bool ReflectionCpuTimingProbe::update(){
+b8 ReflectionCpuTimingProbe::update(){
     if(m_complete)
         return true;
     const u64 presentations = m_context.graphics.getSuccessfulPresentationCount();

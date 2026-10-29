@@ -42,7 +42,7 @@ inline constexpr f64 s_HalfPixel = 0.5;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static f32 RoundMeasuredBound(const f64 value, const bool upper)noexcept{
+[[nodiscard]] static f32 RoundMeasuredBound(const f64 value, const b8 upper)noexcept{
     const f32 rounded = static_cast<f32>(value);
     if(upper ? static_cast<f64>(rounded) >= value : static_cast<f64>(rounded) <= value)
         return rounded;
@@ -129,7 +129,7 @@ inline constexpr f64 s_HalfPixel = 0.5;
     const SIMDVectorDouble halfTexel = VectorDoubleSet(s_HalfTexel, s_HalfTexel, 0.0, 0.0);
     SIMDVectorDouble supportMinimum = glyphSize;
     SIMDVectorDouble supportMaximum = VectorDoubleZero();
-    bool visible = false;
+    b8 visible = false;
     for(u32 y = 0u; y <= glyph.height; ++y){
         const u32 y0 = glyph.y + y == 0u ? 0u : glyph.y + y - 1u;
         const u32 y1 = Min(binding.height - 1u, glyph.y + y);
@@ -235,7 +235,7 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
     return Rect{ static_cast<f32>(VectorDoubleGetX(rectangle->value)), static_cast<f32>(VectorDoubleGetY(rectangle->value)), static_cast<f32>(VectorDoubleGetZ(rectangle->value)), static_cast<f32>(VectorDoubleGetW(rectangle->value)) };
 }
 
-bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
+b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
     const DisplayMetrics& metrics = paint.displayMetrics();
     const SIMDVectorSingle pixelScales = VectorMax(VectorSet(metrics.pixelScaleX, metrics.pixelScaleY, 1.0f, 1.0f), VectorSet(metrics.pixelScaleY, metrics.pixelScaleX, 1.0f, 1.0f));
     const SIMDVectorSingle physicalSizes = VectorMultiply(VectorReplicate(layout.fontSize()), pixelScales);
@@ -352,7 +352,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     if(!paint.prepareImages(m_pages.data(), m_pages.size(), m_sdfPages.data(), m_sdfPages.size()))
         return false;
     for(const auto& glyph : prepared){
-        const bool drawn = glyph.sdfPage ? paint.drawSdfGlyph(m_sdfPages[glyph.pageIndex], glyph.channel, glyph.rectangle, glyph.uv, color) : paint.drawGlyph(m_pages[glyph.pageIndex], glyph.rectangle, glyph.uv, color);
+        const b8 drawn = glyph.sdfPage ? paint.drawSdfGlyph(m_sdfPages[glyph.pageIndex], glyph.channel, glyph.rectangle, glyph.uv, color) : paint.drawGlyph(m_pages[glyph.pageIndex], glyph.rectangle, glyph.uv, color);
         if(!drawn){
             NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Admitted UI glyph draw must succeed"));
             return false;

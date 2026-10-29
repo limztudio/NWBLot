@@ -78,12 +78,12 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
     return static_cast<usize>(key);
 }
 
-[[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world)noexcept{
+[[nodiscard]] static b8 UiWantsKeyboardCapture(NWB::Core::ECS::World& world)noexcept{
     const auto& ui = *MakeNotNull(world.getSystem<NWB::Impl::UiLayerSystem>());
     return ui.wantsKeyboard();
 }
 
-[[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world)noexcept{
+[[nodiscard]] static b8 UiWantsMouseCapture(NWB::Core::ECS::World& world)noexcept{
     const auto& ui = *MakeNotNull(world.getSystem<NWB::Impl::UiLayerSystem>());
     return ui.wantsPointer();
 }
@@ -106,7 +106,7 @@ static void ResolveFlyCameraInput(
     const SIMDVectorSingle moveAxes,
     const SIMDVectorSingle mouseDelta,
     const SIMDVectorSingle delta,
-    const bool boosted,
+    const b8 boosted,
     SIMDVectorSingle& outRotation,
     SIMDVectorSingle& outPosition
 )noexcept{
@@ -144,7 +144,7 @@ static void ResolveFlyCameraInput(
     }
 }
 
-static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const SIMDVectorSingle moveAxes, const bool boosted, const SIMDVectorSingle mouseDelta, const SIMDVectorSingle delta)noexcept{
+static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const SIMDVectorSingle moveAxes, const b8 boosted, const SIMDVectorSingle mouseDelta, const SIMDVectorSingle delta)noexcept{
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world);
     NWB_ASSERT(cameraView.valid());
 
@@ -187,7 +187,7 @@ Project::~Project()noexcept{
     destroyWorld();
 }
 
-bool Project::onStartup(){
+b8 Project::onStartup(){
     if(!m_sceneSubsystems.loadProjectStartScene(m_context.assetManager))
         return false;
     if(!m_uiPreview.loadAssets(m_context.objectArena, m_context.assetManager, m_sceneSubsystems))
@@ -233,7 +233,7 @@ void Project::onShutdown(){
     NWB_LOGGER_ESSENTIAL_INFO(__hidden_testbed_runtime::s_ShutdownText);
 }
 
-bool Project::onUpdate(f32 delta){
+b8 Project::onUpdate(f32 delta){
     const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
 
     updateMainCamera(safeDelta);
@@ -245,7 +245,7 @@ bool Project::onUpdate(f32 delta){
     return true;
 }
 
-void Project::windowFocusUpdate(const bool focused)noexcept{
+void Project::windowFocusUpdate(const b8 focused)noexcept{
     if(!focused)
         clearInputState();
 }
@@ -260,7 +260,7 @@ void Project::pointerCaptureLost()noexcept{
     m_pendingMouseDeltaY = 0.0f;
 }
 
-bool Project::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
+b8 Project::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
 
@@ -276,7 +276,7 @@ bool Project::keyboardUpdate(const i32 key, const i32 scancode, const i32 action
     return false;
 }
 
-bool Project::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
+b8 Project::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
     if(!IsFinite(xpos) || !IsFinite(ypos)){
         m_mousePositionValid = false;
         return false;
@@ -313,7 +313,7 @@ bool Project::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
     return false;
 }
 
-bool Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods)noexcept{
+b8 Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods)noexcept{
     static_cast<void>(mods);
 
     if(__hidden_testbed_runtime::UiWantsMouseCapture(*m_world)){
@@ -338,7 +338,7 @@ bool Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mo
     return false;
 }
 
-bool Project::createDefaultScene(){
+b8 Project::createDefaultScene(){
     if(!m_sceneSubsystems.instantiateEntities(*m_world)){
         NWB_LOGGER_ERROR(__hidden_testbed_runtime::s_SceneEntitiesInvalidText);
         return false;
@@ -381,7 +381,7 @@ void Project::clearInputState()noexcept{
     m_mousePositionValid = false;
 }
 
-void Project::setKeyState(const i32 key, const bool pressed)noexcept{
+void Project::setKeyState(const i32 key, const b8 pressed)noexcept{
     const auto keyIndex = __hidden_testbed_runtime::ResolveKeyIndex(key);
     if(!keyIndex)
         return;
@@ -389,7 +389,7 @@ void Project::setKeyState(const i32 key, const bool pressed)noexcept{
     m_keyPressed[*keyIndex] = pressed;
 }
 
-bool Project::keyPressed(const i32 key)const noexcept{
+b8 Project::keyPressed(const i32 key)const noexcept{
     const auto keyIndex = __hidden_testbed_runtime::ResolveKeyIndex(key);
     if(!keyIndex)
         return false;
@@ -398,7 +398,7 @@ bool Project::keyPressed(const i32 key)const noexcept{
 }
 
 void Project::updateMainCamera(const f32 delta)noexcept{
-    const bool pointerCaptured = __hidden_testbed_runtime::UiWantsMouseCapture(*m_world);
+    const b8 pointerCaptured = __hidden_testbed_runtime::UiWantsMouseCapture(*m_world);
     // Pending deltas were admitted by scene ownership; later UI hover cannot erase a completed drag.
     const f32 mouseDeltaX = m_pendingMouseDeltaX;
     const f32 mouseDeltaY = m_pendingMouseDeltaY;
@@ -409,14 +409,14 @@ void Project::updateMainCamera(const f32 delta)noexcept{
         m_mousePositionValid = false;
     }
 
-    const bool keyboardCaptured = __hidden_testbed_runtime::UiWantsKeyboardCapture(*m_world);
+    const b8 keyboardCaptured = __hidden_testbed_runtime::UiWantsKeyboardCapture(*m_world);
     const SIMDVectorSingle moveAxes = keyboardCaptured
         ? VectorZero()
         : __hidden_testbed_runtime::ResolveMoveAxes(
             VectorSet(static_cast<f32>(keyPressed(NWB::Core::Key::D)), static_cast<f32>(keyPressed(NWB::Core::Key::W)), 0.0f, 0.0f),
             VectorSet(static_cast<f32>(keyPressed(NWB::Core::Key::A)), static_cast<f32>(keyPressed(NWB::Core::Key::S)), 0.0f, 0.0f)
         );
-    const bool boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
+    const b8 boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
 
     __hidden_testbed_runtime::ApplyFlyCameraInputToMainCamera(*m_world, moveAxes, boosted, VectorSet(mouseDeltaX, mouseDeltaY, 0.0f, 0.0f), VectorSet(delta, 0.0f, 0.0f, 0.0f));
 }

@@ -49,7 +49,7 @@ Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassB
 }
 
 
-bool RendererMaterialSystem::prepareMeshComputeBindingLayout(){
+b8 RendererMaterialSystem::prepareMeshComputeBindingLayout(){
     if(!m_materialState.m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
@@ -71,7 +71,7 @@ bool RendererMaterialSystem::prepareMeshComputeBindingLayout(){
     return true;
 }
 
-bool RendererMaterialSystem::createComputeEmulationResources(){
+b8 RendererMaterialSystem::createComputeEmulationResources(){
     if(!prepareMeshComputeBindingLayout())
         return false;
 
@@ -104,19 +104,19 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     return true;
 }
 
-bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItemsView& drawItems)noexcept{
+b8 RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItemsView& drawItems)noexcept{
     return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems) && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems) && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems);
 }
 
-bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
+b8 RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
     return prepareMaterialPassResourceBindingsImpl(drawItems, false);
 }
 
-bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
+b8 RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
     return prepareMaterialPassResourceBindingsImpl(drawItems, true);
 }
 
-bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCount){
+b8 RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     if(instanceCount == 0)
         return true;
     NWB_ASSERT(instanceCount <= static_cast<usize>(Limit<u32>::s_Max));
@@ -151,7 +151,7 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
     return true;
 }
 
-bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
+b8 RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
 #if defined(NWB_DEBUG)
     const auto alignedByteCount = AlignUpChecked(requiredByteCount, sizeof(u32));
@@ -191,19 +191,19 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
     return true;
 }
 
-bool RendererMaterialSystem::prepareMaterialPassDrawBuffers(const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes){
+b8 RendererMaterialSystem::prepareMaterialPassDrawBuffers(const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes){
     const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
 
     return reserveInstanceBufferCapacity(instanceData.size()) && reserveMaterialTypedBufferCapacity(uploadBytes);
 }
 
-bool RendererMaterialSystem::materialPassDrawBuffersReady(const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes)const noexcept{
+b8 RendererMaterialSystem::materialPassDrawBuffersReady(const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes)const noexcept{
     const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
 
     return materialPassDrawBuffersReady(instanceData.size(), uploadBytes);
 }
 
-bool RendererMaterialSystem::materialPassDrawBuffersReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
+b8 RendererMaterialSystem::materialPassDrawBuffersReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
     if(materialTypedByteCount == 0u || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u)
         return false;
 
@@ -226,11 +226,11 @@ void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(const ECSRend
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot.value_or(0u);
 }
 
-bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(const Span<const MaterialPassDrawItem> drawItems, const bool computeEmulation)noexcept{
+b8 RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(const Span<const MaterialPassDrawItem> drawItems, const b8 computeEmulation)noexcept{
     if(drawItems.empty())
         return true;
 
-    bool ready = true;
+    b8 ready = true;
     for(const MaterialPassDrawItem& drawItem : drawItems){
         if(!ready)
             break;

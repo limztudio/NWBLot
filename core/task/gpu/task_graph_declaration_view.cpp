@@ -26,35 +26,35 @@ u64 GpuTaskGraphDeclarationReadView::declarationRevision()const noexcept{
     return m_graph ? m_graph->m_declarationRevision : 0u;
 }
 
-bool GpuTaskGraphDeclarationReadView::validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
+b8 GpuTaskGraphDeclarationReadView::validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
     return m_graph && m_graph->validForDeviceGeneration(deviceGeneration);
 }
 
-bool GpuTaskGraphDeclarationReadView::validTask(const GpuTaskId& id)const noexcept{
+b8 GpuTaskGraphDeclarationReadView::validTask(const GpuTaskId& id)const noexcept{
     return m_graph && m_graph->validTask(id);
 }
 
-bool GpuTaskGraphDeclarationReadView::validResource(const GpuGraphResourceId& id)const noexcept{
+b8 GpuTaskGraphDeclarationReadView::validResource(const GpuGraphResourceId& id)const noexcept{
     return m_graph && m_graph->validResource(id);
 }
 
-bool GpuTaskGraphDeclarationReadView::validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept{
+b8 GpuTaskGraphDeclarationReadView::validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept{
     return m_graph && m_graph->validResourceVersion(id);
 }
 
-bool GpuTaskGraphDeclarationReadView::validResourceSet(const GpuGraphResourceSetId& id)const noexcept{
+b8 GpuTaskGraphDeclarationReadView::validResourceSet(const GpuGraphResourceSetId& id)const noexcept{
     return m_graph && m_graph->validResourceSet(id);
 }
 
-bool GpuTaskGraphDeclarationReadView::validUploadBlob(const GpuUploadBlobId& id)const noexcept{
+b8 GpuTaskGraphDeclarationReadView::validUploadBlob(const GpuUploadBlobId& id)const noexcept{
     return m_graph && m_graph->validUploadBlob(id);
 }
 
-bool GpuTaskGraphDeclarationReadView::validPipeline(const GpuGraphPipelineId& id)const noexcept{
+b8 GpuTaskGraphDeclarationReadView::validPipeline(const GpuGraphPipelineId& id)const noexcept{
     return m_graph && m_graph->validPipeline(id);
 }
 
-bool GpuTaskGraphDeclarationReadView::validExternalCompletion(const GpuExternalCompletionId& id)const noexcept{
+b8 GpuTaskGraphDeclarationReadView::validExternalCompletion(const GpuExternalCompletionId& id)const noexcept{
     return m_graph && m_graph->validExternalCompletion(id);
 }
 

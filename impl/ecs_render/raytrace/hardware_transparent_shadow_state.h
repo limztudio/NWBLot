@@ -33,9 +33,9 @@ struct HardwareTransparentShadowState{
     Core::GpuDescriptorHandle m_overflowListHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle m_overflowArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     u32 m_pixelsCapacity = 0u;
-    bool m_ready = false;
-    bool m_pipelineFailed = false;
-    bool m_dispatchLogged = false;
+    b8 m_ready = false;
+    b8 m_pipelineFailed = false;
+    b8 m_dispatchLogged = false;
 };
 
 

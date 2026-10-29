@@ -37,7 +37,7 @@ inline constexpr u32 s_TestTimeoutMS = 15000u;
 
 class DeadlineGuard final{
 public:
-    explicit DeadlineGuard(bool deathTest = false)
+    explicit DeadlineGuard(b8 deathTest = false)
         : m_watchdog([deathTest](const StopToken& stop)noexcept{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
@@ -61,9 +61,9 @@ private:
 
 
 struct TaskGate{
-    Atomic<bool> entered{ false };
-    Atomic<bool> released{ false };
-    Atomic<bool> expired{ false };
+    Atomic<b8> entered{ false };
+    Atomic<b8> released{ false };
+    Atomic<b8> expired{ false };
 
 
 public:

@@ -22,23 +22,23 @@ using namespace UiEditBoxTestSupport;
 
 class UiEditWordSelectionTests : public UiEditBoxHostTests{
 protected:
-    [[nodiscard]] bool down(const usize byte, const u64 timestampMs, const bool shift = false){
+    [[nodiscard]] b8 down(const usize byte, const u64 timestampMs, const b8 shift = false){
         return dispatch({ .timestampMs = timestampMs , .position = atByte(byte), .type = Ui::InputEventType::PrimaryDown, .shift = shift });
     }
 
-    [[nodiscard]] bool move(const usize byte){
+    [[nodiscard]] b8 move(const usize byte){
         return dispatch({ .position = atByte(byte) , .type = Ui::InputEventType::PointerMove });
     }
 
-    [[nodiscard]] bool up(const usize byte){
+    [[nodiscard]] b8 up(const usize byte){
         return dispatch({ .position = atByte(byte) , .type = Ui::InputEventType::PrimaryUp });
     }
 
-    [[nodiscard]] bool click(const usize byte, const u64 timestampMs, const bool shift = false){
+    [[nodiscard]] b8 click(const usize byte, const u64 timestampMs, const b8 shift = false){
         return down(byte, timestampMs, shift) && up(byte);
     }
 
-    [[nodiscard]] bool clickAt(const Ui::Point point, const u64 timestampMs){
+    [[nodiscard]] b8 clickAt(const Ui::Point point, const u64 timestampMs){
         return dispatch({ .timestampMs = timestampMs , .position = point, .type = Ui::InputEventType::PrimaryDown }) && dispatch({ .position = point , .type = Ui::InputEventType::PrimaryUp });
     }
 };

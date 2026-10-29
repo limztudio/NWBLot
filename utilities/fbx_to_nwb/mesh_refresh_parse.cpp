@@ -232,7 +232,7 @@ template<typename ElementT, usize ComponentCount>
     return outInfluences;
 }
 
-[[nodiscard]] bool FillIndicesRecursive(const ScratchPath& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, Core::Alloc::ScratchArena& scratchArena, UtilityVector<u32>& outIndices){
+[[nodiscard]] b8 FillIndicesRecursive(const ScratchPath& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, Core::Alloc::ScratchArena& scratchArena, UtilityVector<u32>& outIndices){
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0u; i < list.size(); ++i){
@@ -266,7 +266,7 @@ template<typename ElementT, usize ComponentCount>
     return outIndices;
 }
 
-[[nodiscard]] bool ValidateStreamIndex(const ScratchPath& nwbFilePath, const AStringView streamName, const u32 index, const usize count){
+[[nodiscard]] b8 ValidateStreamIndex(const ScratchPath& nwbFilePath, const AStringView streamName, const u32 index, const usize count){
     if(index < count)
         return true;
 
@@ -274,7 +274,7 @@ template<typename ElementT, usize ComponentCount>
     return false;
 }
 
-[[nodiscard]] bool ValidateMesh(const ScratchPath& nwbFilePath, const SourceMeshStreams& mesh){
+[[nodiscard]] b8 ValidateMesh(const ScratchPath& nwbFilePath, const SourceMeshStreams& mesh){
     for(const SourceVertexRef& ref : mesh.vertexRefs){
         if(!ValidateStreamIndex(nwbFilePath, s_PositionField, ref.position, mesh.positions.size()))
             return false;
@@ -302,7 +302,7 @@ template<typename ElementT, usize ComponentCount>
     return true;
 }
 
-[[nodiscard]] bool IsAllowedMeshAssetField(const Core::Metascript::MStringView fieldName)noexcept{
+[[nodiscard]] b8 IsAllowedMeshAssetField(const Core::Metascript::MStringView fieldName)noexcept{
     return
         fieldName == s_PositionsField
         || fieldName == s_NormalsField
@@ -314,7 +314,7 @@ template<typename ElementT, usize ComponentCount>
     ;
 }
 
-[[nodiscard]] bool ValidateMeshAssetFields(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
+[[nodiscard]] b8 ValidateMeshAssetFields(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
     if(!asset.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' is not a map"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName));
         return false;

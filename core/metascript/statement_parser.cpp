@@ -34,7 +34,7 @@ constexpr MStringView s_DuplicateVariableDeclarationMessage = "duplicate variabl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsNameInList(const Span<const MStringView> names, const MStringView name)noexcept{
+[[nodiscard]] b8 IsNameInList(const Span<const MStringView> names, const MStringView name)noexcept{
     for(const MStringView currentName : names){
         if(currentName == name)
             return true;
@@ -64,7 +64,7 @@ StatementParser::StatementParser(MStringView source, MetaArena& arena, Alloc::Sc
 {}
 
 
-bool StatementParser::parseInto(){
+b8 StatementParser::parseInto(){
     while(m_cursor.m_current.type != TokenType::EndOfFile){
         if(!parseStatement())
             return false;
@@ -73,7 +73,7 @@ bool StatementParser::parseInto(){
     return !m_cursor.failed();
 }
 
-bool StatementParser::parseDeclaration(const MStringView typeName, const u32 typeLine, const u32 typeColumn){
+b8 StatementParser::parseDeclaration(const MStringView typeName, const u32 typeLine, const u32 typeColumn){
     const MStringView variableName = m_cursor.m_current.text;
     const u32 variableLine = m_cursor.m_current.line;
     const u32 variableColumn = m_cursor.m_current.column;
@@ -93,7 +93,7 @@ bool StatementParser::parseDeclaration(const MStringView typeName, const u32 typ
     return declareVariable(typeName, variableName, Move(initialValue), typeLine, typeColumn, variableLine, variableColumn);
 }
 
-bool StatementParser::declareVariable(const MStringView typeName, const MStringView variableName, Value&& initialValue, const u32 typeLine, const u32 typeColumn, const u32 variableLine, const u32 variableColumn){
+b8 StatementParser::declareVariable(const MStringView typeName, const MStringView variableName, Value&& initialValue, const u32 typeLine, const u32 typeColumn, const u32 variableLine, const u32 variableColumn){
     if(typeName.empty()){
         m_cursor.error(typeLine, typeColumn, "type name must not be empty");
         return false;
@@ -116,7 +116,7 @@ bool StatementParser::declareVariable(const MStringView typeName, const MStringV
     return true;
 }
 
-bool StatementParser::parseStatement(){
+b8 StatementParser::parseStatement(){
     Value attributes = parseAttributeList();
     if(m_cursor.failed())
         return false;
@@ -145,7 +145,7 @@ bool StatementParser::parseStatement(){
     return parseAssignment(firstName, firstLine, firstColumn);
 }
 
-bool StatementParser::parseAssignment(const MStringView firstName, const u32 firstLine, const u32 firstColumn){
+b8 StatementParser::parseAssignment(const MStringView firstName, const u32 firstLine, const u32 firstColumn){
     ExpressionParser::ScratchPath path{m_scratchArena};
     path.reserve(__hidden_metascript_statement_parser::s_InitialReferencePathSegmentCount);
     path.push_back(firstName);
@@ -271,7 +271,7 @@ Value StatementParser::parseAttributeArgument(){
 }
 
 
-bool StatementParser::parseStructDeclaration(Value&& attributes, const u32 structLine, const u32 structColumn){
+b8 StatementParser::parseStructDeclaration(Value&& attributes, const u32 structLine, const u32 structColumn){
     const MStringView structName = m_cursor.m_current.text;
     m_cursor.advance();
 

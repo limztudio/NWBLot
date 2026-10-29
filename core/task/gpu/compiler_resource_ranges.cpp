@@ -22,11 +22,11 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsReadAccess(const GpuTaskResourceAccess::Enum access)noexcept{
+[[nodiscard]] b8 IsReadAccess(const GpuTaskResourceAccess::Enum access)noexcept{
     return access == GpuTaskResourceAccess::Read || access == GpuTaskResourceAccess::ReadWrite;
 }
 
-[[nodiscard]] bool IsWriteAccess(const GpuTaskResourceAccess::Enum access)noexcept{
+[[nodiscard]] b8 IsWriteAccess(const GpuTaskResourceAccess::Enum access)noexcept{
     return access == GpuTaskResourceAccess::Write || access == GpuTaskResourceAccess::ReadWrite;
 }
 
@@ -60,7 +60,7 @@ namespace GpuTaskGraphCompilerDetail{
     return result.bufferRange.hasExtent() ? Expected<GpuTaskResourceRange>(result) : MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] bool RangesOverlap(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& lhs, const GpuTaskResourceRange& rhs)noexcept{
+[[nodiscard]] b8 RangesOverlap(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& lhs, const GpuTaskResourceRange& rhs)noexcept{
     if(resource.type == GpuGraphResourceType::Texture)
         return lhs.textureSubresources.overlaps(rhs.textureSubresources);
     if(resource.type == GpuGraphResourceType::Buffer)
@@ -68,7 +68,7 @@ namespace GpuTaskGraphCompilerDetail{
     return true;
 }
 
-[[nodiscard]] bool RangeContains(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept{
+[[nodiscard]] b8 RangeContains(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept{
     if(resource.type == GpuGraphResourceType::Texture)
         return outer.textureSubresources.contains(inner.textureSubresources);
     if(resource.type == GpuGraphResourceType::Buffer)
@@ -164,7 +164,7 @@ static void AppendResourceRangeRemainder(const ResourceRangeBounds& outer, const
 }
 
 // One task owns transitions between its own declared subresources. Later ranges may add untouched cells needing a boundary source or initial state.
-[[nodiscard]] bool CollectResourceFirstUseRangesWithinTask(
+[[nodiscard]] b8 CollectResourceFirstUseRangesWithinTask(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     const TaskResourceUseIndex& useHistory,
@@ -262,7 +262,7 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
 
 // Walk newest-to-oldest and consume only still-uncovered portions of the requested ranges.
 // A selected state owns exactly the terminal cells it produced; remaining cells keep their declared graph initial state.
-[[nodiscard]] bool CollectLatestResourceStateFragments(
+[[nodiscard]] b8 CollectLatestResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
     const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
@@ -338,7 +338,7 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
 
 // Terminal exports have no single requested range. Subtract later declared states from each earlier range, keeping only its surviving portions.
 // This uses the same symbolic interval/rectangle partition as inter-task consumer fan-in.
-[[nodiscard]] bool CollectTerminalResourceStateFragments(
+[[nodiscard]] b8 CollectTerminalResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
     const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,

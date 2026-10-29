@@ -48,19 +48,19 @@ struct GbufferGraphTask{
         RendererCsgSystem& csgSystem;
         DeferredFrameTargets& targets;
         Core::GpuTimingSubmissionTicket*& timingTicket;
-        const bool& meshViewSetupReady;
-        const bool& sceneShadingSetupReady;
+        const b8& meshViewSetupReady;
+        const b8& sceneShadingSetupReady;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
-        bool materialDrawBuffersUploaded = false;
-        bool csgFrameBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
-        bool regularComputeEmulationOutputStatesGraphOwned = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 csgFrameBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
+        b8 regularComputeEmulationOutputStatesGraphOwned = false;
         // G-buffer keeps regular rasterization; terminal shared task finishes the timing range.
-        bool regularSharedComputeEmulationDrawsGraphOwned = false;
-        bool csgReceiverComputeEmulationOutputStatesGraphOwned = false;
+        b8 regularSharedComputeEmulationDrawsGraphOwned = false;
+        b8 csgReceiverComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* regularSharedComputeEmulationTiming = nullptr;
 
 
@@ -72,8 +72,8 @@ struct GbufferGraphTask{
             RendererCsgSystem& csgSystemIn,
             DeferredFrameTargets& targetsIn,
             Core::GpuTimingSubmissionTicket*& timingTicketIn,
-            const bool& meshViewSetupReadyIn,
-            const bool& sceneShadingSetupReadyIn
+            const b8& meshViewSetupReadyIn,
+            const b8& sceneShadingSetupReadyIn
         )noexcept
             : graphics(graphicsIn)
             , materialSystem(materialSystemIn)
@@ -88,7 +88,7 @@ struct GbufferGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.regularSharedComputeEmulationTiming);

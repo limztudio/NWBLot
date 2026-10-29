@@ -30,7 +30,7 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ValidateManifestVirtualPath(const Name& virtualPath){
+static b8 ValidateManifestVirtualPath(const Name& virtualPath){
     if(virtualPath)
         return true;
 
@@ -56,7 +56,7 @@ static AssetVolumePayloadIdentity BuildPayloadIdentity(const Name& virtualPath, 
     return identity;
 }
 
-static bool ValidatePayloadIdentity(const Name& virtualPath, const AssetVolumePayloadIdentity& identity){
+static b8 ValidatePayloadIdentity(const Name& virtualPath, const AssetVolumePayloadIdentity& identity){
     if(identity.cookKeyHash != 0u)
         return true;
 
@@ -64,7 +64,7 @@ static bool ValidatePayloadIdentity(const Name& virtualPath, const AssetVolumePa
     return false;
 }
 
-bool ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, const u64 plannedFileCount){
+b8 ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, const u64 plannedFileCount){
     manifest.plannedFileCount = plannedFileCount;
     if(plannedFileCount > static_cast<u64>(Limit<usize>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: planned manifest entry count exceeds container capacity"));
@@ -75,7 +75,7 @@ bool ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, const u64
     return true;
 }
 
-bool AppendObjectFilePayloadToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Path& objectPath, const AssetVolumePayloadIdentity& identity){
+b8 AppendObjectFilePayloadToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Path& objectPath, const AssetVolumePayloadIdentity& identity){
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
     if(!ValidatePayloadIdentity(virtualPath, identity))
@@ -95,7 +95,7 @@ bool AppendObjectFilePayloadToManifest(AssetVolumePackManifest& manifest, const 
     return true;
 }
 
-bool AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const void* payloadBytes, const usize payloadByteCount, const u64 cookKeyHash){
+b8 AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const void* payloadBytes, const usize payloadByteCount, const u64 cookKeyHash){
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
     if(payloadByteCount > 0u && payloadBytes == nullptr){

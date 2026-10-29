@@ -48,7 +48,7 @@ public:
 
 class Compiler{
 public:
-    [[nodiscard]] static bool compile(
+    [[nodiscard]] static b8 compile(
         MStringView source,
         MStringView virtualFilePath,
         MetaArena& arena,

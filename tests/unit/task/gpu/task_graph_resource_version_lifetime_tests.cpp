@@ -121,8 +121,8 @@ TEST(GpuTaskGraphResourceVersion, ReportsExplicitClobberCycleWithVersionLifetime
     EXPECT_EQ(analysis.diagnostic().resource, resource);
     EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
     ExpectClosedCycle(analysis);
-    bool foundExplicit = false;
-    bool foundVersionLifetime = false;
+    b8 foundExplicit = false;
+    b8 foundVersionLifetime = false;
     for(const Graphics::GpuTaskDependencyEdge& edge : analysis.cycleEdges()){
         foundExplicit |= edge.hazard == Graphics::GpuTaskHazardType::Explicit;
         if(edge.hazard != Graphics::GpuTaskHazardType::VersionLifetime)

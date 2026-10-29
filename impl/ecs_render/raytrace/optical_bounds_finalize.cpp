@@ -67,7 +67,7 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
         return MakeUnexpected(Failure{});
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
-    const auto ensureBuffer = [&](Core::BufferHandle& buffer, Core::GpuDescriptorHandle& descriptor, const usize byteSize, const Name identity, const bool output){
+    const auto ensureBuffer = [&](Core::BufferHandle& buffer, Core::GpuDescriptorHandle& descriptor, const usize byteSize, const Name identity, const b8 output){
         if(buffer && buffer->getDeviceGeneration() != device.getDeviceGeneration())
             return false;
         if(buffer && buffer->getCreationDescription().byteSize >= byteSize && descriptor.valid())
@@ -93,8 +93,8 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
         descriptor = slot;
         return true;
     };
-    const bool inputReady = ensureBuffer(m_inputBuffer, m_inputDescriptor, gather.runtimeBounds.size() * sizeof(RayTracingOpticalRuntimeInputGpu), Name("raytrace_optical_runtime_inputs"), false);
-    const bool outputReady = inputReady && ensureBuffer(m_outputBuffer, m_outputDescriptor, NWB_RT_OPTICAL_SCENE_HEADER_BYTES + gather.instances.size() * NWB_RT_OPTICAL_INSTANCE_BYTES, Name("raytrace_optical_resolved_scene"), true);
+    const b8 inputReady = ensureBuffer(m_inputBuffer, m_inputDescriptor, gather.runtimeBounds.size() * sizeof(RayTracingOpticalRuntimeInputGpu), Name("raytrace_optical_runtime_inputs"), false);
+    const b8 outputReady = inputReady && ensureBuffer(m_outputBuffer, m_outputDescriptor, NWB_RT_OPTICAL_SCENE_HEADER_BYTES + gather.instances.size() * NWB_RT_OPTICAL_INSTANCE_BYTES, Name("raytrace_optical_resolved_scene"), true);
     if(!outputReady){
         NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: failed to create finalize buffers"));
         return MakeUnexpected(Failure{});
@@ -146,7 +146,7 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
     return snapshot;
 }
 
-bool RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSystem& shaderSystem){
+b8 RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSystem& shaderSystem){
     if(m_pipeline)
         return true;
     auto& device = m_graphics.getDevice();
@@ -178,7 +178,7 @@ bool RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSyst
         m_pipeline.reset();
     if(!pipelineResult)
         NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: failed to create finalize pipeline"));
-    return static_cast<bool>(pipelineResult);
+    return static_cast<b8>(pipelineResult);
 }
 
 

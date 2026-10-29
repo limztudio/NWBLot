@@ -25,7 +25,7 @@ void LightSpaceCaptureHistory::beginFrame()noexcept{
 
 LightSpaceCaptureTicket LightSpaceCaptureHistory::prepare(const LightSpaceCaptureIdentity& identity, const SoftwareShadowCaptureCadence::Enum cadence)noexcept{
     m_pendingReuseLimit = cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames ? s_ShadowCaptureReuseLimitTwoFrames : cadence == SoftwareShadowCaptureCadence::ReuseOneFrame ? s_ShadowCaptureReuseLimitOneFrame : 0u;
-    const bool reuse = m_acceptedReuseCount < m_pendingReuseLimit
+    const b8 reuse = m_acceptedReuseCount < m_pendingReuseLimit
         && m_accepted && identity.trusted && m_acceptedIdentity.trusted
         && identity.scene == m_acceptedIdentity.scene && identity.lighting == m_acceptedIdentity.lighting
         && identity.layout == m_acceptedIdentity.layout;
@@ -46,7 +46,7 @@ void LightSpaceCaptureHistory::recordCapture(const LightSpaceCaptureTicket& tick
         m_captureRecorded = true;
 }
 
-bool LightSpaceCaptureHistory::accept(const LightSpaceCaptureTicket& ticket)noexcept{
+b8 LightSpaceCaptureHistory::accept(const LightSpaceCaptureTicket& ticket)noexcept{
     if(!ticket.valid() || ticket.sequence != m_pendingTicket.sequence || ticket.reuse != m_pendingTicket.reuse)
         return false;
     if(ticket.reuse){

@@ -95,7 +95,7 @@ inline constexpr void UpdateCanonicalNameHashLanes(NameHash& hash, const CharT c
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool UpdateCanonicalNameHashText(NameHash& hash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 UpdateCanonicalNameHashText(NameHash& hash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(const CharT ch : text){
         if(ch == CharT{})
             return false;
@@ -106,7 +106,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsNameHashTokenChar(const CharT ch)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 IsNameHashTokenChar(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     return (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')) || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f')) || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F')) || ch == static_cast<CharT>('_');
 }
 
@@ -158,7 +158,7 @@ template<typename CharT>
     return hash;
 }
 
-inline constexpr bool EqualHash(const NameHash& a, const NameHash& b)noexcept{
+inline constexpr b8 EqualHash(const NameHash& a, const NameHash& b)noexcept{
     for(u32 i = 0u; i < s_HashLaneCount; ++i){
         if(a.qwords[i] != b.qwords[i])
             return false;
@@ -166,7 +166,7 @@ inline constexpr bool EqualHash(const NameHash& a, const NameHash& b)noexcept{
     return true;
 }
 
-inline constexpr bool IsZeroHash(const NameHash& hash)noexcept{
+inline constexpr b8 IsZeroHash(const NameHash& hash)noexcept{
     for(u32 i = 0u; i < s_HashLaneCount; ++i){
         if(hash.qwords[i] != 0)
             return false;
@@ -290,7 +290,7 @@ template<typename CharT>
 }
 
 
-[[nodiscard]] inline constexpr bool LessNameHash(const NameHash& lhs, const NameHash& rhs)noexcept{
+[[nodiscard]] inline constexpr b8 LessNameHash(const NameHash& lhs, const NameHash& rhs)noexcept{
     for(u32 i = 0u; i < NameDetail::s_HashLaneCount; ++i){
         if(lhs.qwords[i] < rhs.qwords[i])
             return true;
@@ -305,10 +305,10 @@ template<typename CharT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr bool operator==(const NameHash& a, const NameHash& b)noexcept{
+inline constexpr b8 operator==(const NameHash& a, const NameHash& b)noexcept{
     return NameDetail::EqualHash(a, b);
 }
-inline constexpr bool operator!=(const NameHash& a, const NameHash& b)noexcept{
+inline constexpr b8 operator!=(const NameHash& a, const NameHash& b)noexcept{
     return !(a == b);
 }
 

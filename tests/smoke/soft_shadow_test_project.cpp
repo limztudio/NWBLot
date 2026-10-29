@@ -161,7 +161,7 @@ private:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         m_timingEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SOFT_SHADOW_TEST_TIMING");
         if(m_timingEnabled){
             m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
@@ -247,7 +247,7 @@ public:
                     return false;
                 }
             }
-            const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+            const b8 hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: natural shadow route {}"), hardwareAvailable ? NWB_TEXT("hardware") : NWB_TEXT("software"));
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: caustic emission 0"));
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: indirect response hemi-ambient"));
@@ -265,7 +265,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftShadowTestSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
@@ -324,8 +324,8 @@ private:
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
     u32 m_rendererBaselineRenderedFrameCount = 0u;
-    bool m_timingEnabled = false;
-    bool m_rendererBaselineCapturePaused = false;
+    b8 m_timingEnabled = false;
+    b8 m_rendererBaselineCapturePaused = false;
 };
 
 

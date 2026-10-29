@@ -22,7 +22,7 @@ namespace __hidden_gpu_persistent_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool BuildSelection(CommandListResourceSelection& selection, const TextureHandle* const textures, const usize textureCount, const BufferHandle* const buffers, const usize bufferCount)noexcept{
+[[nodiscard]] b8 BuildSelection(CommandListResourceSelection& selection, const TextureHandle* const textures, const usize textureCount, const BufferHandle* const buffers, const usize bufferCount)noexcept{
     for(usize index = 0u; index < textureCount; ++index){
         if(!selection.addTexture(textures[index].get(), index))
             return false;
@@ -79,7 +79,7 @@ void GpuPersistentResourceStateCache::Candidate::reset()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuPersistentResourceStateCache::replaceResourceSubset(
+b8 GpuPersistentResourceStateCache::replaceResourceSubset(
     const CommandListResourceStateHandoff& source,
     const TextureHandle* const textures,
     const usize textureCount,
@@ -130,7 +130,7 @@ bool GpuPersistentResourceStateCache::replaceResourceSubset(
     return true;
 }
 
-bool GpuPersistentResourceStateCache::mergeResourceSubset(
+b8 GpuPersistentResourceStateCache::mergeResourceSubset(
     const CommandListResourceStateHandoff& source,
     const TextureHandle* const textures,
     const usize textureCount,
@@ -144,7 +144,7 @@ bool GpuPersistentResourceStateCache::mergeResourceSubset(
     return commit(candidate);
 }
 
-bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
+b8 GpuPersistentResourceStateCache::buildMergedResourceSubset(
     Candidate& outCandidate,
     const CommandListResourceStateHandoff& source,
     const TextureHandle* const textures,
@@ -192,7 +192,7 @@ bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
     return true;
 }
 
-bool GpuPersistentResourceStateCache::buildFilteredResourceSubset(
+b8 GpuPersistentResourceStateCache::buildFilteredResourceSubset(
     Candidate& outCandidate,
     const CommandListResourceStateHandoff& source,
     const TextureHandle* const textures,
@@ -215,7 +215,7 @@ bool GpuPersistentResourceStateCache::buildFilteredResourceSubset(
     return outCandidate.m_states.buildResourceSubset(source, selection);
 }
 
-bool GpuPersistentResourceStateCache::commit(Candidate& candidate)noexcept{
+b8 GpuPersistentResourceStateCache::commit(Candidate& candidate)noexcept{
     if(&candidate.m_owner != this || !candidate.valid() || m_textures.get_allocator() != candidate.m_textures.get_allocator() || m_buffers.get_allocator() != candidate.m_buffers.get_allocator())
         return false;
 

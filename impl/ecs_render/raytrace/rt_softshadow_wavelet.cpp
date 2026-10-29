@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SoftShadowCombinedWaveletInputs::valid()const noexcept{
+b8 SoftShadowCombinedWaveletInputs::valid()const noexcept{
     const Core::Texture* textures[] = { opaqueHistory, opaqueMoments, transparentHistory, transparentMoments, geometry, opaqueOutput, transparentOutput };
     for(usize index = 0u; index < LengthOf(textures); ++index){
         if(!textures[index])
@@ -33,7 +33,7 @@ bool SoftShadowCombinedWaveletInputs::valid()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureSoftCombinedWaveletPipeline(){
+b8 RendererRayTracingSystem::ensureSoftCombinedWaveletPipeline(){
     auto& resolve = m_rayTracingState.m_softShadowResolve;
     if(resolve.m_combinedWavelet.m_pipeline)
         return true;
@@ -72,13 +72,13 @@ bool RendererRayTracingSystem::ensureSoftCombinedWaveletPipeline(){
     return !resolve.m_combinedWaveletFailed;
 }
 
-bool RendererRayTracingSystem::renderSoftShadowCombinedWavelet(Core::CommandList& commandList, DeferredFrameTargets& targets){
+b8 RendererRayTracingSystem::renderSoftShadowCombinedWavelet(Core::CommandList& commandList, DeferredFrameTargets& targets){
     const auto& resolve = m_rayTracingState.m_softShadowResolve;
-    const bool frontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
+    const b8 frontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
     if(
         !CanCombineSoftShadowWavelets(
-            static_cast<bool>(resolve.m_combinedUpsample.m_pipeline),
-            static_cast<bool>(resolve.m_combinedWavelet.m_pipeline),
+            static_cast<b8>(resolve.m_combinedUpsample.m_pipeline),
+            static_cast<b8>(resolve.m_combinedWavelet.m_pipeline),
             m_rayTracingState.m_softShadowTemporalReady,
             m_rayTracingState.m_softTransparentTemporalReady,
             NWB_SHADOW_RESOLVE_PASS_COUNT,

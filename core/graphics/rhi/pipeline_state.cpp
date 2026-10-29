@@ -14,7 +14,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BlendState::RenderTarget::usesConstantColor()const noexcept{
+b8 BlendState::RenderTarget::usesConstantColor()const noexcept{
     return
         srcBlend == BlendFactor::ConstantColor || srcBlend == BlendFactor::InvConstantColor
         || destBlend == BlendFactor::ConstantColor || destBlend == BlendFactor::InvConstantColor
@@ -27,7 +27,7 @@ bool BlendState::RenderTarget::usesConstantColor()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BlendState::usesConstantColor(u32 numTargets)const noexcept{
+b8 BlendState::usesConstantColor(u32 numTargets)const noexcept{
     NWB_ASSERT(numTargets <= s_MaxRenderTargets);
     for(u32 rt = 0u; rt < numTargets; ++rt){
         if(targets[rt].usesConstantColor())

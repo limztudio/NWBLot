@@ -31,7 +31,7 @@ struct GpuComparableTimestampRange{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return physicalQueue.valid() && beginTicks <= endTicks && secondsPerTick > 0.0 && IsFinite(secondsPerTick);
     }
 };

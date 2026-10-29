@@ -42,7 +42,7 @@ static void AssignAssetRefsFromHashes(const Span<const NameHash> hashes, Core::A
 }
 
 template<typename TAsset>
-[[nodiscard]] static bool ValidateUniqueAssetRefs(
+[[nodiscard]] static b8 ValidateUniqueAssetRefs(
     const Span<const Core::Assets::AssetRef<TAsset>> references,
     const TStringView contextPrefix,
     const TStringView contextLabel,
@@ -64,7 +64,7 @@ template<typename TAsset>
     return true;
 }
 
-[[nodiscard]] static bool ValidateAssetMap(const SceneAsset::AssetMap& assets){
+[[nodiscard]] static b8 ValidateAssetMap(const SceneAsset::AssetMap& assets){
     for(const auto& [nickname, assetRef] : assets){
         if(!nickname){
             NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::validatePayload failed: asset entry has an empty nickname"));
@@ -88,7 +88,7 @@ template<typename TAsset>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EntityAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+b8 EntityAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("EntityAsset::validatePayload")))
         return false;
     if(m_components.empty()){
@@ -100,7 +100,7 @@ bool EntityAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     return true;
 }
 
-bool EntityAsset::loadBinary(const Span<const u8> binary){
+b8 EntityAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(AssetsSceneArenaScope::s_EntityLoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<EntityBinaryPayload::EntityHeaderBinary>(
@@ -138,7 +138,7 @@ bool EntityAsset::loadBinary(const Span<const u8> binary){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ProjectAsset::validatePayload()const{
+b8 ProjectAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("ProjectAsset::validatePayload")))
         return false;
     if(!m_startScene.valid()){
@@ -148,7 +148,7 @@ bool ProjectAsset::validatePayload()const{
     return true;
 }
 
-bool ProjectAsset::loadBinary(const Span<const u8> binary){
+b8 ProjectAsset::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ProjectBinaryPayload::ProjectHeaderBinary>(
         binary,
@@ -182,7 +182,7 @@ void SceneAsset::setContents(SubsystemRefVector&& subsystems, AssetMap&& assets,
     m_assets = Move(assets);
 }
 
-bool SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("SceneAsset::validatePayload")))
         return false;
     if(m_subsystems.empty()){
@@ -198,7 +198,7 @@ bool SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     return true;
 }
 
-bool SceneAsset::loadBinary(const Span<const u8> binary){
+b8 SceneAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(AssetsSceneArenaScope::s_SceneLoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SceneBinaryPayload::SceneHeaderBinary>(

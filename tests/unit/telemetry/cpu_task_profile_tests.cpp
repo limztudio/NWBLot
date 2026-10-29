@@ -27,7 +27,7 @@ using TestArena = NWB::Tests::TestArena<struct CpuTaskProfileIntegrationTag>;
 
 class OwnerThreadTimingSink final : public Perf::TimingSink{
 public:
-    OwnerThreadTimingSink(CpuTaskScheduler& scheduler, Perf::TimingRecorder& recorder, const bool injectTasks = false)noexcept
+    OwnerThreadTimingSink(CpuTaskScheduler& scheduler, Perf::TimingRecorder& recorder, const b8 injectTasks = false)noexcept
         : m_scheduler(scheduler)
         , m_recorder(recorder)
         , m_owner(QueryCurrentThreadId())
@@ -36,7 +36,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool enabled()const noexcept override{ return m_recorder.enabled(); }
+    [[nodiscard]] virtual b8 enabled()const noexcept override{ return m_recorder.enabled(); }
 
     [[nodiscard]] virtual Expected<Perf::TimingScopeId> registerScope(const Name& name)override{
         EXPECT_EQ(QueryCurrentThreadId(), m_owner);
@@ -70,7 +70,7 @@ private:
     CpuTaskScheduler& m_scheduler;
     Perf::TimingRecorder& m_recorder;
     ThreadId m_owner;
-    bool m_injectTasks;
+    b8 m_injectTasks;
     usize m_injectionBudget = 64u;
 };
 
@@ -120,7 +120,7 @@ TEST(CpuTaskProfileIntegration, DelayedTaskTimingPreservesExecutionFrameAtLaterP
     telemetry.setCaptureOptions(Telemetry::CaptureOptions::All());
     const Telemetry::PerfSessionRecordResult result = telemetry.recordPerfReport(perf.report());
     ASSERT_TRUE(result.ok());
-    bool foundNamedTask = false;
+    b8 foundNamedTask = false;
     const Telemetry::EventView events = telemetry.view();
     for(usize index = 0u; index < events.eventCount(); ++index){
         const Telemetry::EventRecord* event = events.eventAt(index);

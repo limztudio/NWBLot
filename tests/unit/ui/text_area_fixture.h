@@ -90,7 +90,7 @@ public:
         m_events.push_back(Move(event));
     }
 
-    void key(const i32 value, const bool control = false, const bool shift = false){
+    void key(const i32 value, const b8 control = false, const b8 shift = false){
         AreaEvent event(m_arena);
         event.kind = AreaEventKind::Key;
         const i32 modifiers = (control ? Core::InputModifier::Control : 0) | (shift ? Core::InputModifier::Shift : 0);
@@ -143,7 +143,7 @@ public:
             const u64 beforeRevision = model.revision();
             const u64 beforeSelection = model.selectionGeneration();
             const u64 beforeComposition = model.compositionGeneration();
-            bool vertical = false;
+            b8 vertical = false;
             if(event.kind == AreaEventKind::Action){
                 result.valid = applyAction(event.action, options.readOnly, model, navigation, sink, result);
             }
@@ -191,7 +191,7 @@ public:
         return result;
     }
 
-    [[nodiscard]] virtual bool publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions&)override{
+    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions&)override{
         ++publishes;
         publications.emplace_back(m_arena);
         AreaPublication& record = publications.back();
@@ -209,7 +209,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool applyAction(const EditAction::Enum action, const bool readOnly, EditModel& model, EditNavigationState& navigation, IEditActionSink& sink, EditBoxResult& result){
+    [[nodiscard]] b8 applyAction(const EditAction::Enum action, const b8 readOnly, EditModel& model, EditNavigationState& navigation, IEditActionSink& sink, EditBoxResult& result){
         actionTexts.emplace_back(m_arena);
         actionTexts.back().assign(model.text().data(), model.text().size());
         if(!sink.apply(model, action, readOnly))
@@ -242,8 +242,8 @@ public:
     usize ordinaryLoans = 0u;
     usize actionLoans = 0u;
     usize publishes = 0u;
-    bool seedColumn = false;
-    bool focused = true;
+    b8 seedColumn = false;
+    b8 focused = true;
 
 
 private:
@@ -266,13 +266,13 @@ public:
 
 
 protected:
-    [[nodiscard]] bool beginArea(const u64 generation, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
+    [[nodiscard]] b8 beginArea(const u64 generation, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
         return begin(generation) && m_builder.beginPanel(s_TextAreaPanelKey, bounds);
     }
 
-    [[nodiscard]] bool acceptArea(){ return finishPanel() && m_context.commitFrame(m_context.readyGeneration()); }
+    [[nodiscard]] b8 acceptArea(){ return finishPanel() && m_context.commitFrame(m_context.readyGeneration()); }
 
-    [[nodiscard]] bool frameArea(const u64 generation, const TextAreaOptions& options = {}, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
+    [[nodiscard]] b8 frameArea(const u64 generation, const TextAreaOptions& options = {}, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
         if(!beginArea(generation, bounds))
             return false;
         m_result = m_builder.textArea(s_TextAreaKey, m_model, m_state, options);
@@ -306,7 +306,7 @@ protected:
 
 
 protected:
-    [[nodiscard]] bool acceptBaseline(){
+    [[nodiscard]] b8 acceptBaseline(){
         useHost();
         if(!m_model.setText("alpha\nbeta") || !frameArea(1u, AreaOptions()))
             return false;
@@ -316,11 +316,11 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool beginParent(const u64 generation){
+    [[nodiscard]] b8 beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::LargeLoanParentOptions());
     }
 
-    [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
+    [[nodiscard]] b8 finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
 
     [[nodiscard]] AcceptedAreaFrame accepted()const noexcept{
         AcceptedAreaFrame frame;

@@ -49,7 +49,7 @@ float3 operator/(const float3 value, const f32 divisor)noexcept{
     return quotient;
 }
 
-bool operator==(const int3 first, const int3 second)noexcept{
+b8 operator==(const int3 first, const int3 second)noexcept{
     return first.x == second.x && first.y == second.y && first.z == second.z;
 }
 
@@ -59,7 +59,7 @@ float3 FloorShaderVector(const float3 value)noexcept{
     return floored;
 }
 
-bool AllShaderLanes(const bool value)noexcept{ return value; }
+b8 AllShaderLanes(const b8 value)noexcept{ return value; }
 
 #define floor FloorShaderVector
 #define max Max
@@ -86,7 +86,7 @@ struct FieldRecord{
     int3 cell;
 };
 
-SIMDVectorSingle GatherBoundaryValue(const SIMDVectorSingle position, const bool validateCell)noexcept{
+SIMDVectorSingle GatherBoundaryValue(const SIMDVectorSingle position, const b8 validateCell)noexcept{
     // Move only lane Z.
     const SIMDVectorSingle biased = VectorAdd(position, VectorSet(0.0f, 0.0f, 0.05f, 0.0f));
     float3 biasedPosition;

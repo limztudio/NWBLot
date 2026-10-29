@@ -69,14 +69,14 @@ private:
         usize dragAnchor = 0u;
         usize wordDragStart = 0u;
         usize wordDragEnd = 0u;
-        bool dragging = false;
-        bool wordDragging = false;
-        bool preeditCaretVisible = true;
-        bool actionCapable = false;
-        bool focused = false;
-        bool enabled = true;
-        bool readOnly = false;
-        bool navigationResetPending = false;
+        b8 dragging = false;
+        b8 wordDragging = false;
+        b8 preeditCaretVisible = true;
+        b8 actionCapable = false;
+        b8 focused = false;
+        b8 enabled = true;
+        b8 readOnly = false;
+        b8 navigationResetPending = false;
         Core::TextInputSessionToken rejectedNative;
 
 
@@ -89,8 +89,8 @@ private:
         Core::TextInputEvent native;
         Ui::EditCommandRequest command;
         Ui::EditNavigationDirection::Enum navigationDirection = Ui::EditNavigationDirection::Up;
-        bool completed = false;
-        bool wordSelect = false;
+        b8 completed = false;
+        b8 wordSelect = false;
         usize position = 0u;
         usize wordPosition = 0u;
         u64 geometryRevision = 0u;
@@ -105,9 +105,9 @@ private:
         usize surroundingCaret = 0u;
         f32 navigationViewportHeight = 0.0f;
         UiEditBoxEventKind::Enum kind = UiEditBoxEventKind::Command;
-        bool navigation = false;
-        bool extend = false;
-        bool dragging = false;
+        b8 navigation = false;
+        b8 extend = false;
+        b8 dragging = false;
 
 
     public:
@@ -129,18 +129,18 @@ public:
         const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditNavigationState& navigation,
         Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions
     )override;
-    [[nodiscard]] virtual bool publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options)override;
+    [[nodiscard]] virtual b8 publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options)override;
     void beginFrame(u64 generation, const Ui::DisplayMetrics& display);
     void finishFrame();
     void commitFrame(u64 generation);
     void collectNative();
-    [[nodiscard]] bool prepareSubmit(const Ui::InputEvent& event)noexcept;
-    void input(const Ui::InputEvent& input, Ui::WidgetId previousCapture, bool submit);
-    [[nodiscard]] bool character(u32 unicode);
-    [[nodiscard]] bool pastePrimary(Ui::Point position);
-    [[nodiscard]] bool hasTextFocus()const noexcept;
-    [[nodiscard]] bool wantsTextInput()const noexcept;
-    [[nodiscard]] bool takeClipboardFailure()noexcept;
+    [[nodiscard]] b8 prepareSubmit(const Ui::InputEvent& event)noexcept;
+    void input(const Ui::InputEvent& input, Ui::WidgetId previousCapture, b8 submit);
+    [[nodiscard]] b8 character(u32 unicode);
+    [[nodiscard]] b8 pastePrimary(Ui::Point position);
+    [[nodiscard]] b8 hasTextFocus()const noexcept;
+    [[nodiscard]] b8 wantsTextInput()const noexcept;
+    [[nodiscard]] b8 takeClipboardFailure()noexcept;
     void synchronizeFocus();
     void reset();
 
@@ -148,16 +148,16 @@ public:
 private:
     [[nodiscard]] Entry* find(Ui::WidgetId widget)noexcept;
     [[nodiscard]] const Entry* find(Ui::WidgetId widget)const noexcept;
-    [[nodiscard]] bool append(Event&& event);
-    [[nodiscard]] bool compositionActive(const Entry& entry)const noexcept;
+    [[nodiscard]] b8 append(Event&& event);
+    [[nodiscard]] b8 compositionActive(const Entry& entry)const noexcept;
     void discard(const UiTextEditOwner& owner)noexcept;
     [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model, Ui::IEditActionSink* actions, NavigationBorrow* navigation = nullptr);
-    [[nodiscard]] bool apply(const Ui::EditBoxOptions& options, Event& event, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);
-    [[nodiscard]] bool applyNavigation(const Event& event, Ui::EditNavigationDirection::Enum direction, Ui::EditModel& model, NavigationBorrow& navigation);
-    [[nodiscard]] bool applyAction(const Ui::EditBoxOptions& options, Ui::EditAction::Enum action, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation);
-    [[nodiscard]] bool rejectBorrowedMutation()noexcept;
+    [[nodiscard]] b8 apply(const Ui::EditBoxOptions& options, Event& event, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);
+    [[nodiscard]] b8 applyNavigation(const Event& event, Ui::EditNavigationDirection::Enum direction, Ui::EditModel& model, NavigationBorrow& navigation);
+    [[nodiscard]] b8 applyAction(const Ui::EditBoxOptions& options, Ui::EditAction::Enum action, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation);
+    [[nodiscard]] b8 rejectBorrowedMutation()noexcept;
     [[nodiscard]] u64 nextFocusGeneration()noexcept;
-    void synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, bool inputMethod);
+    void synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, b8 inputMethod);
     [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const noexcept;
     [[nodiscard]] Expected<usize> hit(const Entry& entry, Ui::Point position)const noexcept;
     [[nodiscard]] Expected<usize> hitWord(const Entry& entry, Ui::Point position)const noexcept;
@@ -188,9 +188,9 @@ private:
     u64 m_activeSelectionSequence = 0u;
     Ui::InputSource m_selectionSource;
     usize m_queuedTextBytes = 0u;
-    bool m_clipboardFailure = false;
-    bool m_borrowed = false;
-    bool m_borrowRejected = false;
+    b8 m_clipboardFailure = false;
+    b8 m_borrowed = false;
+    b8 m_borrowRejected = false;
 };
 
 

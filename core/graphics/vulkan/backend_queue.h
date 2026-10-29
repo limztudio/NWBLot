@@ -62,12 +62,12 @@ public:
         u64 recordingWorkerDomain = 0u;
         u64 graphRecordingOwnershipSerial = 0u;
         u32 recordingWorkerIndex = 0u;
-        bool graphSubmissionAuthorized = false;
+        b8 graphSubmissionAuthorized = false;
     };
     struct SubmissionReceipt{
         u64 submittedID = 0u;
         usize timelineWaitCount = 0u;
-        bool accepted = false;
+        b8 accepted = false;
     };
     struct SubmissionFailure{
         u64 lastSubmittedID = 0u;
@@ -124,7 +124,7 @@ public:
         usize localWaitCount = 0u,
         const SubmissionSignal* localSignals = nullptr,
         usize localSignalCount = 0u,
-        bool forceNativeSubmission = false
+        b8 forceNativeSubmission = false
     );
     [[nodiscard]] VkResult updateLastFinishedID();
     void waitForIdle();
@@ -133,7 +133,7 @@ public:
 private:
     [[nodiscard]] u64 nextRecordingID()noexcept;
     void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
-    [[nodiscard]] bool validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const;
+    [[nodiscard]] b8 validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const;
     void transitionCommandBufferState(TrackedCommandBuffer& commandBuffer, TrackedCommandBufferArenaState::Enum nextState);
     void commitCommandBufferStateTransition(TrackedCommandBuffer& commandBuffer, TrackedCommandBufferArenaState::Enum nextState)noexcept;
     void unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
@@ -150,7 +150,7 @@ private:
     void destroyWorkerCommandArenas()noexcept;
     void clearPendingSemaphores()noexcept;
     [[nodiscard]] CommandBufferList::iterator recycleCommandBuffer(CommandBufferList& source, CommandBufferList::iterator commandBuffer);
-    [[nodiscard]] bool coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, bool prerequisiteObservedComplete, const SubmissionWait* localWaits, usize localWaitCount)const noexcept;
+    [[nodiscard]] b8 coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, b8 prerequisiteObservedComplete, const SubmissionWait* localWaits, usize localWaitCount)const noexcept;
 
 
 private:

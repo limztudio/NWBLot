@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool operator==(const GlyphPageBinding& lhs, const GlyphPageBinding& rhs)noexcept{
+b8 operator==(const GlyphPageBinding& lhs, const GlyphPageBinding& rhs)noexcept{
     return lhs.font == rhs.font && lhs.fontGeneration == rhs.fontGeneration && lhs.atlasIdentity == rhs.atlasIdentity && lhs.generation == rhs.generation && lhs.index == rhs.index && lhs.width == rhs.width && lhs.height == rhs.height;
 }
 

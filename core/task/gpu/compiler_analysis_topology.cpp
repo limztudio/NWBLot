@@ -79,7 +79,7 @@ public:
         usize index = taskIndex;
         for(usize level = 0u; level < m_levelCount; ++level){
             u64& word = m_words[m_levelOffsets[level] + index / s_BitsPerWord];
-            const bool wasEmpty = word == 0u;
+            const b8 wasEmpty = word == 0u;
             word |= static_cast<u64>(1u) << (index % s_BitsPerWord);
             if(!wasEmpty)
                 break;
@@ -144,7 +144,7 @@ void BuildTaskDependencyAdjacency(const Span<const GpuTaskDependencyEdge> edges,
     }
 }
 
-bool BuildTopologicalOrder(
+b8 BuildTopologicalOrder(
     const GpuTaskGraph::DeclarationReadView& graph,
     const Span<const GpuTaskDependencyEdge> edges,
     const TaskDependencyAdjacency& adjacency,
@@ -225,7 +225,7 @@ bool BuildTopologicalOrder(
         }
         NWB_ASSERT(false);
     };
-    bool foundCycle = false;
+    b8 foundCycle = false;
     for(u32 taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
         if(visitState[taskIndex] != s_VisitNotStarted)
             continue;

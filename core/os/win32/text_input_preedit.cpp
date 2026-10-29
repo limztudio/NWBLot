@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const TextInputSessionToken token, const u32 unit, const bool moveCaret){
+TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const TextInputSessionToken token, const u32 unit, const b8 moveCaret){
     if(IsUtf16HighSurrogate(unit)){
         if(m_pendingPreeditHighSurrogate != 0u)
             return TextInputAdmission::InvalidText;
@@ -25,7 +25,7 @@ TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const Text
         return TextInputAdmission::Accepted;
     }
     u32 codePoint = unit;
-    bool advanceCaret = moveCaret;
+    b8 advanceCaret = moveCaret;
     if(IsUtf16LowSurrogate(unit)){
         if(m_pendingPreeditHighSurrogate == 0u)
             return TextInputAdmission::InvalidText;

@@ -14,13 +14,13 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TypeChecker::checkTemplateParamBounds(
+b8 TypeChecker::checkTemplateParamBounds(
     const MVector<TemplateParamDecl>& params,
     const ClassDecl* enclosingClass,
     const MethodDecl* enclosingMethod,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
     MethodDecl tempMethodScope(m_arena);
     if(!enclosingMethod)
         tempMethodScope.templateParams = params;
@@ -66,7 +66,7 @@ bool TypeChecker::checkTemplateParamBounds(
     return ok;
 }
 
-bool TypeChecker::interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, const u32 depth)const noexcept{
+b8 TypeChecker::interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, const u32 depth)const noexcept{
     if(depth > 16u)
         return false;
     const TypeRef* unwrappedIface = m_symbols.unwrapTypeAlias(&ifaceRef);
@@ -85,7 +85,7 @@ bool TypeChecker::interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& 
     }
 
     if(const InterfaceDecl* ifaceDecl = m_symbols.findInterface(cleanIface.name)){
-        const bool hasSubst = !ifaceDecl->templateParams.empty() && !cleanIface.templateArgs.empty();
+        const b8 hasSubst = !ifaceDecl->templateParams.empty() && !cleanIface.templateArgs.empty();
         for(const TypeRef* rawBase : ifaceDecl->baseInterfaces){
             if(!rawBase)
                 continue;
@@ -99,13 +99,13 @@ bool TypeChecker::interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& 
     return false;
 }
 
-bool TypeChecker::classImplementsInterface(const ClassDecl& cls, const TypeRef* implClassRef, const TypeRef& requiredIface)const noexcept{
+b8 TypeChecker::classImplementsInterface(const ClassDecl& cls, const TypeRef* implClassRef, const TypeRef& requiredIface)const noexcept{
     const TypeRef* unwrappedReq = m_symbols.unwrapTypeAlias(&requiredIface);
     if(!unwrappedReq)
         return false;
 
     const TypeRef* unwrappedImplCls = implClassRef ? m_symbols.unwrapTypeAlias(implClassRef) : nullptr;
-    const bool hasClsSubst = unwrappedImplCls && !cls.templateParams.empty() && !unwrappedImplCls->templateArgs.empty();
+    const b8 hasClsSubst = unwrappedImplCls && !cls.templateParams.empty() && !unwrappedImplCls->templateArgs.empty();
     for(const TypeRef* rawImpl : cls.implementedInterfaces){
         if(!rawImpl)
             continue;
@@ -118,7 +118,7 @@ bool TypeChecker::classImplementsInterface(const ClassDecl& cls, const TypeRef* 
     return false;
 }
 
-bool TypeChecker::checkTemplateArgBounds(
+b8 TypeChecker::checkTemplateArgBounds(
     const MVector<TemplateParamDecl>& params,
     const MVector<TypeArg>& args,
     const ClassDecl* enclosingClass,
@@ -126,7 +126,7 @@ bool TypeChecker::checkTemplateArgBounds(
     const SourceSpan span,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
     if(args.size() != params.size()){
         reportError(errors, span, "template argument count does not match template parameter list");
         ok = false;
@@ -151,7 +151,7 @@ bool TypeChecker::checkTemplateArgBounds(
             continue;
 
         const MStringView argTypeName = m_symbols.resolveBaseTypeName(arg.type->name);
-        bool isDependentParam = false;
+        b8 isDependentParam = false;
         if(enclosingClass){
             for(const TemplateParamDecl& tp : enclosingClass->templateParams){
                 if(tp.name == arg.type->name || tp.name == argTypeName){
@@ -186,14 +186,14 @@ bool TypeChecker::checkTemplateArgBounds(
     return ok;
 }
 
-bool TypeChecker::checkTemplateArgTypes(
+b8 TypeChecker::checkTemplateArgTypes(
     const MVector<TypeArg>& templateArgs,
     const ClassDecl* enclosingClass,
     const MethodDecl* enclosingMethod,
     const SourceSpan fallbackSpan,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
     for(const TypeArg& targ : templateArgs){
         if(targ.type){
             if(!checkTypeRef(*targ.type, enclosingClass, enclosingMethod, errors))
@@ -208,16 +208,16 @@ bool TypeChecker::checkTemplateArgTypes(
     return ok;
 }
 
-bool TypeChecker::checkTypeRef(
+b8 TypeChecker::checkTypeRef(
     const TypeRef& typeRef,
     const ClassDecl* enclosingClass,
     const MethodDecl* enclosingMethod,
     MVector<ParseError>& errors,
-    const bool allowVoid
+    const b8 allowVoid
 ){
-    bool ok = true;
+    b8 ok = true;
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&typeRef);
-    const bool isVoid = IsVoidTypeRef(&typeRef) || IsVoidTypeRef(unwrapped);
+    const b8 isVoid = IsVoidTypeRef(&typeRef) || IsVoidTypeRef(unwrapped);
     if(isVoid){
         if(typeRef.refMode != ParamPassingMode::None || (unwrapped && unwrapped->refMode != ParamPassingMode::None)){
             reportError(errors, typeRef.span, "'void' cannot be qualified with 'in' or 'mut'");
@@ -330,7 +330,7 @@ void TypeChecker::markStringToPathAdaptation(
         expr.adaptToTChar = true;
 }
 
-bool TypeChecker::verifyConcreteClassImplementsInterface(
+b8 TypeChecker::verifyConcreteClassImplementsInterface(
     ClassDecl* ownerClass,
     const MethodDecl& method,
     const Expr& rhsExpr,

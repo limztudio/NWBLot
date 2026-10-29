@@ -25,11 +25,11 @@ inline constexpr MStringView s_UnterminatedStringMessage = MStringView("untermin
 constexpr usize s_CompoundAssignmentTokenLength = 2u;
 constexpr usize s_ThreeCharTokenLength = 3u;
 
-[[nodiscard]] constexpr bool IsHexDigit(const MChar c)noexcept{
+[[nodiscard]] constexpr b8 IsHexDigit(const MChar c)noexcept{
     return IsAsciiDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
 
-[[nodiscard]] constexpr bool IsBinaryDigit(const MChar c)noexcept{
+[[nodiscard]] constexpr b8 IsBinaryDigit(const MChar c)noexcept{
     return c == '0' || c == '1';
 }
 
@@ -186,7 +186,7 @@ Token Lexer::next()noexcept{
     }
 }
 
-bool Lexer::consumeBalancedBracesRaw(MStringView& outInnerCode)noexcept{
+b8 Lexer::consumeBalancedBracesRaw(MStringView& outInnerCode)noexcept{
     const usize startOffset = m_current;
     u32 braceDepth = 1u;
 
@@ -277,7 +277,7 @@ void Lexer::skipWhitespaceAndComments()noexcept{
             advance();
             advance();
 
-            bool terminated = false;
+            b8 terminated = false;
             while(!isAtEnd()){
                 if(peek() == '*' && peekNext() == '/'){
                     advance();
@@ -327,8 +327,8 @@ Token Lexer::readNumber()noexcept{
     const usize start = m_current;
     const u32 startLine = m_line;
     const u32 startColumn = m_column;
-    bool isDouble = false;
-    bool isFloat = false;
+    b8 isDouble = false;
+    b8 isFloat = false;
 
     if(peek() == '0' && (peekNext() == 'x' || peekNext() == 'X')){
         advance();

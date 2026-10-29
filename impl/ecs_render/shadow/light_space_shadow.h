@@ -91,7 +91,7 @@ struct LightSpaceShadowStorageCapacity{
     u32 arrayLayers = 0u;
 };
 
-[[nodiscard]] bool LightSpaceShadowStorageFits(const LightSpacePlan& plan, const LightSpaceShadowStorageCapacity& capacity)noexcept;
+[[nodiscard]] b8 LightSpaceShadowStorageFits(const LightSpacePlan& plan, const LightSpaceShadowStorageCapacity& capacity)noexcept;
 
 struct LightSpaceShadowCaster{
     Core::BufferHandle triangleIndexBuffer;
@@ -102,8 +102,8 @@ struct LightSpaceShadowCaster{
     u32 meshletCount = 0u;
     u32 meshletDescSlot = 0u;
     u32 meshletBoundsSlot = 0u;
-    bool transparent = false;
-    bool csg = false;
+    b8 transparent = false;
+    b8 csg = false;
 };
 
 [[nodiscard]] Expected<u32> LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster> casters)noexcept;
@@ -163,7 +163,7 @@ struct LightSpaceShadowSnapshot{
     u32 diagnosticFrame = 0u;
     Span<const u8> csgContextBytes{};
     Span<const Core::BufferHandle> csgDynamicBounds{};
-    bool ready = false;
+    b8 ready = false;
 };
 
 struct LightSpaceShadowState{
@@ -183,14 +183,14 @@ public:
     Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_sceneTextures;
     Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_captureTextures;
     Core::ShaderHandle m_shaders[s_LightSpaceShaderCount];
-    bool m_captureSceneTrusted = false;
-    bool m_captureReuseLogged = false;
-    bool m_sceneEligible = false;
-    bool m_resourcesPrepared = false;
-    bool m_pipelineFailed = false;
-    bool m_dispatchLogged = false;
-    bool m_csgDispatchLogged = false;
-    bool m_csgRequired = false;
+    b8 m_captureSceneTrusted = false;
+    b8 m_captureReuseLogged = false;
+    b8 m_sceneEligible = false;
+    b8 m_resourcesPrepared = false;
+    b8 m_pipelineFailed = false;
+    b8 m_dispatchLogged = false;
+    b8 m_csgDispatchLogged = false;
+    b8 m_csgRequired = false;
 
 
 public:
@@ -205,14 +205,14 @@ public:
 };
 
 // Graph tasks own uploads, clears, and entry/exit states. Resolve owns its internal map-to-fallback UAV dependency.
-[[nodiscard]] bool RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
-[[nodiscard]] bool RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
-[[nodiscard]] bool RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, u32 viewIndex, bool transparent);
-[[nodiscard]] bool RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
-[[nodiscard]] bool RecordLightSpaceResolve(
+[[nodiscard]] b8 RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
+[[nodiscard]] b8 RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
+[[nodiscard]] b8 RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, u32 viewIndex, b8 transparent);
+[[nodiscard]] b8 RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
+[[nodiscard]] b8 RecordLightSpaceResolve(
     Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, Core::GpuTimingRecorder& timing,
     const LightSpaceShadowSnapshot& snapshot,
-    Core::Texture& outputTexture, u32 frameIndex, u32 sampleCount, u32 outputSlot, bool transparent
+    Core::Texture& outputTexture, u32 frameIndex, u32 sampleCount, u32 outputSlot, b8 transparent
 );
 
 

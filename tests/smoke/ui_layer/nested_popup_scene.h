@@ -37,14 +37,14 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:
-    [[nodiscard]] bool paintRoot(Impl::Ui::Builder& ui);
-    [[nodiscard]] bool paintParent(Impl::Ui::Builder& ui);
-    [[nodiscard]] bool paintChild(Impl::Ui::Builder& ui);
+    [[nodiscard]] b8 paintRoot(Impl::Ui::Builder& ui);
+    [[nodiscard]] b8 paintParent(Impl::Ui::Builder& ui);
+    [[nodiscard]] b8 paintChild(Impl::Ui::Builder& ui);
     // Copy accepted popup observations during the callback.
     void observeState(Impl::UiPaintContext& context);
     void paintMarkers(Impl::UiPaintContext& context)const;
@@ -82,15 +82,15 @@ private:
     u32 m_focusCode = 0u;
     u32 m_popupTargets = 0u;
     u32 m_popupCount = 0u;
-    bool m_childParentScope = false;
-    bool m_childDeclared = false;
-    bool m_displayChanged = false;
+    b8 m_childParentScope = false;
+    b8 m_childDeclared = false;
+    b8 m_displayChanged = false;
 };
 
 using SharedUiNestedPopupSmokeScene = RefCountPtr< RefCounter<UiNestedPopupSmokeScene>, ArenaRefDeleter<RefCounter<UiNestedPopupSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerNestedPopupSmokeEnabled();
-[[nodiscard]] bool IsUiLayerNestedPopupSkinSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerNestedPopupSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerNestedPopupSkinSmokeEnabled();
 [[nodiscard]] SharedUiNestedPopupSmokeScene CreateUiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 

@@ -94,10 +94,10 @@ public:
 
 private:
     const ScratchPath& m_path;
-    bool m_owned = false;
+    b8 m_owned = false;
 };
 
-[[nodiscard]] static Expected<bool, ErrorCode> CheckOutputs(const OutputPaths& paths, const bool overwrite)noexcept{
+[[nodiscard]] static Expected<b8, ErrorCode> CheckOutputs(const OutputPaths& paths, const b8 overwrite)noexcept{
     const NotNull<const ScratchPath*> files[] = { MakeNotNull(&paths.metadata), MakeNotNull(&paths.font) };
     u32 presentCount = 0u;
     for(const auto file : files){
@@ -130,7 +130,7 @@ private:
     return {};
 }
 
-[[nodiscard]] static Expected<void, ErrorCode> Publish(const OutputPaths& paths, const bool overwrite, TemporaryFile& font, TemporaryFile& metadata){
+[[nodiscard]] static Expected<void, ErrorCode> Publish(const OutputPaths& paths, const b8 overwrite, TemporaryFile& font, TemporaryFile& metadata){
     const auto present = CheckOutputs(paths, overwrite);
     if(!present)
         return MakeUnexpected(present.error());
@@ -214,7 +214,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch){
+b8 WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch){
     auto fontBinary = BuildPreparedFont(options, payload, scratch);
     MetadataString metadata(scratch);
     if(!fontBinary){

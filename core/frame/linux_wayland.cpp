@@ -74,10 +74,10 @@ struct WaylandContext{
 
     i32 bufferScale = 1;
 
-    bool configured = false;
-    bool visible = false;
-    bool shouldClose = false;
-    bool initialSizeConstrained = false;
+    b8 configured = false;
+    b8 visible = false;
+    b8 shouldClose = false;
+    b8 initialSizeConstrained = false;
 
 
 public:
@@ -294,7 +294,7 @@ static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i
     if(height > 0)
         frameData.height() = PixelDimensionForLogical(height, context.bufferScale);
 
-    bool activated = false;
+    b8 activated = false;
     if(states && states->data && states->size >= sizeof(u32)){
         const auto* state = static_cast<const u32*>(states->data);
         const usize stateCount = states->size / sizeof(u32);
@@ -441,7 +441,7 @@ struct WaylandEventFailure{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InitWaylandFrame(Frame& frame){
+b8 InitWaylandFrame(Frame& frame){
     const TStringView windowTitle = frame.windowTitleOrDefault();
 
     auto& frameData = frame.data<Common::LinuxFrame>();
@@ -597,7 +597,7 @@ Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandFrameTextInput(Frame& 
     return service;
 }
 
-bool ShowWaylandFrame(Frame& frame){
+b8 ShowWaylandFrame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
     if(wl_display* const display = GetWaylandDisplay(frameData)){
         if(const auto flushed = FlushDisplay(*display); !flushed){
@@ -608,7 +608,7 @@ bool ShowWaylandFrame(Frame& frame){
     return true;
 }
 
-bool RunWaylandFrame(Frame& frame){
+b8 RunWaylandFrame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
     auto* context = GetWaylandContext(frameData);
     if(!context || !context->display){
@@ -622,8 +622,8 @@ bool RunWaylandFrame(Frame& frame){
         if(frame.quitRequested())
             return true;
 
-        bool windowVisible = context->visible && frameData.width() > 0 && frameData.height() > 0;
-        bool windowIsInFocus = frameData.isActive();
+        b8 windowVisible = context->visible && frameData.width() > 0 && frameData.height() > 0;
+        b8 windowIsInFocus = frameData.isActive();
 
         const i32 timeoutMs = context->input.pollTimeoutForKeyRepeat((!windowVisible || !windowIsInFocus) ? s_InactivePollTimeoutMs : 0);
         if(const auto pumped = PumpEvents(*context, timeoutMs); !pumped){

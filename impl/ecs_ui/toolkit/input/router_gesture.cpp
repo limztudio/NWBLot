@@ -57,7 +57,7 @@ void InputRouter::appendPointerGesture(const HitTarget& target, InputRoutingResu
     ++m_nextActionSequence;
 }
 
-void InputRouter::updatePointerGesture(const Point& position, const bool completed)noexcept{
+void InputRouter::updatePointerGesture(const Point& position, const b8 completed)noexcept{
     if(m_activeGestureSequence == 0u)
         return;
     for(auto& record : m_pointerGestures){

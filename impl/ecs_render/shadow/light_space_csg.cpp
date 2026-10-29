@@ -46,7 +46,7 @@ u64 BuildLightSpaceCsgCaptureIdentity(
     return identity;
 }
 
-void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const usize capacity, const bool hardware){
+void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const usize capacity, const b8 hardware){
     state.gathering = HasCsgFrameCandidates(world);
     state.hardware = hardware;
     state.snapshot.hasCsg = false;
@@ -69,7 +69,7 @@ void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world
     state.solidTriangleMasks.reserve(capacity);
 }
 
-void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, const Core::ECS::EntityID entity, const bool transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, const SIMDVectorSingle localMin, const SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh){
+void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, const Core::ECS::EntityID entity, const b8 transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, const SIMDVectorSingle localMin, const SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh){
     if(!state.gathering)
         return;
     Fnv64AppendValue(state.captureGeometryIdentity, entity.id);
@@ -127,7 +127,7 @@ void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, const Core::ECS::Ent
     state.solidTriangleMasks.push_back(mesh.solidTriangleWords);
 }
 
-bool FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const CsgShapeRegistry& registry, Core::Alloc::ScratchArena& scratchArena){
+b8 FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const CsgShapeRegistry& registry, Core::Alloc::ScratchArena& scratchArena){
     if(!state.gathering)
         return true;
     if(state.receivers.size() != state.instances.size())

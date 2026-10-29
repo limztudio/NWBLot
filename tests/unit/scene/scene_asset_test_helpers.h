@@ -192,7 +192,7 @@ public:
         m_entries.emplace_back(virtualPath, Move(copy));
     }
 
-    virtual bool readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override{
+    virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override{
         outBinary.clear();
         for(const Entry& entry : m_entries){
             if(entry.path == virtualPath){

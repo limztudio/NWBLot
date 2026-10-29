@@ -88,7 +88,7 @@ struct MaterialParameterType{
 
 Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, const Metascript::Document& doc, MaterialCookArena& arena, ScratchArena& scratchArena);
 
-bool ApplyMaterialBindTypedLayoutParameterValue(
+b8 ApplyMaterialBindTypedLayoutParameterValue(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,
     const ACompactString& parameterName,

@@ -65,7 +65,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize(){
+    [[nodiscard]] b8 initialize(){
         if(!m_router.commitTargets(m_targets.data(), m_targets.size(), ++m_generation))
             return false;
         if(m_kind == WorkloadKind::CursorHover || m_kind == WorkloadKind::CommitTargets)
@@ -86,7 +86,7 @@ public:
         return gesture && gesture->inputSource == s_FirstSource && move(s_LastPosition);
     }
 
-    [[nodiscard]] bool operation(){
+    [[nodiscard]] b8 operation(){
         if(m_kind == WorkloadKind::CommitTargets)
             return m_router.commitTargets(m_targets.data(), m_targets.size(), ++m_generation);
         if(m_kind == WorkloadKind::PressedSweep){
@@ -126,7 +126,7 @@ public:
         return checksum;
     }
 
-    [[nodiscard]] bool measure(){
+    [[nodiscard]] b8 measure(){
         if(!initialize())
             return false;
         const auto name = StringFormat(m_arena, "{}_targets_{}_sources_{}", s_Names[m_kind], m_targets.size(), m_contactCount);
@@ -134,7 +134,7 @@ public:
     }
 
 private:
-    [[nodiscard]] bool move(const Point& position){
+    [[nodiscard]] b8 move(const Point& position){
         PointerInput input;
         input.source = s_FirstSource;
         input.position = position;
@@ -142,7 +142,7 @@ private:
         if(!m_router.queuePointer(input))
             return false;
         const InputRoutingResult result = m_router.process();
-        const bool active = m_kind != WorkloadKind::CursorHover;
+        const b8 active = m_kind != WorkloadKind::CursorHover;
         if(!result.pointerConsumed || !result.pointerRouted || result.capture != (active ? WidgetId{ 1u } : WidgetId{}) || result.hover != (m_hoverCapable ? WidgetId{ 1u } : WidgetId{}))
             return false;
         if(active){
@@ -163,7 +163,7 @@ private:
     u64 m_generation = 0u;
     usize m_pressedCount = 0u;
     WorkloadKind::Enum m_kind;
-    bool m_hoverCapable;
+    b8 m_hoverCapable;
 };
 
 
@@ -176,7 +176,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RunPointerBenchmarks(){
+b8 RunPointerBenchmarks(){
     using namespace __hidden_ui_pointer_benchmark;
     constexpr usize s_Counts[]{ 128u, 1024u, 4096u };
     for(const usize count : s_Counts){

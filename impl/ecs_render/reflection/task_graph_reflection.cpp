@@ -56,13 +56,13 @@ struct UploadParametersTask{
         ReflectionFrameParameters parameters;
         ReflectionHistoryPlan history;
         ReflectionFeedbackPlan feedback;
-        bool feedbackReserved = false;
-        const bool* hardwarePreparationReady = nullptr;
+        b8 feedbackReserved = false;
+        const b8* hardwarePreparationReady = nullptr;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         ReflectionFrameParameters parameters = payload.parameters;
         if(!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)
             parameters.hardwareEnabled = 0u;
@@ -109,16 +109,16 @@ struct DispatchTask{
         ReflectionFrameSnapshot resources;
         DispatchStage::Enum stage;
         ReflectionFeedbackReservation feedbackReservation;
-        const bool* hardwarePreparationReady = nullptr;
-        bool* hardwareDispatchLogged = nullptr;
-        bool* fallbackDispatchLogged = nullptr;
+        const b8* hardwarePreparationReady = nullptr;
+        b8* hardwareDispatchLogged = nullptr;
+        b8* fallbackDispatchLogged = nullptr;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         const ReflectionFrameSnapshot& resources = payload.resources;
-        const bool hardware = payload.stage == DispatchStage::Hardware;
+        const b8 hardware = payload.stage == DispatchStage::Hardware;
         if(hardware && (!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady))
             return true;
         Core::ComputePipeline* pipeline = resources.buildArgsPipeline.get();
@@ -135,7 +135,7 @@ public:
             state.setIndirectParams(resources.indirectArgs.get());
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline, hardware ? resources.scene.tlasHeapHandle : Core::GpuDescriptorHandle::Invalid());
-        const bool sliced = resources.scene.csgTraceContextBuffer && (hardware || payload.stage == DispatchStage::BuildArgs);
+        const b8 sliced = resources.scene.csgTraceContextBuffer && (hardware || payload.stage == DispatchStage::BuildArgs);
         CsgDispatchParameters csgParameters;
         csgParameters.frameParametersSlot = resources.frameParametersSlot;
         if(sliced)
@@ -161,8 +161,8 @@ public:
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        const bool hardware = payload.resources.parameters.hardwareEnabled != 0u && payload.resources.parameters.maxHardwareRays > 0u && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
-        const bool sceneReady = payload.resources.parameters.hardwareEnabled != 0u && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        const b8 hardware = payload.resources.parameters.hardwareEnabled != 0u && payload.resources.parameters.maxHardwareRays > 0u && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        const b8 sceneReady = payload.resources.parameters.hardwareEnabled != 0u && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         payload.feedbackReservation.accept(token, sceneReady);
         if(payload.stage == DispatchStage::Hardware && hardware && payload.resources.scene.csgTraceContextBuffer)
             payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
@@ -175,7 +175,7 @@ public:
         else if(payload.stage == DispatchStage::Classify && !hardware){
             if(payload.fallbackDispatchLogged && !*payload.fallbackDispatchLogged){
                 const u32 mode = payload.resources.parameters.traceMode;
-                const bool screen = mode == NWB_REFLECTION_MODE_SCREEN || mode == NWB_REFLECTION_MODE_HYBRID;
+                const b8 screen = mode == NWB_REFLECTION_MODE_SCREEN || mode == NWB_REFLECTION_MODE_HYBRID;
                 TStringView route = screen ? NWB_TEXT("screen-space") : NWB_TEXT("environment");
                 if(mode == NWB_REFLECTION_MODE_DISABLED)
                     route = s_DisabledReflectionRoute;
@@ -199,13 +199,13 @@ struct CsgHardwareSliceTask{
         ReflectionCsgDispatchHandle dispatch;
         u32 slice = 0u;
         u32 sliceCount = 0u;
-        const bool* hardwarePreparationReady = nullptr;
-        bool* hardwareDispatchLogged = nullptr;
+        const b8* hardwarePreparationReady = nullptr;
+        b8* hardwareDispatchLogged = nullptr;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         if(!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)
             return true;
         if(!payload.dispatch || payload.slice >= payload.sliceCount)
@@ -290,13 +290,13 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     using namespace __hidden_task_graph_reflection;
     if(!resources.valid() || inputs.surfaceReads.empty())
         return MakeUnexpected(Failure{});
-    const bool screen = resources.parameters.traceMode == NWB_REFLECTION_MODE_SCREEN || resources.parameters.traceMode == NWB_REFLECTION_MODE_HYBRID;
+    const b8 screen = resources.parameters.traceMode == NWB_REFLECTION_MODE_SCREEN || resources.parameters.traceMode == NWB_REFLECTION_MODE_HYBRID;
     if(screen && (!inputs.opaqueDepth.valid() || !inputs.opaqueColor.valid()))
         return MakeUnexpected(Failure{});
     ReflectionFeedbackReservation feedbackReservation(resources.feedback.control, resources.feedback.plan);
-    const bool feedbackReserved = feedbackReservation.valid();
-    const bool feedbackWrites = feedbackReserved && resources.feedback.plan.eligible && resources.parameters.hardwareEnabled != 0u;
-    const bool buildArguments = resources.hasHardwareWork();
+    const b8 feedbackReserved = feedbackReservation.valid();
+    const b8 feedbackWrites = feedbackReserved && resources.feedback.plan.eligible && resources.parameters.hardwareEnabled != 0u;
+    const b8 buildArguments = resources.hasHardwareWork();
     const DispatchStage::Enum feedbackPublicationStage = buildArguments ? DispatchStage::BuildArgs : DispatchStage::Classify;
     // A stale feedback lease disables this optimization; rendering remains available.
     Core::GpuGraphResourceId feedbackCurrent;

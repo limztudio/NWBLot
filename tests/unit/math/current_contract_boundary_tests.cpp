@@ -139,7 +139,7 @@ TEST(CurrentMathContractBoundaries, TriangleBoxIntersectionRejectsASeparatingPla
         { VectorSet(1.0f, 1.0f, 1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f) },
         { VectorSet(1.2f, 1.0f, 0.0f, 0.0f), VectorSet(1.0f, 1.2f, 0.0f, 0.0f), VectorSet(1.0f, 1.2f, 0.0f, 0.0f) },
     };
-    constexpr bool s_Expected[]{ false, true, true, true, false };
+    constexpr b8 s_Expected[]{ false, true, true, true, false };
     for(usize index = 0u; index < LengthOf(triangles); ++index){
         SCOPED_TRACE(index);
         EXPECT_EQ(box.intersects(triangles[index][0], triangles[index][1], triangles[index][2]), s_Expected[index]);

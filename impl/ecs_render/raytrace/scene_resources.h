@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 struct RayTracingSceneContentStamp{
     u64 geometry = 0u;
     u64 material = 0u;
-    bool trusted = false;
+    b8 trusted = false;
 };
 
 // Ray-tracing domain owns live scene/material tables; effects retain this snapshot post-preflight plus frozen geometry/texture bundles.
@@ -46,11 +46,11 @@ struct RayTracingSceneGraphResources{
     Span<const Core::BufferHandle> csgTraceBoundsBuffers{};
     RayTracingOpticalSceneSnapshot opticalScene;
     u32 materialContextSlotsHeapSlot = 0u;
-    bool hardwareAvailable = false;
+    b8 hardwareAvailable = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return hardwareAvailable && sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer && instanceMaterialBuffer && materialTypedBuffer && instanceBuffer && opticalScene.valid();
     }
 };

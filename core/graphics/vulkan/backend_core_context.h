@@ -51,24 +51,24 @@ struct VulkanContext{
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
     // These are the feature bits actually enabled through vkCreateDevice's pNext chain.
     // Extension names alone are not capability answers because an enabled extension may have had its feature bit disabled.
-    bool accelerationStructureFeatureEnabled = false;
-    bool rayTracingPipelineFeatureEnabled = false;
-    bool rayQueryFeatureEnabled = false;
-    bool opacityMicromapFeatureEnabled = false;
-    bool clusterAccelerationStructureFeatureEnabled = false;
-    bool rayTracingInvocationReorderFeatureEnabled = false;
-    bool rayTracingInvocationReorderExtFeatureEnabled = false;
+    b8 accelerationStructureFeatureEnabled = false;
+    b8 rayTracingPipelineFeatureEnabled = false;
+    b8 rayQueryFeatureEnabled = false;
+    b8 opacityMicromapFeatureEnabled = false;
+    b8 clusterAccelerationStructureFeatureEnabled = false;
+    b8 rayTracingInvocationReorderFeatureEnabled = false;
+    b8 rayTracingInvocationReorderExtFeatureEnabled = false;
     // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair completes a device-domain probe.
     // It is immutable after Device construction.
-    bool comparableGpuTimestamps = false;
-    bool hostQueryResetFeatureEnabled = false;
-    bool textureCompressionBcFeatureEnabled = false;
-    bool textureCompressionAstcLdrFeatureEnabled = false;
-    bool textureCompressionAstcHdrFeatureEnabled = false;
-    bool independentBlendFeatureEnabled = false;
-    bool fullDrawIndexUint32FeatureEnabled = false;
-    bool multiDrawIndirectFeatureEnabled = false;
-    bool drawIndirectFirstInstanceFeatureEnabled = false;
+    b8 comparableGpuTimestamps = false;
+    b8 hostQueryResetFeatureEnabled = false;
+    b8 textureCompressionBcFeatureEnabled = false;
+    b8 textureCompressionAstcLdrFeatureEnabled = false;
+    b8 textureCompressionAstcHdrFeatureEnabled = false;
+    b8 independentBlendFeatureEnabled = false;
+    b8 fullDrawIndexUint32FeatureEnabled = false;
+    b8 multiDrawIndirectFeatureEnabled = false;
+    b8 drawIndirectFirstInstanceFeatureEnabled = false;
     // Descriptor-buffer limits used for layout and offsets.
     VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
@@ -92,33 +92,33 @@ struct VulkanContext{
     i32 auxiliaryTransferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
 
     struct Extensions{
-        bool khrSynchronization2 = false;
-        bool khrCalibratedTimestamps = false;
-        bool khrRayTracingPipeline = false;
-        bool khrRayQuery = false;
-        bool khrAccelerationStructure = false;
-        bool bufferDeviceAddress = false;
-        bool extDescriptorBuffer = false;
-        bool extCalibratedTimestamps = false;
-        bool extDebugUtils = false;
-        bool khrSwapchain = false;
-        bool khrDynamicRendering = false;
-        bool extOpacityMicromap = false;
-        bool nvCooperativeVector = false;
-        bool nvClusterAccelerationStructure = false;
-        bool nvDeviceDiagnosticCheckpoints = false;
-        bool extDeviceFault = false;
-        bool extTextureCompressionAstcHdr = false;
-        bool amdBufferMarker = false;
-        bool extMeshShader = false;
-        bool khrFragmentShadingRate = false;
-        bool extRayTracingInvocationReorder = false;
-        bool nvRayTracingInvocationReorder = false;
-        bool nvRayTracingLinearSweptSpheres = false;
+        b8 khrSynchronization2 = false;
+        b8 khrCalibratedTimestamps = false;
+        b8 khrRayTracingPipeline = false;
+        b8 khrRayQuery = false;
+        b8 khrAccelerationStructure = false;
+        b8 bufferDeviceAddress = false;
+        b8 extDescriptorBuffer = false;
+        b8 extCalibratedTimestamps = false;
+        b8 extDebugUtils = false;
+        b8 khrSwapchain = false;
+        b8 khrDynamicRendering = false;
+        b8 extOpacityMicromap = false;
+        b8 nvCooperativeVector = false;
+        b8 nvClusterAccelerationStructure = false;
+        b8 nvDeviceDiagnosticCheckpoints = false;
+        b8 extDeviceFault = false;
+        b8 extTextureCompressionAstcHdr = false;
+        b8 amdBufferMarker = false;
+        b8 extMeshShader = false;
+        b8 khrFragmentShadingRate = false;
+        b8 extRayTracingInvocationReorder = false;
+        b8 nvRayTracingInvocationReorder = false;
+        b8 nvRayTracingLinearSweptSpheres = false;
     } extensions;
     u16 deviceGeneration = 0u;
-    bool asyncComputeLaneEnabled = false;
-    bool transferQueueEnabled = false;
+    b8 asyncComputeLaneEnabled = false;
+    b8 transferQueueEnabled = false;
 
 
 public:
@@ -204,7 +204,7 @@ inline QueueFamilySharingInfo ResolveQueueFamilySharing(const ResourceQueueShari
     return result;
 }
 
-inline bool UsesConcurrentQueueSharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context)noexcept{
+inline b8 UsesConcurrentQueueSharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context)noexcept{
     return ResolveQueueFamilySharing(sharing, context).mode == VK_SHARING_MODE_CONCURRENT;
 }
 

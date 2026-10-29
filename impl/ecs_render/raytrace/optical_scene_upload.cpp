@@ -65,7 +65,7 @@ RayTracingOpticalUploadPlan RayTracingOpticalUploadState::plan(const RayTracingO
     return result;
 }
 
-bool RayTracingOpticalUploadState::reserve(const RayTracingOpticalUploadPlan& plan)noexcept{
+b8 RayTracingOpticalUploadState::reserve(const RayTracingOpticalUploadPlan& plan)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(!matchesBuffer(plan) || plan.reused || m_reservedSequence != 0u || plan.acceptedSequence != m_acceptedSequence || plan.sequence >= m_nextSequence)
@@ -76,7 +76,7 @@ bool RayTracingOpticalUploadState::reserve(const RayTracingOpticalUploadPlan& pl
     return true;
 }
 
-bool RayTracingOpticalUploadState::isReserved(const RayTracingOpticalUploadPlan& plan)const noexcept{
+b8 RayTracingOpticalUploadState::isReserved(const RayTracingOpticalUploadPlan& plan)const noexcept{
     NothrowScopedLock lock(m_mutex);
 
     return matchesBuffer(plan) && plan.sequence == m_reservedSequence && plan.upload.get() == m_reservedUpload.get();
@@ -91,7 +91,7 @@ void RayTracingOpticalUploadState::discard(const RayTracingOpticalUploadPlan& pl
     }
 }
 
-bool RayTracingOpticalUploadState::accept(const RayTracingOpticalUploadPlan& plan, const Core::QueueSubmissionToken& token)noexcept{
+b8 RayTracingOpticalUploadState::accept(const RayTracingOpticalUploadPlan& plan, const Core::QueueSubmissionToken& token)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(!matchesBuffer(plan) || plan.sequence != m_reservedSequence || plan.upload.get() != m_reservedUpload.get())
@@ -110,7 +110,7 @@ bool RayTracingOpticalUploadState::accept(const RayTracingOpticalUploadPlan& pla
     return true;
 }
 
-bool RayTracingOpticalUploadState::matchesBuffer(const RayTracingOpticalUploadPlan& plan)const noexcept{
+b8 RayTracingOpticalUploadState::matchesBuffer(const RayTracingOpticalUploadPlan& plan)const noexcept{
     return !m_retired && !m_quarantined && plan.valid() && plan.owner == this && plan.buffer.get() == m_buffer.get() && plan.queue == m_primaryQueue && m_primaryQueue.deviceGeneration == m_buffer->getDeviceGeneration();
 }
 
@@ -161,12 +161,12 @@ RayTracingOpticalUploadReservation& RayTracingOpticalUploadReservation::operator
     return *this;
 }
 
-bool RayTracingOpticalUploadReservation::valid()const noexcept{
+b8 RayTracingOpticalUploadReservation::valid()const noexcept{
     return m_reserved && m_control && m_control->isReserved(m_plan);
 }
 
-bool RayTracingOpticalUploadReservation::accept(const Core::QueueSubmissionToken& token)noexcept{
-    const bool accepted = m_reserved && m_control && m_control->accept(m_plan, token);
+b8 RayTracingOpticalUploadReservation::accept(const Core::QueueSubmissionToken& token)noexcept{
+    const b8 accepted = m_reserved && m_control && m_control->accept(m_plan, token);
     if(m_reserved && m_control && !accepted)
         m_control->discard(m_plan);
     m_reserved = false;

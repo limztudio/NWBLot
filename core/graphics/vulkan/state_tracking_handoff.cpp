@@ -69,7 +69,7 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
     }
 }
 
-bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, const CommandListResourceStateHandoff& states){
+b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, const CommandListResourceStateHandoff& states){
     if(!states.validForDeviceGeneration(m_context.deviceGeneration)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff belongs to a retired device generation"));
         return false;
@@ -148,7 +148,7 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
         const ResourceQueueSharing::Mask sharing,
         const GpuPhysicalQueueId ownerQueue,
         const GpuPhysicalQueueId releaseDestinationQueue
-    ) -> bool {
+    ) -> b8 {
         if(sharing != texture.m_creationDesc.queueSharing){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff texture sharing contract does not match the resource description"));
             return false;
@@ -198,7 +198,7 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
         }
         return true;
     };
-    const auto appendBufferAcquire = [&](Buffer& buffer, const BufferRange range, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue) -> bool {
+    const auto appendBufferAcquire = [&](Buffer& buffer, const BufferRange range, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue) -> b8 {
         if(sharing != buffer.m_creationDesc.queueSharing){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff buffer sharing contract does not match the resource description"));
             return false;

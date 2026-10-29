@@ -200,7 +200,7 @@ namespace GraphicsModuleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
+b8 ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
     if(desc.dataSize == 0)
         return true;
     if(!desc.data){
@@ -231,7 +231,7 @@ bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
     return true;
 }
 
-bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
+b8 ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
     if(!desc.data && desc.uploadDataSize == 0)
         return true;
     if(!desc.data || desc.uploadDataSize == 0){
@@ -262,7 +262,7 @@ bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
     return true;
 }
 
-bool ValidateMeshSetupDesc(const GraphicsRuntime::MeshSetupDesc& desc){
+b8 ValidateMeshSetupDesc(const GraphicsRuntime::MeshSetupDesc& desc){
     if(!desc.vertexData || desc.vertexDataSize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up mesh '{}': vertex data is missing"), ConvertString(desc.vertexBufferName.resolvedText()));
         return false;
@@ -342,7 +342,7 @@ Expected<BufferHandle> GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)
         .uploadToken = uploadToken,
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
-    const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
+    const b8 submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         uploadToken,
         *m_standaloneGraphWorkspaces,
         *this,
@@ -381,7 +381,7 @@ Expected<TextureHandle> GraphicsRuntime::setupTexture(const TextureSetupDesc& de
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.textureDesc.format);
-    const bool requiresGraphicsConsumerQueue = formatInfo.hasDepth || formatInfo.hasStencil;
+    const b8 requiresGraphicsConsumerQueue = formatInfo.hasDepth || formatInfo.hasStencil;
     const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::ResolveSetupUploadConsumerQueue(device, desc.queue, desc.uploadDataSize, desc.textureDesc.initialState != ResourceStates::Unknown, requiresGraphicsConsumerQueue);
     const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, desc.uploadDataSize);
     TextureDesc uploadDesc = desc.textureDesc;
@@ -402,7 +402,7 @@ Expected<TextureHandle> GraphicsRuntime::setupTexture(const TextureSetupDesc& de
         .uploadToken = uploadToken,
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
-    const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
+    const b8 submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         uploadToken,
         *m_standaloneGraphWorkspaces,
         *this,

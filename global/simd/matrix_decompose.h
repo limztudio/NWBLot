@@ -243,7 +243,7 @@ static_assert(alignof(Expected<RigidDualQuaternionDouble>) >= alignof(RigidDualQ
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixIsAffine(const SIMDMatrix& matrix, const f32 epsilon)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL MatrixIsAffine(const SIMDMatrix& matrix, const f32 epsilon)noexcept{
     return
         VectorIsFinite(matrix.v[0], VectorComponentMask::s_XYZW)
         && VectorIsFinite(matrix.v[1], VectorComponentMask::s_XYZW)
@@ -253,7 +253,7 @@ static_assert(alignof(Expected<RigidDualQuaternionDouble>) >= alignof(RigidDualQ
     ;
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixDoubleIsAffine(const SIMDMatrixDouble& matrix, const f64 epsilon)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsAffine(const SIMDMatrixDouble& matrix, const f64 epsilon)noexcept{
     return
         VectorDoubleIsFinite(matrix.v[0], VectorDoubleComponentMask::s_DoubleXYZW)
         && VectorDoubleIsFinite(matrix.v[1], VectorDoubleComponentMask::s_DoubleXYZW)
@@ -277,7 +277,7 @@ static_assert(alignof(Expected<RigidDualQuaternionDouble>) >= alignof(RigidDualQ
     return VectorDouble3Dot(row0, VectorDouble3Cross(row1, row2));
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixIsInvertibleAffine(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 determinantEpsilon)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL MatrixIsInvertibleAffine(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 determinantEpsilon)noexcept{
     if(!MatrixIsAffine(matrix, affineEpsilon))
         return false;
 
@@ -285,7 +285,7 @@ static_assert(alignof(Expected<RigidDualQuaternionDouble>) >= alignof(RigidDualQ
     return VectorIsFinite(determinant, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(determinant), VectorReplicate(determinantEpsilon));
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixDoubleIsInvertibleAffine(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 determinantEpsilon)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsInvertibleAffine(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 determinantEpsilon)noexcept{
     if(!MatrixDoubleIsAffine(matrix, affineEpsilon))
         return false;
 
@@ -293,7 +293,7 @@ static_assert(alignof(Expected<RigidDualQuaternionDouble>) >= alignof(RigidDualQ
     return VectorDoubleIsFinite(determinant, VectorDoubleComponentMask::s_DoubleXYZW) && VectorDouble4Greater(VectorDoubleAbs(determinant), VectorDoubleReplicate(determinantEpsilon));
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixIsRigidAffine(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL MatrixIsRigidAffine(const SIMDMatrix& matrix, const f32 affineEpsilon, const f32 rigidEpsilon)noexcept{
     if(!MatrixIsAffine(matrix, affineEpsilon))
         return false;
 
@@ -311,7 +311,7 @@ static_assert(alignof(Expected<RigidDualQuaternionDouble>) >= alignof(RigidDualQ
     ;
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixDoubleIsRigidAffine(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsRigidAffine(const SIMDMatrixDouble& matrix, const f64 affineEpsilon, const f64 rigidEpsilon)noexcept{
     if(!MatrixDoubleIsAffine(matrix, affineEpsilon))
         return false;
 

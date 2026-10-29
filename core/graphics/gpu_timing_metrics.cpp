@@ -29,7 +29,7 @@ static constexpr usize s_MinOverlappingQueueCount = 2u;
 
 struct TimestampEvent{
     u64 ticks = 0u;
-    bool begins = false;
+    b8 begins = false;
 };
 
 using TimestampRangeVector = Vector<GpuComparableTimestampRange, Alloc::ScratchArena>;
@@ -39,7 +39,7 @@ using TimestampEventVector = Vector<TimestampEvent, Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool LessTimestampRange(const GpuComparableTimestampRange& lhs, const GpuComparableTimestampRange& rhs)noexcept{
+[[nodiscard]] static b8 LessTimestampRange(const GpuComparableTimestampRange& lhs, const GpuComparableTimestampRange& rhs)noexcept{
     if(lhs.physicalQueue.deviceGeneration != rhs.physicalQueue.deviceGeneration)
         return lhs.physicalQueue.deviceGeneration < rhs.physicalQueue.deviceGeneration;
     if(lhs.physicalQueue.index != rhs.physicalQueue.index)
@@ -49,7 +49,7 @@ using TimestampEventVector = Vector<TimestampEvent, Alloc::ScratchArena>;
     return lhs.endTicks < rhs.endTicks;
 }
 
-[[nodiscard]] static bool LessTimestampEvent(const TimestampEvent& lhs, const TimestampEvent& rhs)noexcept{
+[[nodiscard]] static b8 LessTimestampEvent(const TimestampEvent& lhs, const TimestampEvent& rhs)noexcept{
     return lhs.ticks < rhs.ticks;
 }
 
@@ -104,7 +104,7 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Gp
     while(rangeIndex < sortedRanges.size()){
         const GpuPhysicalQueueId physicalQueue = sortedRanges[rangeIndex].physicalQueue;
         GpuQueuePacketEnvelopeMetrics queueMetrics{ .physicalQueue = physicalQueue };
-        bool hasMergedRange = false;
+        b8 hasMergedRange = false;
         u64 mergedBegin = 0u;
         u64 mergedEnd = 0u;
 

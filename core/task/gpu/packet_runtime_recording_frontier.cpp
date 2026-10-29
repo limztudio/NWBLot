@@ -50,10 +50,10 @@ public:
                 continue;
             const GpuSubmissionPacketId packet = m_planAccess.packetIdAt(m_packetIndices[parallelIndex]);
             m_recordedGraph.abandonPacketTimingTicketWithoutCallbacks(packet, m_artifactOperation);
-            const bool abortAbandoned = m_graph.abandonPacketRecordingAbortWithoutCallbacks(m_compiledGraph, m_planAccess, abort);
+            const b8 abortAbandoned = m_graph.abandonPacketRecordingAbortWithoutCallbacks(m_compiledGraph, m_planAccess, abort);
             NWB_FATAL_ASSERT_MSG(abortAbandoned, "joined packet unwind must consume every deferred recording abort");
         }
-        const bool recordingAttemptResolved = m_graph.resolveRecordingAttemptIfTerminal(m_compiledGraph, m_recordingAttemptGeneration);
+        const b8 recordingAttemptResolved = m_graph.resolveRecordingAttemptIfTerminal(m_compiledGraph, m_recordingAttemptGeneration);
         NWB_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet unwind must preserve or resolve its exact recording-plan lease");
     }
 
@@ -71,7 +71,7 @@ private:
     Span<const u32> m_packetIndices;
     Span<GpuPacketRecordingAbort> m_aborts;
     u64 m_recordingAttemptGeneration = 0u;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 
@@ -93,10 +93,10 @@ inline constexpr usize s_MinParallelRecordingPacketCount = 2u;
 struct PacketRecordingFrontierEntry{
     GpuSubmissionPacketId packet;
     u32 frontier = 0u;
-    bool allowsParallelRecording = false;
+    b8 allowsParallelRecording = false;
 };
 
-[[nodiscard]] bool LessPacketRecordingFrontierEntry(const PacketRecordingFrontierEntry& left, const PacketRecordingFrontierEntry& right)noexcept{
+[[nodiscard]] b8 LessPacketRecordingFrontierEntry(const PacketRecordingFrontierEntry& left, const PacketRecordingFrontierEntry& right)noexcept{
     return left.frontier < right.frontier || (left.frontier == right.frontier && left.packet.index < right.packet.index);
 }
 
@@ -110,7 +110,7 @@ struct PacketRecordingFrontierEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
+b8 GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketRange& range,
@@ -150,7 +150,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuNativePacketRecorder::recordTaskRangeInCompileOrder(
+b8 GpuNativePacketRecorder::recordTaskRangeInCompileOrder(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuTaskId firstTask,
@@ -173,7 +173,7 @@ bool GpuNativePacketRecorder::recordTaskRangeInCompileOrder(
 }
 
 
-bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
+b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketRange& range,
@@ -205,8 +205,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     Vector<u8, Alloc::ScratchArena> parallelResults(scratchArena);
     Vector<GpuPacketRecordingAbort, Alloc::ScratchArena> parallelAborts(scratchArena);
     usize parallelPacketCount = 0u;
-    const bool usesParallelRecording = !outCommandIrCapture && cpuScheduler.isParallelEnabled() && range.packetCount >= __hidden_gpu_packet_runtime_recording_frontier::s_MinParallelRecordingPacketCount;
-    bool recordingFrontiersAreMonotonic = true;
+    const b8 usesParallelRecording = !outCommandIrCapture && cpuScheduler.isParallelEnabled() && range.packetCount >= __hidden_gpu_packet_runtime_recording_frontier::s_MinParallelRecordingPacketCount;
+    b8 recordingFrontiersAreMonotonic = true;
     {
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
         if(!declarationAccess.valid())
@@ -241,7 +241,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             const GpuTaskId* const tasks = packetView.tasks;
             if(packetPlan.taskCount == 0u)
                 return false;
-            bool allowsParallelRecording = true;
+            b8 allowsParallelRecording = true;
             for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
                 const GpuTaskGraphTaskView task = declarationAccess.taskAt(tasks[taskIndex].index);
                 const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
@@ -385,10 +385,10 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     continue;
                 const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
                 outRecordedGraph.discardPacketTimingTicket(packet, artifactOperation);
-                const bool abortCompleted = graph.completePacketRecordingAbort(compiledGraph, planAccess, abort);
+                const b8 abortCompleted = graph.completePacketRecordingAbort(compiledGraph, planAccess, abort);
                 NWB_FATAL_ASSERT_MSG(abortCompleted, "joined packet drain must consume every deferred recording abort");
             }
-            const bool recordingAttemptResolved = graph.resolveRecordingAttemptIfTerminal(compiledGraph, recordingAttemptGeneration);
+            const b8 recordingAttemptResolved = graph.resolveRecordingAttemptIfTerminal(compiledGraph, recordingAttemptGeneration);
             NWB_FATAL_ASSERT_MSG(recordingAttemptResolved, "joined packet drain must preserve or resolve its exact recording-plan lease");
             recordingUnwind.release();
             if(!parallelWork){
@@ -414,7 +414,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
 }
 
 
-bool GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
+b8 GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,

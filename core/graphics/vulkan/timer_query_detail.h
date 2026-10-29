@@ -37,7 +37,7 @@ inline Expected<Array<u64, s_TimerQueryTimestampCount>, VkResult> GetTimerQueryR
     return timestamps;
 }
 
-[[nodiscard]] inline bool IsSubmissionComplete(Device& device, const QueueSubmissionToken& token){
+[[nodiscard]] inline b8 IsSubmissionComplete(Device& device, const QueueSubmissionToken& token){
     if(!token.valid())
         return true;
     if(!token.hasPhysicalQueueIdentity())

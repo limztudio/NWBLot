@@ -22,7 +22,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateRayDispatchDimensions(const RayTracingDispatchRaysArguments& arguments, const RayDispatchLimits& limits)noexcept{
+b8 ValidateRayDispatchDimensions(const RayTracingDispatchRaysArguments& arguments, const RayDispatchLimits& limits)noexcept{
     if(arguments.width == 0u || arguments.height == 0u || arguments.depth == 0u)
         return true;
     if(limits.maxInvocationCount == 0u)
@@ -161,7 +161,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         return;
     }
 
-    const auto buildRegion = [&](const ShaderTable::DispatchRegionSnapshot& regionSnapshot, const bool required)noexcept -> Expected<VkStridedDeviceAddressRegionKHR>{
+    const auto buildRegion = [&](const ShaderTable::DispatchRegionSnapshot& regionSnapshot, const b8 required)noexcept -> Expected<VkStridedDeviceAddressRegionKHR>{
         Buffer* const buffer = regionSnapshot.buffer.get();
         if(!buffer){
             if(required || regionSnapshot.offset != 0u || regionSnapshot.recordCount != 0u || regionSnapshot.selectedGroupCount != 0u)

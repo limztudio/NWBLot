@@ -24,11 +24,11 @@ namespace __hidden_shape_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidShapeTypeId(const CsgShapeTypeId id)noexcept{
+[[nodiscard]] b8 ValidShapeTypeId(const CsgShapeTypeId id)noexcept{
     return id != s_InvalidCsgShapeTypeId;
 }
 
-[[nodiscard]] bool ValidShaderModuleInclude(const CsgShapeTypeDesc& desc){
+[[nodiscard]] b8 ValidShaderModuleInclude(const CsgShapeTypeDesc& desc){
     if(!desc.shaderModule)
         return true;
     if(desc.shaderModuleInclude.empty()){
@@ -47,7 +47,7 @@ namespace __hidden_shape_registry{
     return true;
 }
 
-[[nodiscard]] bool ValidShapeTypeDesc(const CsgShapeTypeDesc& desc){
+[[nodiscard]] b8 ValidShapeTypeDesc(const CsgShapeTypeDesc& desc){
     if(!desc.name){
         NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type with empty name"));
         return false;
@@ -77,14 +77,14 @@ template<typename ParameterT>
     return parameters;
 }
 
-[[nodiscard]] bool ValidBoundsVectors(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds, const bool finiteBounds)noexcept{
+[[nodiscard]] b8 ValidBoundsVectors(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds, const b8 finiteBounds)noexcept{
     if(!finiteBounds)
         return true;
 
     return AabbTests::Valid(minBounds, maxBounds);
 }
 
-[[nodiscard]] bool ValidPlaneParameters(const SIMDVectorSingle normalDistance)noexcept{
+[[nodiscard]] b8 ValidPlaneParameters(const SIMDVectorSingle normalDistance)noexcept{
     return !Vector4IsNaN(normalDistance) && !Vector4IsInfinite(normalDistance);
 }
 
@@ -196,7 +196,7 @@ CsgShapeRegistry::CsgShapeRegistry(Core::Alloc::GlobalArena& arena)
 {}
 
 
-Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, const bool replaceExisting){
+Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, const b8 replaceExisting){
     if(!__hidden_shape_registry::ValidShapeTypeDesc(desc))
         return MakeUnexpected(Failure{});
 
@@ -302,7 +302,7 @@ Expected<AString<Core::Alloc::GlobalArena>> CsgShapeRegistry::findShaderModuleIn
         return MakeUnexpected(Failure{});
 
     AString<Core::Alloc::GlobalArena> shaderModuleInclude(resultArena);
-    bool found = false;
+    b8 found = false;
     ScopedLock lock(m_mutex);
     for(const CsgShapeTypeInfo& shapeType : m_shapeTypes){
         if(shapeType.desc.shaderModule != shaderModule)
@@ -352,9 +352,9 @@ Expected<CsgShapeTypeInfo> CsgShapeRegistry::shapeTypeById(const CsgShapeTypeId 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
+b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
     Core::Alloc::GlobalArena& arena = registry.m_shapeTypes.get_allocator().arena();
-    bool result = true;
+    b8 result = true;
 
     result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgBoxShapeName, CsgBoxShapeParameters{}, __hidden_shape_registry::BoxBounds), true) && result;
     result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgCapsuleShapeName, CsgCapsuleShapeParameters{}, __hidden_shape_registry::CapsuleBounds), true) && result;

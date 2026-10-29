@@ -27,7 +27,7 @@ namespace __hidden_texture_device{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidateNativeTextureSharing(const Device& device, const VolkInstanceTable& instanceDispatch, const VkPhysicalDevice physicalDevice, const TextureDesc& desc, const NativeTextureProvenance& provenance){
+[[nodiscard]] static b8 ValidateNativeTextureSharing(const Device& device, const VolkInstanceTable& instanceDispatch, const VkPhysicalDevice physicalDevice, const TextureDesc& desc, const NativeTextureProvenance& provenance){
     return VulkanNativeSharingDetail::ValidateNativeResourceSharing(device, instanceDispatch, physicalDevice, desc.queueSharing, provenance, "texture handle for native texture");
 }
 
@@ -104,7 +104,7 @@ Expected<MemoryRequirements> Device::getTextureMemoryRequirements(Texture& textu
     return result;
 }
 
-bool Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
+b8 Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
     if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture belongs to another device"));
         return false;
@@ -176,7 +176,7 @@ bool Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
     return true;
 }
 
-bool Device::isTextureReadyForGpuUse(Texture* textureResource, const VkImageUsageFlags requiredUsage)const noexcept{
+b8 Device::isTextureReadyForGpuUse(Texture* textureResource, const VkImageUsageFlags requiredUsage)const noexcept{
     if(!textureResource)
         return false;
 

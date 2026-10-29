@@ -50,7 +50,7 @@ struct DescriptorBufferSegment{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return (kind == DescriptorBufferSegmentKind::Resource || kind == DescriptorBufferSegmentKind::Sampler) && sizeBytes > 0 && storageIdentity != 0u && allocationSerial != 0u;
     }
 };
@@ -120,10 +120,10 @@ private:
 
 
 public:
-    bool initialize();
-    [[nodiscard]] bool shutdown();
+    b8 initialize();
+    [[nodiscard]] b8 shutdown();
 
-    [[nodiscard]] bool isEnabled()const noexcept;
+    [[nodiscard]] b8 isEnabled()const noexcept;
 
     // Exact driver descriptor size; 0 when descriptor buffers are disabled.
     [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const noexcept;
@@ -139,7 +139,7 @@ public:
 
 private:
     // Driver layout sizes may exceed the working-size defaults; addresses become immutable after the first allocation in a generation.
-    [[nodiscard]] bool reserveInitialCapacityForBindingGeneration(u32 resourceBytes, u32 samplerBytes, u64 requiredGeneration);
+    [[nodiscard]] b8 reserveInitialCapacityForBindingGeneration(u32 resourceBytes, u32 samplerBytes, u64 requiredGeneration);
     [[nodiscard]] Expected<DescriptorBufferSegment> allocateForBindingGeneration(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes, u64 requiredGeneration);
 
 
@@ -153,13 +153,13 @@ private:
 
 public:
     // Validates allocation identity, then encodes one descriptor.
-    bool writeDescriptor(const DescriptorWriteItem& item, const DescriptorBufferSegment& allocation, u32 dstOffsetBytes, VkDescriptorType descriptorType);
+    b8 writeDescriptor(const DescriptorWriteItem& item, const DescriptorBufferSegment& allocation, u32 dstOffsetBytes, VkDescriptorType descriptorType);
 
 
 private:
     [[nodiscard]] Expected<BindingSnapshot> captureBindingSnapshotLocked()const noexcept;
-    [[nodiscard]] bool isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, DescriptorBufferSegmentKind::Enum expectedKind)const noexcept;
-    bool initializeSegment(SegmentStorage& segment, AStringView debugName, u32 capacityBytes);
+    [[nodiscard]] b8 isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, DescriptorBufferSegmentKind::Enum expectedKind)const noexcept;
+    b8 initializeSegment(SegmentStorage& segment, AStringView debugName, u32 capacityBytes);
     void shutdownSegment(SegmentStorage& segment)noexcept;
 
 
@@ -171,8 +171,8 @@ private:
     mutable Futex m_lifecycleMutex;
     u64 m_bindingGeneration = 0u;
     u64 m_nextBindingGeneration = 1u;
-    bool m_enabled = false;
-    bool m_lifecycleTransitioning = false;
+    b8 m_enabled = false;
+    b8 m_lifecycleTransitioning = false;
     SegmentStorage m_resourceSegment;
     SegmentStorage m_samplerSegment;
 };
@@ -207,7 +207,7 @@ private:
 
 
     public:
-        [[nodiscard]] bool initialize(Alloc::PersistentArena& arena, usize count){
+        [[nodiscard]] b8 initialize(Alloc::PersistentArena& arena, usize count){
             clear();
             if(count == 0u)
                 return true;
@@ -263,7 +263,7 @@ private:
 
     public:
         [[nodiscard]] static usize RequiredBytes(u32 capacity);
-        [[nodiscard]] bool initialize(Alloc::PersistentArena& arena, u32 newCapacity);
+        [[nodiscard]] b8 initialize(Alloc::PersistentArena& arena, u32 newCapacity);
         void clear()noexcept;
     };
     struct RetiredSlot{
@@ -299,7 +299,7 @@ public:
 
 
     public:
-        [[nodiscard]] bool valid()const noexcept{ return m_heap != nullptr; }
+        [[nodiscard]] b8 valid()const noexcept{ return m_heap != nullptr; }
 
 
     private:
@@ -318,10 +318,10 @@ public:
     // The final overlapping release establishes the native heap-use boundary for every slot freed under the leases.
     [[nodiscard]] PendingRecordingLease acquirePendingRecordingLease();
 
-    bool initialize(const GpuDescriptorHeapDesc& desc);
+    b8 initialize(const GpuDescriptorHeapDesc& desc);
     void shutdown();
 
-    [[nodiscard]] bool isInitialized()const noexcept{ return m_initialized; }
+    [[nodiscard]] b8 isInitialized()const noexcept{ return m_initialized; }
     // Coherent aggregate lifecycle counters; intentionally does not identify individual physical queues.
     [[nodiscard]] GpuDescriptorHeapLifecycleStatistics lifecycleStatistics()const noexcept;
 
@@ -335,7 +335,7 @@ public:
     void collectRetired();
 
     // Caller must not overwrite a slot read by in-flight work.
-    bool write(GpuDescriptorHandle handle, const DescriptorWriteItem& item);
+    b8 write(GpuDescriptorHandle handle, const DescriptorWriteItem& item);
 
     // Bind after state setup; optionally includes a per-generation TLAS block at set 2.
     void bindCompute(CommandList& commandList, const ComputePipeline& pipeline, GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::Invalid());
@@ -354,7 +354,7 @@ public:
     // Per-generation one-descriptor TLAS layout at set 2.
     [[nodiscard]] const BindingLayoutHandle& getAccelStructLayout()const noexcept{ return m_accelStructLayout; }
 
-    [[nodiscard]] bool hasAccelStructLayout()const noexcept{ return m_accelStructLayout != nullptr; }
+    [[nodiscard]] b8 hasAccelStructLayout()const noexcept{ return m_accelStructLayout != nullptr; }
     // SPIR-V binding number for a descriptor class.
     [[nodiscard]] u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass)const noexcept;
     // Per-generation TLAS segment block bound at heap set 2.
@@ -365,10 +365,10 @@ private:
     [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass)noexcept;
     void releaseAccelStructDescriptorBlock(u32 slot);
     void releaseRetainedDescriptorResource(GpuDescriptorHandle handle);
-    [[nodiscard]] bool isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept;
-    [[nodiscard]] bool retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept;
-    [[nodiscard]] bool retainedResourcesReadyForQueue(const GpuPhysicalQueueId& queue)const noexcept;
-    [[nodiscard]] bool trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer, const GpuPhysicalQueueId& physicalQueue);
+    [[nodiscard]] b8 isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept;
+    [[nodiscard]] b8 retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept;
+    [[nodiscard]] b8 retainedResourcesReadyForQueue(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] b8 trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer, const GpuPhysicalQueueId& physicalQueue);
     [[nodiscard]] Expected<usize> validateCommandBufferUseSubmissionLocked(TrackedCommandBuffer& commandBuffer, const QueueSubmissionToken& submissionToken);
     void commitCommandBufferUseSubmissionLocked(TrackedCommandBuffer& commandBuffer, const QueueSubmissionToken& submissionToken, usize heapUseIndex)noexcept;
     void discardCommandBufferUse(TrackedCommandBuffer& commandBuffer)noexcept;
@@ -376,12 +376,12 @@ private:
     void shutdownForDeviceTeardown()noexcept;
     void shutdownLocked();
     void resetStateForShutdownLocked()noexcept;
-    [[nodiscard]] bool initializeStorage(u32 resourceCapacity, u32 samplerCapacity, u32 accelStructCapacity);
+    [[nodiscard]] b8 initializeStorage(u32 resourceCapacity, u32 samplerCapacity, u32 accelStructCapacity);
 
     // Allocates persistent resource/sampler blocks; TLAS blocks are per handle.
-    bool initializeDescriptorBufferBlocks(u32 offsetAlignmentBytes);
+    b8 initializeDescriptorBufferBlocks(u32 offsetAlignmentBytes);
     // Encodes one descriptor at the class/slot offset.
-    bool writeDescriptorBuffer(const DescriptorWriteItem& writeItem, GpuDescriptorClass::Enum descriptorClass);
+    b8 writeDescriptorBuffer(const DescriptorWriteItem& writeItem, GpuDescriptorClass::Enum descriptorClass);
 
 
 private:
@@ -423,7 +423,7 @@ private:
     u64 m_descriptorBufferGeneration = 0u;
 
     mutable Futex m_mutex;
-    bool m_initialized = false;
+    b8 m_initialized = false;
 };
 
 

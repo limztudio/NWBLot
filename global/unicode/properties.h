@@ -21,7 +21,7 @@ namespace IndicConjunct{
 
 [[nodiscard]] GraphemeBreak::Enum LookupGraphemeBreak(u32 codePoint)noexcept;
 [[nodiscard]] IndicConjunct::Enum LookupIndicConjunct(u32 codePoint)noexcept;
-[[nodiscard]] bool IsExtendedPictographic(u32 codePoint)noexcept;
+[[nodiscard]] b8 IsExtendedPictographic(u32 codePoint)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

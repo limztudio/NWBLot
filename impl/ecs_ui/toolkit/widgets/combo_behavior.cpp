@@ -20,7 +20,7 @@ namespace __hidden_ui_combo_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<bool> ResolveKey(const IListDataSource& source, const u64 count, const u64 key){
+[[nodiscard]] static Expected<b8> ResolveKey(const IListDataSource& source, const u64 count, const u64 key){
     if(key == 0u || count == 0u)
         return false;
     const auto index = source.indexOf(key);
@@ -31,7 +31,7 @@ namespace __hidden_ui_combo_behavior{
     return source.enabled(*index);
 }
 
-[[nodiscard]] static bool SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision, const u64 count){
+[[nodiscard]] static b8 SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision, const u64 count){
     return generation != 0u && revision != 0u && source.instanceGeneration() == generation && source.revision() == revision && source.rowCount() == count;
 }
 
@@ -45,7 +45,7 @@ namespace __hidden_ui_combo_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ComboBehavior::Bind(ComboState& state, const WidgetId owner, const u64 declarationGeneration)noexcept{
+b8 ComboBehavior::Bind(ComboState& state, const WidgetId owner, const u64 declarationGeneration)noexcept{
     if(!owner.valid() || declarationGeneration == 0u)
         return false;
     if(state.m_owner.valid() && (state.m_owner != owner || state.m_ownerDeclaration != declarationGeneration))
@@ -55,7 +55,7 @@ bool ComboBehavior::Bind(ComboState& state, const WidgetId owner, const u64 decl
     return true;
 }
 
-bool ComboBehavior::Reconcile(ComboState& state, const IListDataSource& source){
+b8 ComboBehavior::Reconcile(ComboState& state, const IListDataSource& source){
     using namespace __hidden_ui_combo_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     const u64 generation = source.instanceGeneration();
@@ -63,7 +63,7 @@ bool ComboBehavior::Reconcile(ComboState& state, const IListDataSource& source){
     const u64 count = source.rowCount();
     if(generation == 0u || revision == 0u)
         return false;
-    const bool replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
+    const b8 replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
     const u64 selected = replacement ? 0u : state.m_selectedKey;
     const auto present = ResolveKey(source, count, selected);
     if(!present)
@@ -91,7 +91,7 @@ void ComboBehavior::Close(ComboState& state)noexcept{
     state.m_popup.close();
 }
 
-bool ComboBehavior::Commit(ComboState& state, const IListDataSource& source, const u64 key){
+b8 ComboBehavior::Commit(ComboState& state, const IListDataSource& source, const u64 key){
     using namespace __hidden_ui_combo_behavior;
     if(!state.m_popup.isOpen() || key == 0u)
         return false;

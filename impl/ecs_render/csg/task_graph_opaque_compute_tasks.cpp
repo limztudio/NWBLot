@@ -34,8 +34,8 @@ OpaqueCsgReceiverComputeEmulationGraphTask::Payload::Payload(
     RendererMaterialSystem& materialSystemIn,
     DeferredFrameTargets& targetsIn,
     Core::GpuTimingSubmissionTicket*& timingTicketIn,
-    const bool& meshViewSetupReadyIn,
-    const bool& sceneShadingSetupReadyIn
+    const b8& meshViewSetupReadyIn,
+    const b8& sceneShadingSetupReadyIn
 )noexcept
     : materialSystem(materialSystemIn)
     , targets(targetsIn)
@@ -49,14 +49,14 @@ OpaqueCsgReceiverComputeEmulationGraphTask::Payload::Payload(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 OpaqueCsgReceiverComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.plan.captured)
         return false;
 
     RendererMaterialSystem& materialSystem = payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
+    const b8 frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(!frameSetupReady)
         return true;
 
@@ -67,8 +67,8 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(const Payload& payload, 
 
     const MaterialPassDrawItemsView drawItems = payload.plan.drawItemsView();
     const CsgFrameGpuDataView csgFrameData = payload.plan.csgFrameDataView();
-    const bool deferredResourcesReady = payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount);
-    const bool csgResourcesReady = deferredResourcesReady && payload.csgFrameBuffersUploaded && csgFrameData.hasWork() && payload.csgResources.frameReady(csgFrameData);
+    const b8 deferredResourcesReady = payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount);
+    const b8 csgResourcesReady = deferredResourcesReady && payload.csgFrameBuffersUploaded && csgFrameData.hasWork() && payload.csgResources.frameReady(csgFrameData);
     if(!csgResourcesReady || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
         return true;
 
@@ -100,8 +100,8 @@ OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload::Payload(
     RendererMaterialSystem& materialSystemIn,
     DeferredFrameTargets& targetsIn,
     Core::GpuTimingSubmissionTicket*& timingTicketIn,
-    const bool& meshViewSetupReadyIn,
-    const bool& sceneShadingSetupReadyIn,
+    const b8& meshViewSetupReadyIn,
+    const b8& sceneShadingSetupReadyIn,
     Optional<Core::GpuTimingMeasure>& opaqueCsgTimingIn
 )noexcept
     : graphics(graphicsIn)
@@ -118,7 +118,7 @@ OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload::Payload(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.plan.captured)
         return false;
@@ -126,7 +126,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& pay
     Core::GraphicsRuntime& graphics = payload.graphics;
     RendererMaterialSystem& materialSystem = payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
+    const b8 frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(!frameSetupReady)
         return true;
 
@@ -136,8 +136,8 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& pay
 
     const MaterialPassDrawItemsView drawItems = payload.plan.drawItemsView();
     const CsgFrameGpuDataView csgFrameData = payload.plan.csgFrameDataView();
-    const bool deferredResourcesReady = payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount);
-    const bool csgResourcesReady = deferredResourcesReady && payload.csgFrameBuffersUploaded && csgFrameData.hasWork() && payload.csgResources.frameReady(csgFrameData);
+    const b8 deferredResourcesReady = payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount);
+    const b8 csgResourcesReady = deferredResourcesReady && payload.csgFrameBuffersUploaded && csgFrameData.hasWork() && payload.csgResources.frameReady(csgFrameData);
     if(!csgResourcesReady || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
         return true;
     if(payload.opaqueCsgTiming.has_value())

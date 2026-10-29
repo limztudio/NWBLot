@@ -26,7 +26,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FloatTextureClearGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 FloatTextureClearGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     Core::Texture* const destination = context.declarations.textureForResource(payload.destination);
     if(!destination || commandList.isRenderPassActive())
         return false;

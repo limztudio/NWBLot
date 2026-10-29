@@ -29,7 +29,7 @@ struct ScrollPlacement{
     u64 firstRow = 0u;
     u64 endRow = 0u;
     u64 rowCount = 0u;
-    bool scrollbarVisible = false;
+    b8 scrollbarVisible = false;
 };
 
 
@@ -51,10 +51,10 @@ public:
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
 
     [[nodiscard]] f64 offset()const noexcept{ return m_offset; }
-    [[nodiscard]] bool setOffset(f64 offset)noexcept;
-    [[nodiscard]] bool ensureVisible(f64 start, f64 end, f64 viewportHeight)noexcept;
-    [[nodiscard]] bool scrollBy(f64 delta, f64 contentHeight, f64 viewportHeight)noexcept;
-    [[nodiscard]] bool clamp(f64 contentHeight, f64 viewportHeight)noexcept;
+    [[nodiscard]] b8 setOffset(f64 offset)noexcept;
+    [[nodiscard]] b8 ensureVisible(f64 start, f64 end, f64 viewportHeight)noexcept;
+    [[nodiscard]] b8 scrollBy(f64 delta, f64 contentHeight, f64 viewportHeight)noexcept;
+    [[nodiscard]] b8 clamp(f64 contentHeight, f64 viewportHeight)noexcept;
 
 
 private:

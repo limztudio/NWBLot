@@ -97,7 +97,7 @@ MString SourceEmitter::emitSource(
             for(const MethodDecl* method : classDecl->methods){
                 if(!method)
                     continue;
-                const bool emittedInHeader = !classDecl->isImported && (method->isInline || !method->templateParams.empty());
+                const b8 emittedInHeader = !classDecl->isImported && (method->isInline || !method->templateParams.empty());
                 if(method->isImported || !method->hasBody || emittedInHeader)
                     continue;
 
@@ -160,7 +160,7 @@ void SourceEmitter::emitConstructorNotNullInitializers(
     if(!ctor.isConstructor || !ctor.hasBody)
         return;
 
-    bool firstInit = true;
+    b8 firstInit = true;
     for(const FieldDecl* field : orderedFields){
         if(!field || !field->type || m_symbols.resolveRefMode(field->type) == ParamPassingMode::None || field->defaultExpr || field->hasCtorInit)
             continue;

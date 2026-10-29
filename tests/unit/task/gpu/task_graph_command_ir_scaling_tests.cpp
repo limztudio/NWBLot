@@ -29,7 +29,7 @@ namespace __hidden_task_graph_command_ir_scaling_tests{
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
-[[nodiscard]] bool AppendMixedRecords(Graphics::GpuCommandIrCapture& capture, const usize begin, const usize end){
+[[nodiscard]] b8 AppendMixedRecords(Graphics::GpuCommandIrCapture& capture, const usize begin, const usize end){
     for(usize index = begin; index < end; ++index){
         const Graphics::GpuTaskId task{ .generation = s_CommandIrTask.generation, .index = static_cast<u32>(index) };
         const Graphics::GpuSubmissionPacketId packet{ .generation = s_CommandIrPacket.generation, .index = static_cast<u32>(index / 64u) };

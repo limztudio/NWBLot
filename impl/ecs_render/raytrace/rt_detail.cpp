@@ -40,11 +40,11 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     return RenderableRayTracingMeshResources{ Move(*resolvedMesh), Move(*mesh) };
 }
 
-[[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept{
+[[nodiscard]] b8 IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept{
     return handle.valid() && handle.descriptorClass() == descriptorClass;
 }
 
-[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const bool writable){
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable){
     const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(descriptorClass);
     if(!allocated)
         return MakeUnexpected(allocated.error());
@@ -63,7 +63,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     return handle;
 }
 
-[[nodiscard]] bool EnsureHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const bool writable, Core::GpuDescriptorHandle& inOutHandle){
+[[nodiscard]] b8 EnsureHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable, Core::GpuDescriptorHandle& inOutHandle){
     if(inOutHandle.valid())
         return IsHeapHandle(inOutHandle, descriptorClass);
 
@@ -74,7 +74,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     return true;
 }
 
-[[nodiscard]] bool ReplaceHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const bool writable, Core::GpuDescriptorHandle& inOutHandle){
+[[nodiscard]] b8 ReplaceHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable, Core::GpuDescriptorHandle& inOutHandle){
     const auto acquired = RegisterHeapBuffer(heap, buffer, descriptorClass, writable);
     if(!acquired)
         return false;
@@ -125,7 +125,7 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
     f32 binCost[s_SceneBvhSahBinCount];
     u32 binCount[s_SceneBvhSahBinCount];
 
-    bool anyAxisValid = false;
+    b8 anyAxisValid = false;
     u32 bestAxis = 0u;
     u32 bestBin = 0u;
     f32 bestCost = s_RayTracingFiniteInfinity;

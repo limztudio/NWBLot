@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
+b8 MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
     instance.deformationState.invalidateCurrent();
     if(instance.meshlets.empty())
         return true;
@@ -43,7 +43,7 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance
     return true;
 }
 
-bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     if(!plan.hasActiveSkin)
         return false;
 
@@ -111,7 +111,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningG
 }
 
 
-bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     if(!plan.updatesMeshletBounds)
         return false;
 

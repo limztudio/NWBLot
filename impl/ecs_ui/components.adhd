@@ -8,7 +8,7 @@ type UiPaintCallback = Func<64u, void(mut UiPaintContext)>;
 class UiPaintComponent{
     [transient]
     public UiPaintCallback paint;
-    public bool visible = true;
+    public b8 visible = true;
     public i32 order = 0;
 }
 

@@ -37,7 +37,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<DependencyInputSelection> selectInputs(
         const PipelineOptions& options,
         const NWB::Core::Assets::CookDependencyRegistry& dependencyRegistry,

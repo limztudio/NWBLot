@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Context::addPartTarget(const WidgetState& owner, const WidgetId part, HitTarget target){
+b8 Context::addPartTarget(const WidgetState& owner, const WidgetId part, HitTarget target){
     if(m_failed || !currentDeclaration(owner) || !part.valid() || part == owner.id || m_targets.size() >= s_InputMaxTargets){
         fail();
         return false;
@@ -30,7 +30,7 @@ bool Context::addPartTarget(const WidgetState& owner, const WidgetId part, HitTa
     return true;
 }
 
-Expected<ControlAction> Context::takeControlAction(const WidgetState& state, const bool enabled, const ControlToken& token){
+Expected<ControlAction> Context::takeControlAction(const WidgetState& state, const b8 enabled, const ControlToken& token){
     if(m_failed || !currentDeclaration(state))
         return MakeUnexpected(Failure{});
     if(!enabled){
@@ -43,7 +43,7 @@ Expected<ControlAction> Context::takeControlAction(const WidgetState& state, con
     return m_input.consumeControlAction(state.id, state.declarationGeneration, token);
 }
 
-Expected<PointerGesture> Context::takePartPointerGesture(const WidgetState& owner, const WidgetId part, const bool enabled){
+Expected<PointerGesture> Context::takePartPointerGesture(const WidgetState& owner, const WidgetId part, const b8 enabled){
     if(m_failed || !currentDeclaration(owner))
         return MakeUnexpected(Failure{});
     if(!enabled){

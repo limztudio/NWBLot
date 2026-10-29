@@ -547,7 +547,7 @@ Expected<RayTracingClusterOperationSizeInfo> Device::getClusterOperationSizeInfo
     return RayTracingClusterOperationSizeInfo{ .resultMaxSizeInBytes = vkSizeInfo.accelerationStructureSize, .scratchSizeInBytes = vkSizeInfo.buildScratchSize, };
 }
 
-bool Device::bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, Heap& heap, u64 offset){
+b8 Device::bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, Heap& heap, u64 offset){
     ScopedLock resourceLock(accelerationStructure.m_memoryBindingMutex);
     if(accelerationStructure.m_buffer){
         if(!bindBufferMemory(*accelerationStructure.m_buffer, heap, offset))
@@ -573,7 +573,7 @@ bool Device::bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure,
     return false;
 }
 
-bool Device::isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResource)const noexcept{
+b8 Device::isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResource)const noexcept{
     if(!accelStructResource)
         return false;
 

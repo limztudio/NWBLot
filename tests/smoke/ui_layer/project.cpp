@@ -36,7 +36,7 @@ UiLayerSmokeProject::~UiLayerSmokeProject()noexcept{
     destroyRuntime();
 }
 
-bool UiLayerSmokeProject::onStartup(){
+b8 UiLayerSmokeProject::onStartup(){
     auto& layer = *MakeNotNull(m_world->getSystem<Impl::UiLayerSystem>());
     m_context.graphics.addRenderPassToBack(layer);
     FramebufferCaptureOptions captureOptions;
@@ -59,7 +59,7 @@ void UiLayerSmokeProject::onShutdown(){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: shutdown"));
 }
 
-bool UiLayerSmokeProject::onUpdate(const f32 delta){
+b8 UiLayerSmokeProject::onUpdate(const f32 delta){
     if(m_framebufferCapture)
         m_framebufferCapture->update();
     const auto updated = m_world->tick(delta);

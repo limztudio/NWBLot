@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena){
+b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena){
     using namespace RayTracingSoftwareBvhDetail;
 
     m_preparedSceneContentStamp = {};
@@ -75,9 +75,9 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     m_rayTracingState.m_swShadowMeshIndexHandles.clear();
     m_rayTracingState.m_swShadowMeshAttributeHandles.clear();
     m_rayTracingState.m_swShadowMeshCount = 0u;
-    bool staticScene = true;
-    bool contentComplete = true;
-    bool captureSceneTrusted = true;
+    b8 staticScene = true;
+    b8 contentComplete = true;
+    b8 captureSceneTrusted = true;
     u64 captureSceneIdentity = s_Fnv64OffsetBasis;
     RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
 
@@ -90,9 +90,9 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
         if(!meshResult && meshResult.error() == RenderableMeshResolution::Absent)
             continue;
-        const bool meshReady = meshResult.has_value();
+        const b8 meshReady = meshResult.has_value();
         // Preflight selects pending mesh storage; the prepared build and traversal validate topology before use.
-        const bool topologyReady = meshReady && (meshResult->meshResources.swBvhTopologyBuilt || meshResult->meshResources.runtimeMesh || meshResult->meshResources.swBvhBuildPending);
+        const b8 topologyReady = meshReady && (meshResult->meshResources.swBvhTopologyBuilt || meshResult->meshResources.runtimeMesh || meshResult->meshResources.swBvhBuildPending);
         if(
             !meshReady
             || !topologyReady
@@ -229,7 +229,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
 
         SIMDVectorSingle opticalMin = VectorZero();
         SIMDVectorSingle opticalMax = VectorZero();
-        bool opticalBoundsValid = false;
+        b8 opticalBoundsValid = false;
         if(bvhPrimitive.transparentOccluder && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh){
             const auto bounds = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
             if(bounds){
@@ -238,7 +238,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
                 opticalBoundsValid = true;
             }
         }
-        const bool runtimeOpticalBounds =
+        const b8 runtimeOpticalBounds =
             bvhPrimitive.transparentOccluder && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
             && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid()
         ;
@@ -323,7 +323,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         const Core::BufferHandle& indexBuffer = caster.triangleIndexBuffer;
         if(indexCount == 0u || indexCount > Limit<u32>::s_Max || !indexBuffer || !indexBuffer->getCreationDescription().isIndexBuffer || indexBuffer->getCreationDescription().byteSize < indexCount * sizeof(u32))
             m_lightSpaceShadow.m_sceneEligible = false;
-        const bool csgReceiver = csg.hasCsg && (csg.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
+        const b8 csgReceiver = csg.hasCsg && (csg.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
         if(csgReceiver)
             instanceMaterials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
         caster.instanceIndex = index;
@@ -346,7 +346,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires {} nodes, exceeding the tagged child-index limit"), static_cast<u64>(requiredNodeCount));
         return false;
     }
-    const bool canReuseSceneBvh =
+    const b8 canReuseSceneBvh =
         staticScene
         && m_rayTracingState.m_sceneSwBvhStaticSceneHashValid
         && m_rayTracingState.m_sceneSwBvhStaticSceneHash == sceneStaticHash
@@ -380,7 +380,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         nodes.reserve(buildNodes.size());
         for(const SceneBvhNodeCalculation& buildNode : buildNodes){
             const u32 nodeIndex = static_cast<u32>(nodes.size());
-            const bool leaf = (buildNode.leftChild & BvhNodeIndex::LeafFlag) != 0u;
+            const b8 leaf = (buildNode.leftChild & BvhNodeIndex::LeafFlag) != 0u;
             if(
                 leaf ? ((buildNode.leftChild & ~BvhNodeIndex::LeafFlag) >= instanceCount || buildNode.rightChild != 1u)
                     : (buildNode.leftChild <= nodeIndex || buildNode.rightChild <= nodeIndex || buildNode.leftChild >= buildNodes.size() || buildNode.rightChild >= buildNodes.size())
@@ -411,7 +411,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
     const usize materialTypedUploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes);
     const u64 swMaterialContextHash = ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
-    const bool canReuseSwMaterialContext =
+    const b8 canReuseSwMaterialContext =
         staticScene
         && m_rayTracingState.m_swShadowMaterialContextHashValid
         && m_rayTracingState.m_swShadowMaterialContextHash == swMaterialContextHash
@@ -432,7 +432,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     }
 
     m_rayTracingState.m_sceneBvhInstanceCount = instanceCount;
-    const bool frozenGraphScene = m_preparedSceneBvh.ready() && m_preparedShadowMaterialContext.ready() && m_preparedShadowMaterialContext.route() == PreparedShadowMaterialContextRoute::Software;
+    const b8 frozenGraphScene = m_preparedSceneBvh.ready() && m_preparedShadowMaterialContext.ready() && m_preparedShadowMaterialContext.route() == PreparedShadowMaterialContextRoute::Software;
     if(frozenGraphScene){
         if(!capturePreparedSceneSwBvhTraversal(preparedMeshes, instanceCount)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal"));

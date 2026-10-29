@@ -48,7 +48,7 @@ struct ReflectionFeedbackExtent{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return byteCount != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return byteCount != 0u; }
 };
 
 [[nodiscard]] Expected<ReflectionFeedbackExtent> ComputeReflectionFeedbackExtent(u32 width, u32 height)noexcept;
@@ -59,7 +59,7 @@ struct ReflectionFeedbackBinding{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return buffer && descriptor.valid(); }
+    [[nodiscard]] b8 valid()const noexcept{ return buffer && descriptor.valid(); }
 };
 
 struct ReflectionFeedbackSnapshot{
@@ -71,7 +71,7 @@ struct ReflectionFeedbackSnapshot{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return control && (!plan.eligible || (extent.valid() && current.valid() && previous.valid()));
     }
 };
@@ -84,8 +84,8 @@ public:
 
 public:
     void invalidateResources();
-    [[nodiscard]] bool prepareResources(u32 width, u32 height, const ReflectionSettings& settings, bool enabled);
-    [[nodiscard]] ReflectionFeedbackSnapshot snapshot(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, bool enabled, u64 graphicsFrameIndex)const noexcept;
+    [[nodiscard]] b8 prepareResources(u32 width, u32 height, const ReflectionSettings& settings, b8 enabled);
+    [[nodiscard]] ReflectionFeedbackSnapshot snapshot(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, b8 enabled, u64 graphicsFrameIndex)const noexcept;
 
 private:
     void releaseBuffers();

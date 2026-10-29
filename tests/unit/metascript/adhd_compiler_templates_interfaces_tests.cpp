@@ -94,7 +94,7 @@ TEST(AdhdCompiler, SupportsCustomClassSwitchEnumVarScopeAndConstSafety){
         "}\r\n"
         "class TagKey {\r\n"
         "    public u32 id = 0;\r\n"
-        "    public bool operator==(in TagKey rhs)const {\r\n"
+        "    public b8 operator==(in TagKey rhs)const {\r\n"
         "        return this.id == rhs.id;\r\n"
         "    }\r\n"
         "}\r\n"

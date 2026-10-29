@@ -73,7 +73,7 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 TEST(AssetsGraphics, DeferredWriteOwnsScratchBytesBeforeCallerMutation){
     TestArena testArena;
     const Path root = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "volume_scratch_bytes");
-    const bool prepared = AssetsGraphicsFixture::PrepareCleanDirectory(root);
+    const b8 prepared = AssetsGraphicsFixture::PrepareCleanDirectory(root);
     EXPECT_TRUE(prepared);
 
     if(prepared){
@@ -86,7 +86,7 @@ TEST(AssetsGraphics, DeferredWriteOwnsScratchBytesBeforeCallerMutation){
         mountDesc.createIfMissing = true;
         mountDesc.usage = NWB::Core::Filesystem::VolumeUsage::CookWrite;
         auto filesystemResult = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
-        const bool created = static_cast<bool>(filesystemResult);
+        const b8 created = static_cast<b8>(filesystemResult);
         EXPECT_TRUE(created);
         if(created){
             UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = Move(*filesystemResult);
@@ -99,16 +99,16 @@ TEST(AssetsGraphics, DeferredWriteOwnsScratchBytesBeforeCallerMutation){
             payload.push_back(4u);
 
             const Name virtualPath("project/tests/scratch_payload");
-            const bool pushed = filesystem->writeFileDeferred(virtualPath, payload);
+            const b8 pushed = filesystem->writeFileDeferred(virtualPath, payload);
             EXPECT_TRUE(pushed);
             if(pushed){
                 payload[0] = 99u;
 
-                const bool flushed = filesystem->flush();
+                const b8 flushed = filesystem->flush();
                 EXPECT_TRUE(flushed);
                 if(flushed){
                     NWB::Core::Assets::AssetBytes readback = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-                    const bool loaded = filesystem->readFile(virtualPath, readback);
+                    const b8 loaded = filesystem->readFile(virtualPath, readback);
                     EXPECT_TRUE(loaded);
                     if(loaded){
                         ASSERT_EQ(readback.size(), 4u);
@@ -198,7 +198,7 @@ using AssetObjectCachePathVector = Vector<Path, NWB::Core::Alloc::GlobalArena>;
     return bytes;
 }
 
-static bool AssetBytesEqual(const Span<const u8> lhs, const Span<const u8> rhs)noexcept{
+static b8 AssetBytesEqual(const Span<const u8> lhs, const Span<const u8> rhs)noexcept{
     if(lhs.size() != rhs.size())
         return false;
     for(usize i = 0u; i < lhs.size(); ++i){

@@ -34,7 +34,7 @@ struct CpuWorkerPlacement{
 
 
 public:
-    [[nodiscard]] inline bool valid()const noexcept{ return logicalProcessorIndex != s_InvalidProcessor; }
+    [[nodiscard]] inline b8 valid()const noexcept{ return logicalProcessorIndex != s_InvalidProcessor; }
 };
 
 
@@ -44,7 +44,7 @@ public:
 // Query on the worker-creating thread; honors CPU sets; never invents indices.
 [[nodiscard]] Expected<InteropVector<CpuWorkerPlacement>> QueryCpuWorkerPlacements();
 // Applies one processor identity, including groups and indices beyond 63.
-[[nodiscard]] bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement);
+[[nodiscard]] b8 SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement);
 
 [[nodiscard]] u32 QueryCpuCoreCount(CpuAffinity::Enum type);
 

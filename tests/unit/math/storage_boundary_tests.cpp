@@ -50,7 +50,7 @@ static void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const S
     NWB_MEMCPY(reinterpret_cast<u8*>(&record.value) + logicalBytes, sizeof(Storage) - logicalBytes, poison, sizeof(Storage) - logicalBytes);
     Array<u8, sizeof(StorageRecord)> original{};
     NWB_MEMCPY(original.data(), original.size(), &record, sizeof(record));
-    for(const bool stream : { false, true }){
+    for(const b8 stream : { false, true }){
         NWB_MEMCPY(&record, sizeof(record), original.data(), original.size());
         if(stream){
             StreamDouble(source, record.value);
@@ -327,7 +327,7 @@ TEST(Math, SelectionControlTreatsHighBitUnsignedValuesAsTrueAndPreservesSelected
         const SIMDVectorSingle selected = VectorSelect(first, second, control);
         const SIMDVectorDouble doubleControl = VectorDoubleSelectControl(controls[0], controls[1], controls[2], controls[3]);
         for(usize lane = 0u; lane < 4u; ++lane){
-            const bool enabled = controls[lane] != 0u;
+            const b8 enabled = controls[lane] != 0u;
             EXPECT_EQ(VectorGetIntByIndex(control, lane), enabled ? Limit<u32>::s_Max : 0u) << code << ':' << lane;
             EXPECT_EQ(VectorGetIntByIndex(selected, lane), enabled ? right[lane] : left[lane]) << code << ':' << lane;
             EXPECT_EQ(VectorDoubleGetIntByIndex(doubleControl, lane), enabled ? Limit<u64>::s_Max : 0u) << code << ':' << lane;

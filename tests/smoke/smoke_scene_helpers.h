@@ -74,7 +74,7 @@ struct SmokeTintedEntitySetup{
     return { entity.id(), materialInterface };
 }
 
-[[nodiscard]] inline bool ApplySmokeMaterialTint(Core::ECS::World& world, const SmokeTintedEntitySetup& setup, const Float4& colorTint, const AStringView tintParameterPath = "runtime.color_tint"){
+[[nodiscard]] inline b8 ApplySmokeMaterialTint(Core::ECS::World& world, const SmokeTintedEntitySetup& setup, const Float4& colorTint, const AStringView tintParameterPath = "runtime.color_tint"){
     return Impl::SetMaterialMutableHalf4(world, setup.entity, setup.materialInterface, tintParameterPath, colorTint);
 }
 
@@ -130,7 +130,7 @@ inline Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, Proj
 }
 
 inline void FinishDestroyingSmokeWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world){
-    const bool deviceIdle = context.graphics.waitForIdle();
+    const b8 deviceIdle = context.graphics.waitForIdle();
     NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), NWB_TEXT("Smoke-world destruction requires either a completed device join or terminal device loss"));
 
     world->clear();

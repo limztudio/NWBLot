@@ -30,8 +30,8 @@ class RendererFramePipeline;
 // Graphics-prefix timing resolution owns packet-merge checks plus ticket rebinding.
 struct GraphicsPrefixTimingResolutionResult{
     usize uniquePacketCount = 0u;
-    bool bindingsValid = true;
-    bool asyncSpansOnePacket = true;
+    b8 bindingsValid = true;
+    b8 asyncSpansOnePacket = true;
 };
 
 
@@ -54,7 +54,7 @@ public:
         usize ticketCount,
         Core::GpuTimingSubmissionTicket** timingTickets,
         Core::GpuTaskId* timingTasks,
-        bool& asyncSpansOnePacket,
+        b8& asyncSpansOnePacket,
         GraphicsPrefixTimingResolutionResult& outResult
     )const noexcept;
 

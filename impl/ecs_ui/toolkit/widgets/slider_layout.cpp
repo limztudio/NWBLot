@@ -50,7 +50,7 @@ namespace __hidden_ui_slider_layout{
     } };
 }
 
-[[nodiscard]] static bool ValidMetrics(const SIMDMatrixDouble& values)noexcept{
+[[nodiscard]] static b8 ValidMetrics(const SIMDMatrixDouble& values)noexcept{
     if(
         VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[0]), VectorDoubleIsInfinite(values.v[0]))) != 0u
         || VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[1]), VectorDoubleIsInfinite(values.v[1]))) != 0u

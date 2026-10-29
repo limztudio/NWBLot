@@ -25,11 +25,11 @@ public:
 
 
 public:
-    [[nodiscard]] bool validateMethod(const MethodDecl& method, MVector<ParseError>& errors);
+    [[nodiscard]] b8 validateMethod(const MethodDecl& method, MVector<ParseError>& errors);
 
 
 private:
-    [[nodiscard]] bool validateBlock(const MVector<Stmt*>& statements, MVector<ParseError>& errors);
+    [[nodiscard]] b8 validateBlock(const MVector<Stmt*>& statements, MVector<ParseError>& errors);
 
 
 private:

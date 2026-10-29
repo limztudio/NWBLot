@@ -22,7 +22,7 @@ TextInputAdmission::Enum ValidateTextInputUtf8(const AStringView text, const usi
     return IsValidUtf8TextWithoutNul(text) ? TextInputAdmission::Accepted : TextInputAdmission::InvalidText;
 }
 
-bool IsTextInputCaretRectValid(const TextInputRect rect)noexcept{
+b8 IsTextInputCaretRectValid(const TextInputRect rect)noexcept{
     using CoordinatePair = i32 __attribute__((ext_vector_type(2)));
     const CoordinatePair extent = { rect.width, rect.height };
     if(!__builtin_reduce_and(extent > CoordinatePair{ 0, 0 }))

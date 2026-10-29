@@ -14,7 +14,7 @@ enum<u32> SkeletonSkinningMode{
     enum DualQuaternion = 1u
 }
 
-bool ValidSkeletonSkinningMode(in u32 mode){
+b8 ValidSkeletonSkinningMode(in u32 mode){
     return mode == cast<u32>(SkeletonSkinningMode::Enum::LinearBlend) || mode == cast<u32>(SkeletonSkinningMode::Enum::DualQuaternion);
 }
 

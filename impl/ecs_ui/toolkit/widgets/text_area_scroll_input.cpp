@@ -41,7 +41,7 @@ namespace __hidden_text_area_scroll_input{
     return SIMDVectorDoubleResult{ next };
 }
 
-[[nodiscard]] static SIMDMatrixDouble LoadDragValues(const PointerGesture& gesture, const bool horizontal)noexcept{
+[[nodiscard]] static SIMDMatrixDouble LoadDragValues(const PointerGesture& gesture, const b8 horizontal)noexcept{
     return SIMDMatrixDouble{ .v = {
         VectorDoubleSubtract(VectorDoubleSet(horizontal ? gesture.targetRectangle.x : gesture.targetRectangle.y, horizontal ? gesture.position.x : gesture.position.y, 0.0, 0.0), VectorDoubleSet(horizontal ? gesture.referenceRectangle.x : gesture.referenceRectangle.y, horizontal ? gesture.origin.x : gesture.origin.y, 0.0, 0.0)),
         VectorDoubleSubtract(VectorDoubleReplicate(horizontal ? gesture.referenceRectangle.width : gesture.referenceRectangle.height), VectorDoubleReplicate(horizontal ? gesture.targetRectangle.width : gesture.targetRectangle.height)),
@@ -71,9 +71,9 @@ namespace __hidden_text_area_scroll_input{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token){
+b8 Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token){
     TextAreaState& state = *frame.state;
-    const bool enabled = item.editOptions.enabled;
+    const b8 enabled = item.editOptions.enabled;
     const auto horizontalIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_ScrollHorizontalThumb);
     if(!horizontalIdResult)
         return false;
@@ -83,13 +83,13 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
         return false;
     const WidgetId verticalId = *verticalIdResult;
     auto horizontal = m_context.takePartPointerGesture(item.state, horizontalId, enabled);
-    bool haveHorizontal = horizontal && horizontal->control == token;
+    b8 haveHorizontal = horizontal && horizontal->control == token;
     auto vertical = m_context.takePartPointerGesture(item.state, verticalId, enabled);
-    bool haveVertical = vertical && vertical->control == token;
+    b8 haveVertical = vertical && vertical->control == token;
     auto action = m_context.takeControlAction(item.state, enabled, token);
-    bool haveAction = action.has_value();
+    b8 haveAction = action.has_value();
     Point scroll = state.scroll();
-    bool manual = false;
+    b8 manual = false;
     while(haveHorizontal || haveVertical || haveAction){
         const u64 horizontalSequence = haveHorizontal ? horizontal->updateSequence : Limit<u64>::s_Max;
         const u64 verticalSequence = haveVertical ? vertical->updateSequence : Limit<u64>::s_Max;
@@ -129,7 +129,7 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
             }
             else if(action->kind == ControlActionKind::Activate && action->value >= TextAreaScrollTarget::s_HorizontalBefore && action->value <= TextAreaScrollTarget::s_VerticalAfter){
                 const ScrollViewportPlacement& accepted = state.scrollbars();
-                const bool x = action->value <= TextAreaScrollTarget::s_HorizontalAfter;
+                const b8 x = action->value <= TextAreaScrollTarget::s_HorizontalAfter;
                 const f64 direction = action->value == TextAreaScrollTarget::s_HorizontalBefore || action->value == TextAreaScrollTarget::s_VerticalBefore ? -1.0 : 1.0;
                 const ScrollbarPlacement& bar = x ? accepted.horizontal : accepted.vertical;
                 const auto stepped = __hidden_text_area_scroll_input::Step(VectorDoubleReplicate(x ? scroll.x : scroll.y), VectorDoubleReplicate(direction), VectorDoubleReplicate(bar.viewportExtent), VectorDoubleReplicate(bar.maximum));

@@ -61,16 +61,16 @@ struct DiagnosticPayload{
     AStringView file;
     u64 instructionPointer = 0u;
     u32 line = 0u;
-    bool terminatesProcess = false;
+    b8 terminatesProcess = false;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool BuildDiagnosticPayload(TelemetryArena& arena, const DiagnosticEventRecord& record, TelemetryBytes& outPayload);
+[[nodiscard]] b8 BuildDiagnosticPayload(TelemetryArena& arena, const DiagnosticEventRecord& record, TelemetryBytes& outPayload);
 [[nodiscard]] Expected<DiagnosticPayload> ParseDiagnosticPayload(const void* payload, usize payloadBytes)noexcept;
-[[nodiscard]] bool RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, u64 frameIndex = 0u, u32 streamId = 0u);
+[[nodiscard]] b8 RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, u64 frameIndex = 0u, u32 streamId = 0u);
 
 class DiagnosticCaptureGuard final : NoCopy{
 public:
@@ -88,7 +88,7 @@ public:
 
     [[nodiscard]] u32 streamId()const noexcept{ return m_streamId.load(MemoryOrder::relaxed); }
 
-    [[nodiscard]] bool installed()const noexcept{ return m_installed; }
+    [[nodiscard]] b8 installed()const noexcept{ return m_installed; }
 
     void capture(const DiagnosticEventRecord& record)noexcept;
 
@@ -97,7 +97,7 @@ private:
     Recorder& m_recorder;
     Atomic<u64> m_frameIndex{ 0u };
     Atomic<u32> m_streamId{ 0u };
-    bool m_installed = false;
+    b8 m_installed = false;
 };
 
 

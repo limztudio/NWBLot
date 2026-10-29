@@ -52,7 +52,7 @@ static constexpr AStringView s_MeshletAttributeDeltasLabel = "Runtime Meshlet At
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
+b8 MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
     if(!binding.runtimeMesh.valid())
         return true;
 
@@ -71,7 +71,7 @@ bool MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID ent
         return true;
     }
 
-    const bool hasActiveSkin = payload.hasActiveSkin();
+    const b8 hasActiveSkin = payload.hasActiveSkin();
     Span<const SkeletonJointMatrix> jointPaletteUpload;
     if(hasActiveSkin){
         const auto upload = MeshSkinningPayload::ResolveGpuJointPalette(*instance, payload);
@@ -81,8 +81,8 @@ bool MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID ent
         }
         jointPaletteUpload = *upload;
     }
-    const bool skinningInputDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u;
-    const bool meshletBoundsDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
+    const b8 skinningInputDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u;
+    const b8 meshletBoundsDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
     if(instance->meshlets.empty())
         return true;
 
@@ -93,10 +93,10 @@ bool MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID ent
     const RuntimeResources& resources = foundResources.value();
     const MeshSkinningDeformationInputs deformationInputs{ .resourceSlotsBuffer = resources.bindlessResourceSlotsBuffer, .editRevision = instance->editRevision, .skinningMode = payload.resolvedSkinningMode, };
     instance->deformationState.refreshCurrent(deformationInputs, payload.jointMatrices.data(), payload.jointMatrices.size(), skinningInputDirty || meshletBoundsDirty);
-    const bool updatesMeshletBounds = instance->deformationState.contentRevision() == 0u;
+    const b8 updatesMeshletBounds = instance->deformationState.contentRevision() == 0u;
     if(!updatesMeshletBounds)
         return true;
-    const bool copiesRestStreams = !hasActiveSkin;
+    const b8 copiesRestStreams = !hasActiveSkin;
     if(
         !resources.bindlessResourceSlotsBuffer
         || !resources.bindlessHeapHandles.resourceSlots.valid()
@@ -174,10 +174,10 @@ Expected<Core::GpuGraphPipelineId> MeshSkinningSystem::FramePlanBuilder::importC
     return m_graph.importComputePipeline(pipeline, Core::GpuGraphPipelineDesc{}.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphPipelineType::Compute));
 }
 
-bool MeshSkinningSystem::FramePlanBuilder::importPlanResources(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan){
-    const bool hasActiveSkin = plan.hasActiveSkin;
-    const bool copiesRestStreams = plan.copiedRestStreams;
-    const bool updatesMeshletBounds = plan.updatesMeshletBounds;
+b8 MeshSkinningSystem::FramePlanBuilder::importPlanResources(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan){
+    const b8 hasActiveSkin = plan.hasActiveSkin;
+    const b8 copiesRestStreams = plan.copiedRestStreams;
+    const b8 updatesMeshletBounds = plan.updatesMeshletBounds;
 
     Expected<Core::GpuGraphResourceId> bindlessResourceSlotsResourceResult = MakeUnexpected(Failure{});
     Expected<Core::GpuGraphResourceId> restPositionResourceResult = MakeUnexpected(Failure{});
@@ -252,7 +252,7 @@ bool MeshSkinningSystem::FramePlanBuilder::importPlanResources(const MeshSkinnin
         repackPipelineResult = importComputePipeline(m_system.m_repackComputePipeline, Name("mesh_skinning.graph_repack_pipeline"), "Skinning Repack Pipeline");
     }
 
-    const bool importsValid =
+    const b8 importsValid =
         bindlessResourceSlotsResourceResult.has_value()
         && skinnedPositionResourceResult.has_value()
         && meshletDescResourceResult.has_value()
@@ -333,7 +333,7 @@ bool MeshSkinningSystem::FramePlanBuilder::importPlanResources(const MeshSkinnin
     return true;
 }
 
-bool MeshSkinningSystem::FramePlanBuilder::declareBindlessSlotsUpload(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan){
+b8 MeshSkinningSystem::FramePlanBuilder::declareBindlessSlotsUpload(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan){
     const auto uploadIdentity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_bindless_slots_upload");
     const auto selectorSourceResult = m_graph.copyUploadData(&resources.bindlessResourceSlots, sizeof(resources.bindlessResourceSlots), alignof(MeshSkinningBindlessResourceSlots));
     if(!uploadIdentity || !selectorSourceResult){
@@ -365,7 +365,7 @@ bool MeshSkinningSystem::FramePlanBuilder::declareBindlessSlotsUpload(const Mesh
     return true;
 }
 
-bool MeshSkinningSystem::FramePlanBuilder::declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan){
+b8 MeshSkinningSystem::FramePlanBuilder::declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan){
     const auto copyByteCounts = MeshSkinningSystem::ResolveRestToSkinnedCopyByteCounts(instance);
     if(!copyByteCounts || copyByteCounts->positionBytes == 0u || copyByteCounts->normalBytes == 0u || copyByteCounts->tangentBytes == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance.handle.value);
@@ -402,7 +402,7 @@ bool MeshSkinningSystem::FramePlanBuilder::declareRestToSkinnedCopy(const MeshSk
     return true;
 }
 
-bool MeshSkinningSystem::FramePlanBuilder::declareJointPaletteUpload(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> jointPaletteUpload, const MeshSkinningGraphDispatchPlan& plan){
+b8 MeshSkinningSystem::FramePlanBuilder::declareJointPaletteUpload(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> jointPaletteUpload, const MeshSkinningGraphDispatchPlan& plan){
     usize jointPaletteBytes = 0u;
     if(jointPaletteUpload.size() > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix) || (jointPaletteBytes = jointPaletteUpload.size() * sizeof(SkeletonJointMatrix)) == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: joint palette payload byte size overflows"));

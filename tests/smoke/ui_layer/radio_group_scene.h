@@ -36,14 +36,14 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:
-    [[nodiscard]] bool paintMain(Impl::Ui::Builder& ui);
-    [[nodiscard]] bool paintDisabled(Impl::Ui::Builder& ui);
-    [[nodiscard]] bool paintPopup(Impl::Ui::Builder& ui);
+    [[nodiscard]] b8 paintMain(Impl::Ui::Builder& ui);
+    [[nodiscard]] b8 paintDisabled(Impl::Ui::Builder& ui);
+    [[nodiscard]] b8 paintPopup(Impl::Ui::Builder& ui);
     void observeState(Impl::UiPaintContext& context);
     void paintMarkers(Impl::UiPaintContext& context)const;
 
@@ -62,13 +62,13 @@ private:
     u32 m_afterClicks = 0u;
     u32 m_popupChanges = 0u;
     u32 m_popupActivations = 0u;
-    bool m_enabled = true;
+    b8 m_enabled = true;
 };
 
 using SharedUiRadioGroupSmokeScene = RefCountPtr< RefCounter<UiRadioGroupSmokeScene>, ArenaRefDeleter<RefCounter<UiRadioGroupSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerRadioGroupSmokeEnabled();
-[[nodiscard]] bool IsUiLayerRadioGroupSkinSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerRadioGroupSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerRadioGroupSkinSmokeEnabled();
 [[nodiscard]] SharedUiRadioGroupSmokeScene CreateUiRadioGroupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 

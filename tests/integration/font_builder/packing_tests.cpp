@@ -103,7 +103,7 @@ TEST(FontAtlasPacking, TightRectanglesAndAllChannelCountsPreserveGuardedPixels){
             const auto& group = payload.groups[glyph.group];
             for(u32 y = 0u; y < group.height; ++y){
                 for(u32 x = 0u; x < group.width; ++x){
-                    const bool guard = x == 0u || y == 0u || x + 1u == group.width || y + 1u == group.height;
+                    const b8 guard = x == 0u || y == 0u || x + 1u == group.width || y + 1u == group.height;
                     const u8 expected = guard ? 0u : static_cast<u8>((index + 1u) * 17u);
                     EXPECT_EQ(group.pixels[(y * group.width + x) * group.channelCount + glyph.channel], expected);
                 }

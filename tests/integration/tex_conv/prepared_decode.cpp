@@ -35,7 +35,7 @@ inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv_prepared_decod
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool Decode(const AStringView source, const AStringView destination, const AStringView mipText){
+[[nodiscard]] b8 Decode(const AStringView source, const AStringView destination, const AStringView mipText){
     u32 mipIndex = 0u;
     if(mipText.empty())
         return false;
@@ -68,7 +68,7 @@ inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv_prepared_decod
     if(bytesPerPlaneTexel == 0u || planeTexels > s_MaxFixtureBytes / bytesPerPlaneTexel)
         return false;
     const usize componentCount = static_cast<usize>(planeTexels * mip.sliceCount * s_ChannelCount);
-    const bool hdr = IsHdrTexturePayloadFormat(texture.payloadFormat());
+    const b8 hdr = IsHdrTexturePayloadFormat(texture.payloadFormat());
     basist::basisu_transcoder_init();
     NWB::Impl::TextureMipDecoder decoder;
     const auto decoded = decoder.decode(texture, mip, mipIndex, hdr ? NWB::Core::Format::RGBA16_FLOAT : NWB::Core::Format::RGBA8_UNORM, scratchArena);

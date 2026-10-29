@@ -49,7 +49,7 @@ Expected<SelectableMetrics> SelectablePainter::Measure(const UiSkin& skin, const
     return metrics;
 }
 
-bool SelectablePainter::Paint(
+b8 SelectablePainter::Paint(
     PaintBuilder& paint, TextService& text, const UiSkin& skin, const TextLayout& layout,
     const Rect& textBounds, const Insets& padding, const Rect& bounds, const Rect& clip, const SelectableStyle& style,
     const SelectablePaintFlags& flags, const Color& textColor, const Color& disabledTextColor
@@ -63,7 +63,7 @@ bool SelectablePainter::Paint(
         return false;
     paint.pushClip(clip);
     paint.pushClip(bounds);
-    bool painted = paint.drawRegion(region->name, bounds);
+    b8 painted = paint.drawRegion(region->name, bounds);
     if(painted && flags.enabled && flags.focused && skin.findRegion(style.focus))
         painted = paint.drawRegion(style.focus, bounds);
     const SIMDVectorSingle content = InsetRectValue(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
@@ -74,9 +74,9 @@ bool SelectablePainter::Paint(
     paint.pushClip({ VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) });
     if(painted)
         painted = text.paint(paint, layout, origin, flags.enabled ? textColor : disabledTextColor);
-    const bool textPopped = paint.popClip();
-    const bool rowPopped = paint.popClip();
-    const bool clipPopped = paint.popClip();
+    const b8 textPopped = paint.popClip();
+    const b8 rowPopped = paint.popClip();
+    const b8 clipPopped = paint.popClip();
     return painted && textPopped && rowPopped && clipPopped;
 }
 
@@ -84,7 +84,7 @@ bool SelectablePainter::Paint(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::selectable(const AStringView stableKey, const StringView text, const bool selected, const WidgetOptions& options){
+b8 Builder::selectable(const AStringView stableKey, const StringView text, const b8 selected, const WidgetOptions& options){
     const auto item = addItem(stableKey, text, WidgetKind::Selectable, options);
     if(!item)
         return false;
@@ -93,7 +93,7 @@ bool Builder::selectable(const AStringView stableKey, const StringView text, con
     return m_context.takeActivation((*item)->state, (*item)->enabled);
 }
 
-bool Builder::paintSelectable(const Item& item, const LayoutBox& box){
+b8 Builder::paintSelectable(const Item& item, const LayoutBox& box){
     const InputRouter& input = m_context.input();
     const SelectablePaintFlags flags{ item.enabled, item.checked, input.hover() == item.state.id, input.focus() == item.state.id };
     if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, item.text, item.textBounds, item.padding, box.rectangle, StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))), item.selectableStyle, flags, item.style.text, item.style.disabledText))

@@ -23,8 +23,8 @@ using EditBoundaryVector = Vector<usize, Core::Alloc::GlobalArena>;
 class GraphemeSegmentation final{
 public:
     // General segmentation accepts controls; single-line editing rejects line breaks and NUL.
-    [[nodiscard]] static Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, AStringView text, bool singleLine = false);
-    [[nodiscard]] static bool Validate(AStringView text, bool singleLine = false)noexcept;
+    [[nodiscard]] static Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, AStringView text, b8 singleLine = false);
+    [[nodiscard]] static b8 Validate(AStringView text, b8 singleLine = false)noexcept;
 };
 
 

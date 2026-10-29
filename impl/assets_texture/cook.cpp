@@ -103,7 +103,7 @@ namespace __hidden_texture_cook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, NWB_TEXT("TextureAssetCodec::serialize")))
         return false;
 

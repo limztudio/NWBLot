@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureSoftwareTransparentSamplingPipeline(){
+b8 RendererRayTracingSystem::ensureSoftwareTransparentSamplingPipeline(){
     auto& sampling = m_rayTracingState.m_softwareTransparentSampling;
     if(sampling.m_pipelines[0] && sampling.m_pipelines[1])
         return true;

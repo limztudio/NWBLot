@@ -83,12 +83,12 @@ using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchAren
 struct CsgClipWorkBounds{
     SIMDVectorSingle minBounds = VectorZero();
     SIMDVectorSingle maxBounds = VectorZero();
-    bool valid = false;
+    b8 valid = false;
 
 
 public:
     // False rejects the cutter; accepted bounds with valid=false require full screen coverage.
-    [[nodiscard]] bool resolveCutter(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize, const CsgClipWorkBounds& receiverBounds);
+    [[nodiscard]] b8 resolveCutter(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize, const CsgClipWorkBounds& receiverBounds);
 };
 
 struct CsgFrameWorkRegion{
@@ -96,13 +96,13 @@ struct CsgFrameWorkRegion{
     u32 minY = Limit<u32>::s_Max;
     u32 maxX = 0u;
     u32 maxY = 0u;
-    bool fullFrame = false;
+    b8 fullFrame = false;
 
 
 public:
-    [[nodiscard]] bool bounded()const noexcept{ return !fullFrame && minX < maxX && minY < maxY; }
+    [[nodiscard]] b8 bounded()const noexcept{ return !fullFrame && minX < maxX && minY < maxY; }
 
-    [[nodiscard]] bool valid()const noexcept{ return fullFrame || bounded(); }
+    [[nodiscard]] b8 valid()const noexcept{ return fullFrame || bounded(); }
 
     [[nodiscard]] u32 width()const noexcept{ return bounded() ? maxX - minX : 0u; }
 
@@ -156,7 +156,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
+    [[nodiscard]] b8 hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
 
     void reserve(const usize receiverCapacity, const usize cutterCapacity){
         receiverRanges.reserve(receiverCapacity);
@@ -185,7 +185,7 @@ public:
 
 
 public:
-    [[nodiscard]] constexpr bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
+    [[nodiscard]] constexpr b8 hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
 };
 
 

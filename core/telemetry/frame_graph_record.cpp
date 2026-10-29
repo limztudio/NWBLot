@@ -19,13 +19,13 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, const u64 frameIndex, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges, const u32 streamId){
+b8 RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, const u64 frameIndex, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::FrameGraphFrame, frameIndex, streamId, [frameIndex, &scratchArena, nodes, edges](TelemetryArena&, TelemetryBytes& payload){
         return BuildFrameGraphPayload(scratchArena, frameIndex, nodes, edges, payload);
     });
 }
 
-bool RecordFrameGraph(
+b8 RecordFrameGraph(
     Recorder& recorder,
     Alloc::ScratchArena& scratchArena,
     const u64 frameIndex,
@@ -39,7 +39,7 @@ bool RecordFrameGraph(
     });
 }
 
-bool RecordFrameGraph(
+b8 RecordFrameGraph(
     Recorder& recorder,
     Alloc::ScratchArena& scratchArena,
     const u64 frameIndex,

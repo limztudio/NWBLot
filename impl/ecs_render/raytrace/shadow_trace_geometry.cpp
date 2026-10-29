@@ -44,7 +44,7 @@ inline constexpr Core::BufferHandle MeshSnapshot::* s_BufferMembers[] = { &MeshS
 struct BufferRecord{
     usize firstMesh[LengthOf(s_BufferMembers)] = { s_MissingIndex, s_MissingIndex, s_MissingIndex, s_MissingIndex };
     usize preparedIndex = s_MissingIndex;
-    bool accepted = false;
+    b8 accepted = false;
 };
 
 class BufferIndex final : NoCopy{
@@ -126,7 +126,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FreezePreparedShadowTraceGeometryBuffers(
+b8 FreezePreparedShadowTraceGeometryBuffers(
     const Span<const ECSRenderDetail::MeshRayTracingResourceSnapshot> meshes,
     const ShadowTraceGeometrySelection& selection,
     Core::Alloc::ScratchArena& scratchArena,
@@ -174,7 +174,7 @@ bool FreezePreparedShadowTraceGeometryBuffers(
         const auto identity = DeriveName(mesh.meshName, identitySuffix);
         if(!identity)
             return false;
-        const bool normalizedByAcceptedPacket = record.accepted;
+        const b8 normalizedByAcceptedPacket = record.accepted;
         outPrepared.push_back(PreparedShadowTraceGeometryBuffer{
             .buffer = buffer,
             .identity = *identity,
@@ -222,7 +222,7 @@ bool FreezePreparedShadowTraceGeometryBuffers(
         return true;
     };
 
-    bool collected = true;
+    b8 collected = true;
     if(selection.includeHardware){
         collected =
             appendSelected(selection.hardwarePositions, s_PositionMember, s_HardwarePositionIdentitySuffix, PreparedShadowTraceGeometryRole::s_HardwarePosition)

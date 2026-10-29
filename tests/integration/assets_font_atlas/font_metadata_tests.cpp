@@ -64,7 +64,7 @@ static constexpr Name s_ScratchArena("tests/integration/assets_font_atlas/metada
     return Path(testArena.arena, NWB_REPO_ROOT) / "__artifacts" / "font_metadata_tests";
 }
 
-[[nodiscard]] static bool PrepareFiles(MetadataTestArena& testArena, const Path& directory){
+[[nodiscard]] static b8 PrepareFiles(MetadataTestArena& testArena, const Path& directory){
     if(!EnsureDirectories(directory))
         return false;
     Core::Assets::AssetBytes bytes(testArena.arena);
@@ -73,7 +73,7 @@ static constexpr Name s_ScratchArena("tests/integration/assets_font_atlas/metada
     return WriteBinaryFile(directory / s_LatinFontFilename, bytes);
 }
 
-[[nodiscard]] static bool LoadMetadata(MetadataTestArena& testArena, Core::Metascript::Document& document){
+[[nodiscard]] static b8 LoadMetadata(MetadataTestArena& testArena, Core::Metascript::Document& document){
     AString<Core::Assets::AssetArena> text(testArena.arena);
     return ReadTextFile(DefaultBundledFontRoot(testArena) / s_LatinMetadataFilename, text) && document.parse(AStringView(text));
 }

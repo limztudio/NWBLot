@@ -20,7 +20,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRasterTask::Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
+b8 GpuRasterTask::Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
     const GpuFrame& frame = payload.frame;
     if(
         !frame || !frame->m_prepared || !frame->m_target || !frame->m_resources
@@ -57,7 +57,7 @@ bool GpuRasterTask::Record(const Payload& payload, Core::CommandList& commands, 
     Core::GpuDescriptorHeap& heap = frame->m_resources->m_graphics.getDevice().getDescriptorHeap();
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
     Core::Rect boundScissor;
-    bool heapBound = false;
+    b8 heapBound = false;
     for(const DrawCommand& draw : frame->m_snapshot.commands()){
         const auto resolvedScissor = geometry.scissor(draw);
         if(!resolvedScissor)
@@ -100,7 +100,7 @@ void GpuRasterTask::Accepted(Payload& payload, const Core::QueueSubmissionToken&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuOutputTask::Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
+b8 GpuOutputTask::Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
     const GpuFrame& frame = payload.frame;
     if(
         !frame || !payload.pipeline || !payload.acquired.valid()

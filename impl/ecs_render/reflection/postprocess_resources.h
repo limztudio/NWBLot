@@ -60,7 +60,7 @@ struct ReflectionPostprocessSnapshot{
     u32 deferredResourcesSlot = 0u;
     u32 opaqueSpecularSlot = 0u;
     u32 viewSlot = 0u;
-    bool spatialEnabled = false;
+    b8 spatialEnabled = false;
 };
 
 // Only the extra opaque history bank and spatial destination live here.
@@ -71,13 +71,13 @@ public:
 
 public:
     void invalidateResources();
-    [[nodiscard]] bool prepareResources(u32 width, u32 height, const ReflectionSettings& settings);
+    [[nodiscard]] b8 prepareResources(u32 width, u32 height, const ReflectionSettings& settings);
     [[nodiscard]] ReflectionPostprocessSnapshot snapshot(const ReflectionRadianceBinding& base, const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, u64 graphicsFrameIndex)const noexcept;
 
 private:
     void releaseTargets();
-    [[nodiscard]] bool preparePipeline(Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* shaderMember, AStringView variant);
-    [[nodiscard]] bool prepareImage(ReflectionRadianceBinding& image, u32 descriptorIndex, Name name);
+    [[nodiscard]] b8 preparePipeline(Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* shaderMember, AStringView variant);
+    [[nodiscard]] b8 prepareImage(ReflectionRadianceBinding& image, u32 descriptorIndex, Name name);
 
 
 private:

@@ -39,7 +39,7 @@ struct alignas(Float4) SceneLight{
     f32 angularRadius = s_LightDirectionalAngularRadius;
     f32 sourceRadius = s_LightPunctualSourceRadius;
     LightType::Enum type = LightType::Directional;
-    bool enableCaustics = s_LightEnableCaustics;
+    b8 enableCaustics = s_LightEnableCaustics;
 };
 
 static_assert(sizeof(LightType::Enum) == sizeof(u8), "LightType must stay compact for ECS storage");
@@ -53,7 +53,7 @@ static_assert((offsetof(LightComponent, range) % alignof(f32)) == 0u, "LightComp
 static_assert((offsetof(LightComponent, innerConeCos) % alignof(f32)) == 0u, "LightComponent::innerConeCos must stay aligned");
 static_assert((offsetof(LightComponent, outerConeCos) % alignof(f32)) == 0u, "LightComponent::outerConeCos must stay aligned");
 static_assert((offsetof(LightComponent, type) % alignof(LightType::Enum)) == 0u, "LightComponent::type must stay aligned");
-static_assert((offsetof(LightComponent, enableCaustics) % alignof(bool)) == 0u, "LightComponent::enableCaustics must stay aligned");
+static_assert((offsetof(LightComponent, enableCaustics) % alignof(b8)) == 0u, "LightComponent::enableCaustics must stay aligned");
 static_assert((offsetof(LightComponent, angularRadius) % alignof(f32)) == 0u, "LightComponent::angularRadius must stay aligned");
 static_assert((offsetof(LightComponent, sourceRadius) % alignof(f32)) == 0u, "LightComponent::sourceRadius must stay aligned");
 

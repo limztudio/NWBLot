@@ -44,7 +44,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> EnvironmentVariableEquals(ArenaT& arena, const AStringView name, const AStringView expectedValue){
+[[nodiscard]] inline Expected<b8, ErrorCode> EnvironmentVariableEquals(ArenaT& arena, const AStringView name, const AStringView expectedValue){
     const auto current = ReadEnvironmentVariable(arena, name);
     if(!current)
         return MakeUnexpected(current.error());
@@ -52,7 +52,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> HasEnvironmentValue(ArenaT& arena, const AStringView name){
+[[nodiscard]] inline Expected<b8, ErrorCode> HasEnvironmentValue(ArenaT& arena, const AStringView name){
     const auto current = ReadEnvironmentVariable(arena, name);
     if(!current)
         return MakeUnexpected(current.error());

@@ -68,7 +68,7 @@ TextInputAdmission::Enum Win32TextInputService::startNativeSession(const TextInp
 }
 
 void Win32TextInputService::endNativeSession(const TextInputSessionToken token){
-    const bool composing = m_compositionToken == token;
+    const b8 composing = m_compositionToken == token;
     m_pendingHighSurrogate = 0u;
     m_compositionToken = {};
     clearCompositionPreedit();
@@ -107,8 +107,8 @@ TextInputAdmission::Enum Win32TextInputService::updateNativeCaret(const TextInpu
     candidate.dwStyle = CFS_EXCLUDE;
     candidate.ptCurrentPos = { caret.x, caret.y + caret.height };
     candidate.rcArea = { caret.x, caret.y, caret.x + caret.width, caret.y + caret.height };
-    const bool compositionSet = ImmSetCompositionWindow(context, &composition) != FALSE;
-    const bool candidateSet = ImmSetCandidateWindow(context, &candidate) != FALSE;
+    const b8 compositionSet = ImmSetCompositionWindow(context, &composition) != FALSE;
+    const b8 candidateSet = ImmSetCandidateWindow(context, &candidate) != FALSE;
     TextInputAdmission::Enum admission = TextInputAdmission::Accepted;
     if(!compositionSet || !candidateSet){
         NWB_LOGGER_WARNING(NWB_TEXT("Text input: IMM32 caret placement failed"));
@@ -123,7 +123,7 @@ TextInputAdmission::Enum Win32TextInputService::updateNativeCaret(const TextInpu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool DispatchWin32TextInputMessage(ITextInputService& service, const u32 message, const usize wParam, const isize lParam){
+b8 DispatchWin32TextInputMessage(ITextInputService& service, const u32 message, const usize wParam, const isize lParam){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
     return MakeNotNull(checked_cast<Win32TextInputService*>(&service))->handleMessage(message, wParam, lParam);

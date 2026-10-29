@@ -37,18 +37,18 @@ public:
 
 
 public:
-    [[nodiscard]] bool capture(
+    [[nodiscard]] b8 capture(
         const RendererRayTracingState& state,
-        bool staticScene,
+        b8 staticScene,
         u64 staticSceneHash,
         Span<const Core::RayTracingInstanceDesc> instances,
         Span<const Core::RayTracingAccelStructHandle> instanceBlases
     );
-    [[nodiscard]] bool record(RendererRayTracingState& state, Core::CommandList& commandList);
+    [[nodiscard]] b8 record(RendererRayTracingState& state, Core::CommandList& commandList);
     // Publishes the accepted static-scene hash and backing handoff, then clears the plan.
     void confirm(RendererRayTracingState& state)noexcept;
     void clear()noexcept;
-    [[nodiscard]] bool ready()const noexcept{ return m_ready; }
+    [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
 
 
 private:
@@ -59,8 +59,8 @@ private:
     usize m_maxInstances = 0u;
     u64 m_staticSceneHash = 0u;
     Core::GpuDescriptorHandle m_heapHandle;
-    bool m_static = false;
-    bool m_ready = false;
+    b8 m_static = false;
+    b8 m_ready = false;
 };
 
 

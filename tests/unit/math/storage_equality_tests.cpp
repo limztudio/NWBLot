@@ -33,8 +33,8 @@ namespace __hidden_storage_equality_tests{
 
 template<typename Element, usize Count>
 struct RawEqualityStorage{
-    friend bool operator==(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{ return MathTypeDetail::EqualArray<RawEqualityStorage, Count>(lhs, rhs); }
-    friend bool operator!=(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{ return !(lhs == rhs); }
+    friend b8 operator==(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{ return MathTypeDetail::EqualArray<RawEqualityStorage, Count>(lhs, rhs); }
+    friend b8 operator!=(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{ return !(lhs == rhs); }
 
 
 public:
@@ -42,7 +42,7 @@ public:
 };
 
 template<typename Value, usize Count>
-NWB_NOINLINE bool LegacyEqual(const Value& lhs, const Value& rhs)noexcept{
+NWB_NOINLINE b8 LegacyEqual(const Value& lhs, const Value& rhs)noexcept{
     for(usize lane = 0u; lane < Count; ++lane){
         if(lhs.raw[lane] != rhs.raw[lane])
             return false;
@@ -53,7 +53,7 @@ NWB_NOINLINE bool LegacyEqual(const Value& lhs, const Value& rhs)noexcept{
 // Compare the scalar reference under its original default floating-point environment.
 #pragma STDC FENV_ACCESS OFF
 template<typename Value, usize Count>
-NWB_NOINLINE bool DefaultContextLegacyEqual(const Value& lhs, const Value& rhs)noexcept{
+NWB_NOINLINE b8 DefaultContextLegacyEqual(const Value& lhs, const Value& rhs)noexcept{
     for(usize i = 0u; i < Count; ++i){
         if(lhs.raw[i] != rhs.raw[i])
             return false;
@@ -63,7 +63,7 @@ NWB_NOINLINE bool DefaultContextLegacyEqual(const Value& lhs, const Value& rhs)n
 #pragma STDC FENV_ACCESS ON
 
 template<typename Value>
-NWB_NOINLINE bool StorageEqual(const Value& lhs, const Value& rhs)noexcept{ return lhs == rhs; }
+NWB_NOINLINE b8 StorageEqual(const Value& lhs, const Value& rhs)noexcept{ return lhs == rhs; }
 
 template<typename Result>
 struct ExpectedVectorStorage{
@@ -105,10 +105,10 @@ void CheckNaNComparisonFlags(){
                 if(mismatch < Count && mismatch != nanLane)
                     rhs.raw[mismatch] = VectorGetX(VectorAdd(VectorReplicate(rhs.raw[mismatch]), VectorSplatOne()));
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const bool expected = LegacyEqual<Value, Count>(lhs, rhs);
+                const b8 expected = LegacyEqual<Value, Count>(lhs, rhs);
                 const i32 expectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const bool actual = StorageEqual(lhs, rhs);
+                const b8 actual = StorageEqual(lhs, rhs);
                 const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
                 EXPECT_EQ(actual, expected) << nanLane << ", " << mismatch;
                 EXPECT_EQ(actualFlags, expectedFlags) << nanLane << ", " << mismatch;
@@ -133,17 +133,17 @@ public:
 };
 
 struct EqualityObservation{
-    bool equal;
+    b8 equal;
     i32 flags;
     u32 rawFlags;
 };
 
 template<typename Value, typename Compare>
-Expected<EqualityObservation> ObserveEquality(const Value& lhs, const Value& rhs, Compare compare)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(compare(lhs, rhs))) && IsNothrowDestructible_V<Compare>){
+Expected<EqualityObservation> ObserveEquality(const Value& lhs, const Value& rhs, Compare compare)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(compare(lhs, rhs))) && IsNothrowDestructible_V<Compare>){
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return MakeUnexpected(Failure{});
     _mm_setcsr(_mm_getcsr() & ~0x3Fu);
-    const bool equal = compare(lhs, rhs);
+    const b8 equal = compare(lhs, rhs);
     return EqualityObservation{ equal, TestFloatingPointExceptions(FE_ALL_EXCEPT), _mm_getcsr() & 0x3Fu };
 }
 
@@ -159,7 +159,7 @@ void CheckRawEqualityComparisonFlags(){
         for(const u32 bits : { 0x00000001u, 0x80000001u, 0x007FFFFFu, 0x807FFFFFu, 0x7FC12345u, 0x7F812345u }){
             for(usize exceptionalLane = 0u; exceptionalLane < Count; ++exceptionalLane){
                 for(usize mismatch = 0u; mismatch <= Count; ++mismatch){
-                    for(const bool compareWithZero : { false, true }){
+                    for(const b8 compareWithZero : { false, true }){
                         Value lhs{}, rhs{};
                         for(usize lane = 0u; lane < Count; ++lane)
                             lhs.raw[lane] = rhs.raw[lane] = static_cast<f32>(lane + 1u);
@@ -206,7 +206,7 @@ void CheckPageBoundary(){
     for(usize lane = 0u; lane < Count; ++lane)
         lhs->raw[lane] = rhs.raw[lane] = static_cast<RemoveCVRef_T<decltype(rhs.raw[0])>>(lane + 1u);
     EXPECT_TRUE(StorageEqual(*lhs, rhs));
-    if constexpr(IsSame_V<RemoveCVRef_T<decltype(rhs.raw[0])>, bool>)
+    if constexpr(IsSame_V<RemoveCVRef_T<decltype(rhs.raw[0])>, b8>)
         rhs.raw[Count - 1u] = !rhs.raw[Count - 1u];
     else
         rhs.raw[Count - 1u] += 1;
@@ -262,10 +262,10 @@ TEST(Math, StorageEqualityPreservesNaNShortCircuitExceptionFlags){
 TEST(Math, StorageEqualityDoesNotReadBeyondUnalignedShortValues){
     using namespace __hidden_storage_equality_tests;
 #if defined(__linux__)
-    CheckPageBoundary<RawEqualityStorage<bool, 1u>, 1u>();
-    CheckPageBoundary<RawEqualityStorage<bool, 16u>, 16u>();
-    CheckPageBoundary<RawEqualityStorage<bool, 17u>, 17u>();
-    CheckPageBoundary<RawEqualityStorage<bool, 33u>, 33u>();
+    CheckPageBoundary<RawEqualityStorage<b8, 1u>, 1u>();
+    CheckPageBoundary<RawEqualityStorage<b8, 16u>, 16u>();
+    CheckPageBoundary<RawEqualityStorage<b8, 17u>, 17u>();
+    CheckPageBoundary<RawEqualityStorage<b8, 33u>, 33u>();
     CheckPageBoundary<Half2U, 2u>();
     CheckPageBoundary<Half4U, 4u>();
     CheckPageBoundary<Float2U, 2u>();
@@ -284,14 +284,14 @@ TEST(Math, StorageEqualityDoesNotReadBeyondUnalignedShortValues){
 TEST(Math, StorageEqualityFallsBackForBooleanArrays){
     using namespace __hidden_storage_equality_tests;
     const auto verify = []<usize Count>(){
-        RawEqualityStorage<bool, Count> lhs{}, rhs{};
+        RawEqualityStorage<b8, Count> lhs{}, rhs{};
         for(usize lane = 0u; lane < Count; ++lane)
             lhs.raw[lane] = rhs.raw[lane] = (lane & 1u) != 0u;
         EXPECT_TRUE(StorageEqual(lhs, rhs));
         for(usize lane = 0u; lane < Count; ++lane){
             rhs.raw[lane] = !rhs.raw[lane];
             EXPECT_FALSE(StorageEqual(lhs, rhs)) << Count << ", " << lane;
-            EXPECT_EQ(StorageEqual(lhs, rhs), (LegacyEqual<RawEqualityStorage<bool, Count>, Count>(lhs, rhs)));
+            EXPECT_EQ(StorageEqual(lhs, rhs), (LegacyEqual<RawEqualityStorage<b8, Count>, Count>(lhs, rhs)));
             rhs.raw[lane] = lhs.raw[lane];
         }
         EXPECT_TRUE(StorageEqual(lhs, rhs));

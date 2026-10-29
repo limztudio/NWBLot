@@ -51,7 +51,7 @@ static constexpr u32 s_NoSurfaceDispatchId = Limit<u32>::s_Max;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssignMaterialShadingModelIdsImpl(const Span<MaterialCookEntry> materialEntries, ScratchArena& scratchArena){
+b8 AssignMaterialShadingModelIdsImpl(const Span<MaterialCookEntry> materialEntries, ScratchArena& scratchArena){
     for(const MaterialCookEntry& entry : materialEntries){
         if(entry.bxdfSource.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing a deferred bxdf"), ConvertString(AStringView(entry.virtualPath)));
@@ -126,7 +126,7 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
 
     // Each assigned BXDF id maps to one source; materials sharing that source share the slot.
     u32 maxId = 0u;
-    bool anyBxdf = false;
+    b8 anyBxdf = false;
     for(const MaterialCookEntry& entry : materialEntries){
         if(entry.bxdfSource.empty())
             continue;
@@ -261,7 +261,7 @@ static void AppendShadowSurfaceBindAlias(const AStringView symbol, const AString
     outAliasSymbols.push_back(Move(aliasSymbol));
 }
 
-static bool AppendShadowSurfaceBindAliases(
+static b8 AppendShadowSurfaceBindAliases(
     const MaterialBindEntry& bindEntry,
     const AStringView bindNamespace,
     ScratchArena& scratchArena,
@@ -391,7 +391,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
 
     // Each surface id maps to one source and .bind interface; shared surfaces require the same interface because their hooks use fixed accessor names.
     u32 maxId = 0u;
-    bool anySurface = false;
+    b8 anySurface = false;
     for(const MaterialCookEntry& entry : materialEntries){
         if(entry.surfaceSource.empty())
             continue;

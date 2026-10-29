@@ -27,7 +27,7 @@ namespace __hidden_ui_edit_caret_geometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidateLayout(const TextLayout& layout, const EditTextMode::Enum mode)noexcept{
+[[nodiscard]] static b8 ValidateLayout(const TextLayout& layout, const EditTextMode::Enum mode)noexcept{
     const StringView text = layout.utf8();
     const auto& lines = layout.lines();
     const auto& clusters = layout.clusters();
@@ -64,7 +64,7 @@ namespace __hidden_ui_edit_caret_geometry{
             if(text[byte] == '\n')
                 return false;
         }
-        const bool lastLine = lineIndex + 1u == lines.size();
+        const b8 lastLine = lineIndex + 1u == lines.size();
         if(lastLine){
             if(line.byteEnd != text.size() || line.breakEnd != line.byteEnd)
                 return false;
@@ -249,7 +249,7 @@ EditCaretGeometry::EditCaretGeometry(Core::Alloc::GlobalArena& arena)noexcept
     , m_lines(arena)
 {}
 
-bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expectedText, const Span<const EditCaretMapping> mapping, const usize committedBytes, const EditTextMode::Enum mode){
+b8 EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expectedText, const Span<const EditCaretMapping> mapping, const usize committedBytes, const EditTextMode::Enum mode){
     // One stop per byte boundary 0..committedBytes, plus one extra at the preedit seam.
     constexpr usize s_MaxExtraMappingStops = 2u;
     if(
@@ -317,7 +317,7 @@ Expected<usize> EditCaretGeometry::hitTest(const Point localPoint)const noexcept
     return HitEditCaretGeometry(m_lines, m_stops, localPoint);
 }
 
-Expected<usize> EditCaretGeometry::verticalTarget(const usize displayCaret, const bool down, const f32 preferredX)const noexcept{
+Expected<usize> EditCaretGeometry::verticalTarget(const usize displayCaret, const b8 down, const f32 preferredX)const noexcept{
     if(!m_ready || !IsFinite(preferredX))
         return MakeUnexpected(Failure{});
     const auto caret = __hidden_ui_edit_caret_geometry::LoadCaretRect(m_layout, m_boundaries, displayCaret);
@@ -353,7 +353,7 @@ Expected<Rect> EditCaretGeometry::rangeOnLine(const EditBoxRange range, const u3
     const EditCaretLine& line = m_lines[lineIndex];
     const usize begin = Max(range.begin, line.byteBegin);
     const usize end = Min(range.end, line.byteEnd);
-    const bool selectedBreak = line.breakEnd != line.byteEnd && range.begin <= line.byteEnd && range.end > line.byteEnd;
+    const b8 selectedBreak = line.breakEnd != line.byteEnd && range.begin <= line.byteEnd && range.end > line.byteEnd;
     if(begin >= end && !selectedBreak){
         return Rect{};
     }

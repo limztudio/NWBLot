@@ -97,7 +97,7 @@ TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndC
     ScopeExit releaseParent([&]()noexcept{ parentGate.open(); });
     Atomic<u32> childInvocations{ 0u };
     Atomic<u32> continuationInvocations{ 0u };
-    Atomic<bool> childRejected{ false };
+    Atomic<b8> childRejected{ false };
     const auto cpuTaskAdmission = scope.submit([&](){
         parentGate.block();
         const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ childInvocations.fetch_add(1u); });

@@ -286,13 +286,13 @@ TEST_F(FilesystemVolumeTest, FailedCompactionPreservesOverlappingSourcePayloadBy
     const auto metadataSegment = MakeVolumeSegmentPath(directory, m_desc.volumeName.view(), 0u);
     auto backupSegment = metadataSegment;
     backupSegment += s_HeldFileSuffix;
-    bool restored = false;
+    b8 restored = false;
     {
         ASSERT_TRUE(RenamePath(metadataSegment, backupSegment));
         ScopeExit restore([&]()noexcept{
             const auto removed = RemoveAllForCleanup(metadataSegment);
             if(removed)
-                restored = static_cast<bool>(RenamePath(backupSegment, metadataSegment));
+                restored = static_cast<b8>(RenamePath(backupSegment, metadataSegment));
         });
         ASSERT_TRUE(EnsureDirectories(metadataSegment));
         EXPECT_FALSE(filesystem.compact(false));
@@ -323,23 +323,23 @@ TEST_F(FilesystemVolumeTest, ImmediateMutationUnwindPreservesIndexedPayloadsAndM
     backupSegment += s_HeldFileSuffix;
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     for(u32 operation = 0u; operation < 3u; ++operation){
-        bool restored = false;
+        b8 restored = false;
         {
             ASSERT_TRUE(RenamePath(metadataSegment, backupSegment));
             ScopeExit restore([&]()noexcept{
                 const auto removed = RemoveAllForCleanup(metadataSegment);
                 if(removed)
-                    restored = static_cast<bool>(RenamePath(backupSegment, metadataSegment));
+                    restored = static_cast<b8>(RenamePath(backupSegment, metadataSegment));
             });
             ASSERT_TRUE(EnsureDirectories(metadataSegment));
             ThrowingPublishLogger throwingLogger(m_logger.arena());
             NWB::Core::Common::LoggerRegistrationGuard throwingLoggerGuard(throwingLogger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
             if(operation == 0u)
-                EXPECT_THROW({ const bool written = filesystem.writeFile(s_TestFile, replacement); EXPECT_FALSE(written); }, i32);
+                EXPECT_THROW({ const b8 written = filesystem.writeFile(s_TestFile, replacement); EXPECT_FALSE(written); }, i32);
             else if(operation == 1u)
-                EXPECT_THROW({ const bool written = filesystem.writeFile(s_New, replacement); EXPECT_FALSE(written); }, i32);
+                EXPECT_THROW({ const b8 written = filesystem.writeFile(s_New, replacement); EXPECT_FALSE(written); }, i32);
             else
-                EXPECT_THROW({ const bool removed = filesystem.removeFile(s_TestFile); EXPECT_FALSE(removed); }, i32);
+                EXPECT_THROW({ const b8 removed = filesystem.removeFile(s_TestFile); EXPECT_FALSE(removed); }, i32);
         }
         ASSERT_TRUE(restored);
         EXPECT_EQ(filesystem.fileCount(), 2u);
@@ -540,7 +540,7 @@ TEST_F(FilesystemVolumeTest, ThrowingPromotionDiagnosticRestoresPublishedBytesDu
     {
         ThrowingPublishLogger throwingLogger(m_logger.arena());
         NWB::Core::Common::LoggerRegistrationGuard throwingLoggerGuard(throwingLogger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-        EXPECT_THROW({ const bool published = PublishStagedVolume(stagedPaths, m_directory, m_desc.volumeName.view(), 3u, scratchArena); EXPECT_FALSE(published); }, i32);
+        EXPECT_THROW({ const b8 published = PublishStagedVolume(stagedPaths, m_directory, m_desc.volumeName.view(), 3u, scratchArena); EXPECT_FALSE(published); }, i32);
     }
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     ASSERT_TRUE(ReadBinaryFile(firstOutput, loaded));

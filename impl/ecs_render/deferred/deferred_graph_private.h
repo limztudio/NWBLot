@@ -31,9 +31,9 @@ namespace ECSRenderDetail{
 
 
 template<typename Record>
-[[nodiscard]] bool RecordDeferredGraphTask(RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Core::CommandList& commandList, Record&& record)noexcept(
+[[nodiscard]] b8 RecordDeferredGraphTask(RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Core::CommandList& commandList, Record&& record)noexcept(
     noexcept(record(deferredSystem, targets, commandList))
-    && IsNothrowConvertible_V<decltype(record(deferredSystem, targets, commandList)), bool>
+    && IsNothrowConvertible_V<decltype(record(deferredSystem, targets, commandList)), b8>
 ){
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
     return record(deferredSystem, targets, commandList);
@@ -41,7 +41,7 @@ template<typename Record>
 
 // The payload overload takes references: deferred system, frame targets, timing ticket; missing bindings fail.
 template<typename Payload, typename Record>
-[[nodiscard]] bool RecordDeferredGraphTask(const Payload& payload, Core::CommandList& commandList, Record&& record)noexcept(noexcept(RecordDeferredGraphTask(payload.deferredSystem, payload.targets, payload.timingTicket, commandList, Forward<Record>(record)))){
+[[nodiscard]] b8 RecordDeferredGraphTask(const Payload& payload, Core::CommandList& commandList, Record&& record)noexcept(noexcept(RecordDeferredGraphTask(payload.deferredSystem, payload.targets, payload.timingTicket, commandList, Forward<Record>(record)))){
     return RecordDeferredGraphTask(payload.deferredSystem, payload.targets, payload.timingTicket, commandList, Forward<Record>(record));
 }
 

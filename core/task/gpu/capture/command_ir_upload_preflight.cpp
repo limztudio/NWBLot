@@ -25,7 +25,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool DeclaresBufferWrite(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const BufferDesc& description, const ResourceStates::Mask state, const BufferRange requested)noexcept{
+[[nodiscard]] static b8 DeclaresBufferWrite(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const BufferDesc& description, const ResourceStates::Mask state, const BufferRange requested)noexcept{
     for(usize index = 0u; index < task.resourceUseCount; ++index){
         const GpuTaskResourceUse& use = task.resourceUses[index];
         if(use.resource == resource && use.requiredState == state && use.access == GpuTaskResourceAccess::Write && use.range.bufferRange.resolve(description).contains(requested))
@@ -34,7 +34,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     return false;
 }
 
-[[nodiscard]] static bool DeclaresTextureWrite(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const TextureDesc& description, const ResourceStates::Mask state, const TextureSubresourceSet requested)noexcept{
+[[nodiscard]] static b8 DeclaresTextureWrite(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const TextureDesc& description, const ResourceStates::Mask state, const TextureSubresourceSet requested)noexcept{
     for(usize index = 0u; index < task.resourceUseCount; ++index){
         const GpuTaskResourceUse& use = task.resourceUses[index];
         if(use.resource == resource && use.requiredState == state && use.access == GpuTaskResourceAccess::Write && use.range.textureSubresources.resolve(description, TextureSubresourceMipResolve::Range).contains(requested))
@@ -43,7 +43,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     return false;
 }
 
-[[nodiscard]] static bool DeclaresTerminalBufferState(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const BufferDesc& description, const BufferRange requested, const ResourceStates::Mask finalState)noexcept{
+[[nodiscard]] static b8 DeclaresTerminalBufferState(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const BufferDesc& description, const BufferRange requested, const ResourceStates::Mask finalState)noexcept{
     ResourceStates::Mask terminalState = ResourceStates::Unknown;
     for(usize index = 0u; index < task.resourceUseCount; ++index){
         const GpuTaskResourceUse& use = task.resourceUses[index];
@@ -53,7 +53,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     return terminalState == finalState;
 }
 
-[[nodiscard]] static bool DeclaresTerminalTextureState(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const TextureDesc& description, const TextureSubresourceSet requested, const ResourceStates::Mask finalState)noexcept{
+[[nodiscard]] static b8 DeclaresTerminalTextureState(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const TextureDesc& description, const TextureSubresourceSet requested, const ResourceStates::Mask finalState)noexcept{
     ResourceStates::Mask terminalState = ResourceStates::Unknown;
     for(usize index = 0u; index < task.resourceUseCount; ++index){
         const GpuTaskResourceUse& use = task.resourceUses[index];
@@ -63,7 +63,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     return terminalState == finalState;
 }
 
-[[nodiscard]] static bool HasSourceBlob(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph)noexcept{
+[[nodiscard]] static b8 HasSourceBlob(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph)noexcept{
     if(!graph.validUploadBlob(record.sourceUploadBlob))
         return false;
     const auto source = graph.uploadBlobData(record.sourceUploadBlob);

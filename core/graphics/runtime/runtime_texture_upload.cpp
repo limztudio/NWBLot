@@ -33,7 +33,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool TextureUploadRequiresGraphicsConsumerQueue(const TextureDesc& textureDesc)noexcept{
+[[nodiscard]] static b8 TextureUploadRequiresGraphicsConsumerQueue(const TextureDesc& textureDesc)noexcept{
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
     return formatInfo.hasDepth || formatInfo.hasStencil;
 }
@@ -203,7 +203,7 @@ struct TextureUploadBatchSubmissionData{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
+b8 GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
     auto& device = getDevice();
     if(desc.acceptedToken)
         *desc.acceptedToken = {};
@@ -229,7 +229,7 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
         .sameClassRouting = sameClassRouting,
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
-    const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
+    const b8 submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         uploadToken,
         *m_standaloneGraphWorkspaces,
         *this,

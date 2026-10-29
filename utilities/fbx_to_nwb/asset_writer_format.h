@@ -23,11 +23,11 @@ namespace AssetWriterFormatDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh);
-[[nodiscard]] bool WriteSkeletonAsset(const ScratchPath& outputPath, Span<ufbx_node* const> joints, Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool WriteSkinAsset(const ScratchPath& outputPath, AStringView meshName, AStringView skeletonName, Span<const MeshSkinInfluence> influences, Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool WriteModelAsset(const ScratchPath& outputPath, AStringView meshName, Optional<AStringView> skinName, Optional<AStringView> skeletonName, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool WriteAssetBunch(
+[[nodiscard]] b8 WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh);
+[[nodiscard]] b8 WriteSkeletonAsset(const ScratchPath& outputPath, Span<ufbx_node* const> joints, Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 WriteSkinAsset(const ScratchPath& outputPath, AStringView meshName, AStringView skeletonName, Span<const MeshSkinInfluence> influences, Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 WriteModelAsset(const ScratchPath& outputPath, AStringView meshName, Optional<AStringView> skinName, Optional<AStringView> skeletonName, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 WriteAssetBunch(
     const ScratchPath& outputPath,
     const SourceMeshStreams& mesh,
     Optional<AStringView> skinName,

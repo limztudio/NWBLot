@@ -21,7 +21,7 @@ namespace ArenaObjectDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename Arena, bool DestroyCompleted = true, bool OwnsConstructed = false>
+template<typename T, typename Arena, b8 DestroyCompleted = true, b8 OwnsConstructed = false>
 class ConstructionStorage final : NoCopy{
 public:
     ConstructionStorage(Arena& arena, const usize count, NotNull<T*> memory, T*& constructed)noexcept
@@ -59,12 +59,12 @@ private:
 
 
 template<typename T, typename... Args>
-consteval bool CanConstructArenaObject()noexcept{
+consteval b8 CanConstructArenaObject()noexcept{
     return requires{ ::new(DeclVal<void*>()) T(DeclVal<Args&&>()...); };
 }
 
 template<typename T, typename... Args>
-consteval bool IsNothrowArenaObjectConstruction()noexcept{
+consteval b8 IsNothrowArenaObjectConstruction()noexcept{
     if constexpr(CanConstructArenaObject<T, Args...>())
         return noexcept(::new(DeclVal<void*>()) T(DeclVal<Args&&>()...));
     else
@@ -72,7 +72,7 @@ consteval bool IsNothrowArenaObjectConstruction()noexcept{
 }
 
 template<typename T>
-consteval bool IsNothrowArenaArrayConstruction()noexcept{
+consteval b8 IsNothrowArenaArrayConstruction()noexcept{
     if constexpr(requires{ ::new(DeclVal<void*>()) T[DeclVal<usize&>()]; })
         return noexcept(::new(DeclVal<void*>()) T[DeclVal<usize&>()]);
     else
@@ -187,7 +187,7 @@ namespace ArenaObjectDetail{
 
 
 template<typename T, typename Arena, typename... Args>
-consteval bool IsNothrowArenaUniqueConstruction()noexcept{
+consteval b8 IsNothrowArenaUniqueConstruction()noexcept{
     if constexpr(CanConstructArenaObject<T, Args...>()){
         return
             noexcept(DeclVal<Arena&>().template allocate<T>(1))

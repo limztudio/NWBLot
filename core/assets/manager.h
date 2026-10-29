@@ -37,7 +37,7 @@ public:
 
 
 public:
-    virtual bool readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const = 0;
+    virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const = 0;
 };
 
 class IAssetAsyncExecutor{
@@ -54,7 +54,7 @@ struct AssetLoadResult{
     u64 requestId = 0;
     UniquePtr<IAsset> asset;
     AssetLoadState::Enum state = AssetLoadState::Invalid;
-    bool success = false;
+    b8 success = false;
 };
 
 
@@ -73,7 +73,7 @@ private:
 
 public:
     template<typename TAsset, typename TResource>
-    [[nodiscard]] static bool CheckLoaderEnter(const AssetRef<TAsset>& assetRef, const TResource& resource, const TStringView owner){
+    [[nodiscard]] static b8 CheckLoaderEnter(const AssetRef<TAsset>& assetRef, const TResource& resource, const TStringView owner){
         if(!assetRef.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner, ConvertString(TAsset::s_AssetTypeText));
             return false;

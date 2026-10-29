@@ -53,11 +53,11 @@ template<typename NameT>
     return { key.task.identityHash(), key.variant, key.resolutionClass };
 }
 
-[[nodiscard]] static bool IsFinitePositiveDuration(const f64 value)noexcept{
+[[nodiscard]] static b8 IsFinitePositiveDuration(const f64 value)noexcept{
     return value > 0.0 && value < Limit<f64>::s_Max;
 }
 
-[[nodiscard]] static bool IsFiniteNonNegative(const f64 value)noexcept{
+[[nodiscard]] static b8 IsFiniteNonNegative(const f64 value)noexcept{
     return value >= 0.0 && value < Limit<f64>::s_Max;
 }
 
@@ -110,7 +110,7 @@ i32 GpuQueueAssignmentScore::total()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskTimingHistory::valid()const noexcept{
+b8 GpuTaskTimingHistory::valid()const noexcept{
     using namespace __hidden_gpu_task_timing_feedback;
 
     return sampleCount != 0u && IsFinitePositiveDuration(averageSeconds) && IsFinitePositiveDuration(minimumSeconds) && IsFinitePositiveDuration(maximumSeconds) && minimumSeconds <= averageSeconds && averageSeconds <= maximumSeconds;
@@ -120,7 +120,7 @@ bool GpuTaskTimingHistory::valid()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskTimingFeedbackPolicy::valid()const noexcept{
+b8 GpuTaskTimingFeedbackPolicy::valid()const noexcept{
     using namespace __hidden_gpu_task_timing_feedback;
 
     return minimumSampleCount != 0u && IsFiniteNonNegative(minimumAbsoluteBenefitSeconds) && IsFiniteNonNegative(minimumRelativeBenefit) && minimumRelativeBenefit <= 1.0;
@@ -130,12 +130,12 @@ bool GpuTaskTimingFeedbackPolicy::valid()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskTimingHistoryMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
+b8 GpuTaskTimingHistoryMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
     return policy.valid() && history.valid() && history.sampleCount >= policy.minimumSampleCount;
 }
 
 
-bool GpuTaskTimingBenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
+b8 GpuTaskTimingBenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
     if(!policy.valid() || !incumbent.valid() || !candidate.valid() || candidate.averageSeconds >= incumbent.averageSeconds)
         return false;
 
@@ -147,14 +147,14 @@ bool GpuTaskTimingBenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent
 }
 
 
-bool GpuTaskTimingSwitchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, const u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
+b8 GpuTaskTimingSwitchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, const u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
     if(!policy.valid() || !assignment.valid() || frameIndex < assignment.lastSwitchFrameIndex)
         return false;
     return frameIndex - assignment.lastSwitchFrameIndex >= policy.minimumFramesBetweenSwitches;
 }
 
 
-bool GpuTaskTimingFeedbackCanSwitch(
+b8 GpuTaskTimingFeedbackCanSwitch(
     const GpuTaskTimingHistory& incumbent,
     const GpuTaskTimingHistory& candidate,
     const GpuTaskTimingAssignmentState& assignment,
@@ -268,7 +268,7 @@ void GpuTaskTimingHistoryStore::resetForDeviceGeneration(const u16 deviceGenerat
 }
 
 
-bool GpuTaskTimingHistoryStore::recordSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, const f64 durationSeconds, const u64 sourceFrameIndex){
+b8 GpuTaskTimingHistoryStore::recordSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, const f64 durationSeconds, const u64 sourceFrameIndex){
     using namespace __hidden_gpu_task_timing_feedback;
 
     if(!IsFinitePositiveDuration(durationSeconds))
@@ -280,7 +280,7 @@ bool GpuTaskTimingHistoryStore::recordSample(const GpuTaskTimingKey& key, const 
 }
 
 
-bool GpuTaskTimingHistoryStore::recordNonCommittingSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, const f64 durationSeconds){
+b8 GpuTaskTimingHistoryStore::recordNonCommittingSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, const f64 durationSeconds){
     using namespace __hidden_gpu_task_timing_feedback;
 
     if(!key.valid() || !physicalQueue.valid() || !IsFinitePositiveDuration(durationSeconds))
@@ -314,7 +314,7 @@ bool GpuTaskTimingHistoryStore::recordNonCommittingSample(const GpuTaskTimingKey
 }
 
 
-bool GpuTaskTimingHistoryStore::noteAcceptedAssignment(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, const u64 sourceFrameIndex){
+b8 GpuTaskTimingHistoryStore::noteAcceptedAssignment(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, const u64 sourceFrameIndex){
     using namespace __hidden_gpu_task_timing_feedback;
 
     if(!key.valid() || !physicalQueue.valid())
@@ -478,7 +478,7 @@ void GpuTaskTimingHistoryStore::rebuildHistory(HistoryRecord& record)noexcept{
 }
 
 
-bool GpuTaskTimingHistoryStore::promoteHistoryIndex(){
+b8 GpuTaskTimingHistoryStore::promoteHistoryIndex(){
     using namespace __hidden_gpu_task_timing_feedback;
     using namespace GpuTaskTimingHistoryDetail;
 
@@ -496,7 +496,7 @@ bool GpuTaskTimingHistoryStore::promoteHistoryIndex(){
     return true;
 }
 
-bool GpuTaskTimingHistoryStore::promoteAssignmentIndex(){
+b8 GpuTaskTimingHistoryStore::promoteAssignmentIndex(){
     using namespace __hidden_gpu_task_timing_feedback;
     using namespace GpuTaskTimingHistoryDetail;
 

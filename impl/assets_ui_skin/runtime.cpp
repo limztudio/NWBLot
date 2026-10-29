@@ -39,7 +39,7 @@ static_assert(UiSkinColorRole::kCount == UiSkinBinaryPayload::s_UiSkinPaletteCol
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsValidRegion(const UiSkinRegion& region, const u32 atlasWidth, const u32 atlasHeight)noexcept{
+[[nodiscard]] static b8 IsValidRegion(const UiSkinRegion& region, const u32 atlasWidth, const u32 atlasHeight)noexcept{
     if(!region.name || region.name == Name(""))
         return false;
     const UiSkinRect& rectangle = region.rectangle;
@@ -80,7 +80,7 @@ static_assert(UiSkinColorRole::kCount == UiSkinBinaryPayload::s_UiSkinPaletteCol
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiSkin::loadBinary(const Span<const u8> binary){
+b8 UiSkin::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(binary, UiSkinBinaryPayload::s_UiSkinMagic, UiSkinBinaryPayload::s_UiSkinLoadBinaryContext, UiSkinBinaryPayload::s_UiSkinAssetKindLabel, cursor);
     if(!headerResult)
@@ -162,7 +162,7 @@ bool UiSkin::loadBinary(const Span<const u8> binary){
     return true;
 }
 
-bool UiSkin::validatePayload()const{
+b8 UiSkin::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("UiSkin::validatePayload")))
         return false;
     if(m_regions.size() > s_UiSkinMaxRegionCount){
@@ -207,7 +207,7 @@ bool UiSkin::validatePayload()const{
     return true;
 }
 
-bool UiSkin::validateTexture(const Texture& texture)const{
+b8 UiSkin::validateTexture(const Texture& texture)const{
     if(!validatePayload())
         return false;
     if(texture.virtualPath() != m_texture.name() || texture.dimension() != TextureDimension::Texture2D || texture.depth() != 1u || texture.width() != m_atlasWidth || texture.height() != m_atlasHeight){

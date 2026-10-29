@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PreparedSceneBvhUpload::StorageReady(const RendererRayTracingState& state, const usize nodeCount, const usize instanceCount)noexcept{
+b8 PreparedSceneBvhUpload::StorageReady(const RendererRayTracingState& state, const usize nodeCount, const usize instanceCount)noexcept{
     return
         state.m_sceneBvhNodeBuffer
         && state.m_sceneInstanceBuffer
@@ -31,9 +31,9 @@ bool PreparedSceneBvhUpload::StorageReady(const RendererRayTracingState& state, 
 }
 
 
-bool PreparedSceneBvhUpload::capture(
+b8 PreparedSceneBvhUpload::capture(
     const RendererRayTracingState& state,
-    const bool staticScene,
+    const b8 staticScene,
     const u64 staticSceneHash,
     const Span<const NwbBvhNodeGpu> nodes,
     const Span<const SceneSwBvhInstanceGpu> instances
@@ -41,7 +41,7 @@ bool PreparedSceneBvhUpload::capture(
     clear();
     const usize nodeCount = nodes.size();
     const usize instanceCount = instances.size();
-    const bool validStorage = StorageReady(state, nodeCount, instanceCount);
+    const b8 validStorage = StorageReady(state, nodeCount, instanceCount);
     if(nodeCount == 0u || instanceCount == 0u || !validStorage)
         return false;
 
@@ -66,13 +66,13 @@ bool PreparedSceneBvhUpload::capture(
     return true;
 }
 
-bool PreparedSceneBvhUpload::captureCacheReuse(const RendererRayTracingState& state, const u64 staticSceneHash, const u32 instanceCount)noexcept{
+b8 PreparedSceneBvhUpload::captureCacheReuse(const RendererRayTracingState& state, const u64 staticSceneHash, const u32 instanceCount)noexcept{
     clear();
     if(instanceCount == 0u)
         return false;
 
     const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
-    const bool validStorage = StorageReady(state, requiredNodeCount, instanceCount);
+    const b8 validStorage = StorageReady(state, requiredNodeCount, instanceCount);
     if(!state.m_sceneSwBvhStaticSceneHashValid || state.m_sceneSwBvhStaticSceneHash != staticSceneHash || state.m_sceneBvhInstanceCount != instanceCount || !validStorage)
         return false;
 
@@ -149,7 +149,7 @@ Expected<PreparedSceneBvhUploads> PreparedSceneBvhUpload::retainUploads(const Re
     return result;
 }
 
-bool PreparedSceneBvhUpload::publishAcceptedUpload(RendererRayTracingState& state)const noexcept{
+b8 PreparedSceneBvhUpload::publishAcceptedUpload(RendererRayTracingState& state)const noexcept{
     if(!m_ready || !m_uploadRequired)
         return false;
 
@@ -162,7 +162,7 @@ bool PreparedSceneBvhUpload::publishAcceptedUpload(RendererRayTracingState& stat
     return true;
 }
 
-bool PreparedSceneBvhUpload::storageMatches(const RendererRayTracingState& state)const noexcept{
+b8 PreparedSceneBvhUpload::storageMatches(const RendererRayTracingState& state)const noexcept{
     return
         state.m_sceneBvhNodeBuffer.get() == m_nodeBuffer.get()
         && state.m_sceneInstanceBuffer.get() == m_instanceBuffer.get()
@@ -173,7 +173,7 @@ bool PreparedSceneBvhUpload::storageMatches(const RendererRayTracingState& state
     ;
 }
 
-bool PreparedSceneBvhUpload::snapshotAccepted(const RendererRayTracingState& state)const noexcept{
+b8 PreparedSceneBvhUpload::snapshotAccepted(const RendererRayTracingState& state)const noexcept{
     return m_uploadRequired || (m_static && state.m_sceneSwBvhStaticSceneHashValid && state.m_sceneSwBvhStaticSceneHash == m_staticSceneHash && state.m_sceneBvhInstanceCount == m_instanceCount);
 }
 

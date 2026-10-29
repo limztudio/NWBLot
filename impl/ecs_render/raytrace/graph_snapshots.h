@@ -37,8 +37,8 @@ struct PreparedSceneBvhUploads{
 
 
 struct GraphOwnedAdaptiveShadowPlan{
-    bool enabled = false;
-    bool compact = false;
+    b8 enabled = false;
+    b8 compact = false;
 };
 
 
@@ -47,15 +47,15 @@ struct RayTracingShadowVisibilityGraphPlanSnapshot{
     LightSpaceShadowSnapshot lightSpace;
     GraphOwnedAdaptiveShadowPlan adaptivePlan;
 
-    bool hardwareTransparentTrace = false;
-    bool softTransparentFoldReady = false;
-    bool combinedSoftUpsample = false;
-    bool combinedSoftWaveletReady = false;
-    bool combinedSoftTemporalReady = false;
-    bool softShadowHistoryReadable = false;
-    bool opaqueTemporalMergeReady = false;
-    bool transparentTemporalMergeReady = false;
-    bool historyFrontIsA = false;
+    b8 hardwareTransparentTrace = false;
+    b8 softTransparentFoldReady = false;
+    b8 combinedSoftUpsample = false;
+    b8 combinedSoftWaveletReady = false;
+    b8 combinedSoftTemporalReady = false;
+    b8 softShadowHistoryReadable = false;
+    b8 opaqueTemporalMergeReady = false;
+    b8 transparentTemporalMergeReady = false;
+    b8 historyFrontIsA = false;
 };
 
 
@@ -63,8 +63,8 @@ struct RayTracingShadowVisibilityGraphPlanSnapshot{
 
 
 struct ShadowPreparationOutcome{
-    bool resourcesValid = false;
-    bool ready = false;
+    b8 resourcesValid = false;
+    b8 ready = false;
 };
 
 
@@ -81,12 +81,12 @@ struct RayTracingFrameCpuStateSnapshot{
     u32 softShadowSlotMask = 0u;
     u32 causticLightCount = 0u;
 
-    bool swShadowDispatchLogged = false;
-    bool causticAccumulatorInitialized = false;
-    bool swCausticDispatchLogged = false;
-    bool hwCausticDispatchLogged = false;
-    bool causticEmissionGateLogged = false;
-    bool surfelSeeded = false;
+    b8 swShadowDispatchLogged = false;
+    b8 causticAccumulatorInitialized = false;
+    b8 swCausticDispatchLogged = false;
+    b8 hwCausticDispatchLogged = false;
+    b8 causticEmissionGateLogged = false;
+    b8 surfelSeeded = false;
 };
 
 
@@ -123,9 +123,9 @@ struct RayTracingDeferredGraphResourceSnapshot{
     Core::RayTracingAccelStructHandle sceneTlas;
 
     f32 causticTemporalDecay = 0.f;
-    bool causticAccumulatorInitialized = false;
-    bool surfelUsesHardwareTrace = false;
-    bool surfelSplitGraphPipelinesReady = false;
+    b8 causticAccumulatorInitialized = false;
+    b8 surfelUsesHardwareTrace = false;
+    b8 surfelSplitGraphPipelinesReady = false;
 };
 
 
@@ -161,12 +161,12 @@ struct RayTracingRefractionGraphResources{
     u32 viewHeapSlot = 0u;
     u32 opaqueReflectionSlot = Core::GpuDescriptorHandle::s_Invalid;
     u32 certifiedInstanceIndex = Limit<u32>::s_Max;
-    bool refractionEnabled = true;
-    bool usesHardwareTrace = false;
+    b8 refractionEnabled = true;
+    b8 usesHardwareTrace = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return pipeline && densePipeline && classifyTilesPipeline && finalizeTilesPipeline && viewBuffer && (!usesHardwareTrace || (sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer));
     }
 };

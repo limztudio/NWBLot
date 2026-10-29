@@ -26,7 +26,7 @@ namespace ECSRenderDetail{
 
 
 template<typename Plan, typename AcceptMode>
-[[nodiscard]] bool CaptureAliasFreeGeneratedGeometryDraws(Plan& plan, const MaterialPassDrawItemsView& source, Core::Alloc::ScratchArena& scratchArena, AcceptMode acceptMode){
+[[nodiscard]] b8 CaptureAliasFreeGeneratedGeometryDraws(Plan& plan, const MaterialPassDrawItemsView& source, Core::Alloc::ScratchArena& scratchArena, AcceptMode acceptMode){
     plan.drawItems.reserve(source.computeDrawItems.size());
     plan.outputBuffers.reserve(source.computeDrawItems.size());
     plan.outputLayouts.reserve(source.computeDrawItems.size());
@@ -50,8 +50,8 @@ template<typename Plan, typename AcceptMode>
 }
 
 
-[[nodiscard]] NWB_INLINE bool MatchesRetainedGeneratedGeometryOutputs(
-    const bool captured,
+[[nodiscard]] NWB_INLINE b8 MatchesRetainedGeneratedGeometryOutputs(
+    const b8 captured,
     const Span<const MaterialPassDrawItem> drawItems,
     const Span<const Core::BufferHandle> outputBuffers,
     const Span<const GeneratedGeometryOutputLayout> outputLayouts,

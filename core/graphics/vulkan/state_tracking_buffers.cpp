@@ -42,11 +42,11 @@ namespace VulkanStateTrackingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsBufferStateRangeValid(const BufferRange range, const BufferDesc& description)noexcept{
+b8 IsBufferStateRangeValid(const BufferRange range, const BufferDesc& description)noexcept{
     return range.hasExtent() && range.byteOffset < description.byteSize && (range.byteSize == BufferRange::s_AllBytes || range.byteSize <= description.byteSize - range.byteOffset);
 }
 
-VkBufferMemoryBarrier2 BuildBufferStateBarrier(const VkBuffer buffer, const BufferRange range, const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const bool rayTracingStageAvailable)noexcept{
+VkBufferMemoryBarrier2 BuildBufferStateBarrier(const VkBuffer buffer, const BufferRange range, const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const b8 rayTracingStageAvailable)noexcept{
     const ResourceStates::Mask sourceState = oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common;
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(sourceState, rayTracingStageAvailable);
@@ -86,7 +86,7 @@ ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer, const BufferRa
         return fallbackState;
 
     ResourceStates::Mask resolvedState = ResourceStates::Unknown;
-    bool first = true;
+    b8 first = true;
     const auto accumulate = [&](const ResourceStates::Mask state)noexcept{
         if(first){
             resolvedState = state;
@@ -111,7 +111,7 @@ ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer, const BufferRa
     return resolvedState;
 }
 
-bool StateTracker::hasExplicitBufferState(Buffer* buffer, const BufferRange range, const bool requireKnown)const noexcept{
+b8 StateTracker::hasExplicitBufferState(Buffer* buffer, const BufferRange range, const b8 requireKnown)const noexcept{
     if(!buffer || !VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc))
         return false;
     const BufferRange resolvedRange = range.resolve(buffer->m_creationDesc);
@@ -142,7 +142,7 @@ void StateTracker::beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask stat
     beginTrackingTransientBuffer(*buffer, state, range);
 }
 
-void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state, const BufferRange range, const bool seedOnly){
+void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::Mask state, const BufferRange range, const b8 seedOnly){
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer.m_creationDesc))
         return;
     const BufferRange resolvedRange = range.resolve(buffer.m_creationDesc);
@@ -208,7 +208,7 @@ void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask stateBits, const bool forceMemoryDependency, const BufferRange range){
+void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask stateBits, const b8 forceMemoryDependency, const BufferRange range){
     if(!bufferResource)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("set buffer state");
@@ -226,7 +226,7 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(&buffer);
     const ResourceStates::Mask fallbackState = buffer.isRetainedStateKnown() ? buffer.m_creationDesc.initialState : ResourceStates::Unknown;
-    const bool uavBarrierEnabled = ResourceStates::HasUnorderedAccess(stateBits) && m_stateTracker.isUavBarrierEnabledForBuffer(buffer);
+    const b8 uavBarrierEnabled = ResourceStates::HasUnorderedAccess(stateBits) && m_stateTracker.isUavBarrierEnabledForBuffer(buffer);
     const usize firstBarrierIndex = m_pendingBufferBarriers.size();
     const auto append = [&](const BufferRange piece, const ResourceStates::Mask oldState){
         if(!piece.hasExtent())
@@ -409,7 +409,7 @@ ResourceStates::Mask CommandList::getBufferState(Buffer* buffer, const BufferRan
     return m_stateTracker.getBufferState(buffer, range);
 }
 
-bool CommandList::hasExplicitBufferState(Buffer* buffer, const BufferRange range, const bool requireKnown)const noexcept{
+b8 CommandList::hasExplicitBufferState(Buffer* buffer, const BufferRange range, const b8 requireKnown)const noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return false;

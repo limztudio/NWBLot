@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiLayerSystem::setInputBindings(const Ui::InputKeyBinding* bindings, const usize count){
+b8 UiLayerSystem::setInputBindings(const Ui::InputKeyBinding* bindings, const usize count){
     synchronizeNativeInput();
     return m_context.input().setBindings(bindings, count);
 }
@@ -24,7 +24,7 @@ void UiLayerSystem::restoreDefaultInputBindings(){
     m_context.input().restoreDefaultBindings();
 }
 
-bool UiLayerSystem::commandInput(const Ui::InputSource source, const Ui::InputCommand::Enum command, const Ui::InputPhase::Enum phase, const bool extend){
+b8 UiLayerSystem::commandInput(const Ui::InputSource source, const Ui::InputCommand::Enum command, const Ui::InputPhase::Enum phase, const b8 extend){
     if(!source.valid() || command > Ui::InputCommand::ContextMenu || (command == Ui::InputCommand::None && phase != Ui::InputPhase::Release) || phase > Ui::InputPhase::Repeat)
         return false;
     synchronizeNativeInput();
@@ -35,7 +35,7 @@ bool UiLayerSystem::commandInput(const Ui::InputSource source, const Ui::InputCo
     event.extend = extend;
     event.edit = true;
     event.repeat = phase == Ui::InputPhase::Repeat;
-    bool consumed = false;
+    b8 consumed = false;
     routeInput(event, &consumed);
     return consumed;
 }

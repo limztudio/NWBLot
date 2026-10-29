@@ -19,7 +19,7 @@ template<typename T>
 [[nodiscard]] constexpr const T& Min(const T& a, const T& b)noexcept(IsArithmetic_V<T>){ return (a < b) ? a : b; }
 
 template<typename T, typename Compare>
-[[nodiscard]] constexpr const T& Min(const T& a, const T& b, Compare comp)noexcept(noexcept(static_cast<bool>(comp(a, b))) && IsNothrowDestructible_V<Compare>){ return comp(a, b) ? a : b; }
+[[nodiscard]] constexpr const T& Min(const T& a, const T& b, Compare comp)noexcept(noexcept(static_cast<b8>(comp(a, b))) && IsNothrowDestructible_V<Compare>){ return comp(a, b) ? a : b; }
 
 template<typename T>
 [[nodiscard]] constexpr T Min(InitializerList<T> list)noexcept(IsArithmetic_V<T>){ return *std::min_element(list.begin(), list.end()); }
@@ -30,7 +30,7 @@ template<typename T, typename Compare>
     && IsNothrowMoveConstructible_V<Compare>
     && IsNothrowDestructible_V<Compare>
     && noexcept(T(*list.begin()))
-    && noexcept(static_cast<bool>(comp(*list.begin(), *list.begin())))
+    && noexcept(static_cast<b8>(comp(*list.begin(), *list.begin())))
 ){
     return *std::min_element(list.begin(), list.end(), comp);
 }
@@ -39,7 +39,7 @@ template<typename T>
 [[nodiscard]] constexpr const T& Max(const T& a, const T& b)noexcept(IsArithmetic_V<T>){ return (a > b) ? a : b; }
 
 template<typename T, typename Compare>
-[[nodiscard]] constexpr const T& Max(const T& a, const T& b, Compare comp)noexcept(noexcept(static_cast<bool>(comp(a, b))) && IsNothrowDestructible_V<Compare>){ return comp(a, b) ? b : a; }
+[[nodiscard]] constexpr const T& Max(const T& a, const T& b, Compare comp)noexcept(noexcept(static_cast<b8>(comp(a, b))) && IsNothrowDestructible_V<Compare>){ return comp(a, b) ? b : a; }
 
 template<typename T>
 [[nodiscard]] constexpr T Max(InitializerList<T> list)noexcept(IsArithmetic_V<T>){ return *std::max_element(list.begin(), list.end()); }
@@ -50,7 +50,7 @@ template<typename T, typename Compare>
     && IsNothrowMoveConstructible_V<Compare>
     && IsNothrowDestructible_V<Compare>
     && noexcept(T(*list.begin()))
-    && noexcept(static_cast<bool>(comp(*list.begin(), *list.begin())))
+    && noexcept(static_cast<b8>(comp(*list.begin(), *list.begin())))
 ){
     return *std::max_element(list.begin(), list.end(), comp);
 }
@@ -227,19 +227,19 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE bool IsFinite(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] NWB_INLINE b8 IsFinite(const T value)noexcept(IsArithmetic_V<T>){
     using std::isfinite;
     return isfinite(value);
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE bool IsNaN(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] NWB_INLINE b8 IsNaN(const T value)noexcept(IsArithmetic_V<T>){
     using std::isnan;
     return isnan(value);
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE bool SignBit(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] NWB_INLINE b8 SignBit(const T value)noexcept(IsArithmetic_V<T>){
     using std::signbit;
     return signbit(value);
 }

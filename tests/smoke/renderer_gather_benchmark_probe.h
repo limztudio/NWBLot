@@ -69,13 +69,13 @@ public:
 
 
 public:
-    [[nodiscard]] bool poll(const Core::Perf::SessionReport& report, bool memoryEnabled);
+    [[nodiscard]] b8 poll(const Core::Perf::SessionReport& report, b8 memoryEnabled);
 
-    [[nodiscard]] bool finished()const noexcept{ return m_successfulFrames >= s_WarmupFrames + s_SampleFrames + s_DrainFrames; }
+    [[nodiscard]] b8 finished()const noexcept{ return m_successfulFrames >= s_WarmupFrames + s_SampleFrames + s_DrainFrames; }
 
     [[nodiscard]] u32 successfulFrames()const noexcept{ return m_successfulFrames; }
 
-    [[nodiscard]] bool write(AStringView path, AStringView workload, bool memoryEnabled, u32 renderers, u32 runtimeRenderers, u32 transparentRenderers, u32 runtimeOwners)const;
+    [[nodiscard]] b8 write(AStringView path, AStringView workload, b8 memoryEnabled, u32 renderers, u32 runtimeRenderers, u32 transparentRenderers, u32 runtimeOwners)const;
 
 
 private:
@@ -85,8 +85,8 @@ private:
     Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount> m_memoryBaseline = {};
     u64 m_lastPublish = 0u;
     u32 m_successfulFrames = 0u;
-    Array<bool, s_GpuScopeCount> m_hasGpuPublication = {};
-    bool m_hasPublication = false;
+    Array<b8, s_GpuScopeCount> m_hasGpuPublication = {};
+    b8 m_hasPublication = false;
 };
 
 

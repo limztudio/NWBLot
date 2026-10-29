@@ -34,7 +34,7 @@ static constexpr TStringView s_ClearRectOutsideRenderAreaReason = NWB_TEXT("clea
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
+void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceSet subresources, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil){
     if(!publicCommandStateAccessible())
         return;
     if(!clearDepth && !clearStencil)
@@ -97,11 +97,11 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
     retainResource(&texture);
 }
 
-void CommandList::clearDepthStencilTextureRect(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const bool clearDepth, const f32 depth, const bool clearStencil, const u8 stencil){
+void CommandList::clearDepthStencilTextureRect(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const b8 clearDepth, const f32 depth, const b8 clearStencil, const u8 stencil){
     clearDepthStencilTextureBox(texture, subresources, Box(rect, 0, Limit<i32>::s_Max), clearDepth, depth, clearStencil, stencil);
 }
 
-void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, const bool clearDepth, const f32 depth, const bool clearStencil, const u8 stencil){
+void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, const b8 clearDepth, const f32 depth, const b8 clearStencil, const u8 stencil){
     if(!publicCommandStateAccessible())
         return;
     if(!clearDepth && !clearStencil)
@@ -219,7 +219,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
     if(m_commandRecordingFailed)
         return;
 
-    const auto copyAspect = [&](const VkImageAspectFlagBits aspect, const NotNull<const u8*> clearPattern, const u32 clearPatternSize) -> bool {
+    const auto copyAspect = [&](const VkImageAspectFlagBits aspect, const NotNull<const u8*> clearPattern, const u32 clearPatternSize) -> b8 {
         u32 planIndex = 0u;
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel, ++planIndex){
             const MipClearPlan& mipPlan = mipClearPlans[planIndex];
@@ -260,7 +260,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
     retainResource(&texture);
 }
 
-bool CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue){
+b8 CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue){
     constexpr TStringView s_OperationName = NWB_TEXT("clear color attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
         rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a color attachment is required"));
@@ -298,7 +298,7 @@ bool CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const 
     return true;
 }
 
-bool CommandList::clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const bool clearDepth, const f32 depth, const bool clearStencil, const u8 stencil){
+b8 CommandList::clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const b8 clearDepth, const f32 depth, const b8 clearStencil, const u8 stencil){
     constexpr TStringView s_OperationName = NWB_TEXT("clear depth/stencil attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
         rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a depth/stencil attachment is required"));

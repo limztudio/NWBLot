@@ -57,7 +57,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool enabled()const noexcept override{ return true; }
+    [[nodiscard]] virtual b8 enabled()const noexcept override{ return true; }
 
     [[nodiscard]] virtual Expected<Core::Perf::TimingScopeId> registerScope(const Name& scopeName)noexcept override{
         static_cast<void>(scopeName);

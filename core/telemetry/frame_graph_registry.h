@@ -33,7 +33,7 @@ public:
     void unregisterContributor(IFrameGraphContributor& contributor)noexcept;
     void clear()noexcept{ m_contributors.clear(); }
 
-    [[nodiscard]] bool record(CaptureSession& session);
+    [[nodiscard]] b8 record(CaptureSession& session);
 
     [[nodiscard]] usize contributorCount()const noexcept{ return m_contributors.size(); }
 
@@ -45,7 +45,7 @@ private:
     FrameGraphPendingNameEdges m_pendingNameEdges;
     FrameGraphPhysicalQueueRuntimeStatisticsRecords m_physicalQueueRuntimeStatistics;
     FrameGraphPacketSubmissionStatisticsRecords m_packetSubmissionStatistics;
-    bool m_recording = false;
+    b8 m_recording = false;
 };
 
 

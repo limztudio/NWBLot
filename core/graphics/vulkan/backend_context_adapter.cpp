@@ -83,13 +83,13 @@ Expected<AdapterInfo> BackendContext::getSelectedAdapterInfo()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
+b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
     const Format::Enum requestedSdrFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice && VulkanDetail::ConvertFormat(requestedSdrFormat) == VK_FORMAT_UNDEFINED){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested SDR swapchain format is unsupported"));
         return false;
     }
-    const bool hdr10Allowed = m_deviceParams.enableHDR10Output && m_hdr10ColorSpaceExtensionEnabled;
+    const b8 hdr10Allowed = m_deviceParams.enableHDR10Output && m_hdr10ColorSpaceExtensionEnabled;
     VkExtent2D requestedExtent = { m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight };
 
     VkResult res = VK_SUCCESS;
@@ -194,7 +194,7 @@ bool BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
         for(const auto& ext : deviceExtensions)
             requiredExtensions.erase(AStringView(ext.extensionName, NWB_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE)));
 
-        bool deviceIsGood = true;
+        b8 deviceIsGood = true;
 
         if(!requiredExtensions.empty()){
             for(const auto& ext : requiredExtensions)
@@ -310,7 +310,7 @@ bool BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
     return false;
 }
 
-bool BackendContext::findQueueFamilies(Alloc::ScratchArena& scratchArena, VkPhysicalDevice physicalDevice){
+b8 BackendContext::findQueueFamilies(Alloc::ScratchArena& scratchArena, VkPhysicalDevice physicalDevice){
     uint32_t queueFamilyCount = 0;
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
@@ -332,7 +332,7 @@ bool BackendContext::findQueueFamilies(Alloc::ScratchArena& scratchArena, VkPhys
     m_asyncComputeQueueFamily = selection.asyncComputeFamily;
     m_transferQueueFamily = selection.dedicatedTransferFamily;
 
-    const bool requirePresentQueue = !m_deviceParams.headlessDevice;
+    const b8 requirePresentQueue = !m_deviceParams.headlessDevice;
     const auto familySupportsPresent = [this, physicalDevice](const i32 familyIndex){
         if(familyIndex == s_InvalidQueueFamilyIndex || !m_windowSurface)
             return false;

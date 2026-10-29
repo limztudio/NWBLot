@@ -34,7 +34,7 @@ struct alignas(MaxAlign) Block{
     usize requestedBytes = 0u;
     Block* previous = nullptr;
     Block* next = nullptr;
-    bool isFree = false;
+    b8 isFree = false;
 };
 
 struct FreeLinks{
@@ -93,7 +93,7 @@ inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
     NWB_MEMCPY(static_cast<u8*>(p.get()) - sizeof(blockPtr), sizeof(blockPtr), &blockPtr, sizeof(blockPtr));
 }
 
-[[nodiscard]] inline bool IsLiveBlock(const void* const bucket, const usize bucketSize, const Block* const block)noexcept{
+[[nodiscard]] inline b8 IsLiveBlock(const void* const bucket, const usize bucketSize, const Block* const block)noexcept{
     if(!bucket || !block || bucketSize < sizeof(Block))
         return false;
 
@@ -164,7 +164,7 @@ inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
     return AllocationLayout{ .userOffset = userOffset, .spanBytes = spanBytes, };
 }
 
-[[nodiscard]] inline Block& CreateBlock(NotNull<void*> address, const usize spanBytes, Block* const previous, Block* const next, const bool isFree)noexcept{
+[[nodiscard]] inline Block& CreateBlock(NotNull<void*> address, const usize spanBytes, Block* const previous, Block* const next, const b8 isFree)noexcept{
     return *new(address.get()) Block{ .spanBytes = spanBytes, .requestedBytes = 0u, .previous = previous, .next = next, .isFree = isFree, };
 }
 
@@ -246,7 +246,7 @@ inline void CoalesceFreeBlocks(void*& freeHead, Block* block)noexcept{
 }
 
 [[nodiscard]] inline Expected<FreeBlockSelection> FindFreeBlock(void* const freeHead, const usize alignment, const usize requestedBytes)noexcept{
-    const bool normalAlignment = alignment == s_BlockAlignment;
+    const b8 normalAlignment = alignment == s_BlockAlignment;
     const auto normalLayout = normalAlignment ? BuildNormalAllocationLayout(requestedBytes) : Expected<AllocationLayout>(MakeUnexpected(Failure{}));
     if(normalAlignment && !normalLayout)
         return MakeUnexpected(Failure{});
@@ -360,7 +360,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
 
     const NotNull<void*> nonNullPtr = MakeNotNull(p);
     auto* const blockPtr = __hidden_persistent::BlockFromAllocation(nonNullPtr);
-    const bool liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, blockPtr);
+    const b8 liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, blockPtr);
     NWB_ASSERT_MSG(liveBlock, NWB_TEXT("PersistentArena reallocation must reference a live block from this arena"));
     if(!liveBlock)
         return nullptr;
@@ -430,7 +430,7 @@ void PersistentArena::deallocate(void* const p, const usize align, const usize s
     NothrowScopedLock lock(m_mutex);
 
     auto* const blockPtr = __hidden_persistent::BlockFromAllocation(MakeNotNull(p));
-    const bool liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, blockPtr);
+    const b8 liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, blockPtr);
     NWB_ASSERT_MSG(liveBlock, NWB_TEXT("PersistentArena deallocation must reference a live block from this arena"));
     if(!liveBlock)
         return;

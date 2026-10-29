@@ -48,7 +48,7 @@ namespace __hidden_assets_mesh_cook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseSourceMeshMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& outEntry){
+static b8 ParseSourceMeshMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& outEntry){
     auto streamsResult = MeshCookSourceStreams::ParseCommonSourceMeshStreams(discoveredFile, asset, s_MeshMetaKind, outEntry.positions.get_allocator().arena(), scratchArena);
     if(!streamsResult)
         return false;
@@ -58,7 +58,7 @@ static bool ParseSourceMeshMeta(const DiscoveredNwbFile& discoveredFile, const C
     return MeshCookMeshlets::BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, cpuScheduler, scratchArena, outEntry);
 }
 
-static bool ValidateMeshAssetFields(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
+static b8 ValidateMeshAssetFields(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
     return Core::Assets::ValidateMetadataAssetFields(
         discoveredFile.filePath,
         asset,
@@ -178,7 +178,7 @@ Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, MeshBinaryPayload::s_MeshSerializeContext))
         return false;
 
@@ -188,7 +188,7 @@ bool MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         return false;
 
     usize reserveBytes = sizeof(MeshBinaryPayload::MeshHeaderBinary);
-    const bool canReserve = MeshAssetBinaryPayload::AddMeshBaseReserveBytes(reserveBytes, mesh);
+    const b8 canReserve = MeshAssetBinaryPayload::AddMeshBaseReserveBytes(reserveBytes, mesh);
 
     outBinary.clear();
     if(canReserve)

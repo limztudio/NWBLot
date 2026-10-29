@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
+b8 RendererRayTracingSystem::setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
     if(!ValidateCausticQualitySettings(settings))
         return false;
     if(m_causticQualitySettings.photonGridDivisor == settings.photonGridDivisor)

@@ -47,7 +47,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BufferDescriptionsEqual(const BufferDesc& lhs, const BufferDesc& rhs)noexcept{
+[[nodiscard]] inline b8 BufferDescriptionsEqual(const BufferDesc& lhs, const BufferDesc& rhs)noexcept{
     return
         lhs.debugName == rhs.debugName
         && lhs.byteSize == rhs.byteSize
@@ -73,19 +73,19 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     ;
 }
 
-[[nodiscard]] constexpr bool IsBufferResourceStateMaskValid(const ResourceStates::Mask states)noexcept{
+[[nodiscard]] constexpr b8 IsBufferResourceStateMaskValid(const ResourceStates::Mask states)noexcept{
     return states != ResourceStates::Unknown && (states & ~s_ValidBufferResourceStates) == 0u;
 }
 
-[[nodiscard]] constexpr bool IsBufferCreationStateMaskValid(const ResourceStates::Mask states)noexcept{
+[[nodiscard]] constexpr b8 IsBufferCreationStateMaskValid(const ResourceStates::Mask states)noexcept{
     return states == ResourceStates::Unknown || IsBufferResourceStateMaskValid(states);
 }
 
-[[nodiscard]] constexpr bool HasStorageBufferUsage(const BufferDesc& desc)noexcept{
+[[nodiscard]] constexpr b8 HasStorageBufferUsage(const BufferDesc& desc)noexcept{
     return desc.structStride != 0u || desc.canHaveUAVs || desc.canHaveRawViews;
 }
 
-[[nodiscard]] inline bool IsBufferDescriptionCompatibleWithResourceStates(const BufferDesc& desc, const ResourceStates::Mask states)noexcept{
+[[nodiscard]] inline b8 IsBufferDescriptionCompatibleWithResourceStates(const BufferDesc& desc, const ResourceStates::Mask states)noexcept{
     if(states == ResourceStates::Unknown)
         return true;
     if(!IsBufferResourceStateMaskValid(states))
@@ -166,7 +166,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     return usage;
 }
 
-[[nodiscard]] inline bool IsBufferUsageSupportedByDevice(const VulkanContext& context, const VkBufferUsageFlags usage)noexcept{
+[[nodiscard]] inline b8 IsBufferUsageSupportedByDevice(const VulkanContext& context, const VkBufferUsageFlags usage)noexcept{
     if(usage == 0u)
         return false;
     if((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) && (!context.extensions.bufferDeviceAddress || !context.deviceDispatch.vkGetBufferDeviceAddress))
@@ -213,19 +213,19 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     return usage;
 }
 
-[[nodiscard]] inline bool IsBufferUsageCompatibleWithDescription(const BufferDesc& desc, const VkBufferUsageFlags usage)noexcept{
+[[nodiscard]] inline b8 IsBufferUsageCompatibleWithDescription(const BufferDesc& desc, const VkBufferUsageFlags usage)noexcept{
     const VkBufferUsageFlags requiredUsage = RequiredBufferUsageForDescription(desc);
     return (usage & requiredUsage) == requiredUsage;
 }
 
-[[nodiscard]] inline bool IsBufferUsageCompatibleWithResourceStates(const BufferDesc& desc, const VkBufferUsageFlags usage, const ResourceStates::Mask states)noexcept{
+[[nodiscard]] inline b8 IsBufferUsageCompatibleWithResourceStates(const BufferDesc& desc, const VkBufferUsageFlags usage, const ResourceStates::Mask states)noexcept{
     if(!IsBufferDescriptionCompatibleWithResourceStates(desc, states))
         return false;
     const VkBufferUsageFlags requiredUsage = RequiredBufferUsageForResourceStates(desc, states);
     return (usage & requiredUsage) == requiredUsage;
 }
 
-[[nodiscard]] inline bool IsBufferUsageConsistent(const VulkanContext& context, const BufferDesc& desc, const bool managed, const VkBufferUsageFlags usage)noexcept{
+[[nodiscard]] inline b8 IsBufferUsageConsistent(const VulkanContext& context, const BufferDesc& desc, const b8 managed, const VkBufferUsageFlags usage)noexcept{
     if(!IsBufferUsageSupportedByDevice(context, usage))
         return false;
     if(!IsBufferUsageCompatibleWithDescription(desc, usage))

@@ -17,15 +17,15 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::paintCombo(const Item& item, const LayoutBox& box){
+b8 Builder::paintCombo(const Item& item, const LayoutBox& box){
     if(item.combo >= m_scope->m_combos.size())
         return false;
     ComboFrame& frame = m_scope->m_combos[item.combo];
     if(!comboMatches(frame))
         return false;
     const InputRouter& input = m_context.input();
-    const bool focused = input.focus() == item.state.id;
-    const bool hovered = input.hover() == item.state.id;
+    const b8 focused = input.focus() == item.state.id;
+    const b8 hovered = input.hover() == item.state.id;
     const Name& name = !item.enabled ? frame.style.disabled : frame.open ? frame.style.open : focused ? frame.style.focused : hovered ? frame.style.hover : frame.style.normal;
     const UiSkinRegion* field = region(name, frame.style.fallback);
     const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
@@ -33,7 +33,7 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
         return false;
     const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
     m_paint.pushClip(clip);
-    const bool fieldPainted = m_paint.drawRegion(field->name, box.rectangle);
+    const b8 fieldPainted = m_paint.drawRegion(field->name, box.rectangle);
     const SIMDVectorSingle content = InsetRectValue(VectorSet(0.0f, 0.0f, box.rectangle.width, box.rectangle.height), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
     const SIMDVectorSingle contentHeightVector = VectorSplatW(content);
     const f32 contentHeight = VectorGetX(contentHeightVector);
@@ -42,7 +42,7 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     const SIMDVectorSingle iconBase = VectorAdd(VectorSet(box.rectangle.x, box.rectangle.y, 0.0f, 0.0f), VectorSet(box.rectangle.width, item.padding.top, 0.0f, 0.0f));
     const SIMDVectorSingle iconOrigin = VectorSubtract(VectorSubtract(iconBase, VectorXorInt(VectorPermute<4, 0, 6, 7>(centered, VectorSet(item.padding.right, 0.0f, 0.0f, 0.0f)), s_SIMDFlipY)), VectorSet(extent, 0.0f, 0.0f, 0.0f));
     const Rect icon{ VectorGetX(iconOrigin), VectorGetY(iconOrigin), extent, extent };
-    const bool arrowPainted = fieldPainted && m_paint.drawRegion(arrow->name, icon, item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha });
+    const b8 arrowPainted = fieldPainted && m_paint.drawRegion(arrow->name, icon, item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha });
     const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.x, box.rectangle.y), VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top));
     const SIMDVectorSingle textExtent = VectorMax(VectorZero(), VectorSubtract(VectorSubtract(VectorSubtract(VectorSet(icon.x, contentHeight, 0.0f, 0.0f), VectorSet(frame.style.arrowGap, 0.0f, 0.0f, 0.0f)), VectorSet(box.rectangle.x, 0.0f, 0.0f, 0.0f)), VectorSet(item.padding.left, 0.0f, 0.0f, 0.0f)));
     const Rect textClip{ VectorGetX(textOrigin), VectorGetY(textOrigin), VectorGetX(textExtent), contentHeight };
@@ -50,10 +50,10 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     const SIMDVectorSingle shiftedOrigin = VectorAdd(textOrigin, VectorSwizzle<2, 1, 2, 1>(centered));
     const SIMDVectorSingle alignedOrigin = VectorSubtract(shiftedOrigin, VectorSet(item.textBounds.x, item.textBounds.y, item.textBounds.x, item.textBounds.y));
     const Point origin{ VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
-    const bool textPainted = arrowPainted && m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);
-    const bool textPopped = m_paint.popClip();
-    const bool focusPainted = textPainted && (!focused || !item.enabled || !m_skin->findRegion(item.style.focus) || m_paint.drawRegion(item.style.focus, box.rectangle));
-    const bool popped = m_paint.popClip();
+    const b8 textPainted = arrowPainted && m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);
+    const b8 textPopped = m_paint.popClip();
+    const b8 focusPainted = textPainted && (!focused || !item.enabled || !m_skin->findRegion(item.style.focus) || m_paint.drawRegion(item.style.focus, box.rectangle));
+    const b8 popped = m_paint.popClip();
     if(!focusPainted || !textPopped || !popped || !comboMatches(frame))
         return false;
     HitTarget target;
@@ -74,7 +74,7 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     return true;
 }
 
-bool Builder::paintCombos(){
+b8 Builder::paintCombos(){
     for(auto& frame : m_scope->m_combos){
         if(!comboMatches(frame) || frame.list >= m_scope->m_lists.size())
             return false;
@@ -84,7 +84,7 @@ bool Builder::paintCombos(){
     return true;
 }
 
-bool Builder::paintComboPopup(ComboFrame& frame){
+b8 Builder::paintComboPopup(ComboFrame& frame){
     const UiSkinRegion* background = region(frame.popupStyle.background, frame.popupStyle.fallback);
     if(!background || !comboMatches(frame))
         return false;
@@ -123,18 +123,18 @@ bool Builder::paintComboPopup(ComboFrame& frame){
     if(!m_context.updatePopupScope(frame.popupToken, scope) || !m_context.activatePopupScope(frame.popupToken))
         return false;
     if(!m_paint.beginOverlay(m_context.popupLayer())){
-        const bool ended = m_context.endPopupScope(false);
+        const b8 ended = m_context.endPopupScope(false);
         if(!ended)
             m_context.fail();
         return false;
     }
     m_paint.pushClip(placement->viewport);
-    const bool backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
-    const bool clipPopped = m_paint.popClip();
+    const b8 backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
+    const b8 clipPopped = m_paint.popClip();
     HitTarget barrier;
     barrier.rectangle = placement->bounds;
     barrier.clip = placement->viewport;
-    bool painted = backgroundPainted && clipPopped && m_context.addTarget(frame.popup, barrier);
+    b8 painted = backgroundPainted && clipPopped && m_context.addTarget(frame.popup, barrier);
     if(painted){
         Item listItem(m_arena);
         listItem.state = frame.rows;
@@ -145,8 +145,8 @@ bool Builder::paintComboPopup(ComboFrame& frame){
         box.clip = placement->bounds;
         painted = (!frame.search || paintComboQuery(frame, box)) && paintList(listItem, box) && comboMatches(frame);
     }
-    const bool overlayEnded = m_paint.endOverlay();
-    const bool scopeEnded = m_context.endPopupScope(painted);
+    const b8 overlayEnded = m_paint.endOverlay();
+    const b8 scopeEnded = m_context.endPopupScope(painted);
     if(painted)
         frame.state->m_popup.m_placement = *placement;
     return painted && overlayEnded && scopeEnded;

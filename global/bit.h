@@ -15,7 +15,7 @@
 
 
 template<typename T>
-[[nodiscard]] constexpr bool IsPowerOfTwo(const T value)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] constexpr b8 IsPowerOfTwo(const T value)noexcept(IsArithmetic_V<T>){
     return value > static_cast<T>(0) && (value & (value - static_cast<T>(1))) == static_cast<T>(0);
 }
 

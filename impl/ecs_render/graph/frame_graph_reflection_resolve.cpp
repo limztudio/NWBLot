@@ -38,8 +38,8 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     const ReflectionSettings& reflectionSettings = inputs.reflectionSettings;
     const CsgFrameState& csgFrameState = inputs.csgFrameState;
     RayTracingRefractionGraphResources refractionResources = inputs.refractionResources;
-    const bool refractionActive = inputs.refractionActive;
-    const bool useLaggedLightingHistory = inputs.useLaggedLightingHistory;
+    const b8 refractionActive = inputs.refractionActive;
+    const b8 useLaggedLightingHistory = inputs.useLaggedLightingHistory;
     const Core::GpuGraphResourceId specularRoughness = inputs.specularRoughness;
     const Core::GpuGraphResourceId refractionSpecularRoughness = inputs.refractionSpecularRoughness;
     const Core::GpuGraphResourceId normal = inputs.normal;

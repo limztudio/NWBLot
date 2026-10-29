@@ -15,7 +15,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EditModel::eraseAroundSelection(const usize beforeBytes, const usize afterBytes){
+b8 EditModel::eraseAroundSelection(const usize beforeBytes, const usize afterBytes){
     const usize start = selectionStart();
     const usize end = selectionEnd();
     if(beforeBytes > start || afterBytes > m_text.size() - end)

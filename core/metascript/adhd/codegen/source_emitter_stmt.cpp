@@ -208,7 +208,7 @@ void SourceEmitter::emitStmt(
     }
     case StmtKind::Switch:{
         if(stmt.lowerSwitchToIfChain){
-            const bool cacheSubject = stmt.expr
+            const b8 cacheSubject = stmt.expr
                 && stmt.expr->kind != ExprKind::Identifier
                 && stmt.expr->kind != ExprKind::ThisMember;
             const u32 bodyIndent = cacheSubject ? (indent + 1u) : indent;
@@ -221,11 +221,11 @@ void SourceEmitter::emitStmt(
                 out.append(");\r\n");
             }
 
-            bool firstBranch = true;
+            b8 firstBranch = true;
             usize idx = 0u;
             while(idx < stmt.switchCases.size()){
                 usize groupEnd = idx;
-                bool groupHasDefault = stmt.switchCases[idx].isDefault;
+                b8 groupHasDefault = stmt.switchCases[idx].isDefault;
                 while(groupEnd + 1u < stmt.switchCases.size() && stmt.switchCases[groupEnd].statements.empty()){
                     ++groupEnd;
                     if(stmt.switchCases[groupEnd].isDefault)
@@ -239,7 +239,7 @@ void SourceEmitter::emitStmt(
                 }
                 else{
                     out.append(firstBranch ? "if(" : "else if(");
-                    bool firstCond = true;
+                    b8 firstCond = true;
                     for(usize k = idx; k <= groupEnd; ++k){
                         if(stmt.switchCases[k].isDefault)
                             continue;
@@ -322,7 +322,7 @@ void SourceEmitter::emitStmt(
         emitStatementList(out, stmt.statements, indent + 1u);
 
         if(loopBinding && loopBinding->isLoopElement && loopBinding->written){
-            const bool endsWithTerminal = !stmt.statements.empty() && stmt.statements.back() && (
+            const b8 endsWithTerminal = !stmt.statements.empty() && stmt.statements.back() && (
                 stmt.statements.back()->kind == StmtKind::Return
                 || stmt.statements.back()->kind == StmtKind::Break
                 || stmt.statements.back()->kind == StmtKind::Continue

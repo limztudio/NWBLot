@@ -57,11 +57,11 @@ struct AvboitAccumulationComputeEmulationGraphTask{
         ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool materialDrawBuffersUploaded = false;
-        bool csgFrameBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
-        bool conservativeGeometryScissor = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 csgFrameBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
+        b8 conservativeGeometryScissor = false;
 
 
     public:
@@ -85,7 +85,7 @@ struct AvboitAccumulationComputeEmulationGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.accumulationTiming);
@@ -114,11 +114,11 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
         usize drawIndex = 0u;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool materialDrawBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
-        bool beginTiming = false;
-        bool finishTiming = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
+        b8 beginTiming = false;
+        b8 finishTiming = false;
         Phase::Enum phase = Phase::Generate;
     };
 
@@ -126,7 +126,7 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.accumulationTiming);
@@ -146,13 +146,13 @@ struct AvboitAccumulationGraphTask{
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot accumulationSnapshot;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr;
-        bool accumulationPhasePrepared = false;
-        bool accumulationMaterialFrameStatesGraphOwned = false;
-        bool accumulationMaterialGeometryStatesGraphOwned = false;
-        bool accumulationComputeEmulationOutputStatesGraphOwned = false;
-        bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false;
-        bool generatedGeometryReused = false;
-        bool hasTransparentRenderers = false;
+        b8 accumulationPhasePrepared = false;
+        b8 accumulationMaterialFrameStatesGraphOwned = false;
+        b8 accumulationMaterialGeometryStatesGraphOwned = false;
+        b8 accumulationComputeEmulationOutputStatesGraphOwned = false;
+        b8 accumulationCsgComputeEmulationOutputStatesGraphOwned = false;
+        b8 generatedGeometryReused = false;
+        b8 hasTransparentRenderers = false;
 
 
     public:
@@ -166,7 +166,7 @@ struct AvboitAccumulationGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.accumulationComputeEmulationTiming);
@@ -182,7 +182,7 @@ struct AvboitAccumulationFinalizeGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
 
 };
 

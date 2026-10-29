@@ -34,8 +34,8 @@ struct GpuTaskGraphOutputLayer{
 
 
 public:
-    [[nodiscard]] bool validShape()const noexcept{
-        const bool hasColor = color.valid();
+    [[nodiscard]] b8 validShape()const noexcept{
+        const b8 hasColor = color.valid();
         return (!readyTask.valid() || frameGeneration != 0u) && (!hasColor || readyTask.valid()) && hasColor == colorVersion.valid() && hasColor == sampledImage.valid();
     }
 };
@@ -48,7 +48,7 @@ public:
 
 public:
     // Preparation owns allocation and captures immutable frame/resource versions before native recording.
-    [[nodiscard]] virtual bool prepareTaskGraphOutputLayer(const AcquiredPresentationFrame& frame) = 0;
+    [[nodiscard]] virtual b8 prepareTaskGraphOutputLayer(const AcquiredPresentationFrame& frame) = 0;
     // Producers have no scene or acquired-image dependency.
     // A successful empty value means no work.
     // A nonzero frameGeneration without graph resources accepts an empty frame through the final consumer.

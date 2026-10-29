@@ -39,7 +39,7 @@ using namespace NWB::Impl;
     return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = 0u, .deviceGeneration = 1u, .queue = Core::CommandQueue::Graphics, };
 }
 
-void Accept(ReflectionFeedbackState& state, const ReflectionFeedbackPlan& plan, const bool hardwareReady = true){
+void Accept(ReflectionFeedbackState& state, const ReflectionFeedbackPlan& plan, const b8 hardwareReady = true){
     ASSERT_TRUE(state.reserve(plan));
     ASSERT_TRUE(state.accept(plan, Token(plan.sequence), hardwareReady));
 }
@@ -148,8 +148,8 @@ TEST(ReflectionFeedback, OnlyTrustedEnabledHybridWithAvailableHardwareCanUseFeed
         ReflectionFeedbackState state(1u);
         auto stamp = Stamp();
         ReflectionSettings settings;
-        bool enabled = true;
-        bool hardwareReady = true;
+        b8 enabled = true;
+        b8 hardwareReady = true;
         switch(reason){
         case 0u: enabled = false; break;
         case 1u: stamp.trusted = false; break;

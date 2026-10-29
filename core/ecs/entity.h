@@ -24,7 +24,7 @@ class Entity{
 public:
     [[nodiscard]] EntityID id()const noexcept{ return m_entity; }
 
-    [[nodiscard]] bool alive()const noexcept{ return m_world.alive(m_entity); }
+    [[nodiscard]] b8 alive()const noexcept{ return m_world.alive(m_entity); }
 
     void destroy(){ m_world.destroyEntity(m_entity); }
 
@@ -51,7 +51,7 @@ public:
     }
 
     template<typename T>
-    bool hasComponent()const noexcept{
+    b8 hasComponent()const noexcept{
         return m_world.hasComponent<T>(m_entity);
     }
 

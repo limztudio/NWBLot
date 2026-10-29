@@ -469,7 +469,7 @@ static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIn
 }
 
 // Prefer client-captured frames; fall back to server StackWalk64 when none were shipped.
-[[nodiscard]] static Expected<bool, ErrorCode> AppendClientCallstack(Core::Alloc::ScratchArena& scratchArena, const HANDLE symbolProcess, const CrashScratchPath& packageDirectory, CrashReportText& outReport){
+[[nodiscard]] static Expected<b8, ErrorCode> AppendClientCallstack(Core::Alloc::ScratchArena& scratchArena, const HANDLE symbolProcess, const CrashScratchPath& packageDirectory, CrashReportText& outReport){
     AString<Core::Alloc::ScratchArena> callstackText{scratchArena};
     const auto read = ReadTextFile(packageDirectory / CrashNames::s_CallstackFileName, callstackText);
     if(!read){
@@ -483,7 +483,7 @@ static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIn
     const AStringView text(callstackText.data(), callstackText.size());
     DWORD frameIndex = 0u;
     usize lineStart = 0u;
-    bool decodedAnyFrame = false;
+    b8 decodedAnyFrame = false;
     while(lineStart < text.size()){
         usize lineEnd = text.find('\n', lineStart);
         if(lineEnd == AStringView::npos)
@@ -504,7 +504,7 @@ static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIn
     return decodedAnyFrame;
 }
 
-Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport){
+Expected<b8, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport){
     const CrashScratchPath dumpPath = packageDirectory / CrashNames::s_ProcessDumpFileName;
     CrashBytes dumpBytes{scratchArena};
     const auto read = ReadBinaryFile(dumpPath, dumpBytes);
@@ -569,7 +569,7 @@ Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc
     InitializeStackFrameFromContext(frame, walkContext);
 
     const DWORD machineType = MachineTypeFromContext(walkContext);
-    bool decodedAnyFrame = false;
+    b8 decodedAnyFrame = false;
     for(DWORD frameIndex = 0u; frameIndex < s_MaxWindowsStackFrames; ++frameIndex){
         if(frame.AddrPC.Offset == 0u)
             break;

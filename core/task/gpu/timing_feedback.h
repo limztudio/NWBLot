@@ -40,13 +40,13 @@ struct GpuTaskTimingAssignmentKey{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return static_cast<bool>(task); }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return static_cast<b8>(task); }
 };
-inline constexpr bool operator==(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
+inline constexpr b8 operator==(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
     return lhs.task == rhs.task && lhs.variant == rhs.variant && lhs.resolutionClass == rhs.resolutionClass;
 }
 
-inline constexpr bool operator!=(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
+inline constexpr b8 operator!=(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -60,13 +60,13 @@ struct GpuTaskTimingKey{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return task && queue < CommandQueue::kCount; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return task && queue < CommandQueue::kCount; }
 };
-inline constexpr bool operator==(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
+inline constexpr b8 operator==(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
     return lhs.task == rhs.task && lhs.variant == rhs.variant && lhs.resolutionClass == rhs.resolutionClass && lhs.queue == rhs.queue;
 }
 
-inline constexpr bool operator!=(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
+inline constexpr b8 operator!=(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -93,7 +93,7 @@ struct RouteKey{
 
 
 public:
-    [[nodiscard]] constexpr bool operator==(const RouteKey&)const noexcept = default;
+    [[nodiscard]] constexpr b8 operator==(const RouteKey&)const noexcept = default;
 };
 
 struct AssignmentKey{
@@ -103,7 +103,7 @@ struct AssignmentKey{
 
 
 public:
-    [[nodiscard]] constexpr bool operator==(const AssignmentKey&)const noexcept = default;
+    [[nodiscard]] constexpr b8 operator==(const AssignmentKey&)const noexcept = default;
 };
 
 struct RouteLookup{
@@ -121,11 +121,11 @@ struct RouteEqual{
 
 
 public:
-    [[nodiscard]] bool operator()(const RouteKey& lhs, const RouteKey& rhs)const noexcept{
+    [[nodiscard]] b8 operator()(const RouteKey& lhs, const RouteKey& rhs)const noexcept{
         return lhs == rhs;
     }
 
-    [[nodiscard]] bool operator()(const RouteKey& lhs, const RouteLookup& rhs)const noexcept{
+    [[nodiscard]] b8 operator()(const RouteKey& lhs, const RouteLookup& rhs)const noexcept{
         return lhs.task == rhs.key.task.identityHash() && lhs.variant == rhs.key.variant && lhs.resolutionClass == rhs.key.resolutionClass && lhs.queue == rhs.key.queue && lhs.physicalQueue == rhs.physicalQueue;
     }
 };
@@ -140,11 +140,11 @@ struct AssignmentEqual{
 
 
 public:
-    [[nodiscard]] bool operator()(const AssignmentKey& lhs, const AssignmentKey& rhs)const noexcept{
+    [[nodiscard]] b8 operator()(const AssignmentKey& lhs, const AssignmentKey& rhs)const noexcept{
         return lhs == rhs;
     }
 
-    [[nodiscard]] bool operator()(const AssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)const noexcept{
+    [[nodiscard]] b8 operator()(const AssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)const noexcept{
         return lhs.task == rhs.task.identityHash() && lhs.variant == rhs.variant && lhs.resolutionClass == rhs.resolutionClass;
     }
 };
@@ -170,7 +170,7 @@ struct GpuTaskTimingHistory{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept;
+    [[nodiscard]] b8 valid()const noexcept;
 };
 
 struct GpuTaskTimingHistoryEntry{
@@ -180,7 +180,7 @@ struct GpuTaskTimingHistoryEntry{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return key.valid() && physicalQueue.valid() && history.valid();
     }
 };
@@ -192,11 +192,11 @@ struct GpuTaskTimingAssignmentState{
     u64 lastAcceptedFrameIndex = 0u;
     u64 lastSwitchFrameIndex = 0u;
     GpuPhysicalQueueId lastAcceptedQueue;
-    bool hasAcceptedAssignment = false;
+    b8 hasAcceptedAssignment = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return key.valid() && hasAcceptedAssignment && lastAcceptedQueue.valid() && lastSwitchFrameIndex <= lastAcceptedFrameIndex;
     }
 };
@@ -218,17 +218,17 @@ struct GpuTaskTimingFeedbackPolicy{
     // Short on samples, one opted-in route probes every N frames. Cross-family probes need the family opt-in; cross-class also need timing.
     // Zero disables calibration.
     // Probes stop once every legal route reaches minimumSampleCount.
-    bool enabled = false;
+    b8 enabled = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept;
+    [[nodiscard]] b8 valid()const noexcept;
 };
 
-[[nodiscard]] bool GpuTaskTimingHistoryMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
-[[nodiscard]] bool GpuTaskTimingBenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
-[[nodiscard]] bool GpuTaskTimingSwitchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
-[[nodiscard]] bool GpuTaskTimingFeedbackCanSwitch(
+[[nodiscard]] b8 GpuTaskTimingHistoryMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
+[[nodiscard]] b8 GpuTaskTimingBenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
+[[nodiscard]] b8 GpuTaskTimingSwitchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
+[[nodiscard]] b8 GpuTaskTimingFeedbackCanSwitch(
     const GpuTaskTimingHistory& incumbent,
     const GpuTaskTimingHistory& candidate,
     const GpuTaskTimingAssignmentState& assignment,
@@ -254,7 +254,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
 
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
     [[nodiscard]] const GpuTaskTimingHistory* find(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue)const noexcept;
@@ -271,7 +271,7 @@ private:
     Optional<GpuTaskTimingHistoryDetail::RouteIndex> m_historyIndex;
     Optional<GpuTaskTimingHistoryDetail::AssignmentIndex> m_assignmentIndex;
     u16 m_deviceGeneration = 0u;
-    bool m_valid = false;
+    b8 m_valid = false;
 };
 
 
@@ -301,12 +301,12 @@ public:
     void reset(GpuTaskTimingHistorySnapshot& outSnapshot)noexcept;
     void resetForDeviceGeneration(u16 deviceGeneration)noexcept;
     // A collected query is accepted GPU work. Dwell state advances only on newer frames, never backwards on late completion.
-    [[nodiscard]] bool recordSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, f64 durationSeconds, u64 sourceFrameIndex);
+    [[nodiscard]] b8 recordSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, f64 durationSeconds, u64 sourceFrameIndex);
     // Adds duration statistics without changing adaptive assignment state.
     // This records both bounded calibration observations and accepted samples whose assignment was committed separately at submission resolution.
-    [[nodiscard]] bool recordNonCommittingSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, f64 durationSeconds);
+    [[nodiscard]] b8 recordNonCommittingSample(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, f64 durationSeconds);
     // Packet acceptance reports the selected route even when timestamp capacity was unavailable.
-    [[nodiscard]] bool noteAcceptedAssignment(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, u64 sourceFrameIndex);
+    [[nodiscard]] b8 noteAcceptedAssignment(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue, u64 sourceFrameIndex);
     void snapshot(GpuTaskTimingHistorySnapshot& outSnapshot)const;
 
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
@@ -322,8 +322,8 @@ private:
     [[nodiscard]] GpuTaskTimingAssignmentState* findAssignmentState(const GpuTaskTimingAssignmentKey& key)noexcept;
     [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignmentState(const GpuTaskTimingAssignmentKey& key)const noexcept;
     void rebuildHistory(HistoryRecord& record)noexcept;
-    [[nodiscard]] bool promoteHistoryIndex();
-    [[nodiscard]] bool promoteAssignmentIndex();
+    [[nodiscard]] b8 promoteHistoryIndex();
+    [[nodiscard]] b8 promoteAssignmentIndex();
 
 
 private:

@@ -92,7 +92,7 @@ public:
     Vector<NavigationCall, Alloc::GlobalArena> records;
     Function<void()> hook;
     Expected<Ui::EditNavigationResult> forcedResult = MakeUnexpected(Failure{});
-    bool forceResult = false;
+    b8 forceResult = false;
 
 
 private:
@@ -119,7 +119,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const bool)override{
+    [[nodiscard]] virtual b8 apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const b8)override{
         records.emplace_back(m_arena);
         records.back().text.assign(model.text().data(), model.text().size());
         records.back().action = action;
@@ -158,11 +158,11 @@ public:
 
 
 protected:
-    [[nodiscard]] bool prepareNavigation(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
+    [[nodiscard]] b8 prepareNavigation(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
         return prepareNavigationModel(m_navigationModel, m_navigation, options, bounds, previousScroll);
     }
 
-    [[nodiscard]] bool prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
+    [[nodiscard]] b8 prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
         if(!beginEditFrame())
             return false;
         m_result = m_host.editNavigated(m_widget, model, options, {}, navigation, m_resolver, m_actions);
@@ -185,30 +185,30 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool navigationFrame(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
+    [[nodiscard]] b8 navigationFrame(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
         return prepareNavigation(options, bounds, previousScroll) && commit();
     }
 
-    [[nodiscard]] bool activateNavigation(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }){
+    [[nodiscard]] b8 activateNavigation(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }){
         return navigationFrame(options, bounds) && key(Core::Key::Tab) && navigationFrame(options, bounds) && m_context.input().focus() == m_widget.id;
     }
 
-    [[nodiscard]] bool commitNative(const AStringView text){
+    [[nodiscard]] b8 commitNative(const AStringView text){
         if(m_textInput.commit(text) != TextInputAdmission::Accepted)
             return false;
         m_host.collectNative();
         return true;
     }
 
-    [[nodiscard]] bool click(const Ui::Point position, const bool shift = false){
+    [[nodiscard]] b8 click(const Ui::Point position, const b8 shift = false){
         return dispatch({ .position = position, .type = Ui::InputEventType::PrimaryDown, .shift = shift  }) && dispatch({ .position = position, .type = Ui::InputEventType::PrimaryUp, .shift = shift  });
     }
 
-    [[nodiscard]] bool focusOther(){
+    [[nodiscard]] b8 focusOther(){
         return key(Core::Key::Tab) && m_context.input().focus() == m_otherWidget.id;
     }
 
-    [[nodiscard]] bool focusNavigation(){
+    [[nodiscard]] b8 focusNavigation(){
         return key(Core::Key::Tab) && m_context.input().focus() == m_widget.id;
     }
 

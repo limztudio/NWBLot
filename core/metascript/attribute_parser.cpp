@@ -14,7 +14,7 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AttributeParser::parseSingleBracketList(MVector<ParsedAttribute>& outAttributes){
+b8 AttributeParser::parseSingleBracketList(MVector<ParsedAttribute>& outAttributes){
     if(!m_cursor.check(TokenType::LeftBracket))
         return true;
 
@@ -47,7 +47,7 @@ bool AttributeParser::parseSingleBracketList(MVector<ParsedAttribute>& outAttrib
     return true;
 }
 
-bool AttributeParser::parseAttributeItem(MVector<ParsedAttribute>& outAttributes){
+b8 AttributeParser::parseAttributeItem(MVector<ParsedAttribute>& outAttributes){
     if(!m_cursor.check(TokenType::Identifier)){
         m_cursor.errorExpected("expected attribute name");
         return false;

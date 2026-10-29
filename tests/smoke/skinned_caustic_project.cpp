@@ -132,7 +132,7 @@ private:
         return world;
     }
 
-    [[nodiscard]] static bool ShouldCapture(void* const context, const u64 frame)noexcept{
+    [[nodiscard]] static b8 ShouldCapture(void* const context, const u64 frame)noexcept{
         const auto& project = *MakeNotNull(static_cast<SkinnedCausticSmokeProject*>(context));
         return project.m_transitionStarted && frame >= project.m_nextCaptureFrame;
     }
@@ -147,7 +147,7 @@ private:
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
 
-    [[nodiscard]] bool installTransitionCutter(){
+    [[nodiscard]] b8 installTransitionCutter(){
         const auto meshEntity = FindSpawnedModelObject(*m_world, m_character, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh);
         if(!meshEntity.valid())
             return false;
@@ -215,7 +215,7 @@ private:
                     || packet.commandListCount == 0u || packet.recoverySubmission
                 )
                     continue;
-                const bool offGraphics = packet.queue.index != primaryGraphics.index || packet.queue.deviceGeneration != primaryGraphics.deviceGeneration;
+                const b8 offGraphics = packet.queue.index != primaryGraphics.index || packet.queue.deviceGeneration != primaryGraphics.deviceGeneration;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: accepted photon route phase {} source_frame={} queue={} graphics_queue={} generation={} off_graphics={}")
                     , phase
                     , sourceFrame
@@ -337,7 +337,7 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         // Enable per-pass GPU timing when a timingprobe sink is active.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
@@ -409,7 +409,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
@@ -455,12 +455,12 @@ private:
     u64 m_phaseSkinningSamples[s_TransitionPhaseCount] = {};
     u32 m_transitionPhase = Limit<u32>::s_Max;
     u32 m_transitionSample = 0u;
-    bool m_phaseRouteRecorded[s_TransitionPhaseCount] = {};
-    bool m_transitionEnabled = false;
-    bool m_transitionLagged = false;
-    bool m_transitionPhotonsEnabled = false;
-    bool m_transitionWarmupStarted = false;
-    bool m_transitionStarted = false;
+    b8 m_phaseRouteRecorded[s_TransitionPhaseCount] = {};
+    b8 m_transitionEnabled = false;
+    b8 m_transitionLagged = false;
+    b8 m_transitionPhotonsEnabled = false;
+    b8 m_transitionWarmupStarted = false;
+    b8 m_transitionStarted = false;
 };
 
 

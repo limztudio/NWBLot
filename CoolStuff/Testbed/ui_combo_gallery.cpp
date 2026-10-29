@@ -27,7 +27,7 @@ void UiComboGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc:
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = s_GalleryFontSize;
-    bool valid = ui.label(s_TitleKey, "Keyed combo selection");
+    b8 valid = ui.label(s_TitleKey, "Keyed combo selection");
     ComboOptions options;
     options.popupHeight = s_PopupHeight;
     const ComboResult result = ui.comboBox(s_ChoiceKey, m_source, m_state, options);

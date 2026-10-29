@@ -45,7 +45,7 @@ UiTextAreaSmokeScene::~UiTextAreaSmokeScene()noexcept{
         TerminateInvariant();
 }
 
-bool UiTextAreaSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiTextAreaSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     if(!drainClipboard())
         return false;
@@ -98,7 +98,7 @@ bool UiTextAreaSmokeScene::paint(Impl::UiPaintContext& context){
 }
 
 void UiTextAreaSmokeScene::resetModel(){
-    const bool initialized = m_model.setText("abcdef\nx\nabcdef\n한국어") && m_model.setSelection(5u, 5u);
+    const b8 initialized = m_model.setText("abcdef\nx\nabcdef\n한국어") && m_model.setSelection(5u, 5u);
     NWB_FATAL_ASSERT(initialized);
     m_state.reset();
     m_enabled = true;
@@ -108,12 +108,12 @@ void UiTextAreaSmokeScene::resetModel(){
 }
 
 void UiTextAreaSmokeScene::longDocument(){
-    const bool replaced = m_model.setText(m_longText) && m_model.setSelection(1039u, 1039u);
+    const b8 replaced = m_model.setText(m_longText) && m_model.setSelection(1039u, 1039u);
     NWB_FATAL_ASSERT(replaced);
     m_longDocument = true;
 }
 
-bool UiTextAreaSmokeScene::seedClipboard(){
+b8 UiTextAreaSmokeScene::seedClipboard(){
     if(m_clipboardToken.valid() && !m_clipboard.cancel(m_clipboardToken))
         return false;
     m_clipboardToken = {};
@@ -124,7 +124,7 @@ bool UiTextAreaSmokeScene::seedClipboard(){
     return true;
 }
 
-bool UiTextAreaSmokeScene::drainClipboard(){
+b8 UiTextAreaSmokeScene::drainClipboard(){
     if(!m_clipboardToken.valid())
         return true;
     const auto status = m_clipboard.poll(m_clipboardToken, m_completion);
@@ -145,9 +145,9 @@ bool UiTextAreaSmokeScene::drainClipboard(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerTextAreaSmokeEnabled(){ return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA"); }
+b8 IsUiLayerTextAreaSmokeEnabled(){ return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA"); }
 
-bool IsUiLayerTextAreaSkinSmokeEnabled(){ return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA_SKIN"); }
+b8 IsUiLayerTextAreaSkinSmokeEnabled(){ return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA_SKIN"); }
 
 SharedUiTextAreaSmokeScene CreateUiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard){
     return SharedUiTextAreaSmokeScene(NewArenaObject<RefCounter<UiTextAreaSmokeScene>>(arena, arena, clipboard), ArenaRefDeleter<RefCounter<UiTextAreaSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);

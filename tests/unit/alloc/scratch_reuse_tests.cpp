@@ -43,10 +43,10 @@ struct AllocationRequest{
 
 
 template<usize Count>
-[[nodiscard]] static bool RunAllocationBatch(ScratchArena& arena, const AllocationRequest (&requests)[Count]){
+[[nodiscard]] static b8 RunAllocationBatch(ScratchArena& arena, const AllocationRequest (&requests)[Count]){
     u8* allocations[Count] = {};
     usize prepared = 0u;
-    bool valid = true;
+    b8 valid = true;
     for(; prepared < Count; ++prepared){
         const AllocationRequest& request = requests[prepared];
         auto* allocation = static_cast<u8*>(arena.allocate(request.alignment, request.bytes));
@@ -71,7 +71,7 @@ template<usize Count>
 }
 
 // Public container operations model collecting and sorting transient work while a caller retains earlier storage.
-[[nodiscard]] static bool RunScopedCollection(ScratchArena& arena, const usize count){
+[[nodiscard]] static b8 RunScopedCollection(ScratchArena& arena, const usize count){
     Vector<u64, ScratchArena> keys(arena);
     keys.resize(count);
     for(usize index = 0u; index < count; ++index)
@@ -127,7 +127,7 @@ TEST(ScratchArenaReuse, ColdAlignmentBucketsAllocateOnceAndReleaseAllBacking){
     constexpr usize s_Alignments[]{ 1u, s_ExpectedDualCount, 4u, 8u, 16u, 32u, 64u, 128u, 256u };
     ArenaMemoryStats before;
     ArenaMemoryStats live;
-    bool valid = true;
+    b8 valid = true;
     usize expectedReserved = 0u;
     ArenaMemoryStats released;
     {
@@ -431,7 +431,7 @@ TEST(ScratchArenaReuse, LargeSmallLargeRequestsDoNotRecreateUndersizedCachedChun
     }
     const ArenaMemoryStats warm = arena.memoryStats();
     const ArenaMemoryStats beforeHeap = HeapBackingMemoryStats();
-    bool valid = true;
+    b8 valid = true;
     for(usize iteration = 0u; iteration < 64u; ++iteration){
         valid &= RunAllocationBatch(arena, s_SmallFirst);
         valid &= RunAllocationBatch(arena, s_LargeFirst);
@@ -490,7 +490,7 @@ TEST(ScratchArenaReuse, OwnerTelemetryRetainsHistoryAndSeparatesReservedBackingF
         live = arena.memoryStats();
         EXPECT_EQ(live.usedBytes, 0u);
         EXPECT_GT(live.reservedBytes, 0u);
-        bool found = false;
+        b8 found = false;
         record = FirstArenaMemoryOwnerRecord();
         while(record){
             ArenaMemoryOwnerSnapshot owner;
@@ -506,7 +506,7 @@ TEST(ScratchArenaReuse, OwnerTelemetryRetainsHistoryAndSeparatesReservedBackingF
         }
         EXPECT_TRUE(found);
     }
-    bool found = false;
+    b8 found = false;
     record = FirstArenaMemoryOwnerRecord();
     while(record){
         ArenaMemoryOwnerSnapshot owner;

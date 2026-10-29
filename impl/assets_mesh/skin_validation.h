@@ -30,7 +30,7 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ValidSkinInfluenceWeights(const SIMDVectorSingle weights)noexcept{
+[[nodiscard]] inline b8 ValidSkinInfluenceWeights(const SIMDVectorSingle weights)noexcept{
     if(!VectorIsFinite(weights, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(weights, VectorZero()))
         return false;
 
@@ -51,7 +51,7 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
     return {};
 }
 
-[[nodiscard]] inline bool ValidInverseBindMatrixCount(const usize inverseBindMatrixCount, const u32 skeletonJointCount)noexcept{
+[[nodiscard]] inline b8 ValidInverseBindMatrixCount(const usize inverseBindMatrixCount, const u32 skeletonJointCount)noexcept{
     if(inverseBindMatrixCount == 0u)
         return true;
 

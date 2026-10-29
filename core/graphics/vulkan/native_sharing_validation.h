@@ -28,7 +28,7 @@ namespace VulkanNativeSharingDetail{
 
 
 template<typename UsageFlags, typename CreateFlags>
-[[nodiscard]] inline bool ValidateNativeResourceSharing(
+[[nodiscard]] inline b8 ValidateNativeResourceSharing(
     const Device& device,
     const VolkInstanceTable& instanceDispatch,
     const VkPhysicalDevice physicalDevice,
@@ -81,7 +81,7 @@ template<typename UsageFlags, typename CreateFlags>
     }
 
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
-    bool hasLogicalQueue = false;
+    b8 hasLogicalQueue = false;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
         if(!ResourceQueueSharing::IncludesQueueClass(queueSharing, queue.queueClass))

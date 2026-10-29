@@ -28,9 +28,9 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const bool splitSoftTransparentFold,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const bool splitOpaqueSoftResolve,
+    const b8 splitSoftTransparentFold,
+    const b8 graphOwnsOpaqueTemporalMergeEntryStates,
+    const b8 splitOpaqueSoftResolve,
     const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan,
     const LightSpaceShadowSnapshot* const lightSpace
 ){
@@ -105,10 +105,10 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const u32 coarseGroupsY = DivideUp(coarseHeight, groupSize);
 
     // Skip the fallback after a soft transparent fold.
-    bool softTransparentRan = false;
+    b8 softTransparentRan = false;
 
     // Soft upsample overwrites the opaque prepass.
-    const bool softWillRun = m_rayTracingState.m_softShadowReady && m_rayTracingState.m_softShadowSlotMask != 0u;
+    const b8 softWillRun = m_rayTracingState.m_softShadowReady && m_rayTracingState.m_softShadowSlotMask != 0u;
     if(!softWillRun){
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
@@ -184,8 +184,8 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     // Fallback transparent fold; it is mutually exclusive with the soft path.
     if(!softTransparentRan){
         // Compacted mode traces only classified edge records.
-        const bool graphOwnsAdaptivePlan = graphOwnedAdaptivePlan && graphOwnedAdaptivePlan->enabled;
-        const bool compact = graphOwnsAdaptivePlan && graphOwnedAdaptivePlan->compact;
+        const b8 graphOwnsAdaptivePlan = graphOwnedAdaptivePlan && graphOwnedAdaptivePlan->enabled;
+        const b8 compact = graphOwnsAdaptivePlan && graphOwnedAdaptivePlan->compact;
 
         // Coarse transmittance feeds both adaptive resolve modes.
         commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true);
@@ -289,7 +289,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     return producedFrameIndex;
 }
 
-bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
+b8 RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
     return m_rayTracingState.m_softTransparentReady;
 }
 
@@ -319,9 +319,9 @@ void RendererRayTracingSystem::dispatchPrimarySoftShadowResolve(
     const u32 frameIndex,
     const u32 softGroupsX,
     const u32 softGroupsY,
-    const bool splitOpaqueSoftResolve,
-    const bool splitSoftTransparentFold,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates
+    const b8 splitOpaqueSoftResolve,
+    const b8 splitSoftTransparentFold,
+    const b8 graphOwnsOpaqueTemporalMergeEntryStates
 ){
     // Split resolve declares the trace fence; the direct route retains its UAV fence.
     if(!splitOpaqueSoftResolve){
@@ -353,7 +353,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates,
+    const b8 graphOwnsOpaqueTemporalMergeEntryStates,
     const LightSpaceShadowSnapshot* const lightSpace
 ){
     if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)

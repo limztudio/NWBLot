@@ -93,7 +93,7 @@ inline constexpr AStringView s_GeneratedFunctionEnd = "}\n\n";
 template<typename StringT>
 void AppendMaterialBindGeneratedUpperIdentifier(const AStringView text, StringT& inOutText)noexcept(
     noexcept(DeclVal<void(*)(usize)noexcept>()(inOutText.size()))
-    && noexcept(static_cast<bool>(inOutText.size() == DeclVal<const usize&>()))
+    && noexcept(static_cast<b8>(inOutText.size() == DeclVal<const usize&>()))
     && noexcept(inOutText += char{})
     && noexcept(inOutText += "VALUE")
 ){
@@ -107,13 +107,13 @@ void AppendMaterialBindGeneratedUpperIdentifier(const AStringView text, StringT&
 template<typename StringT>
 void AppendMaterialBindGeneratedPascalIdentifier(const AStringView text, StringT& inOutText)noexcept(
     noexcept(DeclVal<void(*)(usize)noexcept>()(inOutText.size()))
-    && noexcept(static_cast<bool>(inOutText.size() == DeclVal<const usize&>()))
+    && noexcept(static_cast<b8>(inOutText.size() == DeclVal<const usize&>()))
     && noexcept(inOutText += char{})
     && noexcept(inOutText += DeclVal<const char&>())
     && noexcept(inOutText += "Value")
 ){
     const usize beginSize = inOutText.size();
-    bool upperNext = true;
+    b8 upperNext = true;
     for(const char ch : text){
         if(ch == '_'){
             upperNext = true;
@@ -133,7 +133,7 @@ void AppendMaterialBindGeneratedPascalIdentifier(const AStringView text, StringT
 template<typename ArenaT>
 [[nodiscard]] AString<ArenaT> BuildMaterialBindGeneratedSymbol(ArenaT& arena, const InitializerList<AStringView> nameSegments, const AStringView suffix){
     AString<ArenaT> symbol("NWB_MATERIAL_BIND_", arena);
-    bool firstSegment = true;
+    b8 firstSegment = true;
     for(const AStringView nameSegment : nameSegments){
         if(!firstSegment)
             symbol += '_';
@@ -169,11 +169,11 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const 
 
 Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena);
 
-bool ValidateMaterialCookInterfaces(Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena, CookVector<MaterialCookEntry>& materialEntries);
+b8 ValidateMaterialCookInterfaces(Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena, CookVector<MaterialCookEntry>& materialEntries);
 
 Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, ScratchArena& scratchArena);
 
-bool AssignMaterialShadingModelIdsImpl(Span<MaterialCookEntry> materialEntries, ScratchArena& scratchArena);
+b8 AssignMaterialShadingModelIdsImpl(Span<MaterialCookEntry> materialEntries, ScratchArena& scratchArena);
 
 Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena);
 

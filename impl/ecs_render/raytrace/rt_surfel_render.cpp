@@ -15,45 +15,45 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::renderSurfelGiAgeFree(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
+b8 RendererRayTracingSystem::renderSurfelGiAgeFree(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, true, false, false, false, false, false, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
+b8 RendererRayTracingSystem::renderSurfelGiUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, false, false, false, true);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiHashBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
+b8 RendererRayTracingSystem::renderSurfelGiHashBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, true, false, false, false, false, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiSpawn(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
+b8 RendererRayTracingSystem::renderSurfelGiSpawn(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, true, false, false, false, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiTraceBuildArgs(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
+b8 RendererRayTracingSystem::renderSurfelGiTraceBuildArgs(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, true, false, false, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiTrace(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
+b8 RendererRayTracingSystem::renderSurfelGiTrace(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, false, true, false, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
+b8 RendererRayTracingSystem::renderSurfelGiResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, false, false, true, false);
 }
 
-bool RendererRayTracingSystem::renderSurfelGiPhases(
+b8 RendererRayTracingSystem::renderSurfelGiPhases(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const bool dispatchAgeFree,
-    const bool dispatchHashBuild,
-    const bool dispatchSpawn,
-    const bool dispatchTraceBuildArgs,
-    const bool dispatchTrace,
-    const bool dispatchResolve,
-    const bool dispatchRemaining
+    const b8 dispatchAgeFree,
+    const b8 dispatchHashBuild,
+    const b8 dispatchSpawn,
+    const b8 dispatchTraceBuildArgs,
+    const b8 dispatchTrace,
+    const b8 dispatchResolve,
+    const b8 dispatchRemaining
 ){
     if(!hasSurfelWork())
         return true;
@@ -64,8 +64,8 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         return false;
 
     // Only the trace pass is backend-specific.
-    const bool useHwTrace = m_rayTracingState.m_surfelUseHwTrace;
-    const bool useCsgTrace = m_rayTracingState.m_surfelUseCsgTrace;
+    const b8 useHwTrace = m_rayTracingState.m_surfelUseHwTrace;
+    const b8 useCsgTrace = m_rayTracingState.m_surfelUseCsgTrace;
     Core::ComputePipeline* const tracePipeline = useHwTrace
         ? (useCsgTrace ? m_rayTracingState.m_surfelTraceCsgHwPipeline.get() : m_rayTracingState.m_surfelTraceHwPipeline.get())
         : (useCsgTrace ? m_rayTracingState.m_surfelTraceCsgPipeline.get() : m_rayTracingState.m_surfelTracePipeline.get())
@@ -278,7 +278,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     {
         const u32 frameIndex = m_rayTracingState.m_surfelFrameIndex;
         const Core::QueueSubmissionToken submissionToken = m_rayTracingState.m_surfelCountReadbackSubmissionToken;
-        bool submissionComplete = false;
+        b8 submissionComplete = false;
         if(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity()){
             const Expected<u64> completedValue = m_graphics.getDevice().queueGetCompletedInstance(Core::GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration, });
             submissionComplete = completedValue && *completedValue >= submissionToken.value;

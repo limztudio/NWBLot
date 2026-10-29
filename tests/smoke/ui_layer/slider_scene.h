@@ -35,14 +35,14 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:
-    [[nodiscard]] bool paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] bool paintOther(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] bool paintPopup(Impl::Ui::Builder& ui, f32 right);
+    [[nodiscard]] b8 paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
+    [[nodiscard]] b8 paintOther(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
+    [[nodiscard]] b8 paintPopup(Impl::Ui::Builder& ui, f32 right);
     void observeState(Impl::UiPaintContext& context);
     void paintMarkers(Impl::UiPaintContext& context)const;
 
@@ -60,15 +60,15 @@ private:
     u32 m_beforeClicks = 0u;
     u32 m_afterClicks = 0u;
     u32 m_externalIntents = 0u;
-    bool m_enabled = true;
-    bool m_narrowRange = false;
-    bool m_coarseStep = false;
+    b8 m_enabled = true;
+    b8 m_narrowRange = false;
+    b8 m_coarseStep = false;
 };
 
 using SharedUiSliderSmokeScene = RefCountPtr< RefCounter<UiSliderSmokeScene>, ArenaRefDeleter<RefCounter<UiSliderSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerSliderSmokeEnabled();
-[[nodiscard]] bool IsUiLayerSliderSkinSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerSliderSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerSliderSkinSmokeEnabled();
 [[nodiscard]] SharedUiSliderSmokeScene CreateUiSliderSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 

@@ -47,7 +47,7 @@ public:
 
 private:
     RollbackT m_rollback;
-    bool m_published = false;
+    b8 m_published = false;
 };
 
 
@@ -66,7 +66,7 @@ struct InitialOwnershipCompletionRequirement{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraphCompiler::compile(
+b8 GpuTaskGraphCompiler::compile(
     GpuTaskGraphAnalysis& outAnalysis,
     GpuTaskGraphQueueAssignments& outAssignments,
     GpuCompiledGraph& outCompiledGraph,
@@ -163,7 +163,7 @@ bool GpuTaskGraphCompiler::compile(
             continue;
 
         const GpuPhysicalQueueId producerQueue{ .index = completion.token.physicalQueueIndex, .deviceGeneration = completion.token.deviceGeneration, };
-        bool validProducerQueue = false;
+        b8 validProducerQueue = false;
         for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
             const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
             if(queue.id != producerQueue || queue.queueClass != completion.token.queue)
@@ -234,7 +234,7 @@ bool GpuTaskGraphCompiler::compile(
     // That keeps the compiler from manufacturing an acquire or cross-queue wait on its own.
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
-        const bool hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
+        const b8 hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
         if(hasExternalFinalRelease && (resource.externalFinalState == ResourceStates::Unknown || ResourceUsesConcurrentQueueSharing(resource, topology) || !FindCompiledQueueInfo(compiledPlan, resource.externalFinalReleaseDestinationQueue))){
             return false;
         }
@@ -360,7 +360,7 @@ bool GpuTaskGraphCompiler::compile(
             return failAcceptedQueueFrontierPlan(compiledTask.task);
 
         const GpuSubmissionPacket& packet = outCompiledGraph.m_packets[compiledTask.packet.index];
-        const bool invalidAcceptedQueueFrontierPlan = packet.taskCount != 1u
+        const b8 invalidAcceptedQueueFrontierPlan = packet.taskCount != 1u
             || packet.dependencyCount != 0u
             || packet.externalDependencyCount != 0u
             || !packet.joinsAcceptedQueueFrontier

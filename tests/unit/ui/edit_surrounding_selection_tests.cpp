@@ -26,7 +26,7 @@ constexpr AStringView s_SelectionSampleText = "abcDEFghi";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SeedHistoryAndPreedit(EditModel& model, const AStringView text, const usize anchor, const usize caret){
+[[nodiscard]] static b8 SeedHistoryAndPreedit(EditModel& model, const AStringView text, const usize anchor, const usize caret){
     if(text.empty())
         return false;
     return
@@ -66,7 +66,7 @@ class UiEditSurroundingSelectionTests : public EditFixture{};
 
 
 TEST_F(UiEditSurroundingSelectionTests, OneSidedCountsAddressNormalizedSelectionEdgesForEitherDirection){
-    for(const bool reverse : { false, true }){
+    for(const b8 reverse : { false, true }){
         EditModel before(m_arena);
         ASSERT_TRUE(before.setText(s_SelectionSampleText));
         ASSERT_TRUE(before.setSelection(reverse ? 6u : 3u, reverse ? 3u : 6u));

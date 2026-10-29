@@ -59,7 +59,7 @@ static_assert(NWB_REFRACTION_TILE_ARGUMENT_BYTES == 32u && NWB_REFRACTION_TILE_C
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool TileActive(const u32 phase, const u32 tile)noexcept{
+[[nodiscard]] static b8 TileActive(const u32 phase, const u32 tile)noexcept{
     if(phase == 0u)
         return true;
     if(phase == 1u)
@@ -106,7 +106,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
         payload.stage = NWB_TEXT("resource initialization");
         if(context.commandIrCapture)
             return false;
@@ -254,14 +254,14 @@ public:
     return task;
 }
 
-[[nodiscard]] static bool CompareReadback(Core::Device& device, Core::Alloc::ScratchArena& scratch, const ProbeTask::Payload& payload){
+[[nodiscard]] static b8 CompareReadback(Core::Device& device, Core::Alloc::ScratchArena& scratch, const ProbeTask::Payload& payload){
     const auto mapping = device.mapBuffer(*payload.readback, Core::CpuAccessMode::Read);
     if(!mapping || !*mapping)
         return false;
     ScopeExit unmap([&]()noexcept{ device.unmapBuffer(*payload.readback); });
     const auto words = MakeNotNull(static_cast<const u32*>(*mapping));
     const u32 count = ExpectedTileCount(payload.phase);
-    const bool dense = count == s_TileCount;
+    const b8 dense = count == s_TileCount;
     const u32 compactX = dense ? 0u : Min(count, NWB_REFRACTION_MAX_GROUP_COUNT_X);
     const u32 compactY = dense ? 1u : Max(1u, DivideUp(count, NWB_REFRACTION_MAX_GROUP_COUNT_X));
     const u32 denseX = dense ? s_TilesX : 0u;
@@ -350,7 +350,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+b8 RunRefractionTileProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
     using namespace NWB;
     using namespace __hidden_refraction_tile_probe;
     auto& graphics = context.graphics;
@@ -391,7 +391,7 @@ bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl
     const auto finalize = device.createComputePipeline(finalizeDesc);
     const auto verifyCompact = device.createComputePipeline(verifyCompactDesc);
     const auto verifyDense = device.createComputePipeline(verifyDenseDesc);
-    const auto createBuffer = [&graphics](const Name name, const u32 words, const bool indirect, const bool readback){
+    const auto createBuffer = [&graphics](const Name name, const u32 words, const b8 indirect, const b8 readback){
         Core::BufferDesc desc;
         desc.setDebugName(name).setByteSize(static_cast<u64>(words) * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(!readback).setCanHaveRawViews(!readback).setIsDrawIndirectArgs(indirect).setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
         return graphics.createBuffer(desc);

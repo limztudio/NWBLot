@@ -25,7 +25,7 @@ struct EditNavigationSnapshot{
     u64 instanceGeneration = 0u;
     u64 generation = 0u;
     f32 preferredX = 0.0f;
-    bool valid = false;
+    b8 valid = false;
 };
 
 struct EditNavigationResult{
@@ -51,10 +51,10 @@ public:
 
     [[nodiscard]] f32 preferredX()const noexcept{ return m_preferredX; }
 
-    [[nodiscard]] bool hasPreferredX()const noexcept{ return m_valid; }
+    [[nodiscard]] b8 hasPreferredX()const noexcept{ return m_valid; }
     [[nodiscard]] EditNavigationSnapshot snapshot()const noexcept;
-    [[nodiscard]] bool matches(const EditNavigationSnapshot& snapshot)const noexcept;
-    [[nodiscard]] bool setPreferredX(f32 preferredX)noexcept;
+    [[nodiscard]] b8 matches(const EditNavigationSnapshot& snapshot)const noexcept;
+    [[nodiscard]] b8 setPreferredX(f32 preferredX)noexcept;
     void reset()noexcept;
 
 
@@ -66,7 +66,7 @@ private:
     const u64 m_instanceGeneration;
     u64 m_generation = 1u;
     f32 m_preferredX = 0.0f;
-    bool m_valid = false;
+    b8 m_valid = false;
 };
 
 

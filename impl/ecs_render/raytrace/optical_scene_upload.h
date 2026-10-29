@@ -48,12 +48,12 @@ struct RayTracingOpticalUploadPlan{
     u64 sequence = 0u;
     u64 acceptedSequence = 0u;
     Core::GpuPhysicalQueueId queue;
-    bool reused = false;
-    bool available = false;
+    b8 reused = false;
+    b8 available = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return available && buffer && upload && owner && sequence != 0u && queue.valid(); }
+    [[nodiscard]] b8 valid()const noexcept{ return available && buffer && upload && owner && sequence != 0u && queue.valid(); }
 };
 
 // One physical buffer, one primary Graphics writer domain.
@@ -67,13 +67,13 @@ public:
 public:
     void invalidate()noexcept;
     [[nodiscard]] RayTracingOpticalUploadPlan plan(const RayTracingOpticalSceneUploadHandle& upload)noexcept;
-    [[nodiscard]] bool reserve(const RayTracingOpticalUploadPlan& plan)noexcept;
-    [[nodiscard]] bool isReserved(const RayTracingOpticalUploadPlan& plan)const noexcept;
+    [[nodiscard]] b8 reserve(const RayTracingOpticalUploadPlan& plan)noexcept;
+    [[nodiscard]] b8 isReserved(const RayTracingOpticalUploadPlan& plan)const noexcept;
     void discard(const RayTracingOpticalUploadPlan& plan)noexcept;
-    [[nodiscard]] bool accept(const RayTracingOpticalUploadPlan& plan, const Core::QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] b8 accept(const RayTracingOpticalUploadPlan& plan, const Core::QueueSubmissionToken& token)noexcept;
 
 private:
-    [[nodiscard]] bool matchesBuffer(const RayTracingOpticalUploadPlan& plan)const noexcept;
+    [[nodiscard]] b8 matchesBuffer(const RayTracingOpticalUploadPlan& plan)const noexcept;
 
 
 private:
@@ -86,8 +86,8 @@ private:
     u64 m_reservedSequence = 0u;
     Core::GpuPhysicalQueueId m_primaryQueue;
     mutable Futex m_mutex;
-    bool m_retired = false;
-    bool m_quarantined = false;
+    b8 m_retired = false;
+    b8 m_quarantined = false;
 };
 
 using RayTracingOpticalUploadControl = RefCounter<RayTracingOpticalUploadState>;
@@ -107,15 +107,15 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept;
-    [[nodiscard]] bool accept(const Core::QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] b8 valid()const noexcept;
+    [[nodiscard]] b8 accept(const Core::QueueSubmissionToken& token)noexcept;
     void discard()noexcept;
 
 
 private:
     RayTracingOpticalUploadControlHandle m_control;
     RayTracingOpticalUploadPlan m_plan;
-    bool m_reserved = false;
+    b8 m_reserved = false;
 };
 
 

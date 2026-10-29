@@ -46,19 +46,19 @@ public:
             m_errors.pop_back();
     }
 
-    [[nodiscard]] bool failed()const noexcept{ return !m_errors.empty(); }
+    [[nodiscard]] b8 failed()const noexcept{ return !m_errors.empty(); }
     [[nodiscard]] const Token& current()const noexcept{ return m_current; }
     [[nodiscard]] MetaArena& arena()const noexcept{ return m_arena; }
 
-    [[nodiscard]] bool check(const TokenType::Enum type)const noexcept{ return m_current.type == type; }
-    [[nodiscard]] bool checkIdentifier(const MStringView text)const noexcept{ return m_current.type == TokenType::Identifier && m_current.text == text; }
+    [[nodiscard]] b8 check(const TokenType::Enum type)const noexcept{ return m_current.type == type; }
+    [[nodiscard]] b8 checkIdentifier(const MStringView text)const noexcept{ return m_current.type == TokenType::Identifier && m_current.text == text; }
 
-    bool match(TokenType::Enum type);
-    bool matchIdentifier(MStringView text);
+    b8 match(TokenType::Enum type);
+    b8 matchIdentifier(MStringView text);
 
     void advance();
-    bool expect(TokenType::Enum type, MStringView expected);
-    bool consumeBalancedBracesRaw(MStringView& outInnerCode);
+    b8 expect(TokenType::Enum type, MStringView expected);
+    b8 consumeBalancedBracesRaw(MStringView& outInnerCode);
 
     void error(MStringView message);
     void error(u32 line, u32 column, MStringView message);

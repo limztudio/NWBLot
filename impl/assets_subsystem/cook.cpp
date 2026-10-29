@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary){
+b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary){
     Core::Alloc::ScratchArena scratchArena(AssetsSubsystemArenaScope::s_SerializeArena);
     if(!subsystem.validatePayload())
         return false;
@@ -42,7 +42,7 @@ bool SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::A
 
     for(const ISubsystem::SubsystemRef& ref : subsystem.subsystems){
         const NameHash hash = ref.name().hash();
-        bool duplicate = false;
+        b8 duplicate = false;
         for(const NameHash& existingHash : subsystemHashes){
             if(existingHash == hash){
                 duplicate = true;
@@ -68,7 +68,7 @@ bool SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::A
     }
 
     usize reserveBytes = sizeof(SubsystemBinaryPayload::SubsystemHeaderBinary);
-    const bool canReserve =
+    const b8 canReserve =
         AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes)
         && AddBinaryVectorReserveBytes(reserveBytes, fieldCounts)
         && AddBinaryVectorReserveBytes(reserveBytes, assetHashes)
@@ -92,7 +92,7 @@ bool SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::A
     ;
 }
 
-bool SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     const ISubsystem* const subsystem = CastSubsystem(&asset);
     if(!subsystem){
         NWB_LOGGER_ERROR(
@@ -136,7 +136,7 @@ template<typename TAsset>
     return Core::Assets::ParseMetadataReservedAssetRefText<TAsset>(nwbFilePath, AssetsSubsystemCook::s_SubsystemDiagnosticPrefix, fieldLabel, text, scratchArena);
 }
 
-[[nodiscard]] static bool ValidateSubsystemMetadataFields(const ISubsystem& subsystem, const Path& nwbFilePath, const Value& asset){
+[[nodiscard]] static b8 ValidateSubsystemMetadataFields(const ISubsystem& subsystem, const Path& nwbFilePath, const Value& asset){
     const usize count = subsystem.fieldCount();
     return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, AssetsSubsystemCook::s_SubsystemDiagnosticPrefix, [&subsystem, count](const AStringView fieldName)noexcept{
         if(fieldName == s_SubsystemsFieldName)
@@ -159,7 +159,7 @@ template<typename TAsset>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena, ISubsystem& outSubsystem){
+b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena, ISubsystem& outSubsystem){
     using namespace __hidden_subsystem_cook;
 
     if(!ValidateSubsystemMetadataFields(outSubsystem, nwbFilePath, asset))
@@ -191,7 +191,7 @@ bool AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, co
                 );
                 return false;
             }
-            bool duplicate = false;
+            b8 duplicate = false;
             for(const ISubsystem::SubsystemRef& existing : outSubsystem.subsystems){
                 if(existing.name() == parsedRef->name()){
                     duplicate = true;

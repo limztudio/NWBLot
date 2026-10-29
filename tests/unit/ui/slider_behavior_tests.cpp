@@ -43,7 +43,7 @@ protected:
         ASSERT_TRUE(refresh());
     }
 
-    [[nodiscard]] bool refresh()noexcept{
+    [[nodiscard]] b8 refresh()noexcept{
         const auto metrics = SliderLayout::Measure(m_options, {});
         if(!metrics)
             return false;
@@ -57,7 +57,7 @@ protected:
         return SliderBehavior::Admit(m_state, m_options, m_placement);
     }
 
-    [[nodiscard]] bool set(const f64 value)noexcept{
+    [[nodiscard]] b8 set(const f64 value)noexcept{
         return m_state.setValue(value) && refresh();
     }
 
@@ -69,7 +69,7 @@ protected:
         return action;
     }
 
-    [[nodiscard]] PointerGesture gesture(const bool thumb = true)const noexcept{
+    [[nodiscard]] PointerGesture gesture(const b8 thumb = true)const noexcept{
         PointerGesture gesture;
         gesture.id = { { thumb ? 42u : 43u }, 3u, 7u, 11u };
         gesture.origin = { VectorGetX(VectorMultiplyAddExpression(VectorReplicate(m_placement.thumb.width), VectorReplicate(0.5f), VectorReplicate(m_placement.thumb.x))), 36.0f };
@@ -132,7 +132,7 @@ TEST(UiSliderMathTests, SameSignExtremeBoundsUseABoundedDifference){
     // Lanes are the positive and negative bounds.
     const SIMDVectorDouble bounds = VectorDoubleXorInt(VectorDoubleSet(maximum, maximum, 0.0, 0.0), VectorDoubleAndInt(s_DoubleSIMDNegativeZero, s_DoubleSIMDMaskY));
     const SIMDVectorDouble threeQuarters = VectorDoubleMultiply(bounds, VectorDoubleReplicate(0.75));
-    for(const bool negative : { false, true }){
+    for(const b8 negative : { false, true }){
         const f64 minimum = negative ? VectorDoubleGetY(bounds) : VectorDoubleGetX(threeQuarters);
         const f64 upper = negative ? VectorDoubleGetY(threeQuarters) : maximum;
         Expected<f64> value = MakeUnexpected(Failure{});

@@ -146,13 +146,13 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
         .setResourceUses(avboitIntervalResourceUses.data(), avboitIntervalResourceUses.size())
         .setResourceSetUses(transparentCsgMaterialResourceSetUseCount != 0u ? transparentCsgMaterialResourceSetUses : nullptr, transparentCsgMaterialResourceSetUseCount)
     ;
-    const bool avboitCsgReceiverSpanGraphOwned =
+    const b8 avboitCsgReceiverSpanGraphOwned =
         avboitPrePayload.transparentCsgStreamsUploaded
         && avboitPrePayload.transparentCsgSnapshot.captured
         && avboitCsgReceiverSpanPayload.transparentCsgSnapshot.captured
         && avboitCsgReceiverSpanPayload.csgFrameBuffersUploaded
     ;
-    const bool avboitCsgIntervalCombineGraphOwned = avboitCsgReceiverSpanGraphOwned && avboitCsgIntervalCombinePayload.transparentCsgSnapshot.captured && avboitCsgIntervalCombinePayload.csgFrameBuffersUploaded;
+    const b8 avboitCsgIntervalCombineGraphOwned = avboitCsgReceiverSpanGraphOwned && avboitCsgIntervalCombinePayload.transparentCsgSnapshot.captured && avboitCsgIntervalCombinePayload.csgFrameBuffersUploaded;
     const auto preTaskResult = m_graph.addTask<AvboitPreGraphTask>(avboitIntervalDesc, Move(avboitPrePayload));
     if(!preTaskResult){
         m_avboitSystem.taskGraphStage().m_preTask = {};
@@ -162,7 +162,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     m_avboitSystem.taskGraphStage().m_preTask = *preTaskResult;
 
     Core::GpuTaskId avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_preTask;
-    bool avboitIntervalOutputsGraphOwned = false;
+    b8 avboitIntervalOutputsGraphOwned = false;
     if(avboitCsgReceiverSpanGraphOwned){
         const Core::GpuTaskResourceUse avboitIntervalSpanResourceUses[] = {
             ReadTextureUse(csgReceiverEventData, csgReceiverEventDataSubresources, Core::ResourceStates::UnorderedAccess),

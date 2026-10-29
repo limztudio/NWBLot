@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::IsPointerEvent(const InputEventType::Enum type)noexcept{
+b8 InputRouter::IsPointerEvent(const InputEventType::Enum type)noexcept{
     switch(type){
     case InputEventType::PointerMove:
     case InputEventType::PrimaryDown:
@@ -61,8 +61,8 @@ Expected<InputEvent> InputRouter::resolvePointerEvent(const InputEvent& event){
     if(event.type == InputEventType::PointerWheel && (!IsFinite(event.scrollX) || !IsFinite(event.scrollY)))
         return MakeUnexpected(Failure{});
     InputEvent resolved = event;
-    const bool press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
-    const bool release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
+    const b8 press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
+    const b8 release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
     const PointerIntent::Enum intent = event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp ? PointerIntent::ContextMenu : PointerIntent::Activate;
     const auto held = FindIf(m_pointerBindings.begin(), m_pointerBindings.end(), [&event, intent](const PointerBinding& binding)noexcept{
         return binding.source == event.source && binding.intent == intent;

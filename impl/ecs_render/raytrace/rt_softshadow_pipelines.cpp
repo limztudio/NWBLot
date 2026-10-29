@@ -21,7 +21,7 @@ namespace __hidden_softshadow_pipelines{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool EnsureResolveChannel(
+[[nodiscard]] b8 EnsureResolveChannel(
     RendererShaderSystem& shaderSystem,
     Core::GraphicsBackend::Device& device,
     const Core::BindingLayoutHandle& bindingLayout,
@@ -84,7 +84,7 @@ void RendererRayTracingSystem::discardSoftShadowTemporalHistory()noexcept{
     m_rayTracingState.m_transparentShadowSamplingHistory.discardPending();
 }
 
-bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
+b8 RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     auto& resolve = m_rayTracingState.m_softShadowResolve;
     if(resolve.m_scalar.m_wavelet.m_pipeline && resolve.m_scalar.m_upsample.m_pipeline)
         return true;
@@ -111,7 +111,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     return __hidden_softshadow_pipelines::EnsureResolveChannel(m_shaderSystem, device, resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveCs, resolve.m_scalar);
 }
 
-bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
+b8 RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(m_rayTracingState.m_shadowGeometryDownsamplePipeline)
         return true;
     if(m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed)
@@ -153,7 +153,7 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
+b8 RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
     auto& resolve = m_rayTracingState.m_softShadowResolve;
     if(resolve.m_rgb.m_wavelet.m_pipeline && resolve.m_rgb.m_upsample.m_pipeline)
         return true;
@@ -185,8 +185,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     const u32 slotStart,
     const u32 slotCount,
     const SoftShadowResolveDispatch& dispatch,
-    const bool dispatchFirstWavelet,
-    const bool dispatchTail
+    const b8 dispatchFirstWavelet,
+    const b8 dispatchTail
 ){
     NWB_ASSERT(dispatch.waveletPipeline && dispatch.upsamplePipeline);
     NWB_ASSERT(dispatch.visibilityTexture);
@@ -200,7 +200,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
     const auto runPass = [&](
-        const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY, const bool graphOwnsInputColorState = false, const bool graphOwnsOutputState = false
+        const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY, const b8 graphOwnsInputColorState = false, const b8 graphOwnsOutputState = false
     ){
         NWB_ASSERT(resources.softHalfTexture && resources.inputColorTexture && resources.momentsTexture && resources.outputTexture);
         switch(stage){
@@ -274,7 +274,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     if(!dispatchTail)
         return;
 
-    bool sourceIsHalfA = dispatch.firstWaveletWritesHalfA;
+    b8 sourceIsHalfA = dispatch.firstWaveletWritesHalfA;
     [[maybe_unused]] NotNull<const SoftShadowResolvePassResources*> lastWaveletResources(&dispatch.firstWaveletResources);
     for(u32 pass = 1u; pass < dispatch.waveletPassCount; ++pass){
         const SoftShadowResolvePassResources& nextWaveletResources = sourceIsHalfA ? dispatch.outputHalfBResources : dispatch.outputHalfAResources;
@@ -286,7 +286,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     runPass(dispatch.upsampleResources, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY, dispatch.graphOwnsUpsampleInputColorEntryState, dispatch.graphOwnsUpsampleVisibilityOutputState);
 }
 
-bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
+b8 RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     if(m_rayTracingState.m_shadowReprojectMergePipeline)
         return true;
     if(m_rayTracingState.m_shadowReprojectMergePipelineFailed)

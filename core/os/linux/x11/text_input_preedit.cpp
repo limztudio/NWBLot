@@ -50,8 +50,8 @@ Bool X11TextInputService::OnPreeditDraw(XIC context, const XPointer data, const 
         return 0;
     }
     service.m_insertion.clear();
-    const bool feedbackOnly = draw.text && !draw.text->string.multi_byte;
-    bool valid = true;
+    const b8 feedbackOnly = draw.text && !draw.text->string.multi_byte;
+    b8 valid = true;
     if(feedbackOnly)
         valid = service.m_preedit.moveCaret(static_cast<usize>(draw.caret));
     else{
@@ -119,7 +119,7 @@ Bool X11TextInputService::OnPreeditCaret(XIC context, const XPointer data, const
     return 0;
 }
 
-bool X11TextInputService::convertPreeditText(const XIMText& text){
+b8 X11TextInputService::convertPreeditText(const XIMText& text){
     constexpr usize s_InvalidSequence = static_cast<usize>(-1);
     constexpr usize s_IncompleteSequence = static_cast<usize>(-2);
     m_insertion.clear();

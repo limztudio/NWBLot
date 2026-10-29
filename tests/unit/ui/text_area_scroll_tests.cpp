@@ -249,8 +249,8 @@ TEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBey
     const Point logical = reference.layout().measure();
     ASSERT_LT(visual.y, 0.0f);
     ASSERT_GT(VectorGetX(VectorAdd(VectorReplicate(visual.y), VectorReplicate(visual.height))), logical.y);
-    bool sawLatin = false;
-    bool sawKorean = false;
+    b8 sawLatin = false;
+    b8 sawKorean = false;
     for(const PlacedGlyph& glyph : reference.layout().glyphs()){
         ASSERT_TRUE(glyph.face);
         sawLatin = sawLatin || glyph.face->identity().name() == Name("tests/ui/fonts/latin");
@@ -321,7 +321,7 @@ TEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTe
     const auto logicalCaret = view.caretGeometry().caretRect(view.displayCaret());
     ASSERT_TRUE(logicalCaret);
     Rect previous;
-    bool changedWithScale = false;
+    b8 changedWithScale = false;
     for(const f32 scale : { 1.0f, 1.5f, 2.0f }){
         const DisplayMetrics display{ 800.0f, 600.0f, scale, scale };
         const auto expected = m_text.measure(view.layout(), display);

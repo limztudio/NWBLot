@@ -38,7 +38,7 @@ struct AvboitDepthWarpStageInputs{
     Core::GpuTaskId occupancyTask;
     Core::GpuTimingSubmissionTicket& depthWarpTimingTicket;
     RendererTaskTimingFeedback& timingFeedback;
-    bool hasTransparentRenderers = false;
+    b8 hasTransparentRenderers = false;
 };
 
 struct AvboitDepthWarpStageResult{

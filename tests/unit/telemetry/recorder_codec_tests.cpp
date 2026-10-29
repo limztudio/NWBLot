@@ -101,7 +101,7 @@ TEST(Telemetry, EventCodecPreservesAliasedPayloadAcrossCapacityGrowthAndSubrange
     constexpr u8 s_Expected[] = { 17u, 29u, 43u, 71u, 113u };
     const usize prefixes[] = { 0u, sizeof(Telemetry::EncodedEventHeader) + 3u };
     for(const usize prefix : prefixes){
-        for(const bool spareCapacity : { false, true }){
+        for(const b8 spareCapacity : { false, true }){
             SCOPED_TRACE(prefix);
             SCOPED_TRACE(spareCapacity);
             Telemetry::EventRecord event(testArena.arena);

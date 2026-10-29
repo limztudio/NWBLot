@@ -75,7 +75,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool containsInline(Core::Texture* identity)const noexcept{
+    [[nodiscard]] b8 containsInline(Core::Texture* identity)const noexcept{
         for(usize index = 0u; index < m_inlineCount; ++index){
             if(m_inlineTextures[index] == identity)
                 return true;
@@ -127,7 +127,7 @@ using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Core::Alloc::G
 
 
 // Rejection preserves the successfully collected prefix.
-[[nodiscard]] bool AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, const RendererMaterialResourceState& resources, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector);
+[[nodiscard]] b8 AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, const RendererMaterialResourceState& resources, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector);
 [[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedMaterialPassSampledTextures(
     const MaterialSurfaceInfoMap& materials,
     const RendererMaterialResourceState& resources,
@@ -135,7 +135,7 @@ using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Core::Alloc::G
     Core::Alloc::ScratchArena& scratchArena
 );
 // Names check sequentially; a missing name preserves the published prefix.
-[[nodiscard]] bool MergePreparedShadowMaterialSampledTextures(Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector);
+[[nodiscard]] b8 MergePreparedShadowMaterialSampledTextures(Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector);
 
 
 // Materials validate into reused storage before textures enter the output.
@@ -161,7 +161,7 @@ public:
 
 public:
     template<typename ResolveSurface>
-    [[nodiscard]] bool collect(const MaterialSurfaceInfo& materialInfo, ResolveSurface&& resolveSurface){
+    [[nodiscard]] b8 collect(const MaterialSurfaceInfo& materialInfo, ResolveSurface&& resolveSurface){
         if(!m_pending)
             m_pending.emplace(m_scratchArena);
         ScopeExit clearPending([&]()noexcept{ m_pending->collector.clear(); });

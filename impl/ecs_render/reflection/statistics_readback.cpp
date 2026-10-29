@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReflectionStatisticsState::accept(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const bool hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
+void ReflectionStatisticsState::accept(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = matchingSlot(key);
@@ -104,7 +104,7 @@ Expected<ReflectionStatisticsControlHandle> CreateReflectionStatisticsControl(Co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReflectionStatisticsReservation::accept(const Core::QueueSubmissionToken& token, const bool hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
+void ReflectionStatisticsReservation::accept(const Core::QueueSubmissionToken& token, const b8 hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
     if(m_control && m_key.valid())
         m_control->accept(m_key, token, hardwareReady, history, feedback);
     m_key = {};
@@ -127,7 +127,7 @@ void ReflectionStatisticsReadback::invalidateResources()noexcept{
         buffer = nullptr;
 }
 
-bool ReflectionStatisticsReadback::prepareResources(){
+b8 ReflectionStatisticsReadback::prepareResources(){
     if(m_buffers[0])
         return true;
     const u16 deviceGeneration = m_graphics.getDevice().getDeviceGeneration();

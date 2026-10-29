@@ -253,8 +253,8 @@ TEST(GpuTaskGraph, PlansCompositeUavDependencies){
 
     const Graphics::GpuCompiledBarrier* const consumerBarriers = compiledPlan.findTask(consumer).prologueBarriers;
     ASSERT_NE(consumerBarriers, nullptr);
-    bool hasTextureUavBarrier = false;
-    bool hasBufferUavBarrier = false;
+    b8 hasTextureUavBarrier = false;
+    b8 hasBufferUavBarrier = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledConsumer->prologueBarrierCount; ++barrierIndex){
         const Graphics::GpuCompiledBarrier& barrier = consumerBarriers[barrierIndex];
         hasTextureUavBarrier = hasTextureUavBarrier || (barrier.resource == texture && barrier.type == Graphics::GpuCompiledBarrierType::TextureUav && barrier.before == compositeState && barrier.after == compositeState);
@@ -406,8 +406,8 @@ TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWit
     const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
     ASSERT_NE(barriers, nullptr);
 
-    bool hasMipZeroInitialBarrier = false;
-    bool hasTailInitialBarrier = false;
+    b8 hasMipZeroInitialBarrier = false;
+    b8 hasTailInitialBarrier = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
         const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
         if(
@@ -462,7 +462,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     scheduling.allowPacketMerge = false;
     const Graphics::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
     const Graphics::GpuTaskCommandRequirements computeCommands = ComputeCommands();
-    const auto addReadTask = [&](const Name& identity, const AStringView label, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskCommandRequirements& commands, const bool hasIndependentStateSource){
+    const auto addReadTask = [&](const Name& identity, const AStringView label, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskCommandRequirements& commands, const b8 hasIndependentStateSource){
         const Graphics::GpuTaskResourceUse uses[] = {
             Graphics::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, .hasIndependentStateSource = hasIndependentStateSource, },
         };

@@ -13,18 +13,18 @@ class CsgBoundsGpuData{
     public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
     public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
 
-    public bool valid()const{
+    public b8 valid()const{
         return (this.minBounds.w & s_CsgBoundsValidFlag) != 0;
     }
 
-    public bool finite()const{
+    public b8 finite()const{
         return (this.minBounds.w & s_CsgBoundsFiniteFlag) != 0;
     }
 }
 
 type CsgReceiverCpuBounds = CsgBoundsGpuData;
 
-bool CsgReceiverBoundsCanCull(in CsgReceiverCpuBounds bounds){
+b8 CsgReceiverBoundsCanCull(in CsgReceiverCpuBounds bounds){
     return bounds.valid() && bounds.finite();
 }
 

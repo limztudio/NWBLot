@@ -41,7 +41,7 @@ inline constexpr int s_EntryFailure = -1;
     return {};
 }
 
-[[nodiscard]] static bool ExportPayload(const NWB::Path& directory, const NWB::Impl::FontAtlasPayload& payload, NWB::Core::Alloc::ScratchArena& scratch){
+[[nodiscard]] static b8 ExportPayload(const NWB::Path& directory, const NWB::Impl::FontAtlasPayload& payload, NWB::Core::Alloc::ScratchArena& scratch){
     const ::Path<NWB::Core::Alloc::ScratchArena> outputDirectory(scratch, directory);
     if(!EnsureDirectories(outputDirectory))
         return false;
@@ -64,7 +64,7 @@ inline constexpr int s_EntryFailure = -1;
     return true;
 }
 
-[[nodiscard]] static bool DecodePackage(const AStringView source, const AStringView destination){
+[[nodiscard]] static b8 DecodePackage(const AStringView source, const AStringView destination){
     NWB::Core::Assets::AssetArena arena(s_PackageArena);
     const NWB::Path sourcePath(arena, source);
     const NWB::Path destinationPath(arena, destination);
@@ -83,8 +83,8 @@ inline constexpr int s_EntryFailure = -1;
 
     NWB::Impl::Font font(arena);
     NWB::Impl::FontAtlas atlas(arena);
-    bool foundFont = false;
-    bool foundAtlas = false;
+    b8 foundFont = false;
+    b8 foundAtlas = false;
     for(const auto& asset : *expanded){
         if(asset.assetType == Name("font")){
             if(foundFont)

@@ -104,7 +104,7 @@ void ModelSystem::updateStaticMeshAttachments(){
     jointQueries.clear();
     if(queryCount > 1u){
         jointQueries.reserve(queryCount);
-        bool sharedParent = true;
+        b8 sharedParent = true;
         attachments.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform)noexcept{
             static_cast<void>(entity);
             static_cast<void>(object);

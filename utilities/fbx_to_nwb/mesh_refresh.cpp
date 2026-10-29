@@ -48,29 +48,29 @@ struct StreamSortEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool LessF32(const f32 lhs, const f32 rhs)noexcept{
+[[nodiscard]] b8 LessF32(const f32 lhs, const f32 rhs)noexcept{
     return FloatingHashBits(lhs) < FloatingHashBits(rhs);
 }
 
-[[nodiscard]] bool SameF32(const f32 lhs, const f32 rhs)noexcept{
+[[nodiscard]] b8 SameF32(const f32 lhs, const f32 rhs)noexcept{
     return FloatingHashBits(lhs) == FloatingHashBits(rhs);
 }
 
-[[nodiscard]] bool LessEmittedF32(const f32 lhs, const f32 rhs)noexcept{
+[[nodiscard]] b8 LessEmittedF32(const f32 lhs, const f32 rhs)noexcept{
     return FloatingHashBits(TextWrite::CleanFloat(lhs)) < FloatingHashBits(TextWrite::CleanFloat(rhs));
 }
 
-[[nodiscard]] bool SameEmittedF32(const f32 lhs, const f32 rhs)noexcept{
+[[nodiscard]] b8 SameEmittedF32(const f32 lhs, const f32 rhs)noexcept{
     return FloatingHashBits(TextWrite::CleanFloat(lhs)) == FloatingHashBits(TextWrite::CleanFloat(rhs));
 }
 
-[[nodiscard]] bool LessValue(const Vec2& lhs, const Vec2& rhs)noexcept{
+[[nodiscard]] b8 LessValue(const Vec2& lhs, const Vec2& rhs)noexcept{
     if(!SameEmittedF32(lhs.x, rhs.x))
         return LessEmittedF32(lhs.x, rhs.x);
     return LessEmittedF32(lhs.y, rhs.y);
 }
 
-[[nodiscard]] bool LessValue(const Vec3& lhs, const Vec3& rhs)noexcept{
+[[nodiscard]] b8 LessValue(const Vec3& lhs, const Vec3& rhs)noexcept{
     if(!SameEmittedF32(lhs.x, rhs.x))
         return LessEmittedF32(lhs.x, rhs.x);
     if(!SameEmittedF32(lhs.y, rhs.y))
@@ -78,7 +78,7 @@ struct StreamSortEntry{
     return LessEmittedF32(lhs.z, rhs.z);
 }
 
-[[nodiscard]] bool LessValue(const Vec4& lhs, const Vec4& rhs)noexcept{
+[[nodiscard]] b8 LessValue(const Vec4& lhs, const Vec4& rhs)noexcept{
     if(!SameEmittedF32(lhs.x, rhs.x))
         return LessEmittedF32(lhs.x, rhs.x);
     if(!SameEmittedF32(lhs.y, rhs.y))
@@ -88,7 +88,7 @@ struct StreamSortEntry{
     return LessEmittedF32(lhs.w, rhs.w);
 }
 
-[[nodiscard]] bool LessValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
+[[nodiscard]] b8 LessValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
     for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
         if(lhs.joint[i] != rhs.joint[i])
             return lhs.joint[i] < rhs.joint[i];
@@ -100,20 +100,20 @@ struct StreamSortEntry{
     return false;
 }
 
-[[nodiscard]] bool SameValue(const Vec2& lhs, const Vec2& rhs)noexcept{
+[[nodiscard]] b8 SameValue(const Vec2& lhs, const Vec2& rhs)noexcept{
     return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y);
 }
 
-[[nodiscard]] bool SameValue(const Vec3& lhs, const Vec3& rhs)noexcept{
+[[nodiscard]] b8 SameValue(const Vec3& lhs, const Vec3& rhs)noexcept{
     return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z);
 }
 
-[[nodiscard]] bool SameValue(const Vec4& lhs, const Vec4& rhs)noexcept{
+[[nodiscard]] b8 SameValue(const Vec4& lhs, const Vec4& rhs)noexcept{
     return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z) && SameEmittedF32(lhs.w, rhs.w);
 }
 
 
-[[nodiscard]] bool SameValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
+[[nodiscard]] b8 SameValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
     MeshSkinInfluenceEqual equal;
     return equal(lhs, rhs);
 }
@@ -183,7 +183,7 @@ template<typename Value>
     return outRemap;
 }
 
-[[nodiscard]] bool RemapRequiredIndex(u32& inOutIndex, const Span<const u32> remap, const AStringView streamName){
+[[nodiscard]] b8 RemapRequiredIndex(u32& inOutIndex, const Span<const u32> remap, const AStringView streamName){
     if(inOutIndex < remap.size()){
         inOutIndex = remap[inOutIndex];
         return true;
@@ -193,13 +193,13 @@ template<typename Value>
     return false;
 }
 
-[[nodiscard]] bool RemapOptionalIndex(u32& inOutIndex, const Span<const u32> remap, const AStringView streamName){
+[[nodiscard]] b8 RemapOptionalIndex(u32& inOutIndex, const Span<const u32> remap, const AStringView streamName){
     if(inOutIndex == s_MissingSourceStreamIndex)
         return true;
     return RemapRequiredIndex(inOutIndex, remap, streamName);
 }
 
-[[nodiscard]] bool RemapComponentRefs(SourceMeshStreams& mesh, const Span<const u32> positions, const Span<const u32> normals, const Span<const u32> tangents, const Span<const u32> uv0, const Span<const u32> colors, const Span<const u32> skin){
+[[nodiscard]] b8 RemapComponentRefs(SourceMeshStreams& mesh, const Span<const u32> positions, const Span<const u32> normals, const Span<const u32> tangents, const Span<const u32> uv0, const Span<const u32> colors, const Span<const u32> skin){
     for(SourceVertexRef& ref : mesh.vertexRefs){
         if(!RemapRequiredIndex(ref.position, positions, s_PositionStreamLabel))
             return false;
@@ -361,7 +361,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
         return MakeUnexpected(Failure{});
     }
     ScratchString& source = *sourceResult;
-    const bool useCrlf = HasCrlfLineEndings(AStringView(source));
+    const b8 useCrlf = HasCrlfLineEndings(AStringView(source));
 
     Core::Metascript::MetaArena metaArena(UtilityDetail::s_UtilityArena);
     auto docResult = __hidden_mesh_refresh::ParseMetascriptDocument(inputPath, source, metaArena);
@@ -376,7 +376,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
         return MakeUnexpected(Failure{});
     }
     replacements.reserve(*replacementCapacity);
-    bool sawMesh = false;
+    b8 sawMesh = false;
 
     for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
         if(declaration.type != s_MeshAssetTypeText)

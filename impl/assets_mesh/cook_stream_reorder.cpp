@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena){
+b8 MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena){
     MeshCookCommonStreamReorder reorder(entry.positions.get_allocator().arena(), scratchArena);
     PrepareCommonMeshStreamReorder(entry, reorder);
 

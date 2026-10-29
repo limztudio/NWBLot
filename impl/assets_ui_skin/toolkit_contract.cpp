@@ -74,7 +74,7 @@ static constexpr RequiredRegion s_RequiredRegions[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateUiSkinToolkitContract(const UiSkin& skin){
+b8 ValidateUiSkinToolkitContract(const UiSkin& skin){
     if(!skin.validatePayload())
         return false;
     for(const auto& required : __hidden_ui_skin_toolkit_contract::s_RequiredRegions){

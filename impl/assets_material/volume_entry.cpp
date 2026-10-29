@@ -35,7 +35,7 @@ namespace __hidden_assets_material_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsMaterialResourceParameterValue(const AStringView valueText, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static b8 IsMaterialResourceParameterValue(const AStringView valueText, Core::Alloc::ScratchArena& scratchArena){
     const AStringView trimmed = TrimView(valueText);
     if(trimmed.empty() || trimmed.find('(') != AStringView::npos || trimmed.find(')') != AStringView::npos)
         return false;
@@ -46,7 +46,7 @@ static Expected<MaterialCookEntry> ParseMaterialDocument(const Path& assetRoot, 
     return ParseMaterialCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static bool ExtractMaterialDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+static b8 ExtractMaterialDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     if(!context.document)
         return false;
     const auto materialEntry = ParseMaterialCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena);
@@ -90,7 +90,7 @@ static bool ExtractMaterialDependencies(const Core::Assets::CookDependencyItemCo
     return true;
 }
 
-static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<MaterialCookEntry, Material, MaterialAssetCodec>(
         registry,
         MaterialBinaryPayload::s_MaterialAssetKindLabel,
@@ -100,7 +100,7 @@ static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry)
     );
 }
 
-static bool RegisterMaterialCookDependency(Core::Assets::CookDependencyRegistry& registry){
+static b8 RegisterMaterialCookDependency(Core::Assets::CookDependencyRegistry& registry){
     return registry.registerType(Material::AssetTypeName(), &ExtractMaterialDependencies);
 }
 

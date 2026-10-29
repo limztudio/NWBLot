@@ -40,14 +40,14 @@ static Expected<FontAtlas> BuildFontAtlasCookedAsset(FontAtlasCookEntry& entry, 
     return BuildFontAtlasAsset(entry, arena, scratchArena);
 }
 
-static bool ExtractFontAtlasDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+static b8 ExtractFontAtlasDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto fontRef = Core::Assets::ReadMetadataAssetRefField<Font>(context.nwbFilePath, context.asset, s_FontAtlasDiagnosticPrefix, s_FontField, true);
     if(!fontRef)
         return false;
     return collector.addAssetDependency(fontRef->name(), Font::AssetTypeName());
 }
 
-static bool RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontAtlasCookEntry, FontAtlas, FontAtlasAssetCodec>(
         registry, NWB_TEXT("font atlas"),
         [](const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
@@ -60,7 +60,7 @@ static bool RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry
     );
 }
 
-static bool RegisterFontAtlasCookDependency(Core::Assets::CookDependencyRegistry& registry){
+static b8 RegisterFontAtlasCookDependency(Core::Assets::CookDependencyRegistry& registry){
     return registry.registerType(FontAtlas::AssetTypeName(), &ExtractFontAtlasDependencies);
 }
 

@@ -31,7 +31,7 @@ void GpuRecordingAttemptScope::complete()noexcept{
 }
 
 
-void GpuRecordingAttemptScope::activateWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial, const bool previousPlanWasActive)noexcept{
+void GpuRecordingAttemptScope::activateWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial, const b8 previousPlanWasActive)noexcept{
     NWB_FATAL_ASSERT_MSG(!m_graph, "GPU task graph recording attempt scope must be fresh");
     NWB_FATAL_ASSERT_MSG(preparationSerial != 0u, "GPU task graph recording preparation requires a nonzero serial");
     m_graph = &graph;
@@ -51,7 +51,7 @@ void GpuRecordingAttemptScope::completeWithinLock()noexcept{
 }
 
 
-bool GpuRecordingAttemptScope::validPreparationWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial)const noexcept{
+b8 GpuRecordingAttemptScope::validPreparationWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial)const noexcept{
     return m_graph == &graph && m_compiledGraph == &compiledGraph && m_recordingAttemptGeneration == recordingAttemptGeneration && m_preparationSerial != 0u && m_preparationSerial == preparationSerial;
 }
 
@@ -77,7 +77,7 @@ GpuPacketRecordingAbort::~GpuPacketRecordingAbort()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuPacketRecordingLease::validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)const noexcept{
+b8 GpuPacketRecordingLease::validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)const noexcept{
     if(!valid() || !planAccess.validFor(compiledGraph) || m_packet != packet || m_planGeneration != planAccess.planGeneration())
         return false;
 
@@ -118,7 +118,7 @@ GpuPacketRecordingAccess::GpuPacketRecordingAccess(const GpuTaskGraph& graph, co
     m_claimGeneration = lease.m_claimGeneration;
 }
 
-bool GpuPacketRecordingAccess::validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)const noexcept{
+b8 GpuPacketRecordingAccess::validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)const noexcept{
     return
         m_graph == &graph
         && m_compiledGraph == &compiledGraph
@@ -132,7 +132,7 @@ bool GpuPacketRecordingAccess::validFor(const GpuTaskGraph& graph, const GpuComp
     ;
 }
 
-bool GpuPacketRecordingAccess::validForTask(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& task)const noexcept{
+b8 GpuPacketRecordingAccess::validForTask(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& task)const noexcept{
     if(!validFor(graph, compiledGraph, planAccess, m_packet))
         return false;
     const GpuCompiledTaskView compiledTask = planAccess.findTask(task);

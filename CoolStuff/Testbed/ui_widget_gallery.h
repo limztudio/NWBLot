@@ -42,7 +42,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems);
+    [[nodiscard]] b8 loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems);
     void paint(NWB::Impl::UiPaintContext& context, const NWB::Impl::Ui::Rect& bounds);
 
 
@@ -66,7 +66,7 @@ private:
     UiImageGallery m_images;
     u32 m_count = 0u;
     u32 m_selectedGallery = 0u;
-    bool m_enabled = true;
+    b8 m_enabled = true;
 };
 
 

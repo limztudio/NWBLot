@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& settings, const Span<const LightSpaceLightRequest> requests, const u64 maxStorageBufferRange, const u32 drawCount, const bool csgIntervalDepth)noexcept{
+Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& settings, const Span<const LightSpaceLightRequest> requests, const u64 maxStorageBufferRange, const u32 drawCount, const b8 csgIntervalDepth)noexcept{
     const usize requestCount = requests.size();
     if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > NWB_SCENE_SHADOW_SLOT_COUNT)
         return MakeUnexpected(Failure{});
@@ -44,7 +44,7 @@ Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& setti
             continue;
         if(drawCount == 0u)
             return MakeUnexpected(Failure{});
-        const bool point = request.type == Scene::LightType::Point;
+        const b8 point = request.type == Scene::LightType::Point;
         const u32 resolution = point ? settings.pointResolution : settings.directionalResolution;
         const u32 viewCount = point ? s_PointLightViewCount : 1u;
         const u64 pixelsPerView = static_cast<u64>(resolution) * resolution;

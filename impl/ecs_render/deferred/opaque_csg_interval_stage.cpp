@@ -34,8 +34,8 @@ OpaqueCsgIntervalStage::OpaqueCsgIntervalStage(
     Core::GpuTimingSubmissionTicket*& receiverSpanTimingTicket,
     Core::GpuTimingSubmissionTicket*& intervalCombineTimingTicket,
     Core::GpuTimingSubmissionTicket*& intervalSampleTimingTicket,
-    const bool& meshViewSetupReady,
-    const bool& sceneShadingSetupReady,
+    const b8& meshViewSetupReady,
+    const b8& sceneShadingSetupReady,
     Optional<Core::GpuTimingMeasure>& intervalSampleComputeEmulationTiming
 )noexcept
     : m_graph(graph)
@@ -58,10 +58,10 @@ void OpaqueCsgIntervalStage::capturePayloads(
     const CsgFrameGpuDataView& csgFrameData,
     const usize instanceCount,
     const usize materialTypedByteCount,
-    const bool materialDrawBuffersUploaded,
-    const bool csgFrameBuffersUploaded,
-    const bool hasOpaqueDrawItems,
-    const bool hasOpaqueCsgFrameWork
+    const b8 materialDrawBuffersUploaded,
+    const b8 csgFrameBuffersUploaded,
+    const b8 hasOpaqueDrawItems,
+    const b8 hasOpaqueCsgFrameWork
 ){
     m_receiverSpanPayload.frameBindings = frameBindings;
     m_intervalCombinePayload.frameBindings = frameBindings;
@@ -137,7 +137,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     Core::GpuGraphResourceSetId csgIntervalSampleMaterialGeometrySet;
     Core::GpuGraphResourceSetId csgIntervalSampleMaterialSampledTextureSet;
     const MaterialPassDrawItemsView csgIntervalSampleMaterialGeometryDrawSets[] = { inputs.opaqueDrawItems.csg };
-    const bool csgIntervalSampleUsesMaterialGeometry = !inputs.opaqueDrawItems.csg.empty();
+    const b8 csgIntervalSampleUsesMaterialGeometry = !inputs.opaqueDrawItems.csg.empty();
     m_intervalSamplePayload.materialGeometryStatesGraphOwned = false;
     if(csgIntervalSampleUsesMaterialGeometry){
         const auto csgIntervalSampleMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(
@@ -155,7 +155,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material geometry states"));
         return MakeUnexpected(Failure{});
     }
-    bool csgIntervalSampleMaterialSampledTexturesCollected = false;
+    b8 csgIntervalSampleMaterialSampledTexturesCollected = false;
     if(csgIntervalSampleUsesMaterialGeometry){
         const auto csgIntervalSampleMaterialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
             m_materialSystem,
@@ -176,13 +176,13 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
 
     // Interval-sample material follows Combine immediately, unlike opaque/receiver work. Sample rasterizes right after.
     // That makes pairwise-distinct outputs graph-ownable without excluding earlier regular/receiver aliases.
-    const bool opaqueCsgIntervalSampleComputeEmulationPlanCaptured = inputs.hasCsgFrameGpuWork
+    const b8 opaqueCsgIntervalSampleComputeEmulationPlanCaptured = inputs.hasCsgFrameGpuWork
         && m_intervalSamplePayload.materialFrameStatesGraphOwned
         && m_intervalSamplePayload.materialGeometryStatesGraphOwned
         && csgIntervalSampleMaterialSampledTexturesCollected
         && m_intervalSampleComputeEmulationPayload.plan.capture(inputs.opaqueDrawItems.csg, inputs.csgFrameData, scratchArena)
     ;
-    bool opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned = false;
+    b8 opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned = false;
     if(opaqueCsgIntervalSampleComputeEmulationPlanCaptured){
         const auto opaqueCsgIntervalSampleComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
             m_graph,

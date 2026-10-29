@@ -51,11 +51,11 @@ public:
 
 
 public:
-    [[nodiscard]] bool parseSingleBracketList(MVector<ParsedAttribute>& outAttributes);
+    [[nodiscard]] b8 parseSingleBracketList(MVector<ParsedAttribute>& outAttributes);
 
 
 private:
-    [[nodiscard]] bool parseAttributeItem(MVector<ParsedAttribute>& outAttributes);
+    [[nodiscard]] b8 parseAttributeItem(MVector<ParsedAttribute>& outAttributes);
 
 
 private:

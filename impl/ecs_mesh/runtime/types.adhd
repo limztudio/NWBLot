@@ -3,13 +3,13 @@
 
 
 enum<u8> RuntimeMeshDirtyFlag{
-    enum None = 0u,
-    enum TopologyDirty = 1u << 0u,
-    enum AttributesDirty = 1u << 1u,
-    enum SkinningInputDirty = 1u << 2u,
-    enum GpuUploadDirty = 1u << 3u,
-    enum MeshletBoundsDirty = 1u << 4u,
-    enum All = TopologyDirty | AttributesDirty | SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty
+    flag None = 0u,
+    flag TopologyDirty = 1u << 0u,
+    flag AttributesDirty = 1u << 1u,
+    flag SkinningInputDirty = 1u << 2u,
+    flag GpuUploadDirty = 1u << 3u,
+    flag MeshletBoundsDirty = 1u << 4u,
+    flag All = TopologyDirty | AttributesDirty | SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty
 }
 type RuntimeMeshDirtyFlags = u8;
 
@@ -24,11 +24,11 @@ class RuntimeMeshLocalBounds{
     public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
     public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
 
-    public bool valid()const{
+    public b8 valid()const{
         return (this.minBounds.w & s_RuntimeMeshBoundsValidFlag) != 0;
     }
 
-    public bool finite()const{
+    public b8 finite()const{
         return (this.minBounds.w & s_RuntimeMeshBoundsFiniteFlag) != 0;
     }
 }

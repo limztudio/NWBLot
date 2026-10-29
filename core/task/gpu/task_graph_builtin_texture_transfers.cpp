@@ -41,7 +41,7 @@ struct CopyTextureTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyTe
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         return GpuTaskGraphBuiltinDetail::RecordCopies(
             payload, commandList, context,
             [](const GpuTaskRecordContext& captureContext, const Copy& copy){
@@ -81,7 +81,7 @@ struct ResolveTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTask
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         NWB_ASSERT(!payload.resolves.empty());
         if(context.commandIrCapture)
             return false;
@@ -181,10 +181,10 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, co
         return true;
     };
 
-    bool valid = true;
-    bool requiresTransferCapability = false;
-    bool requiresGraphicsCapability = false;
-    bool requiresComputeOrGraphicsCapability = false;
+    b8 valid = true;
+    b8 requiresTransferCapability = false;
+    b8 requiresGraphicsCapability = false;
+    b8 requiresComputeOrGraphicsCapability = false;
     for(usize regionIndex = 0u; regionIndex < copyDesc.regionCount && valid; ++regionIndex){
         const GpuCopyTextureTaskRegion& region = copyDesc.regions[regionIndex];
         if(!validResource(region.source) || !validResource(region.destination)){
@@ -267,7 +267,7 @@ Expected<GpuTaskId> GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc,
         return true;
     };
 
-    bool valid = true;
+    b8 valid = true;
     for(usize regionIndex = 0u; regionIndex < resolveDesc.regionCount && valid; ++regionIndex){
         const GpuResolveTextureTaskRegion& region = resolveDesc.regions[regionIndex];
         if(!validResource(region.source) || !validResource(region.destination)){

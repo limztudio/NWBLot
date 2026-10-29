@@ -47,8 +47,8 @@ inline constexpr Name s_ConversionScratchArena("utilities/tex_conv/conversion");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<bool AlphaMask>
-[[nodiscard]] bool ValidateInputImage(const ScratchPath& path){
+template<b8 AlphaMask>
+[[nodiscard]] b8 ValidateInputImage(const ScratchPath& path){
     const auto isRegularFile = IsRegularFile(path);
     if(!isRegularFile && !IsMissingPathError(isRegularFile.error())){
         if constexpr(AlphaMask)
@@ -90,8 +90,8 @@ int Run(const int argc, char** argv){
     AInteropString alphaArgument;
     InteropVector<AInteropString> cubeArguments;
     InteropVector<AInteropString> volumeArguments;
-    bool force = false;
-    bool linear = false;
+    b8 force = false;
+    b8 linear = false;
 
     CLI::App app{ "Convert LDR or HDR images into prepared linear UASTC texture assets." };
     app.add_option(TexConvCliDetail::s_InputOptionName.data(), inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");

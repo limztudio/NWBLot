@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placement, const bool interactive){
+b8 Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placement, const b8 interactive){
     if(!sliderMatches(frame))
         return false;
     if(!interactive || placement.centerTravel.width <= 0.0f)
@@ -28,11 +28,11 @@ bool Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placem
         return false;
     const WidgetId thumb = *thumbResult;
     auto control = m_context.takeControlAction(frame.m_widget, true, frame.m_token);
-    bool hasControl = control.has_value();
+    b8 hasControl = control.has_value();
     auto trackGesture = m_context.takePartPointerGesture(frame.m_widget, track, true);
-    bool hasTrack = trackGesture.has_value();
+    b8 hasTrack = trackGesture.has_value();
     auto thumbGesture = m_context.takePartPointerGesture(frame.m_widget, thumb, true);
-    bool hasThumb = thumbGesture.has_value();
+    b8 hasThumb = thumbGesture.has_value();
     while(hasControl || hasTrack || hasThumb){
         if(!sliderMatches(frame))
             return false;

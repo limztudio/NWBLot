@@ -29,8 +29,8 @@ namespace __hidden_skinning_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr bool s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
-static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Deformations make cones unsafe.
+static constexpr b8 s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
+static constexpr b8 s_RuntimeSkinningMeshletConeCullingEnabled = false; // Deformations make cones unsafe.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +100,7 @@ void MeshSkinningSystem::prepare(Core::ECS::World& world){
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
     m_runtimeMeshCache.prepareResources(m_world, scratchArena);
     pruneRuntimeResources();
-    bool ready = true;
+    b8 ready = true;
     m_world.view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, SkinnedMeshBindingComponent& binding){
         if(!ready)
             return;
@@ -124,7 +124,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> MeshSkinningSystem::update(Cor
     return {};
 }
 
-bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+b8 MeshSkinningSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
     if(width == 0 || height == 0)
         return true;
@@ -139,7 +139,7 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
     auto& device = m_graphics.getDevice();
 
     constexpr u32 s_PerRuntimeMeshTimingQueries = 128u;
-    const bool timingReady =
+    const b8 timingReady =
         m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_Skinning.identity, device, s_PerRuntimeMeshTimingQueries)
         && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_MeshletBounds.identity, device, s_PerRuntimeMeshTimingQueries)
         && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_LocalBounds.identity, device, s_PerRuntimeMeshTimingQueries)
@@ -156,7 +156,7 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
     return true;
 }
 
-bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
+b8 MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
     // Frames may lack native submissions; filter retired buffers so handles pin nothing.
@@ -208,7 +208,7 @@ Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS
     return BuildSkinnedRuntimeMeshDesc(entity, runtimeMesh, instance, __hidden_skinning_system::s_RuntimeSkinningMeshletFrustumCullingEnabled, __hidden_skinning_system::s_RuntimeSkinningMeshletConeCullingEnabled);
 }
 
-bool MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const noexcept{
+b8 MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const noexcept{
     return m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity) != nullptr;
 }
 

@@ -62,7 +62,7 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
         const auto identityNameResult = DeriveName(Name("tests/telemetry_scaling/task/"), FormatDecimal(taskIndex, identityText));
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
-        const bool explicitDependency = preceding.valid() && (scenario == Scenario::Explicit || (scenario == Scenario::Mixed && taskIndex % 2u != 0u));
+        const b8 explicitDependency = preceding.valid() && (scenario == Scenario::Explicit || (scenario == Scenario::Mixed && taskIndex % 2u != 0u));
         const auto precedingTaskAdmission = AddTask(graph, identity, "Telemetry Task", explicitDependency ? &preceding : nullptr, explicitDependency ? 1u : 0u, resource.valid() ? &resourceUse : nullptr, resource.valid() ? 1u : 0u);
         ASSERT_TRUE(precedingTaskAdmission);
         preceding = *precedingTaskAdmission;

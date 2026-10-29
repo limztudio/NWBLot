@@ -66,7 +66,7 @@ NWB_INLINE SIMDVectorDouble BaselineSum(const SIMDVectorDouble value)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<bool Candidate>
+template<b8 Candidate>
 NWB_INLINE SIMDMatrixDouble RotationX(const f64 angle)noexcept{
     if constexpr(Candidate)
         return MatrixDoubleRotationX(angle);
@@ -80,7 +80,7 @@ NWB_INLINE SIMDMatrixDouble RotationX(const f64 angle)noexcept{
     return matrix;
 }
 
-template<bool Candidate>
+template<b8 Candidate>
 NWB_INLINE SIMDMatrixDouble PerspectiveFov(const f64 angle)noexcept{
     if constexpr(Candidate)
         return MatrixDoublePerspectiveFovLH(angle, 1.75, 0.125, 100.0);
@@ -98,7 +98,7 @@ NWB_INLINE SIMDMatrixDouble PerspectiveFov(const f64 angle)noexcept{
     return matrix;
 }
 
-template<bool Candidate>
+template<b8 Candidate>
 NWB_INLINE SIMDVectorDouble QuaternionNormal(const f64 angle, const SIMDVectorDouble normal = VectorDoubleSet(0.25, -0.5, 0.75, 0.0))noexcept{
     if constexpr(Candidate)
         return QuaternionDoubleRotationNormal(normal, angle);
@@ -112,7 +112,7 @@ NWB_INLINE SIMDVectorDouble QuaternionNormal(const f64 angle, const SIMDVectorDo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<Operation::Enum Kind, bool Candidate>
+template<Operation::Enum Kind, b8 Candidate>
 NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if constexpr(Kind == Operation::Dot2){
         if constexpr(Candidate)
@@ -140,7 +140,7 @@ NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorD
     }
 }
 
-template<Operation::Enum Kind, bool Candidate>
+template<Operation::Enum Kind, b8 Candidate>
 NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     return Reduce<Kind, Candidate>(lhs, rhs);
@@ -156,7 +156,7 @@ u32 VerifyReduction(u64& seed){
     );
 }
 
-template<Operation::Enum Kind, bool Candidate>
+template<Operation::Enum Kind, b8 Candidate>
 NWB_NOINLINE SIMDMatrixDouble EvaluateFactory(const f64 angle)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Kind == Operation::RotationX)
@@ -188,7 +188,7 @@ u32 VerifyFactory(){
         errno = E2BIG;
         const SIMDMatrixDouble actual = EvaluateFactory<Kind, true>(angle);
         const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT), actualErrno = errno;
-        bool equal = true;
+        b8 equal = true;
         for(usize row = 0u; row < 4u; ++row)
             equal = equal && EqualBits(expected.v[row], actual.v[row]);
         if(!equal || expectedFlags != actualFlags || expectedErrno != actualErrno){
@@ -199,7 +199,7 @@ u32 VerifyFactory(){
     return failures;
 }
 
-template<bool Candidate>
+template<b8 Candidate>
 NWB_NOINLINE SIMDVectorDouble EvaluateQuaternionAxis(const SIMDVectorDouble axis, const f64 angle)noexcept{
 #pragma STDC FENV_ACCESS ON
     return QuaternionNormal<Candidate>(angle, axis);
@@ -263,8 +263,8 @@ u32 Verify(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<Operation::Enum Kind, bool Candidate>
-NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations, const bool latency)noexcept{
+template<Operation::Enum Kind, b8 Candidate>
+NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations, const b8 latency)noexcept{
     SIMDVectorDouble accumulators[8];
     for(usize lane = 0u; lane < 8u; ++lane)
         accumulators[lane] = VectorDoubleSet(0.125, 0.25, 0.5, 1.0);
@@ -299,14 +299,14 @@ NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iteratio
     return result;
 }
 
-template<Operation::Enum Kind, bool Candidate>
-void Measure(const Dataset& data, const usize iterations, const bool latency){
+template<Operation::Enum Kind, b8 Candidate>
+void Measure(const Dataset& data, const usize iterations, const b8 latency){
     const usize operations = Kind <= Operation::Sum && !latency ? iterations * 8u : iterations;
     SimdOptimizationBenchmark::Measure(s_OperationNames[Kind], Candidate, latency, operations, [&]()noexcept{ return Workload<Kind, Candidate>(data, iterations, latency); });
 }
 
 template<Operation::Enum Kind>
-void SelectVariant(const Dataset& data, const bool candidate, const usize iterations, const bool latency){
+void SelectVariant(const Dataset& data, const b8 candidate, const usize iterations, const b8 latency){
     if(candidate)
         Measure<Kind, true>(data, iterations, latency);
     else
@@ -335,7 +335,7 @@ int main(const int argc, const char* const* argv){
     const auto options = SimdOptimizationBenchmark::ParseMeasureOptions(argv, Limit<usize>::s_Max, true);
     if(!options)
         return 2;
-    const bool candidate = options->candidate, latency = options->latency;
+    const b8 candidate = options->candidate, latency = options->latency;
     const usize iterations = options->iterations;
     Dataset data{};
     InitializeDataset(data, SimdOptimizationBenchmark::s_InitialSeed);

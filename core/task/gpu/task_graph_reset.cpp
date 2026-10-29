@@ -26,7 +26,7 @@ GpuTaskGraph::ResetCompletionScope::~ResetCompletionScope()noexcept{
 }
 
 void GpuTaskGraph::ResetCompletionScope::activateWithinLock()noexcept{
-    const bool activationValid = !m_active && m_graph.m_teardownInProgress;
+    const b8 activationValid = !m_active && m_graph.m_teardownInProgress;
     NWB_FATAL_ASSERT_MSG(activationValid, "GPU task graph reset completion requires fresh teardown ownership");
     m_active = true;
 }
@@ -42,7 +42,7 @@ void GpuTaskGraph::ResetCompletionScope::complete()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::tryReset(){
+b8 GpuTaskGraph::tryReset(){
     ResetCompletionScope resetCompletion(*this);
     {
         ScopedLock lock(m_lifecycleMutex);
@@ -64,7 +64,7 @@ bool GpuTaskGraph::tryReset(){
         resetCompletion.activateWithinLock();
     }
 
-    const bool taskPayloadsDestroyed = UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
+    const b8 taskPayloadsDestroyed = UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
     if(!taskPayloadsDestroyed)
         return false;
     resetCompletion.complete();
@@ -80,7 +80,7 @@ void GpuTaskGraph::reset(){
 }
 
 void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
-    const bool taskPayloadsDestroyed = destroyTaskPayloadsWithoutCallbacks();
+    const b8 taskPayloadsDestroyed = destroyTaskPayloadsWithoutCallbacks();
     NWB_FATAL_ASSERT_MSG(taskPayloadsDestroyed, "GPU task graph reset cleanup requires terminal task payloads");
 
     destroyTaskStateSnapshots();
@@ -88,7 +88,7 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
     {
         NothrowScopedLock lock(m_lifecycleMutex);
         if(m_activeCompiledGraph && m_activeRecordingPlanGeneration != 0u && m_submissionBindingState == SubmissionBindingState::None){
-            const bool recordingAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, m_activeRecordingAttemptGeneration);
+            const b8 recordingAttemptResolved = m_activeCompiledGraph->resolveRecordingAttempt(*this, m_activeRecordingPlanGeneration, m_activeRecordingAttemptGeneration);
             NWB_FATAL_ASSERT_MSG(recordingAttemptResolved, "GPU task graph reset cleanup must release its exact recording-plan lease");
         }
         m_tasks.clear();

@@ -94,7 +94,7 @@ namespace __hidden_gpu_task_graph_compiler_resource_versions{
     }
 }
 
-[[nodiscard]] static bool RangeContainsVersion(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept{
+[[nodiscard]] static b8 RangeContainsVersion(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept{
     Expected<GpuTaskResourceRange> resolvedOuter = GpuTaskResourceRange{};
     Expected<GpuTaskResourceRange> resolvedInner = GpuTaskResourceRange{};
     if(!(resolvedOuter = ResolvePhysicalRange(graph, resource, outer)) || !(resolvedInner = ResolveVersionRange(graph, resource, inner)))
@@ -112,7 +112,7 @@ namespace __hidden_gpu_task_graph_compiler_resource_versions{
     }
 }
 
-[[nodiscard]] static bool RangeOverlapsVersion(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& physicalRange, const GpuTaskResourceRange& versionRange)noexcept{
+[[nodiscard]] static b8 RangeOverlapsVersion(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& physicalRange, const GpuTaskResourceRange& versionRange)noexcept{
     Expected<GpuTaskResourceRange> resolvedPhysical = GpuTaskResourceRange{};
     Expected<GpuTaskResourceRange> resolvedVersion = GpuTaskResourceRange{};
     if(!(resolvedPhysical = ResolvePhysicalRange(graph, resource, physicalRange)) || !(resolvedVersion = ResolveVersionRange(graph, resource, versionRange)))
@@ -130,7 +130,7 @@ namespace __hidden_gpu_task_graph_compiler_resource_versions{
     }
 }
 
-[[nodiscard]] static bool HasCoveringPhysicalUse(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuTaskGraphResourceVersionView& version, const GpuTaskResourceVersionRole::Enum role)noexcept{
+[[nodiscard]] static b8 HasCoveringPhysicalUse(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuTaskGraphResourceVersionView& version, const GpuTaskResourceVersionRole::Enum role)noexcept{
     const GpuTaskGraphResourceView resource = graph.resourceAt(version.resource.index);
     for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
         const GpuTaskResourceUse& physicalUse = task.resourceUses[useIndex];
@@ -146,7 +146,7 @@ namespace __hidden_gpu_task_graph_compiler_resource_versions{
     return false;
 }
 
-[[nodiscard]] static bool HasOverlappingPhysicalWrite(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuTaskGraphResourceVersionView& version)noexcept{
+[[nodiscard]] static b8 HasOverlappingPhysicalWrite(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuTaskGraphResourceVersionView& version)noexcept{
     const GpuTaskGraphResourceView resource = graph.resourceAt(version.resource.index);
     for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
         const GpuTaskResourceUse& use = task.resourceUses[useIndex];
@@ -177,7 +177,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool build(const Span<const GpuTaskDependencyEdge> edges, const usize taskCount, const usize maximumRowCount){
+    [[nodiscard]] b8 build(const Span<const GpuTaskDependencyEdge> edges, const usize taskCount, const usize maximumRowCount){
         m_wordsPerRow = taskCount == 0u ? 0u : (taskCount - 1u) / s_BitsPerWord + 1u;
         if(m_wordsPerRow != 0u && taskCount > Limit<usize>::s_Max / m_wordsPerRow)
             return false;
@@ -205,7 +205,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool reaches(const GpuTaskId source, const GpuTaskId destination){
+    [[nodiscard]] b8 reaches(const GpuTaskId source, const GpuTaskId destination){
         usize& rowIndex = m_rowIndices[destination.index];
         if(rowIndex == Limit<usize>::s_Max){
             const usize newRowIndex = m_rows.size();
@@ -275,7 +275,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
         return MakeUnexpected(diagnostic);
     };
 
-    bool hasTaskProducedVersions = false;
+    b8 hasTaskProducedVersions = false;
     for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
         const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
         if(!graph.validResource(version.resource) || version.origin >= GpuGraphResourceVersionOrigin::Count){
@@ -469,7 +469,7 @@ Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdg
     }
 
     FrozenResourceVersionReachability semanticReachability(scratchArena);
-    bool semanticReachabilityBuilt = false;
+    b8 semanticReachabilityBuilt = false;
 
     // Overlapping pre-producer writers need a proven semantic/imported order; else consumers precede the writer.
     // Never feed these constraints back: declaration order must not imply intent.

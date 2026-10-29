@@ -89,7 +89,7 @@ protected:
         return m_router.process();
     }
 
-    void key(const Core::Key::Enum key, const bool shift = false){
+    void key(const Core::Key::Enum key, const b8 shift = false){
         EXPECT_TRUE(send({ .position = {}, .key = key, .type = InputEventType::KeyDown, .shift = shift }).commandConsumed);
         EXPECT_TRUE(send({ .position = {}, .key = key, .type = InputEventType::KeyUp, .shift = shift }).commandConsumed);
     }
@@ -99,7 +99,7 @@ protected:
         EXPECT_TRUE(send({ .position = position , .type = InputEventType::PrimaryUp }).pointerConsumed);
     }
 
-    [[nodiscard]] bool install(const PopupScope& scope, const u64 generation){
+    [[nodiscard]] b8 install(const PopupScope& scope, const u64 generation){
         const auto targets = Targets(scope);
         return m_router.commitTargets(targets.data(), targets.size(), generation, &scope, 1u);
     }

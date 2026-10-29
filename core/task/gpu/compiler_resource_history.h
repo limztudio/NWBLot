@@ -55,12 +55,12 @@ public:
 
 
 public:
-    [[nodiscard]] bool append(const TrackedCompiledResourceState& state);
-    [[nodiscard]] bool validFor(const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states)const noexcept{
+    [[nodiscard]] b8 append(const TrackedCompiledResourceState& state);
+    [[nodiscard]] b8 validFor(const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states)const noexcept{
         return &states == &m_states && states.size() == m_links.size();
     }
 
-    [[nodiscard]] bool validResource(const GpuGraphResourceId resource)const noexcept{
+    [[nodiscard]] b8 validResource(const GpuGraphResourceId resource)const noexcept{
         return resource.valid() && resource.generation == m_graphGeneration && resource.index < m_resources.size();
     }
 

@@ -56,7 +56,7 @@ static constexpr AStringView s_EnableCausticsField = "enable_caustics";
 static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
 
 
-[[nodiscard]] static bool CheckOptionalMetadataAssetMap(const Path& nwbFilePath, const Value& asset, const AStringView diagnosticPrefix){
+[[nodiscard]] static b8 CheckOptionalMetadataAssetMap(const Path& nwbFilePath, const Value& asset, const AStringView diagnosticPrefix){
     if(asset.isNull() || asset.isMap())
         return true;
 
@@ -130,7 +130,7 @@ namespace ComponentAssetSerialization{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
+b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
     if(!component.validatePayload())
         return false;
 
@@ -161,7 +161,7 @@ bool Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     const IComponent* const component = CastComponent(&asset);
     if(!component){
         NWB_LOGGER_ERROR(
@@ -174,7 +174,7 @@ bool ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Ass
     return ComponentAssetSerialization::Serialize(*component, outBinary);
 }
 
-bool TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+b8 TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
     ComponentBinaryPayload::TransformComponentPayloadBinary binaryPayload;
     binaryPayload.position = component.position;
     binaryPayload.rotation = component.rotation;
@@ -182,13 +182,13 @@ bool TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes
     return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
 }
 
-bool CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+b8 CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
     ComponentBinaryPayload::CameraComponentPayloadBinary binaryPayload;
     binaryPayload.projection = component.projection;
     return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
 }
 
-bool LightComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+b8 LightComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
     ComponentBinaryPayload::LightComponentPayloadBinary binaryPayload;
     binaryPayload.colorIntensity = component.colorIntensity;
     binaryPayload.range = component.range;
@@ -212,7 +212,7 @@ namespace SceneAssetCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<bool> ParseMetadataBoolField(
+Expected<b8> ParseMetadataBoolField(
     const Path& nwbFilePath,
     const AStringView diagnosticPrefix,
     const Core::Metascript::Value& value,
@@ -230,7 +230,7 @@ Expected<bool> ParseMetadataBoolField(
     return integerValue != 0;
 }
 
-bool ReadOptionalFiniteF32Field(
+b8 ReadOptionalFiniteF32Field(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const AStringView diagnosticPrefix,
@@ -247,7 +247,7 @@ bool ReadOptionalFiniteF32Field(
     return true;
 }
 
-bool ReadOptionalI32Field(
+b8 ReadOptionalI32Field(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const AStringView diagnosticPrefix,

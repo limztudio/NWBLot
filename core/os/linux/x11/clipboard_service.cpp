@@ -62,7 +62,7 @@ X11ClipboardService::~X11ClipboardService()noexcept{
     }
 }
 
-bool X11ClipboardService::initialize(){
+b8 X11ClipboardService::initialize(){
     X11CheckedOperation operation(m_display);
     m_ownerWindow = XCreateSimpleWindow(&m_display, DefaultRootWindow(&m_display), 0, 0, 1, 1, 0, 0, 0);
     if(m_ownerWindow)
@@ -83,7 +83,7 @@ bool X11ClipboardService::initialize(){
     return operation.succeeded() && m_ownerWindow && m_clipboardAtom && m_utf8Atom && m_targetsAtom && m_timestampAtom && m_multipleAtom && m_atomPairAtom && m_textAtom && m_utf8MimeAtom && m_incrementalAtom && m_propertyAtom && m_timeProbeAtom;
 }
 
-bool X11ClipboardService::handleEvent(const XEvent& event){
+b8 X11ClipboardService::handleEvent(const XEvent& event){
     NWB_ASSERT(isOwnerThread());
     if(event.type == SelectionRequest && event.xselectionrequest.owner == m_ownerWindow){
         answerSelection(event.xselectionrequest);
@@ -127,7 +127,7 @@ bool X11ClipboardService::handleEvent(const XEvent& event){
             finishOperation(ClipboardStatus::NativeFailure);
             return true;
         }
-        bool consumed = false;
+        b8 consumed = false;
         for(usize index = m_outgoing.size(); index > 0u; --index){
             if(m_outgoing[index - 1u].requestor == event.xdestroywindow.window){
                 releaseTransfer(index - 1u, false);
@@ -140,7 +140,7 @@ bool X11ClipboardService::handleEvent(const XEvent& event){
 }
 
 ClipboardCapabilities X11ClipboardService::capabilities(const ClipboardChannel::Enum channel)const noexcept{
-    const bool available = m_ownerWindow && (channel == ClipboardChannel::Clipboard || channel == ClipboardChannel::PrimarySelection);
+    const b8 available = m_ownerWindow && (channel == ClipboardChannel::Clipboard || channel == ClipboardChannel::PrimarySelection);
     return { available, available };
 }
 
@@ -166,7 +166,7 @@ void X11ClipboardService::startNativeRequest(const ClipboardRequestToken token, 
             return;
         }
     }
-    bool succeeded = false;
+    b8 succeeded = false;
     {
         X11CheckedOperation checked(m_display);
         m_operationWindow = XCreateSimpleWindow(&m_display, DefaultRootWindow(&m_display), 0, 0, 1, 1, 0, 0, 0);
@@ -241,7 +241,7 @@ void X11ClipboardService::receiveTimestamp(const Time timestamp){
         return;
     }
     OwnedSelection& selection = *MakeNotNull(ownedSelection(m_operationSelection));
-    bool acquired = false;
+    b8 acquired = false;
     {
         X11CheckedOperation checked(m_display);
         XSetSelectionOwner(&m_display, m_operationSelection, m_ownerWindow, timestamp);
@@ -271,7 +271,7 @@ Expected<GlobalUniquePtr<IClipboardService>> CreateX11ClipboardService(Alloc::Gl
     return service;
 }
 
-bool DispatchX11ClipboardEvent(IClipboardService& service, const _XEvent& event){
+b8 DispatchX11ClipboardEvent(IClipboardService& service, const _XEvent& event){
     return MakeNotNull(checked_cast<X11ClipboardService*>(&service))->handleEvent(event);
 }
 

@@ -132,7 +132,7 @@ private:
     }
 
     template<typename T>
-    bool hasComponent(EntityID entityId)const noexcept{
+    b8 hasComponent(EntityID entityId)const noexcept{
         auto* pool = getPool<T>();
         return pool ? pool->has(entityId) : false;
     }
@@ -214,7 +214,7 @@ public:
 
 
 private:
-    bool alive(EntityID entityId)const noexcept{ return m_entityManager.alive(entityId); }
+    b8 alive(EntityID entityId)const noexcept{ return m_entityManager.alive(entityId); }
 
     template<typename T>
     ComponentPool<T>* getPool()noexcept{

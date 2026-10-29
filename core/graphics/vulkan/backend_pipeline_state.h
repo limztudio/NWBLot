@@ -24,7 +24,7 @@ using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::Scr
 struct CreatedPipelineLayout{
     VkPipelineLayout layout = VK_NULL_HANDLE;
     u32 pushConstantByteSize = 0u;
-    bool ownsLayout = false;
+    b8 ownsLayout = false;
 };
 
 struct PipelineBindingState{
@@ -32,7 +32,7 @@ struct PipelineBindingState{
     Array<u32, s_MaxBindingLayouts> m_bindingLayoutSetIndicesAtCreation{};
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     u32 m_pushConstantByteSize = 0;
-    bool m_ownsPipelineLayout = false;
+    b8 m_ownsPipelineLayout = false;
 };
 
 

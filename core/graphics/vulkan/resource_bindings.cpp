@@ -98,7 +98,7 @@ u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context)noexcep
     return (alignment == 0 || alignment > UINT32_MAX) ? 1u : static_cast<u32>(alignment);
 }
 
-Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(const u32 sampleCount, const bool alphaToCoverageEnable, TStringView operationName){
+Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(const u32 sampleCount, const b8 alphaToCoverageEnable, TStringView operationName){
     auto state = MakeVkStruct<VkPipelineMultisampleStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
     if(!IsSupportedSampleCount(sampleCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: sample count {} is unsupported"), operationName, sampleCount);
@@ -196,7 +196,7 @@ Expected<PipelineRenderingInfo> BuildPipelineRenderingInfo(const FramebufferInfo
     return rendering;
 }
 
-void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout){
+void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, b8& ownsPipelineLayout){
     if(pipeline){
         context.deviceDispatch.vkDestroyPipeline(context.device, pipeline, context.allocationCallbacks);
         pipeline = VK_NULL_HANDLE;
@@ -214,13 +214,13 @@ constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(Resou
     return type == ResourceType::Sampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
 }
 
-bool IsDescriptorBufferBackendReady(const VulkanContext& context)noexcept{
+b8 IsDescriptorBufferBackendReady(const VulkanContext& context)noexcept{
     return context.descriptorBufferManager && context.descriptorBufferManager->isEnabled();
 }
 
 Expected<DescriptorBufferSegmentKind::Enum> TryResolveBindlessDescriptorBufferLayout(const BindlessLayoutDesc& desc)noexcept{
     auto segmentKind = DescriptorBufferSegmentKind::None;
-    bool hasDescriptors = false;
+    b8 hasDescriptors = false;
 
     for(const auto& item : desc.registerSpaces){
         NWB_ASSERT(IsSupportedDescriptorBindingType(item.type));
@@ -239,7 +239,7 @@ Expected<DescriptorBufferSegmentKind::Enum> TryResolveBindlessDescriptorBufferLa
     return segmentKind;
 }
 
-bool ValidateDescriptorBufferBindingFootprint(
+b8 ValidateDescriptorBufferBindingFootprint(
     DescriptorBufferManager& manager,
     const VkDescriptorType descriptorType,
     const u32 descriptorCount,
@@ -265,7 +265,7 @@ bool ValidateDescriptorBufferBindingFootprint(
 }
 
 // Global heap resource type; TLAS uses its own immutable one-descriptor layout.
-constexpr bool IsBindlessRegisterSpaceType(ResourceType::Enum type)noexcept{
+constexpr b8 IsBindlessRegisterSpaceType(ResourceType::Enum type)noexcept{
     return IsSupportedDescriptorBindingType(type);
 }
 
@@ -282,7 +282,7 @@ u32 GetPushConstantByteSize(const BindingLayoutDesc& desc)noexcept{
     return pushConstantByteSize;
 }
 
-bool ValidatePushConstantByteSize(const VulkanContext& context, const u32 byteSize, TStringView operationName){
+b8 ValidatePushConstantByteSize(const VulkanContext& context, const u32 byteSize, TStringView operationName){
     if(byteSize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: push constant size is zero"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed push constant operation: size is zero"));

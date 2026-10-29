@@ -52,7 +52,7 @@ struct MeshSkinningBindlessResourceSlots{
 
 
 public:
-    [[nodiscard]] constexpr bool operator==(const MeshSkinningBindlessResourceSlots&)const noexcept = default;
+    [[nodiscard]] constexpr b8 operator==(const MeshSkinningBindlessResourceSlots&)const noexcept = default;
 };
 static_assert(sizeof(MeshSkinningBindlessResourceSlots) == sizeof(u32) * 20u, "MeshSkinning bindless resource slots must stay five uint4 lanes");
 
@@ -94,10 +94,10 @@ struct MeshSkinningGraphDispatchPlan{
     MeshSkinningSubmissionCommit submissionCommit;
     // Acceptance validates this exact selector generation before setting its residency bit.
     MeshSkinningBindlessResourceSlots bindlessResourceSlotsPayload;
-    bool hasActiveSkin = false;
-    bool copiedRestStreams = false;
-    bool updatesMeshletBounds = false;
-    bool repacksNormals = false;
+    b8 hasActiveSkin = false;
+    b8 copiedRestStreams = false;
+    b8 updatesMeshletBounds = false;
+    b8 repacksNormals = false;
 };
 static constexpr usize s_MeshSkinningGraphDispatchPlanByteSize = 520u;
 static_assert(sizeof(MeshSkinningGraphDispatchPlan) == s_MeshSkinningGraphDispatchPlanByteSize, "Graph-owned skinning plans should stay compact");

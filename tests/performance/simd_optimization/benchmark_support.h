@@ -64,7 +64,7 @@ NWB_NOINLINE inline void InitializeDataset(Dataset& dataset, u64 seed)noexcept{
     }
 }
 
-NWB_INLINE bool EqualBits(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+NWB_INLINE b8 EqualBits(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     for(usize lane = 0u; lane < 4u; ++lane){
         if(VectorDoubleGetIntByIndex(lhs, lane) != VectorDoubleGetIntByIndex(rhs, lane))
             return false;
@@ -97,12 +97,12 @@ template<typename Evaluate>
     return observation;
 }
 
-inline bool EqualObservation(const Observation& lhs, const Observation& rhs)noexcept{
+inline b8 EqualObservation(const Observation& lhs, const Observation& rhs)noexcept{
     return EqualBits(lhs.value, rhs.value) && lhs.flags == rhs.flags && lhs.error == rhs.error;
 }
 
 struct NoAdditionalReductionCheck{
-    bool operator()(const SIMDVectorDouble, const SIMDVectorDouble, const Observation&, const Observation&, const usize, u32&)const noexcept{ return true; }
+    b8 operator()(const SIMDVectorDouble, const SIMDVectorDouble, const Observation&, const Observation&, const usize, u32&)const noexcept{ return true; }
 };
 
 template<typename Baseline, typename Candidate, typename Additional = NoAdditionalReductionCheck>
@@ -136,7 +136,7 @@ u32 VerifyReductionCases(u64& seed, const StringView operation, Baseline&& basel
 
 struct VerificationSweep{
     u32 failures;
-    bool environmentAvailable;
+    b8 environmentAvailable;
 };
 
 template<typename Verify>
@@ -167,7 +167,7 @@ VerificationSweep VerifyRoundingModes(Verify&& verify)noexcept(noexcept(DeclVal<
 }
 
 template<typename Workload>
-void Measure(const StringView operation, const bool candidate, const bool latency, const usize operations, Workload&& workload){
+void Measure(const StringView operation, const b8 candidate, const b8 latency, const usize operations, Workload&& workload){
     const Timer start = TimerNow();
     const SIMDVectorDouble result = workload();
     const f64 nanoseconds = DurationInNS<f64>(TimerNow(), start);
@@ -183,16 +183,16 @@ void Measure(const StringView operation, const bool candidate, const bool latenc
 }
 
 struct MeasureOptions{
-    bool candidate;
-    bool latency;
+    b8 candidate;
+    b8 latency;
     usize iterations;
 };
 
-[[nodiscard]] inline Expected<MeasureOptions> ParseMeasureOptions(const char* const* argv, const usize maximumIterations, const bool allowLatency)noexcept{
-    const bool candidate = StringView(argv[3]) == "candidate";
+[[nodiscard]] inline Expected<MeasureOptions> ParseMeasureOptions(const char* const* argv, const usize maximumIterations, const b8 allowLatency)noexcept{
+    const b8 candidate = StringView(argv[3]) == "candidate";
     if(!candidate && StringView(argv[3]) != "baseline")
         return MakeUnexpected(Failure{});
-    const bool latency = StringView(argv[5]) == "latency";
+    const b8 latency = StringView(argv[5]) == "latency";
     if((latency && !allowLatency) || (!latency && StringView(argv[5]) != "throughput"))
         return MakeUnexpected(Failure{});
     const auto parsedIterations = ParseU64(AStringView(argv[4]));

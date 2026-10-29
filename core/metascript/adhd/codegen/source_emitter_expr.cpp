@@ -32,7 +32,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     }
 
     if(IsRegisterPromotableSimdType(expr.resolvedSimdType)){
-        const bool isDirectSimdRegOp = (expr.kind == ExprKind::MemberAccess && expr.isSwizzle)
+        const b8 isDirectSimdRegOp = (expr.kind == ExprKind::MemberAccess && expr.isSwizzle)
             || expr.kind == ExprKind::Unary
             || (expr.kind == ExprKind::Binary && expr.op != TokenType::Equal)
             || (expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier
@@ -105,9 +105,9 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         {
             if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
                 const MStringView lhsSimd = expr.lhs->resolvedSimdType;
-                const bool isDouble = IsDoubleSimdType(lhsSimd);
-                const bool isInt = IsIntSimdType(lhsSimd);
-                const bool isSignedInt = IsSignedIntSimdType(lhsSimd);
+                const b8 isDouble = IsDoubleSimdType(lhsSimd);
+                const b8 isInt = IsIntSimdType(lhsSimd);
+                const b8 isSignedInt = IsSignedIntSimdType(lhsSimd);
                 static constexpr const char* s_LaneSuffix[4] = { "X(", "Y(", "Z(", "W(" };
 
                 if(isSignedInt)
@@ -153,9 +153,9 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         {
             if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
                 const MStringView lhsSimd = expr.lhs->resolvedSimdType;
-                const bool isDouble = IsDoubleSimdType(lhsSimd);
-                const bool isInt = IsIntSimdType(lhsSimd);
-                const bool isSignedInt = IsSignedIntSimdType(lhsSimd);
+                const b8 isDouble = IsDoubleSimdType(lhsSimd);
+                const b8 isInt = IsIntSimdType(lhsSimd);
+                const b8 isSignedInt = IsSignedIntSimdType(lhsSimd);
 
                 if(isSignedInt)
                     out.append(isDouble ? "static_cast<i64>(" : "static_cast<i32>(");
@@ -192,7 +192,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
                 && IsRegisterPromotableSimdType(expr.arguments[0]->resolvedSimdType))
             {
                 const MStringView argSimd = expr.arguments[0]->resolvedSimdType;
-                const bool isDouble = IsDoubleSimdType(argSimd);
+                const b8 isDouble = IsDoubleSimdType(argSimd);
                 const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0]);
                 out.append(isDouble ? "::VectorDoubleGetX(" : "::VectorGetX(");
                 if(callee == "dot"){
@@ -280,7 +280,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         }
         out.push_back('(');
         u32 ctorVecLanes = 0u;
-        const bool isScalarSplatCtor = !baseCallee.empty()
+        const b8 isScalarSplatCtor = !baseCallee.empty()
             && (m_symbols.isSimdVectorType(baseCallee, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseCallee, ctorVecLanes))
             && expr.arguments.size() == 1u && expr.arguments[0]
             && expr.arguments[0]->resolvedSimdType.empty();

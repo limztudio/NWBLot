@@ -56,7 +56,7 @@ struct GpuTaskGraphExternalResourceHandoff{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return planGeneration != 0u && resource.valid() && destinationQueue.valid() && finalState != ResourceStates::Unknown && producerCount != 0u && producers && waitTokenCount != 0u && waitTokens && terminalRangeCount != 0u && terminalRanges && stateSource;
     }
 };
@@ -79,8 +79,8 @@ public:
 
 public:
     [[nodiscard]] const GpuTaskGraphExternalResourceHandoff* value()const noexcept;
-    [[nodiscard]] bool valid()const noexcept;
-    [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
+    [[nodiscard]] b8 valid()const noexcept;
+    [[nodiscard]] b8 validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
 
 
 private:

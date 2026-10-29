@@ -94,7 +94,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcess
     ASSERT_TRUE(placements);
     ASSERT_FALSE(placements->empty());
     const CpuWorkerPlacement placement = placements->back();
-    bool applied = false;
+    b8 applied = false;
     u32 usableCount = 0u;
     Expected<InteropVector<CpuWorkerPlacement>> restrictedPlacements = MakeUnexpected(Failure{});
     JoiningThread worker([&](){

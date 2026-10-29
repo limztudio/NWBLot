@@ -23,8 +23,8 @@ inline constexpr f32 s_TextAreaDefaultHeight = 160.0f;
 struct TextAreaOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
     LayoutSize height = { LayoutSizePolicy::Fixed, s_TextAreaDefaultHeight };
-    bool enabled = true;
-    bool readOnly = false;
+    b8 enabled = true;
+    b8 readOnly = false;
     f32 wheelLines = s_StyleScrollWheelStep;
 };
 
@@ -55,9 +55,9 @@ public:
 
     [[nodiscard]] const EditNavigationState& navigation()const noexcept{ return m_navigation; }
 
-    [[nodiscard]] bool focused()const noexcept{ return m_visual.focused; }
+    [[nodiscard]] b8 focused()const noexcept{ return m_visual.focused; }
     // Explicit scrolling suppresses caret reveal until a later accepted text, selection or ownership intent.
-    [[nodiscard]] bool scrollTo(Point scroll)noexcept;
+    [[nodiscard]] b8 scrollTo(Point scroll)noexcept;
     void reset()noexcept;
 
 
@@ -72,7 +72,7 @@ private:
     u64 m_revision = 1u;
     u64 m_compositionGeneration = 0u;
     f32 m_scrollY = 0.0f;
-    bool m_revealCaret = true;
+    b8 m_revealCaret = true;
 };
 
 

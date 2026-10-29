@@ -27,8 +27,8 @@ OpaqueEmulationMergeValidator::OpaqueEmulationMergeValidator(NotNull<RendererFra
 void OpaqueEmulationMergeValidator::validate(
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
     const Span<const Core::GpuTaskId> timingTasks,
-    bool timingBindingsValid,
-    bool hasOpaqueCsgFrameWork,
+    b8 timingBindingsValid,
+    b8 hasOpaqueCsgFrameWork,
     OpaqueEmulationMergeValidationResult& outResult
 )const noexcept{
     RendererFramePipeline& pipeline = *m_pipeline;

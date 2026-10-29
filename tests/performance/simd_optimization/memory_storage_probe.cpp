@@ -141,7 +141,7 @@ NWB_INLINE void CandidateCopy(void* destination, usize capacity, const void* sou
 #endif
 }
 
-NWB_INLINE bool CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
+NWB_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
 #if defined(NWB_HAS_AVX)
     const __m256i left = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(lhs.get()));
     const __m256i right = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rhs.get()));
@@ -155,7 +155,7 @@ NWB_INLINE bool CandidateEqual(const NotNull<const u64*> lhs, const NotNull<cons
 }
 
 // Preserve an inexpensive first-word rejection before the full-width exact-bit reduction.
-NWB_INLINE bool CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
+NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
     if(lhs.get()[0] != rhs.get()[0])
         return false;
     return CandidateEqual(lhs, rhs);
@@ -165,7 +165,7 @@ NWB_INLINE bool CandidateEqualFirstWord(const NotNull<const u64*> lhs, const Not
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool CheckRange(const u8* bytes, usize length, usize start, usize count, usize sourceStart)noexcept{
+[[nodiscard]] b8 CheckRange(const u8* bytes, usize length, usize start, usize count, usize sourceStart)noexcept{
     for(usize index = 0u; index < length; ++index){
         const u8 expected = index >= start && index - start < count ? PatternByte(sourceStart + index - start) : s_Poison;
         if(bytes[index] != expected)
@@ -174,7 +174,7 @@ NWB_INLINE bool CandidateEqualFirstWord(const NotNull<const u64*> lhs, const Not
     return true;
 }
 
-[[nodiscard]] bool QualifyCopyBytes(){
+[[nodiscard]] b8 QualifyCopyBytes(){
     constexpr usize s_Bytes = 16640u;
     AlignedBytes source(s_Bytes), destination(s_Bytes);
     for(usize index = 0u; index < s_Bytes; ++index)
@@ -194,7 +194,7 @@ NWB_INLINE bool CandidateEqualFirstWord(const NotNull<const u64*> lhs, const Not
             return false;
     }
     for(const usize count : { 16u, 32u, 48u, 64u, 128u, 4096u }){
-        for(const bool destinationFirst : { false, true }){
+        for(const b8 destinationFirst : { false, true }){
             for(usize index = 0u; index < s_Bytes; ++index)
                 destination.data.get()[index] = PatternByte(index);
             const usize destinationStart = destinationFirst ? 0u : count, sourceStart = destinationFirst ? count : 0u;
@@ -249,7 +249,7 @@ public:
 
 static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
 
-[[nodiscard]] bool RejectedBeforeAccess(void* destination, usize capacity, const void* source, usize count)noexcept{
+[[nodiscard]] b8 RejectedBeforeAccess(void* destination, usize capacity, const void* source, usize count)noexcept{
     const pid_t child = fork();
     if(child < 0)
         return false;
@@ -263,15 +263,15 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
     return waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == s_AbortExit;
 }
 
-[[nodiscard]] bool QualifyProtectedRanges()noexcept{
+[[nodiscard]] b8 QualifyProtectedRanges()noexcept{
     GuardedBytes source, destination;
     if(source.accessibleBytes < s_QualifyLengths[sizeof(s_QualifyLengths) / sizeof(s_QualifyLengths[0]) - 1u])
         return false;
     for(usize index = 0u; index < source.accessibleBytes; ++index)
         source.data[index] = PatternByte(index);
     for(const usize count : s_QualifyLengths){
-        for(const bool sourceAtEnd : { false, true }){
-            for(const bool destinationAtEnd : { false, true }){
+        for(const b8 sourceAtEnd : { false, true }){
+            for(const b8 destinationAtEnd : { false, true }){
                 NWB_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
                 const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~usize{ 15u } : 0u;
                 const usize destinationStart = destinationAtEnd ? (destination.accessibleBytes - count) & ~usize{ 15u } : 0u;
@@ -281,8 +281,8 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
             }
         }
     }
-    for(const bool sourceAtEnd : { false, true }){
-        for(const bool destinationAtEnd : { false, true }){
+    for(const b8 sourceAtEnd : { false, true }){
+        for(const b8 destinationAtEnd : { false, true }){
             const auto left = MakeNotNull(::new(sourceAtEnd ? source.upperGuard - 32u : source.data) u64[4u]);
             const auto right = MakeNotNull(::new(destinationAtEnd ? destination.upperGuard - 32u : destination.data) u64[4u]);
             for(usize lane = 0u; lane < 4u; ++lane)
@@ -312,13 +312,13 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
 }
 #endif
 
-[[nodiscard]] bool QualifyEquality()noexcept{
+[[nodiscard]] b8 QualifyEquality()noexcept{
 #pragma STDC FENV_ACCESS ON
     const auto original = HoldFloatingPointExceptions();
     if(!original)
         return false;
     alignas(64) u64 lhs[8]{}, rhs[8]{};
-    bool valid = true;
+    b8 valid = true;
     constexpr u64 s_Patterns[]{ 0u, ~u64{ 0u }, 0x8000000000000000ull, 0x7FF0000000000001ull, 0x0000000000000001ull, 0x0123456789ABCDEFull };
     for(const u64 pattern : s_Patterns){
         for(usize offset = 0u; offset < 4u; ++offset){
@@ -339,11 +339,11 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
     if(TestFloatingPointExceptions(FE_ALL_EXCEPT) != 0 || !RaiseFloatingPointExceptions(FE_DIVBYZERO))
         valid = false;
     // Opaque call targets prevent either predicate from being removed between the pre-existing flag and its observation.
-    bool(*volatile wideFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = CandidateEqual;
-    bool(*volatile firstWordFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = CandidateEqualFirstWord;
-    const bool wideEqual = wideFunction(MakeNotNull(lhs), MakeNotNull(rhs));
+    b8(*volatile wideFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = CandidateEqual;
+    b8(*volatile firstWordFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = CandidateEqualFirstWord;
+    const b8 wideEqual = wideFunction(MakeNotNull(lhs), MakeNotNull(rhs));
     const i32 wideFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    const bool firstWordEqual = firstWordFunction(MakeNotNull(lhs), MakeNotNull(rhs));
+    const b8 firstWordEqual = firstWordFunction(MakeNotNull(lhs), MakeNotNull(rhs));
     const i32 firstWordFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!wideEqual || !firstWordEqual || wideFlags != FE_DIVBYZERO || firstWordFlags != FE_DIVBYZERO)
         valid = false;
@@ -357,7 +357,7 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
 
 
 // Hot operations inline into the batch so per-call vzeroupper/ABI overhead does not substitute for the production callsite behavior.
-template<bool Candidate, usize FixedCount = 0u>
+template<b8 Candidate, usize FixedCount = 0u>
 NWB_NOINLINE void CopyBatch(u8* destination, const u8* source, usize slots, usize stride, usize bytes, usize iterations)noexcept{
     usize slot = 0u;
     for(usize iteration = 0u; iteration < iterations; ++iteration){
@@ -372,7 +372,7 @@ NWB_NOINLINE void CopyBatch(u8* destination, const u8* source, usize slots, usiz
     }
 }
 
-template<bool Candidate, bool FirstWord = false>
+template<b8 Candidate, b8 FirstWord = false>
 NWB_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, usize slots, usize stride, usize iterations)noexcept{
     usize slot = 0u;
     u64 total = 0u;
@@ -413,7 +413,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
 
 void BenchCopy(usize samples){
     NWB_COUT << "kind,cache,bytes,source_offset,destination_offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
-    for(const bool streaming : { false, true }){
+    for(const b8 streaming : { false, true }){
         for(const usize bytes : s_BenchLengths){
             const usize stride = (bytes + 127u) & ~usize{ 63u };
             const usize slots = streaming ? s_StreamingBytes / stride : 1u;
@@ -451,10 +451,10 @@ void BenchCopy(usize samples){
     }
 }
 
-void BenchEquality(usize samples, bool firstWord){
+void BenchEquality(usize samples, b8 firstWord){
     const auto candidate = MakeNotNull<EqualityBatchFunction>(firstWord ? EqualityBatch<true, true> : EqualityBatch<true>);
     NWB_COUT << "kind,cache,case,offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
-    for(const bool streaming : { false, true }){
+    for(const b8 streaming : { false, true }){
         const usize slots = streaming ? s_StreamingBytes / 64u : 1u;
         AlignedBytes left(slots * 64u + 64u), right(slots * 64u + 64u);
         const auto lhs = MakeNotNull(::new(left.data.get()) u64[slots * 8u + 8u]);

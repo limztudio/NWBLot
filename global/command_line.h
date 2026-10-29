@@ -14,7 +14,7 @@
 
 
 template<typename CharT>
-[[nodiscard]] inline bool CommandLineHasValidArgv(const isize argc, CharT** argv)noexcept{
+[[nodiscard]] inline b8 CommandLineHasValidArgv(const isize argc, CharT** argv)noexcept{
     return argc > 0 && argv != nullptr && argv[0] != nullptr;
 }
 
@@ -42,17 +42,17 @@ template<typename StringT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsConfirmYesText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 IsConfirmYesText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return text == BasicStringView<CharT>("y") || text == BasicStringView<CharT>("yes") || text == BasicStringView<CharT>("true") || text == BasicStringView<CharT>("1");
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsConfirmNoText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 IsConfirmNoText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return text == BasicStringView<CharT>("n") || text == BasicStringView<CharT>("no") || text == BasicStringView<CharT>("false") || text == BasicStringView<CharT>("0");
 }
 
 template<typename CharT>
-[[nodiscard]] inline Expected<bool> ParseConfirmText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline Expected<b8> ParseConfirmText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     if(IsConfirmYesText(text))
         return true;
     if(IsConfirmNoText(text))

@@ -40,9 +40,9 @@ static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
 template<typename Payload>
 static void ConfirmCausticAccumulatorClears(Payload& payload)noexcept(
-    noexcept(static_cast<bool>(payload.graphOwnsNonTemporalAccumulatorClear))
+    noexcept(static_cast<b8>(payload.graphOwnsNonTemporalAccumulatorClear))
     && noexcept(payload.raytracingSystem.confirmCausticAccumulatorNonTemporalClear())
-    && noexcept(static_cast<bool>(payload.graphOwnsAccumulatorBootstrapClear && payload.causticProducerDispatched))
+    && noexcept(static_cast<b8>(payload.graphOwnsAccumulatorBootstrapClear && payload.causticProducerDispatched))
     && noexcept(payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear())
 ){
     if(payload.graphOwnsNonTemporalAccumulatorClear)
@@ -61,22 +61,22 @@ struct CausticAccumulatorDecayGraphTask{
         Core::GraphicsRuntime& graphics;
         DeferredFrameTargets& targets;
         ECSRenderDetail::MeshViewBufferSnapshot meshView;
-        const bool& shadowVisibilityPrepared;
+        const b8& shadowVisibilityPrepared;
         Core::GpuTimingSubmissionTicket& timingTicket;
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
         f32 decayFactor = 0.f;
-        bool hardwareCaustics = false;
+        b8 hardwareCaustics = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
 
         // Match the producer's no-work behavior: keep the dep, but skip dispatch unless the producer would run.
         if(!payload.shadowVisibilityPrepared)
             return true;
-        const bool hasWork = payload.hardwareCaustics ? payload.raytracingSystem.hasHwCausticWork(payload.meshView) : payload.raytracingSystem.hasCausticWork(payload.meshView);
+        const b8 hasWork = payload.hardwareCaustics ? payload.raytracingSystem.hasHwCausticWork(payload.meshView) : payload.raytracingSystem.hasCausticWork(payload.meshView);
         if(!hasWork)
             return true;
 
@@ -86,7 +86,7 @@ public:
         payload.causticPhotonTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, payload.graphics.getDevice(), commandList);
         if(!Core::FinishSplitGpuTimingMarker(&payload.causticPhotonTiming))
             return false;
-        const bool dispatched = payload.raytracingSystem.dispatchCausticAccumulatorDecay(commandList, payload.targets, payload.decayFactor);
+        const b8 dispatched = payload.raytracingSystem.dispatchCausticAccumulatorDecay(commandList, payload.targets, payload.decayFactor);
         if(!dispatched){
             Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned caustic accumulator decay pass failed"));
@@ -101,7 +101,7 @@ public:
 
 // Caustic producers own typed graph-task payloads; RendererFramePipeline composes their packet chain.
 // The renderer still supplies declaration-filtered external state until the graph has every producer in the same frame transaction.
-template<bool Hardware>
+template<b8 Hardware>
 struct CausticProducerGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -112,16 +112,16 @@ struct CausticProducerGraphTask{
         DeferredLightingGraphResources deferredLightingResources;
         ECSRenderDetail::MeshViewBufferSnapshot meshView;
         Core::GpuTimingSubmissionTicket& timingTicket;
-        const bool& shadowVisibilityPrepared;
+        const b8& shadowVisibilityPrepared;
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
-        bool graphOwnsAccumulatorBootstrapClear = false;
-        bool graphOwnsNonTemporalAccumulatorClear = false;
-        bool& causticProducerDispatched;
+        b8 graphOwnsAccumulatorBootstrapClear = false;
+        b8 graphOwnsNonTemporalAccumulatorClear = false;
+        b8& causticProducerDispatched;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         payload.causticProducerDispatched = false;
         if(!payload.deferredLightingResources.valid())
@@ -130,7 +130,7 @@ public:
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         // Typed clears and warm decay precede photons; acceptance publishes their CPU lifecycle.
         if(payload.shadowVisibilityPrepared){
-            bool causticsDispatched;
+            b8 causticsDispatched;
             if constexpr(Hardware)
                 causticsDispatched = payload.raytracingSystem.renderHwCaustics(commandList, payload.meshView, payload.targets, &payload.causticPhotonTiming);
             else
@@ -177,13 +177,13 @@ struct CausticGeometryDownsampleGraphTask{
         Core::GraphicsRuntime& graphics;
         DeferredFrameTargets& targets;
         Core::GpuTimingSubmissionTicket& timingTicket;
-        const bool& causticProducerDispatched;
+        const b8& causticProducerDispatched;
         Optional<Core::GpuTimingMeasure>& causticResolveTiming;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         Core::DiscardGpuTimingMeasure(&payload.causticResolveTiming);
         if(!payload.causticProducerDispatched)
@@ -207,7 +207,7 @@ public:
 struct CausticResolveRecordInputs{
     RendererRayTracingSystem& raytracingSystem;
     DeferredFrameTargets& targets;
-    const bool& causticProducerDispatched;
+    const b8& causticProducerDispatched;
     CausticResolveActivitySnapshot activity;
 };
 
@@ -222,7 +222,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept(noexcept((payload.raytracingSystem.*Dispatch)(commandList, payload.targets))){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept(noexcept((payload.raytracingSystem.*Dispatch)(commandList, payload.targets))){
         static_cast<void>(context);
         if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
             return false;
@@ -243,7 +243,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
             return false;
@@ -270,13 +270,13 @@ struct CausticResolveGraphTask{
     // All bindings are required: resolve always closes the caustic-resolve timing against this frame's ticket.
     struct Payload{
         Core::GpuTimingSubmissionTicket& timingTicket;
-        const bool& causticProducerDispatched;
+        const b8& causticProducerDispatched;
         Optional<Core::GpuTimingMeasure>& causticResolveTiming;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         // No-producer contract: the graph-owned irradiance clear wins, no resolve dispatch when the producer never recorded.
         if(!payload.causticProducerDispatched){
@@ -332,7 +332,7 @@ inline void DispatchCausticResolvePass(
     NWB_ASSERT(input.texture != output.texture);
     // Sequence indices match the graph: prepare, five wavelets, then upsample.
     const u32 activityPassIndex = stage == CausticResolveStage::Wavelet ? static_cast<u32>(CountTrailingZeros(stepWidth)) + 1u : (stage == CausticResolveStage::PrepareDownsample ? 0u : NWB_CAUSTIC_RESOLVE_PASS_COUNT + 1u);
-    const bool usesActivity = activity.valid();
+    const b8 usesActivity = activity.valid();
     const i32 activityInput = usesActivity && activityPassIndex > 0u ? static_cast<i32>((activityPassIndex - 1u) % 2u) : -1;
     const i32 activityOutput = usesActivity && activityPassIndex <= NWB_CAUSTIC_RESOLVE_PASS_COUNT ? static_cast<i32>(activityPassIndex % 2u) : -1;
 

@@ -44,7 +44,7 @@ inline constexpr usize s_CommandIrClearTextureOffset = s_CommandIrClearBufferOff
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool CaptureAllBuiltinCommandIrRecords(Graphics::GpuCommandIrCapture& capture);
+[[nodiscard]] b8 CaptureAllBuiltinCommandIrRecords(Graphics::GpuCommandIrCapture& capture);
 
 void CopyCommandIrBytes(Graphics::GraphicsBytes& outBytes, const BinaryByteView source);
 

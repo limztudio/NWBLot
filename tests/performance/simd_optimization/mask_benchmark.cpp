@@ -49,35 +49,35 @@ NWB_INLINE u32 NWB_SIMD_CALL BaselineMoveDouble(SIMDVectorDouble value)noexcept{
 #endif
 }
 
-template<bool Candidate>
+template<b8 Candidate>
 NWB_INLINE u32 MoveDouble(const SIMDVectorDouble value)noexcept{
     if constexpr(Candidate)
         return VectorDoubleMoveMask(value);
     return BaselineMoveDouble(value);
 }
 
-template<bool Candidate>
-NWB_INLINE bool EqualFloat4(const SIMDVectorSingle a, const SIMDVectorSingle b)noexcept{
+template<b8 Candidate>
+NWB_INLINE b8 EqualFloat4(const SIMDVectorSingle a, const SIMDVectorSingle b)noexcept{
     if constexpr(Candidate)
         return Vector4Equal(a, b);
     return (VectorMoveMask(VectorEqual(a, b)) & VectorComponentMask::s_XYZW) == VectorComponentMask::s_XYZW;
 }
 
-template<bool Candidate>
-NWB_INLINE bool EqualDouble4(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
+template<b8 Candidate>
+NWB_INLINE b8 EqualDouble4(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
     if constexpr(Candidate)
         return VectorDouble4Equal(a, b);
     return (BaselineMoveDouble(VectorDoubleEqual(a, b)) & VectorDoubleComponentMask::s_DoubleXYZW) == VectorDoubleComponentMask::s_DoubleXYZW;
 }
 
-template<bool Candidate>
-NWB_INLINE bool EqualDouble3(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
+template<b8 Candidate>
+NWB_INLINE b8 EqualDouble3(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
     if constexpr(Candidate)
         return VectorDouble3Equal(a, b);
     return (BaselineMoveDouble(VectorDoubleEqual(a, b)) & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ;
 }
 
-template<Operation::Enum Kind, bool Candidate>
+template<Operation::Enum Kind, b8 Candidate>
 NWB_NOINLINE u32 Observe(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Kind == Operation::Move)
@@ -159,7 +159,7 @@ NWB_NOINLINE void InitializeDataset(Dataset& dataset)noexcept{
     }
 }
 
-template<Operation::Enum Kind, bool Candidate>
+template<Operation::Enum Kind, b8 Candidate>
 NWB_INLINE u32 Apply(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
     if constexpr(Kind == Operation::Move)
         return MoveDouble<Candidate>(a);
@@ -171,8 +171,8 @@ NWB_INLINE u32 Apply(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept
         return EqualDouble3<Candidate>(a, b);
 }
 
-template<Operation::Enum Kind, bool Candidate>
-NWB_NOINLINE u64 Workload(const Dataset& data, const usize iterations, const bool latency)noexcept{
+template<Operation::Enum Kind, b8 Candidate>
+NWB_NOINLINE u64 Workload(const Dataset& data, const usize iterations, const b8 latency)noexcept{
     u64 results[8]{};
     if(latency){
         usize index = 1u;
@@ -195,8 +195,8 @@ NWB_NOINLINE u64 Workload(const Dataset& data, const usize iterations, const boo
     return checksum;
 }
 
-template<Operation::Enum Kind, bool Candidate>
-void Measure(const Dataset& data, const usize iterations, const bool latency){
+template<Operation::Enum Kind, b8 Candidate>
+void Measure(const Dataset& data, const usize iterations, const b8 latency){
     const Timer start = TimerNow();
     const u64 checksum = Workload<Kind, Candidate>(data, iterations, latency);
     const f64 nanoseconds = DurationInNS<f64>(TimerNow(), start);
@@ -209,7 +209,7 @@ void Measure(const Dataset& data, const usize iterations, const bool latency){
 }
 
 template<Operation::Enum Kind>
-void SelectVariant(const Dataset& data, const bool candidate, const usize iterations, const bool latency){
+void SelectVariant(const Dataset& data, const b8 candidate, const usize iterations, const b8 latency){
     if(candidate)
         Measure<Kind, true>(data, iterations, latency);
     else
@@ -236,7 +236,7 @@ int main(const int argc, const char* const* argv){
     }
     if(argc != 6 || StringView(argv[1]) != "--measure")
         return 2;
-    const bool candidate = StringView(argv[3]) == "candidate", latency = StringView(argv[5]) == "latency";
+    const b8 candidate = StringView(argv[3]) == "candidate", latency = StringView(argv[5]) == "latency";
     if((!candidate && StringView(argv[3]) != "baseline") || (!latency && StringView(argv[5]) != "throughput"))
         return 2;
     const auto parsedIterations = ParseU64(AStringView(argv[4]));

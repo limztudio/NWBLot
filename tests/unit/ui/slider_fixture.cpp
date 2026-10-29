@@ -129,19 +129,19 @@ void SliderFixture::configureSliderSkin(){
     m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 192u, 32u, 1.0f, Move(regions));
 }
 
-bool SliderFixture::declare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
+b8 SliderFixture::declare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
     return begin(generation) && m_builder.beginPanel(s_SliderPanelKey, bounds) && m_builder.slider(s_SliderKey, m_state, settings);
 }
 
-bool SliderFixture::prepare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
+b8 SliderFixture::prepare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
     return declare(generation, settings, bounds) && finishPanel();
 }
 
-bool SliderFixture::accept(const u64 generation, const SliderOptions& settings, const Rect& bounds){
+b8 SliderFixture::accept(const u64 generation, const SliderOptions& settings, const Rect& bounds){
     return prepare(generation, settings, bounds) && m_context.commitFrame(generation);
 }
 
-bool SliderFixture::sibling(const AStringView key){
+b8 SliderFixture::sibling(const AStringView key){
     return m_builder.virtualList(key, m_laterSource, m_laterState, SiblingOptions()).valid;
 }
 
@@ -181,7 +181,7 @@ SliderAcceptedFrame SliderFixture::accepted()const noexcept{
     return saved;
 }
 
-void SliderFixture::expectAccepted(const SliderAcceptedFrame& saved, const bool popupFocus)const{
+void SliderFixture::expectAccepted(const SliderAcceptedFrame& saved, const b8 popupFocus)const{
     EXPECT_EQ(m_context.input().layoutGeneration(), saved.generation);
     if(popupFocus){
         EXPECT_EQ(m_context.input().popupCount(), saved.popupCount);

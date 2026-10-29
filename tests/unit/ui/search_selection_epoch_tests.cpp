@@ -40,7 +40,7 @@ public:
         m_caret = m_query.caret();
     }
 
-    [[nodiscard]] bool apply()noexcept{
+    [[nodiscard]] b8 apply()noexcept{
         const SelectionMutation::Enum mutation = m_mutation;
         m_mutation = SelectionMutation::None;
         if(mutation == SelectionMutation::None)
@@ -81,7 +81,7 @@ public:
 
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return m_source.indexOf(key); }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const override{
         return m_source.findEnabled(start, reverse);
     }
 
@@ -92,7 +92,7 @@ public:
         return m_source.text(index);
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{ return m_source.enabled(index); }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const override{ return m_source.enabled(index); }
 
     void arm(const SelectionMutation::Enum mutation)noexcept{ m_probe.arm(mutation); }
 
@@ -127,15 +127,15 @@ public:
 
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_source.indexOf(key); }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
         return m_source.findEnabled(start, reverse);
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return m_source.text(index); }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{ return m_source.enabled(index); }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const override{ return m_source.enabled(index); }
 
-    [[nodiscard]] virtual bool filter(const AStringView query)override{
+    [[nodiscard]] virtual b8 filter(const AStringView query)override{
         return m_probe.apply() && m_source.filter(query);
     }
 
@@ -166,14 +166,14 @@ public:
 
 
 protected:
-    [[nodiscard]] bool declareEpochSearch(const u64 generation){
+    [[nodiscard]] b8 declareEpochSearch(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }))
             return false;
         m_searchResult = m_builder.searchComboBox("combo", m_epochSource, m_search, Options());
         return m_searchResult.combo.valid;
     }
 
-    [[nodiscard]] bool acceptInitial(){
+    [[nodiscard]] b8 acceptInitial(){
         m_search.combo().select(4u);
         m_search.combo().open();
         if(!m_search.query().setText(s_SecondHalfQuery) || !m_search.query().setSelection(1u, 4u))
@@ -192,7 +192,7 @@ protected:
         return true;
     }
 
-    void expectPreservedApplicationState(const bool focusRetired = false){
+    void expectPreservedApplicationState(const b8 focusRetired = false){
         EXPECT_EQ(m_search.query().text(), s_SecondHalfQuery);
         EXPECT_EQ(m_search.query().anchor(), 1u);
         EXPECT_EQ(m_search.query().caret(), 4u);

@@ -43,7 +43,7 @@ public:
 
 private:
     GpuTimingMeasure& m_measure;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 class GpuTimingMeasureFinishTimingUnwindScope final : NoCopy{
@@ -63,7 +63,7 @@ public:
 
 private:
     GpuTimingMeasure& m_measure;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 
@@ -84,7 +84,7 @@ GpuTimingFrameTransaction::~GpuTimingFrameTransaction()noexcept{
     abandonWithoutCallbacks();
 }
 
-bool GpuTimingFrameTransaction::begin(const GpuTimingScopeDefinition& scopeDefinition, Device& device, CommandList& commandList, const GpuTimingSampleAttribution attribution){
+b8 GpuTimingFrameTransaction::begin(const GpuTimingScopeDefinition& scopeDefinition, Device& device, CommandList& commandList, const GpuTimingSampleAttribution attribution){
     if(m_state != State::Idle)
         return false;
     if(&commandList.getDevice() != &device){
@@ -106,7 +106,7 @@ bool GpuTimingFrameTransaction::begin(const GpuTimingScopeDefinition& scopeDefin
     return true;
 }
 
-bool GpuTimingFrameTransaction::recordEnd(CommandList& commandList){
+b8 GpuTimingFrameTransaction::recordEnd(CommandList& commandList){
     if(m_state == State::Inactive)
         return true;
     if(m_state != State::BeginRecorded && m_state != State::BeginAccepted)
@@ -123,7 +123,7 @@ bool GpuTimingFrameTransaction::recordEnd(CommandList& commandList){
     return true;
 }
 
-bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToken& token)noexcept{
+b8 GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToken& token)noexcept{
     if(m_state == State::Inactive || m_state == State::Resolved)
         return true;
 
@@ -136,7 +136,7 @@ bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToke
     }
 
     if(m_beginSubmission.valid()){
-        const bool matches = m_beginSubmission == token;
+        const b8 matches = m_beginSubmission == token;
         if(!matches){
             m_recorder.quarantineScope(m_scope);
             m_scope = {};
@@ -151,11 +151,11 @@ bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToke
     return true;
 }
 
-bool GpuTimingFrameTransaction::confirmEndSubmission(const QueueSubmissionToken& token, const bool publishSample)noexcept{
+b8 GpuTimingFrameTransaction::confirmEndSubmission(const QueueSubmissionToken& token, const b8 publishSample)noexcept{
     if(m_state == State::Inactive || m_state == State::Resolved)
         return true;
 
-    const bool orderedSameQueue = m_beginSubmission.valid()
+    const b8 orderedSameQueue = m_beginSubmission.valid()
         && m_beginSubmission.hasPhysicalQueueIdentity()
         && token.valid()
         && token.hasPhysicalQueueIdentity()
@@ -176,11 +176,11 @@ bool GpuTimingFrameTransaction::confirmEndSubmission(const QueueSubmissionToken&
     return true;
 }
 
-bool GpuTimingFrameTransaction::needsRetirement()const noexcept{
+b8 GpuTimingFrameTransaction::needsRetirement()const noexcept{
     return m_beginSubmission.valid() && m_scope.valid();
 }
 
-bool GpuTimingFrameTransaction::prepareForRecovery()noexcept{
+b8 GpuTimingFrameTransaction::prepareForRecovery()noexcept{
     if(!needsRetirement())
         return true;
 
@@ -265,8 +265,8 @@ GpuTimingMeasure::~GpuTimingMeasure()noexcept{
     abandonMarker();
 }
 
-bool GpuTimingMeasure::finishMarker(){
-    const bool finished = !m_marker.valid() || m_commandList.endMarkerLease(m_marker);
+b8 GpuTimingMeasure::finishMarker(){
+    const b8 finished = !m_marker.valid() || m_commandList.endMarkerLease(m_marker);
     m_marker = {};
     return finished;
 }

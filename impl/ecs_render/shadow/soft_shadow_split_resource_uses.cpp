@@ -20,13 +20,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInputs& inputs, SoftShadowSplitResourceUses& uses){
+b8 SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInputs& inputs, SoftShadowSplitResourceUses& uses){
     using namespace RendererTaskGraphDetail;
 
     const SoftShadowSplitRoute& route = inputs.route;
-    const bool hardwareTransparentTrace = inputs.rayTracingPlan.hardwareTransparentTrace;
-    const bool softShadowHistoryReadable = inputs.rayTracingPlan.softShadowHistoryReadable;
-    const bool opaqueHistoryFrontIsA = inputs.rayTracingPlan.historyFrontIsA;
+    const b8 hardwareTransparentTrace = inputs.rayTracingPlan.hardwareTransparentTrace;
+    const b8 softShadowHistoryReadable = inputs.rayTracingPlan.softShadowHistoryReadable;
+    const b8 opaqueHistoryFrontIsA = inputs.rayTracingPlan.historyFrontIsA;
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_graph.importTexture(texture, TextureResourceDesc(identity, label));
     };
@@ -217,7 +217,7 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
     }
 
     uses.graphOwnsTransparentTemporalMergeEntryStates = inputs.rayTracingPlan.transparentTemporalMergeReady;
-    const bool transparentHistoryFrontIsA = inputs.rayTracingPlan.historyFrontIsA;
+    const b8 transparentHistoryFrontIsA = inputs.rayTracingPlan.historyFrontIsA;
     const Core::GpuGraphResourceId transparentHistoryIn = transparentHistoryFrontIsA ? transparentHistoryA : transparentHistoryB;
     const Core::GpuGraphResourceId transparentMomentsIn = transparentHistoryFrontIsA ? transparentMomentsA : transparentMomentsB;
     const Core::GpuGraphResourceId transparentHistoryOut = transparentHistoryFrontIsA ? transparentHistoryB : transparentHistoryA;

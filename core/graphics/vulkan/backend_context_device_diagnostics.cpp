@@ -18,13 +18,13 @@ NWB_VULKAN_BEGIN
 void BackendContext::logVulkanDeviceConfiguration(
     Alloc::ScratchArena& scratchArena,
     const VkPhysicalDeviceProperties& physicalDeviceProperties,
-    const bool maintenance4Enabled,
+    const b8 maintenance4Enabled,
     const VkPhysicalDeviceMaintenance4Features& maintenance4Features,
-    const bool createComputeQueue,
-    const bool createCrossFamilySecondaryComputeQueue,
+    const b8 createComputeQueue,
+    const b8 createCrossFamilySecondaryComputeQueue,
     const i32 secondaryComputeQueueFamily,
-    const bool createDedicatedTransferQueue,
-    const bool createCrossFamilySecondaryTransferQueue,
+    const b8 createDedicatedTransferQueue,
+    const b8 createCrossFamilySecondaryTransferQueue,
     const i32 secondaryTransferQueueFamily
 ){
     if(m_deviceParams.enableDebugRuntime){
@@ -116,7 +116,7 @@ void BackendContext::logVulkanDeviceConfiguration(
         && findNativeQueueIndex(static_cast<u32>(schedulerComputeQueueFamily), s_ComputeQueueIndex) != Limit<u32>::s_Max
     ;
     m_asyncComputeLaneEnabled = m_deviceParams.enableAsyncComputeLane && m_computeQueueEnabled;
-    const bool asyncComputeLaneEffective = m_asyncComputeLaneEnabled;
+    const b8 asyncComputeLaneEffective = m_asyncComputeLaneEnabled;
     const AStringView asyncComputeLaneReason = !m_deviceParams.enableAsyncComputeLane ? VulkanDetail::s_DisabledQueueReason : asyncComputeLaneEffective ? "dedicated compute family selected" : "no dedicated compute-only family";
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: async compute lane requested={} effective={} graphicsFamily={} computeFamily={} ({})")
         , ConvertString(VulkanDetail::BoolToYesNoText(m_deviceParams.enableAsyncComputeLane))
@@ -149,7 +149,7 @@ void BackendContext::logVulkanDeviceConfiguration(
         && m_transferQueueFamily != m_computeQueueFamily
         && findNativeQueueIndex(static_cast<u32>(m_transferQueueFamily), s_TransferQueueIndex) != Limit<u32>::s_Max
     ;
-    const bool transferQueueEffective = m_transferQueueEnabled;
+    const b8 transferQueueEffective = m_transferQueueEnabled;
     const AStringView transferQueueReason = !m_deviceParams.enableTransferQueue ? VulkanDetail::s_DisabledQueueReason : transferQueueEffective ? "dedicated transfer-only family selected" : "no dedicated transfer-only family";
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: transfer queue requested={} effective={} graphicsFamily={} computeFamily={} transferFamily={} ({})")
         , ConvertString(VulkanDetail::BoolToYesNoText(m_deviceParams.enableTransferQueue))

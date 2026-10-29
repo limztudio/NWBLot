@@ -126,7 +126,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool empty()const noexcept{ return valueCount == 0u; }
+    [[nodiscard]] b8 empty()const noexcept{ return valueCount == 0u; }
 
     [[nodiscard]] usize size()const noexcept{ return valueCount; }
 
@@ -630,7 +630,7 @@ TEST(Global, FilesystemStreamAndStageHelpersRejectInvalidAndTruncatedInputs){
     ASSERT_TRUE(EnsureEmptyDirectory(stageDir));
     const auto stagedFile = stageDir / "payload.bin";
     const u8 payload[] = { 0x10u, 0x20u, 0x30u, 0x40u };
-    bool created = false;
+    b8 created = false;
     ASSERT_TRUE(StageNewBinaryFileDurable(stagedFile, payload, sizeof(payload), created));
     EXPECT_TRUE(created);
     EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload, sizeof(payload)));

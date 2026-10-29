@@ -34,7 +34,7 @@ struct BufferAllocation{
     VkBuffer buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle allocation = nullptr;
     void* mappedMemory = nullptr;
-    bool requiresInvalidate = false;
+    b8 requiresInvalidate = false;
 };
 
 struct BufferSuballocation{
@@ -59,7 +59,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize();
+    [[nodiscard]] b8 initialize();
 
     VkResult createBuffer(Buffer& buffer, const VkBufferCreateInfo& bufferInfo);
     void destroyBuffer(Buffer& buffer);
@@ -83,12 +83,12 @@ public:
 
 
 private:
-    [[nodiscard]] bool tryRegisterBufferNativeIdentity(Buffer& buffer);
+    [[nodiscard]] b8 tryRegisterBufferNativeIdentity(Buffer& buffer);
     void unregisterBufferNativeIdentity(VkBuffer nativeBuffer, Buffer& buffer)noexcept;
-    [[nodiscard]] bool isBufferNativeIdentityRegistered(const Buffer& buffer)const noexcept;
-    [[nodiscard]] bool tryRegisterTextureNativeIdentity(Texture& texture);
+    [[nodiscard]] b8 isBufferNativeIdentityRegistered(const Buffer& buffer)const noexcept;
+    [[nodiscard]] b8 tryRegisterTextureNativeIdentity(Texture& texture);
     void unregisterTextureNativeIdentity(VkImage nativeImage, Texture& texture)noexcept;
-    [[nodiscard]] bool isTextureNativeIdentityRegistered(VkImage nativeImage, const Texture& texture)const noexcept;
+    [[nodiscard]] b8 isTextureNativeIdentityRegistered(VkImage nativeImage, const Texture& texture)const noexcept;
 
 
 private:
@@ -177,9 +177,9 @@ private:
     [[nodiscard]] QueueChunkLedger* findQueueLedgerLocked(GpuPhysicalQueueId queue)noexcept;
     [[nodiscard]] QueueChunkLedger& findOrCreateQueueLedgerLocked(GpuPhysicalQueueId queue);
     void linkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
-    void retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, u64 version, bool resetAllocated)noexcept;
+    void retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, u64 version, b8 resetAllocated)noexcept;
     void retireSubmittedChunksLocked(GpuPhysicalQueueId queue, u64 version, const Queue::SubmissionCommandListIdentity* submittedCommandLists, usize submittedCommandListCount, const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners)noexcept;
-    void retireOwnerChunksLocked(GpuPhysicalQueueId queue, u64 version, bool resetAllocated, TrackedCommandBuffer& owner, u64 nativeRecordingID)noexcept;
+    void retireOwnerChunksLocked(GpuPhysicalQueueId queue, u64 version, b8 resetAllocated, TrackedCommandBuffer& owner, u64 nativeRecordingID)noexcept;
 
 
 private:
@@ -211,7 +211,7 @@ class Buffer final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    Buffer(const VulkanContext& context, VulkanAllocator& allocator, const BufferDesc& creationDesc, const VkBufferCreateInfo& bufferInfo, bool initialStateKnown);
+    Buffer(const VulkanContext& context, VulkanAllocator& allocator, const BufferDesc& creationDesc, const VkBufferCreateInfo& bufferInfo, b8 initialStateKnown);
     ~Buffer()noexcept;
 
 
@@ -219,7 +219,7 @@ public:
     [[nodiscard]] const BufferDesc& getDescription()const noexcept{ return m_desc; }
 
     [[nodiscard]] const BufferDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
-    [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
+    [[nodiscard]] b8 descriptionMatchesCreation()const noexcept;
     [[nodiscard]] GpuVirtualAddress getGpuVirtualAddress()const noexcept{ return m_deviceAddress; }
 
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
@@ -238,8 +238,8 @@ public:
 
 
 private:
-    [[nodiscard]] bool isRetainedStateKnown()const noexcept;
-    void setRetainedStateKnown(bool known)noexcept;
+    [[nodiscard]] b8 isRetainedStateKnown()const noexcept;
+    void setRetainedStateKnown(b8 known)noexcept;
 
 
 private:
@@ -255,14 +255,14 @@ private:
     HeapHandle m_boundHeap;
     VulkanDetail::HeapBindingRange m_heapBindingRange;
     Futex m_memoryBindingMutex;
-    Atomic<bool> m_retainedStateKnown = false;
+    Atomic<b8> m_retainedStateKnown = false;
 
     Vector<u64, Alloc::GlobalArena> m_versionTracking;
 
-    const bool m_creationInitialStateKnown;
-    bool m_persistentlyMapped = false;
-    bool m_requiresInvalidate = false;
-    bool m_managed = true; // if true, owns the VkBuffer or VMA allocation
+    const b8 m_creationInitialStateKnown;
+    b8 m_persistentlyMapped = false;
+    b8 m_requiresInvalidate = false;
+    b8 m_managed = true; // if true, owns the VkBuffer or VMA allocation
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
@@ -293,7 +293,7 @@ struct TextureViewKey{
     Format::Enum format = Format::UNKNOWN;
 };
 
-inline bool operator==(const TextureViewKey& lhs, const TextureViewKey& rhs)noexcept{
+inline b8 operator==(const TextureViewKey& lhs, const TextureViewKey& rhs)noexcept{
     return lhs.subresources == rhs.subresources && lhs.dimension == rhs.dimension && lhs.format == rhs.format;
 }
 
@@ -309,7 +309,7 @@ struct TextureViewKeyHasher{
 
 
 class Texture final : public RefCounter<GraphicsResource>, NoCopy{
-    friend Expected<VkImageViewCreateInfo> VulkanDetail::BuildTextureImageViewCreateInfo(Texture& texture, const TextureSubresourceSet& resolvedSubresources, TextureDimension::Enum dimension, Format::Enum format, TStringView operationName, bool assertFailure);
+    friend Expected<VkImageViewCreateInfo> VulkanDetail::BuildTextureImageViewCreateInfo(Texture& texture, const TextureSubresourceSet& resolvedSubresources, TextureDimension::Enum dimension, Format::Enum format, TStringView operationName, b8 assertFailure);
 
     friend class BackendContext;
     friend class Device;
@@ -322,7 +322,7 @@ class Texture final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc, const VkImageCreateInfo& imageInfo, bool initialStateKnown);
+    Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc, const VkImageCreateInfo& imageInfo, b8 initialStateKnown);
     ~Texture()noexcept;
 
 
@@ -330,7 +330,7 @@ public:
     [[nodiscard]] const TextureDesc& getDescription()const noexcept{ return m_desc; }
 
     [[nodiscard]] const TextureDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
-    [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
+    [[nodiscard]] b8 descriptionMatchesCreation()const noexcept;
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     // Task-graph declarations copy this production admission snapshot while retaining the Texture itself.
     [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
@@ -344,18 +344,18 @@ public:
     // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
     [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const noexcept;
     Object getNativeHandle(ObjectType objectType)noexcept;
-    [[nodiscard]] Expected<Object> getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool);
+    [[nodiscard]] Expected<Object> getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, b8);
 
     [[nodiscard]] Expected<VkImageView> getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format);
 
 
 private:
-    [[nodiscard]] bool canRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
-    [[nodiscard]] bool prepareRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
+    [[nodiscard]] b8 canRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
+    [[nodiscard]] b8 prepareRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
     void commitRevokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
     void releasePreparedRevokeUnmanagedNativeImageIdentity(VkImage expectedNativeImage)noexcept;
-    [[nodiscard]] bool isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel)noexcept;
-    void setRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel, bool known)noexcept;
+    [[nodiscard]] b8 isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel)noexcept;
+    void setRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel, b8 known)noexcept;
 
 
 private:
@@ -378,8 +378,8 @@ private:
     Vector<u8, Alloc::GlobalArena> m_retainedSubresourceStates;
     mutable Futex m_retainedSubresourceStatesMutex;
 
-    const bool m_creationInitialStateKnown;
-    bool m_managed = true; // if true, owns the VkImage or VMA allocation
+    const b8 m_creationInitialStateKnown;
+    b8 m_managed = true; // if true, owns the VkImage or VMA allocation
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
@@ -422,7 +422,7 @@ private:
     u32 m_bufferOffsetAlignment = 0;
     ResourceQueueSharing::Mask m_creationQueueSharing = ResourceQueueSharing::Exclusive;
     CpuAccessMode::Enum m_cpuAccess{};
-    bool m_requiresInvalidate = false;
+    b8 m_requiresInvalidate = false;
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };

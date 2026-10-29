@@ -40,7 +40,7 @@ public:
 
 class RejectedReader final : public IMetaReader{
 public:
-    explicit RejectedReader(const bool oversized)noexcept
+    explicit RejectedReader(const b8 oversized)noexcept
         : m_oversized(oversized)
     {}
 
@@ -54,7 +54,7 @@ public:
 
 
 private:
-    bool m_oversized;
+    b8 m_oversized;
 };
 
 

@@ -33,7 +33,7 @@ struct StandaloneGraphWorkspace final : NoCopy{
     GpuCompiledGraph compiledGraph;
     GpuRecordedGraph recordedGraph;
     GpuGraphSubmissionTransaction transaction;
-    bool leased = false;
+    b8 leased = false;
 
 
 public:
@@ -85,7 +85,7 @@ public:
 
 public:
     // Device teardown must drop device-bound command lists first. False means a submission still holds a workspace.
-    [[nodiscard]] bool releaseCommandListCaches()noexcept;
+    [[nodiscard]] b8 releaseCommandListCaches()noexcept;
 
 
 private:

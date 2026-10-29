@@ -56,7 +56,7 @@ void MeshSkinningRuntimeCache::prepareResources(Core::ECS::World& world, Core::A
     m_handleToEntity.reserve(rendererCandidateCount);
     m_sources.reserve(rendererCandidateCount);
 
-    const bool pruneStaleInstances = !m_instances.empty();
+    const b8 pruneStaleInstances = !m_instances.empty();
     skinningBindingView.each([&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
         if(!ensureRuntimeMesh(entity, scratchArena, component))
             component.runtimeMesh.reset();

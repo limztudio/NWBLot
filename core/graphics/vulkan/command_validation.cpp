@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::validateFramebufferForRendering(Framebuffer* const framebuffer, const TStringView operationName){
+b8 CommandList::validateFramebufferForRendering(Framebuffer* const framebuffer, const TStringView operationName){
     if(!framebuffer)
         return true;
     if(&framebuffer->m_context != &m_context){
@@ -56,12 +56,12 @@ bool CommandList::validateFramebufferForRendering(Framebuffer* const framebuffer
     const auto validateAttachment = [this, operationName, &framebufferInfo](
         const FramebufferAttachment& attachment,
         const ResourceStates::Mask requiredState,
-        const bool requireRenderTargetUsage,
-        const bool requireShadingRateUsage,
-        const bool requireDepthStencilFormat,
-        const bool requireFramebufferExtent,
+        const b8 requireRenderTargetUsage,
+        const b8 requireShadingRateUsage,
+        const b8 requireDepthStencilFormat,
+        const b8 requireFramebufferExtent,
         const Format::Enum expectedFormat
-    ) -> bool{
+    ) -> b8{
         Texture* const texture = attachment.texture;
         if(!isTextureReadyForCommandQueue(texture)){
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment is not ready for this exact command queue"));
@@ -100,8 +100,8 @@ bool CommandList::validateFramebufferForRendering(Framebuffer* const framebuffer
             return false;
         }
         const FormatInfo& formatInfo = GetFormatInfo(format);
-        const bool depthStencilFormat = formatInfo.hasDepth || formatInfo.hasStencil;
-        const bool depthStencilImage = (texture->m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
+        const b8 depthStencilFormat = formatInfo.hasDepth || formatInfo.hasStencil;
+        const b8 depthStencilImage = (texture->m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
         if(depthStencilFormat != requireDepthStencilFormat || depthStencilImage != requireDepthStencilFormat){
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment format class is incompatible"));
             return false;
@@ -179,7 +179,7 @@ bool CommandList::validateFramebufferForRendering(Framebuffer* const framebuffer
     return true;
 }
 
-bool CommandList::validateRenderPassBegin(Framebuffer& framebuffer, const RenderPassParameters& params, const TStringView operationName){
+b8 CommandList::validateRenderPassBegin(Framebuffer& framebuffer, const RenderPassParameters& params, const TStringView operationName){
     if(m_renderPassActive){
         rejectCommandRecording(operationName, NWB_TEXT("a render pass is already active"));
         return false;
@@ -215,8 +215,8 @@ bool CommandList::validateRenderPassBegin(Framebuffer& framebuffer, const Render
         return false;
     }
 
-    const bool depthActionsRequested = params.depthAttachmentActions.loadAction != RenderPassLoadAction::Load || params.depthAttachmentActions.storeAction != RenderPassStoreAction::Store;
-    const bool stencilActionsRequested = params.stencilAttachmentActions.loadAction != RenderPassLoadAction::Load || params.stencilAttachmentActions.storeAction != RenderPassStoreAction::Store;
+    const b8 depthActionsRequested = params.depthAttachmentActions.loadAction != RenderPassLoadAction::Load || params.depthAttachmentActions.storeAction != RenderPassStoreAction::Store;
+    const b8 stencilActionsRequested = params.stencilAttachmentActions.loadAction != RenderPassLoadAction::Load || params.stencilAttachmentActions.storeAction != RenderPassStoreAction::Store;
     const FramebufferAttachment& depthAttachment = framebufferDesc.depthAttachment;
     if(!depthAttachment.valid()){
         if(depthActionsRequested || stencilActionsRequested){
@@ -226,8 +226,8 @@ bool CommandList::validateRenderPassBegin(Framebuffer& framebuffer, const Render
         return true;
     }
 
-    const bool clearDepth = params.depthAttachmentActions.loadAction == RenderPassLoadAction::Clear;
-    const bool clearStencil = params.stencilAttachmentActions.loadAction == RenderPassLoadAction::Clear;
+    const b8 clearDepth = params.depthAttachmentActions.loadAction == RenderPassLoadAction::Clear;
+    const b8 clearStencil = params.stencilAttachmentActions.loadAction == RenderPassLoadAction::Clear;
     if(depthAttachment.isReadOnly && (clearDepth || clearStencil)){
         rejectCommandRecording(operationName, NWB_TEXT("depth/stencil clear requested for a read-only attachment"));
         return false;
@@ -249,11 +249,11 @@ bool CommandList::validateRenderPassBegin(Framebuffer& framebuffer, const Render
     return true;
 }
 
-bool CommandList::prepareFramebufferForRendering(Framebuffer* const framebuffer, const TStringView operationName){
+b8 CommandList::prepareFramebufferForRendering(Framebuffer* const framebuffer, const TStringView operationName){
     if(!framebuffer)
         return true;
 
-    const auto prepareAttachment = [this, operationName](const FramebufferAttachment& attachment) -> bool{
+    const auto prepareAttachment = [this, operationName](const FramebufferAttachment& attachment) -> b8{
         if(!attachment.texture)
             return true;
         const TextureSubresourceSet resolved = attachment.subresources.resolve(attachment.texture->m_creationDesc, TextureSubresourceMipResolve::Range);
@@ -274,7 +274,7 @@ bool CommandList::prepareFramebufferForRendering(Framebuffer* const framebuffer,
     return true;
 }
 
-bool CommandList::validateViewportState(const ViewportState& viewportState, const TStringView operationName){
+b8 CommandList::validateViewportState(const ViewportState& viewportState, const TStringView operationName){
     if(viewportState.viewports.size() > 1u || viewportState.scissorRects.size() > 1u){
         rejectCommandRecording(operationName, NWB_TEXT("only one viewport and scissor are supported"));
         return false;
@@ -294,7 +294,7 @@ bool CommandList::validateViewportState(const ViewportState& viewportState, cons
     return true;
 }
 
-bool CommandList::validateTextureForGpuState(Texture* const texture, const ResourceStates::Mask requiredState, const TStringView operationName, const VkImageUsageFlags explicitRequiredUsage){
+b8 CommandList::validateTextureForGpuState(Texture* const texture, const ResourceStates::Mask requiredState, const TStringView operationName, const VkImageUsageFlags explicitRequiredUsage){
     if(!publicCommandStateAccessible())
         return false;
     if(!VulkanTextureDetail::IsTextureResourceStateMaskValid(requiredState)){
@@ -315,7 +315,7 @@ bool CommandList::validateTextureForGpuState(Texture* const texture, const Resou
     return true;
 }
 
-bool CommandList::validateBufferForGpuState(Buffer* const buffer, const ResourceStates::Mask requiredState, const TStringView operationName, const VkBufferUsageFlags explicitRequiredUsage){
+b8 CommandList::validateBufferForGpuState(Buffer* const buffer, const ResourceStates::Mask requiredState, const TStringView operationName, const VkBufferUsageFlags explicitRequiredUsage){
     if(!publicCommandStateAccessible())
         return false;
     if(!VulkanBufferDetail::IsBufferResourceStateMaskValid(requiredState)){

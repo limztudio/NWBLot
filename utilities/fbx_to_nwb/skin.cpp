@@ -41,7 +41,7 @@ SIMDMatrixDouble LoadUfbxMatrix(const ufbx_matrix& matrix)noexcept{
     return result;
 }
 
-bool FiniteUfbxMatrix(const SIMDMatrixDouble& matrix)noexcept{
+b8 FiniteUfbxMatrix(const SIMDMatrixDouble& matrix)noexcept{
     for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
         if(!VectorDoubleIsFinite(matrix.v[rowIndex], VectorComponentMask::s_XYZW))
             return false;
@@ -58,7 +58,7 @@ SIMDMatrix ConvertJointMatrix(const SIMDMatrixDouble& matrix)noexcept{
     return result;
 }
 
-bool NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs)noexcept{
+b8 NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs)noexcept{
     const SIMDVectorSingle epsilon = VectorReplicate(s_JointMatrixRowEpsilon);
     for(usize rowIndex = 0u; rowIndex < s_JointMatrixRowCount; ++rowIndex){
         if(!Vector4NearEqual(lhs.v[rowIndex], rhs.v[rowIndex], epsilon))

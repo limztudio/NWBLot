@@ -46,8 +46,8 @@ public:
 
 
 public:
-    bool loadBinary(Span<const u8> binary);
-    [[nodiscard]] bool validatePayload()const;
+    b8 loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload()const;
 
 public:
     void setMesh(const Core::Assets::AssetRef<Mesh>& mesh)noexcept{ m_mesh = mesh; }

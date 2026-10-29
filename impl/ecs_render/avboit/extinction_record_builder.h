@@ -44,7 +44,7 @@ struct AvboitExtinctionRecordInputs : public AvboitRecordInputsBase{
     Core::GpuGraphResourceId avboitControl;
     Core::GpuGraphResourceId avboitExtinctionOverflow;
     Core::GpuTaskId depthWarpCompletionTask;
-    bool streamsUploaded = false;
+    b8 streamsUploaded = false;
     Core::GpuTimingSubmissionTicket& extinctionTimingTicket;
     Optional<Core::GpuTimingMeasure>& extinctionComputeEmulationTiming;
 
@@ -61,7 +61,7 @@ public:
 
 struct AvboitExtinctionRecordResult{
     Core::GpuTaskId extinctionTask;
-    bool declared = false;
+    b8 declared = false;
 };
 
 

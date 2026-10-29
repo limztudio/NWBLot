@@ -85,10 +85,10 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update(Core::EC
     return {};
 }
 
-bool UiLayerSystem::collectRoots(){
+b8 UiLayerSystem::collectRoots(){
     m_liveRoots.clear();
     m_rootIdentities.clear();
-    bool overflow = false;
+    b8 overflow = false;
     m_world.view<UiPaintComponent>().each([this, &overflow](const Core::ECS::EntityID entity, UiPaintComponent& component)noexcept{
         if(!component.visible || !component.paint)
             return;
@@ -113,7 +113,7 @@ void UiLayerSystem::synchronizeInput(){
     if(m_context.ready() && m_renderer.lastAcceptedGeneration() == m_context.readyGeneration()){
         const auto status = m_renderer.lastAcceptedPresentationStatus();
         if(status == Core::PresentationReceiptStatus::Accepted){
-            const bool committed = m_context.commitFrame(m_renderer.lastAcceptedGeneration());
+            const b8 committed = m_context.commitFrame(m_renderer.lastAcceptedGeneration());
             NWB_FATAL_ASSERT(committed);
             m_editHost.commitFrame(m_renderer.lastAcceptedGeneration());
         }

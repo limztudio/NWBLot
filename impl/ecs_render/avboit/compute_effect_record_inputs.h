@@ -47,9 +47,9 @@ struct AvboitComputeEffectRecordInputs{
 };
 
 template<typename DispatchFn>
-[[nodiscard]] inline bool RecordAvboitComputeEffect(const AvboitComputeEffectRecordInputs& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, DispatchFn&& dispatch){
+[[nodiscard]] inline b8 RecordAvboitComputeEffect(const AvboitComputeEffectRecordInputs& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, DispatchFn&& dispatch){
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-    bool timingRecorded = false;
+    b8 timingRecorded = false;
     const auto timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
     if(!timingAttribution){
         payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;

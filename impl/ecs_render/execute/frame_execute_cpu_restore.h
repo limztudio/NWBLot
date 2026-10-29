@@ -35,8 +35,8 @@ class FrameExecuteCpuRestore final{
 public:
     struct Snapshot{
         RayTracingFrameCpuStateSnapshot rayTracing;
-        bool avboitTargetsNeedClear = false;
-        bool deferredBindlessSlotsUploaded = false;
+        b8 avboitTargetsNeedClear = false;
+        b8 deferredBindlessSlotsUploaded = false;
     };
 
 
@@ -45,15 +45,15 @@ public:
     static void RestoreShadowCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
     static void RestoreCausticsCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
     static void RestoreSurfelGiCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
-    static void RestoreAvboitCpuState(RendererAvboitSystem& avboitSystem, bool targetsNeedClear)noexcept;
-    static void RestorePostGbufferEffectsCpuState(RendererRayTracingState& rayTracingState, RendererAvboitSystem& avboitSystem, const RayTracingFrameCpuStateSnapshot& snapshot, bool avboitTargetsNeedClear)noexcept;
+    static void RestoreAvboitCpuState(RendererAvboitSystem& avboitSystem, b8 targetsNeedClear)noexcept;
+    static void RestorePostGbufferEffectsCpuState(RendererRayTracingState& rayTracingState, RendererAvboitSystem& avboitSystem, const RayTracingFrameCpuStateSnapshot& snapshot, b8 avboitTargetsNeedClear)noexcept;
     static void RestorePostGbufferPacketCpuState(
         RendererMeshSystem& meshSystem,
         RendererDeferredSystem& deferredSystem,
         RendererRayTracingState& rayTracingState,
         RendererAvboitSystem& avboitSystem,
         const Snapshot& snapshot,
-        bool restoreBindlessSlots,
+        b8 restoreBindlessSlots,
         DeferredFrameTargets& targets
     )noexcept;
 

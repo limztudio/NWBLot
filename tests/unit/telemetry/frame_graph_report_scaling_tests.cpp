@@ -80,7 +80,7 @@ public:
         nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("tests/telemetry/report/task"), .label = "Unmeasured task", .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
     }
 
-    void addOwner(const u32 packetCount, const u16 firstQueueIndex, const bool includeQueues = true){
+    void addOwner(const u32 packetCount, const u16 firstQueueIndex, const b8 includeQueues = true){
         const u32 ownerIndex = static_cast<u32>(nodes.size());
         const Telemetry::FrameGraphRuntimeStatistics owner = OwnerStatistics(packetCount);
         nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("tests/telemetry/report/owner"), .label = "Measured owner", .kind = Telemetry::FrameGraphNodeKind::Pass, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = owner, });

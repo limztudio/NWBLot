@@ -74,19 +74,19 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         return MakeUnexpected(Failure{});
 
 
-    const bool generatedGeometryReused = inputs.generatedGeometryReused();
+    const b8 generatedGeometryReused = inputs.generatedGeometryReused();
     if(!inputs.generatedGeometryReusePlansValid())
         return MakeUnexpected(Failure{});
     accumulationPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_accumulationReusedGeometryProducer = inputs.reusedGeometryProducer;
 
-    const bool hasCsgIntervalReads = inputs.csgStreamsUploaded;
+    const b8 hasCsgIntervalReads = inputs.csgStreamsUploaded;
     NWB_ASSERT(!hasCsgIntervalReads || (accumulationPayload.accumulationPhasePrepared && accumulationPayload.accumulationSnapshot.captured));
     accumulationPayload.accumulationMaterialFrameStatesGraphOwned = inputs.streamsUploaded;
     accumulationPayload.accumulationMaterialGeometryStatesGraphOwned = inputs.streamsUploaded && accumulationPayload.accumulationMaterialGeometryStatesGraphOwned;
     Core::GpuGraphResourceSetId accumulationComputeEmulationOutputSet;
-    const bool accumulationComputeEmulationPlanCaptured = inputs.regularComputeEmulationPlanCaptured || inputs.csgComputeEmulationPlanCaptured;
-    bool accumulationComputeEmulationOutputStatesGraphOwned = false;
+    const b8 accumulationComputeEmulationPlanCaptured = inputs.regularComputeEmulationPlanCaptured || inputs.csgComputeEmulationPlanCaptured;
+    b8 accumulationComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.regularComputeEmulationPlanCaptured){
         const auto accumulationComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
             m_graph,
@@ -120,7 +120,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     accumulationPayload.accumulationCsgComputeEmulationOutputStatesGraphOwned = inputs.csgComputeEmulationPlanCaptured && accumulationComputeEmulationOutputStatesGraphOwned;
     accumulationPayload.accumulationComputeEmulationTiming = accumulationComputeEmulationOutputStatesGraphOwned ? &inputs.accumulationComputeEmulationTiming : nullptr;
     Core::GpuGraphResourceId accumulationSharedComputeEmulationOutput;
-    bool accumulationSharedComputeEmulationOutputStatesGraphOwned = false;
+    b8 accumulationSharedComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.sharedComputeEmulationPlanCaptured){
         const auto accumulationSharedComputeEmulationOutputResult = GatherRegularSharedComputeEmulationResource(m_graph, inputs.sharedComputeEmulationPlan, "AVBOIT Accumulation Shared Compute Emulation Output");
         accumulationSharedComputeEmulationOutputStatesGraphOwned = accumulationSharedComputeEmulationOutputResult.has_value();
@@ -317,8 +317,8 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
             const Core::GpuTaskId& dependency,
             const AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Enum phase,
             const usize drawIndex,
-            const bool beginTiming,
-            const bool finishTiming,
+            const b8 beginTiming,
+            const b8 finishTiming,
             const Span<const Core::GpuTaskResourceUse> resourceUses,
             const Span<const Core::GpuTaskResourceSetUse> resourceSetUses
         ){
@@ -375,7 +375,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         Core::GpuTaskId accumulationSharedComputeEmulationDependency = accumulationDependency;
         const Span<const Core::GpuTaskResourceSetUse> accumulationMaterialResourceSetUseSpan(accumulationMaterialResourceSetUses, accumulationMaterialResourceSetUseCount);
         for(usize phaseIndex = 0u; phaseIndex < accumulationSharedComputeEmulationPhaseCount; ++phaseIndex){
-            const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
+            const b8 isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             const auto accumulationSharedComputeEmulationTaskResult = addAccumulationSharedComputeEmulationPhase(
                 accumulationSharedComputeEmulationPhaseIdentities[phaseIndex],
                 accumulationSharedComputeEmulationPhaseMarkers[phaseIndex],

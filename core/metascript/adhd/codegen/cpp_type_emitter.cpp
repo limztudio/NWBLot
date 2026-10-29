@@ -87,7 +87,7 @@ void CppTypeEmitter::emitParamTypeCpp(
     MString& out,
     const ParamPassingMode::Enum mode,
     const TypeRef& type,
-    const bool topLevelConst
+    const b8 topLevelConst
 )const{
     if(mode == ParamPassingMode::Mut){
         emitTypeCpp(out, type);
@@ -133,7 +133,7 @@ void CppTypeEmitter::emitMethodSignature(
     MString& out,
     const ClassDecl* ownerClass,
     const MethodDecl& method,
-    const bool isDeclarationInClass
+    const b8 isDeclarationInClass
 )const{
     if(!method.isConstructor && !method.isDestructor){
         if(method.returnType)
@@ -174,9 +174,9 @@ void CppTypeEmitter::emitMethodSignature(
         out.append(" override");
 }
 
-bool CppTypeEmitter::isSmallValueType(MStringView typeName, const SymbolTable& symbols)noexcept{
+b8 CppTypeEmitter::isSmallValueType(MStringView typeName, const SymbolTable& symbols)noexcept{
     typeName = symbols.resolveBaseTypeName(typeName);
-    if(typeName == "bool"
+    if(typeName == "b8"
         || IsIntegerScalarType(typeName)
         || IsFloatScalarType(typeName)
         || typeName == "EntityID"

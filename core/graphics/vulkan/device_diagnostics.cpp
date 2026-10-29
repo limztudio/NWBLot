@@ -21,7 +21,7 @@ NWB_VULKAN_BEGIN
 
 namespace __hidden_device_diagnostics{
 
-[[nodiscard]] static constexpr StringView BoolToAvailabilityText(const bool value)noexcept{
+[[nodiscard]] static constexpr StringView BoolToAvailabilityText(const b8 value)noexcept{
     return value ? StringView("available") : StringView("unavailable");
 }
 
@@ -37,9 +37,9 @@ void Device::captureDeviceLoss(const AStringView context){
     if(!m_gpuCrashDiagnosticsEnabled)
         return;
 
-    const bool hasCheckpoints = m_context.extensions.nvDeviceDiagnosticCheckpoints;
-    const bool hasDeviceFault = m_context.extensions.extDeviceFault;
-    const bool hasBufferMarker = m_context.extensions.amdBufferMarker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE;
+    const b8 hasCheckpoints = m_context.extensions.nvDeviceDiagnosticCheckpoints;
+    const b8 hasDeviceFault = m_context.extensions.extDeviceFault;
+    const b8 hasBufferMarker = m_context.extensions.amdBufferMarker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE;
 
     // Capture only the first concurrent device-loss report.
     if(m_gpuCrashCaptured.exchange(true))
@@ -103,7 +103,7 @@ void Device::captureDeviceLoss(const AStringView context){
                     continue;
 
                 AmdBreadcrumbSlotRecord newestRecord;
-                bool hasObservedMarker = false;
+                b8 hasObservedMarker = false;
                 {
                     // Lock with breadcrumb reservations to avoid pairing an observation with a torn record.
                     ScopedLock lock(m_amdBreadcrumb.slotMutex);
@@ -159,7 +159,7 @@ void Device::captureDeviceLoss(const AStringView context){
             auto faultCounts = VulkanDetail::MakeVkStruct<VkDeviceFaultCountsEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT);
             if(m_context.deviceDispatch.vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, nullptr) == VK_SUCCESS){
                 const VkDeviceSize vendorBinaryByteSize = faultCounts.vendorBinarySize;
-                const bool vendorBinaryIsRgd = m_context.physicalDeviceProperties.vendorID == s_AmdVendorId;
+                const b8 vendorBinaryIsRgd = m_context.physicalDeviceProperties.vendorID == s_AmdVendorId;
                 if(faultCounts.addressInfoCount > remainingEntries)
                     faultCounts.addressInfoCount = remainingEntries;
                 remainingEntries -= faultCounts.addressInfoCount;

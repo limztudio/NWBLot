@@ -111,7 +111,7 @@ inline void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDe
         graphics.getDevice().getDescriptorHeap().free(descriptor);
 }
 
-[[nodiscard]] inline bool PrepareGpuSampledImageDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, const Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor){
+[[nodiscard]] inline b8 PrepareGpuSampledImageDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, const Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor){
     if(inOutDescriptor.valid())
         return true;
     Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
@@ -208,7 +208,7 @@ struct GpuFrameData : NoCopy{
     Core::QueueSubmissionToken m_raster;
     Core::QueueSubmissionToken m_finalConsumer;
     GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
-    bool m_prepared = false;
+    b8 m_prepared = false;
     u32 m_presentationMode = NWB_UI_PRESENTATION_SDR;
 
 
@@ -221,9 +221,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool prefixComplete(Core::Device& device)const;
-    [[nodiscard]] bool recyclable(Core::Device& device)const;
-    [[nodiscard]] bool complete(Core::Device& device)const;
+    [[nodiscard]] b8 prefixComplete(Core::Device& device)const;
+    [[nodiscard]] b8 recyclable(Core::Device& device)const;
+    [[nodiscard]] b8 complete(Core::Device& device)const;
 };
 
 using GpuFrame = GpuVersion<GpuFrameData>;
@@ -290,7 +290,7 @@ public:
 
 
 // Resolve material descriptors in place; non-SDF draws preserve the previous SDF push fields.
-[[nodiscard]] NWB_INLINE bool ResolvePaintPushConstants(const GpuFrameData& frame, const DrawCommand& draw, GpuPaintPushConstants& push)noexcept{
+[[nodiscard]] NWB_INLINE b8 ResolvePaintPushConstants(const GpuFrameData& frame, const DrawCommand& draw, GpuPaintPushConstants& push)noexcept{
     push.material = static_cast<u32>(draw.material);
     push.textureSlot = NWB_UI_INVALID_HEAP_SLOT;
     if(draw.material == PaintMaterial::Skin)
@@ -337,7 +337,7 @@ struct GpuRasterTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
 };
 
@@ -355,7 +355,7 @@ struct GpuOutputTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
 };
 
@@ -386,16 +386,16 @@ struct GpuRendererState final : NoCopy{
     GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
     u32 m_width = 0u;
     u32 m_height = 0u;
-    bool m_frameTimingScopePrepared = false;
-    bool m_claimed = false;
-    bool m_readyToDeclare = false;
+    b8 m_frameTimingScopePrepared = false;
+    b8 m_claimed = false;
+    b8 m_readyToDeclare = false;
 
 
 public:
-    [[nodiscard]] static bool MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept;
-    [[nodiscard]] static bool ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept;
-    [[nodiscard]] static bool ValidateSdfPages(const DrawSnapshot& snapshot)noexcept;
-    [[nodiscard]] static bool ValidateTextureImages(const DrawSnapshot& snapshot)noexcept;
+    [[nodiscard]] static b8 MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept;
+    [[nodiscard]] static b8 ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept;
+    [[nodiscard]] static b8 ValidateSdfPages(const DrawSnapshot& snapshot)noexcept;
+    [[nodiscard]] static b8 ValidateTextureImages(const DrawSnapshot& snapshot)noexcept;
 
 
 public:
@@ -403,23 +403,23 @@ public:
 
 
 public:
-    [[nodiscard]] bool createResources();
+    [[nodiscard]] b8 createResources();
     [[nodiscard]] Expected<GpuVersion<GpuTargetVersion>> createTarget(u32 width, u32 height);
     [[nodiscard]] Expected<GpuVersion<GpuGlyphVersion>> prepareGlyphPage(const SharedGlyphPage& page);
-    [[nodiscard]] bool prepareGlyphPages(GpuFrameData& frame);
+    [[nodiscard]] b8 prepareGlyphPages(GpuFrameData& frame);
     [[nodiscard]] Expected<GpuGlyphGraphResources> declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     [[nodiscard]] Expected<GpuVersion<GpuSdfAtlasVersion>> prepareSdfPage(Core::Alloc::ScratchArena& scratchArena, const SharedSdfAtlasPage& page);
-    [[nodiscard]] bool prepareSdfPages(GpuFrameData& frame);
+    [[nodiscard]] b8 prepareSdfPages(GpuFrameData& frame);
     [[nodiscard]] Expected<GpuSdfGraphResources> declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     [[nodiscard]] Expected<GpuVersion<GpuTextureImageVersion>> prepareTextureImage(const SharedImageSource& source);
-    [[nodiscard]] bool prepareTextureImages(GpuFrameData& frame);
+    [[nodiscard]] b8 prepareTextureImages(GpuFrameData& frame);
     [[nodiscard]] Expected<GpuTextureGraphResources> declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     void trimImageCache(const DrawSnapshot& snapshot);
     void evictImageCacheEntry()noexcept;
-    [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
-    [[nodiscard]] bool prepareOutputPipeline(const Core::FramebufferInfo& info);
-    [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
-    [[nodiscard]] Expected<Core::GpuTaskGraphOutputLayer> declare(Core::GpuTaskGraph& graph, bool allowEmptySceneLayer);
+    [[nodiscard]] b8 prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
+    [[nodiscard]] b8 prepareOutputPipeline(const Core::FramebufferInfo& info);
+    [[nodiscard]] b8 prepare(const Core::AcquiredPresentationFrame& acquired);
+    [[nodiscard]] Expected<Core::GpuTaskGraphOutputLayer> declare(Core::GpuTaskGraph& graph, b8 allowEmptySceneLayer);
     [[nodiscard]] Expected<Core::GpuTaskId> declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction);
 };
 

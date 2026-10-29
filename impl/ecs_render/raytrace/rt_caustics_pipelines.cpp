@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& targets){
+b8 RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& targets){
     // Prepare hardware resources once geometry and emission targets exist.
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return true;
@@ -26,7 +26,7 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
     return prepareCausticResources(meshView, targets, true);
 }
 
-bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
+b8 RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
     // Hardware photons share the accumulator and resolve with the software reference.
     if(!hasHwCausticWork(meshView))
         return false;
@@ -40,7 +40,7 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         }
     }
     const f32 temporalDecay = m_rayTracingState.m_causticTemporalDecay;
-    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    const b8 csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     const auto& pipeline = csg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline;
     const auto& shaderTable = csg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable;
     if(!pipeline || !shaderTable || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets, temporalDecay))
@@ -88,12 +88,12 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
     return true;
 }
 
-bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
+b8 RendererRayTracingSystem::hasHwCausticWork()const noexcept{
     const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
     return hasHwCausticWork(meshView);
 }
 
-bool RendererRayTracingSystem::hasCommonCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
+b8 RendererRayTracingSystem::hasCommonCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
     return
         m_shadowVisibilityTraceResourcesPreflighted
         && m_shadowVisibilityPreparedTargets
@@ -111,7 +111,7 @@ bool RendererRayTracingSystem::hasCommonCausticWork(const ECSRenderDetail::MeshV
     ;
 }
 
-bool RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
+b8 RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
     // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
     return
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
@@ -123,8 +123,8 @@ bool RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewB
     ;
 }
 
-bool RendererRayTracingSystem::ensureSwCausticPipeline(){
-    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+b8 RendererRayTracingSystem::ensureSwCausticPipeline(){
+    const b8 csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     auto& shader = csg ? m_rayTracingState.m_swCausticCsgShader : m_rayTracingState.m_swCausticShader;
     auto& pipeline = csg ? m_rayTracingState.m_swCausticCsgPipeline : m_rayTracingState.m_swCausticPipeline;
     auto& failed = csg ? m_rayTracingState.m_swCausticCsgPipelineFailed : m_rayTracingState.m_swCausticPipelineFailed;
@@ -181,7 +181,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
+b8 RendererRayTracingSystem::ensureCausticResolvePipeline(){
     CausticResolveState& resolve = m_rayTracingState.m_causticResolve;
     if(resolve.m_prepare.m_pipeline && resolve.m_wavelet.m_pipeline && resolve.m_waveletStepOne.m_pipeline && resolve.m_waveletStepTwo.m_pipeline && resolve.m_waveletDirect.m_pipeline && resolve.m_upsample.m_pipeline)
         return true;
@@ -255,7 +255,7 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
+b8 RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     if(m_rayTracingState.m_causticGeometryDownsamplePipeline)
         return true;
     if(m_rayTracingState.m_causticGeometryDownsamplePipelineFailed)
@@ -307,7 +307,7 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
+b8 RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     if(m_rayTracingState.m_causticAccumulatorDecayPipeline)
         return true;
     if(m_rayTracingState.m_causticAccumulatorDecayPipelineFailed)
@@ -360,8 +360,8 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureCausticRtPipeline(){
-    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+b8 RendererRayTracingSystem::ensureCausticRtPipeline(){
+    const b8 csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     auto& cachedPipeline = csg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline;
     auto& cachedTable = csg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable;
     auto& failed = csg ? m_rayTracingState.m_hwCausticCsgPipelineFailed : m_rayTracingState.m_hwCausticPipelineFailed;
@@ -455,7 +455,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         return false;
     }
     Core::RayTracingShaderTableHandle shaderTable = Move(*shaderTableResult);
-    bool shaderTablePopulated = shaderTable->setRayGenerationShader(RayTracingCausticsTaskDetail::s_HwRaygenExportName);
+    b8 shaderTablePopulated = shaderTable->setRayGenerationShader(RayTracingCausticsTaskDetail::s_HwRaygenExportName);
     if(shaderTablePopulated){
         const auto missIndex = shaderTable->addMissShader(RayTracingCausticsTaskDetail::s_HwMissExportName);
         if(!missIndex)
@@ -483,7 +483,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCount){
+b8 RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCount){
     // Replace the heap slot before retiring the old emission-target buffer.
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();

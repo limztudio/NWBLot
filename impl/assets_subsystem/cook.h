@@ -63,7 +63,7 @@ inline constexpr AStringView s_SubsystemDiagnosticPrefix = "Subsystem meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseSubsystemCookMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena, ISubsystem& outSubsystem);
+[[nodiscard]] b8 ParseSubsystemCookMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena, ISubsystem& outSubsystem);
 
 template<typename SubsystemT>
 [[nodiscard]] Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemCookMetadata(
@@ -133,7 +133,7 @@ template<typename SubsystemT>
 }
 
 template<typename SubsystemT>
-[[nodiscard]] bool ExtractSubsystemDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+[[nodiscard]] b8 ExtractSubsystemDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto subsystemEntry = context.document
         ? ParseSubsystemCookMetadata<SubsystemT>(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena)
         : ParseSubsystemCookMetadata<SubsystemT>(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
@@ -159,7 +159,7 @@ template<typename SubsystemT>
 }
 
 template<typename SubsystemT>
-[[nodiscard]] bool RegisterSubsystemCookEntry(Core::Assets::CookEntryRegistry& registry){
+[[nodiscard]] b8 RegisterSubsystemCookEntry(Core::Assets::CookEntryRegistry& registry){
     Core::Assets::RegisterCompositeRootAssetType(SubsystemT::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<SubsystemCookEntry<SubsystemT>, SubsystemT, TypedSubsystemAssetCodec<SubsystemT>>(
         registry,
@@ -171,7 +171,7 @@ template<typename SubsystemT>
 }
 
 template<typename SubsystemT>
-[[nodiscard]] bool RegisterSubsystemCookDependency(Core::Assets::CookDependencyRegistry& registry){
+[[nodiscard]] b8 RegisterSubsystemCookDependency(Core::Assets::CookDependencyRegistry& registry){
     Core::Assets::RegisterCompositeRootAssetType(SubsystemT::AssetTypeName());
     return registry.registerType(SubsystemT::AssetTypeName(), &ExtractSubsystemDependencies<SubsystemT>, ISubsystem::AssetTypeName());
 }

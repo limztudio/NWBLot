@@ -23,7 +23,7 @@ EditBoxView::EditBoxView(Core::Alloc::GlobalArena& arena)noexcept
     , m_geometry(arena)
 {}
 
-bool EditBoxView::snapshot(const EditModel& model){
+b8 EditBoxView::snapshot(const EditModel& model){
     const AStringView committed = model.text();
     const EditCompositionView composition = model.composition();
     const usize replaced = composition.active ? composition.replacementEnd - composition.replacementStart : 0u;
@@ -41,7 +41,7 @@ bool EditBoxView::snapshot(const EditModel& model){
     else if(!committed.empty())
         display.assign(committed.data(), committed.size());
     const AStringView candidateText(display.data(), display.size());
-    const bool admitted = model.textMode() == EditTextMode::Multiline ? ValidateMultilineText(candidateText) : GraphemeSegmentation::Validate(candidateText, true);
+    const b8 admitted = model.textMode() == EditTextMode::Multiline ? ValidateMultilineText(candidateText) : GraphemeSegmentation::Validate(candidateText, true);
     if(!admitted)
         return false;
     PaintVector<EditCaretMapping> stops(*m_arena);
@@ -79,7 +79,7 @@ TextLayoutStatus::Enum EditBoxView::shape(TextService& text, ShapeRequest reques
     return adoptLayout(Move(*candidate)) ? TextLayoutStatus::Success : TextLayoutStatus::FontFailure;
 }
 
-bool EditBoxView::adoptLayout(TextLayout&& layout){
+b8 EditBoxView::adoptLayout(TextLayout&& layout){
     if(m_revision == 0u)
         return false;
     EditCaretGeometry candidate(*m_arena);
@@ -94,7 +94,7 @@ bool EditBoxView::adoptLayout(TextLayout&& layout){
     return true;
 }
 
-bool EditBoxView::measure(TextService& text, const DisplayMetrics& display){
+b8 EditBoxView::measure(TextService& text, const DisplayMetrics& display){
     if(!m_ready)
         return false;
     const auto measured = text.measure(layout(), display);

@@ -24,11 +24,11 @@ namespace TriangleTests{
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL EdgeCross2D(SIMDVectorSingle a, SIMDVectorSingle b, SIMDVectorSingle c)noexcept;
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL SignedArea2D(SIMDVectorSingle a, SIMDVectorSingle b, SIMDVectorSingle c)noexcept;
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL AreaNormal(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
-[[nodiscard]] bool NWB_SIMD_CALL ContainsPoint2D(SIMDVectorSingle point, SIMDVectorSingle a, SIMDVectorSingle b, SIMDVectorSingle c, SIMDVectorSingle tolerance)noexcept;
+[[nodiscard]] b8 NWB_SIMD_CALL ContainsPoint2D(SIMDVectorSingle point, SIMDVectorSingle a, SIMDVectorSingle b, SIMDVectorSingle c, SIMDVectorSingle tolerance)noexcept;
 
 [[nodiscard]] Expected<f32> NWB_SIMD_CALL Intersects(SIMDVectorSingle origin, SIMDVectorSingle direction, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
 
-[[nodiscard]] bool NWB_SIMD_CALL Intersects(SIMDVectorSingle a0, SIMDVectorSingle a1, SIMDVectorSingle a2, SIMDVectorSingle b0, SIMDVectorSingle b1, SIMDVectorSingle b2)noexcept;
+[[nodiscard]] b8 NWB_SIMD_CALL Intersects(SIMDVectorSingle a0, SIMDVectorSingle a1, SIMDVectorSingle a2, SIMDVectorSingle b0, SIMDVectorSingle b1, SIMDVectorSingle b2)noexcept;
 
 [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL Intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2, SIMDVectorSingle plane)noexcept;
 
@@ -63,11 +63,11 @@ namespace TriangleDoubleTests{
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL EdgeCross2D(SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c)noexcept;
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL SignedArea2D(SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c)noexcept;
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL AreaNormal(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
-[[nodiscard]] bool NWB_SIMD_CALL ContainsPoint2D(SIMDVectorDouble point, SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c, SIMDVectorDouble tolerance)noexcept;
+[[nodiscard]] b8 NWB_SIMD_CALL ContainsPoint2D(SIMDVectorDouble point, SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c, SIMDVectorDouble tolerance)noexcept;
 
 [[nodiscard]] Expected<f64> NWB_SIMD_CALL Intersects(SIMDVectorDouble origin, SIMDVectorDouble direction, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
 
-[[nodiscard]] bool NWB_SIMD_CALL Intersects(SIMDVectorDouble a0, SIMDVectorDouble a1, SIMDVectorDouble a2, SIMDVectorDouble b0, SIMDVectorDouble b1, SIMDVectorDouble b2)noexcept;
+[[nodiscard]] b8 NWB_SIMD_CALL Intersects(SIMDVectorDouble a0, SIMDVectorDouble a1, SIMDVectorDouble a2, SIMDVectorDouble b0, SIMDVectorDouble b1, SIMDVectorDouble b2)noexcept;
 
 [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL Intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2, SIMDVectorDouble plane)noexcept;
 
@@ -146,7 +146,7 @@ namespace TriangleDoubleTests{
 #endif
 }
 
-[[nodiscard]] NWB_INLINE bool TriangleHasArea(const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c, const f64 triangleAreaLengthSquaredEpsilon)noexcept{
+[[nodiscard]] NWB_INLINE b8 TriangleHasArea(const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c, const f64 triangleAreaLengthSquaredEpsilon)noexcept{
     return VectorDoubleGetX(TriangleAreaNormalLengthSquared(BuildTriangleAreaNormal64(a, b, c))) > triangleAreaLengthSquaredEpsilon;
 }
 
@@ -154,7 +154,7 @@ namespace TriangleDoubleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL TriangleTests::ContainsPoint2D(const SIMDVectorSingle point, const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c, const SIMDVectorSingle tolerance)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL TriangleTests::ContainsPoint2D(const SIMDVectorSingle point, const SIMDVectorSingle a, const SIMDVectorSingle b, const SIMDVectorSingle c, const SIMDVectorSingle tolerance)noexcept{
     const SIMDVectorSingle negativeTolerance = VectorNegate(VectorSplatX(tolerance));
     const SIMDVectorSingle ab = TriangleTests::EdgeCross2D(a, b, point);
     const SIMDVectorSingle bc = TriangleTests::EdgeCross2D(b, c, point);
@@ -165,7 +165,7 @@ namespace TriangleDoubleTests{
     return CollisionDetail::Vector4AllTrue(inside);
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL TriangleDoubleTests::ContainsPoint2D(const SIMDVectorDouble point, const SIMDVectorDouble a, const SIMDVectorDouble b, const SIMDVectorDouble c, const SIMDVectorDouble tolerance)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL TriangleDoubleTests::ContainsPoint2D(const SIMDVectorDouble point, const SIMDVectorDouble a, const SIMDVectorDouble b, const SIMDVectorDouble c, const SIMDVectorDouble tolerance)noexcept{
     const SIMDVectorDouble negativeTolerance = VectorDoubleNegate(VectorDoubleSplatX(tolerance));
     const SIMDVectorDouble ab = TriangleDoubleTests::EdgeCross2D(a, b, point);
     const SIMDVectorDouble bc = TriangleDoubleTests::EdgeCross2D(b, c, point);
@@ -188,7 +188,7 @@ namespace TriangleDoubleTests{
     return CollisionDoubleDetail::RayIntersectsTriangle(origin, direction, v0, v1, v2);
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL TriangleTests::Intersects(const SIMDVectorSingle a0, const SIMDVectorSingle a1, const SIMDVectorSingle a2, const SIMDVectorSingle b0, const SIMDVectorSingle b1, const SIMDVectorSingle b2)noexcept{
+[[nodiscard]] inline b8 NWB_SIMD_CALL TriangleTests::Intersects(const SIMDVectorSingle a0, const SIMDVectorSingle a1, const SIMDVectorSingle a2, const SIMDVectorSingle b0, const SIMDVectorSingle b1, const SIMDVectorSingle b2)noexcept{
     // Promotion keeps the separating-axis products finite across the full binary32 coordinate range.
     return TriangleDoubleTests::Intersects(
         ConvertVectorSingleToDouble(VectorAndInt(a0, s_SIMDMask3)), ConvertVectorSingleToDouble(VectorAndInt(a1, s_SIMDMask3)), ConvertVectorSingleToDouble(VectorAndInt(a2, s_SIMDMask3)),
@@ -196,7 +196,7 @@ namespace TriangleDoubleTests{
     );
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL TriangleDoubleTests::Intersects(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+[[nodiscard]] inline b8 NWB_SIMD_CALL TriangleDoubleTests::Intersects(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));

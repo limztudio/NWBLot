@@ -30,7 +30,7 @@ namespace ProcessCaptureFailureKind{
 
 struct ProcessCaptureFailure{
     ProcessCaptureFailureKind::Enum kind = ProcessCaptureFailureKind::InvalidArguments;
-    bool outputTruncated = false;
+    b8 outputTruncated = false;
     ErrorCondition nativeError{};
     ErrorCondition completionError{};
     i32 exitCode = -1;
@@ -87,7 +87,7 @@ inline void CloseFileDescriptor(int& fd)noexcept{
     return static_cast<u64>(time.tv_sec) * s_MillisecondsPerSecond + fractionalMilliseconds;
 }
 
-[[nodiscard]] inline Expected<bool, ErrorCondition> TimeoutExpired(const u64 deadlineMilliseconds)noexcept{
+[[nodiscard]] inline Expected<b8, ErrorCondition> TimeoutExpired(const u64 deadlineMilliseconds)noexcept{
     if(deadlineMilliseconds == 0u)
         return false;
     const auto now = MonotonicMilliseconds();
@@ -190,7 +190,7 @@ template<typename ArenaT, typename StringT>
     const usize timeoutMilliseconds = ProcessExecutionDetail::s_DefaultCaptureProcessOutputTimeoutMilliseconds
 ){
     ProcessExecutionDetail::NativeProcessArguments<ArenaT> nativeArguments(arena);
-    const bool validArguments = nativeArguments.build(arguments);
+    const b8 validArguments = nativeArguments.build(arguments);
     outOutput.clear();
     if(!validArguments || readBufferBytes == 0u)
         return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::InvalidArguments, .nativeError = ErrorCondition::invalid_argument, });
@@ -246,10 +246,10 @@ template<typename ArenaT, typename StringT>
 
     char buffer[ProcessExecutionDetail::s_CaptureReadBufferBytes];
     const usize effectiveReadBufferBytes = readBufferBytes < sizeof(buffer) ? readBufferBytes : sizeof(buffer);
-    bool readSucceeded = true;
+    b8 readSucceeded = true;
     ProcessCaptureFailure readFailure;
-    bool outputTruncated = false;
-    bool timedOut = false;
+    b8 outputTruncated = false;
+    b8 timedOut = false;
     for(;;){
         const auto expired = ProcessExecutionDetail::TimeoutExpired(deadlineMilliseconds);
         if(!expired)

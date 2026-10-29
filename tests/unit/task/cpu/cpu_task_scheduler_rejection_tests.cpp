@@ -94,7 +94,7 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependDirectlyOnItsStructuredParent){
         DeadlineGuard deadline;
         CpuTaskScheduler scheduler(0u);
         CpuTaskHandle parent;
-        bool rejected = false;
+        b8 rejected = false;
         const auto cpuTaskAdmission = scheduler.submit([&](){
             const auto child = scheduler.submit([]()noexcept{}, parent);
             rejected = !child;
@@ -118,7 +118,7 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependOnATransitiveDependentOfItsStructur
         DeadlineGuard deadline;
         CpuTaskScheduler scheduler(0u);
         CpuTaskHandle dependent;
-        bool rejected = false;
+        b8 rejected = false;
         u32 continuations = 0u;
         const auto cpuTaskAdmission = scheduler.submit([&](){
             const auto child = scheduler.submit([]()noexcept{}, dependent);

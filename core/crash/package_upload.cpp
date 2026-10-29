@@ -49,14 +49,14 @@ static_assert(sizeof(size_t) == sizeof(usize), "libcurl callback sizes must matc
 
 static Futex s_CurlAllocatorMutex;
 static Futex s_CurlGlobalInitMutex;
-static bool s_CurlGlobalInitialized = false;
+static b8 s_CurlGlobalInitialized = false;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // PersistentArena rounds C allocations to MaxAlign; reject unsupported round-up before its throwing size arithmetic.
-[[nodiscard]] static constexpr bool CanAllocateCrashCurlBytes(const usize size)noexcept{
+[[nodiscard]] static constexpr b8 CanAllocateCrashCurlBytes(const usize size)noexcept{
     constexpr usize s_MaxRoundedBytes = Limit<usize>::s_Max - (alignof(MaxAlign) - 1u);
     return size <= s_MaxRoundedBytes;
 }
@@ -112,7 +112,7 @@ static void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
     return ZeroAllocateArenaCMemory(DumpArena(), static_cast<usize>(count), static_cast<usize>(size));
 }
 
-[[nodiscard]] static bool EnsureCrashCurlGlobalInit(){
+[[nodiscard]] static b8 EnsureCrashCurlGlobalInit(){
     CURLcode result = CURLE_OK;
     {
         NothrowScopedLock lock(s_CurlGlobalInitMutex);
@@ -131,12 +131,12 @@ static void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
 }
 
 template<typename ArenaT>
-static bool IsSafePackageName(const ::Path<ArenaT>& path)noexcept{
+static b8 IsSafePackageName(const ::Path<ArenaT>& path)noexcept{
     const auto name = path.filenameView();
     if(name.empty() || IsDot(name) || IsDotDot(name))
         return false;
     for(const auto ch : name){
-        const bool ok = IsAsciiIdentifierChar(ch) || ch == '-' || ch == '.';
+        const b8 ok = IsAsciiIdentifierChar(ch) || ch == '-' || ch == '.';
         if(!ok)
             return false;
     }
@@ -249,7 +249,7 @@ static Expected<void, UploadFailure> UploadPackage(Alloc::ScratchArena& scratchA
     return {};
 }
 
-static bool WriteUploadAttemptText(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory, const AStringView state){
+static b8 WriteUploadAttemptText(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory, const AStringView state){
     constexpr AStringView s_StatePrefix = "state=";
     const AStringView stateText = state.data() ? state : PackageNames::s_UploadAttemptUnknownState;
     CrashStringT<Alloc::ScratchArena> text(scratchArena);
@@ -266,14 +266,14 @@ static bool WriteUploadAttemptText(Alloc::ScratchArena& scratchArena, const ::Pa
 template<typename ArenaT>
 Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchArena, const ::Path<ArenaT>& spoolDirectory, const CrashSpoolRetentionConfig& retention, const AStringView protectedPendingPackageName){
     const ::Path<Alloc::ScratchArena> operationSpoolDirectory(scratchArena, spoolDirectory);
-    const auto isSafePackageDirectory = [&](const ::Path<Alloc::ScratchArena>& path)->Expected<bool, ErrorCode>{
+    const auto isSafePackageDirectory = [&](const ::Path<Alloc::ScratchArena>& path)->Expected<b8, ErrorCode>{
         const auto directory = IsDirectory(path);
         if(!directory)
             return MakeUnexpected(directory.error());
         return *directory && IsSafePackageName(path);
     };
 
-    const auto shouldRetainPendingPackageDirectory = [&](const ::Path<Alloc::ScratchArena>& path)->Expected<bool, ErrorCode>{
+    const auto shouldRetainPendingPackageDirectory = [&](const ::Path<Alloc::ScratchArena>& path)->Expected<b8, ErrorCode>{
         const auto safeDirectory = isSafePackageDirectory(path);
         if(!safeDirectory)
             return MakeUnexpected(safeDirectory.error());
@@ -306,7 +306,7 @@ Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchA
 }
 
 template<typename ArenaT>
-static bool UploadPackageDirectory(
+static b8 UploadPackageDirectory(
     ArenaT& arena,
     Alloc::ScratchArena& scratchArena,
     const ::Path<Alloc::ScratchArena>& spoolDirectory,
@@ -352,7 +352,7 @@ static bool UploadPackageDirectory(
     return false;
 }
 
-static bool RecoverUploadingPackageDirectories(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& spoolDirectory){
+static b8 RecoverUploadingPackageDirectories(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& spoolDirectory){
     const ::Path<Alloc::ScratchArena> uploadingDirectory = UploadingDirectory(spoolDirectory);
     const auto uploadingIsDirectory = IsDirectory(uploadingDirectory);
     if(!uploadingIsDirectory){
@@ -366,7 +366,7 @@ static bool RecoverUploadingPackageDirectories(Alloc::ScratchArena& scratchArena
         CaptureCrashPackageFilesystemFailure("enumerate_interrupted_uploads", directory.error());
         return false;
     }
-    bool ok = true;
+    b8 ok = true;
     for(const auto& entry : *directory){
         const auto entryIsDirectory = IsDirectory(entry.path());
         if(!entryIsDirectory){
@@ -388,7 +388,7 @@ static bool RecoverUploadingPackageDirectories(Alloc::ScratchArena& scratchArena
 }
 
 #if defined(NWB_PLATFORM_ANDROID)
-static bool WriteAndroidCollectionNote(Alloc::ScratchArena& scratchArena, const CrashRequest& request){
+static b8 WriteAndroidCollectionNote(Alloc::ScratchArena& scratchArena, const CrashRequest& request){
     constexpr AStringView s_CollectionNote = "application_exit_info=not_collected_by_native_layer\n" "detail=Java/Kotlin host should attach ApplicationExitInfo tombstone data on next launch\n";
     return WriteTextFile(RequestPendingDirectory(scratchArena, request) / PackageNames::s_AndroidCollectionFileName, s_CollectionNote);
 }
@@ -438,20 +438,20 @@ static void CollectAndroidEmergencyRecord(Alloc::ScratchArena& scratchArena, con
 #endif
 
 template<typename ArenaT>
-bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapshot){
+b8 FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapshot){
     if(snapshot.spoolDirectory[0] == 0)
         return false;
     Alloc::ScratchArena scratchArena(CrashArenaScope::s_UploadScratch);
     CollectAndroidEmergencyRecord(scratchArena, snapshot);
 
     const ::Path<Alloc::ScratchArena> spoolDirectory(scratchArena, snapshot.spoolDirectory);
-    const bool recoveryOk = RecoverUploadingPackageDirectories(scratchArena, spoolDirectory);
+    const b8 recoveryOk = RecoverUploadingPackageDirectories(scratchArena, spoolDirectory);
     const auto retentionBeforeUpload = ApplyCrashSpoolRetention(scratchArena, spoolDirectory, snapshot.spoolRetention, AStringView(snapshot.protectedPendingPackageName));
     if(!retentionBeforeUpload){
         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash spool retention failed before upload: {} {}", retentionBeforeUpload.error().category().name(), retentionBeforeUpload.error().value());
         CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_SpoolRetentionCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
     }
-    const bool retentionOk = static_cast<bool>(retentionBeforeUpload);
+    const b8 retentionOk = static_cast<b8>(retentionBeforeUpload);
 
     const CrashStringT<Alloc::ScratchArena> url = CrashUploadUrl(scratchArena, snapshot.logServerUrl);
     if(url.empty())
@@ -460,7 +460,7 @@ bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snap
     if(!EnsureCrashCurlGlobalInit())
         return false;
 
-    bool allUploaded = true;
+    b8 allUploaded = true;
     const ::Path<Alloc::ScratchArena> pendingDirectory = PendingDirectory(spoolDirectory);
     const auto pendingIsDirectory = IsDirectory(pendingDirectory);
     if(!pendingIsDirectory){
@@ -495,10 +495,10 @@ bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snap
         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash spool retention failed after upload: {} {}", retentionAfterUpload.error().category().name(), retentionAfterUpload.error().value());
         CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_SpoolRetentionCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
     }
-    return allUploaded && recoveryOk && retentionOk && static_cast<bool>(retentionAfterUpload);
+    return allUploaded && recoveryOk && retentionOk && static_cast<b8>(retentionAfterUpload);
 }
 
-bool FlushCrashReportsForRequest(const CrashRequest& request){
+b8 FlushCrashReportsForRequest(const CrashRequest& request){
     if(!IsCurrentCrashRequest(request))
         return false;
 
@@ -516,10 +516,10 @@ bool FlushCrashReportsForRequest(const CrashRequest& request){
 
 template Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::GlobalArena>& spoolDirectory, const CrashSpoolRetentionConfig& retention, AStringView protectedPendingPackageName);
 template Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& spoolDirectory, const CrashSpoolRetentionConfig& retention, AStringView protectedPendingPackageName);
-template bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena, const CrashUploadSnapshot& snapshot);
+template b8 FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena, const CrashUploadSnapshot& snapshot);
 
 template Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::PersistentArena>& spoolDirectory, const CrashSpoolRetentionConfig& retention, AStringView protectedPendingPackageName);
-template bool FlushPendingCrashReportsImpl(Alloc::PersistentArena& arena, const CrashUploadSnapshot& snapshot);
+template b8 FlushPendingCrashReportsImpl(Alloc::PersistentArena& arena, const CrashUploadSnapshot& snapshot);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

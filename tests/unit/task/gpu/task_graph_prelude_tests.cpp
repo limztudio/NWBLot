@@ -47,7 +47,7 @@ using namespace TaskGraphTestUtils;
     return AddTaskWithCommands(graph, Name("tests/task_graph/prelude"), "Normal Execution Prelude", PrimaryGraphicsRequirements(), PreludeScheduling(), { .policy = Graphics::GpuTaskTimingPolicy::PacketOnly });
 }
 
-[[nodiscard]] static bool HasPacketDependency(const Graphics::GpuCompiledPacketView& consumer, const Graphics::GpuSubmissionPacketId producer)noexcept{
+[[nodiscard]] static b8 HasPacketDependency(const Graphics::GpuCompiledPacketView& consumer, const Graphics::GpuSubmissionPacketId producer)noexcept{
     if(!consumer.valid())
         return false;
     for(u32 index = 0u; index < consumer.plan->dependencyCount; ++index){

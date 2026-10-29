@@ -25,7 +25,7 @@ namespace __hidden_gpu_task_graph_imports{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool CompatibleResourceMetadata(const GpuTaskGraphResourceView& resource, const GpuGraphResourceDesc& desc)noexcept{
+[[nodiscard]] static b8 CompatibleResourceMetadata(const GpuTaskGraphResourceView& resource, const GpuGraphResourceDesc& desc)noexcept{
     // Re-importing an ownership source through the ordinary typed-import overload could silently exchange one of its immutable ownership snapshots.
     // Require callers to reuse its graph resource ID instead.
     if(resource.initialOwnerHandoffSourceCount != 0u || desc.initialOwnerHandoffSources || desc.initialOwnerHandoffSourceCount != 0u)
@@ -43,13 +43,13 @@ namespace __hidden_gpu_task_graph_imports{
     ;
 }
 
-[[nodiscard]] static bool CompatibleRetainedExternalFinalState(const bool keepInitialState, const ResourceStates::Mask nativeInitialState, const ResourceStates::Mask externalFinalState)noexcept{
+[[nodiscard]] static b8 CompatibleRetainedExternalFinalState(const b8 keepInitialState, const ResourceStates::Mask nativeInitialState, const ResourceStates::Mask externalFinalState)noexcept{
     // Native command-list close restores retained resources to their descriptor state.
     // A typed graph import must not publish a different known terminal state after that restoration.
     return !keepInitialState || externalFinalState == ResourceStates::Unknown || externalFinalState == nativeInitialState;
 }
 
-[[nodiscard]] static bool CompatibleQueueAdmission(const ResourceQueueAdmissionSnapshot& admission, const ResourceQueueSharing::Mask logicalSharing, const usize retainedQueueFamilyIndexCount)noexcept{
+[[nodiscard]] static b8 CompatibleQueueAdmission(const ResourceQueueAdmissionSnapshot& admission, const ResourceQueueSharing::Mask logicalSharing, const usize retainedQueueFamilyIndexCount)noexcept{
     if(!admission.valid() || admission.admittedQueueClasses != logicalSharing || retainedQueueFamilyIndexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
     return admission.queueFamilyIndexCount <= static_cast<usize>(Limit<u32>::s_Max) - retainedQueueFamilyIndexCount;
@@ -275,7 +275,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::importResourceSet(const GpuGraphRe
     return appendResourceSet(desc);
 }
 
-bool GpuTaskGraph::declarePresentEndpoint(const GpuPresentEndpoint& endpoint){
+b8 GpuTaskGraph::declarePresentEndpoint(const GpuPresentEndpoint& endpoint){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return false;

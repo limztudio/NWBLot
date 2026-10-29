@@ -59,7 +59,7 @@ struct AssetVolumeWriteResult{
 
 struct AssetVolumePackManifest;
 
-using AssetVolumeManifestCooker = Function<bool(AssetVolumePackManifest&, VirtualPathHashSet&, ScratchArena&)>;
+using AssetVolumeManifestCooker = Function<b8(AssetVolumePackManifest&, VirtualPathHashSet&, ScratchArena&)>;
 using AssetVolumeManifestCookerVector = CookVector<AssetVolumeManifestCooker>;
 
 

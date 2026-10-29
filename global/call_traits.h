@@ -5,6 +5,9 @@
 #pragma once
 
 
+#include "type.h"
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -14,16 +17,16 @@ namespace CallTraitsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, bool Small>
+template<typename T, b8 Small>
 struct Implementation1{ typedef const T& param_type; };
 template<typename T>
 struct Implementation1<T, true>{ typedef const T param_type; };
 
-template<typename T, bool IsPointer, bool IsArithmetic>
+template<typename T, b8 IsPointer, b8 IsArithmetic>
 struct Implementation0{ typedef const T& param_type; };
-template<typename T, bool IsPointer>
+template<typename T, b8 IsPointer>
 struct Implementation0<T, IsPointer, true>{ typedef typename Implementation1<T, sizeof(T) <= sizeof(void*)>::param_type param_type; };
-template<typename T, bool IsArithmetic>
+template<typename T, b8 IsArithmetic>
 struct Implementation0<T, true, IsArithmetic>{ typedef T const param_type; };
 
 

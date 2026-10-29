@@ -38,7 +38,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool apply(EditModel& model, const EditAction::Enum action, const bool)noexcept override{
+    [[nodiscard]] virtual b8 apply(EditModel& model, const EditAction::Enum action, const b8)noexcept override{
         if(m_context.failed() || &model != &m_model || model.instanceGeneration() != m_instanceGeneration || m_state.revision() != m_revision)
             return false;
         return action <= EditAction::Abandon;
@@ -104,8 +104,8 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
         m_context.fail();
         return result;
     }
-    const bool firstBinding = state.m_visual.modelGeneration == 0u;
-    const bool rebound = !firstBinding && state.m_visual.modelGeneration != modelGeneration;
+    const b8 firstBinding = state.m_visual.modelGeneration == 0u;
+    const b8 rebound = !firstBinding && state.m_visual.modelGeneration != modelGeneration;
     const Point requestedScroll = state.scroll();
     if(rebound){
         state.m_visual.scroll = 0.0f;

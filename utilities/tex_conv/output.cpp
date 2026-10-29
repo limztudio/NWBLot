@@ -67,7 +67,7 @@ public:
 
 
 template<typename ArenaT>
-bool CheckOutputPath(const ::Path<ArenaT>& path, const bool force, const bool temporary){
+b8 CheckOutputPath(const ::Path<ArenaT>& path, const b8 force, const b8 temporary){
     const auto exists = FileExistsNoFollow(path);
     if(!exists){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to query output path '{}': {}"), PathToString<tchar>(path), ConvertString(exists.error().message()));
@@ -191,7 +191,7 @@ Expected<OutputPaths> ResolveOutputPaths(const ScratchPath& inputPath, const ASt
     return paths;
 }
 
-bool ValidateOutputPaths(const OutputPaths& outputPaths, const bool force, Core::Alloc::ScratchArena& scratchArena){
+b8 ValidateOutputPaths(const OutputPaths& outputPaths, const b8 force, Core::Alloc::ScratchArena& scratchArena){
     const ScratchPath dataBackup = __hidden_output::PublicationPaths::MakeBackup(scratchArena, outputPaths.data);
     const ScratchPath metadataBackup = __hidden_output::PublicationPaths::MakeBackup(scratchArena, outputPaths.metadata);
     return
@@ -204,7 +204,7 @@ bool ValidateOutputPaths(const OutputPaths& outputPaths, const bool force, Core:
     ;
 }
 
-bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, const bool force, Core::Alloc::ScratchArena& scratchArena){
+b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, const b8 force, Core::Alloc::ScratchArena& scratchArena){
     if(payload.bytes.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cannot write an empty prepared texture."));
         return false;
@@ -221,9 +221,9 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
     const NotNull<const ScratchPath*> backups[] = { MakeNotNull(&paths.dataBackup), MakeNotNull(&paths.metadataBackup) };
     const NotNull<const ScratchPath*> outputs[] = { MakeNotNull(&paths.data), MakeNotNull(&paths.metadata) };
     const NotNull<const ScratchPath*> temporaries[] = { MakeNotNull(&paths.dataTemporary), MakeNotNull(&paths.metadataTemporary) };
-    bool ownedTemporary[__hidden_output::s_OutputFileCount] = {};
-    bool backedUp[__hidden_output::s_OutputFileCount] = {};
-    bool published[__hidden_output::s_OutputFileCount] = {};
+    b8 ownedTemporary[__hidden_output::s_OutputFileCount] = {};
+    b8 backedUp[__hidden_output::s_OutputFileCount] = {};
+    b8 published[__hidden_output::s_OutputFileCount] = {};
     ErrorCode removalErrors[__hidden_output::s_OutputFileCount];
     ErrorCode restorationErrors[__hidden_output::s_OutputFileCount];
     ErrorCode temporaryErrors[__hidden_output::s_OutputFileCount];

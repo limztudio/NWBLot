@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::setBindings(const InputKeyBinding* bindings, const usize count){
+b8 InputRouter::setBindings(const InputKeyBinding* bindings, const usize count){
     return m_bindings.set(bindings, count);
 }
 
@@ -54,20 +54,20 @@ void InputRouter::cancelDeviceInput(const u64 device)noexcept{
     }
 }
 
-bool InputRouter::wantsCommands()const noexcept{
+b8 InputRouter::wantsCommands()const noexcept{
     return hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source)noexcept{ return source.consumed; }) != m_commandSources.end();
 }
 
-bool InputRouter::ownsKey(const i32 key)const noexcept{
+b8 InputRouter::ownsKey(const i32 key)const noexcept{
     return InputBindings::ValidKey(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
 }
 
-bool InputRouter::ownsSource(const InputSource& source)const noexcept{
+b8 InputRouter::ownsSource(const InputSource& source)const noexcept{
     const CommandSource* held = findCommandSource(source);
     return held && held->consumed;
 }
 
-bool InputRouter::canEditCommand(const InputEvent& event)const noexcept{
+b8 InputRouter::canEditCommand(const InputEvent& event)const noexcept{
     if(event.type != InputEventType::CommandDown || !event.edit)
         return false;
     const CommandSource* source = findCommandSource(event.source);
@@ -85,8 +85,8 @@ bool InputRouter::canEditCommand(const InputEvent& event)const noexcept{
 
 Expected<InputEvent> InputRouter::resolveSourceEvent(const InputEvent& event){
     InputEvent resolved = event;
-    const bool physical = event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp;
-    const bool command = event.type == InputEventType::CommandDown || event.type == InputEventType::CommandUp;
+    const b8 physical = event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp;
+    const b8 command = event.type == InputEventType::CommandDown || event.type == InputEventType::CommandUp;
     if(!physical && !command)
         return resolved;
     if(physical){

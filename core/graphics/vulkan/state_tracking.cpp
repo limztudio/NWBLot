@@ -114,11 +114,11 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
     }
 }
 
-bool StateTracker::isPermanentTexture(Texture& texture)const noexcept{
+b8 StateTracker::isPermanentTexture(Texture& texture)const noexcept{
     return m_permanentTextureStates.find(MakeNotNull(&texture)) != m_permanentTextureStates.end();
 }
 
-bool StateTracker::isPermanentBuffer(Buffer& buffer)const noexcept{
+b8 StateTracker::isPermanentBuffer(Buffer& buffer)const noexcept{
     return m_permanentBufferStates.find(MakeNotNull(&buffer)) != m_permanentBufferStates.end();
 }
 
@@ -150,7 +150,7 @@ ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice 
     return state ? *state : ResourceStates::Unknown;
 }
 
-bool StateTracker::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const noexcept{
+b8 StateTracker::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const noexcept{
     if(!texture)
         return false;
     if(m_permanentTextureStates.find(MakeNotNull(texture)) != m_permanentTextureStates.end())
@@ -212,17 +212,17 @@ void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandB
     }
 }
 
-bool StateTracker::isUavBarrierEnabledForTexture(Texture& texture)const noexcept{
+b8 StateTracker::isUavBarrierEnabledForTexture(Texture& texture)const noexcept{
     const auto found = m_textureUavBarriers.find(MakeNotNull(&texture));
     return found == m_textureUavBarriers.end() || found.value().enableBarriers;
 }
 
-bool StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const noexcept{
+b8 StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const noexcept{
     const auto found = m_bufferUavBarriers.find(MakeNotNull(&buffer));
     return found == m_bufferUavBarriers.end() || found.value().enableBarriers;
 }
 
-void StateTracker::setEnableUavBarriersForTexture(Texture& texture, bool enableBarriers){
+void StateTracker::setEnableUavBarriersForTexture(Texture& texture, b8 enableBarriers){
     auto found = m_textureUavBarriers.find(MakeNotNull(&texture));
     if(found != m_textureUavBarriers.end()){
         found.value().enableBarriers = enableBarriers;
@@ -233,7 +233,7 @@ void StateTracker::setEnableUavBarriersForTexture(Texture& texture, bool enableB
         NWB_ASSERT(false);
 }
 
-void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarriers){
+void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, b8 enableBarriers){
     auto found = m_bufferUavBarriers.find(MakeNotNull(&buffer));
     if(found != m_bufferUavBarriers.end()){
         found.value().enableBarriers = enableBarriers;
@@ -285,7 +285,7 @@ void StateTracker::beginTrackingResolvedTransientTexture(Texture& texture, const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers){
+void CommandList::setEnableUavBarriersForTexture(Texture* texture, b8 enableBarriers){
     if(!texture)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("set texture UAV-barrier policy");
@@ -298,7 +298,7 @@ void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBa
     m_stateTracker.setEnableUavBarriersForTexture(*texture, enableBarriers);
 }
 
-void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarriers){
+void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, b8 enableBarriers){
     if(!buffer)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("set buffer UAV-barrier policy");
@@ -355,7 +355,7 @@ ResourceStates::Mask CommandList::getPermanentBufferState(Buffer* buffer)const n
     return m_stateTracker.getPermanentBufferState(buffer);
 }
 
-bool CommandList::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const noexcept{
+b8 CommandList::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
         return false;

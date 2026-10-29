@@ -48,7 +48,7 @@ public:
     [[nodiscard]] MemoryView memoryView()const noexcept{ return MemoryView(m_memory); }
 
     template<typename Arena>
-    [[nodiscard]] bool recordMemorySnapshot(const Name& scopeName, const Arena& arena){
+    [[nodiscard]] b8 recordMemorySnapshot(const Name& scopeName, const Arena& arena){
         if(!captureOptions().memoryActive())
             return true;
 
@@ -70,10 +70,10 @@ private:
     TimingRecorder m_cpuTiming;
     TimingRecorder m_gpuTiming;
     MemoryRecorder m_memory;
-    bool m_enabled = false;
-    bool m_cpuTimingEnabled = true;
-    bool m_gpuTimingEnabled = true;
-    bool m_memoryEnabled = true;
+    b8 m_enabled = false;
+    b8 m_cpuTimingEnabled = true;
+    b8 m_gpuTimingEnabled = true;
+    b8 m_memoryEnabled = true;
 };
 
 

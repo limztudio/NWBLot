@@ -165,11 +165,11 @@ inline Format::Enum GetBackBufferFormat(const DeviceCreationParameters& params)n
     return params.swapChainFormat;
 }
 
-inline bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported)noexcept{
+inline b8 SupportsRequestedValue(VkBool32 requested, VkBool32 supported)noexcept{
     return requested != VK_TRUE || supported == VK_TRUE;
 }
 
-[[nodiscard]] inline constexpr StringView BoolToYesNoText(const bool value)noexcept{
+[[nodiscard]] inline constexpr StringView BoolToYesNoText(const b8 value)noexcept{
     return value ? StringView("yes") : StringView("no");
 }
 
@@ -290,7 +290,7 @@ inline u64 BytesToMiB(u64 bytes)noexcept{
     return bytes / s_BytesPerMiB;
 }
 
-inline bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature)noexcept{
+inline b8 SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature)noexcept{
     switch(feature){
     case DeviceExtensionFeature::AccelerationStructure:
         return SupportsRequestedValue(requested.accelerationStructure.accelerationStructure, supported.accelerationStructure.accelerationStructure);
@@ -348,7 +348,7 @@ inline void AppendFeatureStruct(void*& pNext, FeatureT& feature)noexcept{
     pNext = &feature;
 }
 
-inline void AppendOptionalDeviceFeature(DeviceExtensionFeature::Enum feature, void*& pNext, OptionalDeviceFeatureSet& features, bool (&appended)[static_cast<usize>(DeviceExtensionFeature::Count)])noexcept{
+inline void AppendOptionalDeviceFeature(DeviceExtensionFeature::Enum feature, void*& pNext, OptionalDeviceFeatureSet& features, b8 (&appended)[static_cast<usize>(DeviceExtensionFeature::Count)])noexcept{
     if(feature == DeviceExtensionFeature::None || feature == DeviceExtensionFeature::Count)
         return;
 

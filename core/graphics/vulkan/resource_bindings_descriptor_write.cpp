@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, const DescriptorBufferSegment& allocation, const u32 dstOffsetBytes, const VkDescriptorType descriptorType){
+b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, const DescriptorBufferSegment& allocation, const u32 dstOffsetBytes, const VkDescriptorType descriptorType){
     ScopedLock lifecycleLock(m_lifecycleMutex);
 
     if(!m_enabled)
@@ -35,7 +35,7 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
         return false;
     }
 
-    const bool isSampler = (descriptorType == VK_DESCRIPTOR_TYPE_SAMPLER);
+    const b8 isSampler = (descriptorType == VK_DESCRIPTOR_TYPE_SAMPLER);
     const DescriptorBufferSegmentKind::Enum expectedKind = isSampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
     if(allocation.kind != expectedKind){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation has the wrong segment kind."));
@@ -85,7 +85,7 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
             last = middle;
     }
 
-    bool ownsLiveAllocation = false;
+    b8 ownsLiveAllocation = false;
     if(first > 0u){
         const DescriptorBufferSegment& liveAllocation = storage.liveAllocations[first - 1u];
         ownsLiveAllocation = liveAllocation.kind == allocation.kind
@@ -110,7 +110,7 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
 
     if(VulkanDetail::UsesDescriptorBufferInfo(item.type)){
         auto& buffer = *MakeNotNull(checked_cast<Buffer*>(item.resourceHandle));
-        const bool isUniform = item.type == ResourceType::ConstantBuffer;
+        const b8 isUniform = item.type == ResourceType::ConstantBuffer;
         const VkBufferUsageFlags requiredUsage = isUniform ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         if(!m_device.isBufferReadyForGpuUse(&buffer, requiredUsage)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready Buffer."));

@@ -31,7 +31,7 @@ struct FontSource{
 
 struct GlyphCoverageBounds{
     Rect ink{};
-    bool known = false;
+    b8 known = false;
 };
 
 struct RawShapedGlyph{
@@ -72,17 +72,17 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept;
+    [[nodiscard]] b8 valid()const noexcept;
     [[nodiscard]] const Core::Assets::AssetRef<Font>& identity()const noexcept;
     [[nodiscard]] u64 generation()const noexcept;
     [[nodiscard]] u32 unitsPerEm()const noexcept;
-    [[nodiscard]] bool coverageInkReliable()const noexcept;
+    [[nodiscard]] b8 coverageInkReliable()const noexcept;
     [[nodiscard]] const SharedBakedFontAtlas& bakedAtlas()const noexcept;
     [[nodiscard]] Expected<FontMetrics> metrics(f32 fontSize)const;
-    [[nodiscard]] bool shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const;
+    [[nodiscard]] b8 shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const;
     // The unrendered native slot presets the same pixel rectangle used by grayscale rasterization.
     [[nodiscard]] Expected<Rect> rasterBounds(u32 glyphId, u32 pixelSize);
-    [[nodiscard]] bool rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output);
+    [[nodiscard]] b8 rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output);
 
 
 private:

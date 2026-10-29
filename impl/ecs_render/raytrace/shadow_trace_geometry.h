@@ -40,7 +40,7 @@ struct PreparedShadowTraceGeometryBuffer{
     Name identity;
     Core::ResourceStates::Mask initialState = Core::ResourceStates::Common;
     u8 roles = 0u;
-    bool normalizationPending = false;
+    b8 normalizationPending = false;
 };
 
 using PreparedShadowTraceGeometryBufferVector = Vector<PreparedShadowTraceGeometryBuffer, Core::Alloc::GlobalArena>;
@@ -53,12 +53,12 @@ struct ShadowTraceGeometrySelection{
     Span<const NotNull<Core::Buffer*>> softwarePositions{};
     Span<const NotNull<Core::Buffer*>> softwareIndices{};
     Span<const NotNull<Core::Buffer*>> softwareAttributes{};
-    bool includeHardware = false;
-    bool includeSoftware = false;
+    b8 includeHardware = false;
+    b8 includeSoftware = false;
 };
 
 
-[[nodiscard]] bool FreezePreparedShadowTraceGeometryBuffers(
+[[nodiscard]] b8 FreezePreparedShadowTraceGeometryBuffers(
     Span<const ECSRenderDetail::MeshRayTracingResourceSnapshot> meshes,
     const ShadowTraceGeometrySelection& selection,
     Core::Alloc::ScratchArena& scratchArena,

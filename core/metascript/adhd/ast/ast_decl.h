@@ -21,7 +21,7 @@ struct EnumEntry{
     MStringView name;
     Expr* valueExpr = nullptr;
     SourceSpan span;
-    bool isFlag = false;
+    b8 isFlag = false;
 };
 
 
@@ -35,7 +35,7 @@ struct EnumDecl{
     SourceSpan span;
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
-    bool isImported = false;
+    b8 isImported = false;
 
 
 public:
@@ -53,7 +53,7 @@ struct TypeAliasDecl{
     MVector<TemplateParamDecl> templateParams;
     TypeRef* aliasedType = nullptr;
     SourceSpan span;
-    bool isImported = false;
+    b8 isImported = false;
 
 
 public:
@@ -77,10 +77,10 @@ struct FieldDecl{
     usize resolvedAlign = 1u;
     usize resolvedOffset = 0u;
     usize originalIndex = 0u;
-    bool hasCtorInit = false;
-    bool usesClassArena = false;
-    bool isTransient = false;
-    bool isReflect = false;
+    b8 hasCtorInit = false;
+    b8 usesClassArena = false;
+    b8 isTransient = false;
+    b8 isReflect = false;
 
 
 public:
@@ -103,18 +103,18 @@ struct MethodDecl{
     MVector<ParamDecl> params;
     MVector<Stmt*> body;
     SourceSpan span;
-    bool hasBody = false;
-    bool isConst = false;
-    bool isOverride = false;
-    bool isConstructor = false;
-    bool isDestructor = false;
-    bool isOperator = false;
-    bool isInline = false;
-    bool isOutOfLine = false;
-    bool isReflect = false;
-    bool usesScratchArena = false;
-    bool usesTaskScope = false;
-    bool isImported = false;
+    b8 hasBody = false;
+    b8 isConst = false;
+    b8 isOverride = false;
+    b8 isConstructor = false;
+    b8 isDestructor = false;
+    b8 isOperator = false;
+    b8 isInline = false;
+    b8 isOutOfLine = false;
+    b8 isReflect = false;
+    b8 usesScratchArena = false;
+    b8 usesTaskScope = false;
+    b8 isImported = false;
 
 
 public:
@@ -137,7 +137,7 @@ struct InterfaceDecl{
     MVector<MethodDecl*> methods;
     MStringView assetTypeName;
     SourceSpan span;
-    bool isImported = false;
+    b8 isImported = false;
 
 
 public:
@@ -165,10 +165,10 @@ struct ClassDecl{
     SourceSpan span;
     usize totalSize = 1u;
     usize totalAlign = 1u;
-    bool isSerialize = false;
-    bool isReflect = false;
-    bool needsClassArena = false;
-    bool isImported = false;
+    b8 isSerialize = false;
+    b8 isReflect = false;
+    b8 needsClassArena = false;
+    b8 isImported = false;
 
 
 public:
@@ -191,7 +191,7 @@ struct ClassTemplateInstantiation{
     MVector<FieldDecl*> orderedFields;
     usize totalSize = 1u;
     usize totalAlign = 1u;
-    bool isImported = false;
+    b8 isImported = false;
 
 
 public:

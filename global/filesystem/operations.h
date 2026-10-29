@@ -58,7 +58,7 @@ inline constexpr FileFormatFlags s_FileFormatFloatField = std::ios::floatfield;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool CanRepresentStreamSize(const u64 byteCount)noexcept{
+[[nodiscard]] inline b8 CanRepresentStreamSize(const u64 byteCount)noexcept{
     return ::CanRepresentU64<StreamSize>(byteCount);
 }
 
@@ -118,7 +118,7 @@ inline void CaptureDirectoryIterationError(ErrorCode& outError)noexcept{
 #endif
 
 template<typename ArenaT>
-[[nodiscard]] inline bool IsRootComponent(const Path<ArenaT>& path)noexcept{
+[[nodiscard]] inline b8 IsRootComponent(const Path<ArenaT>& path)noexcept{
     const usize pathSize = path.size();
     return pathSize != 0u && pathSize == GlobalFilesystemPathDetail::RootDirectoryLength(path.native());
 }
@@ -209,7 +209,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool PathHasDirectoryAncestor(const Path<ArenaT>& normalizedPath, const Path<ArenaT>& normalizedDirectory){
+[[nodiscard]] inline b8 PathHasDirectoryAncestor(const Path<ArenaT>& normalizedPath, const Path<ArenaT>& normalizedDirectory){
     if(normalizedPath.empty() || normalizedDirectory.empty())
         return false;
 
@@ -332,7 +332,7 @@ template<typename ArenaT>
 
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> FileExists(const Path<ArenaT>& path)noexcept{
+[[nodiscard]] inline Expected<b8, ErrorCode> FileExists(const Path<ArenaT>& path)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto attributes = GlobalFilesystemDetail::FileAttributes(path);
     if(!attributes)
@@ -350,7 +350,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> FileExistsNoFollow(const Path<ArenaT>& path)noexcept{
+[[nodiscard]] inline Expected<b8, ErrorCode> FileExistsNoFollow(const Path<ArenaT>& path)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto attributes = GlobalFilesystemDetail::FileAttributes(path);
     if(!attributes)
@@ -368,7 +368,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> IsDirectory(const Path<ArenaT>& path)noexcept{
+[[nodiscard]] inline Expected<b8, ErrorCode> IsDirectory(const Path<ArenaT>& path)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto attributes = GlobalFilesystemDetail::FileAttributes(path);
     if(!attributes)
@@ -386,7 +386,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> IsDirectoryNoFollow(const Path<ArenaT>& path)noexcept{
+[[nodiscard]] inline Expected<b8, ErrorCode> IsDirectoryNoFollow(const Path<ArenaT>& path)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto attributes = GlobalFilesystemDetail::FileAttributes(path);
     if(!attributes)
@@ -404,7 +404,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> IsRegularFile(const Path<ArenaT>& path)noexcept{
+[[nodiscard]] inline Expected<b8, ErrorCode> IsRegularFile(const Path<ArenaT>& path)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto attributes = GlobalFilesystemDetail::FileAttributes(path);
     if(!attributes)
@@ -421,7 +421,7 @@ template<typename ArenaT>
 #endif
 }
 
-[[nodiscard]] inline bool IsMissingPathError(const ErrorCode& error)noexcept{
+[[nodiscard]] inline b8 IsMissingPathError(const ErrorCode& error)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     return error.category() == std::system_category() && (error.value() == ERROR_FILE_NOT_FOUND || error.value() == ERROR_PATH_NOT_FOUND || error.value() == ERROR_DIRECTORY);
 #else
@@ -454,7 +454,7 @@ namespace GlobalFilesystemDetail{
 
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> CreateDirectorySingle(const Path<ArenaT>& path)noexcept{
+[[nodiscard]] inline Expected<b8, ErrorCode> CreateDirectorySingle(const Path<ArenaT>& path)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     if(CreateDirectory(path.c_str(), nullptr))
         return true;
@@ -487,10 +487,10 @@ template<typename ArenaT>
 
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> CreateDirectories(const Path<ArenaT>& path){
+[[nodiscard]] inline Expected<b8, ErrorCode> CreateDirectories(const Path<ArenaT>& path){
     if(path.empty())
         return false;
-    bool createdAny = false;
+    b8 createdAny = false;
     Path<ArenaT> current(path.arena());
     const Path<ArenaT> normalized = path.lexicallyNormal();
     for(const Path<ArenaT> component : normalized){
@@ -525,7 +525,7 @@ template<typename ArenaT>
 
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> RemoveFile(const Path<ArenaT>& path)noexcept{
+[[nodiscard]] inline Expected<b8, ErrorCode> RemoveFile(const Path<ArenaT>& path)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     if(DeleteFile(path.c_str()))
         return true;

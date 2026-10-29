@@ -112,12 +112,12 @@ Expected<TextInputSessionToken, TextInputAdmission::Enum> QueuedTextInputService
     return token;
 }
 
-bool QueuedTextInputService::end(const TextInputSessionToken token){
+b8 QueuedTextInputService::end(const TextInputSessionToken token){
     if(!isOwnerThread() || m_transitioning || !token.valid())
         return false;
     if(token != m_activeToken && token != m_cancelledToken)
         return false;
-    const bool active = token == m_activeToken;
+    const b8 active = token == m_activeToken;
     m_transitioning = true;
     ScopeExit finishTransition([this]()noexcept{ m_transitioning = false; });
     invalidateSession();
@@ -189,14 +189,14 @@ TextInputPollResult::Enum QueuedTextInputService::poll(const TextInputSessionTok
     event.cancelReason = next.cancelReason;
     event.deletionBasis = next.deletionBasis;
     m_queuedTextBytes -= next.text.size();
-    const bool cancelled = next.kind == TextInputEventKind::Cancelled;
+    const b8 cancelled = next.kind == TextInputEventKind::Cancelled;
     m_events.erase(m_events.begin());
     if(cancelled)
         m_cancelledToken = {};
     return TextInputPollResult::Event;
 }
 
-bool QueuedTextInputService::setFocused(const bool focused){
+b8 QueuedTextInputService::setFocused(const b8 focused){
     if(!isOwnerThread())
         return false;
     m_focused = focused;

@@ -39,7 +39,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
 
     TaskHandle inlineTask;
     u32 wakeMask;
-    bool wakeJoiners;
+    b8 wakeJoiners;
     {
         ScopedLock lock(m_mutex);
         if(m_aborting)
@@ -68,7 +68,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
         const TaskHandle parentHandle = s_Execution && &s_Execution->scheduler == this ? s_Execution->task : TaskHandle{};
         TaskNode* const parent = resolveLocked(parentHandle);
         const usize children = parent ? AddSize(parent->children, chunkCount) : 0u;
-        const bool runInline = chunkCount == 1u && (isMainThread() || isExecuting()) && (options.target != CpuTaskTarget::MainThread || isMainThread());
+        const b8 runInline = chunkCount == 1u && (isMainThread() || isExecuting()) && (options.target != CpuTaskTarget::MainThread || isMainThread());
         if(parent)
             parent->children = children;
         for(u32 index = reservedHead; index != TaskHandle::s_InvalidIndex;){

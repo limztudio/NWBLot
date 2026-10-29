@@ -72,11 +72,11 @@ public:
 
 public:
     // Mapping is supplied by the committed/preedit snapshot; adoption is atomic.
-    [[nodiscard]] bool adoptLayout(TextLayout&& layout, StringView expectedText, Span<const EditCaretMapping> mapping, usize committedBytes, EditTextMode::Enum mode);
+    [[nodiscard]] b8 adoptLayout(TextLayout&& layout, StringView expectedText, Span<const EditCaretMapping> mapping, usize committedBytes, EditTextMode::Enum mode);
     // Native preedit can address scalar edges inside graphemes; rectangles are local and have zero width.
     [[nodiscard]] Expected<Rect> caretRect(usize displayByte)const noexcept;
     [[nodiscard]] Expected<usize> hitTest(Point localPoint)const noexcept;
-    [[nodiscard]] Expected<usize> verticalTarget(usize displayCaret, bool down, f32 preferredX)const noexcept;
+    [[nodiscard]] Expected<usize> verticalTarget(usize displayCaret, b8 down, f32 preferredX)const noexcept;
     // A valid nonintersecting range yields an empty rectangle. Selected LF bytes use the supplied trailing cap.
     [[nodiscard]] Expected<Rect> rangeOnLine(EditBoxRange range, u32 lineIndex, f32 breakWidth)const noexcept;
 
@@ -88,7 +88,7 @@ public:
 
     [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_mode; }
 
-    [[nodiscard]] bool ready()const noexcept{ return m_ready; }
+    [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
 
 
 private:
@@ -102,7 +102,7 @@ private:
     PaintVector<EditBoxCaretStop> m_stops;
     PaintVector<EditCaretLine> m_lines;
     EditTextMode::Enum m_mode = EditTextMode::SingleLine;
-    bool m_ready = false;
+    b8 m_ready = false;
 };
 
 

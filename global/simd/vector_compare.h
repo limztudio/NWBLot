@@ -18,7 +18,7 @@ namespace SIMDVectorDetail{
 
 
 // Comparison masks contain canonical all-zero or all-one lanes.
-NWB_INLINE bool NWB_SIMD_CALL AllComparisonMask(SIMDVectorSingle value)noexcept{
+NWB_INLINE b8 NWB_SIMD_CALL AllComparisonMask(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_NEON64)
     return vminvq_u32(vreinterpretq_u32_f32(value)) != 0u;
 #else
@@ -55,7 +55,7 @@ NWB_INLINE NativeUIntPair EqualBitsPair(NativeUIntPair v0, NativeUIntPair v1)noe
 
 // Comparison masks contain canonical all-zero or all-one lanes; inactive lanes are neutralized only after the comparison.
 template<u32 ActiveMask>
-NWB_INLINE bool NWB_SIMD_CALL AllComparisonMask(SIMDVectorDouble value)noexcept{
+NWB_INLINE b8 NWB_SIMD_CALL AllComparisonMask(SIMDVectorDouble value)noexcept{
     static_assert(ActiveMask == VectorDoubleComponentMask::s_DoubleXYZ || ActiveMask == VectorDoubleComponentMask::s_DoubleXYZW);
 #if defined(NWB_HAS_NEON64)
     constexpr u64 s_AllOnesLaneMask = 0xFFFFFFFFFFFFFFFFu;
@@ -411,12 +411,12 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleIsInfinite(SIMDVectorDoubl
     return VectorDoubleEqualInt(VectorDoubleAndInt(value, s_DoubleSIMDAbsMask), s_DoubleSIMDInfinity);
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL VectorIsFinite(SIMDVectorSingle value, u32 activeMask)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL VectorIsFinite(SIMDVectorSingle value, u32 activeMask)noexcept{
     const SIMDVectorSingle invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
     return (VectorMoveMask(invalid) & activeMask) == 0u;
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL VectorDoubleIsFinite(SIMDVectorDouble value, u32 activeMask)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL VectorDoubleIsFinite(SIMDVectorDouble value, u32 activeMask)noexcept{
     const SIMDVectorDouble invalid = VectorDoubleOrInt(VectorDoubleIsNaN(value), VectorDoubleIsInfinite(value));
     return (VectorDoubleMoveMask(invalid) & activeMask) == 0u;
 }

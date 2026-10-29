@@ -29,11 +29,11 @@ using namespace GpuTaskGraphCompilerDetail;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ReadStatesCompatible(const GpuTaskGraphResourceView& resource, const ResourceStates::Mask lhs, const ResourceStates::Mask rhs)noexcept{
+[[nodiscard]] b8 ReadStatesCompatible(const GpuTaskGraphResourceView& resource, const ResourceStates::Mask lhs, const ResourceStates::Mask rhs)noexcept{
     return lhs == rhs || (resource.type == GpuGraphResourceType::Texture && GraphicsBackend::AreTextureReadStatesCompatible(lhs, rhs));
 }
 
-[[nodiscard]] bool NativeClosePreservesState(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const ResourceStates::Mask state)noexcept{
+[[nodiscard]] b8 NativeClosePreservesState(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const ResourceStates::Mask state)noexcept{
     if(const Texture* const texture = graph.textureForResource(resource.id)){
         const TextureDesc& description = texture->getCreationDescription();
         return !description.keepInitialState || description.initialState == state;
@@ -49,14 +49,14 @@ using namespace GpuTaskGraphCompilerDetail;
     return !resource.hasBackendResource;
 }
 
-[[nodiscard]] bool PacketPreservesReadStateSource(const GpuTaskGraphResourceStatePlan& plan, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const TrackedCompiledResourceState& source)noexcept{
+[[nodiscard]] b8 PacketPreservesReadStateSource(const GpuTaskGraphResourceStatePlan& plan, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const TrackedCompiledResourceState& source)noexcept{
     if(!NativeClosePreservesState(plan.graph, resource, source.state))
         return false;
     const GpuSubmissionPacketId packetID = FindCompiledPacketForTask(plan.compiledPlan, source.task);
     if(!packetID.valid() || packetID.generation != plan.compiledPlan.planGeneration || packetID.index >= plan.compiledPlan.packets.size())
         return false;
     const GpuSubmissionPacket& packet = plan.compiledPlan.packets[packetID.index];
-    bool foundSource = false;
+    b8 foundSource = false;
     for(u32 taskOffset = 0u; taskOffset < packet.taskCount; ++taskOffset){
         const GpuTaskId taskID = plan.compiledPlan.packetTasks[packet.taskOffset + taskOffset];
         foundSource = foundSource || taskID == source.task;
@@ -98,7 +98,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TaskPreservesReadState(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphTaskView& task, const TaskResourceUseIndex& useHistory, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const usize useIndex)noexcept{
+b8 TaskPreservesReadState(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphTaskView& task, const TaskResourceUseIndex& useHistory, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const usize useIndex)noexcept{
     if(!useHistory.validFor(task) || useIndex >= task.resourceUseCount || task.resourceUses[useIndex].resource != resource.id)
         return false;
     const GpuTaskResourceUse& entryUse = task.resourceUses[useIndex];
@@ -170,14 +170,14 @@ ResourceStates::Mask ReadStateSourceSnapshotState(const GpuTaskGraph::Declaratio
     return state;
 }
 
-bool AppendOverlappingReaderDependencies(GpuTaskGraphResourceStatePlan& plan, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const TrackedCompiledResourceState& previousState, const GpuSubmissionPacketId& consumer){
+b8 AppendOverlappingReaderDependencies(GpuTaskGraphResourceStatePlan& plan, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, const TrackedCompiledResourceState& previousState, const GpuSubmissionPacketId& consumer){
     // Exclusive sharing always chains overlapping readers through their latest state seeds.
     if(!ResourceUsesConcurrentQueueSharing(resource, plan.topology))
         return true;
     if(previousState.resource != resource.id || previousState.access != GpuTaskResourceAccess::Read || !RangeContains(resource, previousState.range, range))
         return false;
     GpuTaskId newerOverlappingTask;
-    bool mayBoundReadEpoch = true;
+    b8 mayBoundReadEpoch = true;
     for(usize stateIndex = plan.resourceHistory.last(resource.id); stateIndex != Limit<usize>::s_Max; stateIndex = plan.resourceHistory.previous(stateIndex)){
         const TrackedCompiledResourceState& reader = plan.trackedResourceStates[stateIndex];
         if(!RangesOverlap(resource, reader.range, range))

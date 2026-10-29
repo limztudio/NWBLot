@@ -93,7 +93,7 @@ Expected<RefractionStatistics> RendererFramePipeline::tryGetLatestRefractionStat
     return m_raytracingSystem.tryGetLatestRefractionStatistics();
 }
 
-bool RendererFramePipeline::setReflectionSettings(const ReflectionSettings& settings)noexcept{
+b8 RendererFramePipeline::setReflectionSettings(const ReflectionSettings& settings)noexcept{
     if(!ValidateReflectionSettings(settings))
         return false;
     m_reflectionSettings = settings;
@@ -104,11 +104,11 @@ Expected<ReflectionStatistics> RendererFramePipeline::tryGetLatestReflectionStat
     return m_reflectionSystem.tryGetLatestStatistics();
 }
 
-bool RendererFramePipeline::setPresentationSettings(const PresentationSettings& settings)noexcept{
+b8 RendererFramePipeline::setPresentationSettings(const PresentationSettings& settings)noexcept{
     return m_deferredSystem.setPresentationSettings(settings);
 }
 
-bool RendererFramePipeline::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
+b8 RendererFramePipeline::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
     return m_deferredTaskTimingFeedback.setPolicy(policy);
 }
 

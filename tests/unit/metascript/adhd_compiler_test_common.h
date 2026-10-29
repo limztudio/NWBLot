@@ -43,9 +43,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool resolveInclude(
+    [[nodiscard]] b8 resolveInclude(
         const MStringView includePath,
-        const bool,
+        const b8,
         MetaArena& arena,
         MString& outResolvedKey,
         MString& outContent

@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskScheduler::recordPacketRange(
+b8 GpuTaskScheduler::recordPacketRange(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,

@@ -55,9 +55,9 @@ public:
 
 
 protected:
-    bool internalInit(u16 port, BasicStringView<tchar> logFileNameBase = {}, AStringView crashSymbolStoreDirectory = {}, CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{}, AStringView crashUploadToken = AStringView());
+    b8 internalInit(u16 port, BasicStringView<tchar> logFileNameBase = {}, AStringView crashSymbolStoreDirectory = {}, CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{}, AStringView crashUploadToken = AStringView());
     void internalDestroy();
-    bool internalUpdate();
+    b8 internalUpdate();
 
 
 protected:
@@ -66,9 +66,9 @@ protected:
 
 
 private:
-    [[nodiscard]] bool enqueueCrashUpload(const Path& path, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 enqueueCrashUpload(const Path& path, Core::Alloc::ScratchArena& scratchArena);
     void stopCrashIngestWorker();
-    [[nodiscard]] bool crashUploadAuthorized(MHD_Connection& connection)const noexcept;
+    [[nodiscard]] b8 crashUploadAuthorized(MHD_Connection& connection)const noexcept;
     [[nodiscard]] Expected<PendingCrashUpload> tryDequeueCrashUpload();
 
 
@@ -80,7 +80,7 @@ private:
     AString<LogArena> m_crashUploadToken;
     CrashUploadQueue m_crashUploads;
     Semaphore<> m_crashIngestSemaphore;
-    Atomic<bool> m_crashIngestExit;
+    Atomic<b8> m_crashIngestExit;
     Thread m_crashIngestThread;
 };
 

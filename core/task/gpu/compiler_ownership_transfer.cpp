@@ -23,7 +23,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AppendCompiledOwnershipTransfer(
+[[nodiscard]] b8 AppendCompiledOwnershipTransfer(
     GpuTaskGraphResourceStatePlan& plan,
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
@@ -103,7 +103,7 @@ namespace GpuTaskGraphCompilerDetail{
     if(sourceQueueInfo->familyIndex == destinationQueueInfo->familyIndex)
         return true;
 
-    const bool usesConcurrentSharing = ResourceUsesConcurrentQueueSharing(resource, plan.topology);
+    const b8 usesConcurrentSharing = ResourceUsesConcurrentQueueSharing(resource, plan.topology);
     if(usesConcurrentSharing){
         if(!ResourceSharesQueuePairConcurrently(resource, plan.topology, *sourceQueueInfo, *destinationQueueInfo))
             return false;

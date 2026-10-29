@@ -72,7 +72,7 @@ GpuCompiledGraph::CompilationScope::~CompilationScope()noexcept{
 
 
 void GpuCompiledGraph::CompilationScope::publish()noexcept{
-    const bool publicationValid = m_graph && m_graph->m_planAccessState.load(MemoryOrder::relaxed) == GpuCompiledGraph::s_PlanAccessWriterBit;
+    const b8 publicationValid = m_graph && m_graph->m_planAccessState.load(MemoryOrder::relaxed) == GpuCompiledGraph::s_PlanAccessWriterBit;
     NWB_FATAL_ASSERT_MSG(publicationValid, "Compiled-plan publication requires exact compile-writer ownership");
 
     m_graph->m_valid = true;
@@ -169,7 +169,7 @@ GpuCompiledGraph::~GpuCompiledGraph()noexcept{
 }
 
 
-bool GpuCompiledGraph::tryReset()noexcept{
+b8 GpuCompiledGraph::tryReset()noexcept{
     {
         NothrowScopedLock lock(m_attemptBindingMutex);
         if(m_attemptBindingState == AttemptBindingState::Recording || m_attemptBindingState == AttemptBindingState::Submitting)
@@ -193,11 +193,11 @@ void GpuCompiledGraph::reset()noexcept{
     NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph::reset requires its active submission owner to resolve first");
 }
 
-bool GpuCompiledGraph::validPacket(const GpuSubmissionPacketId& packetID)const noexcept{
+b8 GpuCompiledGraph::validPacket(const GpuSubmissionPacketId& packetID)const noexcept{
     return valid() && packetID.valid() && packetID.generation == m_planGeneration && packetID.index < m_packets.size();
 }
 
-bool GpuCompiledGraph::validPacketRange(const GpuSubmissionPacketRange& range)const noexcept{
+b8 GpuCompiledGraph::validPacketRange(const GpuSubmissionPacketRange& range)const noexcept{
     return range.valid() && validPacket(range.first) && range.packetCount <= m_packets.size() - range.first.index;
 }
 
@@ -242,13 +242,13 @@ GpuTaskPacketizationDecision::Enum GpuCompiledGraph::packetizationDecisionForTas
     return compiledTask ? compiledTask->packetizationDecision : GpuTaskPacketizationDecision::Unknown;
 }
 
-bool GpuCompiledGraph::tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
+b8 GpuCompiledGraph::tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     const GpuCompiledTask* const firstTask = findTask(first);
     const GpuCompiledTask* const secondTask = findTask(second);
     return firstTask && secondTask && firstTask->packet == secondTask->packet;
 }
 
-bool GpuCompiledGraph::taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
+b8 GpuCompiledGraph::taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     const GpuCompiledTask* const firstTask = findTask(first);
     const GpuCompiledTask* const secondTask = findTask(second);
     if(!firstTask || !secondTask)
@@ -257,7 +257,7 @@ bool GpuCompiledGraph::taskPrecedesOrSharesPacket(const GpuTaskId& first, const 
     return firstTask->packet.index <= secondTask->packet.index;
 }
 
-bool GpuCompiledGraph::taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
+b8 GpuCompiledGraph::taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     if(first == second)
         return false;
     const GpuCompiledTask* const firstTask = findTask(first);
@@ -275,7 +275,7 @@ bool GpuCompiledGraph::taskPrecedesInSamePacket(const GpuTaskId& first, const Gp
     return firstTaskIndex < secondTaskIndex;
 }
 
-bool GpuCompiledGraph::tasksFormContiguousPacketSequence(const GpuTaskId* const tasks, const usize taskCount)const noexcept{
+b8 GpuCompiledGraph::tasksFormContiguousPacketSequence(const GpuTaskId* const tasks, const usize taskCount)const noexcept{
     if(!tasks || taskCount == 0u)
         return false;
     const GpuCompiledTask* const firstTask = findTask(tasks[0u]);
@@ -299,7 +299,7 @@ bool GpuCompiledGraph::tasksFormContiguousPacketSequence(const GpuTaskId* const 
     return true;
 }
 
-bool GpuCompiledGraph::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept{
+b8 GpuCompiledGraph::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept{
     const GpuCompiledTask* const compiledTask = findTask(task);
     if(!compiledTask)
         return false;

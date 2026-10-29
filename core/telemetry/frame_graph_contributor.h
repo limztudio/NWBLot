@@ -24,7 +24,7 @@ struct FrameGraphNodeHandle{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return index != s_InvalidFrameGraphNodeIndex; }
+    [[nodiscard]] b8 valid()const noexcept{ return index != s_InvalidFrameGraphNodeIndex; }
 };
 
 struct FrameGraphPendingNameEdge{
@@ -73,8 +73,8 @@ public:
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
 
     [[nodiscard]] Alloc::ScratchArena& scratchArena()noexcept{ return m_scratchArena; }
-    [[nodiscard]] bool addPhysicalQueueRuntimeStatistics(FrameGraphNodeHandle owner, const FrameGraphPhysicalQueueRuntimeStatistics& statistics);
-    [[nodiscard]] bool addPacketSubmissionStatistics(FrameGraphNodeHandle owner, const FrameGraphPacketSubmissionStatisticsRecord& statistics);
+    [[nodiscard]] b8 addPhysicalQueueRuntimeStatistics(FrameGraphNodeHandle owner, const FrameGraphPhysicalQueueRuntimeStatistics& statistics);
+    [[nodiscard]] b8 addPacketSubmissionStatistics(FrameGraphNodeHandle owner, const FrameGraphPacketSubmissionStatisticsRecord& statistics);
 
     [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const u8 flags = 0u){
         return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphPassMetadata{}, flags);
@@ -126,7 +126,7 @@ public:
 
 
 public:
-    virtual bool appendFrameGraph(FrameGraphBuilder& builder) = 0;
+    virtual b8 appendFrameGraph(FrameGraphBuilder& builder) = 0;
 };
 
 

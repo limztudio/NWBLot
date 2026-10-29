@@ -79,7 +79,7 @@ void WaylandClipboardService::OnRegistryRemove(void* const data, wl_registry*, c
         return;
     }
     if(name == service.m_managerName){
-        const bool focused = service.m_focused;
+        const b8 focused = service.m_focused;
         service.releaseDevices();
         wl_data_device_manager_destroy(service.m_manager);
         service.m_manager = nullptr;
@@ -89,7 +89,7 @@ void WaylandClipboardService::OnRegistryRemove(void* const data, wl_registry*, c
     }
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     else if(name == service.m_primaryManagerName){
-        const bool focused = service.m_focused;
+        const b8 focused = service.m_focused;
         service.releaseDevices();
         zwp_primary_selection_device_manager_v1_destroy(service.m_primaryManager);
         service.m_primaryManager = nullptr;
@@ -200,7 +200,7 @@ void WaylandClipboardService::OnPrimaryCancelled(void* const data, zwp_primary_s
 
 void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlobalName){
     NWB_ASSERT(isOwnerThread());
-    const bool focused = seat && seat == m_seat && seatGlobalName == m_seatName && m_focused;
+    const b8 focused = seat && seat == m_seat && seatGlobalName == m_seatName && m_focused;
     releaseDevices();
     m_seat = seat;
     m_seatName = seat ? seatGlobalName : 0u;

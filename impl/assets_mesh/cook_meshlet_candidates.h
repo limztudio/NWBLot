@@ -27,7 +27,7 @@ struct MeshletFrontierCandidate{
 
 struct MeshletCandidateSearchResult{
     MeshletFrontierCandidate candidate;
-    bool found = false;
+    b8 found = false;
 };
 
 struct MeshletVertexCounts{
@@ -37,7 +37,7 @@ struct MeshletVertexCounts{
 
 struct MeshletConeScore{
     SIMDVectorSingle cutoff = s_SIMDNegativeOne;
-    bool enabled = false;
+    b8 enabled = false;
 };
 
 struct MeshletScoreState{
@@ -49,7 +49,7 @@ struct MeshletScoreState{
     SIMDVectorSingle radius = VectorZero();
     SIMDVectorSingle coneCutoff = s_SIMDNegativeOne;
     u32 primitiveCount = 0u;
-    bool coneEnabled = false;
+    b8 coneEnabled = false;
 };
 
 static constexpr f32 s_MeshletScoreSharedVertexWeight = 20.0f;
@@ -76,13 +76,13 @@ public:
     [[nodiscard]] static SIMDVectorSingle PredictMeshletScoreRadius(const MeshletScoreState& state, const SIMDVectorSingle (&trianglePositions)[s_MeshletTriangleIndexCount])noexcept;
     [[nodiscard]] static SIMDVectorSingle MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVectorSingle triangleCentroid)noexcept;
     [[nodiscard]] static SIMDVectorSingle MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVectorSingle triangleAreaNormal)noexcept;
-    static void UpdateMeshletScoreConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle triangleAreaNormal, bool& hasNormal, SIMDVectorSingle& coneCutoff)noexcept;
+    static void UpdateMeshletScoreConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle triangleAreaNormal, b8& hasNormal, SIMDVectorSingle& coneCutoff)noexcept;
     template<typename TriangleAreaNormalAtT>
     [[nodiscard]] static MeshletConeScore ComputeMeshletScoreConeCutoff(
         Span<const u32> triangleIndices,
         const SIMDVectorSingle axis,
         const u32 extraTriangleIndex,
-        const bool hasExtraTriangle,
+        const b8 hasExtraTriangle,
         const TriangleAreaNormalAtT& triangleAreaNormalAt
     )noexcept(
         noexcept(DeclVal<void(*)(SIMDVectorSingle)noexcept>()(triangleAreaNormalAt(DeclVal<const u32&>())))
@@ -104,7 +104,7 @@ public:
         const TriangleAreaNormalAtT& triangleAreaNormalAt,
         const u32 sharedVertexCount,
         const u32 missingVertexCount,
-        const bool disconnected
+        const b8 disconnected
     )noexcept(noexcept(PredictMeshletScoreConeWidening(DeclVal<Span<const u32>>(), state, triangleIndex, triangleVectors.areaNormal, triangleAreaNormalAt)));
     [[nodiscard]] static Expected<MeshletVertexCounts> MeshletCanFitTriangle(const MeshletDesc& meshlet, Span<const u32> localVertexRefs, const MeshletTriangleData& triangle)noexcept;
     static void UpdateBestMeshletCandidateIfBetter(
@@ -115,11 +115,11 @@ public:
         Span<const u32> localVertexRefs,
         const usize frontierOffset,
         const u32 triangleIndex,
-        const bool disconnected,
-        bool& found,
+        const b8 disconnected,
+        b8& found,
         MeshletFrontierCandidate& outCandidate
     )noexcept;
-    static void UpdateBestMeshletCandidateFromResult(const MeshletCandidateSearchResult& candidate, bool& found, MeshletFrontierCandidate& outCandidate)noexcept;
+    static void UpdateBestMeshletCandidateFromResult(const MeshletCandidateSearchResult& candidate, b8& found, MeshletFrontierCandidate& outCandidate)noexcept;
     [[nodiscard]] static Expected<MeshletFrontierCandidate> FindBestMeshletFrontierCandidate(
         const MeshletTrianglePrecompute& trianglePrecompute,
         Span<const u32> frontier,
@@ -177,7 +177,7 @@ inline MeshletVertexCounts MeshletCandidateSearch::CountMeshletMissingVertices(c
     MeshletVertexCounts counts{};
     for(usize cornerIndex = 0u; cornerIndex < s_MeshletTriangleIndexCount; ++cornerIndex){
         const u32 vertexRefIndex = triangle.vertexRefs[cornerIndex];
-        bool repeatedInTriangle = false;
+        b8 repeatedInTriangle = false;
         for(usize previousCornerIndex = 0u; previousCornerIndex < cornerIndex; ++previousCornerIndex){
             if(triangle.vertexRefs[previousCornerIndex] == vertexRefIndex){
                 repeatedInTriangle = true;
@@ -198,13 +198,13 @@ inline MeshletVertexCounts MeshletCandidateSearch::CountMeshletMissingVertices(c
 
 
 template<typename TriangleAreaNormalAtT>
-MeshletConeScore MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(const Span<const u32> triangleIndices, const SIMDVectorSingle axis, const u32 extraTriangleIndex, const bool hasExtraTriangle, const TriangleAreaNormalAtT& triangleAreaNormalAt)noexcept(
+MeshletConeScore MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(const Span<const u32> triangleIndices, const SIMDVectorSingle axis, const u32 extraTriangleIndex, const b8 hasExtraTriangle, const TriangleAreaNormalAtT& triangleAreaNormalAt)noexcept(
     noexcept(DeclVal<void(*)(SIMDVectorSingle)noexcept>()(triangleAreaNormalAt(DeclVal<const u32&>())))
 ){
     if(!::FrameValidDirection(axis))
         return {};
 
-    bool hasNormal = false;
+    b8 hasNormal = false;
     SIMDVectorSingle coneCutoff = s_SIMDOne;
     for(const u32 triangleIndex : triangleIndices){
         const SIMDVectorSingle triangleAreaNormal = triangleAreaNormalAt(triangleIndex);
@@ -252,7 +252,7 @@ SIMDVectorSingle MeshletCandidateSearch::ScoreMeshletCandidate(
     const TriangleAreaNormalAtT& triangleAreaNormalAt,
     const u32 sharedVertexCount,
     const u32 missingVertexCount,
-    const bool disconnected
+    const b8 disconnected
 )noexcept(noexcept(PredictMeshletScoreConeWidening(DeclVal<Span<const u32>>(), state, triangleIndex, triangleVectors.areaNormal, triangleAreaNormalAt))){
     const SIMDVectorSingle predictedRadius = PredictMeshletScoreRadius(state, triangleVectors.positions);
     const SIMDVectorSingle predictedRadiusGrowth = VectorMax(VectorSubtract(predictedRadius, state.radius), VectorZero());
@@ -287,8 +287,8 @@ inline void MeshletCandidateSearch::UpdateBestMeshletCandidateIfBetter(
     const Span<const u32> localVertexRefs,
     const usize frontierOffset,
     const u32 triangleIndex,
-    const bool disconnected,
-    bool& found,
+    const b8 disconnected,
+    b8& found,
     MeshletFrontierCandidate& outCandidate
 )noexcept{
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
@@ -320,7 +320,7 @@ inline Expected<MeshletFrontierCandidate> MeshletCandidateSearch::FindBestMeshle
     const MeshletDesc& meshlet,
     const Span<const u32> localVertexRefs
 )noexcept{
-    bool found = false;
+    b8 found = false;
     MeshletFrontierCandidate candidate;
     for(usize frontierOffset = 0u; frontierOffset < frontier.size(); ++frontierOffset){
         const u32 triangleIndex = frontier[frontierOffset];
@@ -342,7 +342,7 @@ inline Expected<MeshletFrontierCandidate> MeshletCandidateSearch::FindBestDiscon
     const MeshletDesc& meshlet,
     const Span<const u32> localVertexRefs
 )noexcept{
-    bool found = false;
+    b8 found = false;
     MeshletFrontierCandidate candidate;
     for(usize triangleIndex = searchBegin; triangleIndex < searchEnd; ++triangleIndex){
         if(trianglePrecompute.visitedTriangles[triangleIndex] != 0u)
@@ -402,7 +402,7 @@ inline Expected<MeshletFrontierCandidate> MeshletCandidateSearch::FindBestDiscon
         return MakeUnexpected(Failure{});
     }
 
-    bool found = false;
+    b8 found = false;
     MeshletFrontierCandidate candidate;
     for(const MeshletCandidateSearchResult& result : parallelCandidates)
         UpdateBestMeshletCandidateFromResult(result, found, candidate);

@@ -14,7 +14,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuCommandIrCapture::captureUploadBuffer(
+b8 GpuCommandIrCapture::captureUploadBuffer(
     const GpuTaskId task,
     const GpuSubmissionPacketId packet,
     const GpuPhysicalQueueId queue,
@@ -36,7 +36,7 @@ bool GpuCommandIrCapture::captureUploadBuffer(
     return appendUpload(record, sourceBytes);
 }
 
-bool GpuCommandIrCapture::captureUploadTexture(
+b8 GpuCommandIrCapture::captureUploadTexture(
     const GpuTaskId task,
     const GpuSubmissionPacketId packet,
     const GpuPhysicalQueueId queue,
@@ -68,7 +68,7 @@ bool GpuCommandIrCapture::captureUploadTexture(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuCommandIrCapture::appendUpload(GpuCommandIrBuiltinTaskRecord record, const BinaryByteView bytes){
+b8 GpuCommandIrCapture::appendUpload(GpuCommandIrBuiltinTaskRecord record, const BinaryByteView bytes){
     if(bytes.empty() || !bytes.data() || m_blobBytes.size() > Limit<u64>::s_Max - bytes.size())
         return false;
 

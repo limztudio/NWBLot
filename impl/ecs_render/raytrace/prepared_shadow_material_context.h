@@ -43,7 +43,7 @@ namespace PreparedShadowMaterialContextRoute{
 // Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.
 class PreparedShadowMaterialContext final : NoCopy{
 private:
-    [[nodiscard]] static bool StorageReady(const RendererRayTracingState& state, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
+    [[nodiscard]] static b8 StorageReady(const RendererRayTracingState& state, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
 
 
 public:
@@ -55,28 +55,28 @@ public:
 
 
 public:
-    [[nodiscard]] bool capture(
+    [[nodiscard]] b8 capture(
         const RendererRayTracingState& state,
         PreparedShadowMaterialContextRoute::Enum route,
-        bool staticScene,
+        b8 staticScene,
         u64 hash,
         Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
         Span<const InstanceGpuData> instances,
         Span<const u8> materialTypedBytes
     );
-    [[nodiscard]] bool captureCacheReuse(const RendererRayTracingState& state, u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
+    [[nodiscard]] b8 captureCacheReuse(const RendererRayTracingState& state, u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
     void clear()noexcept;
 
     [[nodiscard]] Expected<PreparedShadowMaterialContextUploads> retainUploads(const RendererRayTracingState& state, Core::GpuTaskGraph& graph)const;
     // Publishes the accepted route hash; false when no fresh upload was pending.
-    [[nodiscard]] bool publishAcceptedUpload(RendererRayTracingState& state)const noexcept;
+    [[nodiscard]] b8 publishAcceptedUpload(RendererRayTracingState& state)const noexcept;
 
-    [[nodiscard]] bool storageMatches(const RendererRayTracingState& state)const noexcept;
-    [[nodiscard]] bool softwareSnapshotCovers(usize sceneInstanceCount)const noexcept;
+    [[nodiscard]] b8 storageMatches(const RendererRayTracingState& state)const noexcept;
+    [[nodiscard]] b8 softwareSnapshotCovers(usize sceneInstanceCount)const noexcept;
     // A fresh upload stays valid; cache reuse still needs the accepted software hash over the same scene instances.
-    [[nodiscard]] bool softwareSnapshotAccepted(const RendererRayTracingState& state)const noexcept;
-    [[nodiscard]] bool ready()const noexcept{ return m_ready; }
-    [[nodiscard]] bool uploadRequired()const noexcept{ return m_uploadRequired; }
+    [[nodiscard]] b8 softwareSnapshotAccepted(const RendererRayTracingState& state)const noexcept;
+    [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
+    [[nodiscard]] b8 uploadRequired()const noexcept{ return m_uploadRequired; }
     [[nodiscard]] PreparedShadowMaterialContextRoute::Enum route()const noexcept{ return m_route; }
 
 
@@ -102,9 +102,9 @@ private:
     Core::GpuDescriptorHandle m_instanceHeapHandle;
     Core::GpuDescriptorHandle m_materialTypedHeapHandle;
     PreparedShadowMaterialContextRoute::Enum m_route = PreparedShadowMaterialContextRoute::None;
-    bool m_static = false;
-    bool m_ready = false;
-    bool m_uploadRequired = false;
+    b8 m_static = false;
+    b8 m_ready = false;
+    b8 m_uploadRequired = false;
 };
 
 

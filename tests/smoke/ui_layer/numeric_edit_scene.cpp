@@ -39,7 +39,7 @@ UiNumericEditSmokeScene::~UiNumericEditSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiNumericEditSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiNumericEditSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     Builder& ui = context.ui;
     ui.style().fontSize = 16.0f;
@@ -83,7 +83,7 @@ bool UiNumericEditSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiNumericEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+b8 UiNumericEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key < Core::Key::F5 || key > Core::Key::F9)
@@ -94,7 +94,7 @@ bool UiNumericEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, 
         else if(key == Core::Key::F6)
             m_enabled = !m_enabled;
         else if(key == Core::Key::F7){
-            const bool assigned = m_integer.setValue(9007199254740995ll) && m_float.setValue(2.5);
+            const b8 assigned = m_integer.setValue(9007199254740995ll) && m_float.setValue(2.5);
             NWB_FATAL_ASSERT(assigned);
         }
         else if(key == Core::Key::F8)
@@ -106,7 +106,7 @@ bool UiNumericEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, 
 }
 
 void UiNumericEditSmokeScene::resetModels(){
-    const bool reset = m_integer.setValue(7ll) && m_float.setValue(1.25) && m_clipboard.setText("");
+    const b8 reset = m_integer.setValue(7ll) && m_float.setValue(1.25) && m_clipboard.setText("");
     NWB_FATAL_ASSERT(reset);
     m_enabled = true;
     m_readOnly = false;
@@ -129,11 +129,11 @@ Impl::Ui::FloatBounds UiNumericEditSmokeScene::floatBounds()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerNumericEditSmokeEnabled(){
+b8 IsUiLayerNumericEditSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_NUMERIC_EDIT");
 }
 
-bool IsUiLayerNumericEditSkinSmokeEnabled(){
+b8 IsUiLayerNumericEditSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_NUMERIC_EDIT_SKIN");
 }
 

@@ -126,7 +126,7 @@ private:
 
 
 private:
-    bool readMode(){
+    b8 readMode(){
         NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
         if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_ARM")){
             const AStringView arm(value->data(), value->size());
@@ -167,7 +167,7 @@ private:
             if(!value || m_pointLight || m_finiteLightSource || m_arm != Arm::Cut)
                 return false;
             const AStringView selected(value->data(), value->size());
-            bool found = false;
+            b8 found = false;
             for(u32 index = 0u; index < LengthOf(s_OpenCaseNames); ++index){
                 if(selected == s_OpenCaseNames[index]){
                     m_openCase = static_cast<OpenCase::Enum>(index);
@@ -184,7 +184,7 @@ private:
         return !m_analyticAtlas || (!m_pointLight && (m_arm == Arm::Cut || m_arm == Arm::Uncut));
     }
 
-    EntityID createBox(const Box& box, const bool transparent, const SmokeMeshRef& mesh = s_CubeMesh){
+    EntityID createBox(const Box& box, const b8 transparent, const SmokeMeshRef& mesh = s_CubeMesh){
         const SIMDVectorSingle minimum = LoadFloat(box.minimum);
         const SIMDVectorSingle maximum = LoadFloat(box.maximum);
         Float4 center;
@@ -218,7 +218,7 @@ private:
         return entity;
     }
 
-    void createReferencePieces(const Box& box, const Box& cutter, const bool transparent){
+    void createReferencePieces(const Box& box, const Box& cutter, const b8 transparent){
         Float3U lower;
         Float3U upper;
         StoreFloat(VectorMax(LoadFloat(box.minimum), LoadFloat(cutter.minimum)), lower);
@@ -242,7 +242,7 @@ private:
         }
     }
 
-    void addCaster(const Box& box, const Box& cutterBox, const u32 groupIndex, const bool transparent, const bool moving){
+    void addCaster(const Box& box, const Box& cutterBox, const u32 groupIndex, const b8 transparent, const b8 moving){
         if(m_arm == Arm::Reference){
             createReferencePieces(box, cutterBox, transparent);
             return;
@@ -291,7 +291,7 @@ private:
             const SIMDVectorSingle halfExtent = VectorScale(VectorSet(0.7f, 0.7f, 0.0f, 0.0f), xyScale);
             const SIMDVectorSingle boxMin = VectorSetZ(VectorSubtract(center, halfExtent), -7.0f);
             const SIMDVectorSingle boxMax = VectorSetZ(VectorAdd(center, halfExtent), -5.0f);
-            const bool hole = slot == 0u || slot == 3u;
+            const b8 hole = slot == 0u || slot == 3u;
             const f32 holeHalfWidth = m_pointLight ? 0.36f : 0.24f;
             const SIMDVectorSingle holeOffsets = VectorScale(VectorSet(0.3f, 0.4f, 0.0f, 0.0f), xyScale);
             const SIMDVectorSingle holeCenter = VectorAdd(center, VectorAndInt(holeOffsets, s_SIMDMaskX));
@@ -363,8 +363,8 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: analytic atlas tiles=6 shapes=plane,sphere,capsule"));
     }
 
-    bool createOpenAtlas(){
-        const bool clipped = m_openCase == OpenCase::Clipped || m_openCase == OpenCase::ClippedReference;
+    b8 createOpenAtlas(){
+        const b8 clipped = m_openCase == OpenCase::Clipped || m_openCase == OpenCase::ClippedReference;
         if(m_openCase == OpenCase::Reference){
             if(!createBox({ Float3U(-1.9f, -0.7f, -7.0f), Float3U(-0.5f, 0.7f, -5.0f) }, true, s_OpenFiveMesh).valid())
                 return false;
@@ -416,7 +416,7 @@ private:
     }
 
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
-    bool configureTiming(NWB::Core::Alloc::ScratchArena& scratchArena){
+    b8 configureTiming(NWB::Core::Alloc::ScratchArena& scratchArena){
         const auto mode = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_MODE");
         const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_FILE");
         const auto cpuOutput = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_CPU_GPU_FILE");
@@ -438,9 +438,9 @@ private:
             NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: requires uncaptured directional hard-light reference/cut boxes and an explicit route"));
             return false;
         }
-        const bool rayTracing = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
-        const bool rayQuery = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
-        const bool hardware = rayTracing && rayQuery;
+        const b8 rayTracing = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
+        const b8 rayQuery = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+        const b8 hardware = rayTracing && rayQuery;
         if(routeView == "hardware" && !hardware){
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: hardware unavailable rt_accel={} ray_query={}"), rayTracing ? 1u : 0u, rayQuery ? 1u : 0u);
             m_context.requestQuit();
@@ -496,7 +496,7 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         if(!readMode())
             return false;
         const auto camera = CreateSmokeCamera(*m_world, 0.0f, -s_CameraDepth, 0.0f);
@@ -533,7 +533,7 @@ public:
             createAnalyticAtlas();
         else
             createAtlas();
-        const bool hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
+        const b8 hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
             , static_cast<u32>(m_arm), ConvertString(m_pointLight ? s_Point : s_Directional), hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
@@ -560,7 +560,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         if(m_capture)
             m_capture->update();
         ++m_update;
@@ -591,17 +591,17 @@ private:
     UniquePtr<FramebufferCapture> m_capture;
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
     UniquePtr<NWB::Tests::Smoke::CsgCausticTimingProbe> m_timing;
-    bool m_timingRegistered = false;
+    b8 m_timingRegistered = false;
 #endif
     EntityID m_movingCutters[2] = {};
     Float4 m_finalCutterCenters[2] = {};
     u32 m_movingCount = 0u;
     u32 m_update = 0u;
     Arm::Enum m_arm = Arm::Cut;
-    bool m_pointLight = false;
-    bool m_finiteLightSource = false;
-    bool m_analyticAtlas = false;
-    bool m_openAtlas = false;
+    b8 m_pointLight = false;
+    b8 m_finiteLightSource = false;
+    b8 m_analyticAtlas = false;
+    b8 m_openAtlas = false;
     OpenCase::Enum m_openCase = OpenCase::Retained;
 };
 

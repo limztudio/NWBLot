@@ -27,7 +27,7 @@ namespace MeshletRefValidationExceptionDetail{
 
 
 template<typename AttributeSkinContainer, typename SkinResolver, typename ConflictHandler, typename UnreferencedHandler>
-consteval bool AttributeSkinsIsNothrow()noexcept{
+consteval b8 AttributeSkinsIsNothrow()noexcept{
     using Result = decltype(DeclVal<SkinResolver&>()(DeclVal<usize&>(), DeclVal<const MeshletDesc&>(), DeclVal<usize&>(), DeclVal<const u32&>()));
     using SkinIndex = Decay_T<Result>;
     return
@@ -37,14 +37,14 @@ consteval bool AttributeSkinsIsNothrow()noexcept{
         && noexcept(DeclVal<SkinResolver&>()(DeclVal<usize&>(), DeclVal<const MeshletDesc&>(), DeclVal<usize&>(), DeclVal<const u32&>()))
         && (!IsReference_V<Result> || IsNothrowConstructible_V<SkinIndex, Result>)
         && IsNothrowDestructible_V<SkinIndex>
-        && noexcept(static_cast<bool>(!DeclVal<const SkinIndex&>()))
+        && noexcept(static_cast<b8>(!DeclVal<const SkinIndex&>()))
         && noexcept(DeclVal<void(*)(u32&)noexcept>()(DeclVal<AttributeSkinContainer&>()[DeclVal<const usize&>()]))
         && noexcept(DeclVal<u32&>() = *DeclVal<const SkinIndex&>())
-        && noexcept(static_cast<bool>(DeclVal<u32&>() == *DeclVal<const SkinIndex&>()))
-        && noexcept(DeclVal<void(*)(bool)noexcept>()(DeclVal<ConflictHandler&>()(DeclVal<usize&>(), DeclVal<const usize&>(), DeclVal<u32&>(), *DeclVal<const SkinIndex&>())))
-        && noexcept(static_cast<bool>(DeclVal<usize&>() < DeclVal<AttributeSkinContainer&>().size()))
-        && noexcept(static_cast<bool>(DeclVal<AttributeSkinContainer&>()[DeclVal<usize&>()] != s_MeshMissingStreamIndex))
-        && noexcept(DeclVal<void(*)(bool)noexcept>()(DeclVal<UnreferencedHandler&>()(DeclVal<usize&>())))
+        && noexcept(static_cast<b8>(DeclVal<u32&>() == *DeclVal<const SkinIndex&>()))
+        && noexcept(DeclVal<void(*)(b8)noexcept>()(DeclVal<ConflictHandler&>()(DeclVal<usize&>(), DeclVal<const usize&>(), DeclVal<u32&>(), *DeclVal<const SkinIndex&>())))
+        && noexcept(static_cast<b8>(DeclVal<usize&>() < DeclVal<AttributeSkinContainer&>().size()))
+        && noexcept(static_cast<b8>(DeclVal<AttributeSkinContainer&>()[DeclVal<usize&>()] != s_MeshMissingStreamIndex))
+        && noexcept(DeclVal<void(*)(b8)noexcept>()(DeclVal<UnreferencedHandler&>()(DeclVal<usize&>())))
     ;
 }
 
@@ -63,15 +63,15 @@ using PositionSkinResolver = Expected<u32>(*)(const usize, const MeshletDesc&, c
 
 class MeshMeshletRefValidation final : NoCopy{
 public:
-    [[nodiscard]] static bool MeshletPositionRefInRange(const MeshletPositionStreamRef& ref, const usize positionCount, const usize skinCount, const bool skinRequired)noexcept;
-    [[nodiscard]] static bool MeshletAttributeRefInRange(const MeshletAttributeStreamRef& ref, const usize normalCount, const usize tangentCount, const usize uv0Count, const usize colorCount)noexcept;
+    [[nodiscard]] static b8 MeshletPositionRefInRange(const MeshletPositionStreamRef& ref, const usize positionCount, const usize skinCount, const b8 skinRequired)noexcept;
+    [[nodiscard]] static b8 MeshletAttributeRefInRange(const MeshletAttributeStreamRef& ref, const usize normalCount, const usize tangentCount, const usize uv0Count, const usize colorCount)noexcept;
     template<
         typename AttributeSkinContainer,
         typename SkinResolver,
         typename ConflictHandler,
         typename UnreferencedHandler
     >
-    [[nodiscard]] static bool ResolveMeshletAttributeSkinsFromLocalVertices(
+    [[nodiscard]] static b8 ResolveMeshletAttributeSkinsFromLocalVertices(
         Span<const MeshletDesc> meshlets,
         Span<const MeshletLocalVertexRef> localVertexRefs,
         const usize attributeCount,
@@ -85,7 +85,7 @@ public:
         typename ConflictHandler,
         typename UnreferencedHandler
     >
-    [[nodiscard]] static bool ResolveMeshletAttributeSkins(
+    [[nodiscard]] static b8 ResolveMeshletAttributeSkins(
         Span<const MeshletDesc> meshlets,
         Span<const MeshletPositionStreamRef> positionRefs,
         Span<const MeshletLocalVertexRef> localVertexRefs,
@@ -113,7 +113,7 @@ template<
     typename ConflictHandler,
     typename UnreferencedHandler
 >
-[[nodiscard]] bool MeshMeshletRefValidation::ResolveMeshletAttributeSkinsFromLocalVertices(
+[[nodiscard]] b8 MeshMeshletRefValidation::ResolveMeshletAttributeSkinsFromLocalVertices(
     const Span<const MeshletDesc> meshlets,
     const Span<const MeshletLocalVertexRef> localVertexRefs,
     const usize attributeCount,
@@ -166,7 +166,7 @@ template<
     typename ConflictHandler,
     typename UnreferencedHandler
 >
-[[nodiscard]] bool MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
+[[nodiscard]] b8 MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
     const Span<const MeshletDesc> meshlets,
     const Span<const MeshletPositionStreamRef> positionRefs,
     const Span<const MeshletLocalVertexRef> localVertexRefs,

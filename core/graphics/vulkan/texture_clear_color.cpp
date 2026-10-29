@@ -20,7 +20,7 @@ namespace __hidden_texture_clear_color{
 static constexpr TStringView s_BlockCompressedMultisampleReason = NWB_TEXT("block-compressed texture clears require a single-sampled texture");
 static constexpr TStringView s_BlockCompressedActiveRenderingReason = NWB_TEXT("block-compressed texture clears cannot execute during active rendering");
 
-[[nodiscard]] static TStringView ColorClearSubresourceError(const TextureDesc& description, const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask, const bool integerValue, const bool signedIntegerValue)noexcept{
+[[nodiscard]] static TStringView ColorClearSubresourceError(const TextureDesc& description, const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask, const b8 integerValue, const b8 signedIntegerValue)noexcept{
     if(!VulkanDetail::IsTextureSubresourceRangeValid(subresources))
         return VulkanTextureDetail::s_ClearSubresourceRangeInvalidReason;
     if(!VulkanTextureDetail::TextureColorClearAspectIsValid(aspectMask))
@@ -127,7 +127,7 @@ void CommandList::clearTextureBoxInt(Texture& texture, TextureSubresourceSet sub
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const VkClearColorValue& clearValue, const bool integerValue, const bool signedIntegerValue){
+void CommandList::clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const VkClearColorValue& clearValue, const b8 integerValue, const b8 signedIntegerValue){
     if(!publicCommandStateAccessible())
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("clear texture");
@@ -149,7 +149,7 @@ void CommandList::clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& 
         return;
     }
 
-    const bool blockCompressed = Format::IsBlockCompressedFormat(desc.format);
+    const b8 blockCompressed = Format::IsBlockCompressedFormat(desc.format);
     if(blockCompressed && desc.sampleCount != 1u){
         rejectCommandRecording(s_OperationName, __hidden_texture_clear_color::s_BlockCompressedMultisampleReason);
         return;
@@ -190,7 +190,7 @@ void CommandList::clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& 
     retainResource(&texture);
 }
 
-void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, const VkClearColorValue& clearValue, const bool integerValue, const bool signedIntegerValue){
+void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, const VkClearColorValue& clearValue, const b8 integerValue, const b8 signedIntegerValue){
     if(!publicCommandStateAccessible())
         return;
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))
@@ -209,7 +209,7 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
         return;
     }
 
-    const bool blockCompressed = Format::IsBlockCompressedFormat(desc.format);
+    const b8 blockCompressed = Format::IsBlockCompressedFormat(desc.format);
     if((m_renderPassActive || desc.sampleCount != 1u) && VulkanTextureDetail::TextureClearBoxFullyCoversSubresources(desc, resolvedSubresources, box)){
         clearColorTexture(scratchArena, texture, resolvedSubresources, clearValue, integerValue, signedIntegerValue);
         return;
@@ -269,7 +269,7 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
     const u64 blockWidth = static_cast<u64>(texture.m_formatLayout.blockWidth);
     const u64 blockHeight = static_cast<u64>(texture.m_formatLayout.blockHeight);
     const u64 arrayLayerCount = static_cast<u64>(resolvedSubresources.numArraySlices);
-    bool hasNonemptyMip = false;
+    b8 hasNonemptyMip = false;
     u32 mipPlanIndex = 0u;
     for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel, ++mipPlanIndex){
         MipClearPlan& mipPlan = mipClearPlans[mipPlanIndex];

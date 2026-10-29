@@ -98,7 +98,7 @@ inline constexpr TStringView s_MalformedMessagePayloadError = NWB_TEXT("Received
     return s_UnknownLogLevelName;
 }
 
-[[nodiscard]] inline bool MessageTypeWritesToErrorStream(Core::Common::LogType::Enum type)noexcept{
+[[nodiscard]] inline b8 MessageTypeWritesToErrorStream(Core::Common::LogType::Enum type)noexcept{
     switch(type){
     case Core::Common::LogType::CriticalWarning:
     case Core::Common::LogType::Assert:
@@ -110,7 +110,7 @@ inline constexpr TStringView s_MalformedMessagePayloadError = NWB_TEXT("Received
     }
 }
 
-[[nodiscard]] inline bool IsValidMessageType(Core::Common::LogType::Enum type)noexcept{
+[[nodiscard]] inline b8 IsValidMessageType(Core::Common::LogType::Enum type)noexcept{
     switch(type){
     case Core::Common::LogType::Info:
     case Core::Common::LogType::EssentialInfo:
@@ -218,7 +218,7 @@ public:
 
 
 public:
-    bool open(BasicStringView<tchar> fileNameBase){
+    b8 open(BasicStringView<tchar> fileNameBase){
         close();
         if(fileNameBase.empty())
             return false;
@@ -248,7 +248,7 @@ public:
         return m_stream.is_open();
     }
 
-    bool openByExecutableName(){
+    b8 openByExecutableName(){
         const auto executableName = GetExecutableName(m_arena);
         if(!executableName)
             return false;
@@ -266,7 +266,7 @@ public:
             CaptureDiagnosticEvent("logger_processed_message_file", "Processed log stream failed while closing", __FILE__, __LINE__);
     }
 
-    [[nodiscard]] bool writeLine(BasicStringView<tchar> line){
+    [[nodiscard]] b8 writeLine(BasicStringView<tchar> line){
         if(!m_stream.is_open())
             return false;
 
@@ -300,10 +300,10 @@ public:
 
 
 protected:
-    inline bool tryDequeue(MessageType& msg){ return m_messageQueue.try_pop(msg); }
+    inline b8 tryDequeue(MessageType& msg){ return m_messageQueue.try_pop(msg); }
 
     void stopWorker(){
-        const bool alreadyStopping = m_exit.exchange(true, MemoryOrder::acq_rel);
+        const b8 alreadyStopping = m_exit.exchange(true, MemoryOrder::acq_rel);
 
         if(!alreadyStopping)
             MakeNotNull(checked_cast<T*>(this))->internalDestroy();
@@ -318,7 +318,7 @@ public:
 
 public:
     template<typename... Args>
-    inline bool init(Args&&... args){
+    inline b8 init(Args&&... args){
         if constexpr(requires{ T::GlobalInit(); }){
             if(!T::s_GlobalInit){
                 if(!T::GlobalInit())
@@ -327,7 +327,7 @@ public:
             }
         }
 
-        const bool initialized = MakeNotNull(checked_cast<T*>(this))->internalInit(Forward<Args>(args)...);
+        const b8 initialized = MakeNotNull(checked_cast<T*>(this))->internalInit(Forward<Args>(args)...);
         if(!initialized)
             return false;
 
@@ -361,7 +361,7 @@ protected:
 
 protected:
     Thread m_thread;
-    Atomic<bool> m_exit;
+    Atomic<b8> m_exit;
 };
 
 template<typename T, f32 UpdateIntervalSeconds, const TStringView& LoggerName>
@@ -370,7 +370,7 @@ class IntervalLoggerWorkerBase : public LoggerWorkerBase<T, LoggerName>{
 
 
 private:
-    static bool s_GlobalInit;
+    static b8 s_GlobalInit;
 
 
 private:
@@ -413,7 +413,7 @@ private:
     Timer m_lastUpdateTime;
 };
 template<typename T, f32 UpdateIntervalSeconds, const TStringView& LoggerName>
-bool IntervalLoggerWorkerBase<T, UpdateIntervalSeconds, LoggerName>::s_GlobalInit = false;
+b8 IntervalLoggerWorkerBase<T, UpdateIntervalSeconds, LoggerName>::s_GlobalInit = false;
 
 template<typename T, const TStringView& LoggerName>
 class QueuedLoggerWorkerBase : public LoggerWorkerBase<T, LoggerName>{
@@ -421,7 +421,7 @@ class QueuedLoggerWorkerBase : public LoggerWorkerBase<T, LoggerName>{
 
 
 private:
-    static bool s_GlobalInit;
+    static b8 s_GlobalInit;
 
 
 private:
@@ -429,7 +429,7 @@ private:
         for(;;){
             self.m_semaphore.acquire();
 
-            bool updateSucceeded = self.internalUpdate();
+            b8 updateSucceeded = self.internalUpdate();
 
             if(!updateSucceeded){
                 self.m_exit.store(true, MemoryOrder::release);
@@ -450,7 +450,7 @@ public:
 
 
 protected:
-    [[nodiscard]] inline bool workerCanExit()const noexcept{ return true; }
+    [[nodiscard]] inline b8 workerCanExit()const noexcept{ return true; }
 
     void internalDestroy()noexcept{ m_semaphore.release(); }
 
@@ -465,7 +465,7 @@ protected:
     Semaphore<> m_semaphore;
 };
 template<typename T, const TStringView& LoggerName>
-bool QueuedLoggerWorkerBase<T, LoggerName>::s_GlobalInit = false;
+b8 QueuedLoggerWorkerBase<T, LoggerName>::s_GlobalInit = false;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -39,7 +39,7 @@ private:
         u64 lastPublication = 0u;
         u64 eligibleSamples = 0u;
         u32 generation = 0u;
-        bool recorded = false;
+        b8 recorded = false;
     };
 
     struct Record{
@@ -48,7 +48,7 @@ private:
         u64 presentations = 0u;
         u32 scope = 0u;
         u32 generation = 0u;
-        bool gpu = false;
+        b8 gpu = false;
     };
 
 
@@ -57,14 +57,14 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize(bool requested, bool presentationTimingEnabled, AStringView outputPath);
-    [[nodiscard]] bool observe(const Core::Perf::Session& session, const PresentationFpsProbe& presentation, u64 successfulPresentations, bool complete);
-    [[nodiscard]] bool hasCompletedGpuSamples(const Name& name, u64 minimumSamples)const noexcept;
+    [[nodiscard]] b8 initialize(b8 requested, b8 presentationTimingEnabled, AStringView outputPath);
+    [[nodiscard]] b8 observe(const Core::Perf::Session& session, const PresentationFpsProbe& presentation, u64 successfulPresentations, b8 complete);
+    [[nodiscard]] b8 hasCompletedGpuSamples(const Name& name, u64 minimumSamples)const noexcept;
 
 
 private:
-    [[nodiscard]] bool capture(const Core::Perf::TimingView& timing, bool gpu, u64 frame, u64 presentations);
-    [[nodiscard]] bool write(const PresentationFpsSample& presentation, u64 endFrame);
+    [[nodiscard]] b8 capture(const Core::Perf::TimingView& timing, b8 gpu, u64 frame, u64 presentations);
+    [[nodiscard]] b8 write(const PresentationFpsSample& presentation, u64 endFrame);
 
 
 private:
@@ -74,9 +74,9 @@ private:
     Scope m_scopes[2u][s_MaxScopesPerDomain] = {};
     u64 m_firstSourceFrame = 0u;
     u64 m_firstPresentation = 0u;
-    bool m_enabled = false;
-    bool m_started = false;
-    bool m_complete = false;
+    b8 m_enabled = false;
+    b8 m_started = false;
+    b8 m_complete = false;
 };
 
 

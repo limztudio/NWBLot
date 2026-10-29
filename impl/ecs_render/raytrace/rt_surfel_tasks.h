@@ -38,7 +38,7 @@ inline constexpr f32 s_SurfelNormalBias = 0.05f;
 
 template<typename StateT>
 [[nodiscard]] NwbSurfelConstantsGpu BuildSurfelFrameConstants(const StateT& state, const DeferredFrameTargets& targets)noexcept(
-    noexcept(static_cast<bool>(state.m_surfelSeeded))
+    noexcept(static_cast<b8>(state.m_surfelSeeded))
     && noexcept(static_cast<f32>(state.m_surfelHashCellCount))
     && noexcept(static_cast<f32>(state.m_surfelPoolCapacity))
     && noexcept(static_cast<f32>(state.m_surfelFrameIndex))
@@ -79,9 +79,9 @@ struct SurfelGiAsyncPassPayload{
 
 // Hash-build, spawn, trace-args, trace, and resolve share one async-guard preamble; only the render call differs.
 template<typename PayloadT>
-[[nodiscard]] inline bool SurfelAsyncRecordReady(const PayloadT& payload, const Core::GpuTaskRecordContext& context)noexcept(
-    noexcept(static_cast<bool>(!payload.deferredLightingResources.valid()))
-    && noexcept(static_cast<bool>(!DeclVal<const Core::GpuPhysicalQueueInfo*>() || (DeclVal<const Core::GpuPhysicalQueueInfo*>()->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value())))
+[[nodiscard]] inline b8 SurfelAsyncRecordReady(const PayloadT& payload, const Core::GpuTaskRecordContext& context)noexcept(
+    noexcept(static_cast<b8>(!payload.deferredLightingResources.valid()))
+    && noexcept(static_cast<b8>(!DeclVal<const Core::GpuPhysicalQueueInfo*>() || (DeclVal<const Core::GpuPhysicalQueueInfo*>()->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value())))
 ){
     if(!payload.deferredLightingResources.valid())
         return false;
@@ -92,10 +92,10 @@ template<typename PayloadT>
     return true;
 }
 
-using SurfelGiAsyncPassRecorder = bool (RendererRayTracingSystem::*)(Core::CommandList&, DeferredFrameTargets&, const DeferredLightingGraphResources&);
+using SurfelGiAsyncPassRecorder = b8 (RendererRayTracingSystem::*)(Core::CommandList&, DeferredFrameTargets&, const DeferredLightingGraphResources&);
 
 template<SurfelGiAsyncPassRecorder Recorder>
-[[nodiscard]] inline bool RecordSurfelGiAsyncPass(const SurfelGiAsyncPassPayload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+[[nodiscard]] inline b8 RecordSurfelGiAsyncPass(const SurfelGiAsyncPassPayload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_assert(Recorder != nullptr);
     if(!SurfelAsyncRecordReady(payload, context))
         return false;
@@ -134,7 +134,7 @@ struct SurfelGiAgeFreeGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.deferredLightingResources.valid())
             return false;
 
@@ -175,7 +175,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         return RecordSurfelGiAsyncPass<&RendererRayTracingSystem::renderSurfelGiHashBuild>(payload, commandList, context);
     }
 
@@ -194,7 +194,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         return RecordSurfelGiAsyncPass<&RendererRayTracingSystem::renderSurfelGiSpawn>(payload, commandList, context);
     }
 
@@ -213,7 +213,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         return RecordSurfelGiAsyncPass<&RendererRayTracingSystem::renderSurfelGiTraceBuildArgs>(payload, commandList, context);
     }
 
@@ -232,7 +232,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         return RecordSurfelGiAsyncPass<&RendererRayTracingSystem::renderSurfelGiTrace>(payload, commandList, context);
     }
 
@@ -255,7 +255,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         return RecordSurfelGiAsyncPass<&RendererRayTracingSystem::renderSurfelGiResolve>(payload, commandList, context);
     }
 
@@ -280,7 +280,7 @@ struct SurfelGiGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.deferredLightingResources.valid())
             return false;
 
@@ -332,7 +332,7 @@ struct RendererRayTracingSystem::SurfelGiInitializationLifecycleGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
         static_cast<void>(commandList);
         static_cast<void>(context);
         return payload.raytracingSystem.recordSurfelResourceInitializationLifecycle();

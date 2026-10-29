@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
+b8 UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
     if(m_fontsReady)
         return true;
     const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems ? m_activeSceneSubsystems->findSubsystem<UiSubsystem>() : nullptr;

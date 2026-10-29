@@ -23,7 +23,7 @@ TESTBED_BEGIN
 
 // Immutable demo rows share key navigation without adding per-source row or label storage.
 // TextNoThrow is checked when the label reads are instantiated, after the source type is complete.
-template<typename Source, usize LabelCount, u64 DisabledKey, typename Interface = NWB::Impl::Ui::IListDataSource, bool TextNoThrow = true>
+template<typename Source, usize LabelCount, u64 DisabledKey, typename Interface = NWB::Impl::Ui::IListDataSource, b8 TextNoThrow = true>
 class UiImmutableListSource : public Interface, NoCopy{
 public:
     virtual u64 instanceGeneration()const noexcept override final{ return 1u; }
@@ -40,7 +40,7 @@ public:
         return keyValue - 1u;
     }
 
-    virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override final{
+    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override final{
         if(start >= LabelCount)
             return MakeUnexpected(Failure{});
         if(enabled(start))
@@ -66,14 +66,14 @@ public:
         return index < LabelCount ? Source::s_Labels[index] : StringView{};
     }
 
-    virtual bool enabled(const u64 index)const noexcept override final{ return index < LabelCount && index + 1u != DisabledKey; }
+    virtual b8 enabled(const u64 index)const noexcept override final{ return index < LabelCount && index + 1u != DisabledKey; }
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename Source, usize LabelCount, u64 DisabledKey, bool TextNoThrow = true>
+template<typename Source, usize LabelCount, u64 DisabledKey, b8 TextNoThrow = true>
 class UiFilteredListSource : public UiImmutableListSource<Source, LabelCount, DisabledKey, NWB::Impl::Ui::ISearchableListDataSource, TextNoThrow>{
 private:
     class View final : public NWB::Impl::Ui::IListDataSource, NoCopy{
@@ -105,7 +105,7 @@ private:
             return MakeUnexpected(Failure{});
         }
 
-        virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
+        virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
             if(start >= rowCount())
                 return MakeUnexpected(Failure{});
             for(u64 candidate = start; candidate < rowCount(); reverse ? --candidate : ++candidate){
@@ -123,7 +123,7 @@ private:
             return index < rowCount() ? static_cast<const Source&>(m_source).text(m_source.m_indices[index]) : StringView{};
         }
 
-        virtual bool enabled(const u64 index)const noexcept override{ return index < rowCount() && m_source.enabled(m_source.m_indices[index]); }
+        virtual b8 enabled(const u64 index)const noexcept override{ return index < rowCount() && m_source.enabled(m_source.m_indices[index]); }
 
 
     private:
@@ -144,7 +144,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool filter(const AStringView query)override final{
+    [[nodiscard]] virtual b8 filter(const AStringView query)override final{
         if(m_viewRevision != 0u && query == AStringView(m_query.data(), m_query.size()))
             return true;
         if(query.empty())

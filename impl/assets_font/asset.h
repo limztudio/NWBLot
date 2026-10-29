@@ -39,8 +39,8 @@ public:
 
 
 public:
-    bool loadBinary(Span<const u8> binary);
-    [[nodiscard]] bool validatePayload()const;
+    b8 loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload()const;
     void setFontBytes(Core::Assets::AssetBytes&& bytes, u32 faceIndex = 0u)noexcept;
 
 

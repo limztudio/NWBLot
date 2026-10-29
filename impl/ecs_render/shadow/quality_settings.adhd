@@ -24,13 +24,13 @@ class ShadowQualitySettings{
     public ShadowReceiverResolution receiverResolution = ShadowReceiverResolution::Enum::Half;
 }
 
-bool ValidateShadowQualitySettings(in ShadowQualitySettings settings){
+b8 ValidateShadowQualitySettings(in ShadowQualitySettings settings){
     return cast<u8>(settings.transparentSampling) <= cast<u8>(TransparentShadowSampling::Enum::TemporalOne)
         && (settings.receiverResolution == ShadowReceiverResolution::Enum::Half || settings.receiverResolution == ShadowReceiverResolution::Enum::Quarter);
 }
 
 // Reduced sampling requires an accepted history and an available transparent temporal filter.
-u32 ResolveTransparentShadowSampleCount(in ShadowQualitySettings settings, in bool temporalHistoryUsable){
+u32 ResolveTransparentShadowSampleCount(in ShadowQualitySettings settings, in b8 temporalHistoryUsable){
     if(settings.transparentSampling == TransparentShadowSampling::Enum::TemporalOne && temporalHistoryUsable){
         return 1u;
     }

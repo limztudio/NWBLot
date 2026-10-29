@@ -36,8 +36,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
 
 
 private:
@@ -60,15 +60,15 @@ private:
     u32 m_sequence = 0u;
     u32 m_commits = 0u;
     u32 m_underlying = 0u;
-    bool m_focused = false;
-    bool m_enabled = true;
-    bool m_displayChanged = false;
+    b8 m_focused = false;
+    b8 m_enabled = true;
+    b8 m_displayChanged = false;
 };
 
 using SharedUiSearchComboSmokeScene = RefCountPtr< RefCounter<UiSearchComboSmokeScene>, ArenaRefDeleter<RefCounter<UiSearchComboSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerSearchComboSmokeEnabled();
-[[nodiscard]] bool IsUiLayerSearchComboSkinSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerSearchComboSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerSearchComboSkinSmokeEnabled();
 [[nodiscard]] SharedUiSearchComboSmokeScene CreateUiSearchComboSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 

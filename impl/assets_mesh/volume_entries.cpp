@@ -49,7 +49,7 @@ static Expected<MeshCookEntry> ParseMeshValue(const Name virtualPath, const Path
     return ParseMeshCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.cpuScheduler, context.scratchArena);
 }
 
-static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry);
+static b8 RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +63,7 @@ static Expected<SkinCookEntry> ParseSkinValue(const Name virtualPath, const Path
     return ParseSkinCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena);
 }
 
-static bool ExtractSkinDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+static b8 ExtractSkinDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto meshRef = Core::Assets::ReadMetadataAssetRefField<Mesh>(context.nwbFilePath, context.asset, s_SkinDiagnosticPrefix, s_MeshField, true);
     if(!meshRef)
         return false;
@@ -75,7 +75,7 @@ static bool ExtractSkinDependencies(const Core::Assets::CookDependencyItemContex
     return collector.addAssetDependency(skeletonRef->name(), Skeleton::AssetTypeName());
 }
 
-static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
     return
         Core::Assets::RegisterDocumentValueCookEntry<MeshCookEntry, Mesh, MeshAssetCodec>(registry, MeshBinaryPayload::s_MeshAssetKindLabel, &ParseMeshDocument, &ParseMeshValue, &BuildMeshAsset)
         && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
@@ -89,7 +89,7 @@ static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
     ;
 }
 
-static bool RegisterSkinCookDependency(Core::Assets::CookDependencyRegistry& registry){
+static b8 RegisterSkinCookDependency(Core::Assets::CookDependencyRegistry& registry){
     return
         registry.registerType(Skin::AssetTypeName(), &ExtractSkinDependencies)
         && AssetsSubsystemCook::RegisterSubsystemCookDependency<SkinningSubsystem>(registry)

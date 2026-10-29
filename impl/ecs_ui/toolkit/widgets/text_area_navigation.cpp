@@ -39,7 +39,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool matches(const EditModel& model)const noexcept{
+    [[nodiscard]] b8 matches(const EditModel& model)const noexcept{
         return
             m_instanceGeneration == model.instanceGeneration() && m_revision == model.revision()
             && m_externalRevision == model.externalRevision() && m_selectionGeneration == model.selectionGeneration()
@@ -72,7 +72,7 @@ private:
     return nullptr;
 }
 
-[[nodiscard]] static Expected<usize> PageTarget(const EditCaretGeometry& geometry, const usize activeCaret, const Rect& caret, const bool down, const f32 preferredX, const f32 viewportHeight)noexcept{
+[[nodiscard]] static Expected<usize> PageTarget(const EditCaretGeometry& geometry, const usize activeCaret, const Rect& caret, const b8 down, const f32 preferredX, const f32 viewportHeight)noexcept{
     const auto& lines = geometry.lines();
     const EditBoxCaretStop* current = FindStop(geometry, activeCaret);
     if(lines.empty() || !current || current->lineIndex >= lines.size())
@@ -129,7 +129,7 @@ TextAreaNavigationResolver::TextAreaNavigationResolver(Core::Alloc::GlobalArena&
 {}
 
 Expected<EditNavigationResult> TextAreaNavigationResolver::resolve(const EditModel& model, const EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, const f32 viewportHeight){
-    const bool page = direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown;
+    const b8 page = direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown;
     if(
         !current() || model.textMode() != EditTextMode::Multiline || model.composition().active
         || direction > EditNavigationDirection::PageDown || !IsFinite(m_fontSize) || m_fontSize <= 0.0f
@@ -151,14 +151,14 @@ Expected<EditNavigationResult> TextAreaNavigationResolver::resolve(const EditMod
     const f32 preferredX = preferred.valid ? preferred.preferredX : caret->x;
     if(!IsFinite(preferredX))
         return MakeUnexpected(Failure{});
-    const bool down = direction == EditNavigationDirection::Down || direction == EditNavigationDirection::PageDown;
+    const b8 down = direction == EditNavigationDirection::Down || direction == EditNavigationDirection::PageDown;
     const auto resolved = page ? __hidden_ui_text_area_navigation::PageTarget(geometry, model.caret(), *caret, down, preferredX, viewportHeight) : geometry.verticalTarget(view.displayCaret(), down, preferredX);
     if(!resolved)
         return MakeUnexpected(resolved.error());
     return EditNavigationResult{ *resolved, preferredX };
 }
 
-bool TextAreaNavigationResolver::current()const noexcept{
+b8 TextAreaNavigationResolver::current()const noexcept{
     return !m_context.failed() && m_state.instanceGeneration() == m_instanceGeneration && m_state.revision() == m_revision;
 }
 

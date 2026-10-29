@@ -28,7 +28,7 @@ void SurfelCausticsMergeValidator::validate(
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
     Core::GpuTaskId causticsTask,
     Core::GpuTaskId terminalPresentationTask,
-    bool captureLaggedLightingHistory,
+    b8 captureLaggedLightingHistory,
     SurfelCausticsMergeValidationResult& outResult
 )const noexcept{
     RendererFramePipeline& pipeline = *m_pipeline;

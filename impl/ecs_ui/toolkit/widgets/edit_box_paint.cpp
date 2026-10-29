@@ -23,7 +23,7 @@ namespace __hidden_ui_edit_box_paint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidColor(const Color& color)noexcept{
+[[nodiscard]] static b8 ValidColor(const Color& color)noexcept{
     return IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
 }
 
@@ -47,7 +47,7 @@ namespace __hidden_ui_edit_box_paint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style, const EditBoxPaintFlags& flags)const{
+b8 EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style, const EditBoxPaintFlags& flags)const{
     if(
         !m_ready || !__hidden_ui_edit_box_paint::ValidColor(style.background)
         || !__hidden_ui_edit_box_paint::ValidColor(style.text) || !__hidden_ui_edit_box_paint::ValidColor(style.disabledText)
@@ -57,7 +57,7 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
     )
         return false;
     paint.pushClip(placement.frameClip);
-    bool painted = true;
+    b8 painted = true;
     if(const UiSkinRegion* background = __hidden_ui_edit_box_paint::Background(skin, style, flags))
         painted = paint.drawRegion(background->name, placement.bounds);
     else
@@ -68,7 +68,7 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
     if(painted){
         const Color& selection = flags.focused && flags.enabled ? style.selection : style.inactiveSelection;
         if(m_selection.begin == m_selection.end)
-            painted = static_cast<bool>(m_geometry.rangeOnLine(m_selection, 0u, placement.caret.width));
+            painted = static_cast<b8>(m_geometry.rangeOnLine(m_selection, 0u, placement.caret.width));
         else{
             for(u32 line = 0u; line < m_geometry.lines().size(); ++line){
                 auto segment = m_geometry.rangeOnLine(m_selection, line, placement.caret.width);
@@ -107,8 +107,8 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
     }
     if(painted && flags.focused && flags.enabled && !flags.readOnly && (m_composing ? flags.preeditCaretVisible : flags.caretVisible))
         paint.fillRect(placement.caret, style.caret);
-    const bool contentPopped = paint.popClip();
-    const bool framePopped = paint.popClip();
+    const b8 contentPopped = paint.popClip();
+    const b8 framePopped = paint.popClip();
     return painted && contentPopped && framePopped;
 }
 

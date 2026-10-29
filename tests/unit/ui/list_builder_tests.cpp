@@ -186,7 +186,7 @@ TEST_F(UiListBuilderTests, ReplacingTextServiceWithTheSameGenerationInvalidatesT
 
 TEST_F(UiListBuilderTests, SharedStateDeclarationsMergeSameMetricMaximaWithoutContaminatingDifferentMetrics){
     u64 generation = 1u;
-    for(const bool differentMetrics : { false, true }){
+    for(const b8 differentMetrics : { false, true }){
         SCOPED_TRACE(testing::Message() << "differentMetrics=" << differentMetrics);
         ArithmeticSource source;
         source.specialIndex = 2u;

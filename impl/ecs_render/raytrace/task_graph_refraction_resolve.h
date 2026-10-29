@@ -37,7 +37,7 @@ struct RefractionClearTileArgumentsGraphTask{
         Core::GpuGraphResourceId resource;
     };
 
-    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.resource, 0u))
             return false;
         commandList.endRenderPass();
@@ -58,7 +58,7 @@ struct RefractionClearStatisticsGraphTask{
         Core::GpuGraphResourceId resource;
     };
 
-    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.destination)
             return false;
         if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.resource, 0u))
@@ -77,11 +77,11 @@ struct RefractionStatisticsReadbackGraphTask{
         Core::GpuGraphResourceId sourceResource;
         Core::GpuGraphResourceId destinationResource;
         RefractionStatisticsReservation reservation;
-        const bool* hardwarePreparationReady = nullptr;
-        bool hardwareEnabled = false;
+        const b8* hardwarePreparationReady = nullptr;
+        b8 hardwareEnabled = false;
     };
 
-    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.source || !payload.destination || !payload.reservation.valid())
             return false;
         if(context.commandIrCapture && !context.commandIrCapture->captureCopyBuffer(context.task, context.packet, context.queue, payload.sourceResource, 0u, payload.destinationResource, 0u, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE))
@@ -92,7 +92,7 @@ struct RefractionStatisticsReadbackGraphTask{
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-        const bool hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        const b8 hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         payload.reservation.accept(token, hardwareReady);
     }
 
@@ -110,7 +110,7 @@ struct RefractionClassifyTilesGraphTask{
         RayTracingRefractionGraphResources resources;
     };
 
-    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         return payload.system.recordRefractionTileClassification(commandList, payload.targets, payload.resources);
     }
 };
@@ -125,14 +125,14 @@ struct RefractionResolveGraphTask{
         RendererRayTracingSystem& system;
         const DeferredFrameTargets& targets;
         RayTracingRefractionGraphResources resources;
-        const bool* hardwarePreparationReady = nullptr;
-        bool* dispatchLogged = nullptr;
-        bool* screenFallbackDispatchLogged = nullptr;
+        const b8* hardwarePreparationReady = nullptr;
+        b8* dispatchLogged = nullptr;
+        b8* screenFallbackDispatchLogged = nullptr;
     };
 
 
 public:
-    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         RayTracingRefractionGraphResources resources = payload.resources;
         if(resources.usesHardwareTrace && (!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)){
             // A nonfatal TLAS miss still accepts. Use the screen pipeline (its inputs subset this task's) instead of a stale TLAS.
@@ -147,10 +147,10 @@ public:
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         // Only an accepted packet publishes diagnostics. Rejected retries leave the latch; selection/recording stays stateless.
-        const bool usedHardware = payload.resources.usesHardwareTrace && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        const b8 usedHardware = payload.resources.usesHardwareTrace && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         if(usedHardware)
             payload.system.confirmRayTraceContextReadSubmission(token);
-        bool* const dispatchLogged = payload.resources.usesHardwareTrace && !usedHardware ? payload.screenFallbackDispatchLogged : payload.dispatchLogged;
+        b8* const dispatchLogged = payload.resources.usesHardwareTrace && !usedHardware ? payload.screenFallbackDispatchLogged : payload.dispatchLogged;
         if(dispatchLogged && !*dispatchLogged){
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AVBOIT refraction resolve: {}"), usedHardware ? NWB_TEXT("hardware") : NWB_TEXT("screen-space"));
             *dispatchLogged = true;
@@ -169,7 +169,7 @@ public:
 
 
 public:
-    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         return RefractionResolveGraphTask::Record(payload, commandList, context);
     }
 

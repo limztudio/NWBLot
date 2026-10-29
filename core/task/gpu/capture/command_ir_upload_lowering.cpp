@@ -49,7 +49,7 @@ GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBui
 }
 
 // The stream reader admitted this blob range and backend operand preflight admitted its destination on the same stable stream and graph.
-bool LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList){
+b8 LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, const BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList){
     NWB_ASSERT(blobBytes.data() && record.blobSizeBytes != 0u && record.blobOffsetBytes <= static_cast<u64>(blobBytes.size()) && record.blobSizeBytes <= static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes);
     const auto bytes = MakeNotNull(static_cast<const void*>(blobBytes.data() + static_cast<usize>(record.blobOffsetBytes)));
     const usize byteCount = static_cast<usize>(record.blobSizeBytes);

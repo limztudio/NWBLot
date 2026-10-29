@@ -40,7 +40,7 @@ void VerifyAllocatorSelfAssignment(){
 }
 
 template<typename VectorT>
-void VerifyVectorMove(const bool foreignArena, const usize targetSize = 1u){
+void VerifyVectorMove(const b8 foreignArena, const usize targetSize = 1u){
     GlobalArena sourceArena(Name("tests/allocator_propagation/vector_source"));
     GlobalArena targetArena(Name("tests/allocator_propagation/vector_target"));
     {
@@ -74,7 +74,7 @@ void VerifyVectorMove(const bool foreignArena, const usize targetSize = 1u){
 }
 
 template<typename StringT>
-void VerifyStringMove(const bool foreignArena, const bool shortSource){
+void VerifyStringMove(const b8 foreignArena, const b8 shortSource){
     GlobalArena sourceArena(Name("tests/allocator_propagation/string_source"));
     GlobalArena targetArena(Name("tests/allocator_propagation/string_target"));
     {
@@ -105,7 +105,7 @@ void VerifyStringMove(const bool foreignArena, const bool shortSource){
 
 
 template<typename VectorT>
-void VerifyVectorSwap(const bool foreignArena){
+void VerifyVectorSwap(const b8 foreignArena){
     GlobalArena firstArena(Name("tests/allocator_propagation/vector_swap_first"));
     GlobalArena secondArena(Name("tests/allocator_propagation/vector_swap_second"));
     GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
@@ -146,7 +146,7 @@ void VerifyVectorSwap(const bool foreignArena){
 }
 
 template<typename StringT>
-void VerifyStringSwap(const bool foreignArena, const bool shortFirst){
+void VerifyStringSwap(const b8 foreignArena, const b8 shortFirst){
     GlobalArena firstArena(Name("tests/allocator_propagation/string_swap_first"));
     GlobalArena secondArena(Name("tests/allocator_propagation/string_swap_second"));
     GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
@@ -188,22 +188,22 @@ TEST(AllocatorPropagation, SelfAssignmentPreservesArenaBinding){
 }
 
 TEST(AllocatorPropagation, VectorMoveTransfersStorageAndItsDeallocationOwner){
-    for(const bool foreignArena : { false, true }){
+    for(const b8 foreignArena : { false, true }){
         VerifyVectorMove<Vector<u32, GlobalArena>>(foreignArena);
         VerifyVectorMove<DefaultVector<u32, GlobalArena, DefaultOwner>>(foreignArena);
     }
 }
 
 TEST(AllocatorPropagation, CacheAlignedVectorMoveTransfersStorageAndItsDeallocationOwner){
-    for(const bool foreignArena : { false, true }){
+    for(const b8 foreignArena : { false, true }){
         for(const usize targetSize : { 0u, 1u, 65u })
             VerifyVectorMove<ParallelVector<u32, GlobalArena>>(foreignArena, targetSize);
     }
 }
 
 TEST(AllocatorPropagation, CacheAlignedVectorMoveConstructionPreservesExplicitArenaOwnership){
-    for(const bool explicitAllocator : { false, true }){
-        for(const bool foreignArena : { false, true }){
+    for(const b8 explicitAllocator : { false, true }){
+        for(const b8 foreignArena : { false, true }){
             GlobalArena sourceArena(Name("tests/allocator_propagation/parallel_construct_source"));
             GlobalArena targetArena(Name("tests/allocator_propagation/parallel_construct_target"));
             using Values = ParallelVector<u32, GlobalArena>;
@@ -236,8 +236,8 @@ TEST(AllocatorPropagation, CacheAlignedVectorMoveConstructionPreservesExplicitAr
 }
 
 TEST(AllocatorPropagation, StringMovePropagatesArenaForHeapAndSmallStringStorage){
-    for(const bool foreignArena : { false, true }){
-        for(const bool shortSource : { false, true }){
+    for(const b8 foreignArena : { false, true }){
+        for(const b8 shortSource : { false, true }){
             VerifyStringMove<AString<GlobalArena>>(foreignArena, shortSource);
             VerifyStringMove<DefaultAString<GlobalArena, DefaultOwner>>(foreignArena, shortSource);
         }
@@ -245,7 +245,7 @@ TEST(AllocatorPropagation, StringMovePropagatesArenaForHeapAndSmallStringStorage
 }
 
 TEST(AllocatorPropagation, OrderedMapMoveTransfersNodesAndTheirDeallocationOwner){
-    for(const bool foreignArena : { false, true }){
+    for(const b8 foreignArena : { false, true }){
         GlobalArena sourceArena(Name("tests/allocator_propagation/map_source"));
         GlobalArena targetArena(Name("tests/allocator_propagation/map_target"));
         {
@@ -275,7 +275,7 @@ TEST(AllocatorPropagation, OrderedMapMoveTransfersNodesAndTheirDeallocationOwner
 }
 
 TEST(AllocatorPropagation, VectorSwapsTransferStorageAndItsArenaForEveryAllocator){
-    for(const bool foreignArena : { false, true }){
+    for(const b8 foreignArena : { false, true }){
         VerifyVectorSwap<Vector<u32, GlobalArena>>(foreignArena);
         VerifyVectorSwap<ParallelVector<u32, GlobalArena>>(foreignArena);
         VerifyVectorSwap<DefaultVector<u32, GlobalArena, DefaultOwner>>(foreignArena);
@@ -283,8 +283,8 @@ TEST(AllocatorPropagation, VectorSwapsTransferStorageAndItsArenaForEveryAllocato
 }
 
 TEST(AllocatorPropagation, StringSwapsTransferArenaForHeapAndSmallStringStorage){
-    for(const bool foreignArena : { false, true }){
-        for(const bool shortFirst : { false, true }){
+    for(const b8 foreignArena : { false, true }){
+        for(const b8 shortFirst : { false, true }){
             VerifyStringSwap<AString<GlobalArena>>(foreignArena, shortFirst);
             VerifyStringSwap<DefaultAString<GlobalArena, DefaultOwner>>(foreignArena, shortFirst);
         }
@@ -292,7 +292,7 @@ TEST(AllocatorPropagation, StringSwapsTransferArenaForHeapAndSmallStringStorage)
 }
 
 TEST(AllocatorPropagation, OrderedMapSwapsTransferNodesAndTheirArena){
-    for(const bool foreignArena : { false, true }){
+    for(const b8 foreignArena : { false, true }){
         GlobalArena firstArena(Name("tests/allocator_propagation/ordered_swap_first"));
         GlobalArena secondArena(Name("tests/allocator_propagation/ordered_swap_second"));
         GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
@@ -327,7 +327,7 @@ TEST(AllocatorPropagation, OrderedMapSwapsTransferNodesAndTheirArena){
 }
 
 TEST(AllocatorPropagation, HashMapSwapsAndMovesPreserveArenaAndSourceReuse){
-    for(const bool foreignArena : { false, true }){
+    for(const b8 foreignArena : { false, true }){
         GlobalArena firstArena(Name("tests/allocator_propagation/hash_map_first"));
         GlobalArena secondArena(Name("tests/allocator_propagation/hash_map_second"));
         GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
@@ -369,7 +369,7 @@ TEST(AllocatorPropagation, HashMapSwapsAndMovesPreserveArenaAndSourceReuse){
 }
 
 TEST(AllocatorPropagation, HashSetSwapsAndMovesPreserveArenaAndSourceReuse){
-    for(const bool foreignArena : { false, true }){
+    for(const b8 foreignArena : { false, true }){
         GlobalArena firstArena(Name("tests/allocator_propagation/hash_set_first"));
         GlobalArena secondArena(Name("tests/allocator_propagation/hash_set_second"));
         GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;

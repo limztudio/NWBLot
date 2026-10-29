@@ -33,7 +33,7 @@ struct GraphClearTimingRecordState{
     return state.rebindableTimingTicket ? *state.rebindableTimingTicket : state.timingTicket;
 }
 
-[[nodiscard]] inline bool BeginGraphClearTiming(
+[[nodiscard]] inline b8 BeginGraphClearTiming(
     Core::GraphicsRuntime* const graphics,
     Optional<Core::GpuTimingMeasure>* const timing,
     Core::GpuTimingSubmissionTicket* const timingTicket,
@@ -48,7 +48,7 @@ struct GraphClearTimingRecordState{
     return Core::FinishSplitGpuTimingMarker(timing);
 }
 
-[[nodiscard]] inline bool EndGraphClearTiming(Optional<Core::GpuTimingMeasure>* const timing, Core::GpuTimingSubmissionTicket* const timingTicket, Core::CommandList& commandList){
+[[nodiscard]] inline b8 EndGraphClearTiming(Optional<Core::GpuTimingMeasure>* const timing, Core::GpuTimingSubmissionTicket* const timingTicket, Core::CommandList& commandList){
     if(!timing || !*timing || !timingTicket)
         return false;
 
@@ -58,7 +58,7 @@ struct GraphClearTimingRecordState{
     return true;
 }
 
-[[nodiscard]] inline bool BeginGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+[[nodiscard]] inline b8 BeginGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
     if(!state)
@@ -66,7 +66,7 @@ struct GraphClearTimingRecordState{
     return BeginGraphClearTiming(state->graphics, state->timing, ResolveGraphClearTimingTicket(*state), state->scope, commandList);
 }
 
-[[nodiscard]] inline bool EndGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+[[nodiscard]] inline b8 EndGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
     if(!state)

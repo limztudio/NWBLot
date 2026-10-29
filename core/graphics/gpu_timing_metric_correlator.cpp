@@ -47,7 +47,7 @@ GpuTimingMetricCorrelator::GpuTimingMetricCorrelator(Alloc::GlobalArena& arena, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTimingMetricCorrelator::prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope){
+b8 GpuTimingMetricCorrelator::prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope){
     if(!firstScope || !secondScope || !outputScope || firstScope == secondScope || outputScope == firstScope || outputScope == secondScope)
         return false;
 
@@ -67,7 +67,7 @@ bool GpuTimingMetricCorrelator::prepareOverlapMetric(const Name& firstScope, con
         if(outputScope == record.firstScope || outputScope == record.secondScope)
             return false;
 
-        const bool sameInputs = record.firstScope == canonicalFirstScope && record.secondScope == canonicalSecondScope;
+        const b8 sameInputs = record.firstScope == canonicalFirstScope && record.secondScope == canonicalSecondScope;
         if(sameInputs)
             return record.outputScopeName == outputScope && record.outputScope.valid();
         if(record.outputScopeName == outputScope)
@@ -87,7 +87,7 @@ bool GpuTimingMetricCorrelator::prepareOverlapMetric(const Name& firstScope, con
     return true;
 }
 
-bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
+b8 GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
     const u64 sourceFrameIndex,
     const NotNull<const GpuPacketEnvelopeMetricScope*> scopeInputs,
     const usize scopeCount,
@@ -138,7 +138,7 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
                 return false;
         }
 
-        bool queueHasInput = false;
+        b8 queueHasInput = false;
         for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
             if(scopes[scopeIndex].scopeName == output.internalIdleScopeName)
                 return false;
@@ -154,7 +154,7 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
         }
     }
     for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
-        bool hasQueueOutput = false;
+        b8 hasQueueOutput = false;
         for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex)
             hasQueueOutput = hasQueueOutput || queueOutputs[outputIndex].physicalQueue == scopes[scopeIndex].physicalQueue;
         if(!hasQueueOutput)
@@ -195,7 +195,7 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
 
         if(pending.sourceFrameIndex != sourceFrameIndex)
             continue;
-        bool sharesOutput = pending.queueOverlapScopeName == queueOverlapScope;
+        b8 sharesOutput = pending.queueOverlapScopeName == queueOverlapScope;
         for(const PacketEnvelopeMetricQueueOutputRecord& pendingOutput : pending.queueOutputs){
             for(usize outputIndex = 0u; outputIndex < queueOutputCount; ++outputIndex){
                 sharesOutput = sharesOutput || pendingOutput.internalIdleScopeName == queueOutputs[outputIndex].internalIdleScopeName;
@@ -332,9 +332,9 @@ void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, cons
 
         GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
         const auto envelopeMetrics = TryAggregateGpuPacketEnvelopeMetrics(packetRanges.data(), packetRanges.size(), scratchArena, queueMetrics);
-        bool aggregated = envelopeMetrics && queueMetrics.size() == it->queueOutputs.size();
+        b8 aggregated = envelopeMetrics && queueMetrics.size() == it->queueOutputs.size();
         for(const GpuQueuePacketEnvelopeMetrics& queueMetric : queueMetrics){
-            bool hasOutput = false;
+            b8 hasOutput = false;
             for(const PacketEnvelopeMetricQueueOutputRecord& output : it->queueOutputs)
                 hasOutput = hasOutput || output.physicalQueue == queueMetric.physicalQueue;
             aggregated = aggregated && hasOutput;
@@ -358,7 +358,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, cons
     }
 }
 
-bool GpuTimingMetricCorrelator::hasOutputRole(const Name& scopeName)const noexcept{
+b8 GpuTimingMetricCorrelator::hasOutputRole(const Name& scopeName)const noexcept{
     for(const OverlapRecord& record : m_overlapRecords){
         if(record.outputScopeName == scopeName)
             return true;
@@ -386,7 +386,7 @@ void GpuTimingMetricCorrelator::reset()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuTimingMetricCorrelator::rememberMetricOutput(const Name& name, const GpuPhysicalQueueId& queue, const bool internalIdle){
+void GpuTimingMetricCorrelator::rememberMetricOutput(const Name& name, const GpuPhysicalQueueId& queue, const b8 internalIdle){
     for(const PacketEnvelopeMetricOutputRoleRecord& outputRole : m_packetEnvelopeMetricOutputRoles){
         if(outputRole.scopeName != name)
             continue;

@@ -54,7 +54,7 @@ public:
 
 
 private:
-    [[nodiscard]] static bool WriteBomStrippedCompilerInput(ScratchString& source, const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static b8 WriteBomStrippedCompilerInput(ScratchString& source, const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, Core::Alloc::ScratchArena& scratchArena);
 
 
 public:
@@ -63,7 +63,7 @@ public:
     [[nodiscard]] static Expected<ScratchString> BuildCompilerPathText(const ScratchPath& path, Core::Alloc::ScratchArena& scratchArena);
     // Each absolute root gets its own encoded overlay directory so nested relative includes keep resolving within that root.
     [[nodiscard]] static Expected<ScratchPath> BuildCompilerOverlayPath(const ScratchPath& overlayRoot, const ScratchPath& absolutePath, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static bool IsCompilerDependency(Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept;
+    [[nodiscard]] static b8 IsCompilerDependency(Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept;
     [[nodiscard]] static Expected<CompilerInputs> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Core::Alloc::ScratchArena& scratchArena);
 
 

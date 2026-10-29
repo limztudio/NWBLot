@@ -47,7 +47,7 @@ inline constexpr u32 s_MinimumDirectoryPollMilliseconds = 1u;
 
 
 template<typename ArenaT>
-[[nodiscard]] inline bool TextFileContains(const ::Path<ArenaT>& path, const AStringView needle){
+[[nodiscard]] inline b8 TextFileContains(const ::Path<ArenaT>& path, const AStringView needle){
     AString<ArenaT> text(path.arena());
     if(!ReadTextFile(path, text))
         return false;
@@ -56,7 +56,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> WaitForDirectory(const ::Path<ArenaT>& path, const u32 timeoutMilliseconds, const u32 pollMilliseconds = FilesystemTestDetail::s_DefaultDirectoryPollMilliseconds)noexcept{
+[[nodiscard]] inline Expected<b8, ErrorCode> WaitForDirectory(const ::Path<ArenaT>& path, const u32 timeoutMilliseconds, const u32 pollMilliseconds = FilesystemTestDetail::s_DefaultDirectoryPollMilliseconds)noexcept{
     const u32 stepMilliseconds = pollMilliseconds == 0u ? FilesystemTestDetail::s_MinimumDirectoryPollMilliseconds : pollMilliseconds;
     const Timer deadline = TimerAddMS(TimerNow(), timeoutMilliseconds);
     for(;;){

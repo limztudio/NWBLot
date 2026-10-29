@@ -25,12 +25,12 @@ public:
 
 
 public:
-    [[nodiscard]] TypeRef* parseType(bool allowRefMode = false, bool allowAuto = false);
-    [[nodiscard]] bool parseTemplateParamList(MVector<TemplateParamDecl>& outParams);
-    [[nodiscard]] bool parseTypeArgList(MVector<TypeArg>& outArgs);
-    [[nodiscard]] bool parseParamList(MVector<ParamDecl>& outParams);
-    [[nodiscard]] bool expectClosingAngle();
-    [[nodiscard]] bool hasPendingRightAngles()const noexcept{ return m_pendingRightAngles > 0u; }
+    [[nodiscard]] TypeRef* parseType(b8 allowRefMode = false, b8 allowAuto = false);
+    [[nodiscard]] b8 parseTemplateParamList(MVector<TemplateParamDecl>& outParams);
+    [[nodiscard]] b8 parseTypeArgList(MVector<TypeArg>& outArgs);
+    [[nodiscard]] b8 parseParamList(MVector<ParamDecl>& outParams);
+    [[nodiscard]] b8 expectClosingAngle();
+    [[nodiscard]] b8 hasPendingRightAngles()const noexcept{ return m_pendingRightAngles > 0u; }
     void resetPendingRightAngles()noexcept{ m_pendingRightAngles = 0u; }
 
 

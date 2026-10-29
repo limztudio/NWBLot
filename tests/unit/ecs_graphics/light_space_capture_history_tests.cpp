@@ -91,7 +91,7 @@ TEST(LightSpaceCaptureHistory, RejectedRefreshCannotResurrectPreviousInPlaceCont
 }
 
 TEST(LightSpaceCaptureHistory, RejectedReuseAndSkippedFramesCannotExtendCaptureAge){
-    for(const bool prepareReuse : { false, true }){
+    for(const b8 prepareReuse : { false, true }){
         LightSpaceCaptureHistory history;
         const LightSpaceCaptureIdentity identity{ 7u, 11u, 13u, true };
         history.beginFrame();
@@ -144,7 +144,7 @@ TEST(LightSpaceCaptureHistory, TwoFrameReuseRetainsIdentityInvalidationAndReject
     const LightSpaceCaptureIdentity original{ 7u, 11u, 13u, true };
     const LightSpaceCaptureIdentity changes[] = { { 8u, 11u, 13u, true }, { 7u, 12u, 13u, true }, { 7u, 11u, 14u, true }, { 7u, 11u, 13u, false }, };
     for(const auto& changed : changes){
-        for(const bool submitEdit : { false, true }){
+        for(const b8 submitEdit : { false, true }){
             LightSpaceCaptureHistory history;
             history.beginFrame();
             const auto captured = history.prepare(original, SoftwareShadowCaptureCadence::ReuseTwoFrames);

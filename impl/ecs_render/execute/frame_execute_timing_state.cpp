@@ -120,21 +120,21 @@ Expected<usize> FrameExecuteTimingState::bindNormalTimingTickets(
     const Core::GpuTaskId (&graphicsPrefixTimingTasks)[s_GraphicsPrefixTimingTicketCount],
     const usize graphicsPrefixUniquePacketCount,
     const RendererAvboitTaskGraphValidation& avboitValidation,
-    const bool hardwareShadowSupported,
+    const b8 hardwareShadowSupported,
     const usize ticketCapacity,
     Core::GpuTaskGraphTaskTimingTicket* const tickets
 ){
     usize ticketCount = 0u;
-    const auto appendTicket = [&](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket)noexcept -> bool {
+    const auto appendTicket = [&](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket)noexcept -> b8 {
         if(!task.valid() || ticketCount >= ticketCapacity)
             return false;
         tickets[ticketCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };
         return true;
     };
-    bool ready = appendTicket(renderer.m_deferredShadowPrepareTask, shadowPrepareTimingTicket);
+    b8 ready = appendTicket(renderer.m_deferredShadowPrepareTask, shadowPrepareTimingTicket);
     for(usize prefixTaskIndex = 0u; ready && prefixTaskIndex < s_GraphicsPrefixTimingTicketCount; ++prefixTaskIndex){
         const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
-        bool packetAlreadyTimed = false;
+        b8 packetAlreadyTimed = false;
         for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
             if(compiledPlan.tasksSharePacket(task, graphicsPrefixTimingTasks[earlierTaskIndex])){
                 packetAlreadyTimed = true;

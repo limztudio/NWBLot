@@ -37,8 +37,8 @@ private:
     WidgetState m_widget;
     ControlToken m_token;
     SliderResult m_result;
-    bool m_focusOnCommit = false;
-    bool m_interactive = false;
+    b8 m_focusOnCommit = false;
+    b8 m_interactive = false;
 };
 
 

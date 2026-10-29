@@ -69,8 +69,8 @@ static constexpr usize s_TextInputBufferSize = 64u;
 static constexpr i32 s_InactivePollSleepMs = 10;
 static constexpr int s_X11CardinalPropertyFormatBits = 32;
 
-static bool s_DetectableAutoRepeat = false;
-static bool s_KeyStates[s_KeyStateCount] = {};
+static b8 s_DetectableAutoRepeat = false;
+static b8 s_KeyStates[s_KeyStateCount] = {};
 static X11FilteredKeyHistory s_FilteredKeyHistory;
 
 
@@ -194,7 +194,7 @@ static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mo
     }
 }
 
-static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action, const bool dispatchText, const bool dispatchPhysical = true){
+static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action, const b8 dispatchText, const b8 dispatchPhysical = true){
     XKeyEvent translatedEvent = keyEvent;
     const KeySym keySym = keyEvent.keycode ? XLookupKeysym(&translatedEvent, 0) : NoSymbol;
     const i32 key = TranslateKey(keySym);
@@ -212,12 +212,12 @@ static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action
     }
 }
 
-static void ProcessKeyEvent(Frame& frame, const XKeyEvent& event, const bool dispatchText){
+static void ProcessKeyEvent(Frame& frame, const XKeyEvent& event, const b8 dispatchText){
     const u32 keycode = static_cast<u32>(event.keycode);
     const u32 timestamp = static_cast<u32>(event.time);
     const u32 serial = static_cast<u32>(event.serial);
     const u64 receivedAtMs = DurationInMS<u64>(TimerNow());
-    const bool released = event.type == KeyRelease;
+    const b8 released = event.type == KeyRelease;
     if(s_FilteredKeyHistory.isForwardedDuplicate(keycode, released, timestamp, serial, event.send_event != False, receivedAtMs)){
         // The physical event already ran, but an unfiltered press must still reach XIM text lookup.
         if(dispatchText && !released)
@@ -250,7 +250,7 @@ static void ProcessKeyEvent(Frame& frame, const XKeyEvent& event, const bool dis
     DispatchKeyEvent(frame, event, InputAction::Release, false);
 }
 
-static bool ProcessEvent(Frame& frame, const XEvent& event){
+static b8 ProcessEvent(Frame& frame, const XEvent& event){
     auto& frameData = frame.data<Common::LinuxFrame>();
     if(event.xany.window != GetX11Window(frameData))
         return true;
@@ -359,8 +359,8 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
 struct X11WindowState final{
     u32 width;
     u32 height;
-    bool windowVisible;
-    bool windowIsInFocus;
+    b8 windowVisible;
+    b8 windowIsInFocus;
 };
 
 static Expected<X11WindowState> QueryWindowState(Frame& frame){
@@ -372,7 +372,7 @@ static Expected<X11WindowState> QueryWindowState(Frame& frame){
         return MakeUnexpected(Failure{});
     }
 
-    const bool windowVisible = attributes.map_state == IsViewable && attributes.width > 0 && attributes.height > 0;
+    const b8 windowVisible = attributes.map_state == IsViewable && attributes.width > 0 && attributes.height > 0;
     return X11WindowState{ .width = windowVisible ? static_cast<u32>(attributes.width) : 0u, .height = windowVisible ? static_cast<u32>(attributes.height) : 0u, .windowVisible = windowVisible, .windowIsInFocus = frameData.isActive() };
 }
 
@@ -390,7 +390,7 @@ static void ResetFrameData(Common::LinuxFrame& frameData)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InitX11Frame(Frame& frame){
+b8 InitX11Frame(Frame& frame){
     const TStringView windowTitle = frame.windowTitleOrDefault();
     constexpr long s_WindowEventMask = ExposureMask | FocusChangeMask | StructureNotifyMask | KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | PointerMotionMask | EnterWindowMask | LeaveWindowMask;
 
@@ -479,7 +479,7 @@ void ShowX11Frame(Frame& frame){
     XFlush(GetX11Display(frameData));
 }
 
-bool RunX11Frame(Frame& frame){
+b8 RunX11Frame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
 
     Timer lateTime(TimerNow());

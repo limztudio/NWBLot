@@ -58,7 +58,7 @@ SIMDVectorSingle MeshletCandidateSearch::MeshletScoreNormalCoherence(const Meshl
 }
 
 
-void MeshletCandidateSearch::UpdateMeshletScoreConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle triangleAreaNormal, bool& hasNormal, SIMDVectorSingle& coneCutoff)noexcept{
+void MeshletCandidateSearch::UpdateMeshletScoreConeCutoff(const SIMDVectorSingle axis, const SIMDVectorSingle triangleAreaNormal, b8& hasNormal, SIMDVectorSingle& coneCutoff)noexcept{
     const SIMDVectorSingle faceNormal = MeshletTriangleGeometry::NormalizeMeshletDirectionOrZero(triangleAreaNormal);
     if(!::FrameValidDirection(faceNormal))
         return;
@@ -69,7 +69,7 @@ void MeshletCandidateSearch::UpdateMeshletScoreConeCutoff(const SIMDVectorSingle
 }
 
 
-void MeshletCandidateSearch::UpdateBestMeshletCandidateFromResult(const MeshletCandidateSearchResult& candidate, bool& found, MeshletFrontierCandidate& outCandidate)noexcept{
+void MeshletCandidateSearch::UpdateBestMeshletCandidateFromResult(const MeshletCandidateSearchResult& candidate, b8& found, MeshletFrontierCandidate& outCandidate)noexcept{
     if(!candidate.found)
         return;
 

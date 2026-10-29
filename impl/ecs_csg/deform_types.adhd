@@ -53,12 +53,12 @@ class CsgDeformShape{
 
 class CsgDeformCutDesc{
     public CsgDeformShape shape;
-    public bool active = true;
+    public b8 active = true;
 }
 
 class CsgDeformBuildOptions{
     public f32 distanceEpsilon = s_DefaultDistanceEpsilon;
-    public bool fillCaps = true;
+    public b8 fillCaps = true;
 }
 
 enum<u8> CsgDeformShapeKind{
@@ -82,7 +82,7 @@ enum<u8> CsgDeformViabilityReason{
 }
 
 class CsgDeformViability{
-    public bool viable = false;
+    public b8 viable = false;
     public CsgDeformViabilityReason reason = CsgDeformViabilityReason::Enum::Ok;
 }
 

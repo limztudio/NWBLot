@@ -21,7 +21,7 @@ namespace __hidden_pipeline_command_line{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool AssignText(const AStringView text, NWB::Core::Assets::AssetString& output){
+static b8 AssignText(const AStringView text, NWB::Core::Assets::AssetString& output){
     if(!text.empty() && !IsSingleLinePathText(text)){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: paths must not contain nulls or newlines"));
         return false;
@@ -30,7 +30,7 @@ static bool AssignText(const AStringView text, NWB::Core::Assets::AssetString& o
     return true;
 }
 
-static bool AssignInputs(const Span<const AInteropString> values, NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>& outputs){
+static b8 AssignInputs(const Span<const AInteropString> values, NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>& outputs){
     auto& arena = outputs.get_allocator().arena();
     outputs.reserve(values.size());
     for(const AInteropString& value : values){
@@ -77,7 +77,7 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
     PipelineOptions options(arena);
     CommandLineParseApp(m_app, argc, argv);
 
-    const bool allowImplicitProjectInput = m_tool == PipelineTool::DependencyComputer && !m_assetRoots.empty();
+    const b8 allowImplicitProjectInput = m_tool == PipelineTool::DependencyComputer && !m_assetRoots.empty();
     if(m_inputs.empty() && m_inputList.empty() && !allowImplicitProjectInput){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: provide --input or --input-list"));
         return MakeUnexpected(Failure{});

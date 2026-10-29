@@ -20,7 +20,7 @@ namespace UiWidgetTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
+b8 InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
     Core::Assets::AssetBytes bytes(arena);
     auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
@@ -82,7 +82,7 @@ Expected<SkinPaintSample> WidgetFixture::sampleSkinPaint(const DrawSnapshot& sna
     return candidate;
 }
 
-bool WidgetFixture::installKoreanFallback(){
+b8 WidgetFixture::installKoreanFallback(){
     Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
     const auto path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "korean.font";
     Core::Assets::AssetBytes bytes(m_arena);

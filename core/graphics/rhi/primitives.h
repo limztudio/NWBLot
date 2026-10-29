@@ -43,11 +43,11 @@ public:
         , a(alpha)
     {}
 };
-inline bool operator==(const Color& lhs, const Color& rhs)noexcept{
+inline b8 operator==(const Color& lhs, const Color& rhs)noexcept{
     return (lhs.r == rhs.r) && (lhs.g == rhs.g) && (lhs.b == rhs.b) && (lhs.a == rhs.a);
 }
 
-inline bool operator!=(const Color& lhs, const Color& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const Color& lhs, const Color& rhs)noexcept{ return !(lhs == rhs); }
 
 struct UIntColor{
     u32 r, g, b, a;
@@ -73,11 +73,11 @@ public:
         , a(alpha)
     {}
 };
-inline bool operator==(const UIntColor& lhs, const UIntColor& rhs)noexcept{
+inline b8 operator==(const UIntColor& lhs, const UIntColor& rhs)noexcept{
     return (lhs.r == rhs.r) && (lhs.g == rhs.g) && (lhs.b == rhs.b) && (lhs.a == rhs.a);
 }
 
-inline bool operator!=(const UIntColor& lhs, const UIntColor& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const UIntColor& lhs, const UIntColor& rhs)noexcept{ return !(lhs == rhs); }
 
 struct IntColor{
     i32 r, g, b, a;
@@ -103,11 +103,11 @@ public:
         , a(alpha)
     {}
 };
-inline bool operator==(const IntColor& lhs, const IntColor& rhs)noexcept{
+inline b8 operator==(const IntColor& lhs, const IntColor& rhs)noexcept{
     return (lhs.r == rhs.r) && (lhs.g == rhs.g) && (lhs.b == rhs.b) && (lhs.a == rhs.a);
 }
 
-inline bool operator!=(const IntColor& lhs, const IntColor& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const IntColor& lhs, const IntColor& rhs)noexcept{ return !(lhs == rhs); }
 
 
 struct Viewport{
@@ -147,11 +147,11 @@ public:
     // x = width, y = height.
     [[nodiscard]] SIMDVectorSingle extent()const noexcept{ return VectorSubtract(VectorSet(maxX, maxY, 0.0f, 0.0f), VectorSet(minX, minY, 0.0f, 0.0f)); }
 };
-inline bool operator==(const Viewport& lhs, const Viewport& rhs)noexcept{
+inline b8 operator==(const Viewport& lhs, const Viewport& rhs)noexcept{
     return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY) && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ);
 }
 
-inline bool operator!=(const Viewport& lhs, const Viewport& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const Viewport& lhs, const Viewport& rhs)noexcept{ return !(lhs == rhs); }
 
 
 struct Rect{
@@ -197,15 +197,15 @@ public:
 
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }
 
-    [[nodiscard]] constexpr bool validScissor()const noexcept{
+    [[nodiscard]] constexpr b8 validScissor()const noexcept{
         return minX >= 0 && minY >= 0 && maxX >= minX && maxY >= minY;
     }
 };
-inline bool operator==(const Rect& lhs, const Rect& rhs)noexcept{
+inline b8 operator==(const Rect& lhs, const Rect& rhs)noexcept{
     return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY);
 }
 
-inline bool operator!=(const Rect& lhs, const Rect& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const Rect& lhs, const Rect& rhs)noexcept{ return !(lhs == rhs); }
 
 struct Box{
     i32 minX, maxX;
@@ -255,11 +255,11 @@ public:
 
     [[nodiscard]] constexpr i32 depth()const noexcept{ return maxZ - minZ; }
 };
-inline bool operator==(const Box& lhs, const Box& rhs)noexcept{
+inline b8 operator==(const Box& lhs, const Box& rhs)noexcept{
     return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY) && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ);
 }
 
-inline bool operator!=(const Box& lhs, const Box& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const Box& lhs, const Box& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

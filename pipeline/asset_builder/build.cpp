@@ -40,7 +40,7 @@ namespace Assets = Core::Assets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildAssets(const AssetBuildOptions& options){
+b8 BuildAssets(const AssetBuildOptions& options){
     Assets::AssetArena& arena = options.assetRoots.get_allocator().arena();
     if(options.assetType.view() != s_GraphicsAssetBuildType){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: unsupported --asset-type '{}'. Available types: graphics"), ConvertString(options.assetType.view()));

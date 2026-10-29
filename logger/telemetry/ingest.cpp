@@ -73,7 +73,7 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
     result.type = type;
 }
 
-[[nodiscard]] bool StoreRawTelemetry(const Path& rawPath, const void* bytes, const usize byteCount){
+[[nodiscard]] b8 StoreRawTelemetry(const Path& rawPath, const void* bytes, const usize byteCount){
     const BinaryByteView view{ static_cast<const u8*>(bytes), byteCount };
     return WriteBinaryFile(rawPath, view);
 }

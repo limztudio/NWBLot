@@ -56,9 +56,9 @@ private:
 
 void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependencyCount, const usize repetitionCount){
     DeadlineGuard deadline;
-    Atomic<bool> rootEntered{ false };
-    Atomic<bool> releaseRoot{ false };
-    Atomic<bool> rootExpired{ false };
+    Atomic<b8> rootEntered{ false };
+    Atomic<b8> releaseRoot{ false };
+    Atomic<b8> rootExpired{ false };
     Atomic<u32> dependencyCompletionCount{ 0u };
     Atomic<u32> completionCountObservedByJoin{ 0u };
     Atomic<u32> joinInvocationCount{ 0u };
@@ -215,7 +215,7 @@ TEST(CpuTaskSchedulerTests, NestedLargeFanInRejectsACycleAtTheEndOfTheDependency
     Vector<CpuTaskHandle, Alloc::ScratchArena> prerequisites(s_FanIn + 1u, CpuTaskHandle{}, scratchArena);
     CpuTaskScheduler scheduler(0u);
     u32 invocations = 0u;
-    bool rejected = false;
+    b8 rejected = false;
     const auto cpuTaskAdmission = scheduler.submit([&](){
         const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++invocations; }, {}, prerequisites.data(), prerequisites.size());
         rejected = !secondCpuTaskAdmission || !secondCpuTaskAdmission->valid();
@@ -252,8 +252,8 @@ TEST(CpuTaskSchedulerTests, NestedDependencyAcceptsARetiredGenerationInTheAncest
     const auto completed = *completedTaskAdmission;
     ASSERT_TRUE(completed.valid());
     scheduler.wait(completed);
-    bool accepted = false;
-    bool invoked = false;
+    b8 accepted = false;
+    b8 invoked = false;
     const auto cpuTaskAdmission = scheduler.submit([&](){
         const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ invoked = true; }, completed);
         accepted = secondCpuTaskAdmission.has_value() && secondCpuTaskAdmission->valid();

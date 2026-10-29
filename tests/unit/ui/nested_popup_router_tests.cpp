@@ -56,7 +56,7 @@ HitTarget Barrier(const PopupScope& scope, const u32 order)noexcept{
     return target;
 }
 
-HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, const bool navigation)noexcept{
+HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, const b8 navigation)noexcept{
     HitTarget target;
     target.id = { scope.token.widget.value + offset };
     target.declarationGeneration = 10u;
@@ -90,7 +90,7 @@ public:
 
 
 protected:
-    [[nodiscard]] bool install(const PopupScope* scopes, const usize count, const u64 generation, const bool navigation = false){
+    [[nodiscard]] b8 install(const PopupScope* scopes, const usize count, const u64 generation, const b8 navigation = false){
         Array<HitTarget, 1u + 3u * s_InputMaxPopups> targets{};
         targets[0u] = BaseHitTarget();
         for(usize index = 0u; index < count; ++index){
@@ -107,7 +107,7 @@ protected:
         return m_router.process();
     }
 
-    void key(const Core::Key::Enum key, const bool shift = false){
+    void key(const Core::Key::Enum key, const b8 shift = false){
         EXPECT_TRUE(send({ .position = {}, .key = key, .type = InputEventType::KeyDown, .shift = shift }).commandConsumed);
         EXPECT_TRUE(send({ .position = {}, .key = key, .type = InputEventType::KeyUp, .shift = shift }).commandConsumed);
     }

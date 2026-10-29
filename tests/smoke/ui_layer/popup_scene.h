@@ -34,9 +34,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    [[nodiscard]] bool paintLaterRoot(Impl::UiPaintContext& context)const;
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    [[nodiscard]] b8 paintLaterRoot(Impl::UiPaintContext& context)const;
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:
@@ -57,20 +57,20 @@ private:
     u32 m_sequence = 0u;
     u32 m_underlying = 0u;
     u32 m_selected = 0u;
-    bool m_modal = false;
-    bool m_checked = false;
-    bool m_popupFocused = false;
-    bool m_outsideFocused = false;
-    bool m_edge = false;
-    bool m_right = false;
-    bool m_visible = true;
-    bool m_displayChanged = false;
+    b8 m_modal = false;
+    b8 m_checked = false;
+    b8 m_popupFocused = false;
+    b8 m_outsideFocused = false;
+    b8 m_edge = false;
+    b8 m_right = false;
+    b8 m_visible = true;
+    b8 m_displayChanged = false;
 };
 
 using SharedUiPopupSmokeScene = RefCountPtr< RefCounter<UiPopupSmokeScene>, ArenaRefDeleter<RefCounter<UiPopupSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerPopupSmokeEnabled();
-[[nodiscard]] bool IsUiLayerPopupSkinSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerPopupSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerPopupSkinSmokeEnabled();
 [[nodiscard]] SharedUiPopupSmokeScene CreateUiPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 

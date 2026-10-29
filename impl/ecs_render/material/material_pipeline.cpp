@@ -81,7 +81,7 @@ struct MaterialPipelineAvboitPixelShaderSelection{
 
 
 public:
-    [[nodiscard]] bool materialDriven()const noexcept{ return materialShader != nullptr && materialShader->valid(); }
+    [[nodiscard]] b8 materialDriven()const noexcept{ return materialShader != nullptr && materialShader->valid(); }
 
     [[nodiscard]] Name shaderName()const noexcept{ return materialDriven() ? materialShader->name() : s_NameNone; }
 };
@@ -163,8 +163,8 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     Core::GraphicsString csgShaderVariant(m_arena);
     Core::GraphicsString avboitCsgShaderVariant(m_arena);
     const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
-    const bool csgClipPipeline = csgBindingUse.clip;
-    const bool avboitCsgClipPipeline = csgBindingUse.avboitClip;
+    const b8 csgClipPipeline = csgBindingUse.clip;
+    const b8 avboitCsgClipPipeline = csgBindingUse.avboitClip;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(m_arena);
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
     AStringView avboitProjectEvaluatorModuleAssignmentToAdd;
@@ -217,7 +217,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
 
     const Name sharedMeshShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::sharedMs);
     const Name objectVertexShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::objectVs);
-    const bool sharedObjectGeometry = sharedMeshShaderAssetName && materialInfo.meshShader.name() == sharedMeshShaderAssetName && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
+    const b8 sharedObjectGeometry = sharedMeshShaderAssetName && materialInfo.meshShader.name() == sharedMeshShaderAssetName && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
 
     Name passPixelShaderName = s_NameNone;
     NameText<char> passPixelShaderDebugName = "ECSRender_InvalidPassPixelShader";
@@ -252,7 +252,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(!materialPassBindingLayout)
         return failMaterialPipeline();
 
-    auto loadPassPixelShader = [&]() -> bool{
+    auto loadPassPixelShader = [&]() -> b8{
         if(pass == MaterialPipelinePass::Opaque){
             return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, "ECSRender_RendererPS");
         }
@@ -266,7 +266,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Name(passPixelShaderDebugName));
     };
 
-    auto tryBuildMeshPipeline = [&]() -> bool{
+    auto tryBuildMeshPipeline = [&]() -> b8{
         if(!m_shaderSystem.loadShader<MeshShader>(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, "ECSRender_RendererMesh"))
             return false;
         if(!loadPassPixelShader())
@@ -295,7 +295,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         return true;
     };
 
-    auto tryBuildIndexedPipeline = [&]() -> bool{
+    auto tryBuildIndexedPipeline = [&]() -> b8{
         if(!createObjectGeometryPipelineResources(resources))
             return false;
         if(!loadPassPixelShader())
@@ -323,7 +323,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         return true;
     };
 
-    auto tryBuildComputePipeline = [&]() -> bool{
+    auto tryBuildComputePipeline = [&]() -> b8{
         if(!createComputeEmulationResources())
             return false;
         NWB_ASSERT(m_materialState.m_computeBindingLayout);
@@ -378,7 +378,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         return true;
     };
 
-    const bool meshSupported = m_graphics.queryFeatureSupport(Core::Feature::Meshlets);
+    const b8 meshSupported = m_graphics.queryFeatureSupport(Core::Feature::Meshlets);
     // Surface info admission already requires the mesh shader and the opaque pixel shader.
     NWB_ASSERT(pass != MaterialPipelinePass::Opaque || materialInfo.pixelShader.valid());
     NWB_ASSERT(materialInfo.meshShader.valid());
@@ -393,7 +393,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         return MakeNotNull(&resources);
     }
 
-    const bool indexedAvailable = sharedObjectGeometry
+    const b8 indexedAvailable = sharedObjectGeometry
         && objectVertexShaderAssetName
         && m_shaderSystem.hasShaderArchiveStage(objectVertexShaderAssetName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::VertexStage))
     ;
@@ -443,7 +443,7 @@ void RendererMaterialSystem::invalidateRendererPipelines()noexcept{
     m_materialState.m_objectGeometryInputLayout.reset();
 }
 
-void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){
+void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const b8 meshSupported){
     auto [it, inserted] = m_materialState.m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
     if(!inserted){
         if(it.value() == renderPath)

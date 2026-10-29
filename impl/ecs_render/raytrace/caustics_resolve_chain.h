@@ -50,13 +50,13 @@ struct CausticsResolveChainInputs : public CausticsResolveChainStageUseInputs{
     Core::GpuTaskId geometryTask;
     Core::GpuTaskSchedulingHint baseScheduling;
     Span<const Core::GpuTaskExternalStateSource> stateSources{};
-    bool applyStateSourcesToPrepareOnly = true;
-    bool& producerDispatched;
+    b8 applyStateSourcesToPrepareOnly = true;
+    b8& producerDispatched;
     Core::GpuTimingSubmissionTicket& timingTicket;
     Optional<Core::GpuTimingMeasure>& resolveTiming;
 
 public:
-    CausticsResolveChainInputs(DeferredFrameTargets& targetsIn, bool& producerDispatchedIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& resolveTimingIn)noexcept
+    CausticsResolveChainInputs(DeferredFrameTargets& targetsIn, b8& producerDispatchedIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& resolveTimingIn)noexcept
         : targets(targetsIn)
         , producerDispatched(producerDispatchedIn)
         , timingTicket(timingTicketIn)

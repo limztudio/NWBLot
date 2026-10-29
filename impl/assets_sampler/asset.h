@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool IsValidSamplerAddressMode(const Core::SamplerAddressMode::Enum addressMode)noexcept{
+[[nodiscard]] inline b8 IsValidSamplerAddressMode(const Core::SamplerAddressMode::Enum addressMode)noexcept{
     switch(addressMode){
     case Core::SamplerAddressMode::Clamp:
     case Core::SamplerAddressMode::Wrap:
@@ -35,7 +35,7 @@ NWB_IMPL_BEGIN
     }
 }
 
-[[nodiscard]] inline bool IsValidSamplerReductionType(const Core::SamplerReductionType::Enum reductionType)noexcept{
+[[nodiscard]] inline b8 IsValidSamplerReductionType(const Core::SamplerReductionType::Enum reductionType)noexcept{
     switch(reductionType){
     case Core::SamplerReductionType::Standard:
     case Core::SamplerReductionType::Comparison:
@@ -45,7 +45,7 @@ NWB_IMPL_BEGIN
     }
 }
 
-[[nodiscard]] inline bool IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept{
+[[nodiscard]] inline b8 IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept{
     return
         description.borderColor.r == 0.0f
         && description.borderColor.g == 0.0f
@@ -78,8 +78,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool validatePayload()const;
-    bool loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload()const;
+    b8 loadBinary(Span<const u8> binary);
 
     void setDescription(const Core::SamplerDesc& description)noexcept{ m_description = description; }
 

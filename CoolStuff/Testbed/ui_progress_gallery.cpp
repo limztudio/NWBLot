@@ -26,7 +26,7 @@ void UiProgressGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::All
     NWB::Impl::Ui::Builder& ui = context.ui;
     if(!ui.beginPanel("progress_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
         return;
-    bool valid = ui.label(s_TitleKey, "Skinned progress bar");
+    b8 valid = ui.label(s_TitleKey, "Skinned progress bar");
     if(ui.button("advance", "Advance by 25%"))
         m_fraction = m_fraction >= 1.0 ? 0.0 : VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_fraction), VectorDoubleReplicate(s_AdvanceFraction)));
     valid = ui.progress(s_AmountKey, m_fraction) && valid;

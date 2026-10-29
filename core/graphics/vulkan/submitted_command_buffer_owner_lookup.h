@@ -115,9 +115,9 @@ public:
         m_indexed = false;
     }
 
-    [[nodiscard]] bool indexed()const noexcept{ return m_indexed; }
+    [[nodiscard]] b8 indexed()const noexcept{ return m_indexed; }
 
-    [[nodiscard]] bool contains(TrackedCommandBuffer& owner, const u64 nativeRecordingID)const noexcept{
+    [[nodiscard]] b8 contains(TrackedCommandBuffer& owner, const u64 nativeRecordingID)const noexcept{
         if(!m_indexed || !m_ownerEntriesData || nativeRecordingID == 0u)
             return false;
 
@@ -139,7 +139,7 @@ private:
     OwnerEntry* m_ownerEntriesData = nullptr;
     usize m_ownerEntryCapacity = 0u;
     usize m_ownerEntryMask = 0u;
-    bool m_indexed = false;
+    b8 m_indexed = false;
 };
 
 

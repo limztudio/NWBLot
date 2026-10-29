@@ -88,19 +88,19 @@ struct ReflectionStatistics{
     ReflectionTraceMode::Enum traceMode = ReflectionTraceMode::Disabled;
     ReflectionHistoryResetReason::Enum historyResetReason = ReflectionHistoryResetReason::None;
     ReflectionFeedbackResetReason::Enum feedbackResetReason = ReflectionFeedbackResetReason::None;
-    bool hardwareRequested = false;
-    bool hardwareAvailable = false;
-    bool hardwareReady = false;
-    bool csgHardwareEnabled = false;
-    bool opticalTransportEnabled = false;
-    bool historyEligible = false;
-    bool historyReused = false;
-    bool historyReset = false;
-    bool feedbackRequested = false;
-    bool feedbackEnabled = false;
-    bool feedbackReused = false;
-    bool feedbackReset = false;
-    bool schedulingCounterValid = false;
+    b8 hardwareRequested = false;
+    b8 hardwareAvailable = false;
+    b8 hardwareReady = false;
+    b8 csgHardwareEnabled = false;
+    b8 opticalTransportEnabled = false;
+    b8 historyEligible = false;
+    b8 historyReused = false;
+    b8 historyReset = false;
+    b8 feedbackRequested = false;
+    b8 feedbackEnabled = false;
+    b8 feedbackReused = false;
+    b8 feedbackReset = false;
+    b8 schedulingCounterValid = false;
 };
 
 

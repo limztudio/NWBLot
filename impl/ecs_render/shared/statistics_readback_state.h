@@ -31,7 +31,7 @@ struct StatisticsReservationKey{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return sequence != 0u && generation != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return sequence != 0u && generation != 0u; }
 };
 
 struct StatisticsPendingReadback{
@@ -45,8 +45,8 @@ class StatisticsReadbackStateBase : NoCopy{
 protected:
     struct Slot{
         StatisticsT metadata;
-        bool reserved = false;
-        bool inFlight = false;
+        b8 reserved = false;
+        b8 inFlight = false;
     };
 
 
@@ -192,7 +192,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_key.valid(); }
+    [[nodiscard]] b8 valid()const noexcept{ return m_key.valid(); }
 
     [[nodiscard]] u32 slotIndex()const noexcept{ return m_key.slot; }
 

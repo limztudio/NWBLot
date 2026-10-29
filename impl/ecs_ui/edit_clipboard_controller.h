@@ -27,8 +27,8 @@ namespace UiEditClipboardStatus{
 
 struct UiEditClipboardResult{
     UiEditClipboardStatus::Enum status = UiEditClipboardStatus::Idle;
-    bool textChanged = false;
-    bool selectionChanged = false;
+    b8 textChanged = false;
+    b8 selectionChanged = false;
 };
 
 // The OS owns transfer and native selection.
@@ -43,10 +43,10 @@ public:
 
 
 public:
-    [[nodiscard]] UiEditClipboardResult request(const UiTextEditOwner& owner, const Ui::EditModel& model, Ui::EditClipboardAction::Enum action, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard, bool readOnly = false);
-    [[nodiscard]] UiEditClipboardResult drain(const UiTextEditOwner& owner, Ui::EditModel& model, bool readOnly = false);
-    [[nodiscard]] bool cancel();
-    [[nodiscard]] bool pending()const noexcept{ return m_token.valid(); }
+    [[nodiscard]] UiEditClipboardResult request(const UiTextEditOwner& owner, const Ui::EditModel& model, Ui::EditClipboardAction::Enum action, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard, b8 readOnly = false);
+    [[nodiscard]] UiEditClipboardResult drain(const UiTextEditOwner& owner, Ui::EditModel& model, b8 readOnly = false);
+    [[nodiscard]] b8 cancel();
+    [[nodiscard]] b8 pending()const noexcept{ return m_token.valid(); }
 
     [[nodiscard]] Core::ClipboardRequestToken token()const noexcept{ return m_token; }
 
@@ -55,7 +55,7 @@ public:
 
 private:
     void clearRequest()noexcept;
-    [[nodiscard]] UiEditClipboardResult applyCompletion(Ui::EditModel& model, bool readOnly);
+    [[nodiscard]] UiEditClipboardResult applyCompletion(Ui::EditModel& model, b8 readOnly);
 
 
 private:

@@ -41,15 +41,15 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
         return MakeUnexpected(Failure{});
 
     const ECSRenderDetail::MeshViewGpuData& meshViewState = inputs.meshViewState;
-    const bool meshViewUploadRequired = inputs.meshViewUploadRequired;
+    const b8 meshViewUploadRequired = inputs.meshViewUploadRequired;
 
     const SceneShadingBufferUploads uploads = m_deferredSystem.prepareSceneShadingBufferUploads(inputs.meshViewAspectRatio, inputs.rayTracingLightingInput);
     const auto& sceneLightData = uploads.lightData;
     const auto& sceneShadingState = uploads.sceneShadingState;
     const u32 sceneLightCount = uploads.lightCount;
     const auto& rayTracingLightingClassification = uploads.lightingClassification;
-    const bool sceneLightUploadRequired = uploads.lightUploadRequired;
-    const bool sceneShadingUploadRequired = uploads.sceneShadingUploadRequired;
+    const b8 sceneLightUploadRequired = uploads.lightUploadRequired;
+    const b8 sceneShadingUploadRequired = uploads.sceneShadingUploadRequired;
     result.sceneLightingContentHash = ComputeSceneLightingContentHash(sceneShadingState, Span<const ECSRenderDetail::SceneLightGpuData>(sceneLightData, sceneLightCount));
 
     Core::GpuTaskSchedulingHint meshViewSetupScheduling;

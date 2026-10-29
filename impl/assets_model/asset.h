@@ -81,8 +81,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
-    bool loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
+    b8 loadBinary(Span<const u8> binary);
 
 public:
     void setObjects(SkeletonObjectVector&& skeletonObjects, StaticMeshObjectVector&& staticMeshObjects, SkinnedMeshObjectVector&& skinnedMeshObjects)noexcept{

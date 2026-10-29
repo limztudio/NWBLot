@@ -16,7 +16,7 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void FbxSourceMeshStreams::ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const bool wantsSkinning){
+void FbxSourceMeshStreams::ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const b8 wantsSkinning){
     mesh.positions.reserve(estimatedTriangleCorners);
     mesh.normals.reserve(estimatedTriangleCorners);
     mesh.uv0.reserve(estimatedTriangleCorners);
@@ -29,7 +29,7 @@ void FbxSourceMeshStreams::ReserveSourceMeshStreams(SourceMeshStreams& mesh, con
 }
 
 
-void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const bool wantsSkinning){
+void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const b8 wantsSkinning){
     context.positions.reserve(estimatedTriangleCorners);
     context.normals.reserve(estimatedTriangleCorners);
     context.tangents.reserve(estimatedTriangleCorners);
@@ -41,7 +41,7 @@ void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(SourceMeshBuildContext&
 }
 
 
-bool FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept{
+b8 FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept{
     if(mesh.vertexRefs.empty() || mesh.tangents.empty())
         return false;
 
@@ -53,7 +53,7 @@ bool FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams
 }
 
 
-bool FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena){
+b8 FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena){
     mesh.tangents.clear();
 
     SourceVertexRefIndexMap compactLookup(scratchArena);
@@ -91,7 +91,7 @@ bool FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core:
 }
 
 
-bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices){
+b8 FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices){
     if(mesh.max_face_triangles > Limit<usize>::s_Max / s_TriangleIndexCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
         return false;
@@ -104,7 +104,7 @@ bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& m
 }
 
 
-Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(SourceMeshStreams& mesh, const bool usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena){
+Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(SourceMeshStreams& mesh, const b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena){
     using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
 
     SourceTangentReport outTangentReport;
@@ -187,7 +187,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
 }
 
 
-Expected<u32> FbxSourceMeshStreams::InternSourceCorner(SourceMeshBuildContext& context, const SourceTriangleCorner& corner, const bool wantsSkinning){
+Expected<u32> FbxSourceMeshStreams::InternSourceCorner(SourceMeshBuildContext& context, const SourceTriangleCorner& corner, const b8 wantsSkinning){
     SourceVertexRef ref;
     const auto positionIndex = InternSourceValue(context.mesh.positions, context.positions, corner.position, s_SourcePositionLabel);
     if(!positionIndex)

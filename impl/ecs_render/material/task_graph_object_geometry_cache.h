@@ -41,7 +41,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool prepare(
+    [[nodiscard]] b8 prepare(
         Span<const MaterialPassDrawItem> draws,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const DeferredFrameTargets& targets,

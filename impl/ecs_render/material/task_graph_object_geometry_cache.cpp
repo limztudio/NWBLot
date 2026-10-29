@@ -35,7 +35,7 @@ using namespace RendererTaskGraphDetail;
 // Instance read, cache write and cache raster read.
 inline constexpr usize s_DecodeExtraResourceUseCount = 3u;
 
-[[nodiscard]] bool SameDecode(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
+[[nodiscard]] b8 SameDecode(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
     const auto& leftCache = left.meshResources.objectGeometryCache;
     const auto& rightCache = right.meshResources.objectGeometryCache;
     if(
@@ -53,7 +53,7 @@ inline constexpr usize s_DecodeExtraResourceUseCount = 3u;
         rightSources[sourceIndex++] = source.get();
     });
     sourceIndex = 0u;
-    bool same = true;
+    b8 same = true;
     ForEachMaterialPassMeshSourceBuffer(left.meshResources, [&](const Core::BufferHandle& source)noexcept{
         same = same && source.get() == rightSources[sourceIndex];
         ++sourceIndex;
@@ -90,7 +90,7 @@ struct DecodeTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         Core::GpuTimingSubmissionTicket* ticket = payload.rebindableTimingTicket ? *payload.rebindableTimingTicket : payload.timingTicket;
         Optional<Core::GpuTimingSubmissionTicket::RecordingScope> timing;
         if(ticket)
@@ -119,7 +119,7 @@ struct ReadyTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload&, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept{ return true; }
+    [[nodiscard]] static b8 Record(const Payload&, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept{ return true; }
 };
 
 
@@ -139,7 +139,7 @@ ObjectGeometryCacheGraph::ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, Re
     , m_entries(arena)
 {}
 
-bool ObjectGeometryCacheGraph::prepare(
+b8 ObjectGeometryCacheGraph::prepare(
     const Span<const MaterialPassDrawItem> draws,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const DeferredFrameTargets& targets,
@@ -215,7 +215,7 @@ bool ObjectGeometryCacheGraph::prepare(
             m_entries.push_back(Move(entry));
             retained = &m_entries.back();
         }
-        bool alreadyRead = false;
+        b8 alreadyRead = false;
         for(const Core::GpuTaskResourceUse& use : cacheReads)
             alreadyRead = alreadyRead || use.resource == retained->resource;
         if(!alreadyRead){
@@ -232,7 +232,7 @@ bool ObjectGeometryCacheGraph::prepare(
         return true;
     if(!dependency.valid())
         return false;
-    bool containsDependency = false;
+    b8 containsDependency = false;
     for(const Core::GpuTaskId producer : producers)
         containsDependency = containsDependency || producer == dependency;
     if(!containsDependency)

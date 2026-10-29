@@ -49,7 +49,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool hasActiveSkin()const noexcept{
+    [[nodiscard]] b8 hasActiveSkin()const noexcept{
         return skinInfluenceCount != 0u && !jointMatrices.empty();
     }
 };
@@ -103,7 +103,7 @@ namespace MeshSkinningPayload{
 }
 
 template<typename JointPaletteVector>
-[[nodiscard]] bool BuildSkinJointPalette(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> sourceJoints, const u32 skinningMode, JointPaletteVector& outJointPalette){
+[[nodiscard]] b8 BuildSkinJointPalette(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> sourceJoints, const u32 skinningMode, JointPaletteVector& outJointPalette){
     outJointPalette.clear();
 
     if(instance.skin.empty() || sourceJoints.empty())
@@ -127,8 +127,8 @@ template<typename JointPaletteVector>
     }
 
     const usize jointCount = sourceJoints.size();
-    const bool useDualQuaternionPayload = skinningMode == SkeletonSkinningMode::DualQuaternion;
-    const bool hasInverseBindMatrices = !instance.inverseBindMatrices.empty();
+    const b8 useDualQuaternionPayload = skinningMode == SkeletonSkinningMode::DualQuaternion;
+    const b8 hasInverseBindMatrices = !instance.inverseBindMatrices.empty();
     if(hasInverseBindMatrices && jointCount != instance.inverseBindMatrices.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette count {} differs from inverse bind matrix count {}"), instance.handle.value, jointCount, instance.inverseBindMatrices.size());
         return false;
@@ -171,7 +171,7 @@ template<typename JointPaletteVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BuildRuntimeSkinPayload(const MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, RuntimeSkinPayloadScratch& payload){
+[[nodiscard]] inline b8 BuildRuntimeSkinPayload(const MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, RuntimeSkinPayloadScratch& payload){
     payload.skinInfluenceCount = 0u;
     payload.jointMatrices.clear();
     payload.poseJoints.clear();

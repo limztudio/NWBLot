@@ -120,7 +120,7 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::kCount, "UI skin 
     return region;
 }
 
-[[nodiscard]] static TestAString PaletteMetadata(const u32 variant = 0u, const bool includeTypography = true){
+[[nodiscard]] static TestAString PaletteMetadata(const u32 variant = 0u, const b8 includeTypography = true){
     TestAString metadata(s_Metadata);
     if(includeTypography)
         metadata.append("asset.typography = {\"default_font_size\": 16.0};\r\n");

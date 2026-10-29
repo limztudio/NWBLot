@@ -47,7 +47,7 @@ struct AvboitAccumulationRecordInputs : public AvboitRecordInputsBase{
     Core::GpuGraphResourceId avboitAccumColor;
     Core::GpuGraphResourceId avboitAccumExtinction;
     Core::GpuTaskId integrationTask;
-    bool streamsUploaded = false;
+    b8 streamsUploaded = false;
     Core::GpuTimingSubmissionTicket& accumulationTimingTicket;
     Optional<Core::GpuTimingMeasure>& accumulationComputeEmulationTiming;
 
@@ -64,7 +64,7 @@ public:
 
 struct AvboitAccumulationRecordResult{
     Core::GpuTaskId accumulationTask;
-    bool declared = false;
+    b8 declared = false;
 };
 
 

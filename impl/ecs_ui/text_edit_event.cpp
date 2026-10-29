@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiTextEditStatus::Enum ApplyUiTextEditEvent(Ui::EditModel& model, const Core::TextInputEvent& event, const u64 expectedSurroundingRevision, const bool matchesPublishedModel){
+UiTextEditStatus::Enum ApplyUiTextEditEvent(Ui::EditModel& model, const Core::TextInputEvent& event, const u64 expectedSurroundingRevision, const b8 matchesPublishedModel){
     switch(event.kind){
     case Core::TextInputEventKind::Commit: {
         if(Core::ValidateTextInputUtf8(event.text, Core::s_TextInputMaxEventTextBytes) != Core::TextInputAdmission::Accepted)
@@ -43,7 +43,7 @@ UiTextEditStatus::Enum ApplyUiTextEditEvent(Ui::EditModel& model, const Core::Te
             model.cancelComposition();
             return UiTextEditStatus::Applied;
         }
-        const bool wasActive = model.composition().active;
+        const b8 wasActive = model.composition().active;
         if(!wasActive && !model.beginComposition())
             return UiTextEditStatus::ModelRejected;
         if(model.updateComposition(event.text, event.anchorByte, event.caretByte))

@@ -124,7 +124,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     const Float4& colorTint,
     const Float4& position,
     const Float4& scale,
-    const bool csgReceiver,
+    const b8 csgReceiver,
     const CsgVisibleMaterialRef& material
 ){
     const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(world, s_CubeMesh, material, s_SmokeSurfaceMaterialInterface, colorTint, position, scale);
@@ -261,7 +261,7 @@ private:
         return world;
     }
 
-    [[nodiscard]] static bool ShouldCapture(void* const context, const u64 frame)noexcept{
+    [[nodiscard]] static b8 ShouldCapture(void* const context, const u64 frame)noexcept{
         return frame >= MakeNotNull(static_cast<CsgVisibleSmokeProject*>(context))->m_nextCaptureFrame;
     }
 
@@ -338,9 +338,9 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         m_temporalEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment);
-        const bool overlapping = m_temporalEnabled && NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
+        const b8 overlapping = m_temporalEnabled && NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
         CsgVisibleMaterialRef material = s_SolidMaterial;
         if(m_temporalEnabled){
             NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
@@ -425,7 +425,7 @@ public:
             m_receiverCenters[shapeSlot] = receiverPosition;
         }
 
-        bool allEntitiesValid = activeCamera.camera.valid() && directionalLight.valid();
+        b8 allEntitiesValid = activeCamera.camera.valid() && directionalLight.valid();
         if(overlapping){
             // Move only lane Z.
             Float4 receiverPosition;
@@ -455,7 +455,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         if(m_temporalEnabled){
@@ -496,10 +496,10 @@ private:
     u64 m_nextCaptureFrame = Limit<u64>::s_Max;
     u64 m_temporalFrameInterval = s_TemporalFrameInterval;
     u32 m_temporalSample = 0u;
-    bool m_temporalEnabled = false;
-    bool m_temporalAnimated = false;
-    bool m_temporalWarmupStarted = false;
-    bool m_temporalCaptureStarted = false;
+    b8 m_temporalEnabled = false;
+    b8 m_temporalAnimated = false;
+    b8 m_temporalWarmupStarted = false;
+    b8 m_temporalCaptureStarted = false;
 };
 
 

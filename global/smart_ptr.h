@@ -24,7 +24,7 @@ namespace SmartPtrInternalDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename P1, typename P2, bool = IsSame_V<RemoveCV_T<typename PointerTraits<P1>::element_type>, RemoveCV_T<typename PointerTraits<P2>::element_type>>>
+template<typename P1, typename P2, b8 = IsSame_V<RemoveCV_T<typename PointerTraits<P1>::element_type>, RemoveCV_T<typename PointerTraits<P2>::element_type>>>
 struct IsArrayCvConvertibleImplementation : public IsConvertible<P1, P2>{};
 template<typename P1, typename P2>
 struct IsArrayCvConvertibleImplementation<P1, P2, false> : public FalseType{};
@@ -48,10 +48,10 @@ namespace SmartPtrDetail{
 template<typename Source, typename Target>
 struct IsArenaDeleterConversion : FalseType{};
 template<typename U, typename T, typename POOL>
-struct IsArenaDeleterConversion<ArenaDeleter<U, POOL>, ArenaDeleter<T, POOL>> : IntegralConstant<bool, !IsArray_V<U> && !IsArray_V<T> && !IsSame_V<RemoveCV_T<U>, RemoveCV_T<T>> && IsConvertible_V<U*, T*>>{};
+struct IsArenaDeleterConversion<ArenaDeleter<U, POOL>, ArenaDeleter<T, POOL>> : IntegralConstant<b8, !IsArray_V<U> && !IsArray_V<T> && !IsSame_V<RemoveCV_T<U>, RemoveCV_T<T>> && IsConvertible_V<U*, T*>>{};
 
 template<typename Source, typename Target>
-inline constexpr bool IsArenaDeleterConversion_V = IsArenaDeleterConversion<RemoveCVRef_T<Source>, RemoveCVRef_T<Target>>::value;
+inline constexpr b8 IsArenaDeleterConversion_V = IsArenaDeleterConversion<RemoveCVRef_T<Source>, RemoveCVRef_T<Target>>::value;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,22 +72,22 @@ public:
     typedef decltype(PointerProbe::template Test<typename RemoveReference<Deleter>::type>(0)) type;
 };
 
-template<typename P1, typename P2, bool = IsScalar_V<P1> && !IsPointer_V<P1>>
+template<typename P1, typename P2, b8 = IsScalar_V<P1> && !IsPointer_V<P1>>
 struct IsArrayCvConvertible : public SmartPtrInternalDetail::IsArrayCvConvertibleImplementation<P1, P2>{};
 template<typename P1, typename P2>
 struct IsArrayCvConvertible<P1, P2, true> : public FalseType{};
 
 template<typename Base, typename Derived>
-struct IsDerived : public IntegralConstant<bool, IsBaseOf<Base, Derived>::value && !IsSame<typename RemoveCV<Base>::type, typename RemoveCV<Derived>::type>::value>{};
+struct IsDerived : public IntegralConstant<b8, IsBaseOf<Base, Derived>::value && !IsSame<typename RemoveCV<Base>::type, typename RemoveCV<Derived>::type>::value>{};
 
 template<typename T, typename TPointer, typename U, typename UPointer>
-struct IsSafeArrayConversion : public IntegralConstant<bool, IsConvertible<UPointer, TPointer>::value && IsArray<U>::value && (!IsPointer<UPointer>::value || !IsPointer<TPointer>::value || !IsDerived<T, typename RemoveExtent<U>::type>::value)>{};
+struct IsSafeArrayConversion : public IntegralConstant<b8, IsConvertible<UPointer, TPointer>::value && IsArray<U>::value && (!IsPointer<UPointer>::value || !IsPointer<TPointer>::value || !IsDerived<T, typename RemoveExtent<U>::type>::value)>{};
 
 template<typename OwnerA, typename OwnerB>
 using OwnerPointerCompareResult_T = CompareThreeWayResult_T<typename OwnerA::pointer, typename OwnerB::pointer>;
 
 template<typename OwnerA, typename OwnerB>
-[[nodiscard]] inline bool OwnerPointerEqual(const OwnerA& a, const OwnerB& b)noexcept(
+[[nodiscard]] inline b8 OwnerPointerEqual(const OwnerA& a, const OwnerB& b)noexcept(
     IsPointer_V<typename OwnerA::pointer>
     && IsPointer_V<typename OwnerB::pointer>
     && IsSame_V<decltype(a.get()), typename OwnerA::pointer>
@@ -111,7 +111,7 @@ template<typename OwnerA, typename OwnerB>
 }
 
 template<typename OwnerA, typename OwnerB>
-[[nodiscard]] inline bool OwnerPointerLess(const OwnerA& a, const OwnerB& b)noexcept(
+[[nodiscard]] inline b8 OwnerPointerLess(const OwnerA& a, const OwnerB& b)noexcept(
     IsPointer_V<typename OwnerA::pointer>
     && IsPointer_V<typename OwnerB::pointer>
     && IsSame_V<decltype(a.get()), typename OwnerA::pointer>
@@ -119,7 +119,7 @@ template<typename OwnerA, typename OwnerB>
     && noexcept(a.get())
     && noexcept(b.get())
     && IsPointer_V<typename CommonType<typename OwnerA::pointer, typename OwnerB::pointer>::type>
-    && noexcept(static_cast<bool>(LessThan<typename CommonType<typename OwnerA::pointer, typename OwnerB::pointer>::type>{}(a.get(), b.get())))
+    && noexcept(static_cast<b8>(LessThan<typename CommonType<typename OwnerA::pointer, typename OwnerB::pointer>::type>{}(a.get(), b.get())))
 ){
     typedef typename OwnerA::pointer P1;
     typedef typename OwnerB::pointer P2;
@@ -130,22 +130,22 @@ template<typename OwnerA, typename OwnerB>
 }
 
 template<typename Owner>
-[[nodiscard]] inline bool OwnerPointerLessNull(const Owner& a)noexcept(
+[[nodiscard]] inline b8 OwnerPointerLessNull(const Owner& a)noexcept(
     IsPointer_V<typename Owner::pointer>
     && IsSame_V<decltype(a.get()), typename Owner::pointer>
     && noexcept(a.get())
-    && noexcept(static_cast<bool>(LessThan<typename Owner::pointer>{}(a.get(), nullptr)))
+    && noexcept(static_cast<b8>(LessThan<typename Owner::pointer>{}(a.get(), nullptr)))
 ){
     typedef typename Owner::pointer pointer;
     return LessThan<pointer>()(a.get(), nullptr);
 }
 
 template<typename Owner>
-[[nodiscard]] inline bool NullLessOwnerPointer(const Owner& b)noexcept(
+[[nodiscard]] inline b8 NullLessOwnerPointer(const Owner& b)noexcept(
     IsPointer_V<typename Owner::pointer>
     && IsSame_V<decltype(b.get()), typename Owner::pointer>
     && noexcept(b.get())
-    && noexcept(static_cast<bool>(LessThan<typename Owner::pointer>{}(nullptr, b.get())))
+    && noexcept(static_cast<b8>(LessThan<typename Owner::pointer>{}(nullptr, b.get())))
 ){
     typedef typename Owner::pointer pointer;
     pointer rhsPointer = b.get();
@@ -164,40 +164,40 @@ template<typename Owner>
 
 #define NWB_SMART_PTR_COMPARISON_OPERATORS(OwnerType) \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator==(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerEqual(a, b))){ return SmartPtrDetail::OwnerPointerEqual(a, b); } \
+inline b8 operator==(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerEqual(a, b))){ return SmartPtrDetail::OwnerPointerEqual(a, b); } \
 template<typename T1, typename D1, typename T2, typename D2> \
 requires ThreeWayComparableWith<typename OwnerType<T1, D1>::pointer, typename OwnerType<T2, D2>::pointer> \
 inline CompareThreeWayResult_T<typename OwnerType<T1, D1>::pointer, typename OwnerType<T2, D2>::pointer> \
 operator<=>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerCompare(a, b))){ return SmartPtrDetail::OwnerPointerCompare(a, b); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator<(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerLess(a, b))){ return SmartPtrDetail::OwnerPointerLess(a, b); } \
+inline b8 operator<(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerLess(a, b))){ return SmartPtrDetail::OwnerPointerLess(a, b); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((b < a)))){ return (b < a); } \
+inline b8 operator>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()((b < a)))){ return (b < a); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator<=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(b < a)))){ return !(b < a); } \
+inline b8 operator<=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(!(b < a)))){ return !(b < a); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator>=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(a < b)))){ return !(a < b); } \
+inline b8 operator>=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(!(a < b)))){ return !(a < b); } \
 template<typename T, typename D> \
-inline bool operator==(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!a))){ return !a; } \
+inline b8 operator==(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(!a))){ return !a; } \
 template<typename T, typename D> \
 requires ThreeWayComparableWith<typename OwnerType<T, D>::pointer, std::nullptr_t> \
 inline CompareThreeWayResult_T<typename OwnerType<T, D>::pointer, std::nullptr_t> operator<=>(const OwnerType<T, D>& a, std::nullptr_t)noexcept(IsPointer_V<typename OwnerType<T, D>::pointer> && noexcept(a.get())){ return a.get() <=> nullptr; } \
 template<typename T, typename D> \
-inline bool operator<(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(SmartPtrDetail::OwnerPointerLessNull(a))){ return SmartPtrDetail::OwnerPointerLessNull(a); } \
+inline b8 operator<(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(SmartPtrDetail::OwnerPointerLessNull(a))){ return SmartPtrDetail::OwnerPointerLessNull(a); } \
 template<typename T, typename D> \
-inline bool operator<(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(SmartPtrDetail::NullLessOwnerPointer(b))){ return SmartPtrDetail::NullLessOwnerPointer(b); } \
+inline b8 operator<(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(SmartPtrDetail::NullLessOwnerPointer(b))){ return SmartPtrDetail::NullLessOwnerPointer(b); } \
 template<typename T, typename D> \
-inline bool operator>(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((nullptr < a)))){ return (nullptr < a); } \
+inline b8 operator>(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()((nullptr < a)))){ return (nullptr < a); } \
 template<typename T, typename D> \
-inline bool operator>(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((b < nullptr)))){ return (b < nullptr); } \
+inline b8 operator>(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()((b < nullptr)))){ return (b < nullptr); } \
 template<typename T, typename D> \
-inline bool operator<=(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(nullptr < a)))){ return !(nullptr < a); } \
+inline b8 operator<=(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(!(nullptr < a)))){ return !(nullptr < a); } \
 template<typename T, typename D> \
-inline bool operator<=(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(b < nullptr)))){ return !(b < nullptr); } \
+inline b8 operator<=(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(!(b < nullptr)))){ return !(b < nullptr); } \
 template<typename T, typename D> \
-inline bool operator>=(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(a < nullptr)))){ return !(a < nullptr); } \
+inline b8 operator>=(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(!(a < nullptr)))){ return !(a < nullptr); } \
 template<typename T, typename D> \
-inline bool operator>=(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(!(nullptr < b)))){ return !(nullptr < b); }
+inline b8 operator>=(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(!(nullptr < b)))){ return !(nullptr < b); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -244,7 +244,7 @@ private:
 
 
 private:
-    static consteval bool CanDeallocate()noexcept{
+    static consteval b8 CanDeallocate()noexcept{
         return requires(POOL& pool, void* allocation){ pool.template deallocate<T>(static_cast<T*>(allocation), 1); } || requires(POOL& pool, void* allocation){ pool.template deallocate<T>(static_cast<RemoveCV_T<T>*>(allocation), 1); };
     }
 

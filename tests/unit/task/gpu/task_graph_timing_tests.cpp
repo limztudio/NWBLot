@@ -52,7 +52,7 @@ namespace Graphics = Core;
     return graph.addTask(desc);
 }
 
-[[nodiscard]] bool Compile(Graphics::GpuTaskGraphAnalysis& analysis, Graphics::GpuTaskGraphQueueAssignments& assignments, Graphics::GpuCompiledGraph& compiledGraph, Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {}){
+[[nodiscard]] b8 Compile(Graphics::GpuTaskGraphAnalysis& analysis, Graphics::GpuTaskGraphQueueAssignments& assignments, Graphics::GpuCompiledGraph& compiledGraph, Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {}){
     const Graphics::GpuPhysicalQueueInfo queue = TaskGraphTestUtils::GraphicsQueue();
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
     return TaskGraphTestUtils::Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);

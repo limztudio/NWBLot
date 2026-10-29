@@ -42,9 +42,9 @@ inline constexpr f64 s_OutlineBoundsMarginBothSides = 2.0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool HasTable(hb_face_t& face, hb_tag_t tag){
+[[nodiscard]] static b8 HasTable(hb_face_t& face, hb_tag_t tag){
     hb_blob_t* blob = hb_face_reference_table(&face, tag);
-    const bool present = hb_blob_get_length(blob) != 0u;
+    const b8 present = hb_blob_get_length(blob) != 0u;
     hb_blob_destroy(blob);
     return present;
 }
@@ -250,9 +250,9 @@ private:
     hb_font_t* m_scaledFont = nullptr;
     hb_buffer_t* m_shapeBuffer = nullptr;
     u32 m_unitsPerEm = 0u;
-    bool m_ready = false;
-    bool m_allowOutlineBounds = false;
-    bool m_coverageInkReliable = false;
+    b8 m_ready = false;
+    b8 m_allowOutlineBounds = false;
+    b8 m_coverageInkReliable = false;
 };
 
 
@@ -265,7 +265,7 @@ FontFace::FontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalA
 
 FontFace::~FontFace()noexcept = default;
 
-bool FontFace::valid()const noexcept{ return m_state->m_ready; }
+b8 FontFace::valid()const noexcept{ return m_state->m_ready; }
 
 const Core::Assets::AssetRef<Font>& FontFace::identity()const noexcept{ return m_state->m_identity; }
 
@@ -273,7 +273,7 @@ u64 FontFace::generation()const noexcept{ return m_state->m_generation; }
 
 u32 FontFace::unitsPerEm()const noexcept{ return m_state->m_unitsPerEm; }
 
-bool FontFace::coverageInkReliable()const noexcept{ return m_state->m_coverageInkReliable; }
+b8 FontFace::coverageInkReliable()const noexcept{ return m_state->m_coverageInkReliable; }
 
 const SharedBakedFontAtlas& FontFace::bakedAtlas()const noexcept{ return m_state->m_bakedAtlas; }
 
@@ -296,7 +296,7 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     return metrics;
 }
 
-bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const{
+b8 FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const{
     if(!valid() || byteBegin > byteEnd || byteEnd > request.text.size() || request.text.size() > s_TextMaxBytes || !IsFinite(request.fontSize) || request.fontSize < 1.0f / s_TextFixedPointScale || request.fontSize > s_TextMaxFontSize)
         return false;
     const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(request.fontSize), VectorReplicate(s_TextFixedPointScale), VectorReplicate(__hidden_ui_text_font::s_FixedPointRoundBias))));
@@ -327,8 +327,8 @@ bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pa
         if(infos[index].cluster < byteBegin || infos[index].cluster >= byteEnd || positions[index].x_advance < 0)
             return false;
         if(index != 0u){
-            const bool increasing = infos[index].cluster >= infos[index - 1u].cluster;
-            const bool decreasing = infos[index].cluster <= infos[index - 1u].cluster;
+            const b8 increasing = infos[index].cluster >= infos[index - 1u].cluster;
+            const b8 decreasing = infos[index].cluster <= infos[index - 1u].cluster;
             if(request.direction == TextDirection::LeftToRight ? !increasing : !decreasing)
                 return false;
         }
@@ -386,7 +386,7 @@ Expected<Rect> FontFace::rasterBounds(const u32 glyphId, const u32 pixelSize){
     return Rect{ VectorGetX(bounds), VectorGetY(bounds), VectorGetZ(bounds), VectorGetW(bounds) };
 }
 
-bool FontFace::rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output){
+b8 FontFace::rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output){
     if(!valid() || pixelSize == 0u || pixelSize > s_TextMaxRasterPpem)
         return false;
     if(FT_Set_Pixel_Sizes(m_state->m_face, 0u, pixelSize) != 0 || FT_Load_Glyph(m_state->m_face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0 || FT_Render_Glyph(m_state->m_face->glyph, FT_RENDER_MODE_NORMAL) != 0){

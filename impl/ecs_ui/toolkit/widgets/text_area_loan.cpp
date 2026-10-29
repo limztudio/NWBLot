@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept{
+b8 Builder::textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept{
     for(usize index = 0u; index <= m_popupFrameCount; ++index){
         const BuilderScopeFrame& scope = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
         for(const auto& frame : scope.m_textAreas){
@@ -37,7 +37,7 @@ void Builder::snapshotTextArea(TextAreaFrame& frame)noexcept{
     frame.caret = frame.model->caret();
 }
 
-bool Builder::textAreaMatches(const TextAreaFrame& frame)const noexcept{
+b8 Builder::textAreaMatches(const TextAreaFrame& frame)const noexcept{
     return
         popupAncestorsVisible() && frame.model && frame.state
         && frame.state->revision() == frame.stateRevision && frame.state->navigation().matches(frame.navigation)

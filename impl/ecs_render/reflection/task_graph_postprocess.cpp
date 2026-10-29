@@ -70,7 +70,7 @@ struct DepthReduceTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         if(!payload.pipeline)
             return false;
         commandList.endRenderPass();
@@ -95,16 +95,16 @@ struct TemporalTask{
         ReflectionHistoryReservation reservation;
         u32 width = 0u;
         u32 height = 0u;
-        const bool* hardwarePreparationReady = nullptr;
-        bool hardwareEnabled = false;
+        const b8* hardwarePreparationReady = nullptr;
+        b8 hardwareEnabled = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         if(!payload.snapshot.history.eligible)
             return true;
-        const bool ready = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        const b8 ready = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(payload.snapshot.history, ready);
         // Classification and tracing already produced this bank; the accepted task still publishes its history state.
         if(!outcome.reused || payload.snapshot.history.settings.temporalMaxSamples <= 1u)
@@ -147,7 +147,7 @@ struct SpatialTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         commandList.endRenderPass();
         Core::ComputeState state;
         state.setPipeline(payload.pipeline.get());
@@ -172,14 +172,14 @@ struct StatisticsReadbackTask{
         ReflectionStatisticsReservation reservation;
         ReflectionHistoryPlan history;
         ReflectionFeedbackPlan feedback;
-        const bool* hardwarePreparationReady = nullptr;
-        bool feedbackReserved = false;
-        bool hardwareEnabled = false;
+        const b8* hardwarePreparationReady = nullptr;
+        b8 feedbackReserved = false;
+        b8 hardwareEnabled = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.source || !payload.destination || !payload.reservation.valid())
             return false;
         if(context.commandIrCapture && !context.commandIrCapture->captureCopyBuffer(context.task, context.packet, context.queue, payload.sourceResource, 0u, payload.destinationResource, 0u, NWB_REFLECTION_COUNTER_SIZE))
@@ -190,7 +190,7 @@ public:
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-        const bool hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        const b8 hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         const ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(payload.history, hardwareReady);
         ReflectionFeedbackOutcome feedback = ResolveReflectionFeedbackOutcome(payload.feedback, hardwareReady);
         if(!payload.feedbackReserved){
@@ -212,7 +212,7 @@ struct FinalizeTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload&, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload&, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         commandList.endRenderPass();
         return true;
     }
@@ -232,7 +232,7 @@ Expected<Core::GpuGraphResourceId> ImportReflectionTexture(
     Core::GpuTaskGraph& graph,
     const Core::TextureHandle& texture,
     const AStringView resourceLabel,
-    const bool firstWrite
+    const b8 firstWrite
 ){
     {
         const Core::GpuTaskGraph::DeclarationReadView view(graph);
@@ -387,7 +387,7 @@ Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
     Core::GpuTaskGraph& graph,
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,
-    const bool feedbackReserved,
+    const b8 feedbackReserved,
     Core::GpuTaskId dependency,
     ReflectionGraphResult& result
 ){

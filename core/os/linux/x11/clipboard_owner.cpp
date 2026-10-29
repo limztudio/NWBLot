@@ -21,10 +21,10 @@ NWB_CORE_BEGIN
 void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
     OwnedSelection* const selection = ownedSelection(event.selection);
     const Atom destination = event.property ? event.property : event.target;
-    bool converted = false;
+    b8 converted = false;
     Optional<X11PropertyFailure> propertyFailure;
-    const bool currentOwner = selection && selection->owned && XGetSelectionOwner(&m_display, event.selection) == m_ownerWindow;
-    const bool validTime = selection && (event.time == CurrentTime || static_cast<i32>(static_cast<u32>(event.time) - static_cast<u32>(selection->timestamp)) >= 0);
+    const b8 currentOwner = selection && selection->owned && XGetSelectionOwner(&m_display, event.selection) == m_ownerWindow;
+    const b8 validTime = selection && (event.time == CurrentTime || static_cast<i32>(static_cast<u32>(event.time) - static_cast<u32>(selection->timestamp)) >= 0);
     if(currentOwner && validTime && destination){
         if(event.target == m_multipleAtom && event.property){
             const auto property = ReadX11Property(m_display, event.requestor, event.property, false, s_MaxMultipleAtoms * s_X11WireUnitBytes);
@@ -35,7 +35,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
                 if(property->count)
                     NWB_MEMCPY(pairs.data(), pairs.size() * sizeof(Atom), property->bytes, property->count * sizeof(Atom));
                 for(usize index = 0u; index < property->count; index += s_AtomPairLength){
-                    bool usable = pairs[index] != m_multipleAtom && pairs[index + 1u] && pairs[index + 1u] != event.property;
+                    b8 usable = pairs[index] != m_multipleAtom && pairs[index + 1u] && pairs[index + 1u] != event.property;
                     for(usize previous = 0u; previous < index; previous += s_AtomPairLength){
                         if(pairs[previous + 1u] == pairs[index + 1u])
                             usable = false;
@@ -61,7 +61,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
     response.xselection.time = event.time;
     X11CheckedOperation checked(m_display);
     const int sent = XSendEvent(&m_display, event.requestor, False, 0, &response);
-    const bool delivered = checked.succeeded() && sent != 0;
+    const b8 delivered = checked.succeeded() && sent != 0;
     if(!delivered){
         for(usize index = m_outgoing.size(); index > 0u; --index){
             if(m_outgoing[index - 1u].requestor == event.requestor)
@@ -73,7 +73,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
         NWB_LOGGER_WARNING(NWB_TEXT("X11 clipboard: MULTIPLE property read failed; native_domain=X11 native_status={} error_code={}"), propertyFailure->nativeStatus, propertyFailure->errorCode);
 }
 
-bool X11ClipboardService::convertTarget(const XSelectionRequestEvent& event, const Atom target, const Atom property, OwnedSelection& selection){
+b8 X11ClipboardService::convertTarget(const XSelectionRequestEvent& event, const Atom target, const Atom property, OwnedSelection& selection){
     if(target == m_utf8Atom || target == m_utf8MimeAtom || target == m_textAtom)
         return sendText(event.requestor, property, target == m_textAtom ? m_utf8Atom : target, selection.utf8);
     if(target == XA_STRING)
@@ -96,7 +96,7 @@ bool X11ClipboardService::convertTarget(const XSelectionRequestEvent& event, con
     return checked.succeeded();
 }
 
-bool X11ClipboardService::sendText(const Window requestor, const Atom property, const Atom type, const AStringView text){
+b8 X11ClipboardService::sendText(const Window requestor, const Atom property, const Atom type, const AStringView text){
     for(const OutgoingTransfer& active : m_outgoing){
         if(active.requestor == requestor && active.property == property)
             return false;
@@ -114,13 +114,13 @@ bool X11ClipboardService::sendText(const Window requestor, const Atom property, 
     transfer.property = property;
     transfer.type = type;
     transfer.deadline = TimerAddMS(TimerNow(), s_TransferTimeoutMs);
-    bool succeeded = false;
-    bool changedMask = false;
+    b8 succeeded = false;
+    b8 changedMask = false;
     long restoreMask = 0;
     {
         X11CheckedOperation checked(m_display);
         XWindowAttributes attributes{};
-        const bool exists = XGetWindowAttributes(&m_display, requestor, &attributes) != 0;
+        const b8 exists = XGetWindowAttributes(&m_display, requestor, &attributes) != 0;
         if(exists){
             restoreMask = attributes.your_event_mask;
             transfer.previousEventMask = attributes.your_event_mask;
@@ -151,7 +151,7 @@ bool X11ClipboardService::sendText(const Window requestor, const Atom property, 
 void X11ClipboardService::sendChunk(const usize index){
     OutgoingTransfer& transfer = m_outgoing[index];
     const usize count = Min(m_chunkBytes, transfer.text.size() - transfer.offset);
-    bool succeeded = false;
+    b8 succeeded = false;
     {
         X11CheckedOperation checked(m_display);
         XChangeProperty(&m_display, transfer.requestor, transfer.property, transfer.type, s_X11PropertyByteFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(transfer.text.data() + transfer.offset), static_cast<int>(count));
@@ -164,7 +164,7 @@ void X11ClipboardService::sendChunk(const usize index){
     XFlush(&m_display);
 }
 
-void X11ClipboardService::releaseTransfer(const usize index, const bool requestorAlive){
+void X11ClipboardService::releaseTransfer(const usize index, const b8 requestorAlive){
     const Window requestor = m_outgoing[index].requestor;
     const long previousMask = m_outgoing[index].previousEventMask;
     m_outgoing.erase(m_outgoing.begin() + static_cast<isize>(index));
@@ -176,7 +176,7 @@ void X11ClipboardService::releaseTransfer(const usize index, const bool requesto
     }
     X11CheckedOperation checked(m_display);
     XSelectInput(&m_display, requestor, previousMask);
-    const bool restored = checked.succeeded();
+    const b8 restored = checked.succeeded();
     if(!restored)
         return;
 }

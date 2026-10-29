@@ -18,8 +18,8 @@ NWB_IMPL_BEGIN
 
 
 template<typename Visitor>
-[[nodiscard]] bool ForEachMeshletTriangleCorner(const Span<const MeshletDesc> meshlets, const Span<const MeshletLocalVertexRef> localVertexRefs, const Span<const u8> primitiveIndices, Visitor&& visitor)noexcept(
-    noexcept(static_cast<bool>(!visitor(DeclVal<const MeshletDesc&>(), DeclVal<const usize&>(), DeclVal<const MeshletLocalVertexRef&>())))
+[[nodiscard]] b8 ForEachMeshletTriangleCorner(const Span<const MeshletDesc> meshlets, const Span<const MeshletLocalVertexRef> localVertexRefs, const Span<const u8> primitiveIndices, Visitor&& visitor)noexcept(
+    noexcept(static_cast<b8>(!visitor(DeclVal<const MeshletDesc&>(), DeclVal<const usize&>(), DeclVal<const MeshletLocalVertexRef&>())))
 ){
     const usize localVertexRefCount = localVertexRefs.size();
     const usize primitiveIndexCount = primitiveIndices.size();

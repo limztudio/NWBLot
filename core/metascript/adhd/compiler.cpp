@@ -23,13 +23,13 @@ namespace __hidden_adhd_compiler{
 
 
 void AppendPascalCaseSegment(MString& out, const MStringView segment){
-    bool capitalizeNext = true;
-    bool emittedAny = false;
+    b8 capitalizeNext = true;
+    b8 emittedAny = false;
     for(usize i = 0u; i < segment.size(); ++i){
         const MChar c = segment[i];
-        const bool isLower = (c >= 'a' && c <= 'z');
-        const bool isUpper = (c >= 'A' && c <= 'Z');
-        const bool isDigit = (c >= '0' && c <= '9');
+        const b8 isLower = (c >= 'a' && c <= 'z');
+        const b8 isUpper = (c >= 'A' && c <= 'Z');
+        const b8 isDigit = (c >= '0' && c <= '9');
         if(!isLower && !isUpper && !isDigit){
             capitalizeNext = true;
             continue;
@@ -58,7 +58,7 @@ void AppendPascalCaseSegment(MString& out, const MStringView segment){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Compiler::compile(
+b8 Compiler::compile(
     const MStringView source,
     const MStringView virtualFilePath,
     MetaArena& arena,

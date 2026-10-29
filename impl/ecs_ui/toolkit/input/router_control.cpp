@@ -36,7 +36,7 @@ void InputRouter::fenceControl(const WidgetId host, const u64 declarationGenerat
     const HitTarget* accepted = findTarget(host);
     if(accepted == nullptr || (accepted->declarationGeneration == declarationGeneration && accepted->control == token))
         return;
-    const bool preserveText = accepted->declarationGeneration == declarationGeneration && accepted->textEditable && !accepted->owner.valid() && (accepted->scrollable || accepted->control.empty());
+    const b8 preserveText = accepted->declarationGeneration == declarationGeneration && accepted->textEditable && !accepted->owner.valid() && (accepted->scrollable || accepted->control.empty());
     for(auto& target : m_targets){
         if(target.id == host){
             if(preserveText){
@@ -54,7 +54,7 @@ void InputRouter::fenceControl(const WidgetId host, const u64 declarationGenerat
     reconcileTargets();
 }
 
-bool InputRouter::validControlTargets()const noexcept{
+b8 InputRouter::validControlTargets()const noexcept{
     for(const auto& target : m_stagedTargets){
         if(
             (!target.control.empty() && !target.control.valid())
@@ -102,7 +102,7 @@ const HitTarget* InputRouter::controlHost(const HitTarget& target)const noexcept
     return host;
 }
 
-bool InputRouter::currentControlAction(const ControlAction& action)const noexcept{
+b8 InputRouter::currentControlAction(const ControlAction& action)const noexcept{
     const HitTarget* host = findTarget(action.id.target, action.id.declarationGeneration);
     if(host == nullptr || !isInteractive(*host) || !host->focusable || host->owner.valid() || !action.control.valid() || host->control != action.control || host->popup != action.popup)
         return false;
@@ -169,7 +169,7 @@ void InputRouter::appendControlAction(InputRoutingResult& result, const HitTarge
     ++m_nextActionSequence;
 }
 
-bool InputRouter::routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, const bool alreadyPressed, CommandSource& held, InputRoutingResult& result){
+b8 InputRouter::routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, const b8 alreadyPressed, CommandSource& held, InputRoutingResult& result){
     ControlActionKind::Enum kind;
     switch(event.command){
     case InputCommand::Left:

@@ -17,12 +17,12 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token){
-    const bool enabled = item.editOptions.enabled;
+b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token){
+    const b8 enabled = item.editOptions.enabled;
     m_paint.pushClip(clip);
-    bool painted = true;
+    b8 painted = true;
     for(u32 axis = 0u; axis < s_ScrollAxisCount && painted; ++axis){
-        const bool horizontal = axis == 0u;
+        const b8 horizontal = axis == 0u;
         const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
         if(!bar.visible)
             continue;
@@ -32,8 +32,8 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
             break;
         }
         const WidgetId thumbId = *thumbIdResult;
-        const bool hovered = m_context.input().hover() == thumbId;
-        const bool pressed = m_context.input().capture() == thumbId;
+        const b8 hovered = m_context.input().hover() == thumbId;
+        const b8 pressed = m_context.input().capture() == thumbId;
         const Name& thumbName = !enabled ? item.scrollbarStyle.thumbDisabled : pressed ? item.scrollbarStyle.thumbPressed : hovered ? item.scrollbarStyle.thumbHover : item.scrollbarStyle.thumb;
         const UiSkinRegion* track = region(item.scrollbarStyle.track, item.scrollbarStyle.trackFallback);
         const UiSkinRegion* thumb = region(thumbName, item.scrollbarStyle.thumbFallback);
@@ -52,13 +52,13 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         else
             m_paint.fillRect(placement.corner, item.scrollbarStyle.trackColor);
     }
-    const bool popped = m_paint.popClip();
+    const b8 popped = m_paint.popClip();
     if(!painted || !popped)
         return false;
     if(!enabled)
         return true;
     for(u32 axis = 0u; axis < s_ScrollAxisCount; ++axis){
-        const bool horizontal = axis == 0u;
+        const b8 horizontal = axis == 0u;
         const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
         if(!bar.visible)
             continue;

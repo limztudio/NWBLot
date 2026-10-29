@@ -82,7 +82,7 @@ public:
 
 
 public:
-    ViewIterator(ComponentTuple poolsValue, const Span<const EntityID> anchorEntitiesValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, bool validValue)noexcept
+    ViewIterator(ComponentTuple poolsValue, const Span<const EntityID> anchorEntitiesValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, b8 validValue)noexcept
         : pools(Move(poolsValue))
         , anchorEntities(anchorEntitiesValue)
         , anchorPoolIndex(anchorPoolIndexValue)
@@ -135,12 +135,12 @@ public:
             entity = s_InvalidEntityId;
     }
 
-    bool resolveDenseIndices(EntityID entityId, usize anchorDenseIndex)noexcept{
+    b8 resolveDenseIndices(EntityID entityId, usize anchorDenseIndex)noexcept{
         return resolveDenseIndicesImpl(entityId, anchorDenseIndex, IndexSequenceFor<Ts...>{});
     }
 
     template<usize I>
-    bool resolveDenseIndex(EntityID entityId, usize anchorDenseIndex)noexcept{
+    b8 resolveDenseIndex(EntityID entityId, usize anchorDenseIndex)noexcept{
         const auto denseIndex = ViewTupleAccess::FindDenseIndex<I>(pools, anchorPoolIndex, anchorDenseIndex, entityId);
         if(!denseIndex)
             return false;
@@ -149,7 +149,7 @@ public:
     }
 
     template<usize... Is>
-    bool resolveDenseIndicesImpl(EntityID entityId, usize anchorDenseIndex, IndexSequence<Is...>)noexcept{
+    b8 resolveDenseIndicesImpl(EntityID entityId, usize anchorDenseIndex, IndexSequence<Is...>)noexcept{
         return (resolveDenseIndex<Is>(entityId, anchorDenseIndex) && ...);
     }
 
@@ -166,10 +166,10 @@ public:
 
 };
 template<typename... Ts>
-inline bool operator==(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b)noexcept{ return a.index == b.index; }
+inline b8 operator==(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b)noexcept{ return a.index == b.index; }
 
 template<typename... Ts>
-inline bool operator!=(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b)noexcept{ return a.index != b.index; }
+inline b8 operator!=(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b)noexcept{ return a.index != b.index; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -322,7 +322,7 @@ private:
     Span<const EntityID> m_anchorEntities = {};
     usize m_anchorPoolIndex = 0;
     usize m_count = 0;
-    bool m_valid = false;
+    b8 m_valid = false;
 };
 
 

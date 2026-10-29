@@ -69,7 +69,7 @@ private:
     Core::GpuDescriptorHandle m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    bool m_frameStateCacheValid = false;
+    b8 m_frameStateCacheValid = false;
 };
 static constexpr usize s_RendererCsgStateByteSize = 360u;
 static_assert(sizeof(RendererCsgState) == s_RendererCsgStateByteSize, "RendererCsgState should keep its compact CPU-only layout");

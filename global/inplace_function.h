@@ -102,7 +102,7 @@ public:
         return *this;
     }
 
-    inline explicit operator bool()const noexcept{ return m_invoke != nullptr; }
+    inline explicit operator b8()const noexcept{ return m_invoke != nullptr; }
 
     inline Ret operator()(Args... args)const{
         NWB_ASSERT_MSG(m_invoke != nullptr, NWB_TEXT("InplaceFunction invoked without target"));
@@ -272,7 +272,7 @@ public:
         return *this;
     }
 
-    constexpr explicit operator bool()const noexcept{ return m_function != nullptr; }
+    constexpr explicit operator b8()const noexcept{ return m_function != nullptr; }
 
     constexpr operator RawFunction()const noexcept{ return m_function; }
 

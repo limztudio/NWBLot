@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::image(const AStringView stableKey, const Name& regionName, const ImageOptions& options){
+b8 Builder::image(const AStringView stableKey, const Name& regionName, const ImageOptions& options){
     if(declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed() || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes){
         m_context.fail();
         return false;
@@ -43,7 +43,7 @@ bool Builder::image(const AStringView stableKey, const Name& regionName, const I
     return publishImageFrame(**widget, Move(frame));
 }
 
-bool Builder::publishImageFrame(const WidgetState& widget, ImageFrame&& frame){
+b8 Builder::publishImageFrame(const WidgetState& widget, ImageFrame&& frame){
     Item item(m_arena);
     item.state = widget;
     item.image = static_cast<u32>(m_scope->m_images.size());

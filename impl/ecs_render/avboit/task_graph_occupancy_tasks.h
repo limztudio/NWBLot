@@ -56,9 +56,9 @@ struct AvboitPreGraphTask{
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         ECSRenderDetail::TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
-        bool hasTransparentRenderers = false;
-        bool transparentCsgStreamsUploaded = false;
-        bool transparentCsgMaterialGeometryStatesGraphOwned = false;
+        b8 hasTransparentRenderers = false;
+        b8 transparentCsgStreamsUploaded = false;
+        b8 transparentCsgMaterialGeometryStatesGraphOwned = false;
 
 
     public:
@@ -73,7 +73,7 @@ struct AvboitPreGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
@@ -98,11 +98,11 @@ struct AvboitOccupancyComputeEmulationGraphTask{
         ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool materialDrawBuffersUploaded = false;
-        bool csgFrameBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
-        bool conservativeGeometryScissor = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 csgFrameBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
+        b8 conservativeGeometryScissor = false;
 
 
     public:
@@ -126,7 +126,7 @@ struct AvboitOccupancyComputeEmulationGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.occupancyTiming);
@@ -155,11 +155,11 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
         usize drawIndex = 0u;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool materialDrawBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
-        bool beginTiming = false;
-        bool finishTiming = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
+        b8 beginTiming = false;
+        b8 finishTiming = false;
         Phase::Enum phase = Phase::Generate;
     };
 
@@ -167,7 +167,7 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.occupancyTiming);
@@ -181,14 +181,14 @@ struct AvboitOccupancyGraphTask{
 
     // The avboit system, the frame targets, and the timing ticket are required: occupancy always records against this frame's bindings.
     struct Payload{
-        bool hasTransparentRenderers = false;
-        bool occupancyPhasePrepared = false;
-        bool occupancyStreamsUploaded = false;
-        bool occupancyMaterialFrameStatesGraphOwned = false;
-        bool occupancyMaterialGeometryStatesGraphOwned = false;
-        bool occupancyComputeEmulationOutputStatesGraphOwned = false;
-        bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false;
-        bool generatedGeometryReused = false;
+        b8 hasTransparentRenderers = false;
+        b8 occupancyPhasePrepared = false;
+        b8 occupancyStreamsUploaded = false;
+        b8 occupancyMaterialFrameStatesGraphOwned = false;
+        b8 occupancyMaterialGeometryStatesGraphOwned = false;
+        b8 occupancyComputeEmulationOutputStatesGraphOwned = false;
+        b8 occupancyCsgComputeEmulationOutputStatesGraphOwned = false;
+        b8 generatedGeometryReused = false;
         RendererAvboitSystem& avboitSystem;
         DeferredFrameTargets& targets;
         Core::GpuTimingSubmissionTicket& timingTicket;
@@ -209,7 +209,7 @@ struct AvboitOccupancyGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.occupancyComputeEmulationTiming);
@@ -228,7 +228,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
     static void Discarded(Payload& payload)noexcept;
 };

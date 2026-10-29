@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& task, const GpuCompiledBarrier& barrier, CommandList& commandList)const{
+b8 GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& task, const GpuCompiledBarrier& barrier, CommandList& commandList)const{
     if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, task) || !validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::Count)
         return false;
 
@@ -172,7 +172,7 @@ bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, c
     }
 }
 
-bool GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& taskID, CommandList& commandList)const{
+b8 GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& taskID, CommandList& commandList)const{
     if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, taskID) || !validTask(taskID))
         return false;
 
@@ -204,7 +204,7 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compil
 
             const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
             const ArraySlice arrayEnd = subresources.baseArraySlice + subresources.numArraySlices;
-            bool stateMatches = true;
+            b8 stateMatches = true;
             for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
                 for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
                     if(commandList.getTextureSubresourceState(resource.texture.get(), arraySlice, mipLevel) != use.requiredState){
@@ -233,7 +233,7 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compil
             break;
         }
         case GpuGraphResourceType::AccelStruct:{
-            bool alreadySeededByTask = false;
+            b8 alreadySeededByTask = false;
             for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
                 const GpuTaskResourceUse& previousUse = resourceUses[previousUseIndex];
                 if(previousUse.resource == use.resource){

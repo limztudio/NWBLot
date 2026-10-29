@@ -28,43 +28,43 @@ class FbxMeshBuild final : NoCopy{
 public:
     [[nodiscard]] static SIMDVectorSingle LoadUfbxVector(const ufbx_vec3 value, const f32 w = 0.0f)noexcept;
     [[nodiscard]] static PositionKey MakePositionKey(const SIMDVectorSingle position)noexcept;
-    [[nodiscard]] static SIMDVectorSingle LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept;
-    [[nodiscard]] static SIMDVectorSingle LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex)noexcept;
-    [[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const bool wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept;
-    [[nodiscard]] static bool IsFiniteSkinInfluence(const SIMDVectorSingle weights)noexcept;
-    [[nodiscard]] static bool IsFiniteSourceTriangleCorner(
+    [[nodiscard]] static SIMDVectorSingle LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept;
+    [[nodiscard]] static SIMDVectorSingle LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept;
+    [[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept;
+    [[nodiscard]] static b8 IsFiniteSkinInfluence(const SIMDVectorSingle weights)noexcept;
+    [[nodiscard]] static b8 IsFiniteSourceTriangleCorner(
         const SIMDVectorSingle position,
         const SIMDVectorSingle normal,
         const SIMDVectorSingle tangent,
         const SIMDVectorSingle uv0,
         const SIMDVectorSingle color,
-        const bool hasTangent,
-        const bool wantsSkinning,
+        const b8 hasTangent,
+        const b8 wantsSkinning,
         const SIMDVectorSingle skinWeights
     )noexcept;
     template<typename VisitTriangle>
-    [[nodiscard]] static bool VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const bool flipWinding, VisitTriangle&& visitTriangle, UtilityScratchVector<u32>& inOutTriangleIndices);
+    [[nodiscard]] static b8 VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const b8 flipWinding, VisitTriangle&& visitTriangle, UtilityScratchVector<u32>& inOutTriangleIndices);
     [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
         const ufbx_mesh& mesh,
         const ufbx_node& node,
         const ImportOptions& options,
-        const bool wantsSkinning,
+        const b8 wantsSkinning,
         Core::Alloc::ScratchArena& scratchArena,
         UtilityScratchVector<u32>& inOutTriangleIndices
     );
-    static bool AppendInstanceMesh(
+    static b8 AppendInstanceMesh(
         const MeshInstance& instance,
         const ImportOptions& options,
-        const bool wantsSkinning,
+        const b8 wantsSkinning,
         const NormalMode::Enum normalMode,
         const Vec4& defaultColor,
         Core::Alloc::ScratchArena& scratchArena,
         UtilityScratchVector<u32>& inOutTriangleIndices,
         SourceMeshBuildContext& inOutMesh,
         FbxSkinDetail::ExportContext& inOutSkinContext,
-        bool& inOutSawVertexColors,
-        bool& inOutSawVertexUvs,
-        bool& inOutUsedDefaultUvs
+        b8& inOutSawVertexColors,
+        b8& inOutSawVertexUvs,
+        b8& inOutUsedDefaultUvs
     );
     static Expected<usize> EstimateSelectedTriangleCorners(Span<const MeshInstance> instances, Span<const usize> selection);
 
@@ -78,7 +78,7 @@ public:
 
 
 template<typename VisitTriangle>
-[[nodiscard]] bool FbxMeshBuild::VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const bool flipWinding, VisitTriangle&& visitTriangle, UtilityScratchVector<u32>& inOutTriangleIndices){
+[[nodiscard]] b8 FbxMeshBuild::VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const b8 flipWinding, VisitTriangle&& visitTriangle, UtilityScratchVector<u32>& inOutTriangleIndices){
     if(!FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices))
         return false;
     for(usize faceIndex = 0u; faceIndex < mesh.num_faces; ++faceIndex){

@@ -43,7 +43,7 @@ Value ExpressionParser::parseExpression(){
     return parseAdditive();
 }
 
-bool ExpressionParser::parseReferencePath(ScratchPath& path){
+b8 ExpressionParser::parseReferencePath(ScratchPath& path){
     while(m_cursor.m_current.type == TokenType::Dot){
         m_cursor.advance();
         if(m_cursor.m_current.type != TokenType::Identifier){

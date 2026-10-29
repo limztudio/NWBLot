@@ -26,7 +26,7 @@ struct AcquiredBackBuffer{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return texture && availabilityCompletion.valid() && availabilityCompletion.hasPhysicalQueueIdentity() && index != Limit<u32>::s_Max && (nativeInitialState == ResourceStates::Unknown || nativeInitialState == ResourceStates::Present);
     }
 };
@@ -37,11 +37,11 @@ struct AcquiredPresentationFrame{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return backBuffer.valid() && framebuffer; }
+    [[nodiscard]] b8 valid()const noexcept{ return backBuffer.valid() && framebuffer; }
 };
 
 struct PresentationFailure{
-    bool presentationAccepted = false;
+    b8 presentationAccepted = false;
 };
 
 namespace PresentationReceiptStatus{
@@ -53,15 +53,15 @@ struct PresentationReceipt{
     QueueSubmissionToken availabilityCompletion;
     ResourceStates::Mask nativeInitialState = ResourceStates::Unknown;
     u32 index = Limit<u32>::s_Max;
-    bool accepted = false;
+    b8 accepted = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return availabilityCompletion.valid() && availabilityCompletion.hasPhysicalQueueIdentity() && index != Limit<u32>::s_Max && (nativeInitialState == ResourceStates::Unknown || nativeInitialState == ResourceStates::Present);
     }
 
-    void record(const AcquiredBackBuffer& acquired, const bool presentationAccepted)noexcept{
+    void record(const AcquiredBackBuffer& acquired, const b8 presentationAccepted)noexcept{
         availabilityCompletion = acquired.availabilityCompletion;
         nativeInitialState = acquired.nativeInitialState;
         index = acquired.index;
@@ -106,7 +106,7 @@ struct BeginFrameResult{
 
 
 public:
-    [[nodiscard]] bool acquired()const noexcept{
+    [[nodiscard]] b8 acquired()const noexcept{
         return status == BeginFrameStatus::Acquired && backBuffer.valid();
     }
 };
@@ -127,7 +127,7 @@ struct SwapChainTransitionTicket{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return owner != nullptr && epoch != 0u && kind < SwapChainTransitionKind::Count;
     }
 };

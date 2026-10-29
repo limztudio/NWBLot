@@ -32,7 +32,7 @@ struct TimingScopeId{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 
 struct TimingStats{
@@ -49,7 +49,7 @@ struct TimingStats{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return sampleCount != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return sampleCount != 0u; }
 };
 
 
@@ -59,7 +59,7 @@ public:
 class TimingAccumulator final : NoCopy{
 public:
     void clear()noexcept;
-    void setEnabled(bool enabled)noexcept;
+    void setEnabled(b8 enabled)noexcept;
     void record(f64 seconds, u64 sampleFrameIndex)noexcept;
     void publish(u64 publishFrameIndex)noexcept;
 
@@ -69,7 +69,7 @@ public:
 private:
     TimingStats m_currentStats;
     TimingStats m_lastStats;
-    bool m_enabled = false;
+    b8 m_enabled = false;
 };
 
 
@@ -82,7 +82,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool enabled()const noexcept = 0;
+    [[nodiscard]] virtual b8 enabled()const noexcept = 0;
     [[nodiscard]] virtual Expected<TimingScopeId> registerScope(const Name& scopeName) = 0;
     virtual void recordSample(TimingScopeId scope, f64 seconds, u64 sampleFrameIndex) = 0;
     virtual void publishFrame(u64 publishFrameIndex) = 0;
@@ -122,8 +122,8 @@ public:
 
 
 public:
-    void setEnabled(bool enabled)noexcept;
-    [[nodiscard]] virtual bool enabled()const noexcept override{ return m_enabled; }
+    void setEnabled(b8 enabled)noexcept;
+    [[nodiscard]] virtual b8 enabled()const noexcept override{ return m_enabled; }
     void clear()noexcept;
     [[nodiscard]] virtual Expected<TimingScopeId> registerScope(const Name& scopeName)override;
     virtual void recordSample(TimingScopeId scope, f64 seconds, u64 sampleFrameIndex)noexcept override;
@@ -151,7 +151,7 @@ private:
     TimingStats m_emptyStats;
     u64 m_nextPublishFrameIndex = 0u;
     u32 m_generation = 1u;
-    bool m_enabled = false;
+    b8 m_enabled = false;
 };
 
 
@@ -167,7 +167,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_recorder != nullptr; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_recorder != nullptr; }
     [[nodiscard]] const TimingStats& stats(const Name& scopeName)const noexcept;
     [[nodiscard]] const TimingStats& stats(TimingScopeId scope)const noexcept;
     [[nodiscard]] usize scopeCount()const noexcept;

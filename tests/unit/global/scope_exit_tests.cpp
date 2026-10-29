@@ -88,9 +88,9 @@ TEST(ScopeExit, UnwindingRunsNestedCleanupInReverseOrderAndPropagatesFailure){
 }
 
 TEST(ScopeExit, ResolvesTheFinalResultOnSuccessAndTheInitialResultOnUnwind){
-    bool published = false;
-    const auto operation = [&](const bool fails){
-        bool completed = false;
+    b8 published = false;
+    const auto operation = [&](const b8 fails){
+        b8 completed = false;
         ScopeExit publish([&]()noexcept{ published = completed; });
 
         if(fails)
@@ -105,14 +105,14 @@ TEST(ScopeExit, ResolvesTheFinalResultOnSuccessAndTheInitialResultOnUnwind){
 }
 
 TEST(ScopeExit, CleanupObservesEarlierCapturedObjectsBeforeTheirDestruction){
-    bool alive = false;
-    bool observedAlive = false;
+    b8 alive = false;
+    b8 observedAlive = false;
     struct Lifetime{
-        bool& alive;
+        b8& alive;
 
 
     public:
-        explicit Lifetime(bool& lifetime)noexcept
+        explicit Lifetime(b8& lifetime)noexcept
             : alive(lifetime)
         {
             alive = true;

@@ -54,7 +54,7 @@ CookEntryAutoRegistrar::CookEntryAutoRegistrar(const CookEntryRegistrationFuncti
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
+b8 CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
     if(!owner){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: bucket allocation returned null for '{}'"), ConvertString(assetType.resolvedText()));
         return false;
@@ -81,7 +81,7 @@ bool CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry, ScratchArena& scratchArena){
+b8 RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry, ScratchArena& scratchArena){
     Vector<NotNull<CookEntryRegistrationFunction>, Core::Alloc::ScratchArena> functions{scratchArena};
     return RunAutoCollectedFunctions(
         __hidden_cook_entry_registry::QueryAutoRegistrationQueue(), registry, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function")); },

@@ -263,7 +263,7 @@ TEST(GpuTaskGraphResourceFragments, TextureInteriorOverwritePreservesFourRemaind
 
     for(usize terminal = 0u; terminal < s_ExpectedDualCount; ++terminal){
         SCOPED_TRACE(terminal);
-        const bool collected = terminal == 0u
+        const b8 collected = terminal == 0u
             ? Graphics::GpuTaskGraphCompilerDetail::CollectLatestResourceStateFragments(states, history, resource, requested, scratchArena, fragments)
             : Graphics::GpuTaskGraphCompilerDetail::CollectTerminalResourceStateFragments(states, history, resource, scratchArena, fragments)
         ;

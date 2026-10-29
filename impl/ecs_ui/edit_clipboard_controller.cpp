@@ -32,7 +32,7 @@ UiEditClipboardController::~UiEditClipboardController()noexcept{
 }
 
 
-UiEditClipboardResult UiEditClipboardController::request(const UiTextEditOwner& owner, const Ui::EditModel& model, const Ui::EditClipboardAction::Enum action, const Core::ClipboardChannel::Enum channel, const bool readOnly){
+UiEditClipboardResult UiEditClipboardController::request(const UiTextEditOwner& owner, const Ui::EditModel& model, const Ui::EditClipboardAction::Enum action, const Core::ClipboardChannel::Enum channel, const b8 readOnly){
     if(!m_service.isOwnerThread())
         return { UiEditClipboardStatus::WrongThread };
     if(!owner.valid())
@@ -43,8 +43,8 @@ UiEditClipboardResult UiEditClipboardController::request(const UiTextEditOwner& 
         return { UiEditClipboardStatus::InvalidAction };
     if(channel > Core::ClipboardChannel::PrimarySelection)
         return { UiEditClipboardStatus::Unsupported };
-    const bool reads = action == Ui::EditClipboardAction::Paste;
-    const bool mutates = reads || action == Ui::EditClipboardAction::Cut;
+    const b8 reads = action == Ui::EditClipboardAction::Paste;
+    const b8 mutates = reads || action == Ui::EditClipboardAction::Cut;
     if(readOnly && mutates)
         return { UiEditClipboardStatus::ReadOnly };
     if(model.composition().active)
@@ -67,7 +67,7 @@ UiEditClipboardResult UiEditClipboardController::request(const UiTextEditOwner& 
     return { UiEditClipboardStatus::Pending };
 }
 
-UiEditClipboardResult UiEditClipboardController::drain(const UiTextEditOwner& owner, Ui::EditModel& model, const bool readOnly){
+UiEditClipboardResult UiEditClipboardController::drain(const UiTextEditOwner& owner, Ui::EditModel& model, const b8 readOnly){
     if(!m_service.isOwnerThread())
         return { UiEditClipboardStatus::WrongThread };
     if(!m_token.valid())
@@ -93,7 +93,7 @@ UiEditClipboardResult UiEditClipboardController::drain(const UiTextEditOwner& ow
     return result;
 }
 
-bool UiEditClipboardController::cancel(){
+b8 UiEditClipboardController::cancel(){
     if(!m_token.valid())
         return true;
     if(!m_service.isOwnerThread())
@@ -113,7 +113,7 @@ void UiEditClipboardController::clearRequest()noexcept{
     m_insertText.clear();
 }
 
-UiEditClipboardResult UiEditClipboardController::applyCompletion(Ui::EditModel& model, const bool readOnly){
+UiEditClipboardResult UiEditClipboardController::applyCompletion(Ui::EditModel& model, const b8 readOnly){
     switch(m_completion.status){
     case Core::ClipboardStatus::Unsupported: return { UiEditClipboardStatus::Unsupported };
     case Core::ClipboardStatus::InvalidText: return { UiEditClipboardStatus::InvalidText };

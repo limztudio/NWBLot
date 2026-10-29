@@ -23,7 +23,7 @@ namespace GlobalFilesystemRetentionDetail{
 
 struct KeepAllEntries{
     template<typename PathT>
-    [[nodiscard]] Expected<bool, ErrorCode> operator()(const PathT&)const noexcept{
+    [[nodiscard]] Expected<b8, ErrorCode> operator()(const PathT&)const noexcept{
         return true;
     }
 };

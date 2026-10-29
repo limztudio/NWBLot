@@ -35,7 +35,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool matches(const EditModel& model)const noexcept;
+    [[nodiscard]] b8 matches(const EditModel& model)const noexcept;
     void capture(const EditModel& model);
     void clear()noexcept;
 };

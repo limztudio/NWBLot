@@ -39,14 +39,14 @@ struct AssetVolumePrepareContext{
     ScratchArena& scratchArena;
 };
 
-using AssetVolumePrepareFunction = bool (*)(AssetVolumePrepareContext& context);
+using AssetVolumePrepareFunction = b8 (*)(AssetVolumePrepareContext& context);
 
 class AssetVolumePrepareAutoRegistrar final{
 public:
     explicit AssetVolumePrepareAutoRegistrar(AssetVolumePrepareFunction function);
 };
 
-[[nodiscard]] bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context);
+[[nodiscard]] b8 RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

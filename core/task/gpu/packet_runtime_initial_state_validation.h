@@ -25,7 +25,7 @@ private:
 
 
 public:
-    [[nodiscard]] static bool ValidBufferRange(const BufferRange& range, u64 bufferSize)noexcept;
+    [[nodiscard]] static b8 ValidBufferRange(const BufferRange& range, u64 bufferSize)noexcept;
 
 
 public:
@@ -36,7 +36,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool validate();
+    [[nodiscard]] b8 validate();
     [[nodiscard]] Expected<ResourceStates::Mask> permanentTextureState(Texture* texture)const noexcept;
     [[nodiscard]] Expected<ResourceStates::Mask> permanentBufferState(Buffer* buffer)const noexcept;
 
@@ -48,8 +48,8 @@ private:
     Optional<StateIndex> m_permanentBufferIndex;
     Optional<StateIndex> m_textureIndex;
     Optional<StateIndex> m_bufferIndex;
-    bool m_permanentTexturesIndexed = false;
-    bool m_permanentBuffersIndexed = false;
+    b8 m_permanentTexturesIndexed = false;
+    b8 m_permanentBuffersIndexed = false;
 };
 
 

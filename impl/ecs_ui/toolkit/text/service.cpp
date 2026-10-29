@@ -50,7 +50,7 @@ TextService::TextService(Core::Alloc::GlobalArena& arena)
 
 TextService::~TextService()noexcept = default;
 
-bool TextService::setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count){
+b8 TextService::setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count){
     if(m_generation == Limit<u64>::s_Max || !m_shaper.setFonts(scratchArena, sources, count))
         return false;
     m_pages.clear();

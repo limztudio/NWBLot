@@ -80,7 +80,7 @@ struct ProjectStartupContext{
 struct ProjectRuntimeContext{
     using ShaderPathResolveCallback = Function<Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName)>;
     using TelemetryCaptureCallback = Function<void(const Core::Telemetry::CaptureOptions& options)>;
-    using TelemetryUploadFlushCallback = Function<bool(bool clearAfterUpload)>;
+    using TelemetryUploadFlushCallback = Function<b8(b8 clearAfterUpload)>;
     using PerfCaptureCallback = Function<void(const Core::Perf::CaptureOptions& options)>;
     using RequestQuitCallback = Function<void()>;
 
@@ -109,7 +109,7 @@ public:
 
 public:
     void setTelemetryCapture(const Core::Telemetry::CaptureOptions& options);
-    [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
+    [[nodiscard]] b8 flushTelemetryUpload(b8 clearAfterUpload = false);
     void setPerfCapture(const Core::Perf::CaptureOptions& options);
     [[nodiscard]] Core::Perf::TimingView gpuTimingView()const noexcept{ return perfSession.gpuTimingView(); }
 };
@@ -121,14 +121,14 @@ public:
 
 
 public:
-    virtual bool onStartup(){
+    virtual b8 onStartup(){
         return true;
     }
 
     virtual void onShutdown(){
     }
 
-    virtual bool onUpdate(f32 delta){
+    virtual b8 onUpdate(f32 delta){
         static_cast<void>(delta);
         return true;
     }
@@ -137,7 +137,7 @@ public:
 
 ProjectFrameClientSize QueryProjectFrameClientSize();
 TStringView QueryProjectWindowTitle()noexcept;
-bool ConfigureProjectRuntime(ProjectStartupContext& context)noexcept;
+b8 ConfigureProjectRuntime(ProjectStartupContext& context)noexcept;
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
 
 Expected<UniquePtr<Core::ECS::World>, TStringView> CreateInitialProjectWorld(ProjectRuntimeContext& context);

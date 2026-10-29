@@ -39,7 +39,7 @@ static constexpr InputSource s_Contact{ 13u, 1u };
     return target;
 }
 
-[[nodiscard]] static PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position, const bool hoverCapable = false, const PointerIntent::Enum intent = PointerIntent::Activate)noexcept{
+[[nodiscard]] static PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position, const b8 hoverCapable = false, const PointerIntent::Enum intent = PointerIntent::Activate)noexcept{
     PointerInput input;
     input.source = source;
     input.phase = phase;

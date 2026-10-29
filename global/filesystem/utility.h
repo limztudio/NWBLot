@@ -149,14 +149,14 @@ template<typename StringT, typename PathT>
 
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool IsPathPrefixText(const BasicStringView<CharT> root, const BasicStringView<CharT> file)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 IsPathPrefixText(const BasicStringView<CharT> root, const BasicStringView<CharT> file)noexcept(IsArithmetic_V<CharT>){
     if(root == file)
         return true;
     return !root.empty() && file.size() > root.size() && StartsWith(file, root) && (root.back() == static_cast<CharT>('/') || file[root.size()] == static_cast<CharT>('/'));
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsSingleLinePathText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 IsSingleLinePathText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return !text.empty() && !HasEmbeddedNull(text) && !HasLineBreak(text);
 }
 
@@ -171,16 +171,16 @@ namespace GlobalFilesystemUtilityDetail{
 
 
 template<typename CharT>
-inline constexpr bool IsSafeCacheNameChar(CharT ch)noexcept(IsArithmetic_V<CharT>){
-    const bool alphaNum = (ch >= CharT('a') && ch <= CharT('z')) || (ch >= CharT('0') && ch <= CharT('9'));
-    const bool safePunctuation = ch == CharT('.') || ch == CharT('_') || ch == CharT('-');
+inline constexpr b8 IsSafeCacheNameChar(CharT ch)noexcept(IsArithmetic_V<CharT>){
+    const b8 alphaNum = (ch >= CharT('a') && ch <= CharT('z')) || (ch >= CharT('0') && ch <= CharT('9'));
+    const b8 safePunctuation = ch == CharT('.') || ch == CharT('_') || ch == CharT('-');
     return alphaNum || safePunctuation;
 }
 
-template<bool Canonical, typename StringT>
+template<b8 Canonical, typename StringT>
 inline void SanitizeSafeCacheName(StringT& text)noexcept(IsNothrowRangeFor<StringT, decltype([](typename StringT::value_type&)noexcept([]()consteval noexcept{
     using CharT = typename StringT::value_type;
-    constexpr bool s_ReplacementIsNothrow = noexcept(IsSafeCacheNameChar(DeclVal<CharT&>())) && noexcept(DeclVal<CharT&>() = CharT('_'));
+    constexpr b8 s_ReplacementIsNothrow = noexcept(IsSafeCacheNameChar(DeclVal<CharT&>())) && noexcept(DeclVal<CharT&>() = CharT('_'));
     if constexpr(Canonical)
         return s_ReplacementIsNothrow && noexcept(DeclVal<CharT&>() = Canonicalize(DeclVal<CharT&>()));
     else
@@ -196,7 +196,7 @@ inline void SanitizeSafeCacheName(StringT& text)noexcept(IsNothrowRangeFor<Strin
     }
 }
 
-template<typename CharT, typename ArenaT, bool Canonical>
+template<typename CharT, typename ArenaT, b8 Canonical>
 [[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheNameImpl(ArenaT& arena, const BasicStringView<CharT> text){
     if(text.empty())
         return BasicString<CharT, ArenaT>(arena);
@@ -206,9 +206,9 @@ template<typename CharT, typename ArenaT, bool Canonical>
     return output;
 }
 
-template<bool Canonical, typename StringT>
+template<b8 Canonical, typename StringT>
 [[nodiscard]] inline StringT BuildSafeCacheNameCopy(const StringT& text)noexcept(
-    noexcept(static_cast<bool>(text.empty())) && noexcept(StringT(text.get_allocator())) && noexcept(StringT(text.data(), text.size(), text.get_allocator()))
+    noexcept(static_cast<b8>(text.empty())) && noexcept(StringT(text.get_allocator())) && noexcept(StringT(text.data(), text.size(), text.get_allocator()))
     && noexcept(SanitizeSafeCacheName<Canonical>(DeclVal<StringT&>())) && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>
 ){
     if(text.empty())
@@ -292,15 +292,15 @@ template<typename StringT, typename PathT>
 }
 
 template<typename PathT>
-[[nodiscard]] inline bool PathHasListedExtension(const PathT& path, const Span<const AStringView> extensions)noexcept([]()consteval noexcept{
+[[nodiscard]] inline b8 PathHasListedExtension(const PathT& path, const Span<const AStringView> extensions)noexcept([]()consteval noexcept{
     using PathChar = typename PathT::value_type;
     if constexpr(requires{ DeclVal<const PathT&>().extensionView(); }){
         using Extension = Decay_T<decltype(DeclVal<const PathT&>().extensionView())>;
         return
             noexcept(DeclVal<void(*)(Extension)noexcept>()(DeclVal<const PathT&>().extensionView())) && IsNothrowDestructible_V<Extension>
-            && noexcept(static_cast<bool>(DeclVal<const Extension&>().size() != DeclVal<usize>()))
-            && noexcept(static_cast<bool>(DeclVal<usize&>() < DeclVal<const Extension&>().size()))
-            && noexcept(static_cast<bool>(ToAsciiLower(DeclVal<const Extension&>()[DeclVal<usize&>()]) != static_cast<PathChar>(ToAsciiLower(DeclVal<const AStringView&>()[DeclVal<usize&>()]))))
+            && noexcept(static_cast<b8>(DeclVal<const Extension&>().size() != DeclVal<usize>()))
+            && noexcept(static_cast<b8>(DeclVal<usize&>() < DeclVal<const Extension&>().size()))
+            && noexcept(static_cast<b8>(ToAsciiLower(DeclVal<const Extension&>()[DeclVal<usize&>()]) != static_cast<PathChar>(ToAsciiLower(DeclVal<const AStringView&>()[DeclVal<usize&>()]))))
         ;
     }
     else{
@@ -309,9 +309,9 @@ template<typename PathT>
         return
             noexcept(DeclVal<void(*)(ExtensionPath)noexcept>()(DeclVal<const PathT&>().extension())) && IsNothrowDestructible_V<ExtensionPath>
             && noexcept(DeclVal<void(*)(Extension)noexcept>()(DeclVal<const ExtensionPath&>().native())) && IsNothrowDestructible_V<Extension>
-            && noexcept(static_cast<bool>(DeclVal<const Extension&>().size() != DeclVal<usize>()))
-            && noexcept(static_cast<bool>(DeclVal<usize&>() < DeclVal<const Extension&>().size()))
-            && noexcept(static_cast<bool>(ToAsciiLower(DeclVal<const Extension&>()[DeclVal<usize&>()]) != static_cast<PathChar>(ToAsciiLower(DeclVal<const AStringView&>()[DeclVal<usize&>()]))))
+            && noexcept(static_cast<b8>(DeclVal<const Extension&>().size() != DeclVal<usize>()))
+            && noexcept(static_cast<b8>(DeclVal<usize&>() < DeclVal<const Extension&>().size()))
+            && noexcept(static_cast<b8>(ToAsciiLower(DeclVal<const Extension&>()[DeclVal<usize&>()]) != static_cast<PathChar>(ToAsciiLower(DeclVal<const AStringView&>()[DeclVal<usize&>()]))))
         ;
     }
 }()){
@@ -321,7 +321,7 @@ template<typename PathT>
         for(const AStringView listed : extensions){
             if(extension.size() != listed.size())
                 continue;
-            bool matched = true;
+            b8 matched = true;
             for(usize c = 0u; c < extension.size(); ++c){
                 if(ToAsciiLower(extension[c]) != static_cast<PathChar>(ToAsciiLower(listed[c]))){
                     matched = false;
@@ -339,7 +339,7 @@ template<typename PathT>
         for(const AStringView listed : extensions){
             if(extension.size() != listed.size())
                 continue;
-            bool matched = true;
+            b8 matched = true;
             for(usize c = 0u; c < extension.size(); ++c){
                 if(ToAsciiLower(extension[c]) != static_cast<PathChar>(ToAsciiLower(listed[c]))){
                     matched = false;

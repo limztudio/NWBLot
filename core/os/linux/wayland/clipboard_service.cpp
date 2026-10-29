@@ -72,7 +72,7 @@ WaylandClipboardService::~WaylandClipboardService()noexcept{
         wl_registry_destroy(m_registry);
 }
 
-bool WaylandClipboardService::initialize(){
+b8 WaylandClipboardService::initialize(){
     m_registry = wl_display_get_registry(&m_display);
     if(!m_registry)
         return false;
@@ -88,7 +88,7 @@ void WaylandClipboardService::observeSerial(const u32 serial)noexcept{
         m_serial = serial;
 }
 
-void WaylandClipboardService::setKeyboardFocus(const bool focused)noexcept{
+void WaylandClipboardService::setKeyboardFocus(const b8 focused)noexcept{
     NWB_ASSERT(isOwnerThread());
     m_focused = focused && m_seat;
     if(!m_focused){
@@ -101,7 +101,7 @@ void WaylandClipboardService::setKeyboardFocus(const bool focused)noexcept{
 }
 
 ClipboardCapabilities WaylandClipboardService::capabilities(const ClipboardChannel::Enum channel)const noexcept{
-    bool available = channel == ClipboardChannel::Clipboard && m_device;
+    b8 available = channel == ClipboardChannel::Clipboard && m_device;
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     if(channel == ClipboardChannel::PrimarySelection)
         available = m_primaryDevice;
@@ -156,7 +156,7 @@ void WaylandClipboardService::cancelNativeRequest(const ClipboardRequestToken to
 void WaylandClipboardService::pumpNativeRequests(){
     const Timer now = TimerNow();
     if(m_readToken.valid()){
-        const auto read = now >= m_readDeadline ? Expected<bool, ClipboardPipeReadFailure>(MakeUnexpected(ClipboardPipeReadFailure{ .status = ClipboardStatus::Unavailable })) : ReadClipboardPipe(m_readFd, m_received);
+        const auto read = now >= m_readDeadline ? Expected<b8, ClipboardPipeReadFailure>(MakeUnexpected(ClipboardPipeReadFailure{ .status = ClipboardStatus::Unavailable })) : ReadClipboardPipe(m_readFd, m_received);
         if(!read || *read)
             finishRead(read ? ClipboardStatus::Success : read.error().status);
     }
@@ -268,7 +268,7 @@ void ObserveWaylandClipboardInputSerial(IClipboardService& service, const u32 se
     MakeNotNull(checked_cast<WaylandClipboardService*>(&service))->observeSerial(serial);
 }
 
-void SetWaylandClipboardKeyboardFocus(IClipboardService& service, const bool focused)noexcept{
+void SetWaylandClipboardKeyboardFocus(IClipboardService& service, const b8 focused)noexcept{
     MakeNotNull(checked_cast<WaylandClipboardService*>(&service))->setKeyboardFocus(focused);
 }
 

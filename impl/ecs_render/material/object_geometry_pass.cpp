@@ -25,7 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMaterialSystem::createObjectGeometryPipelineResources(MaterialPipelineResources& resources){
+b8 RendererMaterialSystem::createObjectGeometryPipelineResources(MaterialPipelineResources& resources){
     if(!prepareMeshComputeBindingLayout())
         return false;
     auto& device = m_graphics.getDevice();
@@ -67,12 +67,12 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(MaterialPipel
     return true;
 }
 
-bool RendererMaterialSystem::indexedMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+b8 RendererMaterialSystem::indexedMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     return (drawItems.empty() || frameBindings.bindingValid()) && prepareIndexedMaterialPassResourceBindings(drawItems);
 }
 
 
-bool RendererMaterialSystem::prepareIndexedMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
+b8 RendererMaterialSystem::prepareIndexedMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
     for(const MaterialPassDrawItem& draw : drawItems){
         const auto& cache = draw.meshResources.objectGeometryCache;
         if(!draw.meshResources.valid() || !draw.pipelineResources.indexedPipeline || !cache.valid() || cache.decoderPipeline != draw.pipelineResources.objectGeometryDecodePipeline)
@@ -111,7 +111,7 @@ void RendererMaterialSystem::renderIndexedMaterialPassDrawItems(const MaterialPa
     }
 }
 
-bool RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem){
+b8 RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem){
     const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
     const auto& cache = mesh.objectGeometryCache;
     const Core::ComputePipelineHandle& pipeline = drawItem.pipelineResources.objectGeometryDecodePipeline;

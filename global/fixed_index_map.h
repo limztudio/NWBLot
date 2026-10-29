@@ -18,7 +18,7 @@ class FixedIndexMap final : NoCopy{
 private:
     struct Slot{
         Key key{};
-        bool occupied = false;
+        b8 occupied = false;
         usize value = 0u;
     };
 
@@ -46,9 +46,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
 
-    [[nodiscard]] const usize* find(const Key& key)const noexcept(noexcept(static_cast<usize>(m_hash(key))) && noexcept(static_cast<bool>(m_equal(key, key)))){
+    [[nodiscard]] const usize* find(const Key& key)const noexcept(noexcept(static_cast<usize>(m_hash(key))) && noexcept(static_cast<b8>(m_equal(key, key)))){
         if(m_slots.empty())
             return nullptr;
 
@@ -65,7 +65,7 @@ public:
         return nullptr;
     }
 
-    [[nodiscard]] bool insertOrAssign(const Key& key, const usize value)noexcept(noexcept(static_cast<usize>(m_hash(key))) && noexcept(static_cast<bool>(m_equal(key, key))) && noexcept(DeclVal<Key&>() = key)){
+    [[nodiscard]] b8 insertOrAssign(const Key& key, const usize value)noexcept(noexcept(static_cast<usize>(m_hash(key))) && noexcept(static_cast<b8>(m_equal(key, key))) && noexcept(DeclVal<Key&>() = key)){
         if(m_slots.empty())
             return false;
 
@@ -93,7 +93,7 @@ private:
     Vector<Slot, ArenaT> m_slots;
     Hash m_hash;
     Equal m_equal;
-    bool m_valid = true;
+    b8 m_valid = true;
 };
 
 

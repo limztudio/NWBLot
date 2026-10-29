@@ -32,7 +32,7 @@ ShadowTimingRenderPass::~ShadowTimingRenderPass()noexcept{
     stop();
 }
 
-bool ShadowTimingRenderPass::start(){
+b8 ShadowTimingRenderPass::start(){
     if(m_registered)
         return true;
     constexpr u32 s_InFlightRanges = 32u;

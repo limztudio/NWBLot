@@ -58,7 +58,7 @@ UiSliderSmokeScene::~UiSliderSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiSliderSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiSliderSmokeScene::paint(Impl::UiPaintContext& context){
     auto& ui = context.ui;
     ui.style().fontSize = 14.0f;
     ui.style().gap = 8.0f;
@@ -76,7 +76,7 @@ bool UiSliderSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiSliderSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
+b8 UiSliderSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key < Core::Key::F4 || key > Core::Key::F9)
@@ -110,7 +110,7 @@ bool UiSliderSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const
     return true;
 }
 
-bool UiSliderSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
+b8 UiSliderSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     if(!ui.beginPanel("slider_main", bounds))
         return false;
@@ -136,7 +136,7 @@ bool UiSliderSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& 
     return m_state.result().valid;
 }
 
-bool UiSliderSmokeScene::paintOther(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
+b8 UiSliderSmokeScene::paintOther(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     if(!ui.beginPanel("slider_other", bounds))
         return false;
@@ -157,7 +157,7 @@ bool UiSliderSmokeScene::paintOther(Impl::Ui::Builder& ui, const Impl::Ui::Rect&
     return m_disabled.result().valid && m_constant.result().valid;
 }
 
-bool UiSliderSmokeScene::paintPopup(Impl::Ui::Builder& ui, const f32 right){
+b8 UiSliderSmokeScene::paintPopup(Impl::Ui::Builder& ui, const f32 right){
     using namespace Impl::Ui;
     PopupOptions popup;
     popup.anchor = { right, 228.0f, 8.0f, 24.0f };
@@ -186,11 +186,11 @@ bool UiSliderSmokeScene::paintPopup(Impl::Ui::Builder& ui, const f32 right){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerSliderSmokeEnabled(){
+b8 IsUiLayerSliderSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_SLIDER");
 }
 
-bool IsUiLayerSliderSkinSmokeEnabled(){
+b8 IsUiLayerSliderSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_SLIDER_SKIN");
 }
 

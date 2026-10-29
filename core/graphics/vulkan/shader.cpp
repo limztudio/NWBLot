@@ -24,7 +24,7 @@ namespace __hidden_vulkan_shader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool IsValidSpirvBytecodeShape(const void* binary, const usize binarySize)noexcept{
+[[nodiscard]] inline b8 IsValidSpirvBytecodeShape(const void* binary, const usize binarySize)noexcept{
     return binary && binarySize != 0u && (binarySize & s_SpirvWordAlignmentMask) == 0u;
 }
 

@@ -53,7 +53,7 @@ static constexpr AStringView s_MaterialInterface = "project/shaders/smoke_surfac
 struct LifecyclePhase{
     AStringView name;
     f32 glassX;
-    bool enabled;
+    b8 enabled;
 };
 
 static constexpr LifecyclePhase s_LifecyclePhases[] = {
@@ -99,10 +99,10 @@ private:
         reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
         NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("RefractionSmokeProject: invalid reflection settings"));
         const auto enabled = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED");
-        const bool refractionEnabled = !enabled || *enabled != 0.0f;
+        const b8 refractionEnabled = !enabled || *enabled != 0.0f;
         renderer.setRefractionEnabled(refractionEnabled);
         const auto hardware = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE");
-        const bool hardwareEnabled = !hardware || *hardware != 0.0f;
+        const b8 hardwareEnabled = !hardware || *hardware != 0.0f;
         renderer.setRefractionHardwareTracingEnabled(hardwareEnabled);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: refraction {}"), refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
         return world;
@@ -110,7 +110,7 @@ private:
 
 
 private:
-    bool configureFrameGraphSnapshot(NWB::Core::Alloc::ScratchArena& arena){
+    b8 configureFrameGraphSnapshot(NWB::Core::Alloc::ScratchArena& arena){
         const auto path = ReadEnvironmentVariable(arena, "NWB_REFRACTION_FRAME_GRAPH_SNAPSHOT_PATH");
         if(!path){
             NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: failed to read frame-graph snapshot path"));
@@ -128,7 +128,7 @@ private:
         return true;
     }
 
-    bool configureQueryDiagnostics(NWB::Core::Alloc::ScratchArena& arena){
+    b8 configureQueryDiagnostics(NWB::Core::Alloc::ScratchArena& arena){
         const auto configured = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_DIAGNOSTICS");
         if(!configured || (*configured && **configured != "0" && **configured != "1")){
             NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: diagnostics must be absent, 0, or 1"));
@@ -195,7 +195,7 @@ private:
         m_diagnosticsReported = true;
     }
 
-    bool updateFrameGraphSnapshot(){
+    b8 updateFrameGraphSnapshot(){
         if(m_frameGraphSnapshotPath.empty() || m_frameGraphSnapshotCompleted)
             return true;
         i32 width = 0;
@@ -222,7 +222,7 @@ private:
         return true;
     }
 
-    bool configureFramebufferCapture(NWB::Core::Alloc::ScratchArena& scratchArena){
+    b8 configureFramebufferCapture(NWB::Core::Alloc::ScratchArena& scratchArena){
         constexpr u32 s_DefaultCaptureFrameCount = 16u;
         if(m_lifecycleEnabled){
             const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
@@ -280,7 +280,7 @@ private:
         return entity;
     }
 
-    bool createDensityScene(NWB::Core::Alloc::ScratchArena& arena, const u32 percent){
+    b8 createDensityScene(NWB::Core::Alloc::ScratchArena& arena, const u32 percent){
         const auto configuredExtent = ReadSmokeEnvironmentText(arena, "NWB_REFRACTION_SMOKE_EXTENT");
         if(!configuredExtent || (*configuredExtent != "960x720" && *configuredExtent != "1600x900" && *configuredExtent != "1920x1080")){
             NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: density requires explicit extent 960x720, 1600x900, or 1920x1080"));
@@ -292,7 +292,7 @@ private:
             NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: density requires refraction enabled and hardware selection absent, 0, or 1"));
             return false;
         }
-        const bool hardwareRequested = !*hardware || **hardware == "1";
+        const b8 hardwareRequested = !*hardware || **hardware == "1";
         const auto extent = NWB::QueryProjectFrameClientSize();
         const u32 frameWidth = extent.width;
         const u32 frameHeight = extent.height;
@@ -371,7 +371,7 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: phase {} applied"), ConvertString(phase.name));
     }
 
-    bool advanceLifecycleCapture(){
+    b8 advanceLifecycleCapture(){
         if(!m_lifecycleEnabled || !m_framebufferCapture->captureReady() || m_lifecyclePhase == LengthOf(s_LifecyclePhases))
             return true;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: captured {} graphics frame {}"), ConvertString(s_LifecyclePhases[m_lifecyclePhase].name), m_framebufferCapture->capturedGraphicsFrameIndex());
@@ -400,7 +400,7 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
         m_lifecycleEnabled = ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_LIFECYCLE");
         m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_TIMING");
@@ -462,7 +462,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         reportQueryDiagnostics();
         if(m_framebufferCapture)
             m_framebufferCapture->update();
@@ -500,12 +500,12 @@ private:
     u64 m_diagnosticsSourceFrame = 0u;
     NWB::Core::ECS::EntityID m_glass = {};
     usize m_lifecyclePhase = 0u;
-    bool m_lifecycleEnabled = false;
-    bool m_timingEnabled = false;
-    bool m_densityEnabled = false;
-    bool m_diagnosticsEnabled = false;
-    bool m_diagnosticsReported = false;
-    bool m_frameGraphSnapshotCompleted = false;
+    b8 m_lifecycleEnabled = false;
+    b8 m_timingEnabled = false;
+    b8 m_densityEnabled = false;
+    b8 m_diagnosticsEnabled = false;
+    b8 m_diagnosticsReported = false;
+    b8 m_frameGraphSnapshotCompleted = false;
 };
 
 

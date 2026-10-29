@@ -35,7 +35,7 @@ public:
 
     [[nodiscard]] TextInputAdmission::Enum commit(AStringView text){ return emitCommit(activeSession(), text); }
 
-    [[nodiscard]] TextInputAdmission::Enum preedit(AStringView text, usize anchor, usize caret, bool visible = true){
+    [[nodiscard]] TextInputAdmission::Enum preedit(AStringView text, usize anchor, usize caret, b8 visible = true){
         return emitPreedit(activeSession(), text, anchor, caret, visible);
     }
 

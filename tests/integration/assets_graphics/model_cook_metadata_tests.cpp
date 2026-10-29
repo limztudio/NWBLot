@@ -81,7 +81,7 @@ public:
         expectedSkeletons.insert_or_assign(*objectIdentity, *expectedIdentity);
     }
 
-    [[nodiscard]] bool parse(){
+    [[nodiscard]] b8 parse(){
         auto result = ParseModelCookMetadata(Name("tests/model_cook_metadata/model"), path, asset, outputArena, scratchArena);
         if(!result)
             return false;

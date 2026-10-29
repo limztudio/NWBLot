@@ -23,7 +23,7 @@ namespace __hidden_vulkan_resource_bindings_commands{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool HasExactLayoutAtSet(const PipelineBindingState& pipelineBindings, const BindingLayout* const expectedLayout, const u32 expectedSetIndex, const u32 expectedCount)noexcept{
+[[nodiscard]] b8 HasExactLayoutAtSet(const PipelineBindingState& pipelineBindings, const BindingLayout* const expectedLayout, const u32 expectedSetIndex, const u32 expectedCount)noexcept{
     if(!expectedLayout)
         return expectedCount == 0u;
 
@@ -38,13 +38,13 @@ namespace __hidden_vulkan_resource_bindings_commands{
     return foundCount == expectedCount;
 }
 
-[[nodiscard]] bool PipelineMatchesHeapLayouts(
+[[nodiscard]] b8 PipelineMatchesHeapLayouts(
     const PipelineBindingState& pipelineBindings,
     const BindingLayout* const resourceLayout,
     const BindingLayout* const samplerLayout,
     const BindingLayout* const accelStructLayout,
     const GpuDescriptorHeapAbi& abi,
-    const bool bindAccelStruct
+    const b8 bindAccelStruct
 )noexcept{
     return
         HasExactLayoutAtSet(pipelineBindings, resourceLayout, abi.resourceSetIndex, 1u)
@@ -235,7 +235,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         return;
     }
 
-    const bool bindAccelStruct = accelStructHandle.valid();
+    const b8 bindAccelStruct = accelStructHandle.valid();
     ScopedLock heapLock(heap.m_mutex);
     const GpuDescriptorHeapAbi abi = heap.m_desc.bindlessHeapAbi;
     const u32 maxBoundDescriptorSets = m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets;

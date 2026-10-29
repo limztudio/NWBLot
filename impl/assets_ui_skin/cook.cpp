@@ -26,7 +26,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, NWB_TEXT("UiSkinAssetCodec::serialize")))
         return false;
     const UiSkin& skin = *MakeNotNull(checked_cast<const UiSkin*>(&asset));

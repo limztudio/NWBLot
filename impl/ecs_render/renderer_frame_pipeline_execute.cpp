@@ -89,8 +89,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     }
 
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
-    const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
-    const bool hasTransparentRenderers = m_preparedHasTransparentRenderers;
+    const b8 hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
+    const b8 hasTransparentRenderers = m_preparedHasTransparentRenderers;
     NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
     auto& device = m_graphics.getDevice();
     if(m_graphics.isDeviceRecreationRequested() || device.requiresRecreation()){
@@ -112,9 +112,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const bool dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max && computeFamilyIndex != graphicsFamilyIndex;
-    const bool laggedAsyncLightingRequested = m_frameLaggedAsyncLightingEnabled && dedicatedAsyncCompute;
-    const bool laggedLightingHistoryResourcesReady = deferredTargets.laggedLightingHistory.valid();
+    const b8 dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max && computeFamilyIndex != graphicsFamilyIndex;
+    const b8 laggedAsyncLightingRequested = m_frameLaggedAsyncLightingEnabled && dedicatedAsyncCompute;
+    const b8 laggedLightingHistoryResourcesReady = deferredTargets.laggedLightingHistory.valid();
     if(laggedAsyncLightingRequested && !laggedLightingHistoryResourcesReady){
         NWB_ASSERT(laggedLightingHistoryResourcesReady);
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: lagged async lighting requires validated history targets"));
@@ -130,7 +130,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         const Expected<u64> completedValue = device.queueGetCompletedInstance(Core::GpuPhysicalQueueId{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration, });
         return !completedValue || *completedValue < token.value;
     };
-    const bool laggedLightingHistorySubmissionPending = laggedLightingHistoryTokenPending(laggedLightingHistorySubmissionToken, m_laggedLightingHistoryGeneration);
+    const b8 laggedLightingHistorySubmissionPending = laggedLightingHistoryTokenPending(laggedLightingHistorySubmissionToken, m_laggedLightingHistoryGeneration);
 
     // Keep only an incomplete accepted tail as the writer drain.
     if(laggedLightingHistorySubmissionPending){
@@ -153,11 +153,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // Snapshot the prior tail before declaration resets the token.
     const Core::QueueSubmissionToken priorLaggedLightingHistoryReadReadyToken = m_laggedLightingHistorySubmissionToken;
     const Core::QueueSubmissionToken priorLaggedLightingHistoryWriterDrainToken = m_laggedLightingHistoryWriterDrainToken;
-    const bool laggedLightingHistoryWriterWaitPending = priorLaggedLightingHistoryWriterDrainToken.valid();
-    const bool hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
-    const bool laggedAsyncLightingSchedule = laggedAsyncLightingRequested && laggedLightingHistoryResourcesReady && priorLaggedLightingHistoryReadReadyToken.valid();
+    const b8 laggedLightingHistoryWriterWaitPending = priorLaggedLightingHistoryWriterDrainToken.valid();
+    const b8 hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
+    const b8 laggedAsyncLightingSchedule = laggedAsyncLightingRequested && laggedLightingHistoryResourcesReady && priorLaggedLightingHistoryReadReadyToken.valid();
     // The history tail is optional; its failure must not break the frame.
-    const bool requestsLaggedLightingHistoryCapture = laggedAsyncLightingRequested;
+    const b8 requestsLaggedLightingHistoryCapture = laggedAsyncLightingRequested;
     m_shadowPreparationOutcome.ready = false;
     // Compile graphs first; the prefix records its five tasks natively.
     const ECSRenderDetail::RendererFrameGraphFeatures frameGraphFeatures{
@@ -172,8 +172,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
 
     // Preserve mirrors so rejected recordings retry exactly.
     const RayTracingFrameCpuStateSnapshot rayTracingCpuState = m_rayTracingState.captureFrameCpuState();
-    const bool avboitTargetsNeedClear = m_avboitSystem.captureTargetClearState();
-    const bool deferredBindlessSlotsUploaded = deferredTargets.bindless.slotsUploaded;
+    const b8 avboitTargetsNeedClear = m_avboitSystem.captureTargetClearState();
+    const b8 deferredBindlessSlotsUploaded = deferredTargets.bindless.slotsUploaded;
     const RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources = m_raytracingSystem.snapshotShadowPreparationResources();
     const RayTracingDeferredGraphResourceSnapshot rayTracingGraphResources = m_raytracingSystem.snapshotDeferredGraphResources();
     const RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources = m_raytracingSystem.snapshotSurfelPersistentResources();
@@ -195,17 +195,17 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const auto restoreAvboitCpuState = [&]()noexcept{
         FrameExecuteCpuRestore::RestoreAvboitCpuState(m_avboitSystem, avboitTargetsNeedClear);
     };
-    const auto restorePostGbufferPacketCpuState = [&](const bool restoreBindlessSlots)noexcept{
+    const auto restorePostGbufferPacketCpuState = [&](const b8 restoreBindlessSlots)noexcept{
         FrameExecuteCpuRestore::RestorePostGbufferPacketCpuState(m_meshSystem, m_deferredSystem, m_rayTracingState, m_avboitSystem, executeCpuRestoreSnapshot, restoreBindlessSlots, deferredTargets);
     };
     // Retain this token even if Surfel GI consumes the diagnostic.
     const Core::QueueSubmissionToken surfelCounterReadbackCompletionToken = rayTracingCpuState.surfelCountReadbackSubmissionToken;
 
     FrameExecuteTimingState timing(m_graphics);
-    bool shadowVisibilityOpaqueProduced = false;
-    bool shadowVisibilityTransparentTraceProduced = false;
+    b8 shadowVisibilityOpaqueProduced = false;
+    b8 shadowVisibilityTransparentTraceProduced = false;
     u32 shadowVisibilityOpaqueFrameIndex = 0u;
-    const bool clearAvboitTargets = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
+    const b8 clearAvboitTargets = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
     const Core::FramebufferInfoEx& meshViewFramebufferInfo = deferredTargets.framebuffer->getFramebufferInfo();
     f32 meshViewAspectRatio = Scene::s_CameraFallbackAspectRatio;
     if(meshViewFramebufferInfo.width != 0u && meshViewFramebufferInfo.height != 0u)
@@ -213,7 +213,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope graphPayloadLifetime(m_deferredLightingSubmissionTransaction, m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph);
     // Graph build, its retry, and scheduling share one scratch arena.
     Core::Alloc::ScratchArena deferredGraphScratchArena(RendererArenaScope::s_TaskGraphArena);
-    const auto buildDeferredGraph = [&](const bool captureLightingHistory){
+    const auto buildDeferredGraph = [&](const b8 captureLightingHistory){
         buildDeferredLightingTaskGraph(
             deferredGraphScratchArena,
             frameGraphFeatures,
@@ -274,49 +274,49 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph build with optional lagged lighting-history capture failed; retrying without the tail"));
         buildDeferredGraph(false);
     }
-    const bool deferredGraphScheduled = scheduleDeferredLightingTaskGraphForExecution(deferredGraphScratchArena);
+    const b8 deferredGraphScheduled = scheduleDeferredLightingTaskGraphForExecution(deferredGraphScratchArena);
     const Core::GpuTaskGraph::DeclarationReadView deferredTaskGraphView(m_deferredLightingTaskGraph);
     const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
-    const bool captureLaggedLightingHistory = m_deferredLaggedLightingHistoryTask.valid();
+    const b8 captureLaggedLightingHistory = m_deferredLaggedLightingHistoryTask.valid();
     const auto taskIsCompiled = [&](const Core::GpuTaskId task)noexcept{
         return deferredCompiledPlan.findTask(task).valid();
     };
     ShadowPreparePacketValidator shadowPreparePacketValidator(MakeNotNull(this));
     ShadowPreparePacketValidationResult shadowPreparePacket;
     shadowPreparePacketValidator.validate(deferredCompiledPlan, shadowPreparePacket);
-    const bool shadowPrepareSoftwareBvhBuildsMerged = shadowPreparePacket.softwareBvhBuildsMerged;
-    const bool shadowPrepareAccelStructFinalizeMerged = shadowPreparePacket.accelStructFinalizeMerged;
-    const bool deferredBindlessSlotsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.bindlessSlotsUploadMerged;
-    const bool rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.rayTraceMaterialContextSlotsUploadMerged;
-    const bool causticEmissionTargetsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.causticEmissionTargetsUploadMerged;
-    const bool surfelFrameConstantsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.surfelFrameConstantsUploadMerged;
-    const bool shadowMaterialContextUploadsMergedIntoShadowPreparePacket = shadowPreparePacket.shadowMaterialContextUploadsMerged;
-    const bool sceneBvhUploadsMergedIntoShadowPreparePacket = shadowPreparePacket.sceneBvhUploadsMerged;
+    const b8 shadowPrepareSoftwareBvhBuildsMerged = shadowPreparePacket.softwareBvhBuildsMerged;
+    const b8 shadowPrepareAccelStructFinalizeMerged = shadowPreparePacket.accelStructFinalizeMerged;
+    const b8 deferredBindlessSlotsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.bindlessSlotsUploadMerged;
+    const b8 rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.rayTraceMaterialContextSlotsUploadMerged;
+    const b8 causticEmissionTargetsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.causticEmissionTargetsUploadMerged;
+    const b8 surfelFrameConstantsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.surfelFrameConstantsUploadMerged;
+    const b8 shadowMaterialContextUploadsMergedIntoShadowPreparePacket = shadowPreparePacket.shadowMaterialContextUploadsMerged;
+    const b8 sceneBvhUploadsMergedIntoShadowPreparePacket = shadowPreparePacket.sceneBvhUploadsMerged;
     // CSG callbacks keep an independent anchor across FrontierSafe splits.
     static_assert(FrameExecuteTimingState::s_GraphicsPrefixTimingTicketCount == GraphicsPrefixTimingResolver::s_TimingTaskCount);
     Core::GpuTaskId graphicsPrefixTimingTasks[GraphicsPrefixTimingResolver::s_TimingTaskCount];
     GraphicsPrefixTimingResolver graphicsPrefixTimingResolver(MakeNotNull(this));
     GraphicsPrefixTimingResolutionResult graphicsPrefixTimingResolution;
     graphicsPrefixTimingResolver.resolve(deferredCompiledPlan, timing.graphicsPrefixOwnedTimingTickets, FrameExecuteTimingState::s_GraphicsPrefixTimingTicketCount, timing.graphicsPrefixTimingTickets, graphicsPrefixTimingTasks, timing.asyncPrefixTimingSpansOnePacket, graphicsPrefixTimingResolution);
-    const bool graphicsPrefixTimingBindingsValid = graphicsPrefixTimingResolution.bindingsValid;
+    const b8 graphicsPrefixTimingBindingsValid = graphicsPrefixTimingResolution.bindingsValid;
     const usize graphicsPrefixUniquePacketCount = graphicsPrefixTimingResolution.uniquePacketCount;
     ShadowVisibilityMergeValidator shadowVisibilityMergeValidator(MakeNotNull(this));
     ShadowVisibilityMergeValidationResult shadowVisibilityMerge;
     shadowVisibilityMergeValidator.validate(deferredCompiledPlan, shadowVisibilityMerge);
-    const bool shadowVisibilityPreparedTasksMerged = shadowVisibilityMerge.preparedTasksMerged;
-    const bool shadowVisibilityAllLitClearMerged = shadowVisibilityMerge.allLitClearMerged;
-    const bool shadowVisibilityAdaptivePrimitivesMerged = shadowVisibilityMerge.adaptivePrimitivesMerged;
+    const b8 shadowVisibilityPreparedTasksMerged = shadowVisibilityMerge.preparedTasksMerged;
+    const b8 shadowVisibilityAllLitClearMerged = shadowVisibilityMerge.allLitClearMerged;
+    const b8 shadowVisibilityAdaptivePrimitivesMerged = shadowVisibilityMerge.adaptivePrimitivesMerged;
     const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = deferredCompiledPlan.queueInfoForTask(m_deferredShadowVisibilityTask);
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixTask);
     OpaqueEmulationMergeValidator opaqueEmulationMergeValidator(MakeNotNull(this));
     OpaqueEmulationMergeValidationResult opaqueEmulationMerge;
     opaqueEmulationMergeValidator.validate(deferredCompiledPlan, graphicsPrefixTimingTasks, graphicsPrefixTimingBindingsValid, hasOpaqueCsgFrameWork, opaqueEmulationMerge);
-    const bool graphicsPrefixPacketsAreGraphics = opaqueEmulationMerge.packetsAreGraphics;
-    const bool graphicsPrefixOpaqueComputeEmulationMerged = opaqueEmulationMerge.opaqueComputeEmulationMerged;
-    const bool graphicsPrefixOpaqueSharedComputeEmulationMerged = opaqueEmulationMerge.opaqueSharedComputeEmulationMerged;
-    const bool graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged = opaqueEmulationMerge.opaqueCsgReceiverComputeEmulationMerged;
-    const bool graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged = opaqueEmulationMerge.opaqueCsgIntervalSampleComputeEmulationMerged;
-    const bool graphicsPrefixCsgIntervalClearBundleMerged = opaqueEmulationMerge.csgIntervalClearBundleMerged;
+    const b8 graphicsPrefixPacketsAreGraphics = opaqueEmulationMerge.packetsAreGraphics;
+    const b8 graphicsPrefixOpaqueComputeEmulationMerged = opaqueEmulationMerge.opaqueComputeEmulationMerged;
+    const b8 graphicsPrefixOpaqueSharedComputeEmulationMerged = opaqueEmulationMerge.opaqueSharedComputeEmulationMerged;
+    const b8 graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged = opaqueEmulationMerge.opaqueCsgReceiverComputeEmulationMerged;
+    const b8 graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged = opaqueEmulationMerge.opaqueCsgIntervalSampleComputeEmulationMerged;
+    const b8 graphicsPrefixCsgIntervalClearBundleMerged = opaqueEmulationMerge.csgIntervalClearBundleMerged;
     const Core::GpuPhysicalQueueInfo* const frameTimingBeginQueue = deferredCompiledPlan.queueInfoForTask(m_deferredFrameTimingBeginTask);
     const Core::GpuSubmissionPacketId frameTimingBeginPacket = deferredCompiledPlan.packetForTask(m_deferredFrameTimingBeginTask);
     const Core::GpuSubmissionPacketRange frameTimingEnvelope = deferredCompiledPlan.packetTimingEnvelopeRange();
@@ -325,7 +325,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const RendererAvboitTaskGraphValidation avboitValidation = m_avboitSystem.validateTaskGraphStage(deferredCompiledPlan, clearAvboitTargets, hasTransparentRenderers);
     const Core::GpuTaskId causticsTask = hardwareShadowSupported ? m_deferredHardwareCausticsTask : m_deferredSoftwareCausticsTask;
     // History-selector uploads must share Lighting's acceptance boundary.
-    const bool laggedLightingHistorySlotsUploadMergedIntoLightingPacket = !m_deferredLaggedLightingHistorySlotsUploadTask.valid() || deferredCompiledPlan.tasksSharePacket(m_deferredLightingTask, m_deferredLaggedLightingHistorySlotsUploadTask);
+    const b8 laggedLightingHistorySlotsUploadMergedIntoLightingPacket = !m_deferredLaggedLightingHistorySlotsUploadTask.valid() || deferredCompiledPlan.tasksSharePacket(m_deferredLightingTask, m_deferredLaggedLightingHistorySlotsUploadTask);
     // Resolve the terminal endpoint through the compiler, not renderer policy.
     const Core::GpuCompiledPresentEndpoint* const presentationEndpoint = deferredCompiledPlan.presentEndpoint();
     const Core::GpuTaskId terminalPresentationTask = presentationEndpoint ? presentationEndpoint->producer : Core::GpuTaskId{};
@@ -344,25 +344,25 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::GpuPhysicalQueueInfo* const surfelGiPreparationQueue = surfelCausticsMerge.surfelGiPreparationQueue;
     const Core::GpuPhysicalQueueInfo* const surfelGiSnapshotCopyQueue = surfelCausticsMerge.surfelGiSnapshotCopyQueue;
     const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue = surfelCausticsMerge.surfelGiCounterReadbackQueue;
-    const bool surfelGiOutputClearMergedIntoGiPacket = surfelCausticsMerge.surfelGiOutputClearMergedIntoGiPacket;
-    const bool surfelGiPreparedPrefixMergedIntoGiPacket = surfelCausticsMerge.surfelGiPreparedPrefixMergedIntoGiPacket;
-    const bool surfelGiInitializationLifecycleMergedIntoPreparationPacket = surfelCausticsMerge.surfelGiInitializationLifecycleMergedIntoPreparationPacket;
-    const bool causticPhotonMergedIntoCausticsPacket = surfelCausticsMerge.causticPhotonMergedIntoCausticsPacket;
-    const bool causticGeometryMergedIntoCausticsPacket = surfelCausticsMerge.causticGeometryMergedIntoCausticsPacket;
-    const bool causticResolvePrepareMergedIntoCausticsPacket = surfelCausticsMerge.causticResolvePrepareMergedIntoCausticsPacket;
-    const bool causticResolveWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveWaveletMergedIntoCausticsPacket;
-    const bool causticResolveSecondWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveSecondWaveletMergedIntoCausticsPacket;
-    const bool causticResolveThirdWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveThirdWaveletMergedIntoCausticsPacket;
-    const bool causticResolveFourthWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveFourthWaveletMergedIntoCausticsPacket;
-    const bool causticResolveFifthWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveFifthWaveletMergedIntoCausticsPacket;
-    const bool causticResolveUpsampleMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveUpsampleMergedIntoCausticsPacket;
-    const bool causticIrradianceClearMergedIntoCausticsPacket = surfelCausticsMerge.causticIrradianceClearMergedIntoCausticsPacket;
-    const bool causticAccumulatorNonTemporalClearMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorNonTemporalClearMergedIntoCausticsPacket;
-    const bool causticAccumulatorBootstrapClearMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorBootstrapClearMergedIntoCausticsPacket;
-    const bool causticAccumulatorDecayMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorDecayMergedIntoCausticsPacket;
-    const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct = surfelCausticsMerge.surfelGiSnapshotCopyAndTimingPacketsAreDistinct;
-    const bool surfelCounterReadbackFollowsPresentation = surfelCausticsMerge.surfelCounterReadbackFollowsPresentation;
-    const bool laggedLightingHistoryFollowsPresentation = surfelCausticsMerge.laggedLightingHistoryFollowsPresentation;
+    const b8 surfelGiOutputClearMergedIntoGiPacket = surfelCausticsMerge.surfelGiOutputClearMergedIntoGiPacket;
+    const b8 surfelGiPreparedPrefixMergedIntoGiPacket = surfelCausticsMerge.surfelGiPreparedPrefixMergedIntoGiPacket;
+    const b8 surfelGiInitializationLifecycleMergedIntoPreparationPacket = surfelCausticsMerge.surfelGiInitializationLifecycleMergedIntoPreparationPacket;
+    const b8 causticPhotonMergedIntoCausticsPacket = surfelCausticsMerge.causticPhotonMergedIntoCausticsPacket;
+    const b8 causticGeometryMergedIntoCausticsPacket = surfelCausticsMerge.causticGeometryMergedIntoCausticsPacket;
+    const b8 causticResolvePrepareMergedIntoCausticsPacket = surfelCausticsMerge.causticResolvePrepareMergedIntoCausticsPacket;
+    const b8 causticResolveWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveWaveletMergedIntoCausticsPacket;
+    const b8 causticResolveSecondWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveSecondWaveletMergedIntoCausticsPacket;
+    const b8 causticResolveThirdWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveThirdWaveletMergedIntoCausticsPacket;
+    const b8 causticResolveFourthWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveFourthWaveletMergedIntoCausticsPacket;
+    const b8 causticResolveFifthWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveFifthWaveletMergedIntoCausticsPacket;
+    const b8 causticResolveUpsampleMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveUpsampleMergedIntoCausticsPacket;
+    const b8 causticIrradianceClearMergedIntoCausticsPacket = surfelCausticsMerge.causticIrradianceClearMergedIntoCausticsPacket;
+    const b8 causticAccumulatorNonTemporalClearMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorNonTemporalClearMergedIntoCausticsPacket;
+    const b8 causticAccumulatorBootstrapClearMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorBootstrapClearMergedIntoCausticsPacket;
+    const b8 causticAccumulatorDecayMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorDecayMergedIntoCausticsPacket;
+    const b8 surfelGiSnapshotCopyAndTimingPacketsAreDistinct = surfelCausticsMerge.surfelGiSnapshotCopyAndTimingPacketsAreDistinct;
+    const b8 surfelCounterReadbackFollowsPresentation = surfelCausticsMerge.surfelCounterReadbackFollowsPresentation;
+    const b8 laggedLightingHistoryFollowsPresentation = surfelCausticsMerge.laggedLightingHistoryFollowsPresentation;
     if(
         !deferredGraphScheduled
         || !m_deferredLightingTaskGraphScheduled
@@ -556,7 +556,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred graph cancellation overlapped active native work; requesting device recreation"));
             m_graphics.requestDeviceRecreation();
         }
-        const bool shadowPrepareAccepted = taskIsCompiled(m_deferredShadowPrepareTask) && m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredShadowPrepareTask).valid();
+        const b8 shadowPrepareAccepted = taskIsCompiled(m_deferredShadowPrepareTask) && m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredShadowPrepareTask).valid();
         restorePostGbufferPacketCpuState(!shadowPrepareAccepted);
         m_raytracingSystem.discardSoftShadowTemporalHistory();
     };
@@ -588,7 +588,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     normalExecution.taskSubmissionHookCount = framePresentationSignal.valid() ? LengthOf(terminalPresentationSubmissionHooks) : 0u;
 
     const Core::GpuTaskScheduler& normalScheduler = m_graphics.gpuTasks();
-    const bool normalGraphAccepted = normalScheduler.executeGraph(
+    const b8 normalGraphAccepted = normalScheduler.executeGraph(
         normalExecution,
         lifecycles.normalExecutionScratchArena,
         m_deferredLightingTaskGraph,
@@ -612,7 +612,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::QueueSubmissionToken deferredPresentSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredPresentTask);
     const Core::QueueSubmissionToken finalPresentationSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, terminalPresentationTask);
 
-    bool presentationSignalReady = true;
+    b8 presentationSignalReady = true;
     if(framePresentationSignal.valid()){
         if(finalPresentationSubmissionToken.valid()){
             presentationSignalReady = m_graphics.confirmFramePresentationSignal(framePresentationSignal, finalPresentationSubmissionToken);
@@ -626,8 +626,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    const bool selectedCausticsStateReady = lifecycles.selectedCausticsStateReady(hardwareShadowSupported);
-    const bool normalSemanticTokensReady =
+    const b8 selectedCausticsStateReady = lifecycles.selectedCausticsStateReady(hardwareShadowSupported);
+    const b8 normalSemanticTokensReady =
         frameTimingBeginSubmissionToken.valid()
         && frameTimingBeginSubmissionToken.matchesPhysicalQueue(primaryGraphicsQueue.index, primaryGraphicsQueue.deviceGeneration)
         && shadowPrepareSubmissionToken.valid()
@@ -642,8 +642,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         && deferredPresentSubmissionToken.valid()
         && finalPresentationSubmissionToken.valid()
     ;
-    const bool normalStateReady = lifecycles.shadowPrepareStateLifecycle.stateReady && lifecycles.shadowVisibilityStateLifecycle.stateReady && selectedCausticsStateReady && lifecycles.surfelGiStateLifecycle.stateReady && lifecycles.deferredLightingStateLifecycle.stateReady;
-    const bool acceptedStateLost =
+    const b8 normalStateReady = lifecycles.shadowPrepareStateLifecycle.stateReady && lifecycles.shadowVisibilityStateLifecycle.stateReady && selectedCausticsStateReady && lifecycles.surfelGiStateLifecycle.stateReady && lifecycles.deferredLightingStateLifecycle.stateReady;
+    const b8 acceptedStateLost =
         (shadowPrepareSubmissionToken.valid() && !lifecycles.shadowPrepareStateLifecycle.stateReady)
         || (shadowVisibilitySubmissionToken.valid() && !lifecycles.shadowVisibilityStateLifecycle.stateReady)
         || (selectedCausticsSubmissionToken.valid() && !selectedCausticsStateReady)
@@ -651,7 +651,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || (deferredLightingSubmissionToken.valid() && !lifecycles.deferredLightingStateLifecycle.stateReady)
     ;
 
-    bool frameTimingEndReady = true;
+    b8 frameTimingEndReady = true;
     if(finalPresentationSubmissionToken.valid()){
         frameTimingEndReady = timing.frameTimingTransaction.confirmEndSubmission(finalPresentationSubmissionToken, true);
         if(!frameTimingEndReady){
@@ -660,8 +660,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         }
     }
     if(!normalGraphAccepted || !normalSemanticTokensReady || !normalStateReady || !presentationSignalReady){
-        const bool hadAcceptedPackets = m_deferredLightingSubmissionTransaction.hasAcceptedPackets();
-        bool recovered = true;
+        const b8 hadAcceptedPackets = m_deferredLightingSubmissionTransaction.hasAcceptedPackets();
+        b8 recovered = true;
         if(!hadAcceptedPackets){
             discardRenderPackets();
         }

@@ -43,24 +43,24 @@ struct OpaqueRegularComputeEmulationGraphTask{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;
         Core::GpuTimingSubmissionTicket*& timingTicket;
-        const bool& meshViewSetupReady;
-        const bool& sceneShadingSetupReady;
+        const b8& meshViewSetupReady;
+        const b8& sceneShadingSetupReady;
         MeshFrameBindingSnapshot frameBindings;
         OpaqueRegularComputeEmulationGraphPlan plan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool materialDrawBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
 
 
     public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket*& timingTicketIn, const bool& meshViewSetupReadyIn, const bool& sceneShadingSetupReadyIn)noexcept;
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket*& timingTicketIn, const b8& meshViewSetupReadyIn, const b8& sceneShadingSetupReadyIn)noexcept;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 
@@ -78,18 +78,18 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;
         Core::GpuTimingSubmissionTicket*& timingTicket;
-        const bool& meshViewSetupReady;
-        const bool& sceneShadingSetupReady;
+        const b8& meshViewSetupReady;
+        const b8& sceneShadingSetupReady;
         Optional<Core::GpuTimingMeasure>& opaqueRegularTiming;
         MeshFrameBindingSnapshot frameBindings;
         RegularSharedComputeEmulationGraphPlan plan;
         usize drawIndex = 0u;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool materialDrawBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
-        bool finishTiming = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
+        b8 finishTiming = false;
         Phase::Enum phase = Phase::Generate;
     };
 
@@ -97,7 +97,7 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.opaqueRegularTiming);

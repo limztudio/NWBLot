@@ -99,9 +99,9 @@ static void SymmetrizeCompactTaskRelations(const Span<u64> words, const Span<con
         using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
         return
             noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
-            && noexcept(static_cast<bool>(DeclVal<const usize&>() < DeclVal<Range>().m_begin || DeclVal<const usize&>() >= DeclVal<Range>().m_end))
+            && noexcept(static_cast<b8>(DeclVal<const usize&>() < DeclVal<Range>().m_begin || DeclVal<const usize&>() >= DeclVal<Range>().m_end))
             && noexcept(DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin])
-            && noexcept(static_cast<bool>(DeclVal<const usize&>() >= DeclVal<Range>().m_begin && DeclVal<const usize&>() < DeclVal<Range>().m_end))
+            && noexcept(static_cast<b8>(DeclVal<const usize&>() >= DeclVal<Range>().m_begin && DeclVal<const usize&>() < DeclVal<Range>().m_end))
             && noexcept(DeclVal<usize&>() = Max(DeclVal<usize&>(), DeclVal<const RowRanges&>()[DeclVal<usize>()].m_end))
         ;
     }()
@@ -127,7 +127,7 @@ static void SymmetrizeCompactTaskRelations(const Span<u64> words, const Span<con
             using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
             return
                 noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
-                && noexcept(static_cast<bool>(DeclVal<const usize&>() >= DeclVal<Range>().m_begin && DeclVal<const usize&>() < DeclVal<Range>().m_end))
+                && noexcept(static_cast<b8>(DeclVal<const usize&>() >= DeclVal<Range>().m_begin && DeclVal<const usize&>() < DeclVal<Range>().m_end))
                 && noexcept(DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin] |= DeclVal<const u64&>())
             ;
         }()
@@ -198,7 +198,7 @@ GpuTaskSchedulingReachability::GpuTaskSchedulingReachability(Alloc::ScratchArena
     , m_rowOffsets(scratchArena)
 {}
 
-bool GpuTaskSchedulingReachability::reaches(const GpuTaskId& source, const GpuTaskId& destination)const noexcept{
+b8 GpuTaskSchedulingReachability::reaches(const GpuTaskId& source, const GpuTaskId& destination)const noexcept{
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     if(!m_valid || !source.valid() || !destination.valid() || source.generation != m_graphGeneration || destination.generation != m_graphGeneration || source.index >= m_taskCount || destination.index >= m_taskCount || source == destination)
@@ -216,7 +216,7 @@ bool GpuTaskSchedulingReachability::reaches(const GpuTaskId& source, const GpuTa
     return (m_words[wordIndex] & mask) != 0u;
 }
 
-bool GpuTaskSchedulingReachability::transitivelyIndependent(const GpuTaskId& lhs, const GpuTaskId& rhs)const noexcept{
+b8 GpuTaskSchedulingReachability::transitivelyIndependent(const GpuTaskId& lhs, const GpuTaskId& rhs)const noexcept{
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     if(!m_valid || !lhs.valid() || !rhs.valid() || lhs.generation != m_graphGeneration || rhs.generation != m_graphGeneration || lhs.index >= m_taskCount || rhs.index >= m_taskCount || lhs == rhs)
@@ -238,7 +238,7 @@ bool GpuTaskSchedulingReachability::transitivelyIndependent(const GpuTaskId& lhs
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability){
+b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability){
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     const auto reset = [&outReachability]()noexcept{
@@ -270,12 +270,12 @@ bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView&
         return true;
     }
     NWB_ASSERT(analysis.topologicalOrder().size() == taskCount);
-    bool totalOrder = taskCount > 1u;
+    b8 totalOrder = taskCount > 1u;
     for(usize orderIndex = 0u; orderIndex < taskCount && totalOrder; ++orderIndex){
         const GpuTaskId source = analysis.topologicalOrder()[orderIndex];
         NWB_ASSERT(source.valid() && source.generation == graph.generation() && source.index < taskCount);
-        const bool finalTask = orderIndex + 1u == taskCount;
-        bool reachesNext = finalTask;
+        const b8 finalTask = orderIndex + 1u == taskCount;
+        b8 reachesNext = finalTask;
         const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(source);
         for(usize consumerOffset = 0u; consumerOffset < consumers.taskCount; ++consumerOffset){
             const u32 consumerIndex = consumers[consumerOffset];
@@ -354,7 +354,7 @@ bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView&
         const usize compactBudget = (totalWordCount - totalWordCount / s_CompactBudgetReserveDivisor) * sizeof(u64);
         const usize compactBytes = compactWordCount * sizeof(u64);
         const auto metadataBytes = TryMultiply<usize>(taskCount, sizeof(usize) + sizeof(GpuTaskSchedulingReachability::WordRange));
-        const bool compactRows = metadataBytes && compactBytes <= compactBudget && *metadataBytes <= compactBudget - compactBytes;
+        const b8 compactRows = metadataBytes && compactBytes <= compactBudget && *metadataBytes <= compactBudget - compactBytes;
         // Retaining the bounds costs at most 1/32 of a dense matrix at this width; smaller dense rows release them.
         constexpr usize s_MinDenseBoundsReuseWordsPerRow = 64u;
         if(compactRows || wordsPerRow >= s_MinDenseBoundsReuseWordsPerRow){

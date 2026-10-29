@@ -40,7 +40,7 @@ public:
 
 public:
     // Resolve before recording or native submission. The caller retains the immutable callback array through publication.
-    [[nodiscard]] bool resolve(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& plan, const GpuSubmissionPacketRange& range, const TaskCallback* const callbacks, const usize callbackCount){
+    [[nodiscard]] b8 resolve(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& plan, const GpuSubmissionPacketRange& range, const TaskCallback* const callbacks, const usize callbackCount){
         m_callbacks = nullptr;
         m_callbackCount = 0u;
         m_generation = 0u;

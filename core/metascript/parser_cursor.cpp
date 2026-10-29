@@ -114,14 +114,14 @@ ParserCursor::ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchA
 }
 
 
-bool ParserCursor::match(const TokenType::Enum type){
+b8 ParserCursor::match(const TokenType::Enum type){
     if(m_current.type != type)
         return false;
     advance();
     return true;
 }
 
-bool ParserCursor::matchIdentifier(const MStringView text){
+b8 ParserCursor::matchIdentifier(const MStringView text){
     if(m_current.type != TokenType::Identifier || m_current.text != text)
         return false;
     advance();
@@ -135,7 +135,7 @@ void ParserCursor::advance(){
         error(m_current.text);
 }
 
-bool ParserCursor::expect(TokenType::Enum type, MStringView expected){
+b8 ParserCursor::expect(TokenType::Enum type, MStringView expected){
     if(m_current.type == type){
         advance();
         return true;
@@ -144,7 +144,7 @@ bool ParserCursor::expect(TokenType::Enum type, MStringView expected){
     return false;
 }
 
-bool ParserCursor::consumeBalancedBracesRaw(MStringView& outInnerCode){
+b8 ParserCursor::consumeBalancedBracesRaw(MStringView& outInnerCode){
     if(m_current.type != TokenType::LeftBrace){
         errorExpected("expected '{' to start native block");
         return false;

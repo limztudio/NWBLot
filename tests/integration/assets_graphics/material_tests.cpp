@@ -101,7 +101,7 @@ static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringV
 #if defined(NWB_FINAL)
 static Expected<UniquePtr<NWB::Core::Assets::IAsset>> RoundTripMaterialAssetCodec(TestArena& testArena, NWB::Impl::MaterialAssetCodec& codec, const NWB::Impl::Material& material){
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-    const bool serialized = codec.serialize(material, binary);
+    const b8 serialized = codec.serialize(material, binary);
     EXPECT_TRUE(serialized);
     EXPECT_FALSE(binary.empty());
     if(!serialized || binary.empty())

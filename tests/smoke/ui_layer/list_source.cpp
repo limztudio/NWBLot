@@ -40,7 +40,7 @@ Expected<u64> UiListSmokeSource::indexOf(const u64 keyValue)const noexcept{
     return index;
 }
 
-Expected<u64> UiListSmokeSource::findEnabled(const u64 start, const bool reverse)const noexcept{
+Expected<u64> UiListSmokeSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
     return FindAdjacentEnabledRow(*this, start, reverse);
 }
 
@@ -66,7 +66,7 @@ StringView UiListSmokeSource::text(const u64 index)const noexcept{
     return { m_label.data(), 4u + count };
 }
 
-bool UiListSmokeSource::enabled(const u64 index)const noexcept{
+b8 UiListSmokeSource::enabled(const u64 index)const noexcept{
     return index < rowCount() && key(index) != 5u;
 }
 

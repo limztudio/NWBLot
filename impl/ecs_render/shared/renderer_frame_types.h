@@ -74,7 +74,7 @@ struct AvboitFrameTargets{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
 #if defined(NWB_DEBUG)
         return
             fullWidth > 0
@@ -128,13 +128,13 @@ struct MaterialPassDrawContext{
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     // Graph declares mesh-view/material SRVs; frozen streams may retain mesh-source SRVs.
-    bool materialFrameStatesGraphOwned = false;
+    b8 materialFrameStatesGraphOwned = false;
     // Graph may retain source buffers; emulation vertices stay local by default.
-    bool materialGeometryStatesGraphOwned = false;
+    b8 materialGeometryStatesGraphOwned = false;
     // Split pairs receive generated-output entry states; shared-output draws interleave generation and rasterization.
-    bool emulationOutputEntryStateGraphOwned = false;
+    b8 emulationOutputEntryStateGraphOwned = false;
     // Shared generated output must retain triangles needed by every consuming viewport.
-    bool conservativeGeometryScissor = false;
+    b8 conservativeGeometryScissor = false;
 };
 
 
@@ -157,7 +157,7 @@ struct DeferredLightingGraphResources{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return sceneShadingBuffer && lightBuffer; }
+    [[nodiscard]] b8 valid()const noexcept{ return sceneShadingBuffer && lightBuffer; }
 };
 
 
@@ -322,11 +322,11 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle csgRemovedIntervalCapNormal = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle csgRemovedIntervalData = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle csgRemovedIntervalCount = Core::GpuDescriptorHandle::Invalid();
-    bool slotsUploaded = false;
+    b8 slotsUploaded = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return
             slotsBuffer != nullptr
             && slotsBufferDescriptor.valid()
@@ -417,11 +417,11 @@ struct DeferredLaggedLightingHistoryResources{
     Core::GpuDescriptorHandle surfelIrradianceDescriptor = Core::GpuDescriptorHandle::Invalid();
     // Prevents accepting history from a recycled target generation.
     u64 generation = 0u;
-    bool slotsUploaded = false;
+    b8 slotsUploaded = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return
             shadowVisibility != nullptr
             && causticIrradiance != nullptr
@@ -529,7 +529,7 @@ struct DeferredFrameTargets{
 
 
 public:
-    [[nodiscard]] bool csgIntervalTargetsValid()const noexcept{
+    [[nodiscard]] b8 csgIntervalTargetsValid()const noexcept{
         return
             csgCapNormalFormat != Core::Format::UNKNOWN
             && csgIntervalDepthFormat != Core::Format::UNKNOWN
@@ -560,7 +560,7 @@ public:
         ;
     }
 
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
 #if defined(NWB_DEBUG)
         return
             width > 0

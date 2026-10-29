@@ -62,8 +62,8 @@ template<typename ScopeId, typename ScopeVector, typename ScopeMap, typename Cre
 
 template<typename ScopeId, typename ScopeVector>
 [[nodiscard]] auto FindNamedScope(const ScopeVector& scopes, const ScopeId scope)noexcept(
-    noexcept(DeclVal<ScopeId&>().~ScopeId()) && noexcept(static_cast<bool>(!scope.valid() || scope.index >= scopes.size())) &&
-    noexcept(scopes[scope.index].get()) && noexcept(static_cast<bool>(!scopes[scope.index].get() || scopes[scope.index].get()->generation != scope.generation))
+    noexcept(DeclVal<ScopeId&>().~ScopeId()) && noexcept(static_cast<b8>(!scope.valid() || scope.index >= scopes.size())) &&
+    noexcept(scopes[scope.index].get()) && noexcept(static_cast<b8>(!scopes[scope.index].get() || scopes[scope.index].get()->generation != scope.generation))
 ) -> RemoveCVRef_T<decltype(scopes[scope.index].get())>{
     if(!scope.valid() || scope.index >= scopes.size())
         return nullptr;
@@ -77,7 +77,7 @@ template<typename ScopeId, typename ScopeVector>
 
 template<typename ScopeId, typename ScopeVector>
 [[nodiscard]] ScopeId ScopeAt(const ScopeVector& scopes, const usize index)noexcept(
-    noexcept(ScopeId{}) && noexcept(ScopeId(DeclVal<ScopeId&&>())) && noexcept(static_cast<bool>(index >= scopes.size())) && noexcept(scopes[index].get()) &&
+    noexcept(ScopeId{}) && noexcept(ScopeId(DeclVal<ScopeId&&>())) && noexcept(static_cast<b8>(index >= scopes.size())) && noexcept(scopes[index].get()) &&
     noexcept(DeclVal<ScopeId&>().index = static_cast<u32>(index)) && noexcept(DeclVal<ScopeId&>().generation = scopes[index].get()->generation)
 ){
     if(index >= scopes.size())
@@ -95,8 +95,8 @@ template<typename ScopeId, typename ScopeVector>
 
 template<typename ScopeVector>
 [[nodiscard]] Name ScopeNameAt(const ScopeVector& scopes, const usize index)noexcept(
-    noexcept(static_cast<bool>(index >= scopes.size())) && noexcept(scopes[index].get()) &&
-    noexcept(static_cast<bool>(!scopes[index].get())) && noexcept(DeclVal<void(*)(Name)noexcept>()(scopes[index].get()->name))
+    noexcept(static_cast<b8>(index >= scopes.size())) && noexcept(scopes[index].get()) &&
+    noexcept(static_cast<b8>(!scopes[index].get())) && noexcept(DeclVal<void(*)(Name)noexcept>()(scopes[index].get()->name))
 ){
     if(index >= scopes.size())
         return s_NameNone;

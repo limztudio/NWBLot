@@ -107,7 +107,7 @@ void DeclParser::parseClassMethodQualifiers(MethodDecl& method)noexcept{
     }
 }
 
-bool DeclParser::parseClassMemberCallableBody(MethodDecl& method, const MStringView missingTerminatorMessage){
+b8 DeclParser::parseClassMemberCallableBody(MethodDecl& method, const MStringView missingTerminatorMessage){
     if(m_cursor.check(TokenType::LeftBrace)){
         method.hasBody = true;
         return m_stmtParser.parseBlockStatements(method.body);
@@ -115,7 +115,7 @@ bool DeclParser::parseClassMemberCallableBody(MethodDecl& method, const MStringV
     return m_cursor.expect(TokenType::Semicolon, missingTerminatorMessage);
 }
 
-bool DeclParser::parseClassMember(ClassDecl& classDecl){
+b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     MVector<ParsedAttribute> attributes(m_cursor.arena());
     if(m_cursor.check(TokenType::LeftBracket)){
         AttributeParser attrParser(m_cursor);
@@ -289,7 +289,7 @@ bool DeclParser::parseClassMember(ClassDecl& classDecl){
     if(m_cursor.check(TokenType::LeftParen)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         m_cursor.advance();
-        const bool isMethodSig = m_cursor.check(TokenType::RightParen)
+        const b8 isMethodSig = m_cursor.check(TokenType::RightParen)
             || m_cursor.checkIdentifier("in")
             || m_cursor.checkIdentifier("mut");
         m_cursor.restore(cp);

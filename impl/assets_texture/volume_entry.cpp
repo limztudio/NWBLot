@@ -32,7 +32,7 @@ static Expected<TextureCookEntry> ParseTextureDocument(const Path& assetRoot, co
     return ParseTextureCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static bool RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<TextureCookEntry, Texture, TextureAssetCodec>(
         registry,
         s_TextureAssetKindLabel,

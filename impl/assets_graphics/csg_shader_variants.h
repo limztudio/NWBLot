@@ -44,8 +44,8 @@ inline constexpr AStringView s_ProjectEvaluatorModuleDefineName = "NWB_CSG_PROJE
 inline constexpr AStringView s_ExternallyPlannedMacroIncludes[]{ s_ProjectEvaluatorModuleDefineName };
 [[nodiscard]] ShaderStageKeySet CollectMaterialClipShaderKeys(Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<bool, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);
-[[nodiscard]] bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, u64 sourceVariantCount, u64& inOutVariantCount);
+[[nodiscard]] Expected<b8, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);
+[[nodiscard]] b8 AddClipVariantCount(const ShaderCook::ShaderEntry& entry, u64 sourceVariantCount, u64& inOutVariantCount);
 [[nodiscard]] Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& cookArena, AStringView entryName, const ShaderCook::DefineCombo& sourceCombo);
 
 

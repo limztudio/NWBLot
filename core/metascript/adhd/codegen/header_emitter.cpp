@@ -20,7 +20,7 @@ namespace __hidden_adhd_header_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool TypeRefReferencesSymbol(const TypeRef& type, const MStringView targetName, const u32 depth = 0u)noexcept{
+[[nodiscard]] b8 TypeRefReferencesSymbol(const TypeRef& type, const MStringView targetName, const u32 depth = 0u)noexcept{
     if(depth > 16u)
         return false;
     if(type.name == targetName)
@@ -40,14 +40,14 @@ namespace __hidden_adhd_header_emitter{
     return false;
 }
 
-[[nodiscard]] bool ClassDependsOnClassByValue(
+[[nodiscard]] b8 ClassDependsOnClassByValue(
     const ClassDecl& cls,
     const MStringView targetClassName,
     const SymbolTable& symbols,
     u32 depth = 0u
 )noexcept;
 
-[[nodiscard]] bool TypeRefReferencesSymbolByValue(
+[[nodiscard]] b8 TypeRefReferencesSymbolByValue(
     const TypeRef& type,
     const MStringView targetName,
     const SymbolTable& symbols,
@@ -72,7 +72,7 @@ namespace __hidden_adhd_header_emitter{
     return false;
 }
 
-[[nodiscard]] bool ClassDependsOnClassByValue(
+[[nodiscard]] b8 ClassDependsOnClassByValue(
     const ClassDecl& cls,
     const MStringView targetClassName,
     const SymbolTable& symbols,
@@ -87,7 +87,7 @@ namespace __hidden_adhd_header_emitter{
     return false;
 }
 
-[[nodiscard]] bool InstantiationDependsOnClassByValue(
+[[nodiscard]] b8 InstantiationDependsOnClassByValue(
     const ClassTemplateInstantiation& inst,
     const MStringView targetClassName,
     const SymbolTable& symbols
@@ -170,7 +170,7 @@ void VisitClassTopo(
     outSorted.push_back(cur);
 }
 
-[[nodiscard]] bool HasTemplateParamName(const MVector<TemplateParamDecl>* params, const MStringView name)noexcept{
+[[nodiscard]] b8 HasTemplateParamName(const MVector<TemplateParamDecl>* params, const MStringView name)noexcept{
     if(!params)
         return false;
     for(const TemplateParamDecl& p : *params){
@@ -186,7 +186,7 @@ void CollectExternalForwardDeclClasses(
     const MVector<TemplateParamDecl>* outerTemplateParams,
     const MVector<TemplateParamDecl>* innerTemplateParams,
     MVector<MStringView>& outNames,
-    const bool inRefOrAssetContext = false,
+    const b8 inRefOrAssetContext = false,
     const u32 depth = 0u
 ){
     if(depth > 16u || type.isAuto)
@@ -220,7 +220,7 @@ void CollectExternalForwardDeclClasses(
         return;
     }
 
-    const bool isRefOrAsset = inRefOrAssetContext || (type.refMode != ParamPassingMode::None);
+    const b8 isRefOrAsset = inRefOrAssetContext || (type.refMode != ParamPassingMode::None);
     if(isRefOrAsset
         && !type.name.empty()
         && type.templateArgs.empty()
@@ -228,7 +228,7 @@ void CollectExternalForwardDeclClasses(
         && !HasTemplateParamName(innerTemplateParams, type.name)
         && !IsKnownConcreteTypeName(type.name, symbols))
     {
-        bool alreadyPresent = false;
+        b8 alreadyPresent = false;
         for(const MStringView existing : outNames){
             if(existing == type.name){
                 alreadyPresent = true;
@@ -239,7 +239,7 @@ void CollectExternalForwardDeclClasses(
             outNames.push_back(type.name);
     }
 
-    const bool childInAssetContext = (type.name == "AssetRef");
+    const b8 childInAssetContext = (type.name == "AssetRef");
     for(const TypeArg& targ : type.templateArgs){
         if(targ.type){
             CollectExternalForwardDeclClasses(
@@ -287,13 +287,13 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     else if(namespacePath.size() >= 9u && namespacePath.substr(0u, 9u) == "NWB::Impl")
         out.append("#include <impl/global.h>\r\n");
 
-    bool hasSubsystemDecl = false;
-    bool hasSubsystemCsg = false;
-    bool hasSubsystemFontAtlas = false;
-    bool hasSubsystemSampler = false;
-    bool hasSubsystemShader = false;
-    bool hasSubsystemUiSkin = false;
-    bool hasComponentAssetDecl = false;
+    b8 hasSubsystemDecl = false;
+    b8 hasSubsystemCsg = false;
+    b8 hasSubsystemFontAtlas = false;
+    b8 hasSubsystemSampler = false;
+    b8 hasSubsystemShader = false;
+    b8 hasSubsystemUiSkin = false;
+    b8 hasComponentAssetDecl = false;
     for(const ClassDecl* classDecl : unit.classes){
         if(!classDecl || classDecl->isImported)
             continue;
@@ -419,7 +419,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
     }
 
-    bool emittedForwardDecl = false;
+    b8 emittedForwardDecl = false;
     for(const MStringView extCls : externalForwardClasses){
         emittedForwardDecl = true;
         out.append("class ");
@@ -447,7 +447,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     if(emittedForwardDecl)
         out.append("\r\n");
 
-    auto constUsesLocalTypeAlias = [&](const Stmt& c)noexcept -> bool{
+    auto constUsesLocalTypeAlias = [&](const Stmt& c)noexcept -> b8{
         if(!c.varType)
             return false;
         for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
@@ -457,7 +457,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         return false;
     };
 
-    auto constUsesLocalClass = [&](const Stmt& c)noexcept -> bool{
+    auto constUsesLocalClass = [&](const Stmt& c)noexcept -> b8{
         if(!c.varType)
             return false;
         for(const ClassDecl* classDecl : unit.classes){
@@ -467,7 +467,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         return false;
     };
 
-    bool emittedEarlyConst = false;
+    b8 emittedEarlyConst = false;
     for(const Stmt* c : unit.globalConstants){
         if(!c || c->isImported || !c->varType || constUsesLocalTypeAlias(*c) || constUsesLocalClass(*c))
             continue;
@@ -494,7 +494,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
     }
 
-    bool emittedMidConst = false;
+    b8 emittedMidConst = false;
     for(const Stmt* c : unit.globalConstants){
         if(!c || c->isImported || !c->varType || !constUsesLocalTypeAlias(*c) || constUsesLocalClass(*c))
             continue;
@@ -541,7 +541,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                 readyClasses.push_back(classDecl);
         }
 
-        auto isClassReady = [&](const ClassDecl* target)noexcept -> bool{
+        auto isClassReady = [&](const ClassDecl* target)noexcept -> b8{
             for(const ClassDecl* c : readyClasses){
                 if(c == target)
                     return true;
@@ -550,7 +550,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         };
 
         auto emitReadyInstantiations = [&](){
-            bool progress = true;
+            b8 progress = true;
             while(progress){
                 progress = false;
                 for(usize idx = 0u; idx < unit.templateInstantiations.size(); ++idx){
@@ -563,7 +563,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                     }
                     if(!isClassReady(inst->templateDecl))
                         continue;
-                    bool depsReady = true;
+                    b8 depsReady = true;
                     for(const ClassDecl* depCls : sortedClasses){
                         if(!depCls || isClassReady(depCls))
                             continue;
@@ -595,7 +595,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
     }
 
-    bool emittedClassConst = false;
+    b8 emittedClassConst = false;
     for(const Stmt* c : unit.globalConstants){
         if(!c || c->isImported || !c->varType || !constUsesLocalClass(*c))
             continue;

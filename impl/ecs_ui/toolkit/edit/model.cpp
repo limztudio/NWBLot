@@ -67,7 +67,7 @@ EditModel::EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits, 
     m_boundaries.push_back(0u);
 }
 
-bool EditModel::setText(const AStringView value){
+b8 EditModel::setText(const AStringView value){
     if(value.size() > m_limits.maxBytes)
         return false;
     auto boundaries = buildBoundaries(value);
@@ -76,7 +76,7 @@ bool EditModel::setText(const AStringView value){
     AString<Core::Alloc::GlobalArena> candidate(m_arena);
     if(!value.empty())
         candidate.assign(value.data(), value.size());
-    const bool changed = value != text();
+    const b8 changed = value != text();
     m_text = Move(candidate);
     m_boundaries = Move(*boundaries);
     m_anchor = m_text.size();
@@ -92,7 +92,7 @@ bool EditModel::setText(const AStringView value){
     return true;
 }
 
-bool EditModel::setSelection(const usize anchor, const usize caret)noexcept{
+b8 EditModel::setSelection(const usize anchor, const usize caret)noexcept{
     if(!isBoundary(anchor) || !isBoundary(caret))
         return false;
     cancelComposition();
@@ -102,27 +102,27 @@ bool EditModel::setSelection(const usize anchor, const usize caret)noexcept{
     return true;
 }
 
-bool EditModel::selectAll()noexcept{
+b8 EditModel::selectAll()noexcept{
     return setSelection(0u, m_text.size());
 }
 
-bool EditModel::replaceSelection(const AStringView value){
+b8 EditModel::replaceSelection(const AStringView value){
     return replaceRange(selectionStart(), selectionEnd(), value);
 }
 
-bool EditModel::backspace(){
+b8 EditModel::backspace(){
     const usize start = hasSelection() ? selectionStart() : previousBoundary(m_caret);
     const usize end = hasSelection() ? selectionEnd() : m_caret;
     return replaceRange(start, end, {});
 }
 
-bool EditModel::eraseForward(){
+b8 EditModel::eraseForward(){
     const usize start = hasSelection() ? selectionStart() : m_caret;
     const usize end = hasSelection() ? selectionEnd() : nextBoundary(m_caret);
     return replaceRange(start, end, {});
 }
 
-bool EditModel::eraseSurrounding(const usize beforeBytes, const usize afterBytes){
+b8 EditModel::eraseSurrounding(const usize beforeBytes, const usize afterBytes){
     if(beforeBytes > m_caret || afterBytes > m_text.size() - m_caret)
         return false;
     if(beforeBytes == 0u && afterBytes == 0u)
@@ -130,7 +130,7 @@ bool EditModel::eraseSurrounding(const usize beforeBytes, const usize afterBytes
     return replaceRange(m_caret - beforeBytes, m_caret + afterBytes, {});
 }
 
-bool EditModel::replaceRange(const usize begin, const usize end, const AStringView replacement){
+b8 EditModel::replaceRange(const usize begin, const usize end, const AStringView replacement){
     if(begin > end || !isBoundary(begin) || !isBoundary(end) || replacement.size() > m_limits.maxBytes)
         return false;
     const usize retainedBytes = m_text.size() - (end - begin);
@@ -154,7 +154,7 @@ bool EditModel::replaceRange(const usize begin, const usize end, const AStringVi
         }
     }
     const AStringView after(candidate.data(), candidate.size());
-    const bool changed = after != text();
+    const b8 changed = after != text();
     if(changed)
         recordHistory(text(), m_anchor, m_caret, after, caret, caret);
     m_text = Move(candidate);
@@ -168,7 +168,7 @@ bool EditModel::replaceRange(const usize begin, const usize end, const AStringVi
     return true;
 }
 
-bool EditModel::validateText(const AStringView value)const noexcept{
+b8 EditModel::validateText(const AStringView value)const noexcept{
     return m_textMode == EditTextMode::SingleLine ? GraphemeSegmentation::Validate(value, true) : ValidateMultilineText(value);
 }
 

@@ -41,7 +41,7 @@ struct AtlasPage{
     u32 cursorX = 0u;
     u32 cursorY = 0u;
     u32 rowHeight = 0u;
-    bool dirty = false;
+    b8 dirty = false;
     u64 generation = 0u;
 
 
@@ -78,7 +78,7 @@ private:
     };
 
     struct GlyphKeyEqualTo{
-        [[nodiscard]] bool operator()(const GlyphKey& lhs, const GlyphKey& rhs)const noexcept{
+        [[nodiscard]] b8 operator()(const GlyphKey& lhs, const GlyphKey& rhs)const noexcept{
             return lhs.face == rhs.face && lhs.glyphId == rhs.glyphId && lhs.pixelSize == rhs.pixelSize;
         }
     };
@@ -94,7 +94,7 @@ public:
 
 public:
     void reset()noexcept;
-    [[nodiscard]] bool prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize);
+    [[nodiscard]] b8 prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize);
     [[nodiscard]] const AtlasGlyph* find(const SharedFontFace& face, u32 glyphId, u32 pixelSize)const noexcept;
     [[nodiscard]] Expected<SharedGlyphPage> page(u32 index);
     [[nodiscard]] usize pageCount()const noexcept{ return m_pages.size(); }

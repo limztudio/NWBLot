@@ -27,7 +27,7 @@ struct SamplerGpuResource final : NoCopy{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return sampler != nullptr && samplerHeapHandle.valid();
     }
 };
@@ -42,8 +42,8 @@ namespace SamplerAssetLoader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool Create(SamplerGpuResource& outResource, const Sampler& samplerAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName);
-[[nodiscard]] bool Load(SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& samplerAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName);
+[[nodiscard]] b8 Create(SamplerGpuResource& outResource, const Sampler& samplerAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName);
+[[nodiscard]] b8 Load(SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& samplerAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName);
 void Release(SamplerGpuResource& inOutResource, Core::GraphicsRuntime& graphics);
 
 

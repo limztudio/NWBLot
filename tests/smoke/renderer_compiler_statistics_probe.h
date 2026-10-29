@@ -46,7 +46,7 @@ private:
         usize acceptedTasks = 0u;
         usize rejectedPackets = 0u;
         usize rejectedTasks = 0u;
-        bool valid = false;
+        b8 valid = false;
     };
 
 
@@ -61,10 +61,10 @@ public:
 
 public:
     // Release the borrowed renderer pointer before world destruction.
-    [[nodiscard]] bool start(Impl::RendererSystem& renderer, AStringView path);
+    [[nodiscard]] b8 start(Impl::RendererSystem& renderer, AStringView path);
     void stop();
-    [[nodiscard]] bool write()const;
-    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
+    [[nodiscard]] b8 write()const;
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
     virtual void render(Core::Framebuffer*)override;
 
 
@@ -73,8 +73,8 @@ private:
     AString<Core::Alloc::GlobalArena> m_output;
     Impl::RendererSystem* m_renderer = nullptr;
     u64 m_attempts = 0u;
-    bool m_enabled = false;
-    bool m_registered = false;
+    b8 m_enabled = false;
+    b8 m_registered = false;
 };
 
 

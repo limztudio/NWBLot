@@ -73,7 +73,7 @@ SlangCompilerWorkspace::ScopedDirectoryCleanupGuard::~ScopedDirectoryCleanupGuar
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SlangCompilerWorkspace::WriteBomStrippedCompilerInput(ScratchString& source, const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, Alloc::ScratchArena& scratchArena){
+b8 SlangCompilerWorkspace::WriteBomStrippedCompilerInput(ScratchString& source, const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, Alloc::ScratchArena& scratchArena){
     ShaderSourceDependencies::SpliceSourceLines(source);
     ScratchString scanSource(AStringView(source), scratchArena);
     ShaderSourceDependencies::MaskSourceComments(scanSource);
@@ -236,7 +236,7 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::BuildCompi
     return overlayRoot / rootKey / relativePath;
 }
 
-bool SlangCompilerWorkspace::IsCompilerDependency(const Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept{
+b8 SlangCompilerWorkspace::IsCompilerDependency(const Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept{
     for(const Path& dependency : dependencies){
         if(dependency == absolutePath)
             return true;

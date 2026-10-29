@@ -38,14 +38,14 @@ struct PrefixSceneUploadInputs{
     Core::GpuGraphResourceId sceneShading;
     Core::GpuTaskId shadowPrepareTask;
     f32 meshViewAspectRatio = 1.f;
-    bool meshViewUploadRequired = false;
+    b8 meshViewUploadRequired = false;
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming;
     Core::GpuTimingSubmissionTicket*& meshViewSetupTimingTicket;
     Core::GpuTimingSubmissionTicket*& sceneShadingSetupTimingTicket;
-    const bool& asyncPrefixTimingSpansOnePacket;
+    const b8& asyncPrefixTimingSpansOnePacket;
     const Core::GpuTaskId& shadowVisibilityTask;
-    bool& meshViewSetupReady;
-    bool& sceneShadingSetupReady;
+    b8& meshViewSetupReady;
+    b8& sceneShadingSetupReady;
 };
 
 struct PrefixSceneUploadResult{

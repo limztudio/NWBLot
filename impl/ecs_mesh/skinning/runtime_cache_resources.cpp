@@ -76,7 +76,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
     return instance.sourceName ? instance.sourceName.resolvedText() : AStringView("<unnamed>");
 }
 
-[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(const MeshSkinningRuntimeInstance& instance){
+[[nodiscard]] b8 ValidateRuntimeMeshUploadPayload(const MeshSkinningRuntimeInstance& instance){
     if(!Core::Mesh::MeshClassUsesSkinning(instance.meshClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has invalid mesh class"), ConvertString(RuntimeMeshSourceText(instance)));
         return false;
@@ -166,12 +166,12 @@ template<typename PayloadT>
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
     const Span<const PayloadT> payload,
-    const bool canHaveUavs,
+    const b8 canHaveUavs,
     const TStringView label,
-    const bool canHaveRawViews = false,
-    const bool accelStructBuildInput = false,
+    const b8 canHaveRawViews = false,
+    const b8 accelStructBuildInput = false,
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
-    const bool isIndexBuffer = false
+    const b8 isIndexBuffer = false
 ){
     const auto bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.entity.id, instance.editRevision, suffix);
     if(!bufferName){
@@ -197,18 +197,18 @@ template<typename PayloadT>
 }
 
 template<typename PayloadT>
-[[nodiscard]] bool AssignRuntimeBuffer(
+[[nodiscard]] b8 AssignRuntimeBuffer(
     Core::BufferHandle& outBuffer,
     Core::GraphicsRuntime& graphics,
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
     const Span<const PayloadT> payload,
-    const bool canHaveUavs,
+    const b8 canHaveUavs,
     const TStringView label,
-    const bool canHaveRawViews = false,
-    const bool accelStructBuildInput = false,
+    const b8 canHaveRawViews = false,
+    const b8 accelStructBuildInput = false,
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
-    const bool isIndexBuffer = false
+    const b8 isIndexBuffer = false
 ){
     auto buffer = SetupRuntimeBuffer<PayloadT>(graphics, instance, suffix, payload, canHaveUavs, label, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer);
     if(!buffer){
@@ -219,14 +219,14 @@ template<typename PayloadT>
     return true;
 }
 
-[[nodiscard]] bool AssignPaddedRawRuntimeBuffer(
+[[nodiscard]] b8 AssignPaddedRawRuntimeBuffer(
     Core::BufferHandle& outBuffer,
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
     const Span<const u8> payload,
-    const bool canHaveUavs,
+    const b8 canHaveUavs,
     const TStringView label,
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
 ){
@@ -269,14 +269,14 @@ template<typename PayloadT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
+b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
     if(!__hidden_runtime_cache_resources::ValidateRuntimeMeshUploadPayload(instance))
         return false;
 
-    const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
+    const b8 rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
     // Software and hybrid tails read raw position/index buffers; keep views even with HWRT.
 
-    bool uploaded = CreateMeshSkinningLocalBoundsBuffers(m_graphics, instance);
+    b8 uploaded = CreateMeshSkinningLocalBoundsBuffers(m_graphics, instance);
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
         instance.restPositionBuffer,
         m_graphics,

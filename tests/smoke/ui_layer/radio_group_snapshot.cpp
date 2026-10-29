@@ -130,8 +130,8 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
         static_cast<u64>(input.popupCount()), focusScope, m_source.labelReads(), m_disabled.selectedKey(),
         m_source.rowCount() };
     const DisplayMetrics& previous = m_snapshot.display;
-    const bool displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
-    bool changed = current.values != m_snapshot.values;
+    const b8 displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
+    b8 changed = current.values != m_snapshot.values;
     for(usize index = 0u; index < current.rectangles.size(); ++index)
         changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
     if(m_snapshot.sequence != 0u && !changed && !displayChanged)

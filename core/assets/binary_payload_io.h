@@ -22,7 +22,7 @@ NWB_ASSETS_BEGIN
 
 
 template<typename ValueContainer>
-[[nodiscard]] bool ReadVectorPayload(const Span<const u8> binary, const u64 count, const TStringView failureContext, const TStringView label, usize& inOutCursor, ValueContainer& outValues){
+[[nodiscard]] b8 ReadVectorPayload(const Span<const u8> binary, const u64 count, const TStringView failureContext, const TStringView label, usize& inOutCursor, ValueContainer& outValues){
     const auto result = ::ReadBinaryVectorPayload(binary, count, inOutCursor, outValues);
     if(result)
         return true;
@@ -53,7 +53,7 @@ template<typename HeaderT>
     return header;
 }
 
-[[nodiscard]] inline bool ReadCompletePayload(const Span<const u8> binary, const usize cursor, const TStringView failureContext){
+[[nodiscard]] inline b8 ReadCompletePayload(const Span<const u8> binary, const usize cursor, const TStringView failureContext){
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext);
         return false;
@@ -73,7 +73,7 @@ template<typename HeaderT>
 
 
 template<typename ValueContainer>
-[[nodiscard]] bool AppendVectorPayload(AssetBytes& outBinary, const ValueContainer& values, const TStringView failureContext, const TStringView label){
+[[nodiscard]] b8 AppendVectorPayload(AssetBytes& outBinary, const ValueContainer& values, const TStringView failureContext, const TStringView label){
     const auto result = ::AppendBinaryVectorPayload(outBinary, values);
     if(result)
         return true;

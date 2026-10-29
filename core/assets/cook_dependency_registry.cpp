@@ -46,7 +46,7 @@ namespace __hidden_cook_dependency_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CookDependencyRegistry::registerType(const Name& assetType, const CookDependencyExtractFunction extractDependencies, const Name& categoryAssetType){
+b8 CookDependencyRegistry::registerType(const Name& assetType, const CookDependencyExtractFunction extractDependencies, const Name& categoryAssetType){
     if(!assetType){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: tried to register an unnamed cook dependency type"));
         return false;
@@ -66,7 +66,7 @@ bool CookDependencyRegistry::registerType(const Name& assetType, const CookDepen
     return true;
 }
 
-bool CookDependencyRegistry::registerDefaultEntryAsset(const Name& virtualPath, const Name& assetType, const AStringView virtualPathText){
+b8 CookDependencyRegistry::registerDefaultEntryAsset(const Name& virtualPath, const Name& assetType, const AStringView virtualPathText){
     if(!virtualPath || !assetType || virtualPathText.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid default cook entry asset registration"));
         return false;
@@ -91,7 +91,7 @@ CookDependencyExtractFunction CookDependencyRegistry::find(const Name& assetType
     return found == m_lookup.end() ? nullptr : found.value().get();
 }
 
-bool CookDependencyRegistry::matchesAssetType(const Name& actualType, const Name& expectedType)const noexcept{
+b8 CookDependencyRegistry::matchesAssetType(const Name& actualType, const Name& expectedType)const noexcept{
     if(!expectedType || actualType == expectedType)
         return true;
     if(!actualType)
@@ -101,7 +101,7 @@ bool CookDependencyRegistry::matchesAssetType(const Name& actualType, const Name
     return found != m_categories.end() && found.value() == expectedType;
 }
 
-bool CookDependencyRegistry::extractDependencies(const CookDependencyItemContext& context, ICookDependencyCollector& collector)const{
+b8 CookDependencyRegistry::extractDependencies(const CookDependencyItemContext& context, ICookDependencyCollector& collector)const{
     const CookDependencyExtractFunction extractor = find(context.assetType);
     if(!extractor)
         return true;
@@ -120,7 +120,7 @@ CookDependencyAutoRegistrar::CookDependencyAutoRegistrar(const CookDependencyReg
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RegisterAutoCollectedCookDependencyTypes(CookDependencyRegistry& registry, ScratchArena& scratchArena){
+b8 RegisterAutoCollectedCookDependencyTypes(CookDependencyRegistry& registry, ScratchArena& scratchArena){
     Vector<NotNull<CookDependencyRegistrationFunction>, Core::Alloc::ScratchArena> functions{ scratchArena };
     return RunAutoCollectedFunctions(
         __hidden_cook_dependency_registry::QueryAutoRegistrationQueue(),

@@ -31,17 +31,17 @@ public:
 
 public:
     // False only for a frame-fatal declaration failure; meshes without a ready pose or dirty bounds are skipped.
-    [[nodiscard]] bool declare(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding);
+    [[nodiscard]] b8 declare(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding);
     [[nodiscard]] const Core::GpuTaskId& terminalTask()const noexcept{ return m_terminalTask; }
 
 
 private:
     [[nodiscard]] Expected<Core::GpuGraphResourceId> importBuffer(const Core::BufferHandle& buffer, AStringView label);
     [[nodiscard]] Expected<Core::GpuGraphPipelineId> importComputePipeline(const Core::ComputePipelineHandle& pipeline, Name identity, AStringView label);
-    [[nodiscard]] bool importPlanResources(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan);
-    [[nodiscard]] bool declareBindlessSlotsUpload(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan);
-    [[nodiscard]] bool declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan);
-    [[nodiscard]] bool declareJointPaletteUpload(const MeshSkinningRuntimeInstance& instance, Span<const SkeletonJointMatrix> jointPaletteUpload, const MeshSkinningGraphDispatchPlan& plan);
+    [[nodiscard]] b8 importPlanResources(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan);
+    [[nodiscard]] b8 declareBindlessSlotsUpload(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan);
+    [[nodiscard]] b8 declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan);
+    [[nodiscard]] b8 declareJointPaletteUpload(const MeshSkinningRuntimeInstance& instance, Span<const SkeletonJointMatrix> jointPaletteUpload, const MeshSkinningGraphDispatchPlan& plan);
 
 
 private:

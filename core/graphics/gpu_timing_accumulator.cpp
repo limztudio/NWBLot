@@ -15,7 +15,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTimingAccumulator::setCaptureEnabled(const bool enabled, const u64 subscriptionIdentityLimit)noexcept{
+b8 GpuTimingAccumulator::setCaptureEnabled(const b8 enabled, const u64 subscriptionIdentityLimit)noexcept{
     if(enabled == m_captureEnabled)
         return false;
 
@@ -36,7 +36,7 @@ void GpuTimingAccumulator::collect(
     const u32 epoch,
     const u64 performanceCaptureEpoch,
     const u64 subscriptionIdentityLimit,
-    const bool publishPerformanceSamples,
+    const b8 publishPerformanceSamples,
     Alloc::ScratchArena& scratchArena,
     SampleDispatchVector& completedSamples,
     GpuTimingSinkSampleVector& performanceSamples
@@ -55,7 +55,7 @@ void GpuTimingAccumulator::collect(
             || !record.acceptedSubmission.matchesPhysicalQueue(record.physicalQueue.index, record.physicalQueue.deviceGeneration)
             || !device.matchesPhysicalQueueIdentity(record.acceptedSubmission.queue, record.acceptedSubmission.physicalQueueIndex, record.acceptedSubmission.deviceGeneration)
         ){
-            const bool retirementPending = quarantineRecord(record, subscriptionIdentityLimit);
+            const b8 retirementPending = quarantineRecord(record, subscriptionIdentityLimit);
             if(retirementPending){
                 completedSamples.push_back(SampleDispatch{
                     .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
@@ -87,8 +87,8 @@ void GpuTimingAccumulator::collect(
         if(!result)
             continue;
 
-        const bool publishSample = record.epoch == epoch && record.publicationGeneration == m_publicationGeneration && record.publishSample;
-        const bool publishPerformanceSample = publishSample && publishPerformanceSamples && record.performanceCaptureEpoch == performanceCaptureEpoch;
+        const b8 publishSample = record.epoch == epoch && record.publicationGeneration == m_publicationGeneration && record.publishSample;
+        const b8 publishPerformanceSample = publishSample && publishPerformanceSamples && record.performanceCaptureEpoch == performanceCaptureEpoch;
         const u64 sourceFrameIndex = record.frameIndex;
         const f64 durationSeconds = result->durationSeconds();
         GpuComparableTimestampRange comparableRange;
@@ -130,7 +130,7 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
     if(!m_captureEnabled)
         return;
 
-    const bool canReset = commandList.canResetTimerQueryHere();
+    const b8 canReset = commandList.canResetTimerQueryHere();
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
     // Retain pending pools until their result is observable instead of erasing a late GPU sample.
     // Pools reset this frame stay unusable to dynamic-rendering scopes until the caller confirms this list submitted.
@@ -159,7 +159,7 @@ void GpuTimingAccumulator::confirmFrameReset(const QueueSubmissionToken& token){
             continue;
 
         record.frameResetRecorded = false;
-        const bool matchesResetQueue = token.valid() && token.matchesPhysicalQueue(record.frameResetRecordingQueue.index, record.frameResetRecordingQueue.deviceGeneration);
+        const b8 matchesResetQueue = token.valid() && token.matchesPhysicalQueue(record.frameResetRecordingQueue.index, record.frameResetRecordingQueue.deviceGeneration);
         record.frameResetRecordingQueue = {};
         if(m_captureEnabled && record.state == QueryState::Available && matchesResetQueue){
             record.frameResetSubmission = token;
@@ -184,7 +184,7 @@ void GpuTimingAccumulator::requestQueries(const u32 queryCount)noexcept{
     m_requestedQueryCount = Max(m_requestedQueryCount, queryCount);
 }
 
-bool GpuTimingAccumulator::materializeRequestedQueries(Device& device){
+b8 GpuTimingAccumulator::materializeRequestedQueries(Device& device){
     return !m_captureEnabled || m_requestedQueryCount == 0u || reserveQueries(device, m_requestedQueryCount);
 }
 
@@ -277,7 +277,7 @@ GpuTimingAccumulator::QueryEndResult::Enum GpuTimingAccumulator::endQueryFromExi
     return QueryEndResult::Ended;
 }
 
-bool GpuTimingAccumulator::recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope){
+b8 GpuTimingAccumulator::recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope){
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
@@ -292,7 +292,7 @@ bool GpuTimingAccumulator::recordQueryEnd(CommandList& commandList, const GpuTim
     return true;
 }
 
-bool GpuTimingAccumulator::validateQuerySubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token)const noexcept{
+b8 GpuTimingAccumulator::validateQuerySubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token)const noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
@@ -305,7 +305,7 @@ bool GpuTimingAccumulator::validateQuerySubmission(const GpuTimingScope& scope, 
     return token.valid() && token.queue == record.queueClass && token.matchesPhysicalQueue(record.physicalQueue.index, record.physicalQueue.deviceGeneration);
 }
 
-bool GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token, const bool publishSample)noexcept{
+b8 GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token, const b8 publishSample)noexcept{
     if(!validateQuerySubmission(scope, token))
         return false;
 
@@ -326,7 +326,7 @@ bool GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const Queue
     return true;
 }
 
-bool GpuTimingAccumulator::prepareQueryForRecovery(const GpuTimingScope& scope)noexcept{
+b8 GpuTimingAccumulator::prepareQueryForRecovery(const GpuTimingScope& scope)noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
@@ -340,7 +340,7 @@ bool GpuTimingAccumulator::prepareQueryForRecovery(const GpuTimingScope& scope)n
     return true;
 }
 
-bool GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope, const u64 subscriptionIdentityLimit){
+b8 GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope, const u64 subscriptionIdentityLimit){
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
@@ -349,7 +349,7 @@ bool GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope, const u64 s
         return false;
 
     if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
-        const bool retirementPending = quarantineQuery(scope, subscriptionIdentityLimit);
+        const b8 retirementPending = quarantineQuery(scope, subscriptionIdentityLimit);
         NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined because accepted work attempted rollback release"));
         return retirementPending;
     }
@@ -357,7 +357,7 @@ bool GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope, const u64 s
         return quarantineQuery(scope, subscriptionIdentityLimit);
 
     if(!record.query || !record.query->discardUnacceptedRecording(scope.timerQueryRecording)){
-        const bool retirementPending = quarantineQuery(scope, subscriptionIdentityLimit);
+        const b8 retirementPending = quarantineQuery(scope, subscriptionIdentityLimit);
         NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined because its unaccepted native recording could not be revoked"));
         return retirementPending;
     }
@@ -367,7 +367,7 @@ bool GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope, const u64 s
     return false;
 }
 
-bool GpuTimingAccumulator::abandonQuery(const GpuTimingScope& scope, const u64 subscriptionIdentityLimit)noexcept{
+b8 GpuTimingAccumulator::abandonQuery(const GpuTimingScope& scope, const u64 subscriptionIdentityLimit)noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
@@ -382,7 +382,7 @@ bool GpuTimingAccumulator::abandonQuery(const GpuTimingScope& scope, const u64 s
     return false;
 }
 
-bool GpuTimingAccumulator::quarantineQuery(const GpuTimingScope& scope, const u64 subscriptionIdentityLimit)noexcept{
+b8 GpuTimingAccumulator::quarantineQuery(const GpuTimingScope& scope, const u64 subscriptionIdentityLimit)noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
@@ -392,7 +392,7 @@ bool GpuTimingAccumulator::quarantineQuery(const GpuTimingScope& scope, const u6
     return quarantineRecord(record, subscriptionIdentityLimit);
 }
 
-bool GpuTimingAccumulator::quarantineRecord(QueryRecord& record, const u64 subscriptionIdentityLimit)noexcept{
+b8 GpuTimingAccumulator::quarantineRecord(QueryRecord& record, const u64 subscriptionIdentityLimit)noexcept{
     if(record.state != QueryState::Quarantined){
         if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
             NWB_ASSERT(m_pendingAcceptedQueryCount > 0u);
@@ -412,7 +412,7 @@ bool GpuTimingAccumulator::quarantineRecord(QueryRecord& record, const u64 subsc
     return record.retirementNotificationPending;
 }
 
-bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
+b8 GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
     u32 usableQueryCount = 0u;
     for(const QueryRecord& record : m_queries){
         if(record.state != QueryState::Quarantined)
@@ -438,7 +438,7 @@ u32 GpuTimingAccumulator::findAvailableQuery()const noexcept{
     return Limit<u32>::s_Max;
 }
 
-bool GpuTimingAccumulator::appendQuery(Device& device){
+b8 GpuTimingAccumulator::appendQuery(Device& device){
     QueryRecord record;
     auto query = device.createTimerQuery();
     if(!query)
@@ -456,7 +456,7 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
     const u64 retirementFrameIndex = record.frameIndex;
     const GpuTimingSampleAttribution retirementAttribution = record.attribution;
     const u64 retirementSubscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit;
-    const bool retirementNotificationPending = record.retirementNotificationPending;
+    const b8 retirementNotificationPending = record.retirementNotificationPending;
     if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
         NWB_ASSERT(m_pendingAcceptedQueryCount > 0u);
         --m_pendingAcceptedQueryCount;
@@ -509,8 +509,8 @@ usize GpuTimingAccumulator::pendingAttributionCount()const noexcept{
     return result;
 }
 
-bool GpuTimingAccumulator::markAttributionsForRetirement(const u64 subscriptionIdentityLimit)noexcept{
-    bool retirementPending = false;
+b8 GpuTimingAccumulator::markAttributionsForRetirement(const u64 subscriptionIdentityLimit)noexcept{
+    b8 retirementPending = false;
     for(QueryRecord& record : m_queries){
         if(record.attribution != s_NoGpuTimingSampleAttribution && !record.retirementNotificationPending){
             record.retirementNotificationPending = true;

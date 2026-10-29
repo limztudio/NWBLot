@@ -54,11 +54,11 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize();
+    [[nodiscard]] b8 initialize();
     void attachSeat(wl_seat* seat, u32 seatGlobalName);
-    [[nodiscard]] bool setKeyboardFocused(bool focused);
+    [[nodiscard]] b8 setKeyboardFocused(b8 focused);
     void setBufferScale(i32 scale);
-    [[nodiscard]] bool dispatchDirectCodePoint(u32 codePoint);
+    [[nodiscard]] b8 dispatchDirectCodePoint(u32 codePoint);
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override;
 
 
@@ -73,7 +73,7 @@ private:
     void releaseDevice()noexcept;
     void clearPending()noexcept;
     void nativeFailure();
-    [[nodiscard]] bool flush()noexcept;
+    [[nodiscard]] b8 flush()noexcept;
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     void commitState(TextInputSessionToken token, u64 revision);
     void sendCaret(TextInputRect caret)noexcept;
@@ -90,9 +90,9 @@ private:
     wl_seat* m_seat = nullptr;
     u32 m_seatName = 0u;
     i32 m_bufferScale = 1;
-    bool m_keyboardFocused = false;
-    bool m_entered = false;
-    bool m_enabled = false;
+    b8 m_keyboardFocused = false;
+    b8 m_entered = false;
+    b8 m_enabled = false;
     TextInputSessionToken m_nativeToken;
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     wl_registry* m_registry = nullptr;
@@ -109,11 +109,11 @@ private:
     i32 m_pendingEnd = 0;
     u32 m_pendingBefore = 0u;
     u32 m_pendingAfter = 0u;
-    bool m_hasPreedit = false;
-    bool m_hasCommit = false;
-    bool m_hasDelete = false;
-    bool m_pendingInvalid = false;
-    bool m_waitingForCurrentSerial = false;
+    b8 m_hasPreedit = false;
+    b8 m_hasCommit = false;
+    b8 m_hasDelete = false;
+    b8 m_pendingInvalid = false;
+    b8 m_waitingForCurrentSerial = false;
     WaylandTextInputDeferredState m_deferredState;
 #endif
 };

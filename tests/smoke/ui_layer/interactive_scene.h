@@ -28,7 +28,7 @@ namespace Tests::Smoke{
 // Application-owned model markers let the native smoke verify controls without recognizing text or atlas pixels.
 class UiInteractiveSmokeScene : NoCopy{
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
 
 
 private:
@@ -41,12 +41,12 @@ private:
     Impl::Ui::DisplayMetrics m_lastDisplay;
     u32 m_count = 0u;
     u32 m_actions = 0u;
-    bool m_enabled = true;
+    b8 m_enabled = true;
 };
 
 using SharedUiInteractiveSmokeScene = RefCountPtr< RefCounter<UiInteractiveSmokeScene>, ArenaRefDeleter<RefCounter<UiInteractiveSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerInteractionSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerInteractionSmokeEnabled();
 [[nodiscard]] SharedUiInteractiveSmokeScene CreateUiInteractiveSmokeScene(Core::Alloc::GlobalArena& arena);
 
 

@@ -59,7 +59,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool MergeUse(ResourceUseInfo& info, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access)noexcept{
+    [[nodiscard]] static b8 MergeUse(ResourceUseInfo& info, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access)noexcept{
         if(info.requiredState != state)
             return false;
         if(info.access != access)
@@ -75,7 +75,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool add(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){
+    [[nodiscard]] b8 add(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){
         if(!resource.valid())
             return false;
         if(m_index)
@@ -96,7 +96,7 @@ public:
         return addIndexed(resource, state, access);
     }
 
-    [[nodiscard]] bool promoteIndex(){
+    [[nodiscard]] b8 promoteIndex(){
         NWB_ASSERT(!m_index && m_count == InlineCapacity);
         Index index(InlineCapacity * s_PromotedIndexCapacityFactor, Core::GpuGraphResourceIdHasher{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
         for(const ResourceUseEntry& entry : m_inline){
@@ -111,7 +111,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool addIndexed(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){
+    [[nodiscard]] b8 addIndexed(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){
         const auto [found, inserted] = m_index->try_emplace(resource, ResourceUseInfo{ m_count, state, access });
         if(inserted){
             ++m_count;

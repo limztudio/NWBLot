@@ -23,7 +23,7 @@ namespace __hidden_x11_text_input_preedit_buffer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidUtf8(const AStringView text)noexcept{
+[[nodiscard]] static b8 ValidUtf8(const AStringView text)noexcept{
     return text.size() <= X11PreeditBuffer::s_MaxBytes && IsValidUtf8TextWithoutNul(text);
 }
 
@@ -48,7 +48,7 @@ void X11PreeditBuffer::clear()noexcept{
     m_caretByte = 0u;
 }
 
-bool X11PreeditBuffer::replace(const usize firstCharacter, const usize characterCount, const AStringView insertion, const usize caretCharacter){
+b8 X11PreeditBuffer::replace(const usize firstCharacter, const usize characterCount, const AStringView insertion, const usize caretCharacter){
     using namespace __hidden_x11_text_input_preedit_buffer;
     if(characterCount > s_MaxBytes || firstCharacter > s_MaxBytes - characterCount)
         return false;
@@ -77,7 +77,7 @@ bool X11PreeditBuffer::replace(const usize firstCharacter, const usize character
     return true;
 }
 
-bool X11PreeditBuffer::moveCaret(const usize caretCharacter)noexcept{
+b8 X11PreeditBuffer::moveCaret(const usize caretCharacter)noexcept{
     const auto caretByte = Utf8ByteOffset(m_text, caretCharacter);
     if(!caretByte)
         return false;

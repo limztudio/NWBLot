@@ -37,7 +37,7 @@ private:
 
     private:
         const GpuTaskScheduler& m_scheduler;
-        bool m_admitted = false;
+        b8 m_admitted = false;
     };
 
     class PreparedTimingTicketsUnwindScope;
@@ -71,8 +71,8 @@ private:
         u64 m_recordingAttemptGeneration = 0u;
         GpuGraphSubmissionBinding m_submissionBinding;
         i32 m_uncaughtExceptionCount = 0;
-        bool m_installed = false;
-        bool m_armed = false;
+        b8 m_installed = false;
+        b8 m_armed = false;
     };
 
     class SubmissionAttemptExceptionScope final : NoCopy{
@@ -92,7 +92,7 @@ private:
         GpuSubmissionPacketId* m_outFailedPacket = nullptr;
         GpuSubmissionPacketId m_failedPacket;
         i32 m_uncaughtExceptionCount = 0;
-        bool m_active = true;
+        b8 m_active = true;
     };
 
 
@@ -105,19 +105,19 @@ public:
 
 public:
     // Device owner attaches after creation, detaches before destruction; stop/join producers and finish GPU waits first.
-    [[nodiscard]] bool attachDevice(Device& device)noexcept;
-    [[nodiscard]] bool detachDevice(Device& device)noexcept;
-    [[nodiscard]] bool isAttachedTo(const Device& device)const noexcept;
-    [[nodiscard]] bool isInitialized()const noexcept;
+    [[nodiscard]] b8 attachDevice(Device& device)noexcept;
+    [[nodiscard]] b8 detachDevice(Device& device)noexcept;
+    [[nodiscard]] b8 isAttachedTo(const Device& device)const noexcept;
+    [[nodiscard]] b8 isInitialized()const noexcept;
     // A detached scheduler is idle. Token waits require an attached matching device and an accepted token.
-    [[nodiscard]] bool wait()const;
-    [[nodiscard]] bool wait(const QueueSubmissionToken& token)const;
+    [[nodiscard]] b8 wait()const;
+    [[nodiscard]] b8 wait(const QueueSubmissionToken& token)const;
 
 
 public:
     // Freezes queue assignment at admission from a current pressure snapshot, then inits caller-owned artifacts for the immutable plan.
     // Explicit queue loads in compileOptions override automatic timeline sampling for deterministic tooling and tests.
-    [[nodiscard]] bool scheduleGraph(
+    [[nodiscard]] b8 scheduleGraph(
         const GpuTaskGraph& graph,
         Alloc::ScratchArena& scratchArena,
         GpuTaskGraphAnalysis& analysis,
@@ -126,7 +126,7 @@ public:
         GpuRecordedGraph& recordedGraph,
         GpuGraphSubmissionTransaction& transaction
     )const;
-    [[nodiscard]] bool scheduleGraph(
+    [[nodiscard]] b8 scheduleGraph(
         const GpuTaskGraph& graph,
         const GpuTaskGraphCompileOptions& compileOptions,
         Alloc::ScratchArena& scratchArena,
@@ -137,7 +137,7 @@ public:
         GpuGraphSubmissionTransaction& transaction
     )const;
     // Records and executes the compiler-frozen ordinary graph prefix. Native recorder construction and queue submission remain scheduler-owned.
-    [[nodiscard]] bool executeGraph(
+    [[nodiscard]] b8 executeGraph(
         const GpuTaskGraphNormalExecutionDesc& desc,
         Alloc::ScratchArena& scratchArena,
         GpuTaskGraph& graph,
@@ -149,7 +149,7 @@ public:
     )const;
     // Executes one graph-owned terminal recovery/finalization task after ordinary graph work reaches an accepted frontier.
     // The scheduler owns recorder construction and all native queue-submission details.
-    [[nodiscard]] bool executeAcceptedFrontierTask(
+    [[nodiscard]] b8 executeAcceptedFrontierTask(
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId task,
         Alloc::ScratchArena& scratchArena,
@@ -161,7 +161,7 @@ public:
     )const;
     // Executes one semantic late task after its graph dependencies have accepted.
     // Recorded and accepted callbacks retain the task-level lifecycle contract while the scheduler owns native recording and submission.
-    [[nodiscard]] bool executeTask(
+    [[nodiscard]] b8 executeTask(
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId task,
         const GpuTaskGraphTaskRecordedCallback* recordedCallback,
@@ -176,7 +176,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool compileGraph(
+    [[nodiscard]] b8 compileGraph(
         const GpuTaskGraph& graph,
         const GpuTaskGraphCompileOptions& compileOptions,
         Alloc::ScratchArena& scratchArena,
@@ -188,7 +188,7 @@ private:
     )const;
     // Records/submits the selected ordinary prefix. Without a terminal task, frontier packets must form one terminal suffix.
     // The executor rejects a frontier inside its prefix before recording; it never touches later caller-owned work.
-    [[nodiscard]] bool submitGraph(
+    [[nodiscard]] b8 submitGraph(
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
         const GpuTaskGraphNormalExecutionDesc& desc,
@@ -202,7 +202,7 @@ private:
 
 private:
     // Records/submits one frontier recovery/finalization task. Failure rejects the unaccepted task.
-    [[nodiscard]] bool recordAndSubmitAcceptedFrontierTask(
+    [[nodiscard]] b8 recordAndSubmitAcceptedFrontierTask(
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
         GpuTaskId task,
@@ -213,7 +213,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
     // Records/submits one late task post-accept: recorded checks the final-state seed, accepted publishes from the token.
-    [[nodiscard]] bool recordAndSubmitTask(
+    [[nodiscard]] b8 recordAndSubmitTask(
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
         GpuTaskId task,
@@ -229,7 +229,7 @@ private:
 
 private:
     [[nodiscard]] Device& device()const noexcept;
-    [[nodiscard]] bool recordPacketRange(
+    [[nodiscard]] b8 recordPacketRange(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
@@ -241,7 +241,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket
     )const;
     // Caller-owned exclusive SubmissionOperation; this path reuses the executor without same-transaction gate reentry.
-    [[nodiscard]] bool recordAndSubmitTaskWithinSubmissionOperation(
+    [[nodiscard]] b8 recordAndSubmitTaskWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
@@ -256,7 +256,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket
     )const;
     // Arms one recording attempt and binds its transaction while the caller keeps the exclusive operation.
-    [[nodiscard]] bool prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
+    [[nodiscard]] b8 prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
@@ -269,7 +269,7 @@ private:
     )const;
     // The caller owns one active composite submission operation for the full native-accept, task-callback, and transaction-publication sequence.
     // It supplies semantic bindings while the packet primitive stays internal.
-    [[nodiscard]] bool submitPacketRangeWithinSubmissionOperation(
+    [[nodiscard]] b8 submitPacketRangeWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,
         const GpuRecordedGraph& recordedGraph,
         const GpuSubmissionPacketRange& range,
@@ -286,7 +286,7 @@ private:
     )const;
     // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and transaction-publication sequence.
     // Range submission supplies its synchronous semantic obligations here.
-    [[nodiscard]] bool submitPacketWithinSubmissionOperation(
+    [[nodiscard]] b8 submitPacketWithinSubmissionOperation(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph& recordedGraph,

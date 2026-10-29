@@ -40,16 +40,16 @@ static SIMDVectorSingle BuildLightEmissionVector(const SIMDVectorSingle forward)
     return Vector3NormalizeOr(forward, VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
 }
 
-static bool IsValidLightRotation(const SIMDVectorSingle rotation)noexcept{
+static b8 IsValidLightRotation(const SIMDVectorSingle rotation)noexcept{
     const SIMDVectorSingle rotationLengthSquared = QuaternionLengthSq(rotation);
     return !QuaternionIsNaN(rotation) && !QuaternionIsInfinite(rotation) && VectorIsFinite(rotationLengthSquared, VectorComponentMask::s_XYZW) && Vector4Greater(rotationLengthSquared, VectorReplicate(s_NormalizeLengthSquaredEpsilon));
 }
 
-static bool IsValidLightColorIntensity(const SIMDVectorSingle colorIntensity)noexcept{
+static b8 IsValidLightColorIntensity(const SIMDVectorSingle colorIntensity)noexcept{
     return VectorIsFinite(colorIntensity, VectorComponentMask::s_XYZW) && Vector4Greater(VectorSplatW(colorIntensity), VectorZero());
 }
 
-static bool IsValidLightCone(const f32 innerConeCos, const f32 outerConeCos)noexcept{
+static b8 IsValidLightCone(const f32 innerConeCos, const f32 outerConeCos)noexcept{
     return IsFinite(innerConeCos) && IsFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
 }
 

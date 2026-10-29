@@ -70,7 +70,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
         u64 index = 0u;
         if(start >= count)
             return MakeUnexpected(Failure{});
@@ -92,7 +92,7 @@ public:
 
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         mutate(CallbackStage::Enabled);
         const u64 keyValue = reversed ? count - index : index + 1u;
         return index < count && keyValue != disabledKey;
@@ -152,16 +152,16 @@ private:
 
 
 public:
-    bool reversed = false;
-    bool badLookup = false;
-    bool wrongLookup = false;
+    b8 reversed = false;
+    b8 badLookup = false;
+    b8 wrongLookup = false;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool Navigate(ComboState& state, const ComboSource& source, const ControlActionKind::Enum kind)noexcept{
+[[nodiscard]] static b8 Navigate(ComboState& state, const ComboSource& source, const ControlActionKind::Enum kind)noexcept{
     ListState& preview = ComboBehavior::Preview(state);
     if(!ListBehavior::Reconcile(preview, source))
         return false;

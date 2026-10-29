@@ -148,17 +148,17 @@ inline void BeginMeshHeapHandleGather(RtMeshHeapHandleCache& cache)noexcept{
         it.value().seenThisFrame = false;
 }
 
-[[nodiscard]] inline bool IsStorageBufferHeapHandle(const Core::GpuDescriptorHandle handle)noexcept{
+[[nodiscard]] inline b8 IsStorageBufferHeapHandle(const Core::GpuDescriptorHandle handle)noexcept{
     return RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::StorageBuffer);
 }
 
 // Recording is not allowed to register a new descriptor after the shared graph has frozen resource identities.
-[[nodiscard]] inline bool IsAccelStructHeapHandle(const Core::GpuDescriptorHandle handle)noexcept{
+[[nodiscard]] inline b8 IsAccelStructHeapHandle(const Core::GpuDescriptorHandle handle)noexcept{
     return RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::AccelStruct);
 }
 
 template<typename RayTracingState>
-[[nodiscard]] inline bool HasPreparedShadowMaterialContextBuffers(const RayTracingState& state, const usize materialCount, const usize instanceCount, const usize materialTypedUploadBytes)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(
+[[nodiscard]] inline b8 HasPreparedShadowMaterialContextBuffers(const RayTracingState& state, const usize materialCount, const usize instanceCount, const usize materialTypedUploadBytes)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(
     state.m_shadowInstanceMaterialBuffer
         && state.m_shadowInstanceMaterialCapacity >= materialCount
         && IsStorageBufferHeapHandle(state.m_shadowInstanceMaterialHeapHandle)
@@ -184,7 +184,7 @@ template<typename RayTracingState>
 }
 
 template<typename RayTracingState>
-[[nodiscard]] inline bool HasPreparedSceneBvhBuffers(const RayTracingState& state, const u32 instanceCount)noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()(
+[[nodiscard]] inline b8 HasPreparedSceneBvhBuffers(const RayTracingState& state, const u32 instanceCount)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(
     state.m_sceneBvhNodeBuffer
         && state.m_sceneInstanceBuffer
         && state.m_sceneBvhNodeCapacity >= DeclVal<const usize&>()
@@ -218,8 +218,8 @@ template<typename RayTracingState>
     if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
         return MakeUnexpected(Failure{});
 
-    const bool firstBuild = meshResources.blasBuildPending || !meshResources.blasBuildAccepted;
-    const bool performRefit = meshResources.runtimeMesh && !firstBuild && meshResources.blasRefitsSinceRebuild < AdaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount);
+    const b8 firstBuild = meshResources.blasBuildPending || !meshResources.blasBuildAccepted;
+    const b8 performRefit = meshResources.runtimeMesh && !firstBuild && meshResources.blasRefitsSinceRebuild < AdaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount);
     build.meshName = meshResources.meshName;
     build.positionBuffer = meshResources.positionBuffer;
     build.triangleIndexBuffer = meshResources.triangleIndexBuffer;
@@ -242,7 +242,7 @@ template<typename RayTracingState>
     return build;
 }
 
-[[nodiscard]] inline bool MatchesPreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept{
+[[nodiscard]] inline b8 MatchesPreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept{
     if(
         meshResources.meshName != build.meshName
         || meshResources.runtimeMesh != build.runtimeMesh
@@ -266,7 +266,7 @@ template<typename RayTracingState>
     return positionDesc.structStride == build.vertexStride && positionDesc.byteSize == build.positionByteSize && build.vertexStride != 0u && build.vertexCount == positionDesc.byteSize / build.vertexStride;
 }
 
-[[nodiscard]] inline bool RecordPreparedMeshBlasBuild(Core::CommandList& commandList, const PreparedMeshBlasBuild& build, const bool meshBlasGeometryBuildInputStatesGraphOwned){
+[[nodiscard]] inline b8 RecordPreparedMeshBlasBuild(Core::CommandList& commandList, const PreparedMeshBlasBuild& build, const b8 meshBlasGeometryBuildInputStatesGraphOwned){
     if(
         !build.positionBuffer
         || !build.triangleIndexBuffer

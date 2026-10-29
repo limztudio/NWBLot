@@ -49,7 +49,7 @@ class SoftwareShadowSettings{
     public u64 memoryBudgetBytes = s_ShadowDefaultMemoryBudgetBytes;
 }
 
-bool ValidateSoftwareShadowSettings(in SoftwareShadowSettings settings){
+b8 ValidateSoftwareShadowSettings(in SoftwareShadowSettings settings){
     return
         cast<u8>(settings.backend) <= cast<u8>(SoftwareShadowBackend::Enum::LightSpace)
         && cast<u8>(settings.coverage) <= cast<u8>(SoftwareShadowCoverage::Enum::FittedVolume)

@@ -25,7 +25,7 @@
 struct SharedLibraryFailure{
     ErrorCode code;
     DiagnosticEventText detail{};
-    bool detailTruncated = false;
+    b8 detailTruncated = false;
 
 
 public:
@@ -84,16 +84,16 @@ public:
         return {};
     }
 
-    [[nodiscard]] bool isOpen()const noexcept{ return m_handle != nullptr; }
+    [[nodiscard]] b8 isOpen()const noexcept{ return m_handle != nullptr; }
 
     void close(){
         if(!m_handle)
             return;
 
 #if defined(NWB_PLATFORM_WINDOWS)
-        const bool released = ::FreeLibrary(static_cast<HMODULE>(m_handle)) != 0;
+        const b8 released = ::FreeLibrary(static_cast<HMODULE>(m_handle)) != 0;
 #else
-        const bool released = ::dlclose(m_handle) == 0;
+        const b8 released = ::dlclose(m_handle) == 0;
 #endif
         if(!released)
             TerminateInvariant();

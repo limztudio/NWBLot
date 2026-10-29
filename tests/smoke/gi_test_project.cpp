@@ -98,7 +98,7 @@ struct ComplexSceneBox{
     Float4 scale;
     Float4 tint;
     f32 yawDegrees;
-    bool indirectOnly = false;
+    b8 indirectOnly = false;
 };
 
 // Offset partition doorways expose different mixes of red and blue bounce light.
@@ -165,7 +165,7 @@ static constexpr ComplexSceneBox s_ComplexFrontEnclosureBoxes[] = {
 
 class GiTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static bool ShouldCaptureComplex(void* context, const u64)noexcept{
+    [[nodiscard]] static b8 ShouldCaptureComplex(void* context, const u64)noexcept{
         return MakeNotNull(static_cast<GiTestSmokeProject*>(context))->m_complexLiveWarmupComplete;
     }
 
@@ -193,7 +193,7 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         const auto csgGi = m_csgGiScene.start();
         if(!csgGi)
             return false;
@@ -295,7 +295,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         if(m_csgGiScene.active()){
             m_csgGiScene.update();
             const auto updated = m_world->tick(1.0f / 60.0f);
@@ -310,7 +310,7 @@ public:
         const u64 captureProgress = m_complexSceneEnabled ? successfulPresentations : m_rendererBaselineRenderedFrameCount;
         const u64 captureWarmup = m_complexSceneEnabled ? Max(static_cast<u64>(captureFreezeFrame), s_ComplexCaptureWarmupPresentations) : captureFreezeFrame;
         f64 elapsedLiveSeconds = 0.0;
-        bool liveWarmupComplete = !m_complexSceneEnabled;
+        b8 liveWarmupComplete = !m_complexSceneEnabled;
         if(m_complexSceneEnabled && !m_complexLiveWarmupComplete && captureFreezeFrame != 0u && successfulPresentations >= captureWarmup){
             const Timer now = TimerNow();
             if(!m_complexLiveWarmupStarted){
@@ -383,7 +383,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool samplePresentationFps(){
+    [[nodiscard]] b8 samplePresentationFps(){
         const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
         const auto status = m_presentationFpsProbe.observe(successfulPresentations, TimerNow());
         if(status == NWB::Tests::Smoke::PresentationFpsStatus::Invalid){
@@ -404,7 +404,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool createComplexScene(){
+    [[nodiscard]] b8 createComplexScene(){
         for(const ComplexSceneBox& box : s_ComplexSceneBoxes){
             const auto entity = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, box.indirectOnly ? s_ComplexIndirectMaterial : s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale);
             if(!entity.valid())
@@ -438,7 +438,7 @@ private:
             randomState = randomState * 1664525u + 1013904223u;
             return static_cast<f32>(randomState >> 8u);
         };
-        const auto overlaps = [](const ComplexSceneBox& a, const ComplexSceneBox& b)noexcept -> bool{
+        const auto overlaps = [](const ComplexSceneBox& a, const ComplexSceneBox& b)noexcept -> b8{
             const SIMDVectorSingle verticalCenters = VectorSet(a.position.y, b.position.y, 0.0f, 0.0f);
             const SIMDVectorSingle verticalHalfExtents = VectorScale(VectorSet(a.scale.y, b.scale.y, 0.0f, 0.0f), 0.5f);
             const SIMDVectorSingle verticalUpper = VectorAdd(verticalCenters, verticalHalfExtents);
@@ -473,7 +473,7 @@ private:
             const SIMDVectorSingle footprint = VectorMultiplyAddExpression(VectorSet(3.40f, 4.45f, 0.26f, 0.36f), VectorScale(VectorSet(xRandom, zRandom, widthRandom, depthRandom), 1.0f / 16777216.0f), VectorSet(-1.70f, -2.70f, 0.18f, 0.18f));
             const f32 x = VectorGetX(footprint);
             const f32 z = VectorGetY(footprint);
-            const bool frontRow = z < -1.8f;
+            const b8 frontRow = z < -1.8f;
             const SIMDVectorSingle unitRandom = VectorScale(VectorSet(heightRandom, shadeRandom, yawRandom, 0.0f), 1.0f / 16777216.0f);
             const SIMDVectorSingle heightShade = VectorMultiplyAddExpression(VectorSet(frontRow ? 0.34f : 0.68f, 0.32f, 0.0f, 0.0f), unitRandom, VectorSet(frontRow ? 0.22f : 0.30f, 0.62f, 0.0f, 0.0f));
             // Truncate equals a u32 cast here because the scaled value is in 0..7.
@@ -493,7 +493,7 @@ private:
             if(x > -1.12f && x < 1.12f && z > -1.20f && z < 0.18f)
                 continue;
 
-            bool blocked = false;
+            b8 blocked = false;
             for(const ComplexSceneBox& box : s_ComplexSceneBoxes)
                 blocked |= overlaps(body, box);
             for(const ComplexSceneBox& box : s_ComplexBouncePatches)
@@ -572,13 +572,13 @@ private:
     u64 m_complexLiveWarmupStartPresentations = 0u;
     u32 m_rendererBaselineRenderedFrameCount = 0u;
     f32 m_complexMinLiveWarmupSeconds = s_ComplexMinLiveWarmupSeconds;
-    bool m_rendererBaselineCapturePaused = false;
-    bool m_resolveSwitchEnabled = false;
-    bool m_complexSceneEnabled = false;
-    bool m_coverageViewEnabled = false;
-    bool m_complexLiveWarmupStarted = false;
-    bool m_complexLiveWarmupComplete = false;
-    bool m_complexCaptureReceiptLogged = false;
+    b8 m_rendererBaselineCapturePaused = false;
+    b8 m_resolveSwitchEnabled = false;
+    b8 m_complexSceneEnabled = false;
+    b8 m_coverageViewEnabled = false;
+    b8 m_complexLiveWarmupStarted = false;
+    b8 m_complexLiveWarmupComplete = false;
+    b8 m_complexCaptureReceiptLogged = false;
 };
 
 

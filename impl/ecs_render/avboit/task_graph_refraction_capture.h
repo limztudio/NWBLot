@@ -68,7 +68,7 @@ namespace RendererTaskGraphDetail{
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::MeshViewGpuData& meshViewState,
     Core::GpuTaskId dependency,
-    bool enabled,
+    b8 enabled,
     DeferredFrameTargets& targets,
     ObjectGeometryCacheGraph& objectGeometry,
     AvboitGeneratedGeometryReuse& generatedGeometry

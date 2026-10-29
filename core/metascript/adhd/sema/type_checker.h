@@ -24,8 +24,8 @@ struct ScopedVarInfo{
     TypeRef* type = nullptr;
     const Expr* lambdaExpr = nullptr;
     ParamPassingMode::Enum mode = ParamPassingMode::None;
-    bool isConst = false;
-    bool isParam = false;
+    b8 isConst = false;
+    b8 isParam = false;
 };
 
 
@@ -43,18 +43,18 @@ public:
 
 
 public:
-    [[nodiscard]] bool checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors);
 
 
 private:
-    [[nodiscard]] bool linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>& errors);
-    [[nodiscard]] bool checkTemplateParamBounds(
+    [[nodiscard]] b8 linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkTemplateParamBounds(
         const MVector<TemplateParamDecl>& params,
         const ClassDecl* enclosingClass,
         const MethodDecl* enclosingMethod,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkTemplateArgBounds(
+    [[nodiscard]] b8 checkTemplateArgBounds(
         const MVector<TemplateParamDecl>& params,
         const MVector<TypeArg>& args,
         const ClassDecl* enclosingClass,
@@ -62,29 +62,29 @@ private:
         SourceSpan span,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkTemplateArgTypes(
+    [[nodiscard]] b8 checkTemplateArgTypes(
         const MVector<TypeArg>& templateArgs,
         const ClassDecl* enclosingClass,
         const MethodDecl* enclosingMethod,
         SourceSpan fallbackSpan,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkTypeRef(
+    [[nodiscard]] b8 checkTypeRef(
         const TypeRef& typeRef,
         const ClassDecl* enclosingClass,
         const MethodDecl* enclosingMethod,
         MVector<ParseError>& errors,
-        bool allowVoid = false
+        b8 allowVoid = false
     );
-    [[nodiscard]] bool classImplementsInterface(const ClassDecl& cls, const TypeRef* implClassRef, const TypeRef& requiredIface)const noexcept;
-    [[nodiscard]] bool interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, u32 depth = 0u)const noexcept;
+    [[nodiscard]] b8 classImplementsInterface(const ClassDecl& cls, const TypeRef* implClassRef, const TypeRef& requiredIface)const noexcept;
+    [[nodiscard]] b8 interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, u32 depth = 0u)const noexcept;
     void markStringToPathAdaptation(
         ClassDecl* ownerClass,
         const MethodDecl& method,
         Expr& expr,
         const MVector<ScopedVarInfo>& scope
     )const noexcept;
-    [[nodiscard]] bool verifyConcreteClassImplementsInterface(
+    [[nodiscard]] b8 verifyConcreteClassImplementsInterface(
         ClassDecl* ownerClass,
         const MethodDecl& method,
         const Expr& rhsExpr,
@@ -94,13 +94,13 @@ private:
         MStringView errorMessage,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors);
-    [[nodiscard]] bool checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors);
-    [[nodiscard]] bool checkCallableSignature(const ClassDecl* enclosingClass, MethodDecl& method, MVector<ParseError>& errors);
-    [[nodiscard]] bool hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const FieldDecl& field)const noexcept;
-    [[nodiscard]] bool checkConstructorInitialization(ClassDecl& classDecl, MethodDecl& ctor, MVector<ParseError>& errors);
-    [[nodiscard]] bool checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVector<ParseError>& errors);
-    [[nodiscard]] bool checkStatementList(
+    [[nodiscard]] b8 checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkCallableSignature(const ClassDecl* enclosingClass, MethodDecl& method, MVector<ParseError>& errors);
+    [[nodiscard]] b8 hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const FieldDecl& field)const noexcept;
+    [[nodiscard]] b8 checkConstructorInitialization(ClassDecl& classDecl, MethodDecl& ctor, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkStatementList(
         ClassDecl* ownerClass,
         MethodDecl& method,
         MVector<Stmt*>& statements,
@@ -112,44 +112,44 @@ private:
         const MVector<ScopedVarInfo>& scope,
         usize savedScopeSize
     )const noexcept;
-    [[nodiscard]] bool checkStatement(
+    [[nodiscard]] b8 checkStatement(
         ClassDecl* ownerClass,
         MethodDecl& method,
         Stmt& stmt,
         MVector<ScopedVarInfo>& scope,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkVarDeclStatement(
+    [[nodiscard]] b8 checkVarDeclStatement(
         ClassDecl* ownerClass,
         MethodDecl& method,
         Stmt& stmt,
         MVector<ScopedVarInfo>& scope,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkReturnStatement(
+    [[nodiscard]] b8 checkReturnStatement(
         ClassDecl* ownerClass,
         MethodDecl& method,
         Stmt& stmt,
         const MVector<ScopedVarInfo>& scope,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkExpr(
+    [[nodiscard]] b8 checkExpr(
         ClassDecl* ownerClass,
         MethodDecl& method,
         Expr& expr,
         const MVector<ScopedVarInfo>& scope,
-        bool isMutationTarget,
+        b8 isMutationTarget,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkCallExpr(
+    [[nodiscard]] b8 checkCallExpr(
         ClassDecl* ownerClass,
         MethodDecl& method,
         Expr& expr,
         const MVector<ScopedVarInfo>& scope,
-        bool isMutationTarget,
+        b8 isMutationTarget,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkCallableArguments(
+    [[nodiscard]] b8 checkCallableArguments(
         ClassDecl* ownerClass,
         MethodDecl& method,
         MVector<Expr*>& arguments,
@@ -163,14 +163,14 @@ private:
         MStringView calledMemberName,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkBinaryExpr(
+    [[nodiscard]] b8 checkBinaryExpr(
         ClassDecl* ownerClass,
         MethodDecl& method,
         Expr& expr,
         const MVector<ScopedVarInfo>& scope,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] bool checkLambdaExpr(
+    [[nodiscard]] b8 checkLambdaExpr(
         ClassDecl* ownerClass,
         MethodDecl& method,
         Expr& expr,
@@ -190,7 +190,7 @@ private:
         const MVector<ScopedVarInfo>& scope
     )const noexcept;
 
-    [[nodiscard]] bool isReceiverConst(
+    [[nodiscard]] b8 isReceiverConst(
         ClassDecl* ownerClass,
         const MethodDecl& method,
         const Expr& recv,
@@ -203,8 +203,8 @@ private:
         const MVector<ScopedVarInfo>& scope,
         const SymbolTable& symbols
     )noexcept;
-    [[nodiscard]] static bool isEscapingMutCaptureLambda(const Expr* rhs, const MVector<ScopedVarInfo>& scope)noexcept;
-    [[nodiscard]] static bool statementsContainReturnOrNative(const MVector<Stmt*>& stmts)noexcept;
+    [[nodiscard]] static b8 isEscapingMutCaptureLambda(const Expr* rhs, const MVector<ScopedVarInfo>& scope)noexcept;
+    [[nodiscard]] static b8 statementsContainReturnOrNative(const MVector<Stmt*>& stmts)noexcept;
 
     [[nodiscard]] static const TemplateParamDecl* findTemplateParam(
         const ClassDecl* ownerClass,
@@ -217,20 +217,20 @@ private:
         const ClassDecl& classDecl,
         MStringView name,
         const usize* preferredArgCount = nullptr,
-        bool preferConst = false,
-        bool requirePublic = false
+        b8 preferConst = false,
+        b8 requirePublic = false
     )noexcept;
     [[nodiscard]] static const MethodDecl* findClassOperator(
         const ClassDecl& classDecl,
         MStringView opName,
         const usize* preferredArgCount = nullptr,
-        bool preferConst = false,
-        bool requirePublic = false
+        b8 preferConst = false,
+        b8 requirePublic = false
     )noexcept;
     [[nodiscard]] static const MethodDecl* findClassConstructor(
         const ClassDecl& classDecl,
         usize argCount,
-        bool requirePublic = false
+        b8 requirePublic = false
     )noexcept;
     void reportError(MVector<ParseError>& errors, SourceSpan span, MStringView message)const;
 
@@ -244,8 +244,8 @@ private:
     u32 m_parallelDepth = 0u;
     u32 m_loopDepth = 0u;
     u32 m_switchDepth = 0u;
-    bool m_inLambda = false;
-    bool m_inClassArenaContext = false;
+    b8 m_inLambda = false;
+    b8 m_inClassArenaContext = false;
 };
 
 

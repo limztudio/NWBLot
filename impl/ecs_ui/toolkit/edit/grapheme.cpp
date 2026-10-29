@@ -22,7 +22,7 @@ namespace __hidden_ui_grapheme{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool IsSingleLineScalar(const u32 scalar)noexcept{
+static b8 IsSingleLineScalar(const u32 scalar)noexcept{
     return scalar != 0u && scalar != s_UnicodeLineFeed && scalar != s_UnicodeCarriageReturn && scalar != s_UnicodeLineSeparator && scalar != s_UnicodeParagraphSeparator;
 }
 
@@ -36,7 +36,7 @@ static bool IsSingleLineScalar(const u32 scalar)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<EditBoundaryVector> GraphemeSegmentation::Build(Core::Alloc::GlobalArena& arena, const AStringView text, const bool singleLine){
+Expected<EditBoundaryVector> GraphemeSegmentation::Build(Core::Alloc::GlobalArena& arena, const AStringView text, const b8 singleLine){
     if(!Validate(text, singleLine))
         return MakeUnexpected(Failure{});
     EditBoundaryVector candidate(arena);
@@ -49,7 +49,7 @@ Expected<EditBoundaryVector> GraphemeSegmentation::Build(Core::Alloc::GlobalAren
         const u32 scalar = decoded->codePoint;
         const GraphemeBreak::Enum current = LookupGraphemeBreak(scalar);
         const IndicConjunct::Enum indic = LookupIndicConjunct(scalar);
-        const bool pictograph = IsExtendedPictographic(scalar);
+        const b8 pictograph = IsExtendedPictographic(scalar);
         if(state.breaksBefore(current, indic, pictograph))
             candidate.push_back(offset);
         state.advance(current, indic, pictograph);
@@ -59,7 +59,7 @@ Expected<EditBoundaryVector> GraphemeSegmentation::Build(Core::Alloc::GlobalAren
     return candidate;
 }
 
-bool GraphemeSegmentation::Validate(const AStringView text, const bool singleLine)noexcept{
+b8 GraphemeSegmentation::Validate(const AStringView text, const b8 singleLine)noexcept{
     if(text.size() > Limit<i32>::s_Max || (!text.empty() && text.data() == nullptr))
         return false;
     usize offset = 0u;

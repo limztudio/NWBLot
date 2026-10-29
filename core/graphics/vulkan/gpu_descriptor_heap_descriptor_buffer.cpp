@@ -40,7 +40,7 @@ ResourceType::Enum ClassToResourceType(const GpuDescriptorClass::Enum descriptor
     }
 }
 
-bool IsResourceTypeCompatible(const GpuDescriptorClass::Enum descriptorClass, const ResourceType::Enum resourceType)noexcept{
+b8 IsResourceTypeCompatible(const GpuDescriptorClass::Enum descriptorClass, const ResourceType::Enum resourceType)noexcept{
     switch(descriptorClass){
     case GpuDescriptorClass::SampledImage:
     case GpuDescriptorClass::SampledImage2DArray:
@@ -65,7 +65,7 @@ bool IsResourceTypeCompatible(const GpuDescriptorClass::Enum descriptorClass, co
     }
 }
 
-bool IsSampledImageClass(const GpuDescriptorClass::Enum descriptorClass)noexcept{
+b8 IsSampledImageClass(const GpuDescriptorClass::Enum descriptorClass)noexcept{
     switch(descriptorClass){
     case GpuDescriptorClass::SampledImage:
     case GpuDescriptorClass::SampledImage2DArray:
@@ -99,7 +99,7 @@ TextureDimension::Enum GetSampledImageDimension(const GpuDescriptorClass::Enum d
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWriteItem& item){
+b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWriteItem& item){
     using namespace __hidden_vulkan_descriptor_heap_descriptor_buffer;
     ScopedLock lock(m_mutex);
 
@@ -245,7 +245,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
                 return false;
             }
             const FormatInfo& formatInfo = GetFormatInfo(format);
-            const bool uintClass = descriptorClass == GpuDescriptorClass::SampledImage2DArrayUint;
+            const b8 uintClass = descriptorClass == GpuDescriptorClass::SampledImage2DArrayUint;
             if((uintClass && (formatInfo.kind != FormatKind::Integer || formatInfo.isSigned)) || (!uintClass && formatInfo.kind == FormatKind::Integer)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected format {} for sampled-image class {}."), static_cast<u32>(format), static_cast<u32>(descriptorClass));
                 return false;
@@ -264,8 +264,8 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
                 return false;
             }
             const FormatInfo& formatInfo = GetFormatInfo(format);
-            const bool unsignedInteger = formatInfo.kind == FormatKind::Integer && !formatInfo.isSigned;
-            const bool floatOrNormalized = formatInfo.kind == FormatKind::Float || formatInfo.kind == FormatKind::Normalized;
+            const b8 unsignedInteger = formatInfo.kind == FormatKind::Integer && !formatInfo.isSigned;
+            const b8 floatOrNormalized = formatInfo.kind == FormatKind::Float || formatInfo.kind == FormatKind::Normalized;
             if(Format::IsBlockCompressedFormat(format) || formatInfo.hasDepth || formatInfo.hasStencil || (!unsignedInteger && !floatOrNormalized) || (dimension == TextureDimension::Texture3D && !floatOrNormalized)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected format {} for StorageImage dimension {}."), static_cast<u32>(format), static_cast<u32>(dimension));
                 return false;
@@ -362,7 +362,7 @@ void GpuDescriptorHeap::bindRayTracing(CommandList& commandList, const RayTracin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignmentBytes){
+b8 GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignmentBytes){
     if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled())
         return false;
 
@@ -431,7 +431,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
     return true;
 }
 
-bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeItem, const GpuDescriptorClass::Enum descriptorClass){
+b8 GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeItem, const GpuDescriptorClass::Enum descriptorClass){
     if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled())
         return false;
 
@@ -456,7 +456,7 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
 
         DescriptorBufferSegment& retainedBlock = m_accelStructBufferBlocks[writeItem.arrayElement];
         DescriptorBufferSegment candidateBlock{};
-        const bool allocateBlock = !retainedBlock.valid();
+        const b8 allocateBlock = !retainedBlock.valid();
         auto block = MakeNotNull(&retainedBlock);
         if(allocateBlock){
             const Expected<DescriptorBufferSegment> allocatedBlock = m_context.descriptorBufferManager->allocateForBindingGeneration(m_accelStructLayout->getDescriptorBufferSegmentKind(), setSizeBytes, m_context.descriptorBufferManager->getOffsetAlignmentBytes(), m_descriptorBufferGeneration);
@@ -490,7 +490,7 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
         return true;
     }
 
-    const bool isSampler = (descriptorClass == GpuDescriptorClass::Sampler);
+    const b8 isSampler = (descriptorClass == GpuDescriptorClass::Sampler);
     const DescriptorBufferSegment& block = isSampler ? m_samplerBufferBlock : m_resourceBufferBlock;
     const DescriptorBufferSegmentKind::Enum expectedSegmentKind = isSampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
     if(!block.valid() || block.kind != expectedSegmentKind){

@@ -61,7 +61,7 @@ TypeRef* SubstituteAliasTypeRef(
     for(const TypeArg& arg : origType.templateArgs){
         TypeArg subArg = arg;
         if(arg.type){
-            bool matchedConstParam = false;
+            b8 matchedConstParam = false;
             for(usize p = 0u; p < count; ++p){
                 if(templateParams[p].constValueType && arg.type->name == templateParams[p].name){
                     subArg.type = nullptr;
@@ -89,7 +89,7 @@ TypeRef* SubstituteAliasTypeRef(
 [[nodiscard]] MethodDecl* SubstituteInterfaceMethod(
     const SymbolTable& symbols,
     MethodDecl* method,
-    const bool hasSubst,
+    const b8 hasSubst,
     const MVector<TemplateParamDecl>& templateParams,
     const MVector<TypeArg>& templateArgs,
     MetaArena& arena
@@ -131,8 +131,8 @@ TypeRef* SubstituteAliasTypeRef(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
-    bool ok = true;
+b8 SymbolTable::build(TranslationUnit& unit, MVector<ParseError>& errors){
+    b8 ok = true;
 
     for(EnumDecl* decl : unit.enums){
         if(hasTypeSymbol(decl->name)){
@@ -248,7 +248,7 @@ MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MSt
     if(!iface)
         return nullptr;
 
-    const bool hasSubst = !iface->templateParams.empty() && !resolvedIface->templateArgs.empty();
+    const b8 hasSubst = !iface->templateParams.empty() && !resolvedIface->templateArgs.empty();
 
     MethodDecl* firstMatch = nullptr;
     for(MethodDecl* method : iface->methods){
@@ -290,7 +290,7 @@ void SymbolTable::collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<M
     if(!iface)
         return;
 
-    const bool hasSubst = !iface->templateParams.empty() && !resolvedIface->templateArgs.empty();
+    const b8 hasSubst = !iface->templateParams.empty() && !resolvedIface->templateArgs.empty();
     for(const TypeRef* baseType : iface->baseInterfaces){
         if(!baseType)
             continue;
@@ -366,14 +366,14 @@ MStringView SymbolTable::resolveBaseTypeName(MStringView typeName)const noexcept
     return typeName;
 }
 
-bool SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
+b8 SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
     if(const TypeAliasDecl* aliasDecl = findTypeAlias(typeName)){
         if(aliasDecl->aliasedType && aliasDecl->aliasedType->isFuncType)
             return true;
     }
     const MStringView baseName = resolveBaseTypeName(typeName);
     if(const ClassDecl* cls = findClass(baseName)){
-        bool hasAnyCtor = false;
+        b8 hasAnyCtor = false;
         for(const MethodDecl* m : cls->methods){
             if(m && m->isConstructor){
                 hasAnyCtor = true;
@@ -396,7 +396,7 @@ bool SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
         || baseName == "Path";
 }
 
-bool SymbolTable::isArenaBackedContainer(const MStringView typeName)noexcept{
+b8 SymbolTable::isArenaBackedContainer(const MStringView typeName)noexcept{
     return typeName == "Vector"
         || typeName == "ParallelVector"
         || typeName == "ForwardList"
@@ -414,7 +414,7 @@ bool SymbolTable::isArenaBackedContainer(const MStringView typeName)noexcept{
         || typeName == "String";
 }
 
-bool SymbolTable::isSimdVectorType(const MStringView typeName, u32& outLanes)noexcept{
+b8 SymbolTable::isSimdVectorType(const MStringView typeName, u32& outLanes)noexcept{
     if(typeName == "f64x2"){
         outLanes = 2u;
         return true;
@@ -434,7 +434,7 @@ bool SymbolTable::isSimdVectorType(const MStringView typeName, u32& outLanes)noe
     return false;
 }
 
-bool SymbolTable::isUnalignedVectorType(const MStringView typeName, u32& outLanes)noexcept{
+b8 SymbolTable::isUnalignedVectorType(const MStringView typeName, u32& outLanes)noexcept{
     if(typeName == "f32x2u" || typeName == "i32x2u" || typeName == "u32x2u"
         || typeName == "f64x2u" || typeName == "i64x2u" || typeName == "u64x2u")
     {
@@ -456,12 +456,12 @@ bool SymbolTable::isUnalignedVectorType(const MStringView typeName, u32& outLane
     return false;
 }
 
-bool SymbolTable::isUnalignedVectorType(const MStringView typeName)noexcept{
+b8 SymbolTable::isUnalignedVectorType(const MStringView typeName)noexcept{
     u32 lanes = 0u;
     return isUnalignedVectorType(typeName, lanes);
 }
 
-bool SymbolTable::isSimdMatrixType(const MStringView typeName)noexcept{
+b8 SymbolTable::isSimdMatrixType(const MStringView typeName)noexcept{
     return typeName == "f32x3x4"
         || typeName == "f32x4x4"
         || typeName == "f64x3x3"
@@ -469,12 +469,12 @@ bool SymbolTable::isSimdMatrixType(const MStringView typeName)noexcept{
         || typeName == "f64x4x4";
 }
 
-bool SymbolTable::isSimdType(const MStringView typeName)noexcept{
+b8 SymbolTable::isSimdType(const MStringView typeName)noexcept{
     u32 lanes = 0u;
     return isSimdVectorType(typeName, lanes) || isSimdMatrixType(typeName);
 }
 
-bool SymbolTable::isStringSwitchType(const MStringView typeName)noexcept{
+b8 SymbolTable::isStringSwitchType(const MStringView typeName)noexcept{
     return typeName == "String"
         || typeName == "StringView"
         || typeName == "CompactString"
@@ -525,7 +525,7 @@ MStringView SymbolTable::mapBuiltinCppType(const MStringView typeName)noexcept{
     return {};
 }
 
-bool SymbolTable::hasTypeSymbol(const MStringView name)const noexcept{
+b8 SymbolTable::hasTypeSymbol(const MStringView name)const noexcept{
     return findEnum(name) != nullptr
         || findInterface(name) != nullptr
         || findClass(name) != nullptr

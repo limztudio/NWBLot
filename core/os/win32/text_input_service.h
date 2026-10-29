@@ -26,10 +26,10 @@ public:
 
 public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override;
-    [[nodiscard]] bool handleMessage(u32 message, usize wParam, isize lParam);
+    [[nodiscard]] b8 handleMessage(u32 message, usize wParam, isize lParam);
     [[nodiscard]] Expected<isize> resolveContextMessage(u32 message, usize wParam, isize lParam)noexcept;
     [[nodiscard]] Expected<u32> decodeFallbackCharInput(u32 unit)noexcept;
-    [[nodiscard]] bool resetFallbackCharInput()noexcept;
+    [[nodiscard]] b8 resetFallbackCharInput()noexcept;
 
 
 protected:
@@ -44,7 +44,7 @@ private:
     [[nodiscard]] TextInputAdmission::Enum readCompositionText(NotNull<void*> nativeContext, u32 index);
     [[nodiscard]] Expected<usize, TextInputAdmission::Enum> compositionCursor(NotNull<void*> nativeContext)noexcept;
     [[nodiscard]] TextInputAdmission::Enum acceptComposition(TextInputSessionToken token, usize wParam, isize flags);
-    [[nodiscard]] TextInputAdmission::Enum acceptInsertedPreedit(TextInputSessionToken token, u32 unit, bool moveCaret);
+    [[nodiscard]] TextInputAdmission::Enum acceptInsertedPreedit(TextInputSessionToken token, u32 unit, b8 moveCaret);
     [[nodiscard]] TextInputAdmission::Enum publishCompositionPreedit(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte);
     void clearCompositionPreedit()noexcept;
     void rejectNativeInput(TextInputSessionToken token, TextInputAdmission::Enum admission);
@@ -61,11 +61,11 @@ private:
     u32 m_pendingPreeditHighSurrogate = 0u;
     usize m_preeditCaretByte = 0u;
     isize m_nativeContextFlags = 0;
-    bool m_pendingPreeditMoveCaret = true;
-    bool m_imeAvailable = false;
-    bool m_nativeContextKnown = false;
-    bool m_nativeContextActive = false;
-    bool m_replayingContext = false;
+    b8 m_pendingPreeditMoveCaret = true;
+    b8 m_imeAvailable = false;
+    b8 m_nativeContextKnown = false;
+    b8 m_nativeContextActive = false;
+    b8 m_replayingContext = false;
 };
 
 

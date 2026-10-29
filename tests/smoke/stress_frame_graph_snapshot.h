@@ -30,7 +30,7 @@ namespace Tests::Smoke{
 
 
 // Captures the pixel-freeze frame snapshot through public telemetry.
-[[nodiscard]] bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, AStringView outputPath, u64 completedFrames);
+[[nodiscard]] b8 CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, AStringView outputPath, u64 completedFrames);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

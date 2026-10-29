@@ -41,7 +41,7 @@ namespace __hidden_auto_registration{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetCodecAutoRegistrar::initialize(){
+b8 AssetCodecAutoRegistrar::initialize(){
     ::RegisterAutoFactory(__hidden_auto_registration::QueryAutoCodecFactoryQueue(), m_factory);
     return true;
 }

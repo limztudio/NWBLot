@@ -39,7 +39,7 @@ struct TelemetryMemorySummary{
     u64 maxPeakUsedBytes = 0u;
     i64 totalUsedDeltaBytes = 0;
     // An unrepresentable sum stays invalid for this report; individual records retain their original deltas.
-    bool totalUsedDeltaValid = true;
+    b8 totalUsedDeltaValid = true;
 };
 
 struct TelemetryReportSummary{
@@ -68,9 +68,9 @@ struct TelemetryReportSummary{
     u64 frameGraphEdgeCount = 0u;
     u32 maxFrameGraphNodeCount = 0u;
     u32 maxFrameGraphEdgeCount = 0u;
-    bool gpuTimingSecondsValid = true;
-    bool cpuTimingSecondsValid = true;
-    bool hasFrameRange = false;
+    b8 gpuTimingSecondsValid = true;
+    b8 cpuTimingSecondsValid = true;
+    b8 hasFrameRange = false;
 };
 
 struct TelemetryReport{

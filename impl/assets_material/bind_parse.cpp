@@ -152,8 +152,8 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ValidateMaterialBindStructAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct){
-    bool foundBlockClass = false;
+static b8 ValidateMaterialBindStructAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct){
+    b8 foundBlockClass = false;
 
     for(const MaterialBindAttribute& attribute : bindStruct.attributes){
         if(attribute.name != s_MaterialConstantAttribute && attribute.name != s_MaterialMutableAttribute){
@@ -183,11 +183,11 @@ static bool ValidateMaterialBindStructAttributes(const Path& bindFilePath, const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct, const MaterialBindField& field){
-    const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value();
+static b8 ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct, const MaterialBindField& field){
+    const b8 isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value();
     if(isResourceField && field.attributes.empty())
         return true;
-    bool foundRequiredAttribute = false;
+    b8 foundRequiredAttribute = false;
 
     for(const MaterialBindAttribute& attribute : field.attributes){
         if(isResourceField || attribute.name != s_DefaultAttribute){
@@ -232,7 +232,7 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
     if(!parsedName)
         return MakeUnexpected(Failure{});
     field.name = *parsedName;
-    const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value();
+    const b8 isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value();
     if(!IsAsciiIdentifier(field.type) || (!isResourceField && !ParseMaterialParameterTypeText(AStringView(field.type)))){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field.name), ConvertString(field.type));
         return MakeUnexpected(Failure{});
@@ -336,7 +336,7 @@ static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascript::Document& doc, MaterialCookArena& arena, MaterialBindEntry& outEntry){
+static b8 ParseMaterialBindInstances(const Path& bindFilePath, const Metascript::Document& doc, MaterialCookArena& arena, MaterialBindEntry& outEntry){
     outEntry.instances.clear();
 
     if(doc.declarations().empty()){

@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiEditBoxHost::prepareSubmit(const Ui::InputEvent& event)noexcept{
+b8 UiEditBoxHost::prepareSubmit(const Ui::InputEvent& event)noexcept{
     if(rejectBorrowedMutation() || !m_context.input().canSubmitCommand(event))
         return false;
     const Entry* entry = find(m_context.input().focus());
@@ -30,8 +30,8 @@ bool UiEditBoxHost::prepareSubmit(const Ui::InputEvent& event)noexcept{
     return true;
 }
 
-bool UiEditBoxHost::compositionActive(const Entry& entry)const noexcept{
-    bool composing = entry.expected.m_expectedComposition.active;
+b8 UiEditBoxHost::compositionActive(const Entry& entry)const noexcept{
+    b8 composing = entry.expected.m_expectedComposition.active;
     for(const Event& event : m_events){
         if(event.owner != entry.owner || event.focusGeneration != entry.focusGeneration)
             continue;

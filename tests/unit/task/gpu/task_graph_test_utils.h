@@ -113,9 +113,9 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const usize dependencyCount = 0u
 );
 
-[[nodiscard]] bool Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis);
+[[nodiscard]] b8 Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis);
 
-[[nodiscard]] bool Assign(
+[[nodiscard]] b8 Assign(
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
@@ -124,7 +124,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::GpuTaskGraphQueueAssignmentOptions& options = {}
 );
 
-[[nodiscard]] bool Compile(
+[[nodiscard]] b8 Compile(
     Graphics::GpuTaskGraphAnalysis& analysis,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
@@ -135,7 +135,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 );
 
 // Compile on a topology where Compute and Transfer capabilities stay on their dedicated queue classes.
-[[nodiscard]] bool CompileWithSeparatedCommandQueues(
+[[nodiscard]] b8 CompileWithSeparatedCommandQueues(
     Graphics::GpuTaskGraphAnalysis& analysis,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
@@ -159,7 +159,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
+    [[nodiscard]] b8 compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
 };
 
 struct TwoQueueCompile{
@@ -178,7 +178,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
+    [[nodiscard]] b8 compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
 };
 
 struct ThreeQueueCompile{
@@ -198,7 +198,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
+    [[nodiscard]] b8 compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
 };
 
 [[nodiscard]] constexpr Graphics::GpuQueueCapability::Mask QueueCapabilities(
@@ -251,13 +251,13 @@ struct ExternalFinalReadPair{
     const Graphics::ResourceStates::Mask readState,
     const Graphics::ResourceStates::Mask externalFinalState,
     const Graphics::ResourceQueueSharing::Mask queueSharing,
-    const bool samePacket,
-    const bool finalizerDependsOnEarlier,
+    const b8 samePacket,
+    const b8 finalizerDependsOnEarlier,
     const Graphics::GpuPhysicalQueueId externalFinalReleaseDestinationQueue
 );
 
 
-[[nodiscard]] bool HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard)noexcept;
+[[nodiscard]] b8 HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

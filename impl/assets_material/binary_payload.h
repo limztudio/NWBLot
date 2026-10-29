@@ -104,7 +104,7 @@ inline constexpr usize s_ResourceReferenceBytes = sizeof(MaterialResourceReferen
     return byteSize;
 }
 
-[[nodiscard]] inline bool ValidateMaterialResourceReferences(const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const MaterialResourceReference> resourceReferences)noexcept{
+[[nodiscard]] inline b8 ValidateMaterialResourceReferences(const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const MaterialResourceReference> resourceReferences)noexcept{
     usize resourceFieldCount = 0u;
     u32 constantByteBegin = 0u;
     for(const MaterialTypedLayoutBlock& block : blocks){
@@ -127,7 +127,7 @@ inline constexpr usize s_ResourceReferenceBytes = sizeof(MaterialResourceReferen
             ++resourceFieldCount;
             const MaterialResourceKind::Enum expectedKind = MaterialLayoutFieldResourceKind(field.fieldType);
             const u32 expectedByteOffset = constantByteBegin + field.offset;
-            bool foundReference = false;
+            b8 foundReference = false;
             for(const MaterialResourceReference& resourceReference : resourceReferences){
                 if(resourceReference.blockName != block.blockName || resourceReference.fieldName != field.fieldName)
                     continue;

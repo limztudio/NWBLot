@@ -83,7 +83,7 @@ private:
     f64 m_minFrameSeconds = 0.0;
     f64 m_maxFrameSeconds = 0.0;
     u32 m_intervalFrames = 0u;
-    bool m_samplingStarted = false;
+    b8 m_samplingStarted = false;
 };
 
 

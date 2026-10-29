@@ -71,11 +71,11 @@ constexpr CaptureFlag::Mask operator~(const CaptureFlag::Mask value)noexcept{
     return static_cast<CaptureFlag::Mask>(~static_cast<u32>(value));
 }
 
-[[nodiscard]] constexpr bool AnyCapture(const CaptureFlag::Mask value)noexcept{
+[[nodiscard]] constexpr b8 AnyCapture(const CaptureFlag::Mask value)noexcept{
     return static_cast<u32>(value) != 0u;
 }
 
-[[nodiscard]] constexpr bool HasCapture(const CaptureFlag::Mask value, const CaptureFlag::Mask flag)noexcept{
+[[nodiscard]] constexpr b8 HasCapture(const CaptureFlag::Mask value, const CaptureFlag::Mask flag)noexcept{
     return AnyCapture(value & flag);
 }
 
@@ -110,18 +110,18 @@ public:
         return options;
     }
 
-    [[nodiscard]] constexpr bool enabled()const noexcept{ return AnyCapture(flags); }
+    [[nodiscard]] constexpr b8 enabled()const noexcept{ return AnyCapture(flags); }
 
-    [[nodiscard]] constexpr bool textLogEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::TextLog); }
+    [[nodiscard]] constexpr b8 textLogEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::TextLog); }
 
-    [[nodiscard]] constexpr bool diagnosticEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::Diagnostic); }
+    [[nodiscard]] constexpr b8 diagnosticEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::Diagnostic); }
 
-    [[nodiscard]] constexpr bool perfEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::Perf); }
+    [[nodiscard]] constexpr b8 perfEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::Perf); }
 
-    [[nodiscard]] constexpr bool frameGraphEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::FrameGraph); }
+    [[nodiscard]] constexpr b8 frameGraphEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::FrameGraph); }
 };
 
-[[nodiscard]] constexpr bool IsValidEventKind(EventKind::Enum kind)noexcept;
+[[nodiscard]] constexpr b8 IsValidEventKind(EventKind::Enum kind)noexcept;
 
 struct EventHeader{
     u64 frameIndex = 0u;
@@ -135,7 +135,7 @@ struct EventHeader{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return magic == s_EventMagic && version == s_TelemetryFormatVersion && kind != EventKind::Unknown && IsValidEventKind(kind);
     }
 };
@@ -144,7 +144,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr bool IsValidEventKind(const EventKind::Enum kind)noexcept{
+[[nodiscard]] constexpr b8 IsValidEventKind(const EventKind::Enum kind)noexcept{
     switch(kind){
     case EventKind::Unknown:
     case EventKind::TextLog:
@@ -173,7 +173,7 @@ public:
     }
 }
 
-[[nodiscard]] constexpr bool CaptureAllowsEventKind(const CaptureOptions& capture, const EventKind::Enum kind)noexcept{
+[[nodiscard]] constexpr b8 CaptureAllowsEventKind(const CaptureOptions& capture, const EventKind::Enum kind)noexcept{
     return HasCapture(capture.flags, CaptureFlagForEventKind(kind));
 }
 

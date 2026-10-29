@@ -71,7 +71,7 @@ namespace RendererTaskGraphDetail{
                 rhsBuffers[sourceIndex++] = buffer.get();
             });
             sourceIndex = 0u;
-            bool equal = true;
+            b8 equal = true;
             ForEachMaterialPassMeshSourceBuffer(*lhs, [&](const Core::BufferHandle& buffer)noexcept{
                 equal = (buffer.get() == rhsBuffers[sourceIndex++]) && equal;
             });

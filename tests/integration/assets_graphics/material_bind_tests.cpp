@@ -66,7 +66,7 @@ struct ThrowingImplicitIdentifierSize{
     operator u16()const;
 };
 
-[[nodiscard]] bool operator==(const ThrowingImplicitIdentifierSize&, const usize&)noexcept;
+[[nodiscard]] b8 operator==(const ThrowingImplicitIdentifierSize&, const usize&)noexcept;
 
 struct ThrowingIdentifierSizeAppend{
     ThrowingIdentifierSizeAppend& operator+=(char)noexcept;
@@ -330,7 +330,7 @@ TEST(AssetsGraphics, ShadowSurfaceDispatchIsolatesOverlappingBindApis){
 
 
     const Path assetRoot = root / s_AssetsDir;
-    const bool assetsWritten =
+    const b8 assetsWritten =
         AssetsGraphicsFixture::WriteTextFile(assetRoot / s_MaterialInterfaces / "shadow_dispatch_first.bind", AssetsGraphicsFixture::s_ShadowDispatchFirstMaterialBindSource)
         && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_MaterialInterfaces / "shadow_dispatch_second.bind", AssetsGraphicsFixture::s_ShadowDispatchSecondMaterialBindSource)
         && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_Shaders / "shadow_dispatch_shared_surface_helper.slangi", AssetsGraphicsFixture::s_ShadowDispatchSharedSurfaceHelperSource)
@@ -343,7 +343,7 @@ TEST(AssetsGraphics, ShadowSurfaceDispatchIsolatesOverlappingBindApis){
     ASSERT_TRUE(assetsWritten);
 
     const Path engineAssetRoot = AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(testArena) / "impl" / s_AssetsDir;
-    const bool cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { engineAssetRoot, assetRoot });
+    const b8 cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { engineAssetRoot, assetRoot });
     EXPECT_TRUE(cooked);
     EXPECT_EQ(logger.errorCount(), 0u);
 

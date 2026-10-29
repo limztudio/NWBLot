@@ -40,7 +40,7 @@ inline constexpr u32 s_HexAppendFailure = 0xE20Bu;
 
 
 struct ThrowingHexCapacityPredicate{
-    explicit operator bool()const{
+    explicit operator b8()const{
         throw s_HexCapacityFailure;
     }
 };
@@ -159,10 +159,10 @@ public:
         throw s_PointerFailure;
     }
 
-    explicit operator bool()const noexcept{ return target != nullptr; }
+    explicit operator b8()const noexcept{ return target != nullptr; }
 };
 
-[[nodiscard]] bool operator==(const ThrowingFancyPointer& lhs, const ThrowingFancyPointer& rhs)noexcept{
+[[nodiscard]] b8 operator==(const ThrowingFancyPointer& lhs, const ThrowingFancyPointer& rhs)noexcept{
     return lhs.target == rhs.target;
 }
 
@@ -179,7 +179,7 @@ public:
 };
 
 struct ThrowingComparisonResult{
-    operator bool()const{ throw s_ComparisonFailure; }
+    operator b8()const{ throw s_ComparisonFailure; }
 
     [[nodiscard]] ThrowingComparisonResult operator!()const noexcept{ return {}; }
 };
@@ -308,7 +308,7 @@ public:
 };
 
 struct ObservationPointer{
-    static inline bool s_FailCopy = false;
+    static inline b8 s_FailCopy = false;
     RefCountTarget* target = nullptr;
 
 
@@ -336,10 +336,10 @@ public:
 
     ObservationPointer& operator=(ObservationPointer&&)noexcept = default;
 
-    explicit operator bool()const noexcept{ return target != nullptr; }
+    explicit operator b8()const noexcept{ return target != nullptr; }
 };
 
-[[nodiscard]] bool operator==(const ObservationPointer& first, const ObservationPointer& second)noexcept{ return first.target == second.target; }
+[[nodiscard]] b8 operator==(const ObservationPointer& first, const ObservationPointer& second)noexcept{ return first.target == second.target; }
 
 u32 RefCountAddReference(ObservationPointer)noexcept{ return 1u; }
 

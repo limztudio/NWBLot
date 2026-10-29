@@ -71,9 +71,9 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
     constexpr u32 s_CallbackCount = 2u;
     constexpr u32 s_ReleaseSchedules = 2u;
     for(u32 round = 0u; round < s_Rounds; ++round){
-        Atomic<bool> release{ false };
-        Atomic<bool> joining{ false };
-        Atomic<bool> workerEntered{ false };
+        Atomic<b8> release{ false };
+        Atomic<b8> joining{ false };
+        Atomic<b8> workerEntered{ false };
         u32 callbacks = 0u;
         CpuTaskScope scope(scheduler);
         JoiningThread releaser;
@@ -130,7 +130,7 @@ TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendant
     config.heterogeneous = false;
     CpuTaskScheduler scheduler(config);
     for(u32 round = 0u; round < s_Rounds; ++round){
-        Atomic<bool> start{ false };
+        Atomic<b8> start{ false };
         Atomic<u32> entered{ 0u };
         Atomic<u32> visits{ 0u };
         Atomic<u32> joined{ 0u };

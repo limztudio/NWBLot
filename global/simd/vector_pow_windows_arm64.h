@@ -117,7 +117,7 @@ inline constexpr u32 s_ArmMayUnderflowMultiplierBits = 0x1a200000u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<bool Equal>
+template<b8 Equal>
 NWB_INLINE UInt64x4 ArmCompareMask(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
     const auto aLow = SIMDVectorDoubleDetail::GetLow(a), aHigh = SIMDVectorDoubleDetail::GetHigh(a);
     const auto bLow = SIMDVectorDoubleDetail::GetLow(b), bHigh = SIMDVectorDoubleDetail::GetHigh(b);
@@ -133,7 +133,7 @@ NWB_INLINE UInt64x4 ArmCompareMask(const SIMDVectorDouble a, const SIMDVectorDou
     return BitCast<UInt64x4>(SIMDVectorDoubleDetail::FromUIntPairs(low, high));
 }
 
-template<bool Ordered>
+template<b8 Ordered>
 struct ArmArithmetic{
     u32 control;
 
@@ -254,15 +254,15 @@ struct ArmArithmetic{
     return (bits & (1u << shift)) != 0u ? s_ArmOddInteger : s_ArmEvenInteger;
 }
 
-[[nodiscard]] NWB_INLINE bool ArmSpecialBits(const u32 bits)noexcept{
+[[nodiscard]] NWB_INLINE b8 ArmSpecialBits(const u32 bits)noexcept{
     return 2u * bits - 1u >= 2u * s_F32InfinityBits - 1u;
 }
 
-[[nodiscard]] NWB_INLINE bool ArmSignaling(const u32 bits)noexcept{
+[[nodiscard]] NWB_INLINE b8 ArmSignaling(const u32 bits)noexcept{
     return 2u * (bits ^ s_F32QuietBit) > 2u * s_F32QuietNaNBits;
 }
 
-template<bool Ordered, bool Bounded = false>
+template<b8 Ordered, b8 Bounded = false>
 NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 control)noexcept{
 #pragma STDC FENV_ACCESS ON
     const ArmArithmetic<Ordered> math{ control };
@@ -278,7 +278,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
         result = (zeroExponent | oneBase) ? UInt4{ s_F32OneBits, s_F32OneBits, s_F32OneBits, s_F32OneBits } : ix;
     }
     else{
-        bool ordinary = false;
+        b8 ordinary = false;
         if constexpr(!Ordered){
             const UInt4 absoluteY = iy & s_F32AbsoluteBitMask;
             const Int4 normalInputs = (ix >= s_F32MinNormalBits) & (ix < s_F32InfinityBits) & (ix != s_F32OneBits) & (absoluteY != 0u) & (absoluteY < s_F32InfinityBits) & (iy != s_F32OneBits);
@@ -312,7 +312,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
                 }
                 if(ArmSpecialBits(a)){
                     SIMDVectorSingle square = math.multiply(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(a)));
-                    const bool negative = (a & s_F32SignBitMask) != 0u && ArmCheckInt(b) == s_ArmOddInteger;
+                    const b8 negative = (a & s_F32SignBitMask) != 0u && ArmCheckInt(b) == s_ArmOddInteger;
                     if(negative)
                         square = VectorXorInt(square, s_SIMDNegativeZero);
                     if(2u * a == 0u && (b & s_F32SignBitMask) != 0u){
@@ -392,7 +392,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
             for(usize lane = 0u; lane < 4u; ++lane){
                 if(special[lane] == 0)
                     continue;
-                const bool negative = sign[lane] != 0u;
+                const b8 negative = sign[lane] != 0u;
                 i32 exceptional = 0;
                 if(overflow[lane] != 0u)
                     exceptional = s_ArmExceptionalOverflowCode;
@@ -439,7 +439,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
     return BitCast<SIMDVectorSingle>(special != 0 ? narrowed : result);
 }
 
-template<bool Ordered>
+template<b8 Ordered>
 NWB_NOINLINE SIMDVectorSingle ArmPackedPacket(const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 control)noexcept{
 #pragma STDC FENV_ACCESS ON
     return ArmPackedBody<Ordered, false>(x, y, control);

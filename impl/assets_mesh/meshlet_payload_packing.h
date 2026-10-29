@@ -111,7 +111,7 @@ namespace MeshletRefDeltaWidth{
     return static_cast<MeshletRefDeltaWidth::Enum>((encoding >> shift) & s_MeshletRefEncodingWidthMask);
 }
 
-[[nodiscard]] constexpr NWB_INLINE bool MeshletRefDeltaFitsWidth(const u32 delta, const MeshletRefDeltaWidth::Enum width)noexcept{
+[[nodiscard]] constexpr NWB_INLINE b8 MeshletRefDeltaFitsWidth(const u32 delta, const MeshletRefDeltaWidth::Enum width)noexcept{
     return width == MeshletRefDeltaWidth::U32 || (width == MeshletRefDeltaWidth::U16 && delta <= static_cast<u32>(Limit<u16>::s_Max)) || (width == MeshletRefDeltaWidth::U8 && delta <= static_cast<u32>(Limit<u8>::s_Max));
 }
 
@@ -180,7 +180,7 @@ namespace MeshletRefDeltaWidth{
     return (bounds.conePacked >> s_MeshletConeCutoffShift) & s_MeshletPackedByteMask;
 }
 
-[[nodiscard]] NWB_INLINE bool MeshletConeEnabled(const MeshletBounds& bounds)noexcept{
+[[nodiscard]] NWB_INLINE b8 MeshletConeEnabled(const MeshletBounds& bounds)noexcept{
     return (MeshletConeFlags(bounds) & s_MeshletConeFlagEnabled) != 0u;
 }
 

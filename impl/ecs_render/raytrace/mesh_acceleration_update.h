@@ -25,8 +25,8 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RequiresMeshBlasUpdate(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh)noexcept;
-[[nodiscard]] bool RequiresMeshSwBvhUpdate(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh)noexcept;
+[[nodiscard]] b8 RequiresMeshBlasUpdate(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh)noexcept;
+[[nodiscard]] b8 RequiresMeshSwBvhUpdate(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

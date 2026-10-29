@@ -119,7 +119,7 @@ private:
     Vector<CpuTaskScheduler::TaskHandle, Alloc::GlobalArena> m_executionHandles;
     Vector<CpuTaskScheduler::TaskHandle, Alloc::GlobalArena> m_executionDependencies;
     Vector<Expected<void, CpuTaskAdmissionError::Enum>, Alloc::GlobalArena> m_executionResults;
-    bool m_dirty;
+    b8 m_dirty;
 };
 
 

@@ -54,11 +54,11 @@ static void CleanupOwnedHandle(HANDLE& handle, CrashDetail::PlatformCleanupObser
         observations.record(released.error());
 }
 
-static void WaitForOwnedProcess(const HANDLE process, const bool terminateImmediately, CrashDetail::PlatformCleanupObservations& observations)noexcept{
+static void WaitForOwnedProcess(const HANDLE process, const b8 terminateImmediately, CrashDetail::PlatformCleanupObservations& observations)noexcept{
     if(!process || process == INVALID_HANDLE_VALUE)
         return;
     DWORD waited = WaitForSingleObject(process, terminateImmediately ? 0u : s_HandlerExitWaitMilliseconds);
-    bool terminated = false;
+    b8 terminated = false;
     if(!terminateImmediately && waited != WAIT_OBJECT_0){
         // Preserve detached upload completion after the existing bounded normal shutdown wait.
         observations.record(NativeFailure(CrashDetail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT));
@@ -212,7 +212,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
         return CrashDumpTransportStatus::Failed;
 
     // Re-entrancy guard: a fault inside the transport (e.g. the SEH filter faulting) must not re-enter or self-deadlock.
-    static thread_local bool s_InTransport = false;
+    static thread_local b8 s_InTransport = false;
     if(s_InTransport)
         return CrashDumpTransportStatus::Failed;
     s_InTransport = true;

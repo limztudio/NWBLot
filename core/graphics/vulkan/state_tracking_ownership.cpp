@@ -57,7 +57,7 @@ VkImageMemoryBarrier2 BuildTextureOwnershipReleaseBarrier(
     const ResourceStates::Mask state,
     const u32 sourceQueueFamily,
     const u32 destinationQueueFamily,
-    const bool rayTracingStageAvailable
+    const b8 rayTracingStageAvailable
 )noexcept{
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = BuildTextureStateBarrier(image, aspectMask, subresources, resolvedState, resolvedState, rayTracingStageAvailable);
@@ -75,7 +75,7 @@ VkImageMemoryBarrier2 BuildTextureOwnershipAcquireBarrier(
     const ResourceStates::Mask state,
     const u32 sourceQueueFamily,
     const u32 destinationQueueFamily,
-    const bool rayTracingStageAvailable
+    const b8 rayTracingStageAvailable
 )noexcept{
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = BuildTextureStateBarrier(image, aspectMask, subresources, resolvedState, resolvedState, rayTracingStageAvailable);
@@ -86,7 +86,7 @@ VkImageMemoryBarrier2 BuildTextureOwnershipAcquireBarrier(
     return barrier;
 }
 
-VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(const VkBuffer buffer, const ResourceStates::Mask state, const u32 sourceQueueFamily, const u32 destinationQueueFamily, const bool rayTracingStageAvailable, const BufferRange range)noexcept{
+VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(const VkBuffer buffer, const ResourceStates::Mask state, const u32 sourceQueueFamily, const u32 destinationQueueFamily, const b8 rayTracingStageAvailable, const BufferRange range)noexcept{
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(resolvedState, rayTracingStageAvailable);
@@ -101,7 +101,7 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(const VkBuffer buffer,
     return barrier;
 }
 
-VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(const VkBuffer buffer, const ResourceStates::Mask state, const u32 sourceQueueFamily, const u32 destinationQueueFamily, const bool rayTracingStageAvailable, const BufferRange range)noexcept{
+VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(const VkBuffer buffer, const ResourceStates::Mask state, const u32 sourceQueueFamily, const u32 destinationQueueFamily, const b8 rayTracingStageAvailable, const BufferRange range)noexcept{
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;

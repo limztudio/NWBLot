@@ -109,20 +109,20 @@ using ParseMetadataValueFn = Expected<EntryT>(*)(
     Core::Alloc::ScratchArena&
 );
 
-[[nodiscard]] Expected<bool> ParseMetadataBoolField(
+[[nodiscard]] Expected<b8> ParseMetadataBoolField(
     const Path& nwbFilePath,
     AStringView diagnosticPrefix,
     const Core::Metascript::Value& value,
     AStringView fieldLabel
 );
-[[nodiscard]] bool ReadOptionalFiniteF32Field(
+[[nodiscard]] b8 ReadOptionalFiniteF32Field(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     AStringView diagnosticPrefix,
     AStringView fieldLabel,
     f32& outValue
 );
-[[nodiscard]] bool ReadOptionalI32Field(
+[[nodiscard]] b8 ReadOptionalI32Field(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     AStringView diagnosticPrefix,
@@ -212,7 +212,7 @@ template<typename AssetT, typename EntryT>
 }
 
 template<typename EntryT, typename AssetT, ParseMetadataValueFn<EntryT> ParseValFn, const AStringView& DiagnosticPrefix>
-[[nodiscard]] bool RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
+[[nodiscard]] b8 RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<EntryT, AssetT, TypedComponentAssetCodec<AssetT>>(
         registry,
         ComponentBinaryPayload::s_ComponentAssetKindLabel,
@@ -223,7 +223,7 @@ template<typename EntryT, typename AssetT, ParseMetadataValueFn<EntryT> ParseVal
 }
 
 template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn, const AStringView& DiagnosticPrefix>
-[[nodiscard]] bool ExtractLeafComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
+[[nodiscard]] b8 ExtractLeafComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
     return ParseCookDependencyEntry<EntryT, ParseValFn>(context, DiagnosticPrefix).has_value();
 }
 

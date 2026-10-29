@@ -65,7 +65,7 @@ public:
         m_events.push_back(Move(event));
     }
 
-    void key(const i32 key, const bool control = false){
+    void key(const i32 key, const b8 control = false){
         NumericEvent event(m_arena);
         event.kind = NumericEventKind::Key;
         event.intent = m_bindings.resolve(key, control ? Core::InputModifier::Control : 0);
@@ -157,7 +157,7 @@ public:
 
     [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
 
-    [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
+    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
         ++publishes;
         displayed.assign(view.displayText().data(), view.displayText().size());
         if(onPublishInteger)
@@ -185,8 +185,8 @@ public:
     usize loans = 0u;
     usize ordinaryLoans = 0u;
     usize publishes = 0u;
-    bool focused = true;
-    bool mutationApplied = false;
+    b8 focused = true;
+    b8 mutationApplied = false;
 };
 
 class NumericFixture : public WidgetFixture{
@@ -199,15 +199,15 @@ public:
 
 
 protected:
-    [[nodiscard]] bool beginNumeric(const u64 generation){
+    [[nodiscard]] b8 beginNumeric(const u64 generation){
         return begin(generation) && m_builder.beginPanel(s_NumericPanelKey, { 20.0f, 20.0f, 740.0f, 520.0f });
     }
 
-    [[nodiscard]] bool beginParent(const u64 generation){
+    [[nodiscard]] b8 beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::LargeLoanParentOptions());
     }
 
-    [[nodiscard]] bool acceptNumeric(){
+    [[nodiscard]] b8 acceptNumeric(){
         return finishPanel() && m_context.commitFrame(m_context.readyGeneration());
     }
 

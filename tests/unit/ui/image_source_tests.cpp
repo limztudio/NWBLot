@@ -39,7 +39,7 @@ protected:
         texture.setPayload(description.width, description.height, Move(mips), Move(bytes), description.dimension, description.depth, description.format, description.alphaMode, description.alphaConstant);
     }
 
-    [[nodiscard]] static bool Prepare(Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description = {}){
+    [[nodiscard]] static b8 Prepare(Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description = {}){
         const auto count = TextureFormat::ComputeCompleteMipCount(description.dimension, description.width, description.height, description.depth);
         if(!count)
             return false;

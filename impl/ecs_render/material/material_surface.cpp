@@ -43,10 +43,10 @@ static void ReleaseAssetCache(CacheT& cache, ReleaseFn&& releaseItem)noexcept(
             noexcept(DeclVal<CacheT&>().begin())
             && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Iterator>)
             && IsNothrowDestructible_V<Iterator>
-            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<CacheT&>().end()))
+            && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<CacheT&>().end()))
             && noexcept(++DeclVal<Iterator&>())
 #if NWB_OCCUR_ASSERT
-            && noexcept(static_cast<bool>(!DeclVal<Iterator&>().value()))
+            && noexcept(static_cast<b8>(!DeclVal<Iterator&>().value()))
 #endif
             && noexcept(DeclVal<ReleaseFn&>()(*DeclVal<Iterator&>().value()))
             && noexcept(DeclVal<CacheT&>().clear())
@@ -209,8 +209,8 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
 
     const auto pixelShader = material.findShader<PixelShader>();
     const auto meshShader = material.findShader<MeshShader>();
-    const bool hasPixelShader = pixelShader.has_value();
-    const bool hasMeshShader = meshShader.has_value();
+    const b8 hasPixelShader = pixelShader.has_value();
+    const b8 hasMeshShader = meshShader.has_value();
     if(pixelShader)
         createdInfo.pixelShader = *pixelShader;
     if(meshShader)
@@ -274,7 +274,7 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::findMaterialSurf
     return MakeNotNull(&materialInfo);
 }
 
-bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo){
+b8 RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo){
     if(materialInfo.resourceReferencesResolved)
         return true;
 
@@ -323,8 +323,8 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
     return true;
 }
 
-bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
-    bool hasTransparentRenderers = false;
+b8 RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
+    b8 hasTransparentRenderers = false;
     auto rendererView = m_world.view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
         static_cast<void>(entity);
@@ -364,8 +364,8 @@ void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(){
     }
 }
 
-bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLookupMode::Enum lookupMode){
-    auto materialIsTransparent = [&](const Core::Assets::AssetRef<Material>& material) -> bool{
+b8 RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLookupMode::Enum lookupMode){
+    auto materialIsTransparent = [&](const Core::Assets::AssetRef<Material>& material) -> b8{
         const auto materialInfoResult = lookupMode == RendererResourceLookupMode::CreateMissing ? createMaterialSurfaceInfo(material) : findMaterialSurfaceInfo(material);
         if(!materialInfoResult)
             return false;
@@ -385,7 +385,7 @@ bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLooku
     return false;
 }
 
-bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector)const{
+b8 RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector)const{
     return AppendPreparedMaterialSurfaceSampledTextures(materialInfo, m_materialState.m_resourceState, collector);
 }
 

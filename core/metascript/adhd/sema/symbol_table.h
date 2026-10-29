@@ -31,7 +31,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool build(TranslationUnit& unit, MVector<ParseError>& errors);
+    [[nodiscard]] b8 build(TranslationUnit& unit, MVector<ParseError>& errors);
 
     [[nodiscard]] EnumDecl* findEnum(MStringView name)const noexcept;
     [[nodiscard]] InterfaceDecl* findInterface(MStringView name)const noexcept;
@@ -51,18 +51,18 @@ public:
     [[nodiscard]] const TypeRef* unwrapTypeAlias(const TypeRef* type)const noexcept;
     [[nodiscard]] ParamPassingMode::Enum resolveRefMode(const TypeRef* type)const noexcept;
     [[nodiscard]] MStringView resolveBaseTypeName(MStringView typeName)const noexcept;
-    [[nodiscard]] bool isSelfDefaultedType(MStringView typeName)const noexcept;
+    [[nodiscard]] b8 isSelfDefaultedType(MStringView typeName)const noexcept;
 
-    [[nodiscard]] static bool isArenaBackedContainer(MStringView typeName)noexcept;
-    [[nodiscard]] static bool isSimdVectorType(MStringView typeName, u32& outLanes)noexcept;
-    [[nodiscard]] static bool isUnalignedVectorType(MStringView typeName, u32& outLanes)noexcept;
-    [[nodiscard]] static bool isUnalignedVectorType(MStringView typeName)noexcept;
-    [[nodiscard]] static bool isSimdMatrixType(MStringView typeName)noexcept;
-    [[nodiscard]] static bool isSimdType(MStringView typeName)noexcept;
-    [[nodiscard]] static bool isStringSwitchType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 isArenaBackedContainer(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 isSimdVectorType(MStringView typeName, u32& outLanes)noexcept;
+    [[nodiscard]] static b8 isUnalignedVectorType(MStringView typeName, u32& outLanes)noexcept;
+    [[nodiscard]] static b8 isUnalignedVectorType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 isSimdMatrixType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 isSimdType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 isStringSwitchType(MStringView typeName)noexcept;
     [[nodiscard]] static MStringView mapBuiltinCppType(MStringView typeName)noexcept;
 
-    [[nodiscard]] bool hasTypeSymbol(MStringView name)const noexcept;
+    [[nodiscard]] b8 hasTypeSymbol(MStringView name)const noexcept;
 
 
 private:

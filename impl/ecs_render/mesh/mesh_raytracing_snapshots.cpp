@@ -39,7 +39,7 @@ static constexpr usize s_RetainedAccelerationBuffersPerMesh = 5u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RuntimeMeshletBoundsReady(const MeshResources& mesh)noexcept{
+[[nodiscard]] b8 RuntimeMeshletBoundsReady(const MeshResources& mesh)noexcept{
     const Core::GpuDescriptorHandle descriptor = mesh.geometryHeapHandles[NWB_MESH_BINDING_MESHLET_DESC];
     const Core::GpuDescriptorHandle bounds = mesh.runtimeMeshletLocalBoundsHeapHandle;
     if(
@@ -52,7 +52,7 @@ static constexpr usize s_RetainedAccelerationBuffersPerMesh = 5u;
     return true;
 }
 
-[[nodiscard]] bool RuntimeMeshletSnapshotMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
+[[nodiscard]] b8 RuntimeMeshletSnapshotMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
     if(!RuntimeMeshletBoundsReady(mesh)){
         return snapshot.meshletCount == 0u && !snapshot.meshletDescBuffer && !snapshot.meshletLocalBoundsBuffer && !snapshot.meshletDescHeapHandle.valid() && !snapshot.meshletLocalBoundsHeapHandle.valid();
     }
@@ -112,7 +112,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapsho
     return snapshot;
 }
 
-[[nodiscard]] bool RayTracingResourceSnapshotMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
+[[nodiscard]] b8 RayTracingResourceSnapshotMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
     return
         mesh.meshName == snapshot.meshName
         && mesh.positionBuffer.get() == snapshot.positionBuffer.get()
@@ -148,7 +148,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapsho
     ;
 }
 
-[[nodiscard]] bool RayTracingResourceIdentityMatches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& lhs, const ECSRenderDetail::MeshRayTracingResourceSnapshot& rhs)noexcept{
+[[nodiscard]] b8 RayTracingResourceIdentityMatches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& lhs, const ECSRenderDetail::MeshRayTracingResourceSnapshot& rhs)noexcept{
     return
         lhs.meshName == rhs.meshName
         && lhs.positionBuffer.get() == rhs.positionBuffer.get()
@@ -229,9 +229,9 @@ Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::fi
     return __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(mesh);
 }
 
-bool RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired){
+b8 RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired){
     const auto found = m_meshState.m_meshes.find(expected.meshName);
-    const bool currentMatches = found != m_meshState.m_meshes.end() && __hidden_mesh_raytracing_snapshots::RayTracingResourceSnapshotMatches(found.value(), expected);
+    const b8 currentMatches = found != m_meshState.m_meshes.end() && __hidden_mesh_raytracing_snapshots::RayTracingResourceSnapshotMatches(found.value(), expected);
     if(!currentMatches || !__hidden_mesh_raytracing_snapshots::RayTracingResourceIdentityMatches(expected, desired)){
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         const Core::GpuDescriptorHandle currentNodeHandle = found != m_meshState.m_meshes.end() ? found.value().swBvhNodeHeapHandle : Core::GpuDescriptorHandle::Invalid();
@@ -278,8 +278,8 @@ bool RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail:
         heap.free(expected.swBvhParentHeapHandle);
 
     MeshResources& mesh = found.value();
-    const bool blasReplaced = mesh.blas.get() != desired.blas.get();
-    const bool swBvhReplaced = mesh.swBvhNodeBuffer.get() != desired.swBvhNodeBuffer.get() || mesh.swBvhParentBuffer.get() != desired.swBvhParentBuffer.get();
+    const b8 blasReplaced = mesh.blas.get() != desired.blas.get();
+    const b8 swBvhReplaced = mesh.swBvhNodeBuffer.get() != desired.swBvhNodeBuffer.get() || mesh.swBvhParentBuffer.get() != desired.swBvhParentBuffer.get();
     mesh.blas = desired.blas;
     mesh.swBvhNodeBuffer = desired.swBvhNodeBuffer;
     mesh.swBvhParentBuffer = desired.swBvhParentBuffer;

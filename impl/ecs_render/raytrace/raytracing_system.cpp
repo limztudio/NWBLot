@@ -60,7 +60,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(
 RendererRayTracingSystem::~RendererRayTracingSystem()noexcept = default;
 
 
-bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena){
+b8 RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena){
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene({});
     m_lightSpaceShadow.m_captureHistory.beginFrame();
     m_lightSpaceShadow.m_captureSceneTrusted = false;
@@ -114,7 +114,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
             return true;
         }
 
-        const bool sceneReady = prepareSceneTlasResources(scratchArena);
+        const b8 sceneReady = prepareSceneTlasResources(scratchArena);
         if(!sceneReady){
             if(!ensureRayTraceMaterialContextSlotsHeapHandle())
                 return false;
@@ -132,7 +132,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
             return false;
         }
         m_shadowVisibilityTraceResourcesPreflighted = true;
-        const bool backendReady = ensureShadowPipeline();
+        const b8 backendReady = ensureShadowPipeline();
         m_shadowVisibilityBackendPipelinePreflighted = backendReady;
 
         // HW opaque shadow shares the SW half-res denoise chain: jittered trace, temporal merge, a-trous resolve, upsample.
@@ -185,7 +185,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
     }
 
     // No HW ray tracing: build/refit per-mesh software BVHs from skinned geometry, then the per-frame scene BVH.
-    const bool meshResourcesReady = preparePendingMeshSwBvhResources(scratchArena);
+    const b8 meshResourcesReady = preparePendingMeshSwBvhResources(scratchArena);
     if(!meshResourcesReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH resource preparation failed"));
     if(!meshResourcesReady || !prepareSceneSwBvhResources(scratchArena)){
@@ -219,7 +219,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
     }
     m_shadowVisibilityTraceResourcesPreflighted = true;
 
-    const bool backendReady = ensureSwShadowPipeline();
+    const b8 backendReady = ensureSwShadowPipeline();
     m_shadowVisibilityBackendPipelinePreflighted = backendReady;
 
     // Soft opaque shadow: downsample + a-trous pipelines denoise half-res trace; non-fatal.
@@ -258,14 +258,14 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
     return true;
 }
 
-Expected<bool> RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
+Expected<b8> RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const bool sceneTlasBuildGraphOwned,
-    const bool meshBlasBuildsGraphOwned,
-    const bool meshBlasGeometryBuildInputStatesGraphOwned,
-    const bool meshSwBvhBuildsGraphOwned,
-    const bool preparedMeshSwBvhBuildsRecordedByGraph
+    const b8 sceneTlasBuildGraphOwned,
+    const b8 meshBlasBuildsGraphOwned,
+    const b8 meshBlasGeometryBuildInputStatesGraphOwned,
+    const b8 meshSwBvhBuildsGraphOwned,
+    const b8 preparedMeshSwBvhBuildsRecordedByGraph
 ){
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
         return MakeUnexpected(Failure{});
@@ -336,7 +336,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_meshSystem.discardRayTracingBuildState();
 }
 
-bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena){
+b8 RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena){
     m_preparedShadowTraceGeometryBuffers.clear();
     if(!m_shadowVisibilityResourcesPreflighted)
         return false;
@@ -394,11 +394,11 @@ void RendererRayTracingSystem::confirmPreparedSceneTlasBuild()noexcept{
     m_preparedSceneTlas.confirm(m_rayTracingState);
 }
 
-bool RendererRayTracingSystem::preparedTraversalStorageMatchesCurrent()const noexcept{
+b8 RendererRayTracingSystem::preparedTraversalStorageMatchesCurrent()const noexcept{
     return m_preparedSceneBvh.storageMatches(m_rayTracingState) && m_preparedShadowMaterialContext.storageMatches(m_rayTracingState);
 }
 
-bool RendererRayTracingSystem::appendPreparedShadowTraceMaterialSampledTextures(const MaterialSurfaceInfo& materialInfo, ShadowMaterialSampledTextureCollector& collector){
+b8 RendererRayTracingSystem::appendPreparedShadowTraceMaterialSampledTextures(const MaterialSurfaceInfo& materialInfo, ShadowMaterialSampledTextureCollector& collector){
     return collector.collect(materialInfo, [this](const MaterialSurfaceInfo& material, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){
         return m_materialSystem.appendPreparedMaterialSurfaceSampledTextures(material, pending);
     });
@@ -408,8 +408,8 @@ void RendererRayTracingSystem::clearPreparedShadowTraceMaterialSampledTextures()
     m_preparedShadowTraceMaterialSampledTextures.clear();
 }
 
-bool RendererRayTracingSystem::capturePreparedSceneBvh(
-    const bool staticScene,
+b8 RendererRayTracingSystem::capturePreparedSceneBvh(
+    const b8 staticScene,
     const u64 staticSceneHash,
     const Span<const NwbBvhNodeGpu> nodes,
     const Span<const SceneSwBvhInstanceGpu> instances
@@ -418,7 +418,7 @@ bool RendererRayTracingSystem::capturePreparedSceneBvh(
     return m_preparedSceneBvh.capture(m_rayTracingState, staticScene, staticSceneHash, nodes, instances);
 }
 
-bool RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(const u64 staticSceneHash, const u32 instanceCount)noexcept{
+b8 RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(const u64 staticSceneHash, const u32 instanceCount)noexcept{
     clearPreparedSceneBvh();
     return m_preparedSceneBvh.captureCacheReuse(m_rayTracingState, staticSceneHash, instanceCount);
 }
@@ -429,7 +429,7 @@ void RendererRayTracingSystem::clearPreparedSceneBvh()noexcept{
     m_preparedSceneBvh.clear();
 }
 
-bool RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(const Span<const PreparedSceneSwBvhMesh> meshes, const u32 instanceCount){
+b8 RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(const Span<const PreparedSceneSwBvhMesh> meshes, const u32 instanceCount){
     clearPreparedSceneSwBvhTraversal();
     const usize meshCount = meshes.size();
     const auto validStorageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
@@ -477,13 +477,13 @@ bool RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(const Span<con
     return true;
 }
 
-bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
+b8 RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     const auto validStorageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
         return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
     };
     auto& state = m_rayTracingState;
-    const bool sceneSnapshotValid = m_preparedSceneBvh.snapshotAccepted(state);
-    const bool materialSnapshotValid = m_preparedShadowMaterialContext.softwareSnapshotAccepted(state);
+    const b8 sceneSnapshotValid = m_preparedSceneBvh.snapshotAccepted(state);
+    const b8 materialSnapshotValid = m_preparedShadowMaterialContext.softwareSnapshotAccepted(state);
     const auto rejectPreparedTraversal = [&]()noexcept{
         if(!m_preparedSceneBvh.uploadRequired())
             state.m_sceneSwBvhStaticSceneHashValid = false;
@@ -520,7 +520,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
 
     const auto matchesMesh = [this, &validStorageHandle](const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh, const PreparedSceneSwBvhMesh& prepared)noexcept{
         const auto attributeCache = m_rayTracingState.m_swMeshHeapHandleCache.find(NotNull<const Core::Buffer*>(prepared.attributeBuffer.get()));
-        const bool topologyReady = mesh.swBvhTopologyBuilt || preparedMeshSwBvhBuildProducesTopology(mesh);
+        const b8 topologyReady = mesh.swBvhTopologyBuilt || preparedMeshSwBvhBuildProducesTopology(mesh);
         return
             mesh.meshName == prepared.meshName
             && mesh.runtimeMesh == prepared.runtimeMesh
@@ -556,7 +556,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         }
     }
 
-    const bool tablesMatch =
+    const b8 tablesMatch =
         state.m_swShadowMeshCount == static_cast<u32>(m_preparedSceneSwBvhMeshes.size())
         && state.m_sceneBvhInstanceCount == m_preparedSceneSwBvhInstanceCount
         && state.m_swShadowMeshNodeBuffers.size() == m_preparedSceneSwBvhMeshes.size()

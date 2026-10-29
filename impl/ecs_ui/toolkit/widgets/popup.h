@@ -30,10 +30,10 @@ struct PopupOptions{
     Point size = s_PopupDefaultSize;
     PopupPlacementSide::Enum side = PopupPlacementSide::Below;
     f32 gap = s_StyleSpacingSmall;
-    bool modal = false;
-    bool dismissOutside = true;
-    bool dismissCancel = true;
-    bool autofocus = true;
+    b8 modal = false;
+    b8 dismissOutside = true;
+    b8 dismissCancel = true;
+    b8 autofocus = true;
 };
 
 struct PopupPlacement{
@@ -64,7 +64,7 @@ public:
     void open()noexcept;
     void close()noexcept{ m_open = false; }
 
-    [[nodiscard]] bool isOpen()const noexcept{ return m_open; }
+    [[nodiscard]] b8 isOpen()const noexcept{ return m_open; }
 
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
 
@@ -81,8 +81,8 @@ private:
     const u64 m_instanceGeneration;
     u64 m_openGeneration = 0u;
     PopupPlacement m_placement;
-    bool m_parentBound = false;
-    bool m_open = false;
+    b8 m_parentBound = false;
+    b8 m_open = false;
     PopupToken m_parent;
     u64 m_parentOpenGeneration = 0u;
 };

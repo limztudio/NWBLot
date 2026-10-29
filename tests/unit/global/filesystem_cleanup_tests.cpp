@@ -40,7 +40,7 @@ TEST(GlobalFilesystemCleanup, UnwindRetiresPopulatedTreeAndRepeatedMissingCleanu
     ASSERT_TRUE(WriteTextFile(root / "sibling", "sibling"));
     static_assert(noexcept(RemoveAllForCleanup(root)));
     struct Marker final{};
-    bool caught = false;
+    b8 caught = false;
     ErrorCode cleanupError;
     try{
         ScopeExit cleanup([&]()noexcept{

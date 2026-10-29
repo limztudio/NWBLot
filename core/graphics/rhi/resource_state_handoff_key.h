@@ -34,7 +34,7 @@ struct TextureSubresourceStateKeyHasher{
 };
 
 struct TextureSubresourceStateKeyEqualTo{
-    [[nodiscard]] bool operator()(const TextureSubresourceStateKey& lhs, const TextureSubresourceStateKey& rhs)const noexcept{
+    [[nodiscard]] b8 operator()(const TextureSubresourceStateKey& lhs, const TextureSubresourceStateKey& rhs)const noexcept{
         return lhs.texture == rhs.texture && lhs.mipLevel == rhs.mipLevel && lhs.arraySlice == rhs.arraySlice;
     }
 };

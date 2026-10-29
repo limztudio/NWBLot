@@ -29,19 +29,19 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InitX11Frame(Frame& frame);
+b8 InitX11Frame(Frame& frame);
 [[nodiscard]] Expected<GlobalUniquePtr<IClipboardService>> CreateX11FrameClipboard(Frame& frame);
 [[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> CreateX11FrameTextInput(Frame& frame);
 void ShowX11Frame(Frame& frame);
-bool RunX11Frame(Frame& frame);
+b8 RunX11Frame(Frame& frame);
 void CleanupX11Frame(Frame& frame)noexcept;
 
 #if defined(NWB_WITH_WAYLAND)
-bool InitWaylandFrame(Frame& frame);
+b8 InitWaylandFrame(Frame& frame);
 [[nodiscard]] Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandFrameClipboard(Frame& frame);
 [[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandFrameTextInput(Frame& frame);
-bool ShowWaylandFrame(Frame& frame);
-bool RunWaylandFrame(Frame& frame);
+b8 ShowWaylandFrame(Frame& frame);
+b8 RunWaylandFrame(Frame& frame);
 void CleanupWaylandFrame(Frame& frame)noexcept;
 #endif
 

@@ -29,7 +29,7 @@ namespace __hidden_gpu_packet_runtime_recorded_graph_statistics{
 inline constexpr usize s_MinOverlapPacketCount = 2u;
 
 template<typename StatisticsT>
-static void AccumulatePacketRecordingCounts(StatisticsT& statistics, SIMDVectorDouble& inOutRecordingSeconds, const GpuRecordedPacket& recordedPacket, const bool overlaps)noexcept{
+static void AccumulatePacketRecordingCounts(StatisticsT& statistics, SIMDVectorDouble& inOutRecordingSeconds, const GpuRecordedPacket& recordedPacket, const b8 overlaps)noexcept{
     ++statistics.packetCount;
     statistics.taskCount += recordedPacket.taskCount;
     statistics.commandListCount += recordedPacket.commandListCount;
@@ -56,7 +56,7 @@ struct PacketRecordingIntervalEntry{
     u32 packetIndex = 0u;
 };
 
-[[nodiscard]] bool LessPacketRecordingIntervalEntry(const PacketRecordingIntervalEntry& left, const PacketRecordingIntervalEntry& right)noexcept{
+[[nodiscard]] b8 LessPacketRecordingIntervalEntry(const PacketRecordingIntervalEntry& left, const PacketRecordingIntervalEntry& right)noexcept{
     return left.beginNanoseconds < right.beginNanoseconds || (left.beginNanoseconds == right.beginNanoseconds && (left.endNanoseconds < right.endNanoseconds || (left.endNanoseconds == right.endNanoseconds && left.packetIndex < right.packetIndex)));
 }
 
@@ -166,7 +166,7 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     const ArtifactOperation& artifactAccess
 ){
     using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph_statistics::PacketRecordingIntervalEntry;
-    const bool artifactAccessValid = planAccess.validFor(compiledGraph) && artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid;
+    const b8 artifactAccessValid = planAccess.validFor(compiledGraph) && artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid;
     NWB_FATAL_ASSERT_MSG(artifactAccessValid, "Packet overlap caching requires its exact valid artifact writer");
     if(packetIndices.size() < __hidden_gpu_packet_runtime_recorded_graph_statistics::s_MinOverlapPacketCount)
         return;
@@ -187,8 +187,8 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     u64 maximumPreviousEndNanoseconds = 0u;
     for(usize intervalIndex = 0u; intervalIndex < intervalEntries.size(); ++intervalIndex){
         const IntervalEntry& interval = intervalEntries[intervalIndex];
-        const bool overlapsPrevious = intervalIndex != 0u && interval.beginNanoseconds < maximumPreviousEndNanoseconds;
-        const bool overlapsNext = intervalIndex + 1u < intervalEntries.size() && intervalEntries[intervalIndex + 1u].beginNanoseconds < interval.endNanoseconds;
+        const b8 overlapsPrevious = intervalIndex != 0u && interval.beginNanoseconds < maximumPreviousEndNanoseconds;
+        const b8 overlapsNext = intervalIndex + 1u < intervalEntries.size() && intervalEntries[intervalIndex + 1u].beginNanoseconds < interval.endNanoseconds;
         if(overlapsPrevious || overlapsNext)
             storage.packetRecordingOverlaps[interval.packetIndex] = 1u;
         maximumPreviousEndNanoseconds = Max(maximumPreviousEndNanoseconds, interval.endNanoseconds);

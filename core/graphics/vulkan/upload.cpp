@@ -214,7 +214,7 @@ void UploadManager::linkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk&
     ledger.firstActiveChunk = &chunk;
 }
 
-void UploadManager::retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, const u64 version, const bool resetAllocated)noexcept{
+void UploadManager::retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, const u64 version, const b8 resetAllocated)noexcept{
     if(chunk.previousActiveChunk)
         chunk.previousActiveChunk->nextActiveChunk = chunk.nextActiveChunk;
     else
@@ -250,7 +250,7 @@ void UploadManager::retireSubmittedChunksLocked(
     while(chunk){
         BufferChunk* const nextChunk = chunk->nextActiveChunk;
         NWB_ASSERT(chunk->owner && chunk->nativeRecordingID != 0u);
-        bool submitted = false;
+        b8 submitted = false;
         if(submittedOwners.indexed())
             submitted = submittedOwners.contains(*chunk->owner, chunk->nativeRecordingID);
         else{
@@ -269,7 +269,7 @@ void UploadManager::retireSubmittedChunksLocked(
     }
 }
 
-void UploadManager::retireOwnerChunksLocked(const GpuPhysicalQueueId queue, const u64 version, const bool resetAllocated, TrackedCommandBuffer& owner, const u64 nativeRecordingID)noexcept{
+void UploadManager::retireOwnerChunksLocked(const GpuPhysicalQueueId queue, const u64 version, const b8 resetAllocated, TrackedCommandBuffer& owner, const u64 nativeRecordingID)noexcept{
     QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
     if(!ledger)
         return;

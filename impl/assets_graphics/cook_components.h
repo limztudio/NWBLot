@@ -26,8 +26,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RegisterGraphicsComponentCookEntries(Core::Assets::CookEntryRegistry& registry);
-[[nodiscard]] bool RegisterGraphicsComponentCookDependencies(Core::Assets::CookDependencyRegistry& registry);
+[[nodiscard]] b8 RegisterGraphicsComponentCookEntries(Core::Assets::CookEntryRegistry& registry);
+[[nodiscard]] b8 RegisterGraphicsComponentCookDependencies(Core::Assets::CookDependencyRegistry& registry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -166,14 +166,14 @@ CrashTestText BuildManifest(
     return manifest;
 }
 
-bool WriteArchive(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const AStringView archive){
+b8 WriteArchive(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const AStringView archive){
     if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup)))
         return false;
 
     return WriteTextFile(ArchivePath(arena, testGroup, stem), archive);
 }
 
-bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const Span<const u8> archive){
+b8 WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const Span<const u8> archive){
     if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup)))
         return false;
 
@@ -194,7 +194,7 @@ Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, const A
     return config;
 }
 
-static bool ManifestContainsStringValue(Core::Alloc::GlobalArena& arena, const AStringView manifest, const AStringView key, const AStringView value){
+static b8 ManifestContainsStringValue(Core::Alloc::GlobalArena& arena, const AStringView manifest, const AStringView key, const AStringView value){
     if(value.empty())
         return true;
 
@@ -207,7 +207,7 @@ static bool ManifestContainsStringValue(Core::Alloc::GlobalArena& arena, const A
     return Contains(manifest, AStringView(needle.data(), needle.size()));
 }
 
-static bool TriggerPackageContains(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
+static b8 TriggerPackageContains(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
     CrashTestText manifest(arena);
     if(!ReadTextFile(packageDirectory / CrashNames::s_ManifestFileName, manifest))
         return false;
@@ -269,11 +269,11 @@ void BuildLinuxCrashArchive(CrashTestText& archive, Core::Alloc::GlobalArena& ar
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
 }
 
-bool Contains(const AStringView text, const AStringView needle)noexcept{
+b8 Contains(const AStringView text, const AStringView needle)noexcept{
     return text.find(needle) != AStringView::npos;
 }
 
-bool ContainsMessage(const TStringView text, const TStringView needle)noexcept{
+b8 ContainsMessage(const TStringView text, const TStringView needle)noexcept{
     return text.find(needle) != TStringView::npos;
 }
 

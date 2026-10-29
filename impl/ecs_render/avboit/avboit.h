@@ -41,7 +41,7 @@ static_assert(offsetof(RendererAvboitPushConstants, heapSlots) == sizeof(u32) * 
 [[nodiscard]] Core::RenderState BuildRendererAvboitVoxelRenderState()noexcept;
 [[nodiscard]] Core::RenderState BuildRendererAvboitAccumulateRenderState()noexcept;
 [[nodiscard]] Core::RenderState BuildRendererAvboitRefractionCaptureRenderState()noexcept;
-[[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, bool hdr10OutputActive)noexcept;
+[[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, b8 hdr10OutputActive)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

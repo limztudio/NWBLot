@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
+b8 RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
     if(!snapshot.ready || !snapshot.viewPipeline || !snapshot.drawArguments || snapshot.plan.viewCount == 0u)
         return false;
     commandList.setComputeState(Core::ComputeState{}.setPipeline(snapshot.viewPipeline.get()));
@@ -31,7 +31,7 @@ bool RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHe
     return true;
 }
 
-bool RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
+b8 RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
     if(!snapshot.ready || !snapshot.cullPipeline || !snapshot.drawArguments || snapshot.casters.empty() || snapshot.plan.viewCount == 0u)
         return false;
     commandList.setComputeState(Core::ComputeState{}.setPipeline(snapshot.cullPipeline.get()));
@@ -54,7 +54,7 @@ bool RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHea
     return true;
 }
 
-bool RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, const u32 viewIndex, const bool transparent){
+b8 RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, const u32 viewIndex, const b8 transparent){
     static_assert(sizeof(Core::DrawIndexedIndirectArguments) == NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
     if(!snapshot.ready || !snapshot.drawArguments || viewIndex >= snapshot.plan.viewCount)
         return false;
@@ -109,7 +109,7 @@ bool RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptor
     return true;
 }
 
-bool RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
+b8 RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
     const auto& pipeline = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u ? snapshot.csgShadePipeline : snapshot.shadePipeline;
     if(!snapshot.ready || !pipeline || snapshot.plan.totalPixels == 0u)
         return false;
@@ -125,13 +125,13 @@ bool RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHe
     return true;
 }
 
-bool RecordLightSpaceResolve(
+b8 RecordLightSpaceResolve(
     Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, Core::GpuTimingRecorder& timing,
     const LightSpaceShadowSnapshot& snapshot,
-    Core::Texture& outputTexture, const u32 frameIndex, const u32 sampleCount, const u32 outputSlot, const bool transparent
+    Core::Texture& outputTexture, const u32 frameIndex, const u32 sampleCount, const u32 outputSlot, const b8 transparent
 ){
-    const bool csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
-    const bool hardwareCsg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u;
+    const b8 csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
+    const b8 hardwareCsg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u;
     const auto& pipeline = csg ? (transparent ? snapshot.csgTransparentResolve : snapshot.csgOpaqueResolve) : (transparent ? snapshot.transparentResolve : snapshot.opaqueResolve);
     const auto& fallback = csg ? (transparent ? snapshot.csgTransparentFallback : snapshot.csgOpaqueFallback) : (transparent ? snapshot.transparentFallback : snapshot.opaqueFallback);
     if(!snapshot.ready || !pipeline || sampleCount == 0u || (hardwareCsg ? !snapshot.csgTlasDescriptor.valid() : !fallback))

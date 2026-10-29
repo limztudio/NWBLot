@@ -41,7 +41,7 @@ void RayTracingOpticalSceneResources::invalidate(){
     m_runtimeBoundsRequired = false;
 }
 
-bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather& gather){
+b8 RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather& gather){
     m_prepared = false;
     m_runtimeBoundsRequired = !gather.runtimeBounds.empty();
     m_runtimeBoundsSnapshot.reset();
@@ -93,7 +93,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
         m_resources.descriptor = descriptor;
         m_capacity = byteCount;
     }
-    const bool samePayload =
+    const b8 samePayload =
         m_resources.upload
         && m_resources.upload->bytes.size() == byteCount
         && NWB_MEMCMP(m_resources.upload->bytes.data(), &gather.header, sizeof(gather.header)) == 0
@@ -130,7 +130,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
     return m_prepared;
 }
 
-bool RayTracingOpticalSceneResources::prepareRuntimeBounds(const RayTracingOpticalSceneGather& gather, RendererShaderSystem& shaderSystem){
+b8 RayTracingOpticalSceneResources::prepareRuntimeBounds(const RayTracingOpticalSceneGather& gather, RendererShaderSystem& shaderSystem){
     if(!m_prepared)
         return false;
     m_runtimeBoundsSnapshot.reset();
@@ -146,7 +146,7 @@ bool RayTracingOpticalSceneResources::prepareRuntimeBounds(const RayTracingOptic
         return false;
     }
     m_runtimeBoundsSnapshot = Move(*prepared);
-    m_prepared = static_cast<bool>(m_runtimeBoundsSnapshot);
+    m_prepared = static_cast<b8>(m_runtimeBoundsSnapshot);
     return m_prepared;
 }
 

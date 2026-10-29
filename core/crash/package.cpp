@@ -49,7 +49,7 @@ static void AppendUnsignedText(CrashStringT<ArenaT>& out, const u64 value){
 }
 
 template<typename ArenaT>
-static void AppendManifestPropertyPrefix(CrashStringT<ArenaT>& out, const StringView key, const bool isFirst){
+static void AppendManifestPropertyPrefix(CrashStringT<ArenaT>& out, const StringView key, const b8 isFirst){
     if(!isFirst)
         out += ",\n";
     out += "  \"";
@@ -101,9 +101,9 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendUnsignedText(manifest, request.threadId);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHasExceptionContextKey, false);
 #if defined(NWB_PLATFORM_WINDOWS)
-    const bool hasExceptionContext = request.manualContextSize != 0u || request.exceptionPointers != 0u;
+    const b8 hasExceptionContext = request.manualContextSize != 0u || request.exceptionPointers != 0u;
 #else
-    const bool hasExceptionContext = request.exceptionPointers != 0u;
+    const b8 hasExceptionContext = request.exceptionPointers != 0u;
 #endif
     manifest += hasExceptionContext ? s_TrueText : s_FalseText;
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFaultAddressKey, false);
@@ -199,11 +199,11 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     return text;
 }
 
-static bool HasCpuContext(const CrashRequest& request)noexcept{
+static b8 HasCpuContext(const CrashRequest& request)noexcept{
     return request.faultAddress != 0u || request.instructionPointer != 0u || request.stackPointer != 0u || request.framePointer != 0u;
 }
 
-static bool HasCallstack(const CrashRequest& request)noexcept{
+static b8 HasCallstack(const CrashRequest& request)noexcept{
     return request.callstackFrameCount != 0u;
 }
 
@@ -264,7 +264,7 @@ static CrashStringT<ArenaT> BuildArtifactStrategyText(ArenaT& arena, const Crash
 }
 
 template<typename ArenaT>
-static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
+static b8 WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     const ::Path<ArenaT> packageDirectory = RequestPendingDirectory(arena, request);
     const auto directory = EnsureDirectories(packageDirectory);
     if(!directory){
@@ -295,7 +295,7 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
 
 #if defined(NWB_PLATFORM_WINDOWS)
 template<typename ArenaT>
-static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
+static b8 WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
     constexpr AStringView s_CloseDumpProcessOperation = "close_dump_process";
 
     const ::Path<ArenaT> dumpPath = RequestPendingDirectory(arena, request) / PackageNames::s_ProcessDumpFileName;
@@ -365,7 +365,7 @@ static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const 
         return;
     }
 
-    bool copied = true;
+    b8 copied = true;
     char buffer[s_LinuxCopyBufferBytes];
     for(;;){
         input.read(buffer, static_cast<StreamSize>(sizeof(buffer)));
@@ -406,7 +406,7 @@ static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const AStri
 #endif
 
 template<typename ArenaT>
-static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& request){
+static b8 WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& request){
     if(!IsCurrentCrashRequest(request))
         return false;
     if(!WriteCrashPackageBasics(arena, request))
@@ -414,7 +414,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
 
 #if defined(NWB_PLATFORM_WINDOWS)
     if(request.platform == PlatformKind::Windows){
-        const bool dumpWritten = WriteWindowsMinidump(arena, request);
+        const b8 dumpWritten = WriteWindowsMinidump(arena, request);
         if(!WriteTextFile(
             RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
             dumpWritten ? "minidump captured; server-side PDB symbolication pending\n" : "minidump capture failed; metadata package only\n"
@@ -452,7 +452,7 @@ void CaptureCrashPackageFilesystemFailure(const AStringView operation, const Err
     CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_PackageErrorCategory, .expression = operation, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
 }
 
-bool WriteCrashPackage(const CrashRequest& request){
+b8 WriteCrashPackage(const CrashRequest& request){
     return WriteCrashPackageWithArena(DumpArena(), request);
 }
 
@@ -483,7 +483,7 @@ Expected<CrashBytesT<ArenaT>, ErrorCode> BuildPackageArchive(ArenaT& arena, Allo
         return MakeUnexpected(directory.error());
 
     CrashBytesT<Alloc::ScratchArena> fileBytes(scratchArena);
-    bool wroteFile = false;
+    b8 wroteFile = false;
     for(const auto& entry : *directory){
         const auto regularFile = entry.isRegularFile();
         if(!regularFile)

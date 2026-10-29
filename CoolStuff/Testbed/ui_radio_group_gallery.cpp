@@ -23,7 +23,7 @@ Expected<u64> UiRadioGroupSource::indexOf(const u64 keyValue)const noexcept{
     return keyValue - 1u;
 }
 
-Expected<u64> UiRadioGroupSource::findEnabled(const u64 start, const bool reverse)const noexcept{
+Expected<u64> UiRadioGroupSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
     if(start >= s_RowCount)
         return MakeUnexpected(Failure{});
     const u64 index = start == s_FirstDisabledIndex ? (reverse ? s_LastEnabledIndex : s_RowCount) : start;
@@ -47,7 +47,7 @@ void UiRadioGroupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x,
     Builder& ui = context.ui;
     if(!ui.beginPanel("radio_group_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
         return;
-    bool valid = ui.label(s_TitleKey, "Radio choices");
+    b8 valid = ui.label(s_TitleKey, "Radio choices");
     const RadioGroupResult result = ui.radioGroup("quality", m_source, m_state);
     valid = ui.label(s_HintKey, "Arrows select; Enter / Space sets") && result.valid && valid;
     valid = ui.endPanel() && valid;

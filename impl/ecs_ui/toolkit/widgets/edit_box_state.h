@@ -24,8 +24,8 @@ NWB_IMPL_UI_BEGIN
 struct EditBoxOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
     LayoutSize height;
-    bool enabled = true;
-    bool readOnly = false;
+    b8 enabled = true;
+    b8 readOnly = false;
 };
 
 // The host keeps this value alive through the matching endPanel/endWindow; paint and GPU snapshots own their text.
@@ -39,19 +39,19 @@ struct EditBoxState{
     usize caret = 0u;
     EditBoxPlacement placement;
     f32 scroll = 0.0f;
-    bool focused = false;
+    b8 focused = false;
 };
 
 struct EditBoxResult{
-    bool valid = false;
-    bool textChanged = false;
-    bool selectionChanged = false;
-    bool submitted = false;
-    bool cancelled = false;
-    bool focused = false;
-    bool preeditCaretVisible = true;
-    bool blurred = false;
-    bool abandoned = false;
+    b8 valid = false;
+    b8 textChanged = false;
+    b8 selectionChanged = false;
+    b8 submitted = false;
+    b8 cancelled = false;
+    b8 focused = false;
+    b8 preeditCaretVisible = true;
+    b8 blurred = false;
+    b8 abandoned = false;
 };
 
 
@@ -72,7 +72,7 @@ public:
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, EditModel& model, const EditBoxOptions& options, const PopupToken& popup, IEditActionSink& actions) = 0;
     // Navigation resolves the current model between copied events; application objects are lent only for this call.
     [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState& widget, EditModel& model, const EditBoxOptions& options, const PopupToken& popup, EditNavigationState& navigation, IEditNavigationResolver& resolver, IEditActionSink& actions) = 0;
-    [[nodiscard]] virtual bool publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions& options) = 0;
+    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions& options) = 0;
 };
 
 

@@ -38,7 +38,7 @@ static Expected<UiSkinCookEntry> ParseUiSkinDocument(const Path& assetRoot, cons
     return ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static bool ExtractUiSkinDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+static b8 ExtractUiSkinDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     if(!context.document)
         return false;
     const auto skinEntry = ParseUiSkinCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena);
@@ -47,7 +47,7 @@ static bool ExtractUiSkinDependencies(const Core::Assets::CookDependencyItemCont
     return collector.addAssetDependency(skinEntry->texture.name(), Texture::AssetTypeName());
 }
 
-static bool RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
     return
         Core::Assets::RegisterSingleDocumentCookEntry<UiSkinCookEntry, UiSkin, UiSkinAssetCodec>(
             registry,
@@ -60,7 +60,7 @@ static bool RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
     ;
 }
 
-static bool RegisterUiSkinCookDependency(Core::Assets::CookDependencyRegistry& registry){
+static b8 RegisterUiSkinCookDependency(Core::Assets::CookDependencyRegistry& registry){
     return
         registry.registerType(UiSkin::AssetTypeName(), &ExtractUiSkinDependencies)
         && AssetsSubsystemCook::RegisterSubsystemCookDependency<UiSubsystem>(registry)

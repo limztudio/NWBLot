@@ -51,7 +51,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
         u64 index = 0u;
         ++findCalls;
         if(start >= count)
@@ -78,7 +78,7 @@ public:
 
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         ++enabledCalls;
         return index < count && (index < disabledBegin || index >= disabledEnd);
     }
@@ -97,11 +97,11 @@ public:
     u64 count = 10u;
     u64 disabledBegin = Limit<u64>::s_Max;
     u64 disabledEnd = Limit<u64>::s_Max;
-    bool reversed = false;
-    bool badLookup = false;
-    bool wrongLookup = false;
-    bool badFind = false;
-    mutable bool changeRevisionOnLookup = false;
+    b8 reversed = false;
+    b8 badLookup = false;
+    b8 wrongLookup = false;
+    b8 badFind = false;
+    mutable b8 changeRevisionOnLookup = false;
     mutable u64 keyCalls = 0u;
     mutable u64 lookupCalls = 0u;
     mutable u64 findCalls = 0u;

@@ -96,7 +96,7 @@ protected:
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.f, Move(regions));
     }
 
-    [[nodiscard]] bool installAtlas(){
+    [[nodiscard]] b8 installAtlas(){
         const FontSource source{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_font, 1u, &m_atlas };
         return m_text.setFonts(m_scratchArena, &source, 1u);
     }

@@ -113,7 +113,7 @@ public:
             return VectorDoubleZero();
         return VectorDoubleSaturate(VectorDoubleDivide(VectorDoubleReplicate(readyFrontierWorkerBusySeconds), VectorDoubleReplicate(readyFrontierWorkerCapacitySeconds)));
     }
-    [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };
 
 
@@ -138,7 +138,7 @@ struct GpuTaskGraphPhysicalQueueRecordingStatistics{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
     }
 };
@@ -166,13 +166,13 @@ private:
 
 
     public:
-        [[nodiscard]] static bool Active()noexcept{ return s_ActiveOperation != nullptr; }
-        [[nodiscard]] static bool ActiveFor(const GpuRecordedGraph& recordedGraph)noexcept;
-        [[nodiscard]] static bool ActiveExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept;
-        [[nodiscard]] static bool ActiveScopeIs(const ArtifactOperation& operation)noexcept{
+        [[nodiscard]] static b8 Active()noexcept{ return s_ActiveOperation != nullptr; }
+        [[nodiscard]] static b8 ActiveFor(const GpuRecordedGraph& recordedGraph)noexcept;
+        [[nodiscard]] static b8 ActiveExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept;
+        [[nodiscard]] static b8 ActiveScopeIs(const ArtifactOperation& operation)noexcept{
             if(!operation.m_ownsAdmission || !operation.m_recordedGraph)
                 return false;
-            bool foundOperation = false;
+            b8 foundOperation = false;
             for(const ArtifactOperation* active = s_ActiveOperation; active; active = active->m_previousOperation){
                 if(active->m_recordedGraph != operation.m_recordedGraph)
                     return false;
@@ -189,11 +189,11 @@ private:
 
 
     public:
-        [[nodiscard]] bool valid()const noexcept{ return m_recordedGraph != nullptr; }
-        [[nodiscard]] bool validFor(const GpuRecordedGraph& recordedGraph)const noexcept{
+        [[nodiscard]] b8 valid()const noexcept{ return m_recordedGraph != nullptr; }
+        [[nodiscard]] b8 validFor(const GpuRecordedGraph& recordedGraph)const noexcept{
             return m_recordedGraph == &recordedGraph;
         }
-        [[nodiscard]] bool exclusiveFor(const GpuRecordedGraph& recordedGraph)const noexcept{
+        [[nodiscard]] b8 exclusiveFor(const GpuRecordedGraph& recordedGraph)const noexcept{
             return m_recordedGraph == &recordedGraph && m_exclusive;
         }
 
@@ -201,8 +201,8 @@ private:
     private:
         const GpuRecordedGraph* m_recordedGraph = nullptr;
         ArtifactOperation* m_previousOperation = nullptr;
-        bool m_exclusive = false;
-        bool m_ownsAdmission = false;
+        b8 m_exclusive = false;
+        b8 m_ownsAdmission = false;
     };
     // Every ready-frontier worker receives isolated state-handoff scratch.
     // Separate from per-packet final-state slots, which are written only by the packet's own recording worker and read by later frontiers.
@@ -233,10 +233,10 @@ private:
 
 
     public:
-        [[nodiscard]] bool ensureValid(GraphicsArena& arena);
+        [[nodiscard]] b8 ensureValid(GraphicsArena& arena);
         [[nodiscard]] Expected<CommandListHandle> acquireCommandList(Device& device, const CommandListParameters& parameters);
         void reset()noexcept;
-        [[nodiscard]] bool valid()const noexcept{ return stateFanInScratchArena != nullptr; }
+        [[nodiscard]] b8 valid()const noexcept{ return stateFanInScratchArena != nullptr; }
     };
 
 
@@ -257,20 +257,20 @@ public:
 public:
     // A live record/submit operation leases every packet, timing ticket, state seed, and command-list handle in this artifact.
     // Failed reset leaves all storage and exact publication identities unchanged so the operation can finish or unwind safely.
-    [[nodiscard]] bool tryReset(const GpuCompiledGraph& compiledGraph);
+    [[nodiscard]] b8 tryReset(const GpuCompiledGraph& compiledGraph);
     void reset(const GpuCompiledGraph& compiledGraph);
     // Join graph/native work before releasing device-bound cached recording objects.
-    [[nodiscard]] bool releaseCommandListCache()noexcept;
+    [[nodiscard]] b8 releaseCommandListCache()noexcept;
 
 
 private:
     void revokeCommandListPublicationsWithoutCallbacks(ArtifactStorage& storage)noexcept;
-    [[nodiscard]] bool prepareStorageCandidateLayout(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess);
-    [[nodiscard]] bool prepareResetStorageCandidate(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess);
-    [[nodiscard]] bool prepareRecordingStorageCandidate(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTimingRecorder* timingRecorder);
+    [[nodiscard]] b8 prepareStorageCandidateLayout(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess);
+    [[nodiscard]] b8 prepareResetStorageCandidate(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess);
+    [[nodiscard]] b8 prepareRecordingStorageCandidate(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTimingRecorder* timingRecorder);
     void publishStorageCandidate(const GpuTaskGraph* graphIdentity, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, u64 recordingAttemptGeneration, const ArtifactOperation& artifactAccess)noexcept;
-    [[nodiscard]] bool validForWithinArtifactOperation(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const ArtifactOperation& artifactAccess)const noexcept;
-    [[nodiscard]] bool validForWithinArtifactOperation(
+    [[nodiscard]] b8 validForWithinArtifactOperation(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const ArtifactOperation& artifactAccess)const noexcept;
+    [[nodiscard]] b8 validForWithinArtifactOperation(
         const GpuTaskGraph& graph,
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph& compiledGraph,
@@ -280,8 +280,8 @@ private:
 
 
 public:
-    [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
-    [[nodiscard]] bool validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
+    [[nodiscard]] b8 validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
+    [[nodiscard]] b8 validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
     // Owned aggregate from packet slots under artifact admission. The plan proof guards metadata and rejects foreign artifacts.
     [[nodiscard]] GpuTaskGraphRecordingStatistics recordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
@@ -289,8 +289,8 @@ public:
     [[nodiscard]] GpuTaskGraphPhysicalQueueRecordingStatistics physicalQueueRecordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] Optional<GpuRecordedPacket> packetSnapshot(const GpuSubmissionPacketId& packet)const noexcept;
     // Checks this recorded graph against compiler output and resolves the task's packet to its native final state.
-    [[nodiscard]] bool hasTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task)const noexcept;
-    [[nodiscard]] bool copyTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task, CommandListResourceStateHandoff& outStateSeed)const;
+    [[nodiscard]] b8 hasTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task)const noexcept;
+    [[nodiscard]] b8 copyTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task, CommandListResourceStateHandoff& outStateSeed)const;
 
 
 private:

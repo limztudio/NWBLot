@@ -415,7 +415,7 @@ TEST(GpuTaskGraph, LogicalSharingRequiresTwoSelectedFamiliesAcrossEveryMaskAndTo
                 queues[queueIndex].familyIndex = queueIndex >= 3u && queues[queueIndex].queueClass == splitClass ? 1u : 0u;
                 queues[queueIndex].queueIndex = static_cast<u32>(queueIndex);
             }
-            for(const bool reversed : { false, true }){
+            for(const b8 reversed : { false, true }){
                 SCOPED_TRACE(reversed);
                 Graphics::GpuPhysicalQueueInfo orderedQueues[LengthOf(queues)];
                 for(usize queueIndex = 0u; queueIndex < LengthOf(queues); ++queueIndex)
@@ -425,7 +425,7 @@ TEST(GpuTaskGraph, LogicalSharingRequiresTwoSelectedFamiliesAcrossEveryMaskAndTo
                 Graphics::GpuTaskGraphResourceView resource{};
                 resource.type = Graphics::GpuGraphResourceType::Buffer;
                 resource.queueSharing = sharing;
-                const bool expectedConcurrent = Graphics::ResourceQueueSharing::IncludesQueueClass(sharing, splitClass);
+                const b8 expectedConcurrent = Graphics::ResourceQueueSharing::IncludesQueueClass(sharing, splitClass);
                 EXPECT_EQ(Graphics::GpuTaskGraphCompilerDetail::ResourceUsesConcurrentQueueSharing(resource, topology), expectedConcurrent);
             }
         }

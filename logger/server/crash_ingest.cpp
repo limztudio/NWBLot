@@ -70,7 +70,7 @@ static void ApplyRetention(Core::Alloc::ScratchArena& arena, const CrashIngestCo
     return Core::Common::LogType::EssentialInfo;
 }
 
-static void AppendAcceptedIngestDetails(const CrashScratchPath& rawPath, const bool rawArchived, Core::Alloc::ScratchArena& arena, CrashText& outReport){
+static void AppendAcceptedIngestDetails(const CrashScratchPath& rawPath, const b8 rawArchived, Core::Alloc::ScratchArena& arena, CrashText& outReport){
     if(!outReport.empty() && outReport.back() != '\n')
         outReport += s_ReportLineEnd;
 
@@ -280,7 +280,7 @@ template<typename ArenaT>
     return ParseU64(AStringView(manifest.data() + begin, cursor - begin));
 }
 
-[[nodiscard]] static Expected<bool> FindGeneratedJsonBoolValue(Core::Alloc::ScratchArena& scratchArena, const AStringView manifest, const AStringView key){
+[[nodiscard]] static Expected<b8> FindGeneratedJsonBoolValue(Core::Alloc::ScratchArena& scratchArena, const AStringView manifest, const AStringView key){
     const auto valueCursor = FindGeneratedJsonValueCursor(scratchArena, manifest, key);
     if(!valueCursor)
         return MakeUnexpected(Failure{});
@@ -430,7 +430,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));
 
     const auto rawPath = ::MovePathToDirectory(operationArchivePath, CrashRawDirectory(scratchArena, config.storageDirectory));
-    const bool rawArchived = rawPath.has_value();
+    const b8 rawArchived = rawPath.has_value();
     if(!rawArchived){
         if(const auto removed = RemoveFile(archivePath); !removed || !*removed)
             NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove crash archive that could not be retained"));

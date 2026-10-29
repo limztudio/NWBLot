@@ -121,8 +121,8 @@ struct GpuTaskNode{
     mutable u64 discardNotificationGeneration = 0u;
     GpuTaskTimingMetadata timing;
     mutable TaskLifecycleState::Enum lifecycleState = TaskLifecycleState::Declared;
-    mutable bool recordThunkInProgress = false;
-    mutable bool recordThunkCompleted = false;
+    mutable b8 recordThunkInProgress = false;
+    mutable b8 recordThunkCompleted = false;
 };
 
 struct GpuGraphResourceNode{
@@ -143,8 +143,8 @@ struct GpuGraphResourceNode{
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     u16 deviceGeneration = 0u;
-    bool usesConcurrentSharing = false;
-    bool hasQueueAdmission = false;
+    b8 usesConcurrentSharing = false;
+    b8 hasQueueAdmission = false;
     GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
     GpuPhysicalQueueId initialOwnerQueue;
 };
@@ -155,14 +155,14 @@ struct ResourcePointerKey{
 };
 
 struct ResourcePointerEqual{
-    [[nodiscard]] bool operator()(const ResourcePointerKey& left, const ResourcePointerKey& right)const noexcept{
+    [[nodiscard]] b8 operator()(const ResourcePointerKey& left, const ResourcePointerKey& right)const noexcept{
         return left.pointer == right.pointer && left.type == right.type;
     }
 };
 
 struct ResourceImportMatch{
     u32 index = Limit<u32>::s_Max;
-    bool samePointer = false;
+    b8 samePointer = false;
 };
 
 // The binding borrows an import argument only until its pending resource node takes ownership.
@@ -205,14 +205,14 @@ struct PipelinePointerKey{
 };
 
 struct PipelinePointerEqual{
-    [[nodiscard]] bool operator()(const PipelinePointerKey& left, const PipelinePointerKey& right)const noexcept{
+    [[nodiscard]] b8 operator()(const PipelinePointerKey& left, const PipelinePointerKey& right)const noexcept{
         return left.pointer == right.pointer && left.type == right.type;
     }
 };
 
 struct PipelineImportMatch{
     u32 index = Limit<u32>::s_Max;
-    bool samePointer = false;
+    b8 samePointer = false;
 };
 
 // The pending pipeline node retains the imported handle before any registry entry is published.
@@ -229,7 +229,7 @@ struct GpuExternalCompletionNode{
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
     QueueSubmissionToken token;
-    bool hasToken = false;
+    b8 hasToken = false;
 };
 
 struct GpuUploadBlobNode{

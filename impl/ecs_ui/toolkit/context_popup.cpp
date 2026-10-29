@@ -23,7 +23,7 @@ namespace __hidden_ui_context_popup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool Geometry(const PopupScope& scope)noexcept{
+[[nodiscard]] static b8 Geometry(const PopupScope& scope)noexcept{
     if(
         !IsFinite(scope.bounds.x) || !IsFinite(scope.bounds.y) || !IsFinite(scope.bounds.width) || !IsFinite(scope.bounds.height)
         || !IsFinite(scope.viewport.x) || !IsFinite(scope.viewport.y) || !IsFinite(scope.viewport.width) || !IsFinite(scope.viewport.height)
@@ -45,7 +45,7 @@ namespace __hidden_ui_context_popup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Context::registerPopupScope(const WidgetState& state, PopupScope scope){
+b8 Context::registerPopupScope(const WidgetState& state, PopupScope scope){
     if(
         m_failed || !currentDeclaration(state) || state.kind != WidgetKind::Popup
         || !scope.token.valid() || scope.token.widget != state.id || scope.token.declarationGeneration != state.declarationGeneration
@@ -66,7 +66,7 @@ bool Context::registerPopupScope(const WidgetState& state, PopupScope scope){
     return true;
 }
 
-bool Context::activatePopupScope(const PopupToken& token)noexcept{
+b8 Context::activatePopupScope(const PopupToken& token)noexcept{
     if(m_failed || !m_rootActive || !token.valid() || m_popupDepth == s_InputMaxPopups){
         fail();
         return false;
@@ -88,7 +88,7 @@ bool Context::activatePopupScope(const PopupToken& token)noexcept{
     return false;
 }
 
-bool Context::updatePopupScope(const PopupToken& token, PopupScope scope)noexcept{
+b8 Context::updatePopupScope(const PopupToken& token, PopupScope scope)noexcept{
     if(m_failed || !m_rootActive || !token.valid() || scope.token != token || !__hidden_ui_context_popup::Geometry(scope)){
         fail();
         return false;
@@ -108,11 +108,11 @@ bool Context::updatePopupScope(const PopupToken& token, PopupScope scope)noexcep
     return false;
 }
 
-bool Context::beginPopupScope(const WidgetState& state, PopupScope scope){
+b8 Context::beginPopupScope(const WidgetState& state, PopupScope scope){
     return registerPopupScope(state, scope) && activatePopupScope(scope.token);
 }
 
-bool Context::endPopupScope(const bool visible)noexcept{
+b8 Context::endPopupScope(const b8 visible)noexcept{
     if(m_popupDepth == 0u || !m_currentPopup.valid()){
         fail();
         return false;
@@ -128,8 +128,8 @@ bool Context::endPopupScope(const bool visible)noexcept{
 }
 
 void Context::discardPopupScope(const PopupToken& token)noexcept{
-    Array<bool, s_InputMaxPopups> removed{};
-    bool found = false;
+    Array<b8, s_InputMaxPopups> removed{};
+    b8 found = false;
     for(usize index = 0u; index < m_popups.size(); ++index){
         removed[index] = m_popups[index].scope.token == token;
         for(usize ancestor = 0u; ancestor < index && !removed[index]; ++ancestor)
@@ -148,7 +148,7 @@ void Context::discardPopupScope(const PopupToken& token)noexcept{
         return;
     m_input.closePopup(token);
     for(usize index = m_targets.size(); index > 0u; --index){
-        bool remove = false;
+        b8 remove = false;
         for(usize popup = 0u; popup < m_popups.size(); ++popup)
             remove |= removed[popup] && m_targets[index - 1u].target.popup == m_popups[popup].scope.token;
         if(remove)
@@ -160,7 +160,7 @@ void Context::discardPopupScope(const PopupToken& token)noexcept{
     }
 }
 
-bool Context::hasPopupScope(const PopupToken& token)const noexcept{
+b8 Context::hasPopupScope(const PopupToken& token)const noexcept{
     return popupLayer(token) != 0u;
 }
 

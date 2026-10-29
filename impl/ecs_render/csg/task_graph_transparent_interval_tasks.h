@@ -45,7 +45,7 @@ struct TransparentCsgIntervalRecordInputs{
     MeshFrameBindingSnapshot frameBindings;
     CsgGraphResourceSnapshot csgResources;
     TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
-    bool csgFrameBuffersUploaded = false;
+    b8 csgFrameBuffersUploaded = false;
 
 
 public:
@@ -70,7 +70,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
@@ -89,7 +89,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);

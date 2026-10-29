@@ -23,11 +23,11 @@ struct ReflectionSceneContentStamp{
     u64 material = 0u;
     u64 lighting = 0u;
     u64 view = 0u;
-    bool trusted = false;
+    b8 trusted = false;
 
 
 public:
-    [[nodiscard]] constexpr bool matchesScene(const ReflectionSceneContentStamp& other)const noexcept{
+    [[nodiscard]] constexpr b8 matchesScene(const ReflectionSceneContentStamp& other)const noexcept{
         return geometry == other.geometry && material == other.material && lighting == other.lighting && trusted == other.trusted;
     }
 };

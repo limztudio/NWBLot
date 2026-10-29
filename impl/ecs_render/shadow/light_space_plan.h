@@ -47,7 +47,7 @@ struct LightSpaceLightRequest{
     u32 lightIndex = 0u;
     u32 shadowSlot = 0u;
     Scene::LightType::Enum type = Scene::LightType::Directional;
-    bool eligible = true;
+    b8 eligible = true;
 };
 
 // A point light renders one view per cube face.
@@ -68,7 +68,7 @@ struct LightSpacePlan{
 };
 
 // Invalid input is rejected. Valid but ineligible or over-budget lights retain software tracing.
-[[nodiscard]] Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& settings, Span<const LightSpaceLightRequest> requests, u64 maxStorageBufferRange, u32 drawCount, bool csgIntervalDepth = false)noexcept;
+[[nodiscard]] Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& settings, Span<const LightSpaceLightRequest> requests, u64 maxStorageBufferRange, u32 drawCount, b8 csgIntervalDepth = false)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -37,8 +37,8 @@ using TaskGraphTestUtils::TestArena;
     const Graphics::GpuTaskCommandRequirements& commands,
     const Graphics::GpuTaskId* const dependencies = nullptr,
     const usize dependencyCount = 0u,
-    const bool mergeWithPrevious = false,
-    const bool allowPacketMerge = false
+    const b8 mergeWithPrevious = false,
+    const b8 allowPacketMerge = false
 ){
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = !allowPacketMerge;
@@ -49,7 +49,7 @@ using TaskGraphTestUtils::TestArena;
     return graph.addTask(description, commands);
 }
 
-[[nodiscard]] bool HasPacketDependency(const Graphics::GpuCompiledGraph::ReadView& plan, const Graphics::GpuTaskId& consumer, const Graphics::GpuTaskId& producer)noexcept{
+[[nodiscard]] b8 HasPacketDependency(const Graphics::GpuCompiledGraph::ReadView& plan, const Graphics::GpuTaskId& consumer, const Graphics::GpuTaskId& producer)noexcept{
     const Graphics::GpuSubmissionPacketId producerPacket = plan.packetForTask(producer);
     const Graphics::GpuCompiledPacketView consumerPacket = plan.packet(plan.packetForTask(consumer));
     if(!producerPacket.valid() || !consumerPacket.valid())
@@ -61,7 +61,7 @@ using TaskGraphTestUtils::TestArena;
     return false;
 }
 
-[[nodiscard]] bool HasStateSeed(const Graphics::GpuCompiledGraph::ReadView& plan, const Graphics::GpuTaskId& consumer, const Graphics::GpuTaskId& producer)noexcept{
+[[nodiscard]] b8 HasStateSeed(const Graphics::GpuCompiledGraph::ReadView& plan, const Graphics::GpuTaskId& consumer, const Graphics::GpuTaskId& producer)noexcept{
     const Graphics::GpuSubmissionPacketId producerPacket = plan.packetForTask(producer);
     const Graphics::GpuCompiledTaskView consumerTask = plan.findTask(consumer);
     if(!producerPacket.valid() || !consumerTask.valid())
@@ -74,7 +74,7 @@ using TaskGraphTestUtils::TestArena;
 }
 
 
-void CheckSingleLaneStateChangeScratch(usize& scratchPeak, const usize taskCount, const bool concurrentSharing = false){
+void CheckSingleLaneStateChangeScratch(usize& scratchPeak, const usize taskCount, const b8 concurrentSharing = false){
     SCOPED_TRACE(taskCount);
     SCOPED_TRACE(concurrentSharing);
     TestArena testArena;
@@ -144,7 +144,7 @@ TEST(GpuTaskGraph, KeepsConcurrentReadersIndependentAfterStateEstablishingProduc
         ASSERT_TRUE(resourceResult);
         const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
-        const bool isAccelStruct = resourceType == Graphics::GpuGraphResourceType::AccelStruct;
+        const b8 isAccelStruct = resourceType == Graphics::GpuGraphResourceType::AccelStruct;
         Graphics::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = isAccelStruct ? Graphics::ResourceStates::AccelStructWrite : Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write, };
         const auto writerResult = AddStateTask(graph, Name("tests/task_graph/read_fanout_writer"), use, GraphicsCommands());
         ASSERT_TRUE(writerResult);
@@ -208,7 +208,7 @@ TEST(GpuTaskGraph, KeepsCompatibleTextureReadMasksIndependentWithoutChangingSema
     EXPECT_FALSE(HasPacketDependency(plan, depthReader, computeReader));
     const Graphics::GpuCompiledTaskView depthTask = plan.findTask(depthReader);
     ASSERT_TRUE(depthTask.valid());
-    bool hasSemanticTransition = false;
+    b8 hasSemanticTransition = false;
     for(u32 index = 0u; index < depthTask.plan->prologueBarrierCount; ++index){
         const Graphics::GpuCompiledBarrier& barrier = depthTask.prologueBarriers[index];
         hasSemanticTransition = hasSemanticTransition || (
@@ -271,7 +271,7 @@ TEST(GpuTaskGraph, JoinsEveryConcurrentReaderBeforeIncompatibleReadStateChange){
 TEST(GpuTaskGraph, JoinsConcurrentReadersBeforeTaskInternalReadStateChange){
     const Graphics::GpuGraphResourceType::Enum resourceTypes[] = { Graphics::GpuGraphResourceType::Texture, Graphics::GpuGraphResourceType::Buffer, };
     for(const Graphics::GpuGraphResourceType::Enum resourceType : resourceTypes){
-        for(const bool overlappingLaterUse : { false, true }){
+        for(const b8 overlappingLaterUse : { false, true }){
             SCOPED_TRACE(resourceType);
             SCOPED_TRACE(overlappingLaterUse);
             TestArena testArena;

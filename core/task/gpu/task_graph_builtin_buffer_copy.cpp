@@ -41,7 +41,7 @@ struct CopyBufferTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyBuf
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         return GpuTaskGraphBuiltinDetail::RecordCopies(
             payload, commandList, context,
             [](const GpuTaskRecordContext& captureContext, const Copy& copy){
@@ -105,7 +105,7 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, con
         return dataSizeBytes != 0u && offsetBytes <= bufferDesc.byteSize && dataSizeBytes <= bufferDesc.byteSize - offsetBytes;
     };
 
-    bool valid = true;
+    b8 valid = true;
     for(usize regionIndex = 0u; regionIndex < copyDesc.regionCount && valid; ++regionIndex){
         const GpuCopyBufferTaskRegion& region = copyDesc.regions[regionIndex];
         if(!validResource(region.source) || !validResource(region.destination)){

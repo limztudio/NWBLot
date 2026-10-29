@@ -69,7 +69,7 @@ struct RayTracingOpticalBoundsFinalizeSnapshot{
     Core::GpuDescriptorHandle sourceDescriptor = Core::GpuDescriptorHandle::Invalid();
     Core::GpuPhysicalQueueId queue;
     u32 instanceCount = 0u;
-    bool staticBoundsComplete = false;
+    b8 staticBoundsComplete = false;
 
 
 public:
@@ -88,7 +88,7 @@ public:
     [[nodiscard]] Expected<RayTracingOpticalBoundsFinalizeHandle> prepare(const RayTracingOpticalSceneGather& gather, Core::GpuDescriptorHandle sourceDescriptor, RendererShaderSystem& shaderSystem);
 
 private:
-    [[nodiscard]] bool ensurePipeline(RendererShaderSystem& shaderSystem);
+    [[nodiscard]] b8 ensurePipeline(RendererShaderSystem& shaderSystem);
 
 
 private:

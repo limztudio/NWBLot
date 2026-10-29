@@ -42,24 +42,24 @@ struct CsgReceiverDrawState{
     u32 firstCutter = 0u;
     u32 cutterCount = 0u;
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
-    bool active = false;
+    b8 active = false;
     // cutterCount lets render CSG iterate the lookup range directly, skipping receiver/group resolve.
 };
 
 struct CsgFrameState{
-    bool hasAnyWork = false;
+    b8 hasAnyWork = false;
 
-    bool hasOpaqueStaticWork = false;
-    bool hasOpaqueSkinnedWork = false;
-    bool hasTransparentStaticWork = false;
-    bool hasTransparentSkinnedWork = false;
+    b8 hasOpaqueStaticWork = false;
+    b8 hasOpaqueSkinnedWork = false;
+    b8 hasTransparentStaticWork = false;
+    b8 hasTransparentSkinnedWork = false;
 
     u32 receiverCount = 0u;
     u32 cutterCount = 0u;
 
 
 public:
-    [[nodiscard]] bool empty()const noexcept{ return !hasAnyWork; }
+    [[nodiscard]] b8 empty()const noexcept{ return !hasAnyWork; }
 };
 
 struct CsgFrameCutterRange{
@@ -67,14 +67,14 @@ struct CsgFrameCutterRange{
     u32 cutterCount = 0u;
 };
 
-using CsgReceiverVisibleCallback = bool(*)(Core::ECS::World& world, Core::ECS::EntityID entity, CsgReceiverKind::Enum receiverKind, const CsgReceiverComponent& receiver, void* userData);
+using CsgReceiverVisibleCallback = b8(*)(Core::ECS::World& world, Core::ECS::EntityID entity, CsgReceiverKind::Enum receiverKind, const CsgReceiverComponent& receiver, void* userData);
 
 struct CsgFrameBuildDesc{
     CsgReceiverVisibleCallback receiverVisible = nullptr;
     void* receiverVisibleUserData = nullptr;
 
-    bool includeOpaquePass = true;
-    bool includeTransparentPass = true;
+    b8 includeOpaquePass = true;
+    b8 includeTransparentPass = true;
 };
 
 static_assert(IsStandardLayout_V<CsgReceiverComponent>, "CsgReceiverComponent must stay layout-stable for ECS storage");
@@ -119,7 +119,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool empty()const noexcept{ return m_cutterRanges.empty(); }
+    [[nodiscard]] b8 empty()const noexcept{ return m_cutterRanges.empty(); }
 
     [[nodiscard]] u32 cutterCount()const noexcept{ return static_cast<u32>(m_cutterRefs.size()); }
     [[nodiscard]] Expected<CsgReceiverDrawState> resolveReceiverDrawState(Core::ECS::EntityID entity, CsgReceiverPass::Enum receiverPass)const noexcept;
@@ -175,14 +175,14 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool HasCsgFrameCandidates(Core::ECS::World& world)noexcept;
+[[nodiscard]] b8 HasCsgFrameCandidates(Core::ECS::World& world)noexcept;
 struct CsgResolvedReceiver{
     CsgReceiverComponent receiver;
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
 };
 
 [[nodiscard]] Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, Core::ECS::EntityID entity)noexcept;
-void AddCsgFrameReceiverWork(CsgFrameState& inOutState, CsgReceiverKind::Enum receiverKind, bool opaqueWork, bool transparentWork, u32 cutterCount)noexcept;
+void AddCsgFrameReceiverWork(CsgFrameState& inOutState, CsgReceiverKind::Enum receiverKind, b8 opaqueWork, b8 transparentWork, u32 cutterCount)noexcept;
 void FinalizeCsgFrameState(CsgFrameState& inOutState)noexcept;
 [[nodiscard]] CsgFrameState BuildCsgFrameState(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const CsgFrameBuildDesc& desc = CsgFrameBuildDesc{});
 

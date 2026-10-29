@@ -62,7 +62,7 @@ void AppendRadeonGpuDetectiveSummary(Core::Alloc::ScratchArena& arena, const Cra
 void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, CrashReportText& outReport);
 
 #if defined(NWB_PLATFORM_WINDOWS)
-[[nodiscard]] Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(
+[[nodiscard]] Expected<b8, CrashSymbolicationFailure> AppendWindowsMinidumpStack(
     Core::Alloc::ScratchArena& scratchArena,
     const CrashScratchPath& packageDirectory,
     const CrashPackageSummary& summary,

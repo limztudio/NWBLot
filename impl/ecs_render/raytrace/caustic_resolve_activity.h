@@ -41,8 +41,8 @@ struct CausticResolveActivitySnapshot{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept;
-    [[nodiscard]] bool matches(const CausticResolveActivitySnapshot& other)const noexcept;
+    [[nodiscard]] b8 valid()const noexcept;
+    [[nodiscard]] b8 matches(const CausticResolveActivitySnapshot& other)const noexcept;
 };
 
 [[nodiscard]] Expected<CausticResolveActivityLayout> ResolveCausticActivityLayout(u32 halfWidth, u32 halfHeight)noexcept;

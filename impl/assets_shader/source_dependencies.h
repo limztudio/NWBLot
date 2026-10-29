@@ -62,7 +62,7 @@ struct IncludeDirective{
 );
 
 template<typename SourceArenaT, typename DependencyVectorT>
-[[nodiscard]] bool Gather(
+[[nodiscard]] b8 Gather(
     const ::Path<SourceArenaT>& sourcePath,
     Span<const Path> includeDirectories,
     const Span<const AStringView> externallyPlannedMacroIncludes,
@@ -124,7 +124,7 @@ template<typename SourceArenaT, typename DependencyVectorT>
                 const AStringView includeName = include->name;
                 const auto includeKind = include->kind;
                 if(includeKind == ShaderSourceDependencies::IncludeKind::Macro || includeKind == ShaderSourceDependencies::IncludeKind::Unsupported){
-                    const bool plannedMacro = includeKind == ShaderSourceDependencies::IncludeKind::Macro && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
+                    const b8 plannedMacro = includeKind == ShaderSourceDependencies::IncludeKind::Macro && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
                         return name == includeName;
                     }
                     ) != externallyPlannedMacroIncludes.end();

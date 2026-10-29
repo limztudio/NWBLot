@@ -68,7 +68,7 @@ private:
 
 
     public:
-        [[nodiscard]] static bool ActiveFor(const Device& device)noexcept{
+        [[nodiscard]] static b8 ActiveFor(const Device& device)noexcept{
             for(const SubmissionOperationLease* lease = ActiveLease(); lease; lease = lease->m_previousActiveLease){
                 if(lease->m_device == &device)
                     return true;
@@ -89,7 +89,7 @@ private:
 
 
     public:
-        [[nodiscard]] bool valid()const noexcept{ return m_device != nullptr; }
+        [[nodiscard]] b8 valid()const noexcept{ return m_device != nullptr; }
 
 
     private:
@@ -134,7 +134,7 @@ private:
     public:
         // The caller supplies a validated, non-empty ring layout.
         // Both arrays allocate once with device-lifetime backing, so their spans fit the persistent arena.
-        [[nodiscard]] bool initializeMetadata(const VulkanDetail::AmdBreadcrumbRingLayout& newLayout, const Name& allocationLog){
+        [[nodiscard]] b8 initializeMetadata(const VulkanDetail::AmdBreadcrumbRingLayout& newLayout, const Name& allocationLog){
             const auto expectedSlotCount = TryMultiply<usize>(newLayout.physicalQueueCount, newLayout.slotsPerQueue);
             if(metadata || newLayout.physicalQueueCount == 0u || newLayout.slotsPerQueue == 0u || !expectedSlotCount || *expectedSlotCount != newLayout.totalSlotCount)
                 return false;
@@ -170,7 +170,7 @@ public:
         VkBuffer buffer = VK_NULL_HANDLE;
         VkDeviceSize offset = 0u;
         u32 marker = 0u;
-        bool valid = false;
+        b8 valid = false;
     };
 
 
@@ -184,9 +184,9 @@ public:
     [[nodiscard]] Expected<HeapHandle> createHeap(const HeapDesc& d);
     [[nodiscard]] Expected<TextureHandle> createTexture(const TextureDesc& d);
     [[nodiscard]] Expected<MemoryRequirements> getTextureMemoryRequirements(Texture& texture);
-    bool bindTextureMemory(Texture& texture, Heap& heap, u64 offset);
+    b8 bindTextureMemory(Texture& texture, Heap& heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
-    [[nodiscard]] bool isTextureReadyForGpuUse(Texture* textureResource, VkImageUsageFlags requiredUsage = 0u)const noexcept;
+    [[nodiscard]] b8 isTextureReadyForGpuUse(Texture* textureResource, VkImageUsageFlags requiredUsage = 0u)const noexcept;
     // The caller owns native binding and lifetime and must provide exact immutable creation provenance.
     // Only one live Texture wrapper may name a VkImage per Device.
     [[nodiscard]] Expected<TextureHandle> createHandleForNativeTexture(ObjectType objectType, Object nativeTextureHandle, const TextureDesc& desc, const NativeTextureProvenance& nativeProvenance);
@@ -197,12 +197,12 @@ public:
     [[nodiscard]] Expected<void*> mapBuffer(Buffer& buffer, CpuAccessMode::Enum requestedAccess);
     void unmapBuffer(Buffer& buffer);
     [[nodiscard]] Expected<MemoryRequirements> getBufferMemoryRequirements(Buffer& buffer);
-    bool bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
+    b8 bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
     // Native wrappers trust caller-managed binding.
     // Managed ordinary buffers require their VMA allocation, while managed virtual buffers require a retained, device-owned bound Heap allocation.
     // CPU mapping is irrelevant.
-    [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* bufferResource, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
+    [[nodiscard]] b8 isBufferReadyForGpuUse(Buffer* bufferResource, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
     // The caller owns native binding and lifetime and must provide the exact immutable creation provenance.
     // Only one live Buffer wrapper may name a VkBuffer per Device.
     [[nodiscard]] Expected<BufferHandle> createHandleForNativeBuffer(ObjectType objectType, Object nativeBufferHandle, const BufferDesc& desc, const NativeBufferProvenance& nativeProvenance);
@@ -212,14 +212,14 @@ public:
     [[nodiscard]] Expected<SamplerHandle> createSampler(const SamplerDesc& d);
     [[nodiscard]] Expected<InputLayoutHandle> createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader*);
     [[nodiscard]] Expected<EventQueryHandle> createEventQuery();
-    [[nodiscard]] bool setEventQuery(EventQuery& query, CommandQueue::Enum queue);
-    [[nodiscard]] Expected<bool> pollEventQuery(EventQuery& query);
-    [[nodiscard]] bool waitEventQuery(EventQuery& query);
+    [[nodiscard]] b8 setEventQuery(EventQuery& query, CommandQueue::Enum queue);
+    [[nodiscard]] Expected<b8> pollEventQuery(EventQuery& query);
+    [[nodiscard]] b8 waitEventQuery(EventQuery& query);
     [[nodiscard]] Expected<TimerQueryHandle> createTimerQuery();
-    [[nodiscard]] Expected<bool> pollTimerQuery(TimerQuery& query);
+    [[nodiscard]] Expected<b8> pollTimerQuery(TimerQuery& query);
     [[nodiscard]] Expected<TimerQueryResult> getTimerQueryResult(TimerQuery& query);
     Expected<f32> getTimerQueryTime(TimerQuery& query);
-    bool resetTimerQuery(TimerQuery& query);
+    b8 resetTimerQuery(TimerQuery& query);
     [[nodiscard]] Expected<FramebufferHandle> createFramebuffer(const FramebufferDesc& desc);
     [[nodiscard]] Expected<GraphicsPipelineHandle> createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo);
     [[nodiscard]] Expected<ComputePipelineHandle> createComputePipeline(const ComputePipelineDesc& desc);
@@ -231,9 +231,9 @@ public:
     [[nodiscard]] Expected<RayTracingAccelStructHandle> createAccelStruct(const RayTracingAccelStructDesc& desc);
     [[nodiscard]] Expected<MemoryRequirements> getAccelStructMemoryRequirements(RayTracingAccelStruct& accelerationStructure);
     [[nodiscard]] Expected<RayTracingClusterOperationSizeInfo> getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
-    bool bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, Heap& heap, u64 offset);
+    b8 bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, Heap& heap, u64 offset);
     // Structural readiness deliberately allows an unbuilt acceleration structure to remain a legal build target.
-    [[nodiscard]] bool isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResource)const noexcept;
+    [[nodiscard]] b8 isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResource)const noexcept;
     [[nodiscard]] Expected<CommandListHandle> createCommandList(const CommandListParameters& params = CommandListParameters());
     // Cross-queue dependencies are immutable submission-local token edges.
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* commandLists, usize numCommandLists, CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc);
@@ -241,15 +241,15 @@ public:
 
 
 private:
-    void prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, bool graphSubmissionAuthorized);
-    void finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, u64 submittedID, bool submissionAccepted);
+    void prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, b8 graphSubmissionAuthorized);
+    void finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, u64 submittedID, b8 submissionAccepted);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeGraphCommandLists(CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandListsInternal(
         CommandList* const* commandLists,
         usize numCommandLists,
         const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionDesc& submitDesc,
-        bool graphSubmissionAuthorized,
+        b8 graphSubmissionAuthorized,
         DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy = DeviceLossDiagnosticPolicy::Capture
     );
 
@@ -265,39 +265,39 @@ public:
     [[nodiscard]] GpuPhysicalQueueTopology getPhysicalQueueTopology()const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] Expected<GpuQueueTimelineSnapshot> getQueueTimelineSnapshot(const GpuPhysicalQueueId& queue);
-    [[nodiscard]] bool supportsComparableGpuTimestamps()const noexcept{ return m_context.comparableGpuTimestamps; }
+    [[nodiscard]] b8 supportsComparableGpuTimestamps()const noexcept{ return m_context.comparableGpuTimestamps; }
     // Absolute ranges require the extension-backed logical-device epoch and a complete 64-bit queue timestamp.
     // Partial-width timestamps remain valid for modular ordinary durations only.
-    [[nodiscard]] bool supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept{
+    [[nodiscard]] b8 supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept{
         const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(queue);
         return supportsComparableGpuTimestamps() && queueInfo && queueInfo->timestampValidBits == s_CompleteTimestampValidBits;
     }
     [[nodiscard]] GpuCommandArenaStatistics getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] GpuCommandArenaWorkerStatistics getCommandArenaWorkerStatistics(const GpuPhysicalQueueId& queue, u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
-    [[nodiscard]] bool matchesPhysicalQueueIdentity(CommandQueue::Enum queue, u16 physicalQueueIndex, u16 deviceGeneration)const noexcept;
-    [[nodiscard]] bool matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] b8 matchesPhysicalQueueIdentity(CommandQueue::Enum queue, u16 physicalQueueIndex, u16 deviceGeneration)const noexcept;
+    [[nodiscard]] b8 matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept;
     // Validates an accepted token as a current submission wait without changing queue state.
     // The producer timeline is sampled under its queue mutex so a failed submit cannot expose a tentative value as available work.
-    [[nodiscard]] bool validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
+    [[nodiscard]] b8 validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
     // Blocks until one exact accepted queue timeline value completes.
     // This proves that a bridged WSI binary semaphore wait consumed its signal before the acquire slot is reset and reused.
-    [[nodiscard]] bool waitForSubmissionToken(const QueueSubmissionToken& token);
+    [[nodiscard]] b8 waitForSubmissionToken(const QueueSubmissionToken& token);
     // Native device loss permits loss-aware teardown. Logical quarantine still requires an idle join before freeing.
-    [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
+    [[nodiscard]] b8 isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
 
-    [[nodiscard]] bool requiresRecreation()const noexcept{
+    [[nodiscard]] b8 requiresRecreation()const noexcept{
         return isDeviceLost() || m_deviceQuarantined.load(MemoryOrder::acquire);
     }
 
     void quarantineDevice()noexcept{ m_deviceQuarantined.store(true, MemoryOrder::release); }
     [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queueType)const noexcept;
     [[nodiscard]] u32 getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept;
-    [[nodiscard]] bool usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const noexcept{
+    [[nodiscard]] b8 usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const noexcept{
         return UsesConcurrentQueueSharing(sharing, m_context);
     }
-    bool waitForIdle();
+    b8 waitForIdle();
     void runGarbageCollection();
-    [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature)const noexcept;
+    [[nodiscard]] b8 queryFeatureSupport(Feature::Enum feature)const noexcept;
     [[nodiscard]] WaveLaneCountRange getWaveLaneCounts()const noexcept;
     // Maximum byte range represented by one storage-buffer descriptor; independent of allocation/VRAM budgets.
     [[nodiscard]] u64 getMaxStorageBufferRange()const noexcept;
@@ -308,11 +308,11 @@ public:
     // External queue operations remain the caller's responsibility and must not overlap engine submission, presentation, idle, or teardown.
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)noexcept;
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue)noexcept;
-    bool isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.nvDeviceDiagnosticCheckpoints; }
+    b8 isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.nvDeviceDiagnosticCheckpoints; }
 
-    bool isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.amdBufferMarker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
+    b8 isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.amdBufferMarker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
     // NV and AMD marker paths share one command-list tracker.
-    bool isAnyGpuMarkerEnabled()const noexcept{ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
+    b8 isAnyGpuMarkerEnabled()const noexcept{ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
 
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker()noexcept{ return m_gpuCrashTracker; }
     void captureDeviceLoss(AStringView context);
@@ -334,33 +334,33 @@ public:
 private:
     void markDeviceLost()noexcept{ m_deviceLost.store(true, MemoryOrder::release); }
     [[nodiscard]] VkResult waitForNativeIdle()noexcept;
-    [[nodiscard]] bool waitForSubmissionTokenInternal(const QueueSubmissionToken& token, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
-    [[nodiscard]] bool setEventQueryInternal(EventQuery& query, CommandQueue::Enum queue, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
-    [[nodiscard]] Expected<bool> pollEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
-    [[nodiscard]] bool waitEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
+    [[nodiscard]] b8 waitForSubmissionTokenInternal(const QueueSubmissionToken& token, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
+    [[nodiscard]] b8 setEventQueryInternal(EventQuery& query, CommandQueue::Enum queue, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
+    [[nodiscard]] Expected<b8> pollEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
+    [[nodiscard]] b8 waitEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
     void prepareForDestructionAfterIdleOrLoss();
-    [[nodiscard]] bool beginSubmissionOperation()noexcept;
+    [[nodiscard]] b8 beginSubmissionOperation()noexcept;
     void endSubmissionOperation()noexcept;
-    [[nodiscard]] bool submissionOperationActiveOnCurrentThread()const noexcept{
+    [[nodiscard]] b8 submissionOperationActiveOnCurrentThread()const noexcept{
         return SubmissionOperationLease::ActiveFor(*this);
     }
-    [[nodiscard]] bool beginLifecycleDrain()noexcept;
+    [[nodiscard]] b8 beginLifecycleDrain()noexcept;
     void endLifecycleDrain()noexcept;
     // Records the prepare phase's idle-or-loss proof.
     // Once sealed, the submission gate remains closed and the destructor must not issue another fallible Vulkan wait during the commit phase.
-    [[nodiscard]] bool sealLifecycleDrainForDestruction()noexcept;
-    [[nodiscard]] bool submissionsBlocked()const noexcept{
+    [[nodiscard]] b8 sealLifecycleDrainForDestruction()noexcept;
+    [[nodiscard]] b8 submissionsBlocked()const noexcept{
         return requiresRecreation() || (m_submissionOperationState.load(MemoryOrder::acquire) & s_SubmissionDrainBit) != 0u;
     }
     [[nodiscard]] Expected<QueueSubmissionToken> consumeAcquiredImageSemaphore(VkSemaphore semaphore);
     [[nodiscard]] Expected<VkResult> presentNativeQueue(u32 nativeQueueIndex, const VkPresentInfoKHR& presentInfo);
-    [[nodiscard]] bool registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue);
+    [[nodiscard]] b8 registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue);
     void configureQueueSharingContext()noexcept;
     void releaseOwnedResources()noexcept;
     // Probed once at device initialization so compressed texture selection does not rely on a later optimistic format-property query.
     void probeCompressedTextureFormats();
     [[nodiscard]] FormatSupport::Mask queryFormatSupportUncached(Format::Enum format)const noexcept;
-    [[nodiscard]] bool canCreateSampledTextureFormat(Format::Enum format)const;
+    [[nodiscard]] b8 canCreateSampledTextureFormat(Format::Enum format)const;
     [[nodiscard]] Expected<GraphicsBytes> loadPipelineCacheData();
     void savePipelineCacheData(Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<CreatedPipelineLayout> createPipelineLayoutForBindingLayouts(Span<const BindingLayoutHandle> bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const;
@@ -375,7 +375,7 @@ private:
     )const;
     [[nodiscard]] Expected<PipelineBindingState> buildPipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const;
     template<typename PipelineT>
-    [[nodiscard]] bool configurePipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena, PipelineT& pipeline)const{
+    [[nodiscard]] b8 configurePipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena, PipelineT& pipeline)const{
         auto bindings = buildPipelineBindings(bindingLayouts, operationName, scratchArena);
         if(bindings){
             static_cast<PipelineBindingState&>(pipeline) = Move(*bindings);
@@ -385,7 +385,7 @@ private:
     }
 
     template<typename PipelineT>
-    [[nodiscard]] bool createPipeline(TStringView operationName, const VkComputePipelineCreateInfo& pipelineInfo, PipelineT& pipeline)const{
+    [[nodiscard]] b8 createPipeline(TStringView operationName, const VkComputePipelineCreateInfo& pipelineInfo, PipelineT& pipeline)const{
         const VkResult res = m_context.deviceDispatch.vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline.m_pipeline);
         if(res == VK_SUCCESS)
             return true;
@@ -395,7 +395,7 @@ private:
     }
 
     template<typename PipelineT>
-    [[nodiscard]] bool createPipeline(TStringView operationName, const VkGraphicsPipelineCreateInfo& pipelineInfo, PipelineT& pipeline)const{
+    [[nodiscard]] b8 createPipeline(TStringView operationName, const VkGraphicsPipelineCreateInfo& pipelineInfo, PipelineT& pipeline)const{
         const VkResult res = m_context.deviceDispatch.vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline.m_pipeline);
         if(res == VK_SUCCESS)
             return true;
@@ -411,12 +411,12 @@ private:
     Atomic<u64> m_nextTimerQueryIncarnation = 0u;
     u16 m_deviceGeneration = 0u;
     // Actual Vulkan loss and logical quarantine remain distinct so only proven loss may bypass an idle teardown join.
-    Atomic<bool> m_deviceLost = false;
-    Atomic<bool> m_deviceQuarantined = false;
-    Atomic<bool> m_lifecycleDestructionPrepared = false;
-    Atomic<bool> m_gpuCrashCaptured = false;
-    bool m_gpuCrashDiagnosticsEnabled = false;
-    bool m_queueRegistryReady = false;
+    Atomic<b8> m_deviceLost = false;
+    Atomic<b8> m_deviceQuarantined = false;
+    Atomic<b8> m_lifecycleDestructionPrepared = false;
+    Atomic<b8> m_gpuCrashCaptured = false;
+    b8 m_gpuCrashDiagnosticsEnabled = false;
+    b8 m_queueRegistryReady = false;
     GpuCrashTracker m_gpuCrashTracker;
     // Pre-reserved crash-capture arena.
     Alloc::PersistentArena m_gpuCrashReportArena;
@@ -435,7 +435,7 @@ private:
     GraphicsVector<NotNull<Queue*>> m_physicalQueues;
     GraphicsVector<GpuPhysicalQueueInfo> m_physicalQueueInfos;
     Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};
-    Array<bool, static_cast<u32>(CommandQueue::kCount)> m_explicitPrimaryQueues = {};
+    Array<b8, static_cast<u32>(CommandQueue::kCount)> m_explicitPrimaryQueues = {};
     // Only block-compressed entries are populated; all are resolved before the device is exposed.
     Array<FormatSupport::Mask, static_cast<usize>(Format::Count)> m_compressedFormatSupport = {};
 

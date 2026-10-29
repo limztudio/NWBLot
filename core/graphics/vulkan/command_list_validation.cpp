@@ -80,7 +80,7 @@ void CommandList::cancelTaskCapabilityTracking()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::validateTrackedResourcesReadyForSubmission()const{
+b8 CommandList::validateTrackedResourcesReadyForSubmission()const{
     if(!m_currentCmdBuf){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command list: tracked resource readiness ledger is unavailable"));
         return false;
@@ -184,7 +184,7 @@ void CommandList::retainStagingBuffer(Buffer& buffer){
     m_currentCmdBuf->m_resourceReferences.trackRetainedBuffer(buffer);
 }
 
-bool CommandList::validateCommandRecordingScope(const TStringView operationName){
+b8 CommandList::validateCommandRecordingScope(const TStringView operationName){
     if(!publicCommandStateAccessible())
         return false;
     if(m_commandRecordingFailed)
@@ -193,8 +193,8 @@ bool CommandList::validateCommandRecordingScope(const TStringView operationName)
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
     const u8 exactCapabilityBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
-    const bool validRecordingScope = matchesActiveNativeLeaseIdentity();
-    const bool validExactQueue = queueInfo && queueInfo->queueClass == m_creationDesc.queueType && (exactCapabilityBits & __hidden_command_list_validation::s_KnownCapabilityBits) != 0u;
+    const b8 validRecordingScope = matchesActiveNativeLeaseIdentity();
+    const b8 validExactQueue = queueInfo && queueInfo->queueClass == m_creationDesc.queueType && (exactCapabilityBits & __hidden_command_list_validation::s_KnownCapabilityBits) != 0u;
     if(validRecordingScope && validExactQueue)
         return true;
 
@@ -210,7 +210,7 @@ bool CommandList::validateCommandRecordingScope(const TStringView operationName)
     return false;
 }
 
-bool CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::Mask requiredCapabilities, const TStringView operationName){
+b8 CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::Mask requiredCapabilities, const TStringView operationName){
     if(!publicCommandStateAccessible())
         return false;
 #if defined(NWB_DEBUG)
@@ -227,8 +227,8 @@ bool CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::M
     auto& queueInfo = *MakeNotNull(m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue));
     const u8 availableBits = static_cast<u8>(queueInfo.capabilities);
     const CommandQueue::Enum exactQueueClass = queueInfo.queueClass;
-    const bool validRequiredMask = requiredBits != 0u && (requiredBits & ~__hidden_command_list_validation::s_KnownCapabilityBits) == 0u;
-    const bool supported = validRequiredMask && (availableBits & requiredBits) == requiredBits;
+    const b8 validRequiredMask = requiredBits != 0u && (requiredBits & ~__hidden_command_list_validation::s_KnownCapabilityBits) == 0u;
+    const b8 supported = validRequiredMask && (availableBits & requiredBits) == requiredBits;
     if(supported)
         return true;
 
@@ -246,7 +246,7 @@ bool CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::M
     return false;
 }
 
-bool CommandList::recordAndValidateAnyCommandCapability(const GpuQueueCapability::Mask alternativeCapabilities, const TStringView operationName){
+b8 CommandList::recordAndValidateAnyCommandCapability(const GpuQueueCapability::Mask alternativeCapabilities, const TStringView operationName){
     if(!publicCommandStateAccessible())
         return false;
     const u8 alternativeBits = static_cast<u8>(alternativeCapabilities);

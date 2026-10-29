@@ -36,8 +36,8 @@ struct InitializerState{
     Array<u32, s_InitializerCount> finalizeCounts{};
     Array<u32, s_EventCapacity> events{};
     usize eventCount = 0u;
-    bool failNext = false;
-    bool throwNext = false;
+    b8 failNext = false;
+    b8 throwNext = false;
 
 
 public:
@@ -59,7 +59,7 @@ public:
 
 
 public:
-    virtual bool initialize()override{
+    virtual b8 initialize()override{
         ++s_State.initializeCounts[m_index];
         s_State.record(m_index);
         if(m_index == 1u){

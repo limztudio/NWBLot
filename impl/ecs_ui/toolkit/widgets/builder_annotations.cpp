@@ -26,17 +26,17 @@ Builder::Item* Builder::annotationAnchor(const AStringView stableKey)noexcept{
     return nullptr;
 }
 
-bool Builder::paintDeferred(){
+b8 Builder::paintDeferred(){
     if(!paintDeferredContents() || !validateDeferredSources() || !validateDeferredStates())
         return false;
     return true;
 }
 
-bool Builder::paintDeferredContents(){
+b8 Builder::paintDeferredContents(){
     return paintContextMenus() && paintCombos() && paintTooltips();
 }
 
-bool Builder::validateDeferredSources()const{
+b8 Builder::validateDeferredSources()const{
     // Every loan remains live through all later source callbacks, including those in an ended child scope.
     for(const auto& frame : m_scope->m_radioGroups){
         if(!radioGroupMatches(frame))
@@ -57,7 +57,7 @@ bool Builder::validateDeferredSources()const{
     return true;
 }
 
-bool Builder::validateDeferredStates()const noexcept{
+b8 Builder::validateDeferredStates()const noexcept{
     // No source callbacks run after these model checks until every scope's loans have been released.
     for(const auto& frame : m_scope->m_sliders){
         if(!sliderMatches(frame))
@@ -134,11 +134,11 @@ void Builder::releaseDeferredLoans()noexcept{
         frame.state = nullptr;
 }
 
-bool Builder::listStateMatches(const ListFrame& frame)const noexcept{
+b8 Builder::listStateMatches(const ListFrame& frame)const noexcept{
     return popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration;
 }
 
-bool Builder::listMatches(const ListFrame& frame)const{
+b8 Builder::listMatches(const ListFrame& frame)const{
     return
         frame.source && listStateMatches(frame)
         && frame.source->instanceGeneration() == frame.token.contentGeneration && listStateMatches(frame)

@@ -52,12 +52,12 @@ struct ReflectionFeedbackPlan{
     u32 probeIndex = 0u;
     u32 currentBank = 0u;
     u32 previousBank = 0u;
-    bool enabled = false;
-    bool eligible = false;
-    bool reused = false;
-    bool reset = false;
-    bool previousHardwareReady = false;
-    bool quarantined = false;
+    b8 enabled = false;
+    b8 eligible = false;
+    b8 reused = false;
+    b8 reset = false;
+    b8 previousHardwareReady = false;
+    b8 quarantined = false;
     ReflectionFeedbackResetReason::Enum resetReason = ReflectionFeedbackResetReason::None;
 };
 
@@ -65,13 +65,13 @@ struct ReflectionFeedbackOutcome{
     u64 epoch = 0u;
     u64 startGraphicsFrame = 0u;
     u32 probeIndex = 0u;
-    bool eligible = false;
-    bool reused = false;
-    bool reset = false;
+    b8 eligible = false;
+    b8 reused = false;
+    b8 reset = false;
     ReflectionFeedbackResetReason::Enum resetReason = ReflectionFeedbackResetReason::None;
 };
 
-[[nodiscard]] ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(const ReflectionFeedbackPlan& plan, bool hardwareReady)noexcept;
+[[nodiscard]] ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(const ReflectionFeedbackPlan& plan, b8 hardwareReady)noexcept;
 
 // Accepted writers publish feedback; writer-less classification only invalidates control.
 // One shared Graphics queue; declared hazards order reuse without CPU waits.
@@ -83,10 +83,10 @@ public:
 
 public:
     void reset(u16 deviceGeneration)noexcept;
-    [[nodiscard]] ReflectionFeedbackPlan plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, bool enabled, u64 graphicsFrameIndex)noexcept;
-    [[nodiscard]] bool reserve(const ReflectionFeedbackPlan& plan)noexcept;
+    [[nodiscard]] ReflectionFeedbackPlan plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, b8 enabled, u64 graphicsFrameIndex)noexcept;
+    [[nodiscard]] b8 reserve(const ReflectionFeedbackPlan& plan)noexcept;
     void discard(const ReflectionFeedbackPlan& plan)noexcept;
-    [[nodiscard]] bool accept(const ReflectionFeedbackPlan& plan, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
+    [[nodiscard]] b8 accept(const ReflectionFeedbackPlan& plan, const Core::QueueSubmissionToken& token, b8 hardwareReady)noexcept;
 
 
 private:
@@ -103,11 +103,11 @@ private:
     u32 m_acceptedBank = 0u;
     mutable Futex m_mutex;
     u16 m_deviceGeneration = 0u;
-    bool m_enabled = false;
-    bool m_eligible = false;
-    bool m_hardwareReady = false;
-    bool m_resourcesChanged = false;
-    bool m_quarantined = false;
+    b8 m_enabled = false;
+    b8 m_eligible = false;
+    b8 m_hardwareReady = false;
+    b8 m_resourcesChanged = false;
+    b8 m_quarantined = false;
 };
 
 using ReflectionFeedbackControl = RefCounter<ReflectionFeedbackState>;
@@ -127,15 +127,15 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_reserved; }
-    void accept(const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
+    [[nodiscard]] b8 valid()const noexcept{ return m_reserved; }
+    void accept(const Core::QueueSubmissionToken& token, b8 hardwareReady)noexcept;
     void discard()noexcept;
 
 
 private:
     ReflectionFeedbackControlHandle m_control;
     ReflectionFeedbackPlan m_plan;
-    bool m_reserved = false;
+    b8 m_reserved = false;
 };
 
 

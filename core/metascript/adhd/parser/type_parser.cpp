@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TypeRef* TypeParser::parseType(const bool allowRefMode, const bool allowAuto){
+TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
     ParamPassingMode::Enum refMode = ParamPassingMode::None;
     const SourceSpan startSpan{m_cursor.current().line, m_cursor.current().column};
 
@@ -27,6 +27,10 @@ TypeRef* TypeParser::parseType(const bool allowRefMode, const bool allowAuto){
 
     if(m_cursor.checkIdentifier("const")){
         m_cursor.error("C++-style 'const' type qualifier is prohibited in adhd; use 'in' for read-only parameters");
+        return nullptr;
+    }
+    if(m_cursor.checkIdentifier("bool")){
+        m_cursor.error("'bool' is prohibited in adhd; use 'b8'");
         return nullptr;
     }
 
@@ -130,7 +134,7 @@ TypeRef* TypeParser::parseType(const bool allowRefMode, const bool allowAuto){
     return type;
 }
 
-bool TypeParser::parseTemplateParamList(MVector<TemplateParamDecl>& outParams){
+b8 TypeParser::parseTemplateParamList(MVector<TemplateParamDecl>& outParams){
     if(!m_cursor.match(TokenType::Less))
         return true;
 
@@ -193,7 +197,7 @@ bool TypeParser::parseTemplateParamList(MVector<TemplateParamDecl>& outParams){
     return expectClosingAngle();
 }
 
-bool TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
+b8 TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
     if(!m_cursor.expect(TokenType::Less, "expected '<' before template arguments"))
         return false;
 
@@ -220,7 +224,7 @@ bool TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
     return expectClosingAngle();
 }
 
-bool TypeParser::parseParamList(MVector<ParamDecl>& outParams){
+b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams){
     if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for parameter list"))
         return false;
 
@@ -270,7 +274,7 @@ bool TypeParser::parseParamList(MVector<ParamDecl>& outParams){
     return m_cursor.expect(TokenType::RightParen, "expected ')' after parameter list");
 }
 
-bool TypeParser::expectClosingAngle(){
+b8 TypeParser::expectClosingAngle(){
     if(m_pendingRightAngles > 0u){
         --m_pendingRightAngles;
         return true;

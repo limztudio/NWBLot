@@ -106,7 +106,7 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
     m_rayTracingState.m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
-bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
+b8 RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
     if(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer)
         return true;
 
@@ -130,7 +130,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
+b8 RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
     if(handle.valid())
         return true;
 
@@ -148,7 +148,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
     return true;
 }
 
-bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
+b8 RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){

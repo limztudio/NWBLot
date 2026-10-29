@@ -32,7 +32,7 @@ World::World(Alloc::GlobalArena& arena, CpuTaskScheduler& taskScheduler)
 {}
 
 World::~World()noexcept(false){
-    bool joined = false;
+    b8 joined = false;
     ScopeExit retireOwned([this, &joined]()noexcept{
         if(!joined)
             m_tasks.drain();

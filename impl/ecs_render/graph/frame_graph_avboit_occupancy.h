@@ -52,8 +52,8 @@ struct FrameGraphAvboitOccupancyUploadInputs{
     Core::GpuGraphResourceId csgCutters;
     Core::GpuGraphResourceId csgClipContextSlots;
     Core::GpuTaskId uploadTask;
-    bool intervalOutputsGraphOwned = false;
-    bool hasTransparentRenderers = false;
+    b8 intervalOutputsGraphOwned = false;
+    b8 hasTransparentRenderers = false;
 };
 
 struct FrameGraphAvboitOccupancyUploadResult{
@@ -64,12 +64,12 @@ struct FrameGraphAvboitOccupancyUploadResult{
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan sharedComputeEmulationPlan;
     usize sharedComputeEmulationInstanceCount = 0u;
     usize sharedComputeEmulationMaterialTypedByteCount = 0u;
-    bool csgStreamsUploaded = false;
-    bool regularComputeEmulationPlanCaptured = false;
-    bool producesReusableGeometry = false;
-    bool csgComputeEmulationPlanCaptured = false;
-    bool sharedComputeEmulationPlanCaptured = false;
-    bool declared = false;
+    b8 csgStreamsUploaded = false;
+    b8 regularComputeEmulationPlanCaptured = false;
+    b8 producesReusableGeometry = false;
+    b8 csgComputeEmulationPlanCaptured = false;
+    b8 sharedComputeEmulationPlanCaptured = false;
+    b8 declared = false;
 };
 
 

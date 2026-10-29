@@ -49,8 +49,8 @@ public:
 
 protected:
     virtual void SetUp()override;
-    [[nodiscard]] bool loadFont(Font& font, StringView filename);
-    [[nodiscard]] bool installCoverageFonts();
+    [[nodiscard]] b8 loadFont(Font& font, StringView filename);
+    [[nodiscard]] b8 installCoverageFonts();
     void beginPaint(u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
     [[nodiscard]] Expected<SharedGlyphPage> makePage(u64 atlasIdentity);
 

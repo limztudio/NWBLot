@@ -122,7 +122,7 @@ struct GpuCommandIrRasterStateDesc{
     u32 indexOffset = 0u;
     Format::Enum indexFormat = Format::UNKNOWN;
     u8 dynamicStencilRefValue = 0u;
-    bool hasScissor = false;
+    b8 hasScissor = false;
 };
 
 struct GpuCommandIrRasterTaskRecord{
@@ -145,7 +145,7 @@ struct GpuCommandIrRasterTaskRecord{
     Format::Enum indexFormat = Format::UNKNOWN;
     GpuCommandIrWireOpcode::Enum opcode = GpuCommandIrWireOpcode::SetGraphicsState;
     u8 dynamicStencilRefValue = 0u;
-    bool hasScissor = false;
+    b8 hasScissor = false;
 };
 
 struct GpuCommandIrDecodedRecord{
@@ -182,7 +182,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_owner != nullptr; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_owner != nullptr; }
 
 
 private:

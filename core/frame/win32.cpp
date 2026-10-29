@@ -62,7 +62,7 @@ namespace Win32MessagePumpResult{
 
 
 template<typename OnDestroyFunc, typename SetActiveFunc>
-[[nodiscard]] static bool HandleWin32FrameLifecycleMessage(HWND hwnd, UINT message, WPARAM wParam, OnDestroyFunc&& onDestroy, SetActiveFunc&& setActive, LRESULT& outResult){
+[[nodiscard]] static b8 HandleWin32FrameLifecycleMessage(HWND hwnd, UINT message, WPARAM wParam, OnDestroyFunc&& onDestroy, SetActiveFunc&& setActive, LRESULT& outResult){
     switch(message){
     case WM_DESTROY:
         onDestroy();
@@ -124,7 +124,7 @@ template<typename IsActiveFunc>
 }
 
 template<typename IsActiveFunc, typename BeforeUpdateFunc, typename UpdateFunc>
-[[nodiscard]] static bool RunWin32TimedFrameLoop(IsActiveFunc&& isActive, BeforeUpdateFunc&& beforeUpdate, UpdateFunc&& update){
+[[nodiscard]] static b8 RunWin32TimedFrameLoop(IsActiveFunc&& isActive, BeforeUpdateFunc&& beforeUpdate, UpdateFunc&& update){
     Timer lateTime(TimerNow());
 
     for(;;){
@@ -177,7 +177,7 @@ static constexpr StringView s_WindowLifecycleCategory = "frame_window_lifecycle"
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool EnableProcessDpiAwareness(){
+static b8 EnableProcessDpiAwareness(){
     if(AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
         return true;
 
@@ -230,7 +230,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         Win32FrameInput input(*frame, hwnd);
         if(uMsg == WM_SETFOCUS || uMsg == WM_KILLFOCUS){
-            const bool focused = uMsg == WM_SETFOCUS;
+            const b8 focused = uMsg == WM_SETFOCUS;
             input.dispatchTextInputFocus(focused);
             frame->input().windowFocusUpdate(focused);
             return 0;
@@ -239,7 +239,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         if(
             __hidden_frame_win32::HandleWin32FrameLifecycleMessage(
                 hwnd, uMsg, wParam, []()noexcept{},
-                [&](const bool isActive){
+                [&](const b8 isActive){
                     frame->data<Common::WinFrame>().setActive(isActive);
                     input.dispatchTextInputFocus(isActive && GetFocus() == hwnd);
                     frame->input().windowFocusUpdate(isActive);
@@ -290,7 +290,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Frame::init(){
+b8 Frame::init(){
     if(!FrameDetail::EnableProcessDpiAwareness())
         return false;
 
@@ -403,17 +403,17 @@ bool Frame::init(){
     return true;
 }
 
-bool Frame::showFrame(){
+b8 Frame::showFrame(){
     ShowWindow(data<Common::WinFrame>().hwnd(), SW_SHOW);
     return true;
 }
 
-bool Frame::mainLoop(){
+b8 Frame::mainLoop(){
     if(quitRequested())
         return true;
 
-    bool gracefulQuit = false;
-    const bool loopResult = __hidden_frame_win32::RunWin32TimedFrameLoop(
+    b8 gracefulQuit = false;
+    const b8 loopResult = __hidden_frame_win32::RunWin32TimedFrameLoop(
         [&]()noexcept{ return data<Common::WinFrame>().isActive() || m_graphics.shouldRenderUnfocused(); },
         [&](){
             const HWND hwnd = data<Common::WinFrame>().hwnd();
@@ -428,19 +428,19 @@ bool Frame::mainLoop(){
                 NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 client rectangle query failed; native_domain=Win32 native_code={}"), nativeError);
                 return false;
             }
-            const bool windowVisible = (rect.right > rect.left) && (rect.bottom > rect.top);
+            const b8 windowVisible = (rect.right > rect.left) && (rect.bottom > rect.top);
             const u32 width = windowVisible ? static_cast<u32>(rect.right - rect.left) : 0;
             const u32 height = windowVisible ? static_cast<u32>(rect.bottom - rect.top) : 0;
             if(windowVisible){
                 data<Common::WinFrame>().width() = static_cast<u16>(Min<u32>(width, s_MaxU16));
                 data<Common::WinFrame>().height() = static_cast<u16>(Min<u32>(height, s_MaxU16));
             }
-            const bool windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
+            const b8 windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
             if(const Optional<TStringView> title = syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
 #ifdef NWB_UNICODE
-                const bool titleChanged = SetWindowTextW(data<Common::WinFrame>().hwnd(), title->data()) != FALSE;
+                const b8 titleChanged = SetWindowTextW(data<Common::WinFrame>().hwnd(), title->data()) != FALSE;
 #else
-                const bool titleChanged = SetWindowTextA(data<Common::WinFrame>().hwnd(), title->data()) != FALSE;
+                const b8 titleChanged = SetWindowTextA(data<Common::WinFrame>().hwnd(), title->data()) != FALSE;
 #endif
                 if(!titleChanged){
                     const DWORD nativeError = GetLastError();
@@ -496,9 +496,9 @@ void Frame::cleanupPlatform()noexcept{
     frameData.setWindowClass(0u);
     frameData.setActive(false);
 
-    const bool windowFailed = window && !DestroyWindow(window);
+    const b8 windowFailed = window && !DestroyWindow(window);
     const DWORD windowError = windowFailed ? GetLastError() : ERROR_SUCCESS;
-    const bool classFailed = windowClass && !UnregisterClass(MAKEINTATOM(windowClass), frameData.instance());
+    const b8 classFailed = windowClass && !UnregisterClass(MAKEINTATOM(windowClass), frameData.instance());
     const DWORD classError = classFailed ? GetLastError() : ERROR_SUCCESS;
 
     if(windowFailed){

@@ -36,7 +36,7 @@ using namespace TelemetryTestDetail;
 
 class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
 public:
-    virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
         const Telemetry::FrameGraphNodeHandle source = builder.addPass(Name("source"), "Source");
         const Telemetry::FrameGraphNodeHandle target = builder.addResource(Name(s_Target), "Target");
         const Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name(s_Target), "Duplicate Target");
@@ -61,7 +61,7 @@ public:
 
 
 public:
-    virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
         if(!builder.addPass(Name("cache_lifetime"), AStringView(m_label)).valid())
             return false;
         if(m_throwNext){
@@ -74,8 +74,8 @@ public:
 
 
 public:
-    bool m_throwNext = true;
-    bool m_reentryRejected = false;
+    b8 m_throwNext = true;
+    b8 m_reentryRejected = false;
 
 
 private:

@@ -227,7 +227,7 @@ public:
 
     pointer operator->()const noexcept(noexcept(get())){ return get(); }
 
-    explicit operator bool()const noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((get() != pointer())))){ return (get() != pointer()); }
+    explicit operator b8()const noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()((get() != pointer())))){ return (get() != pointer()); }
 
 
 public:
@@ -305,7 +305,7 @@ public:
         return *this;
     }
 
-    explicit operator bool()const noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((get() != pointer())))){ return (get() != pointer()); }
+    explicit operator b8()const noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()((get() != pointer())))){ return (get() != pointer()); }
 
     typename AddLValueReference<T>::type operator[](ptrdiff_t i)const noexcept(IsPointer_V<pointer>){ return get()[i]; }
 

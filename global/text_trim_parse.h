@@ -27,7 +27,7 @@ inline constexpr u32 s_UnicodeParagraphSeparator = 0x2029u;
 
 
 template<typename CharT>
-[[nodiscard]] inline bool IsAsciiSpace(const CharT ch)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 IsAsciiSpace(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     return ch == CharT(' ') || ch == CharT('\t') || ch == CharT('\n') || ch == CharT('\r') || ch == CharT('\f') || ch == CharT('\v');
 }
 
@@ -98,22 +98,22 @@ BasicStringView<CharT> TrimLeftView(const BasicString<CharT, ArenaT>&&) = delete
 
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const BasicStringView<CharT> prefix)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 StartsWith(const BasicStringView<CharT> text, const BasicStringView<CharT> prefix)noexcept(IsArithmetic_V<CharT>){
     return text.size() >= prefix.size() && BasicStringView<CharT>(text.data(), prefix.size()) == prefix;
 }
 
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline constexpr bool StartsWith(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> prefix)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 StartsWith(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> prefix)noexcept(IsArithmetic_V<CharT>){
     return StartsWith<CharT>(BasicStringView<CharT>{text}, prefix);
 }
 
 template<typename CharT, usize N>
-[[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const CharT (&prefix)[N])noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 StartsWith(const BasicStringView<CharT> text, const CharT (&prefix)[N])noexcept(IsArithmetic_V<CharT>){
     return StartsWith<CharT>(text, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
 }
 
 template<typename CharT, typename ArenaT, usize N>
-[[nodiscard]] inline constexpr bool StartsWith(const BasicString<CharT, ArenaT>& text, const CharT (&prefix)[N])noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 StartsWith(const BasicString<CharT, ArenaT>& text, const CharT (&prefix)[N])noexcept(IsArithmetic_V<CharT>){
     return StartsWith<CharT>(BasicStringView<CharT>{text}, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
 }
 
@@ -136,7 +136,7 @@ template<typename StringT>
         text.erase(index, count);
     }
 inline void TrimInPlace(StringT& inOutText)noexcept(
-    noexcept(TrimView(inOutText)) && noexcept(static_cast<bool>(DeclVal<usize>() == inOutText.size()))
+    noexcept(TrimView(inOutText)) && noexcept(static_cast<b8>(DeclVal<usize>() == inOutText.size()))
     && noexcept(static_cast<usize>(DeclVal<BasicStringView<typename StringT::value_type>>().data() - inOutText.data()))
     && noexcept(inOutText.erase(DeclVal<usize>())) && noexcept(inOutText.erase(0u, DeclVal<const usize&>()))
 ){
@@ -157,7 +157,7 @@ template<typename StringT>
 
 
 template<typename CharT>
-[[nodiscard]] inline bool HasCrlfLineEndings(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 HasCrlfLineEndings(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(usize i = 1u; i < text.size(); ++i){
         if(text[i - 1u] == CharT('\r') && text[i] == CharT('\n'))
             return true;
@@ -172,14 +172,14 @@ template<typename StringT>
         text.resize(size);
         text[0u];
     }
-inline void NormalizeLineEndingsInPlace(StringT& inOutText, const bool useCrlf)noexcept([]()consteval noexcept{
+inline void NormalizeLineEndingsInPlace(StringT& inOutText, const b8 useCrlf)noexcept([]()consteval noexcept{
     using CharT = typename StringT::value_type;
     return
         noexcept(DeclVal<void(*)(usize)noexcept>()(DeclVal<StringT&>().size()))
-        && noexcept(static_cast<bool>(DeclVal<StringT&>()[DeclVal<usize&>()] == CharT('\r')))
-        && noexcept(static_cast<bool>(DeclVal<bool>() && DeclVal<StringT&>()[DeclVal<usize>()] == CharT('\n')))
+        && noexcept(static_cast<b8>(DeclVal<StringT&>()[DeclVal<usize&>()] == CharT('\r')))
+        && noexcept(static_cast<b8>(DeclVal<b8>() && DeclVal<StringT&>()[DeclVal<usize>()] == CharT('\n')))
         && noexcept(DeclVal<void(*)(CharT)noexcept>()(DeclVal<StringT&>()[DeclVal<usize&>()]))
-        && noexcept(static_cast<bool>(DeclVal<const CharT&>() == CharT('\r')))
+        && noexcept(static_cast<b8>(DeclVal<const CharT&>() == CharT('\r')))
         && noexcept(DeclVal<StringT&>()[DeclVal<usize>()] = CharT('\n'))
         && noexcept(DeclVal<StringT&>()[DeclVal<usize>()] = DeclVal<const CharT&>())
         && noexcept(DeclVal<StringT&>()[DeclVal<usize&>()] = CharT('\n'))
@@ -192,7 +192,7 @@ inline void NormalizeLineEndingsInPlace(StringT& inOutText, const bool useCrlf)n
     const usize sourceSize = inOutText.size();
 
     if(!useCrlf){
-        bool hasCarriageReturn = false;
+        b8 hasCarriageReturn = false;
         for(usize i = 0u; i < sourceSize; ++i){
             if(inOutText[i] == CharT('\r')){
                 hasCarriageReturn = true;
@@ -255,7 +255,7 @@ inline void NormalizeLineEndingsInPlace(StringT& inOutText, const bool useCrlf)n
 
 
 template<typename ByteContainer>
-[[nodiscard]] inline constexpr bool HasUtf8Bom(const ByteContainer& bytes)noexcept(noexcept(static_cast<bool>(bytes.size() < TextDetail::s_Utf8BomByteCount)) && noexcept(static_cast<u8>(bytes[0u]))){
+[[nodiscard]] inline constexpr b8 HasUtf8Bom(const ByteContainer& bytes)noexcept(noexcept(static_cast<b8>(bytes.size() < TextDetail::s_Utf8BomByteCount)) && noexcept(static_cast<u8>(bytes[0u]))){
     if(bytes.size() < TextDetail::s_Utf8BomByteCount)
         return false;
 
@@ -272,11 +272,11 @@ inline void StripUtf8Bom(StringT& inOutText)noexcept(noexcept(HasUtf8Bom(inOutTe
 }
 
 
-[[nodiscard]] inline constexpr bool IsUtf8Continuation(const u8 value)noexcept{
+[[nodiscard]] inline constexpr b8 IsUtf8Continuation(const u8 value)noexcept{
     return (value & BasicStringDetail::s_Utf8ContinuationMask) == BasicStringDetail::s_Utf8ContinuationMarker;
 }
 
-[[nodiscard]] inline constexpr bool IsUtf8ScalarBoundary(const AStringView text, const usize byteOffset)noexcept{
+[[nodiscard]] inline constexpr b8 IsUtf8ScalarBoundary(const AStringView text, const usize byteOffset)noexcept{
     return byteOffset <= text.size() && (byteOffset == text.size() || !IsUtf8Continuation(static_cast<u8>(text[byteOffset])));
 }
 
@@ -385,7 +385,7 @@ struct DecodedUtf8CodePoint{
     return 4u;
 }
 
-[[nodiscard]] inline constexpr bool IsTextInputCodePoint(const u32 unicode)noexcept{
+[[nodiscard]] inline constexpr b8 IsTextInputCodePoint(const u32 unicode)noexcept{
     if(unicode < s_UnicodeSpace || unicode == s_UnicodeDelete)
         return false;
     return IsUnicodeScalarValue(unicode);
@@ -393,8 +393,8 @@ struct DecodedUtf8CodePoint{
 
 
 template<typename CharT, typename Traits, typename AllocatorT>
-[[nodiscard]] inline bool ReadTextLine(std::basic_istream<CharT, Traits>& stream, std::basic_string<CharT, Traits, AllocatorT>& outLine){
-    return static_cast<bool>(std::getline(stream, outLine));
+[[nodiscard]] inline b8 ReadTextLine(std::basic_istream<CharT, Traits>& stream, std::basic_string<CharT, Traits, AllocatorT>& outLine){
+    return static_cast<b8>(std::getline(stream, outLine));
 }
 
 

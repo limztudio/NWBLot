@@ -27,7 +27,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningSystem::submitFrameSkinningGraph(){
+b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     auto& device = m_graphics.getDevice();
     const Core::GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     if(!topology.queues || topology.queueCount == 0u){
@@ -44,7 +44,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     dispatchPlans.clear();
     auto skinningBindings = m_world.view<SkinnedMeshBindingComponent>();
     dispatchPlans.reserve(skinningBindings.candidateCount());
-    bool declarationFailed = false;
+    b8 declarationFailed = false;
 
     FramePlanBuilder planBuilder(*this, graph, scratchArena, dispatchPlans);
     skinningBindings.each([&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
@@ -211,11 +211,11 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         Core::GpuPersistentResourceStateCache::Candidate& candidate;
         const Core::BufferHandle* buffers = nullptr;
         usize bufferCount = 0u;
-        bool preparationInvoked = false;
-        bool statePrepared = false;
-        bool stateAccepted = false;
+        b8 preparationInvoked = false;
+        b8 statePrepared = false;
+        b8 stateAccepted = false;
     } skinningState{ .cache = m_acceptedSkinningState, .scratchArena = scratchArena, .candidate = acceptedStateCandidate, .buffers = liveBuffers.data(), .bufferCount = liveBuffers.size(), };
-    const auto prepareSkinningState = [](void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState) -> bool {
+    const auto prepareSkinningState = [](void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState) -> b8 {
         SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
         if(!context)
             return false;
@@ -226,7 +226,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         return context->statePrepared;
     };
     const Core::GpuTaskGraphTaskRecordedCallback recordedCallback{ .task = terminalTask, .context = &skinningState, .invoke = prepareSkinningState, };
-    const auto acceptSkinningTask = [](void* const rawContext, const Core::QueueSubmissionToken& token)noexcept -> bool {
+    const auto acceptSkinningTask = [](void* const rawContext, const Core::QueueSubmissionToken& token)noexcept -> b8 {
         static_cast<void>(token);
         SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
         if(!context || !context->statePrepared)
@@ -244,7 +244,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     normalExecution.taskTimingTicketCount = LengthOf(timingTickets);
     normalExecution.taskAcceptedCallbacks = &acceptedCallback;
     normalExecution.taskAcceptedCallbackCount = 1u;
-    const bool skinningGraphAccepted = scheduler.executeGraph(normalExecution, scratchArena, graph, compiledGraph, recordedGraph, transaction, nullptr);
+    const b8 skinningGraphAccepted = scheduler.executeGraph(normalExecution, scratchArena, graph, compiledGraph, recordedGraph, transaction, nullptr);
     const Core::QueueSubmissionToken skinningToken = transaction.taskToken(compiledPlan, terminalTask);
     if(!skinningToken.valid()){
         if(!transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration()))

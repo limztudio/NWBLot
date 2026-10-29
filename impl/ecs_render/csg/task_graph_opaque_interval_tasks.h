@@ -60,13 +60,13 @@ struct CsgOpaqueIntervalRecordInputs{
     RendererCsgSystem& csgSystem;
     DeferredFrameTargets& targets;
     Core::GpuTimingSubmissionTicket*& timingTicket;
-    const bool& meshViewSetupReady;
-    const bool& sceneShadingSetupReady;
+    const b8& meshViewSetupReady;
+    const b8& sceneShadingSetupReady;
     MeshFrameBindingSnapshot frameBindings;
     CsgGraphResourceSnapshot csgResources;
     OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
-    bool materialDrawBuffersUploaded = false;
-    bool csgFrameBuffersUploaded = false;
+    b8 materialDrawBuffersUploaded = false;
+    b8 csgFrameBuffersUploaded = false;
 
 
 public:
@@ -76,8 +76,8 @@ public:
         RendererCsgSystem& csgSystemIn,
         DeferredFrameTargets& targetsIn,
         Core::GpuTimingSubmissionTicket*& timingTicketIn,
-        const bool& meshViewSetupReadyIn,
-        const bool& sceneShadingSetupReadyIn
+        const b8& meshViewSetupReadyIn,
+        const b8& sceneShadingSetupReadyIn
     )noexcept
         : materialSystem(materialSystemIn)
         , csgSystem(csgSystemIn)
@@ -98,7 +98,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 
@@ -112,7 +112,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 
@@ -128,17 +128,17 @@ struct CsgIntervalSampleGraphTask{
         RendererCsgSystem& csgSystem;
         DeferredFrameTargets& targets;
         Core::GpuTimingSubmissionTicket*& timingTicket;
-        const bool& meshViewSetupReady;
-        const bool& sceneShadingSetupReady;
+        const b8& meshViewSetupReady;
+        const b8& sceneShadingSetupReady;
         MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
-        bool materialDrawBuffersUploaded = false;
-        bool csgFrameBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 csgFrameBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
         // Keep CSG compute draws raster-only so the compiler supplies the UAV boundary.
-        bool csgComputeEmulationOutputStatesGraphOwned = false;
+        b8 csgComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* opaqueCsgComputeEmulationTiming = nullptr;
 
 
@@ -150,14 +150,14 @@ struct CsgIntervalSampleGraphTask{
             RendererCsgSystem& csgSystemIn,
             DeferredFrameTargets& targetsIn,
             Core::GpuTimingSubmissionTicket*& timingTicketIn,
-            const bool& meshViewSetupReadyIn,
-            const bool& sceneShadingSetupReadyIn
+            const b8& meshViewSetupReadyIn,
+            const b8& sceneShadingSetupReadyIn
         )noexcept;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.opaqueCsgComputeEmulationTiming);

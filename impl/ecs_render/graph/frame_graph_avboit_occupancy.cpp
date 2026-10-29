@@ -51,18 +51,18 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
     const Core::GpuGraphResourceId csgReceiverRanges = inputs.csgReceiverRanges;
     const Core::GpuGraphResourceId csgCutters = inputs.csgCutters;
     const Core::GpuGraphResourceId csgClipContextSlots = inputs.csgClipContextSlots;
-    const bool intervalOutputsGraphOwned = inputs.intervalOutputsGraphOwned;
+    const b8 intervalOutputsGraphOwned = inputs.intervalOutputsGraphOwned;
     Core::GpuTaskId occupancyUploadTask = inputs.uploadTask;
-    bool occupancyCsgStreamsUploaded = false;
-    bool occupancyRegularComputeEmulationPlanCaptured = false;
+    b8 occupancyCsgStreamsUploaded = false;
+    b8 occupancyRegularComputeEmulationPlanCaptured = false;
     Core::GpuTaskId occupancyReusedGeometryProducer;
-    bool occupancyProducesReusableGeometry = false;
-    bool occupancyCsgComputeEmulationPlanCaptured = false;
-    bool occupancySharedComputeEmulationPlanCaptured = false;
+    b8 occupancyProducesReusableGeometry = false;
+    b8 occupancyCsgComputeEmulationPlanCaptured = false;
+    b8 occupancySharedComputeEmulationPlanCaptured = false;
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan occupancySharedComputeEmulationPlan;
     usize occupancySharedComputeEmulationInstanceCount = 0u;
     usize occupancySharedComputeEmulationMaterialTypedByteCount = 0u;
-    bool occupancyMaterialSampledTexturesCollected = false;
+    b8 occupancyMaterialSampledTexturesCollected = false;
     Core::GpuGraphResourceSetId occupancyMaterialGeometrySet;
     Core::GpuGraphResourceSetId occupancyMaterialSampledTextureSet;
     result.uploadTask = occupancyUploadTask;
@@ -103,7 +103,7 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
             return MakeUnexpected(Failure{});
         }
 
-        const bool occupancyHasCsgDrawItems = occupancyUploadResult->hasCsgDrawItems;
+        const b8 occupancyHasCsgDrawItems = occupancyUploadResult->hasCsgDrawItems;
         if(occupancyHasCsgDrawItems && !intervalOutputsGraphOwned){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: clipped AVBOIT occupancy draws require prepared interval outputs"));
             return MakeUnexpected(Failure{});

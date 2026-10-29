@@ -48,15 +48,15 @@ static ECSRenderDetail::MeshFrameHeapSlots ResolveMeshFrameHeapSlots(const Mater
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const noexcept{
+b8 RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const noexcept{
     return mesh.valid() && frameBindings.bindingValid();
 }
 
-bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDrawItemsView& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+b8 RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDrawItemsView& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings) && indexedMaterialPassDrawResourcesReady(drawItems.indexedDrawItems, frameBindings) && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, frameBindings);
 }
 
-bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+b8 RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     for(const MaterialPassDrawItem& drawItem : drawItems){
         if(!materialPassDrawResourcesReady(drawItem.meshResources, frameBindings) || !drawItem.pipelineResources.meshletPipeline)
             return false;
@@ -64,7 +64,7 @@ bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const Span<const
     return true;
 }
 
-bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+b8 RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     if(drawItems.empty())
         return true;
 
@@ -84,10 +84,10 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const Span<co
     return true;
 }
 
-u32 RendererMaterialSystem::meshDispatchFlags(const MaterialPassMeshResourceSnapshot& mesh, const MaterialPipelinePass::Enum pass, const bool twoSided, const bool meshletConeCullScaleSafe)const noexcept{
+u32 RendererMaterialSystem::meshDispatchFlags(const MaterialPassMeshResourceSnapshot& mesh, const MaterialPipelinePass::Enum pass, const b8 twoSided, const b8 meshletConeCullScaleSafe)const noexcept{
     u32 flags = 0u;
-    const bool meshletBoundsFresh = !mesh.runtimeMesh || mesh.dynamicMeshletBoundsFresh;
-    const bool meshletConesFresh = !mesh.runtimeMesh || mesh.dynamicMeshletConesFresh;
+    const b8 meshletBoundsFresh = !mesh.runtimeMesh || mesh.dynamicMeshletBoundsFresh;
+    const b8 meshletConesFresh = !mesh.runtimeMesh || mesh.dynamicMeshletConesFresh;
     // Runtime mesh providers own dynamic culling policy; the renderer only consumes the published freshness flags.
     if(meshletBoundsFresh)
         flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletFrustumCull;
@@ -121,7 +121,7 @@ void RendererMaterialSystem::setMaterialPassCommonBufferStates(const MaterialPas
     }
 }
 
-bool RendererMaterialSystem::setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh){
+b8 RendererMaterialSystem::setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh){
     const u32 dispatchFlags = materialPassDrawDispatchFlags(context, drawItem, mesh);
     const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
     u32 csgContextHeapSlot = 0u;

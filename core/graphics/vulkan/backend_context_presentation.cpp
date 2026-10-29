@@ -134,7 +134,7 @@ BeginFrameResult BackendContext::beginFrame(){
     return result;
 }
 
-bool BackendContext::abandonAcquiredFrame(){
+b8 BackendContext::abandonAcquiredFrame(){
     UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
     if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready)
         return false;
@@ -161,15 +161,15 @@ bool BackendContext::abandonAcquiredFrame(){
         return false;
     }
 
-    const bool currentImageReady = m_swapChain && m_swapChainIndex < m_swapChainImages.size() && m_swapChainIndex < m_presentSemaphores.size() && m_swapChainImages[m_swapChainIndex].rhiHandle && m_presentSemaphores[m_swapChainIndex] != VK_NULL_HANDLE;
-    const bool presentationSignalIdle = m_framePresentationSignalState == FramePresentationSignalState::Idle && m_framePresentationSemaphore == VK_NULL_HANDLE && !m_framePresentationQueue.valid() && m_framePresentationSwapChainIndex == Limit<u32>::s_Max;
-    const bool presentationSignalTracked =
+    const b8 currentImageReady = m_swapChain && m_swapChainIndex < m_swapChainImages.size() && m_swapChainIndex < m_presentSemaphores.size() && m_swapChainImages[m_swapChainIndex].rhiHandle && m_presentSemaphores[m_swapChainIndex] != VK_NULL_HANDLE;
+    const b8 presentationSignalIdle = m_framePresentationSignalState == FramePresentationSignalState::Idle && m_framePresentationSemaphore == VK_NULL_HANDLE && !m_framePresentationQueue.valid() && m_framePresentationSwapChainIndex == Limit<u32>::s_Max;
+    const b8 presentationSignalTracked =
         currentImageReady
         && m_framePresentationSignalState != FramePresentationSignalState::Idle
         && m_framePresentationSemaphore == m_presentSemaphores[m_swapChainIndex]
         && m_framePresentationSwapChainIndex == m_swapChainIndex
     ;
-    const bool abandonmentReady = currentImageReady && (presentationSignalIdle || presentationSignalTracked);
+    const b8 abandonmentReady = currentImageReady && (presentationSignalIdle || presentationSignalTracked);
     // Invalidate presentation identity before touching signal state.
     // Keeping m_frameAcquired set quarantines the WSI image even if retirement or draining fails, so no later beginFrame, claim, or present can reuse it.
     m_swapChainIndex = Limit<u32>::s_Max;
@@ -199,8 +199,8 @@ bool BackendContext::abandonAcquiredFrame(){
     return true;
 }
 
-Expected<bool, PresentationFailure> BackendContext::present(){
-    bool presentationAccepted = false;
+Expected<b8, PresentationFailure> BackendContext::present(){
+    b8 presentationAccepted = false;
     UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
     VkResult res = VK_SUCCESS;
     const auto captureDeviceLossAfterUnlock = [&](const AStringView context, UniqueLock<Futex>* const presentationLock = nullptr){
@@ -238,7 +238,7 @@ Expected<bool, PresentationFailure> BackendContext::present(){
 
     const VkSemaphore& semaphore = m_presentSemaphores[m_swapChainIndex];
 
-    bool frameSignalAccepted = false;
+    b8 frameSignalAccepted = false;
     {
         ScopedLock presentationLock(m_framePresentationMutex);
         frameSignalAccepted = m_framePresentationSignalState == FramePresentationSignalState::Accepted && m_framePresentationSwapChainIndex == m_swapChainIndex && m_framePresentationSemaphore == semaphore;
@@ -410,7 +410,7 @@ Expected<bool, PresentationFailure> BackendContext::present(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::ensureDirectPresentCommandList(const GpuPhysicalQueueId& executionQueue){
+b8 BackendContext::ensureDirectPresentCommandList(const GpuPhysicalQueueId& executionQueue){
     if(!m_rhiDevice || !executionQueue.valid())
         return false;
     if(m_directPresentCommandList && m_directPresentQueue == executionQueue)
@@ -431,7 +431,7 @@ void BackendContext::resetDirectPresentCommandList()noexcept{
     m_directPresentQueue = {};
 }
 
-bool BackendContext::recordDirectPresentTransition(const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy, Texture* backbufferTexture){
+b8 BackendContext::recordDirectPresentTransition(const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy, Texture* backbufferTexture){
     CommandList* const directCommandList = m_directPresentCommandList.get();
     if(!directCommandList || !backbufferTexture)
         return false;

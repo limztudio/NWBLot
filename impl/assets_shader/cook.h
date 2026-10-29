@@ -56,7 +56,7 @@ struct StringEqual{
 
 
 public:
-    [[nodiscard]] bool operator()(const AStringView lhs, const AStringView rhs)const noexcept{
+    [[nodiscard]] b8 operator()(const AStringView lhs, const AStringView rhs)const noexcept{
         return lhs == rhs;
     }
 };
@@ -105,8 +105,8 @@ public:
         const ::Path<Core::Alloc::ScratchArena>& outputPath;
         u32 defineCount = 0;
         ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
-        bool rayQuery = false;
-        bool compilerInputsHaveBom = false;
+        b8 rayQuery = false;
+        b8 compilerInputsHaveBom = false;
     };
 
     struct DependencyRootAlias{
@@ -166,8 +166,8 @@ public:
         CookMap<CookString, DefineEntry> defineValues;
         CookMap<CookString, CookString> implicitDefines;
         ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
-        bool rayQuery = false;
-        bool emitMeshComputeShadow = true;
+        b8 rayQuery = false;
+        b8 emitMeshComputeShadow = true;
 
 
     public:
@@ -201,7 +201,7 @@ private:
 public:
     struct DependencyChecksum{
         u64 checksum = 0u;
-        bool compilerInputsHaveBom = false;
+        b8 compilerInputsHaveBom = false;
     };
 
 
@@ -215,11 +215,11 @@ public:
     [[nodiscard]] Expected<ShaderEntry> parseShaderMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<IncludeEntry> parseIncludeMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena);
 
-    [[nodiscard]] bool validateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 validateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
 
     void mergeInheritedDefines(ShaderEntry& inOutEntry, Span<const Path> dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena);
 
-    [[nodiscard]] bool expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations);
+    [[nodiscard]] b8 expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations);
 
     [[nodiscard]] CookString buildVariantName(const DefineCombo& combo, Core::Alloc::ScratchArena& scratchArena);
 

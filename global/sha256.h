@@ -19,11 +19,11 @@ struct Sha256Digest{
     u8 bytes[s_ByteCount] = {};
 };
 
-[[nodiscard]] inline bool operator==(const Sha256Digest& lhs, const Sha256Digest& rhs)noexcept{
+[[nodiscard]] inline b8 operator==(const Sha256Digest& lhs, const Sha256Digest& rhs)noexcept{
     return NWB_MEMCMP(lhs.bytes, rhs.bytes, sizeof(lhs.bytes)) == 0;
 }
 
-[[nodiscard]] inline bool operator!=(const Sha256Digest& lhs, const Sha256Digest& rhs)noexcept{
+[[nodiscard]] inline b8 operator!=(const Sha256Digest& lhs, const Sha256Digest& rhs)noexcept{
     return !(lhs == rhs);
 }
 

@@ -27,7 +27,7 @@ TEST(Crash, SnapshotKeepsPublishedMetadataDuringInterruptedWriter){
     ASSERT_TRUE(NWB::Core::Crash::SetCrashMetadata(s_Key, s_Published));
 
     NWB::Core::Crash::CrashDetail::CrashRequest request;
-    bool exercisedWriter = false;
+    b8 exercisedWriter = false;
     {
         NothrowScopedLock lock(NWB::Core::Crash::CrashDetail::g_State.mutex);
         for(auto& metadata : NWB::Core::Crash::CrashDetail::g_State.metadata){
@@ -42,7 +42,7 @@ TEST(Crash, SnapshotKeepsPublishedMetadataDuringInterruptedWriter){
         }
     }
     ASSERT_TRUE(exercisedWriter);
-    bool found = false;
+    b8 found = false;
     for(u32 i = 0u; i < request.metadataCount; ++i){
         if(AStringView(request.metadata[i].key) != s_Key)
             continue;
@@ -79,7 +79,7 @@ TEST(Crash, ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbRecords){
     start.arrive_and_wait();
     for(usize iteration = 0u; iteration < s_Iterations; ++iteration){
         const auto request = NWB::Core::Crash::CrashDetail::BuildCrashDumpRequest(NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, {});
-        bool found = false;
+        b8 found = false;
         for(u32 i = 0u; i < request.metadataCount; ++i){
             const auto& metadata = request.metadata[i];
             if(AStringView(metadata.key) != s_Key)

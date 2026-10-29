@@ -68,8 +68,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool parse(MStringView source, IIncludeResolver* includeResolver = nullptr);
-    [[nodiscard]] bool parse(IMetaReader& reader, IIncludeResolver* includeResolver = nullptr);
+    [[nodiscard]] b8 parse(MStringView source, IIncludeResolver* includeResolver = nullptr);
+    [[nodiscard]] b8 parse(IMetaReader& reader, IIncludeResolver* includeResolver = nullptr);
 
     [[nodiscard]] const Value* findVariable(MStringView name)const noexcept;
     [[nodiscard]] Value* findVariable(MStringView name)noexcept;
@@ -77,7 +77,7 @@ public:
     [[nodiscard]] const DeclarationList& declarations()const noexcept{ return m_declarations; }
     [[nodiscard]] const StructMap& structs()const noexcept{ return m_structs; }
 
-    [[nodiscard]] bool hasErrors()const noexcept{ return !m_errors.empty(); }
+    [[nodiscard]] b8 hasErrors()const noexcept{ return !m_errors.empty(); }
 
     [[nodiscard]] const ErrorList& errors()const noexcept{ return m_errors; }
 

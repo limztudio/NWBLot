@@ -35,11 +35,11 @@ namespace Tests::Smoke{
 
 struct FramebufferCaptureOptions{
     // Borrowed predicate context must outlive stop.
-    bool (*shouldCapture)(void*, u64) = nullptr;
+    b8 (*shouldCapture)(void*, u64) = nullptr;
     void* predicateContext = nullptr;
     u32 requiredWidth = 0u;
     u32 requiredHeight = 0u;
-    bool quitWhenReady = true;
+    b8 quitWhenReady = true;
 };
 
 // Ref-count completion state so teardown can finish after the project stops the observer.
@@ -70,26 +70,26 @@ public:
 
 
 public:
-    [[nodiscard]] bool start();
+    [[nodiscard]] b8 start();
     void stop();
     void update();
-    [[nodiscard]] bool rearm(::Path<Core::Alloc::GlobalArena>&& outputPath)noexcept;
-    [[nodiscard]] bool captureReady()const noexcept{ return m_captureReady; }
+    [[nodiscard]] b8 rearm(::Path<Core::Alloc::GlobalArena>&& outputPath)noexcept;
+    [[nodiscard]] b8 captureReady()const noexcept{ return m_captureReady; }
 
     [[nodiscard]] u64 capturedGraphicsFrameIndex()const noexcept{ return m_completionState->graphicsFrameIndex; }
     void finish();
 
 
 public:
-    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
-    virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
+    virtual b8 validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;
     virtual void backBufferResizing()override;
 
 
 public:
-    [[nodiscard]] virtual bool prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame)override;
-    [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const noexcept override;
+    [[nodiscard]] virtual b8 prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame)override;
+    [[nodiscard]] virtual b8 hasTaskGraphPresentationWork()const noexcept override;
     [[nodiscard]] virtual Expected<Core::GpuTaskId> declareTaskGraphPresentation(Core::GpuTaskGraph& graph, const Core::AcquiredPresentationFrame& frame, Core::GpuGraphResourceId backbuffer, Core::GpuTaskId previousTask)override;
 
 
@@ -97,9 +97,9 @@ private:
     void markFailed(TStringView reason);
     void requestTerminalQuit();
     void resetPendingReadback();
-    [[nodiscard]] bool stagingMatches(const Core::TextureDesc& description)const noexcept;
-    [[nodiscard]] bool prepareReadback(const Core::TextureDesc& description);
-    [[nodiscard]] bool writeCapture(NotNull<const u8*> sourceBytes, usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 stagingMatches(const Core::TextureDesc& description)const noexcept;
+    [[nodiscard]] b8 prepareReadback(const Core::TextureDesc& description);
+    [[nodiscard]] b8 writeCapture(NotNull<const u8*> sourceBytes, usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:
@@ -114,14 +114,14 @@ private:
     u64 m_lastCountedGraphicsFrame = Limit<u64>::s_Max;
     u32 m_captureFrameCount = 0u;
     u32 m_preparedFrameCount = 0u;
-    bool m_registered = false;
-    bool m_taskGraphPresentationPrepared = false;
-    bool m_taskGraphPresentationClaimed = false;
-    bool m_captureReady = false;
-    bool m_skipped = false;
-    bool m_failed = false;
-    bool m_quitRequested = false;
-    bool m_stopped = false;
+    b8 m_registered = false;
+    b8 m_taskGraphPresentationPrepared = false;
+    b8 m_taskGraphPresentationClaimed = false;
+    b8 m_captureReady = false;
+    b8 m_skipped = false;
+    b8 m_failed = false;
+    b8 m_quitRequested = false;
+    b8 m_stopped = false;
 };
 
 

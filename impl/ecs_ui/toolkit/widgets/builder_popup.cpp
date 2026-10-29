@@ -18,8 +18,8 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const PopupOptions& options){
-    const bool nested = m_scope->m_popupState && m_scope->m_panelActive;
+b8 Builder::beginPopup(const AStringView stableKey, PopupState& state, const PopupOptions& options){
+    const b8 nested = m_scope->m_popupState && m_scope->m_panelActive;
     if(declarationBlocked() || (!balanced() && !nested) || !m_skin || m_context.failed()){
         m_context.fail();
         return false;
@@ -102,18 +102,18 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
     return true;
 }
 
-bool Builder::endPopup(){
+b8 Builder::endPopup(){
     if(declarationBlocked() || !m_scope->m_popupState || !m_scope->m_panelActive || m_scope->m_windowActive || m_scope->m_stack.size() != 1u){
         m_context.fail();
         return false;
     }
     m_finalizing = true;
     ScopeExit finish([this]()noexcept{ m_finalizing = false; });
-    const bool visible = synchronizePopup();
-    const bool arranged = !visible || (!m_context.failed() && m_scope->m_layout.arrange(m_scope->m_bounds));
-    const bool overlayEnded = m_paint.endOverlay();
-    const bool scopePopped = m_context.popScope();
-    const bool popupEnded = m_context.endPopupScope(visible && arranged);
+    const b8 visible = synchronizePopup();
+    const b8 arranged = !visible || (!m_context.failed() && m_scope->m_layout.arrange(m_scope->m_bounds));
+    const b8 overlayEnded = m_paint.endOverlay();
+    const b8 scopePopped = m_context.popScope();
+    const b8 popupEnded = m_context.endPopupScope(visible && arranged);
     m_scope->m_panelActive = false;
     m_scope->m_stack.clear();
     if(!arranged || !overlayEnded || !scopePopped || !popupEnded){
@@ -128,13 +128,13 @@ bool Builder::endPopup(){
         m_scope = MakeNotNull(m_scope->m_parent);
         return true;
     }
-    const bool finished = finishPopupFamily();
+    const b8 finished = finishPopupFamily();
     if(!finished)
         m_context.fail();
     return finished;
 }
 
-bool Builder::synchronizePopup()noexcept{
+b8 Builder::synchronizePopup()noexcept{
     for(const BuilderScopeFrame* frame = m_scope.get(); frame; frame = frame->m_parent){
         if(frame->m_popupState && !popupFrameVisible(*frame)){
             m_context.input().closePopup(frame->m_popupToken);

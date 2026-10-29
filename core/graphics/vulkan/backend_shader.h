@@ -65,7 +65,7 @@ struct ShaderLibraryKey{
     ShaderType::Mask shaderType = ShaderType::None;
 };
 
-inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)noexcept{
+inline b8 operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)noexcept{
     return lhs.entryName == rhs.entryName && lhs.shaderType == rhs.shaderType;
 }
 

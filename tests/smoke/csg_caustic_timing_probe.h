@@ -69,16 +69,16 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize(bool diagnostic, bool csg, bool hardware, AStringView outputPath, AStringView cpuOutputPath, AStringView startPath);
-    [[nodiscard]] bool update();
+    [[nodiscard]] b8 initialize(b8 diagnostic, b8 csg, b8 hardware, AStringView outputPath, AStringView cpuOutputPath, AStringView startPath);
+    [[nodiscard]] b8 update();
     void finish();
-    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 
 
 private:
-    [[nodiscard]] bool capture(const Core::Perf::TimingView& view, u64 sourceFrame, bool cpu);
-    [[nodiscard]] Expected<bool> selectCommonWindow();
-    [[nodiscard]] bool write(u64 collectionEndSource);
+    [[nodiscard]] b8 capture(const Core::Perf::TimingView& view, u64 sourceFrame, b8 cpu);
+    [[nodiscard]] Expected<b8> selectCommonWindow();
+    [[nodiscard]] b8 write(u64 collectionEndSource);
 
 
 private:
@@ -98,10 +98,10 @@ private:
     usize m_commonEnd = 0u;
     PresentationFpsSample m_commonPresentation;
     u32 m_positiveIntervals = 0u;
-    bool m_diagnostic = false;
-    bool m_prepared = false;
-    bool m_measuring = false;
-    bool m_complete = false;
+    b8 m_diagnostic = false;
+    b8 m_prepared = false;
+    b8 m_measuring = false;
+    b8 m_complete = false;
 };
 
 

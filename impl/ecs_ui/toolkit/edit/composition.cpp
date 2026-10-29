@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EditModel::beginComposition()noexcept{
+b8 EditModel::beginComposition()noexcept{
     if(m_compositionActive)
         return true;
     m_compositionAnchor = m_anchor;
@@ -30,7 +30,7 @@ bool EditModel::beginComposition()noexcept{
     return true;
 }
 
-bool EditModel::updateComposition(const AStringView value, const usize anchor, const usize caret){
+b8 EditModel::updateComposition(const AStringView value, const usize anchor, const usize caret){
     if(!m_compositionActive || value.size() > m_limits.maxBytes || !validateText(value))
         return false;
     if(!IsUtf8ScalarBoundary(value, anchor) || !IsUtf8ScalarBoundary(value, caret))
@@ -48,7 +48,7 @@ bool EditModel::updateComposition(const AStringView value, const usize anchor, c
     return true;
 }
 
-bool EditModel::commitComposition(const AStringView value){
+b8 EditModel::commitComposition(const AStringView value){
     if(!m_compositionActive)
         return false;
     return replaceRange(Min(m_compositionAnchor, m_compositionCaret), Max(m_compositionAnchor, m_compositionCaret), value);

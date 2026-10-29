@@ -64,7 +64,7 @@ struct SetupUploadReadinessBridgeGraphTask{
     }
 
 
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept{
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept{
         static_cast<void>(payload);
         static_cast<void>(commandList);
         static_cast<void>(context);
@@ -83,7 +83,7 @@ struct StandaloneTaskGraphRecoveryTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept{
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept{
         static_cast<void>(payload);
         static_cast<void>(commandList);
         static_cast<void>(context);
@@ -100,7 +100,7 @@ struct StandaloneTaskGraphTimingRetirementTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         static_cast<void>(context);
         return !payload.frameTimingTransaction.needsRetirement() || payload.frameTimingTransaction.recordEnd(commandList);
     }
@@ -182,7 +182,7 @@ struct FrameTimingResetGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         static_cast<void>(context);
 
         payload.timing->recordFrameReset(commandList);
@@ -283,9 +283,9 @@ StandaloneGraphWorkspacePool::Lease::~Lease()noexcept(false){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool StandaloneGraphWorkspacePool::releaseCommandListCaches()noexcept{
+b8 StandaloneGraphWorkspacePool::releaseCommandListCaches()noexcept{
     NothrowScopedLock lock(m_mutex);
-    bool released = true;
+    b8 released = true;
     for(WorkspaceOwner& workspace : m_workspaces){
         if(workspace->leased || !workspace->recordedGraph.releaseCommandListCache())
             released = false;
@@ -370,7 +370,7 @@ SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(GraphicsBackend::
     return result;
 }
 
-ResourceQueueSharing::Mask ResolveSetupUploadConsumerSharing(const ResourceQueueSharing::Mask requestedSharing, const CommandQueue::Enum consumerQueue, const bool crossFamilySameClassRouting)noexcept{
+ResourceQueueSharing::Mask ResolveSetupUploadConsumerSharing(const ResourceQueueSharing::Mask requestedSharing, const CommandQueue::Enum consumerQueue, const b8 crossFamilySameClassRouting)noexcept{
     if(crossFamilySameClassRouting){
         const ResourceQueueSharing::Mask baseSharing = requestedSharing == ResourceQueueSharing::Exclusive ? ResourceQueueSharing::ForQueueClass(consumerQueue) : requestedSharing;
         return static_cast<ResourceQueueSharing::Mask>(static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(consumerQueue)));
@@ -383,7 +383,7 @@ ResourceQueueSharing::Mask ResolveSetupUploadConsumerSharing(const ResourceQueue
     return static_cast<ResourceQueueSharing::Mask>(static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(consumerQueue)));
 }
 
-CommandQueue::Enum ResolveSetupUploadConsumerQueue(GraphicsBackend::Device& device, const CommandQueue::Enum requestedConsumerQueue, const usize uploadBytes, const bool hasKnownFinalState, const bool requiresGraphicsConsumerQueue)noexcept{
+CommandQueue::Enum ResolveSetupUploadConsumerQueue(GraphicsBackend::Device& device, const CommandQueue::Enum requestedConsumerQueue, const usize uploadBytes, const b8 hasKnownFinalState, const b8 requiresGraphicsConsumerQueue)noexcept{
     if(requiresGraphicsConsumerQueue)
         return CommandQueue::Graphics;
 
@@ -404,7 +404,7 @@ CommandQueue::Enum ResolveSetupUploadConsumerQueue(GraphicsBackend::Device& devi
     }
 }
 
-GpuTaskSchedulingHint SetupUploadGraphScheduling(const usize byteCount, const bool sameClassRouting, const bool crossFamilySameClassRouting)noexcept{
+GpuTaskSchedulingHint SetupUploadGraphScheduling(const usize byteCount, const b8 sameClassRouting, const b8 crossFamilySameClassRouting)noexcept{
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = byteCount >= s_SetupUploadLargeMinimumBytes ? GpuTaskCostHint::Large : GpuTaskCostHint::Tiny;
     // A public setup call returns one accepted producer token, so retain a distinct explicit packet.
@@ -539,10 +539,10 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary supplies the Graphics worker pool.
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.readyFrontierScheduler = readyFrontierScheduler;
-    const bool graphAccepted = scheduler.executeGraph(normalExecution, scratchArena, graph, compiledGraph, recordedGraph, transaction, timingRecorder);
+    const b8 graphAccepted = scheduler.executeGraph(normalExecution, scratchArena, graph, compiledGraph, recordedGraph, transaction, timingRecorder);
     const QueueSubmissionToken terminalToken = transaction.taskToken(compiledPlan, terminalTask);
     if(!graphAccepted){
-        bool timingRecovered = true;
+        b8 timingRecovered = true;
         if(frameTimingTransaction){
             if(terminalToken.valid())
                 timingRecovered = frameTimingTransaction->confirmEndSubmission(terminalToken, false);
@@ -551,7 +551,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
             if(!timingRecovered)
                 frameTimingTransaction->discard();
         }
-        const bool recovered = !transaction.hasAcceptedPackets() || scheduler.executeAcceptedFrontierTask(compiledGraph, recoveryTask, scratchArena, graph, recordedGraph, transaction, timingRecorder);
+        const b8 recovered = !transaction.hasAcceptedPackets() || scheduler.executeAcceptedFrontierTask(compiledGraph, recoveryTask, scratchArena, graph, recordedGraph, transaction, timingRecorder);
         if(recovered && frameTimingTransaction && frameTimingTransaction->needsRetirement()){
             const QueueSubmissionToken recoveryToken = transaction.taskToken(compiledPlan, recoveryTask);
             timingRecovered = frameTimingTransaction->confirmEndSubmission(recoveryToken, false) && timingRecovered;
@@ -560,14 +560,14 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
             NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: standalone frame timing could not be retired after graph rejection"));
             frameTimingTransaction->discard();
         }
-        const bool discarded = transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration());
+        const b8 discarded = transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration());
         if(!recovered || !discarded)
             graphics.requestDeviceRecreation();
         return MakeUnexpected(Failure{});
     }
 
-    const bool discarded = transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration());
-    const bool timingConfirmed = !frameTimingTransaction || frameTimingTransaction->confirmEndSubmission(terminalToken, discarded && terminalToken.valid());
+    const b8 discarded = transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration());
+    const b8 timingConfirmed = !frameTimingTransaction || frameTimingTransaction->confirmEndSubmission(terminalToken, discarded && terminalToken.valid());
     if(!timingConfirmed){
         NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: standalone frame timing confirmation failed"));
         frameTimingTransaction->discard();
@@ -579,7 +579,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     return terminalToken;
 }
 
-bool SubmitGraphOwnedSetupUpload(
+b8 SubmitGraphOwnedSetupUpload(
     QueueSubmissionToken& inOutUploadToken,
     StandaloneGraphWorkspacePool& workspaces,
     const GraphicsRuntime& graphics,
@@ -604,7 +604,7 @@ bool SubmitGraphOwnedSetupUpload(
     return true;
 }
 
-bool SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing){
+b8 SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing){
     auto& device = graphics.getDevice();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     if(!graphicsQueue.valid())

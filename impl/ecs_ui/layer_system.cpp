@@ -94,7 +94,7 @@ void UiLayerSystem::prepare(Core::ECS::World& world){
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: UI skin request failed; retaining the selected skin"));
 }
 
-bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+b8 UiLayerSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
     m_resourcesReady = false;
     m_width = width;
@@ -164,10 +164,10 @@ void UiLayerSystem::invalidateResources(){
     m_renderer.invalidateResources();
 }
 
-bool UiLayerSystem::prepareResources(Core::Framebuffer* framebuffer){
+b8 UiLayerSystem::prepareResources(Core::Framebuffer* framebuffer){
     if(!framebuffer || !m_resourcesReady)
         return false;
-    const bool prepared = m_renderer.prepareTaskGraphOutputLayer(m_graphics.acquiredPresentationFrame());
+    const b8 prepared = m_renderer.prepareTaskGraphOutputLayer(m_graphics.acquiredPresentationFrame());
     if(!prepared && m_presentation == UiLayerPresentation::Standalone)
         m_graphics.requestDeviceRecreation();
     return prepared;

@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureSoftCombinedTemporalPipeline(){
+b8 RendererRayTracingSystem::ensureSoftCombinedTemporalPipeline(){
     auto& resolve = m_rayTracingState.m_softShadowResolve;
     if(resolve.m_combinedTemporal.m_pipeline)
         return true;
@@ -56,7 +56,7 @@ bool RendererRayTracingSystem::ensureSoftCombinedTemporalPipeline(){
     return !resolve.m_combinedTemporalFailed;
 }
 
-bool RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(Core::CommandList& commandList, DeferredFrameTargets& targets){
+b8 RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(Core::CommandList& commandList, DeferredFrameTargets& targets){
     const auto& resolve = m_rayTracingState.m_softShadowResolve;
     if(
         !resolve.m_combinedTemporal.m_pipeline
@@ -66,7 +66,7 @@ bool RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(Core::Comma
     )
         return false;
 
-    const bool frontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
+    const b8 frontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
     Core::Texture* const outputs[] = {
         frontIsA ? targets.shadowHistB.get() : targets.shadowHistA.get(),
         frontIsA ? targets.shadowMomentsB.get() : targets.shadowMomentsA.get(),

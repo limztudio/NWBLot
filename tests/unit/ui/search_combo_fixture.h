@@ -58,7 +58,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const override{
         u64 index = 0u;
         if(start >= rowCount())
             return MakeUnexpected(Failure{});
@@ -87,7 +87,7 @@ public:
         return full->text(key(index) - 1u);
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const override{
         if(enabledMutation){
             EditModel& query = *MakeNotNull(Exchange(enabledMutation, nullptr));
             if(!query.setText(s_EmptyResultQuery))
@@ -127,13 +127,13 @@ public:
 
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return full.indexOf(key); }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
         return full.findEnabled(start, reverse);
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return full.text(index); }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const override{
         if(fullMutation){
             EditModel& query = *MakeNotNull(Exchange(fullMutation, nullptr));
             if(!query.setText(s_EmptyResultQuery))
@@ -142,7 +142,7 @@ public:
         return full.enabled(index);
     }
 
-    [[nodiscard]] virtual bool filter(const AStringView query)override{
+    [[nodiscard]] virtual b8 filter(const AStringView query)override{
         ++filterCalls;
         if(filterMutation){
             EditModel& model = *MakeNotNull(Exchange(filterMutation, nullptr));
@@ -172,7 +172,7 @@ public:
     EditModel* filterMutation = nullptr;
     mutable EditModel* fullMutation = nullptr;
     u64 filterCalls = 0u;
-    bool alternateView = false;
+    b8 alternateView = false;
 };
 
 class SearchEditHost final : public IEditBoxHost{
@@ -215,7 +215,7 @@ public:
 
     [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
 
-    [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
+    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
         ++publications;
         publishContextPopup = m_context.popupToken();
         publishedComposing = view.composing();
@@ -242,14 +242,14 @@ public:
     u64 loans = 0u;
     u64 contextScopedLoans = 0u;
     u64 publications = 0u;
-    bool submitted = false;
-    bool cancelled = false;
-    bool preedit = false;
-    bool publishedComposing = false;
+    b8 submitted = false;
+    b8 cancelled = false;
+    b8 preedit = false;
+    b8 publishedComposing = false;
 
 
 private:
-    bool m_changeText = false;
+    b8 m_changeText = false;
 };
 
 
@@ -280,22 +280,22 @@ protected:
         m_builder.setEditHost(&m_host);
     }
 
-    [[nodiscard]] bool declareSearch(const u64 generation){
+    [[nodiscard]] b8 declareSearch(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }))
             return false;
         m_searchResult = m_builder.searchComboBox(s_ComboKey, m_searchSource, m_search, Options());
         return m_searchResult.combo.valid;
     }
 
-    [[nodiscard]] bool prepareSearch(const u64 generation){ return declareSearch(generation) && finishPanel(); }
+    [[nodiscard]] b8 prepareSearch(const u64 generation){ return declareSearch(generation) && finishPanel(); }
 
-    [[nodiscard]] bool acceptSearch(const u64 generation){
+    [[nodiscard]] b8 acceptSearch(const u64 generation){
         return prepareSearch(generation) && m_context.commitFrame(generation);
     }
 
     [[nodiscard]] WidgetId query(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "query")); }
 
-    [[nodiscard]] bool openSearch(const u64 generation){
+    [[nodiscard]] b8 openSearch(const u64 generation){
         const HitTarget* field = target(host());
         if(!field)
             return false;

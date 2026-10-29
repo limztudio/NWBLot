@@ -50,7 +50,7 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
     return {};
 }
 
-[[nodiscard]] static bool FillResources(Core::GpuTaskGraph& graph, const usize count, ResourceIds& members){
+[[nodiscard]] static b8 FillResources(Core::GpuTaskGraph& graph, const usize count, ResourceIds& members){
     members.clear();
     members.reserve(count);
     for(usize index = 0u; index < count; ++index){

@@ -52,8 +52,8 @@ public:
 
 
 public:
-    virtual bool has(EntityID entityId)const = 0;
-    virtual bool remove(EntityID entityId) = 0;
+    virtual b8 has(EntityID entityId)const = 0;
+    virtual b8 remove(EntityID entityId) = 0;
     virtual void clear() = 0;
     virtual usize size()const = 0;
     virtual u64 mutationVersion()const = 0;
@@ -146,11 +146,11 @@ public:
         return AddressOf(m_components[*denseIndex]);
     }
 
-    inline virtual bool has(EntityID entityId)const noexcept override{
+    inline virtual b8 has(EntityID entityId)const noexcept override{
         return findDenseIndex(entityId).has_value();
     }
 
-    virtual bool remove(EntityID entityId)noexcept(noexcept(DeclVal<T&>() = DeclVal<T&&>()))override{
+    virtual b8 remove(EntityID entityId)noexcept(noexcept(DeclVal<T&>() = DeclVal<T&&>()))override{
         const auto resolvedDenseIndex = findDenseIndex(entityId);
         if(!resolvedDenseIndex)
             return false;

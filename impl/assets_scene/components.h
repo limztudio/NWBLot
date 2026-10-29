@@ -46,12 +46,12 @@ protected:
 
 
 public:
-    [[nodiscard]] virtual bool loadBinary(Span<const u8> binary) = 0;
-    [[nodiscard]] virtual bool loadComponentPayload(Span<const u8> payload) = 0;
-    [[nodiscard]] virtual bool validatePayload()const = 0;
+    [[nodiscard]] virtual b8 loadBinary(Span<const u8> binary) = 0;
+    [[nodiscard]] virtual b8 loadComponentPayload(Span<const u8> payload) = 0;
+    [[nodiscard]] virtual b8 validatePayload()const = 0;
     virtual void applyToEntity(Core::ECS::Entity& entity)const = 0;
 #if defined(NWB_COOK)
-    [[nodiscard]] virtual bool serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const = 0;
+    [[nodiscard]] virtual b8 serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const = 0;
 #endif
 };
 
@@ -65,7 +65,7 @@ namespace ComponentAssetRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool LoadBinary(IComponent& component, Span<const u8> binary);
+[[nodiscard]] b8 LoadBinary(IComponent& component, Span<const u8> binary);
 
 template<typename TPod>
 [[nodiscard]] Expected<TPod> ReadSinglePodPayload(const Span<const u8> payload, const TStringView contextLabel){
@@ -108,7 +108,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool loadBinary(const Span<const u8> binary)override{
+    [[nodiscard]] virtual b8 loadBinary(const Span<const u8> binary)override{
         return ComponentAssetRuntime::LoadBinary(*this, binary);
     }
 };
@@ -156,17 +156,17 @@ public:
 public:
     [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, Span<const u8> binary)const override;
 #if defined(NWB_COOK)
-    virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
+    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif
 };
 
 
 #if defined(NWB_COOK)
 namespace ComponentAssetSerialization{
-[[nodiscard]] bool Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary);
+[[nodiscard]] b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary);
 
 template<typename TPod>
-[[nodiscard]] bool WriteSinglePodPayload(const TPod& pod, Core::Assets::AssetBytes& outBytes){
+[[nodiscard]] b8 WriteSinglePodPayload(const TPod& pod, Core::Assets::AssetBytes& outBytes){
     outBytes.clear();
     outBytes.reserve(sizeof(pod));
     AppendPOD(outBytes, pod);
@@ -184,7 +184,7 @@ public:
 
 #if defined(NWB_COOK)
 public:
-    virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
+    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
         if(!this->checkSerializeAssetType(asset, NWB_TEXT("TypedComponentAssetCodec::serialize")))
             return false;
 

@@ -103,7 +103,7 @@ static void VerifyOwnedOutput(const Span<const ExpandedAssetMetadata> output, co
     EXPECT_EQ(sourceLocal->asReference(), s_Local);
 }
 
-[[nodiscard]] static bool ParseLookupFixture(BunchFixture& fixture, const AStringView metadata, const usize unusedDeclarations){
+[[nodiscard]] static b8 ParseLookupFixture(BunchFixture& fixture, const AStringView metadata, const usize unusedDeclarations){
     AString<Alloc::ScratchArena> source(fixture.scratchArena);
     source.reserve(unusedDeclarations * 32u + metadata.size());
     for(usize index = 0u; index < unusedDeclarations; ++index)

@@ -20,7 +20,7 @@ namespace __hidden_adhd_reflection_emitter_nwb{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr bool IsDeserializableClass(const ClassDecl* cls)noexcept{
+[[nodiscard]] constexpr b8 IsDeserializableClass(const ClassDecl* cls)noexcept{
     return cls && (cls->isSerialize || cls->isReflect || !cls->assetTypeName.empty() || !cls->templateParams.empty());
 }
 
@@ -44,8 +44,8 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
     out.append("u) continue; ");
 }
 
-[[nodiscard]] bool IsScalarOrStringLikeNwbElement(const MStringView typeName, const SymbolTable& symbols)noexcept{
-    return typeName == "bool"
+[[nodiscard]] b8 IsScalarOrStringLikeNwbElement(const MStringView typeName, const SymbolTable& symbols)noexcept{
+    return typeName == "b8"
         || IsIntegerScalarType(typeName)
         || IsFloatScalarType(typeName)
         || symbols.findEnum(typeName) != nullptr
@@ -63,7 +63,7 @@ void EmitNwbValueConversionExpr(
     const MStringView valueAccessor,
     const SymbolTable& symbols
 ){
-    if(typeName == "bool"){
+    if(typeName == "b8"){
         out.push_back('(');
         out.append(valueAccessor.data(), valueAccessor.size());
         out.append(".asInteger() != 0)");
@@ -122,14 +122,14 @@ void EmitNwbSimdVectorCtorExpr(
 ){
     const MStringView cppVecType = SymbolTable::mapBuiltinCppType(vecTypeName);
     const MStringView laneScalar = vecTypeName.substr(0u, 3u);
-    const bool isIntLane = (vecTypeName[0] == 'i' || vecTypeName[0] == 'u');
-    const bool isMixedVec = (vecTypeName == "f32x3_i32" || vecTypeName == "f32x3_u32" || vecTypeName == "f64x3_i64" || vecTypeName == "f64x3_u64");
+    const b8 isIntLane = (vecTypeName[0] == 'i' || vecTypeName[0] == 'u');
+    const b8 isMixedVec = (vecTypeName == "f32x3_i32" || vecTypeName == "f32x3_u32" || vecTypeName == "f64x3_i64" || vecTypeName == "f64x3_u64");
     out.append(cppVecType.data(), cppVecType.size());
     out.push_back('(');
     for(u32 lane = 0u; lane < simdLanes; ++lane){
         if(lane > 0u)
             out.append(", ");
-        const bool laneIsInt = isIntLane || (isMixedVec && lane == 3u);
+        const b8 laneIsInt = isIntLane || (isMixedVec && lane == 3u);
         const MStringView curScalar = (isMixedVec && lane == 3u) ? vecTypeName.substr(6u) : laneScalar;
         out.append("static_cast<");
         out.append(curScalar.data(), curScalar.size());
@@ -197,13 +197,13 @@ void EmitNwbSimdMatrixLocalInit(
     out.append("].toDouble()); ");
 }
 
-[[nodiscard]] bool TryEmitNwbSharedScalarOrVectorFieldDeserialize(
+[[nodiscard]] b8 TryEmitNwbSharedScalarOrVectorFieldDeserialize(
     MString& out,
     const MStringView fieldName,
     const MStringView typeName,
     const SymbolTable& symbols
 ){
-    if(typeName == "bool"){
+    if(typeName == "b8"){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isNumeric()) this->");
         out.append(fieldName.data(), fieldName.size());
@@ -264,9 +264,9 @@ void EmitNwbSimdMatrixLocalInit(
 void EmitNwbListContainerLoopHeader(
     MString& out,
     const MStringView fieldName,
-    const bool isForwardList,
-    const bool isFixedVec,
-    const bool isDynVec
+    const b8 isForwardList,
+    const b8 isFixedVec,
+    const b8 isDynVec
 ){
     EmitNwbFieldFindPrefix(out, fieldName);
     out.append("__f->isList()){ ");
@@ -295,11 +295,11 @@ void EmitNwbListContainerFieldDeserialize(
     const MStringView elemName,
     const SymbolTable& symbols
 ){
-    const bool isSetContainer = (containerTypeName == "Set" || containerTypeName == "HashSet" || containerTypeName == "ParallelHashSet");
-    const bool isForwardList = (containerTypeName == "ForwardList");
-    const bool isFixedVec = (containerTypeName == "FixedVector");
-    const bool isDynVec = (containerTypeName == "Vector" || containerTypeName == "Deque" || containerTypeName == "ParallelVector" || containerTypeName == "List" || isSetContainer);
-    const bool isPushContainer = isForwardList || isFixedVec || isDynVec;
+    const b8 isSetContainer = (containerTypeName == "Set" || containerTypeName == "HashSet" || containerTypeName == "ParallelHashSet");
+    const b8 isForwardList = (containerTypeName == "ForwardList");
+    const b8 isFixedVec = (containerTypeName == "FixedVector");
+    const b8 isDynVec = (containerTypeName == "Vector" || containerTypeName == "Deque" || containerTypeName == "ParallelVector" || containerTypeName == "List" || isSetContainer);
+    const b8 isPushContainer = isForwardList || isFixedVec || isDynVec;
     const MStringView elemAccessor = isForwardList ? "__f->asList()[__i - 1u]" : "__f->asList()[__i]";
     const MStringView elemListAccessor = isForwardList ? "__f->asList()[__i - 1u].asList()" : "__f->asList()[__i].asList()";
     const MStringView assignOrPushPrefix = isSetContainer ? ".insert(" : (isForwardList ? ".push_front(" : (isPushContainer ? ".push_back(" : "[__i] = "));
@@ -441,7 +441,7 @@ void EmitNwbMapFieldDeserialize(
     const MStringView valName,
     const SymbolTable& symbols
 ){
-    const bool isStringLikeKey = (keyName == "String" || keyName == "CompactString" || keyName == "Name" || keyName == "Path");
+    const b8 isStringLikeKey = (keyName == "String" || keyName == "CompactString" || keyName == "Name" || keyName == "Path");
     if(!isStringLikeKey)
         return;
 
@@ -529,7 +529,7 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
     using namespace __hidden_adhd_reflection_emitter_nwb;
 
     out.append("    template<typename NwbValue>\r\n");
-    out.append("    [[nodiscard]] bool deserializeNwb(const NwbValue& inMap)noexcept{\r\n");
+    out.append("    [[nodiscard]] b8 deserializeNwb(const NwbValue& inMap)noexcept{\r\n");
     out.append("        if(!inMap.isMap())\r\n");
     out.append("            return false;\r\n");
     for(const FieldDecl* field : fields){

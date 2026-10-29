@@ -28,14 +28,14 @@ inline constexpr usize s_HardwareTransparentShadowScratchCount = 3u;
 
 // Frozen prepared soft-transparent route shared by the split resource declarations and the split task chain.
 struct SoftShadowSplitRoute{
-    bool hardwareShadowSupported = false;
-    bool hardwareCsgShadow = false;
-    bool csgShadow = false;
-    bool traceGeometryStatesGraphOwned = false;
-    bool combinedSoftUpsample = false;
-    bool combinedSoftWavelet = false;
-    bool combinedSoftTemporal = false;
-    bool graphOwnsOpaqueTemporalMergeEntryStates = false;
+    b8 hardwareShadowSupported = false;
+    b8 hardwareCsgShadow = false;
+    b8 csgShadow = false;
+    b8 traceGeometryStatesGraphOwned = false;
+    b8 combinedSoftUpsample = false;
+    b8 combinedSoftWavelet = false;
+    b8 combinedSoftTemporal = false;
+    b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
 };
 
 struct SoftShadowSplitResourceInputs{
@@ -78,7 +78,7 @@ struct SoftShadowSplitResourceUses{
     usize transparentFirstWaveletCount = 0u;
     Core::GpuTaskResourceUse transparentFold[s_MaxTransparentFoldUses] = {};
     usize transparentFoldCount = 0u;
-    bool graphOwnsTransparentTemporalMergeEntryStates = false;
+    b8 graphOwnsTransparentTemporalMergeEntryStates = false;
 
 
 public:
@@ -101,7 +101,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool build(const SoftShadowSplitResourceInputs& inputs, SoftShadowSplitResourceUses& uses);
+    [[nodiscard]] b8 build(const SoftShadowSplitResourceInputs& inputs, SoftShadowSplitResourceUses& uses);
 
 
 private:

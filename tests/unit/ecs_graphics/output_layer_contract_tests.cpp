@@ -20,7 +20,7 @@ using namespace NWB;
 
 class RecordingLayerContributor final : public Core::IGpuTaskGraphOutputLayerContributor{
 public:
-    virtual bool prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame)noexcept override{
+    virtual b8 prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame)noexcept override{
         static_cast<void>(frame);
         return true;
     }

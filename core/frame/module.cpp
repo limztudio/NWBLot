@@ -91,7 +91,7 @@ Frame::~Frame()noexcept(false){
     drainOnFailure.release();
 }
 
-bool Frame::startup(){
+b8 Frame::startup(){
     const auto updateTimingScope = m_perfSession.cpuTimingSink().registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
     if(!updateTimingScope){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame: project-update CPU timing scope registration failed"));
@@ -128,7 +128,7 @@ void Frame::cleanup(){
     NWB_FATAL_ASSERT_MSG(m_graphics.destroy(), NWB_TEXT("Frame cleanup requires either a completed graphics join or terminal device loss"));
 }
 
-bool Frame::update(f32 delta){
+b8 Frame::update(f32 delta){
     const u64 frameIndex = m_graphics.getFrameIndex();
     m_perfSession.beginFrame(frameIndex);
     m_telemetrySession.setFrameIndex(frameIndex);
@@ -153,7 +153,7 @@ void Frame::setTelemetryUploadCallback(TelemetryUploadCallback callback, void* u
     m_telemetryUploadUserData = userData;
 }
 
-bool Frame::flushTelemetryUpload(const bool clearAfterUpload){
+b8 Frame::flushTelemetryUpload(const b8 clearAfterUpload){
     if(m_telemetrySession.eventCount() == 0u)
         return true;
     if(!m_telemetryUploadCallback)
@@ -191,7 +191,7 @@ TStringView Frame::windowTitleOrDefault()const noexcept{
     return !title.empty() ? title : TStringView(NWB_TEXT("NWB"));
 }
 
-Optional<TStringView> Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+Optional<TStringView> Frame::syncGraphicsWindowState(u32 width, u32 height, b8 windowVisible, b8 windowIsInFocus){
     if(!m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus))
         NWB_LOGGER_WARNING(NWB_TEXT("Frame: graphics window-state update requires device recreation"));
 
@@ -203,7 +203,7 @@ Optional<TStringView> Frame::syncGraphicsWindowState(u32 width, u32 height, bool
     return TStringView(m_appliedWindowTitle);
 }
 
-bool Frame::updateFrame(f32 delta){
+b8 Frame::updateFrame(f32 delta){
     ScopeExit discardUnpublishedProfile([this]()noexcept{ m_cpuTasks.setProfiling(false, m_perfSession.frameIndex()); });
 
     if(!clipboard().pump()){
@@ -213,7 +213,7 @@ bool Frame::updateFrame(f32 delta){
     m_cpuTasks.pumpMainThread();
     Perf::TimingSink& cpuTiming = m_perfSession.cpuTimingSink();
     f64 projectUpdateSeconds;
-    bool recordProjectUpdateTiming = false;
+    b8 recordProjectUpdateTiming = false;
     const u64 sampleFrameIndex = m_perfSession.frameIndex();
 
     if(m_projectUpdateCallback){

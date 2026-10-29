@@ -56,7 +56,7 @@ void MeshSkinningDeformationState::invalidateCurrent()noexcept{
     m_pendingCandidate = 0u;
 }
 
-void MeshSkinningDeformationState::refreshCurrent(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* const joints, const usize jointCount, const bool inputDirty)noexcept{
+void MeshSkinningDeformationState::refreshCurrent(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* const joints, const usize jointCount, const b8 inputDirty)noexcept{
     invalidateCurrent();
     if(
         inputDirty
@@ -87,7 +87,7 @@ Expected<u64> MeshSkinningDeformationState::stage(const MeshSkinningDeformationI
     return m_pendingCandidate;
 }
 
-bool MeshSkinningDeformationState::accept(const u64 candidate)noexcept{
+b8 MeshSkinningDeformationState::accept(const u64 candidate)noexcept{
     if(candidate == 0u || candidate != m_pendingCandidate)
         return false;
     m_acceptedJoints.swap(m_pendingJoints);

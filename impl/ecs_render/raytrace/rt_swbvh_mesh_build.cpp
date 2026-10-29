@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
+b8 RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
@@ -120,7 +120,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::
     return true;
 }
 
-bool RendererRayTracingSystem::ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
+b8 RendererRayTracingSystem::ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
     if(primitiveCount > s_BvhMaxPrimitivesPerMesh){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh exceeds software BVH primitive cap ({} > {}), shadows skipped"), static_cast<u64>(primitiveCount), static_cast<u64>(s_BvhMaxPrimitivesPerMesh));
         return false;
@@ -140,7 +140,7 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(u32 primitiveCount, Core
     return true;
 }
 
-bool RendererRayTracingSystem::meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, const Core::GpuDescriptorHandle nodeHeapHandle, const Core::GpuDescriptorHandle parentHeapHandle)noexcept{
+b8 RendererRayTracingSystem::meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, const Core::GpuDescriptorHandle nodeHeapHandle, const Core::GpuDescriptorHandle parentHeapHandle)noexcept{
     return
         nodeBuffer
         && parentBuffer
@@ -159,7 +159,7 @@ bool RendererRayTracingSystem::meshSwBvhResourcesReady(const Core::BufferHandle&
     ;
 }
 
-bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
+b8 RendererRayTracingSystem::buildMeshSwBvhPrepared(
     Core::CommandList& commandList,
     const u32 positionHeapSlot,
     const u32 triangleIndexHeapSlot,
@@ -243,7 +243,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     return true;
 }
 
-bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
+b8 RendererRayTracingSystem::refitMeshSwBvhPrepared(
     Core::CommandList& commandList,
     const u32 positionHeapSlot,
     const u32 triangleIndexHeapSlot,

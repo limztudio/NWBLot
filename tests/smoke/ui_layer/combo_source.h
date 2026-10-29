@@ -39,10 +39,10 @@ public:
             return MakeUnexpected(Failure{});
         return m_rows.indexOf(key);
     }
-    virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
+    virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
     virtual StringView text(u64 index)const noexcept override{ return m_empty ? StringView{} : m_rows.text(index); }
 
-    virtual bool enabled(u64 index)const noexcept override{ return !m_empty && m_rows.enabled(index); }
+    virtual b8 enabled(u64 index)const noexcept override{ return !m_empty && m_rows.enabled(index); }
 
 
 public:
@@ -56,7 +56,7 @@ public:
 
     void replace()noexcept{ ++m_generation; }
 
-    [[nodiscard]] bool reversed()const noexcept{ return m_rows.reversed(); }
+    [[nodiscard]] b8 reversed()const noexcept{ return m_rows.reversed(); }
 
     [[nodiscard]] u64 removedKey()const noexcept{ return m_rows.removedKey(); }
 
@@ -67,7 +67,7 @@ private:
     UiListSmokeSource m_rows;
     u64 m_generation = 1u;
     u64 m_revision = 1u;
-    bool m_empty = false;
+    b8 m_empty = false;
 };
 
 

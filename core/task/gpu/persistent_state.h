@@ -39,9 +39,9 @@ public:
 
 
     public:
-        [[nodiscard]] bool valid()const noexcept{ return !m_consumed && m_states.valid(); }
+        [[nodiscard]] b8 valid()const noexcept{ return !m_consumed && m_states.valid(); }
 
-        [[nodiscard]] bool empty()const noexcept{ return !valid() || m_states.empty(); }
+        [[nodiscard]] b8 empty()const noexcept{ return !valid() || m_states.empty(); }
 
         [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return valid() ? &m_states : nullptr; }
 
@@ -55,7 +55,7 @@ public:
         CommandListResourceStateHandoff m_states;
         GraphicsVector<TextureHandle> m_textures;
         GraphicsVector<BufferHandle> m_buffers;
-        bool m_consumed = false;
+        b8 m_consumed = false;
     };
 
 
@@ -74,9 +74,9 @@ public:
 public:
     void reset()noexcept;
 
-    [[nodiscard]] bool valid()const noexcept{ return m_states.valid(); }
+    [[nodiscard]] b8 valid()const noexcept{ return m_states.valid(); }
 
-    [[nodiscard]] bool empty()const noexcept{ return !m_states.valid() || m_states.empty(); }
+    [[nodiscard]] b8 empty()const noexcept{ return !m_states.valid() || m_states.empty(); }
 
     [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return m_states.valid() ? &m_states : nullptr; }
 
@@ -85,19 +85,19 @@ public:
     [[nodiscard]] usize retainedBufferCount()const noexcept{ return m_buffers.size(); }
 
     // Replaces the cache with `source` filtered to live imports, for pruning a removed runtime generation.
-    [[nodiscard]] bool replaceResourceSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 replaceResourceSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
 
     // Folds a graph packet's final native state into the retained accepted snapshot, then filters the result to the caller's current live resources.
     // The retained cache is changed only after the new candidate is complete.
-    [[nodiscard]] bool mergeResourceSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 mergeResourceSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
 
     // Builds an acceptance-only candidate from the retained base state and `source`.
     // The caller must call commit() only after the packet that produced `source` is accepted; a rejected packet leaves this cache untouched.
-    [[nodiscard]] bool buildMergedResourceSubset(Candidate& outCandidate, const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] b8 buildMergedResourceSubset(Candidate& outCandidate, const CommandListResourceStateHandoff& source, const TextureHandle* textures, usize textureCount, const BufferHandle* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena)const;
 
     // Produces a typed, filtered source for recording without altering the accepted cache.
     // This preserves the last accepted state when the newly recorded packet is later rejected.
-    [[nodiscard]] bool buildFilteredResourceSubset(
+    [[nodiscard]] b8 buildFilteredResourceSubset(
         Candidate& outCandidate,
         const CommandListResourceStateHandoff& source,
         const TextureHandle* textures,
@@ -107,29 +107,29 @@ public:
         Alloc::ScratchArena& scratchArena
     )const;
 
-    [[nodiscard]] bool commit(Candidate& candidate)noexcept;
+    [[nodiscard]] b8 commit(Candidate& candidate)noexcept;
 
-    [[nodiscard]] bool replaceBufferSubset(const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] b8 replaceBufferSubset(const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena){
         return replaceResourceSubset(source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 
-    [[nodiscard]] bool replaceTextureSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, const usize textureCount, Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] b8 replaceTextureSubset(const CommandListResourceStateHandoff& source, const TextureHandle* textures, const usize textureCount, Alloc::ScratchArena& scratchArena){
         return replaceResourceSubset(source, textures, textureCount, nullptr, 0u, scratchArena);
     }
 
-    [[nodiscard]] bool replaceTextureSubset(const CommandListResourceStateHandoff& source, const TextureHandle& texture, Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] b8 replaceTextureSubset(const CommandListResourceStateHandoff& source, const TextureHandle& texture, Alloc::ScratchArena& scratchArena){
         return replaceTextureSubset(source, &texture, 1u, scratchArena);
     }
 
-    [[nodiscard]] bool mergeBufferSubset(const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] b8 mergeBufferSubset(const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena){
         return mergeResourceSubset(source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 
-    [[nodiscard]] bool buildMergedBufferSubset(Candidate& outCandidate, const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena)const{
+    [[nodiscard]] b8 buildMergedBufferSubset(Candidate& outCandidate, const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena)const{
         return buildMergedResourceSubset(outCandidate, source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 
-    [[nodiscard]] bool buildFilteredBufferSubset(Candidate& outCandidate, const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena)const{
+    [[nodiscard]] b8 buildFilteredBufferSubset(Candidate& outCandidate, const CommandListResourceStateHandoff& source, const BufferHandle* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena)const{
         return buildFilteredResourceSubset(outCandidate, source, nullptr, 0u, buffers, bufferCount, scratchArena);
     }
 

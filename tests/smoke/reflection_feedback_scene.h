@@ -33,19 +33,19 @@ public:
 
 
 public:
-    [[nodiscard]] bool create(AStringView caseName, bool finalState);
-    [[nodiscard]] bool mutationCase()const noexcept{ return m_case == ReflectionFeedbackCase::Mutation; }
-    [[nodiscard]] bool applyMutation()noexcept;
+    [[nodiscard]] b8 create(AStringView caseName, b8 finalState);
+    [[nodiscard]] b8 mutationCase()const noexcept{ return m_case == ReflectionFeedbackCase::Mutation; }
+    [[nodiscard]] b8 applyMutation()noexcept;
 
 private:
-    [[nodiscard]] Core::ECS::EntityID createPanel(const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, bool horizontal = false);
+    [[nodiscard]] Core::ECS::EntityID createPanel(const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, b8 horizontal = false);
 
 
 private:
     Core::ECS::World& m_world;
     Core::ECS::EntityID m_green;
     ReflectionFeedbackCase::Enum m_case = ReflectionFeedbackCase::Boundary;
-    bool m_finalState = false;
+    b8 m_finalState = false;
 };
 
 

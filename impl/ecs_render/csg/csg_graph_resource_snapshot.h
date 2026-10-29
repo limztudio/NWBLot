@@ -38,8 +38,8 @@ namespace ECSRenderDetail{
 
 
     public:
-        [[nodiscard]] bool bindingValid()const noexcept;
-        [[nodiscard]] bool frameReady(const CsgFrameGpuDataView& csgFrameData)const noexcept;
+        [[nodiscard]] b8 bindingValid()const noexcept;
+        [[nodiscard]] b8 frameReady(const CsgFrameGpuDataView& csgFrameData)const noexcept;
         [[nodiscard]] Expected<u32> findClipContextHeapSlot()const noexcept;
     };
 };

@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererAvboitSystem::appendTaskGraphTimingTickets(
+b8 RendererAvboitSystem::appendTaskGraphTimingTickets(
     const RendererAvboitTaskGraphValidation& validation,
     const usize bindingCapacity,
     RendererAvboitTaskGraphTimingTickets& timingTickets,

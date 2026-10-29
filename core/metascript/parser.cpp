@@ -46,7 +46,7 @@ Document::Document(MetaArena& arena)
 {}
 
 
-bool Document::parse(MStringView source, IIncludeResolver* includeResolver){
+b8 Document::parse(MStringView source, IIncludeResolver* includeResolver){
     m_errors.clear();
     m_variables.clear();
     m_declarations.clear();
@@ -66,7 +66,7 @@ bool Document::parse(MStringView source, IIncludeResolver* includeResolver){
     return parser.parseInto();
 }
 
-bool Document::parse(IMetaReader& reader, IIncludeResolver* includeResolver){
+b8 Document::parse(IMetaReader& reader, IIncludeResolver* includeResolver){
     m_errors.clear();
     m_variables.clear();
     m_declarations.clear();

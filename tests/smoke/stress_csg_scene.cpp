@@ -49,7 +49,7 @@ static constexpr f32 s_RowDepth[] = { -0.55f, 0.55f };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* const owners, const usize ownerCount, const bool opaqueOnly){
+b8 StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* const owners, const usize ownerCount, const b8 opaqueOnly){
     const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_STRESS_CSG_PROFILE");
     if(!value || AStringView(value->data(), value->size()) == "none")
         return true;
@@ -102,7 +102,7 @@ bool StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::ScratchAre
     return true;
 }
 
-bool StressCsgScene::update(Core::ECS::World& world, const f32 yaw){
+b8 StressCsgScene::update(Core::ECS::World& world, const f32 yaw){
     if(!m_enabled)
         return true;
     if(!IsFinite(yaw)){

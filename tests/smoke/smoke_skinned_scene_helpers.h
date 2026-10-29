@@ -46,7 +46,7 @@ using SmokeModelRef = Core::Assets::AssetRef<Impl::Model>;
 
 struct SmokeTintedModelEntityResult{
     Core::ECS::EntityID entity;
-    bool tintApplied = false;
+    b8 tintApplied = false;
 };
 
 
@@ -72,7 +72,7 @@ inline void AddSmokeSkinnedRenderSystems(Core::ECS::World& world, ProjectRuntime
     const SmokeModelRef& modelRef,
     const TStringView projectName,
     const Name preferredSkeletonObject = Name(),
-    const bool requireInvertibleBindPose = false
+    const b8 requireInvertibleBindPose = false
 ){
     const auto loadedModelAsset = assetManager.loadSync(Impl::Model::AssetTypeName(), modelRef.name());
     if(!loadedModelAsset){

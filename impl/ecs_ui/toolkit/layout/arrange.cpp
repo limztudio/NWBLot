@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LayoutTree::arrange(const Rect& viewport){
+b8 LayoutTree::arrange(const Rect& viewport){
     if(m_buildFailed || m_nodes.empty() || !IsValidRectangle(viewport))
         return false;
     m_work.assign(m_nodes.size(), {});
@@ -40,7 +40,7 @@ bool LayoutTree::arrange(const Rect& viewport){
     return true;
 }
 
-bool LayoutTree::arrangeNode(const u32 index)noexcept{
+b8 LayoutTree::arrangeNode(const u32 index)noexcept{
     const Node& node = m_nodes[index];
     const LayoutNodeDesc& description = node.description;
     Work& work = m_work[index];
@@ -59,8 +59,8 @@ bool LayoutTree::arrangeNode(const u32 index)noexcept{
         return false;
     const SIMDVectorSingle childClipValue = description.clipChildren ? IntersectRectValue(inheritedClip, content) : inheritedClip;
     const Rect childClip{ VectorGetX(childClipValue), VectorGetY(childClipValue), VectorGetZ(childClipValue), VectorGetW(childClipValue) };
-    const bool row = description.direction == LayoutDirection::Row;
-    const bool column = description.direction == LayoutDirection::Column;
+    const b8 row = description.direction == LayoutDirection::Row;
+    const b8 column = description.direction == LayoutDirection::Column;
     SIMDVectorDouble consumed = VectorDoubleZero();
     SIMDVectorDouble weight = VectorDoubleZero();
     u32 childCount = 0u;

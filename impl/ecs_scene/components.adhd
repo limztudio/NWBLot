@@ -17,7 +17,7 @@ const f32 s_LightInnerConeCos = 0.95f;
 const f32 s_LightOuterConeCos = 0.90f;
 const f32 s_LightDirectionalAngularRadius = 0.00465f;
 const f32 s_LightPunctualSourceRadius = 0.1f;
-const bool s_LightEnableCaustics = true;
+const b8 s_LightEnableCaustics = true;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,7 +89,7 @@ class LightComponent{
     public f32 angularRadius = s_LightDirectionalAngularRadius;
     public f32 sourceRadius = s_LightPunctualSourceRadius;
     public LightType type = LightType::Enum::Directional;
-    public bool enableCaustics = s_LightEnableCaustics;
+    public b8 enableCaustics = s_LightEnableCaustics;
 
     public f32x4 color()const{
         return f32x4(this.colorIntensity.x, this.colorIntensity.y, this.colorIntensity.z, 0.0f);

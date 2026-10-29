@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 
 inline void ApplyModelObjectRenderer(Core::ECS::World& world, const Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::Entity& entity){
     Core::Assets::AssetRef<Material> resolvedMaterial = material;
-    bool visible = true;
+    b8 visible = true;
     if(const RendererComponent* ownerRenderer = world.tryGetComponent<RendererComponent>(owner)){
         visible = ownerRenderer->visible;
         if(!resolvedMaterial.valid())

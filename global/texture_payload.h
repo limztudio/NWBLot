@@ -26,7 +26,7 @@ namespace TextureDimension{
     };
 };
 
-[[nodiscard]] constexpr bool IsValidTextureDimension(const TextureDimension::Enum dimension)noexcept{
+[[nodiscard]] constexpr b8 IsValidTextureDimension(const TextureDimension::Enum dimension)noexcept{
     return dimension == TextureDimension::Texture2D || dimension == TextureDimension::TextureCube || dimension == TextureDimension::Texture3D;
 }
 
@@ -43,11 +43,11 @@ namespace TexturePayloadFormat{
     };
 };
 
-[[nodiscard]] constexpr bool IsValidTexturePayloadFormat(const TexturePayloadFormat::Enum format)noexcept{
+[[nodiscard]] constexpr b8 IsValidTexturePayloadFormat(const TexturePayloadFormat::Enum format)noexcept{
     return format == TexturePayloadFormat::UastcLdr4x4 || format == TexturePayloadFormat::UastcHdr4x4;
 }
 
-[[nodiscard]] constexpr bool IsHdrTexturePayloadFormat(const TexturePayloadFormat::Enum format)noexcept{
+[[nodiscard]] constexpr b8 IsHdrTexturePayloadFormat(const TexturePayloadFormat::Enum format)noexcept{
     return format == TexturePayloadFormat::UastcHdr4x4;
 }
 
@@ -69,7 +69,7 @@ namespace TextureAlphaMode{
     };
 };
 
-[[nodiscard]] constexpr bool IsValidTextureAlphaMode(const TextureAlphaMode::Enum mode)noexcept{
+[[nodiscard]] constexpr b8 IsValidTextureAlphaMode(const TextureAlphaMode::Enum mode)noexcept{
     return mode == TextureAlphaMode::Opaque || mode == TextureAlphaMode::EmbeddedLdr || mode == TextureAlphaMode::ConstantUnorm8 || mode == TextureAlphaMode::SeparateUastcLdr4x4;
 }
 

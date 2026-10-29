@@ -25,7 +25,7 @@ public:
     struct Entry{
         void* resource;
         usize inputIndex;
-        bool texture;
+        b8 texture;
     };
 
 
@@ -34,7 +34,7 @@ private:
     static constexpr usize s_BucketCountFactor = 2u;
     static constexpr usize s_BytesPerEntry = sizeof(Entry) + sizeof(usize) * s_BucketCountFactor;
 
-    [[nodiscard]] static usize HashIdentity(void* resource, bool texture)noexcept;
+    [[nodiscard]] static usize HashIdentity(void* resource, b8 texture)noexcept;
     static void InsertIndex(void* storage, usize capacity, usize entryIndex)noexcept;
 
 
@@ -47,13 +47,13 @@ public:
 
 
 public:
-    [[nodiscard]] bool addTexture(Texture* texture, usize inputIndex)noexcept;
-    [[nodiscard]] bool addBuffer(Buffer* buffer, usize inputIndex)noexcept;
-    [[nodiscard]] bool containsTexture(Texture* texture)const noexcept{ return texture && containsResource(texture, true); }
+    [[nodiscard]] b8 addTexture(Texture* texture, usize inputIndex)noexcept;
+    [[nodiscard]] b8 addBuffer(Buffer* buffer, usize inputIndex)noexcept;
+    [[nodiscard]] b8 containsTexture(Texture* texture)const noexcept{ return texture && containsResource(texture, true); }
 
-    [[nodiscard]] bool containsBuffer(Buffer* buffer)const noexcept{ return buffer && containsResource(buffer, false); }
+    [[nodiscard]] b8 containsBuffer(Buffer* buffer)const noexcept{ return buffer && containsResource(buffer, false); }
 
-    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
 
     [[nodiscard]] const Entry* entries()const noexcept{ return m_storage ? static_cast<const Entry*>(m_storage) : m_inlineEntries; }
 
@@ -65,8 +65,8 @@ public:
 
 
 private:
-    [[nodiscard]] bool addResource(void* resource, usize inputIndex, bool texture)noexcept;
-    [[nodiscard]] bool containsResource(void* resource, bool texture)const noexcept{
+    [[nodiscard]] b8 addResource(void* resource, usize inputIndex, b8 texture)noexcept;
+    [[nodiscard]] b8 containsResource(void* resource, b8 texture)const noexcept{
         if(m_storage)
             return containsIndexedResource(resource, texture);
         const usize begin = texture ? 0u : m_textureCount;
@@ -77,8 +77,8 @@ private:
         }
         return false;
     }
-    [[nodiscard]] bool containsIndexedResource(void* resource, bool texture)const noexcept;
-    [[nodiscard]] bool grow()noexcept;
+    [[nodiscard]] b8 containsIndexedResource(void* resource, b8 texture)const noexcept;
+    [[nodiscard]] b8 grow()noexcept;
 
 
 private:
@@ -89,7 +89,7 @@ private:
     usize m_capacity = s_InlineCapacity;
     usize m_size = 0u;
     usize m_textureCount = 0u;
-    bool m_valid = true;
+    b8 m_valid = true;
 };
 
 

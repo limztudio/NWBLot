@@ -105,7 +105,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
     raster.packet = decodedContext->packet;
     raster.queue = decodedContext->queue;
     usize nextBlobOffset = m_nextBlobOffset;
-    bool valid = true;
+    b8 valid = true;
     switch(header.opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{
         usize cursor = recordOffset;

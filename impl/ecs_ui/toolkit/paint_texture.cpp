@@ -18,11 +18,11 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PaintBuilder::prepareTextureImages(const SharedImageSource* const images, const usize count){
+b8 PaintBuilder::prepareTextureImages(const SharedImageSource* const images, const usize count){
     return prepareImages(nullptr, 0u, nullptr, 0u, images, count);
 }
 
-bool PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv, const Color& tint){
+b8 PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
     if(
         !source || !IsFinite(rectangle.x) || !IsFinite(rectangle.y)

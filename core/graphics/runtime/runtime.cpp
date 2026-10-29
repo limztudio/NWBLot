@@ -31,7 +31,7 @@ namespace __hidden_graphics_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
+[[nodiscard]] static b8 CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
     if(src.enableDebugRuntime && !CanEnableDebugRuntime())
         return false;
 
@@ -92,7 +92,7 @@ GraphicsRuntime::~GraphicsRuntime()noexcept(false){
     detachOnFailure.release();
 }
 
-bool GraphicsRuntime::init(const Common::FrameData& data){
+b8 GraphicsRuntime::init(const Common::FrameData& data){
     if(!registerCpuTimingScopes())
         return false;
 
@@ -139,7 +139,7 @@ bool GraphicsRuntime::init(const Common::FrameData& data){
     return true;
 }
 
-bool GraphicsRuntime::createHeadlessDevice(){
+b8 GraphicsRuntime::createHeadlessDevice(){
     if(!registerCpuTimingScopes())
         return false;
 
@@ -170,7 +170,7 @@ bool GraphicsRuntime::createHeadlessDevice(){
     return validateRenderPassResources();
 }
 
-bool GraphicsRuntime::createInstance(const InstanceParameters& params){
+b8 GraphicsRuntime::createInstance(const InstanceParameters& params){
     if(!__hidden_graphics_runtime::CopyInstanceParameters(m_deviceCreationParams, params)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: debug runtime is only available in non-final builds"));
         return false;
@@ -191,7 +191,7 @@ void GraphicsRuntime::requestDeviceRecreation()const{
     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: device recreation requested; ending the current graphics session before another submission."));
 }
 
-bool GraphicsRuntime::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+b8 GraphicsRuntime::updateWindowState(u32 width, u32 height, b8 windowVisible, b8 windowIsInFocus){
     if(m_deviceRecreationRequested)
         return false;
     if(auto* device = m_backend->getDevice(); device && device->requiresRecreation()){
@@ -219,7 +219,7 @@ bool GraphicsRuntime::updateWindowState(u32 width, u32 height, bool windowVisibl
     return true;
 }
 
-bool GraphicsRuntime::destroy(){
+b8 GraphicsRuntime::destroy(){
     m_lastPresentationReceipt.reset();
 
     auto transitionTicket = m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Destroy);
@@ -239,7 +239,7 @@ bool GraphicsRuntime::destroy(){
         return false;
     }
     GraphicsBackend::Device* const device = m_backend->getDevice();
-    const bool detachScheduler = device && m_gpuTasks.isAttachedTo(*device);
+    const b8 detachScheduler = device && m_gpuTasks.isAttachedTo(*device);
     if(detachScheduler && !m_gpuTasks.detachDevice(*device)){
         requestDeviceRecreation();
         return false;
@@ -257,7 +257,7 @@ bool GraphicsRuntime::destroy(){
     return true;
 }
 
-bool GraphicsRuntime::waitForIdle(){
+b8 GraphicsRuntime::waitForIdle(){
     if(auto* device = m_backend->getDevice()){
         if(m_gpuTasks.isAttachedTo(*device))
             return m_gpuTasks.wait();
@@ -267,7 +267,7 @@ bool GraphicsRuntime::waitForIdle(){
     return true;
 }
 
-bool GraphicsRuntime::isDeviceLost()const noexcept{
+b8 GraphicsRuntime::isDeviceLost()const noexcept{
     if(const auto* device = m_backend->getDevice())
         return device->isDeviceLost();
     return false;
@@ -289,12 +289,12 @@ QueueSubmissionPreSubmitHook GraphicsRuntime::claimFramePresentationSignal()noex
     return m_backend->claimFramePresentationSignal();
 }
 
-bool GraphicsRuntime::confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept{
+b8 GraphicsRuntime::confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept{
     return m_backend->confirmFramePresentationSignal(claim, token);
 }
 
 
-bool GraphicsRuntime::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
+b8 GraphicsRuntime::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
     return m_backend->cancelFramePresentationSignal(claim);
 }
 

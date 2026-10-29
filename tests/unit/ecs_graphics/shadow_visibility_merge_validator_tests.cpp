@@ -48,7 +48,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool build(const bool combinedUpsample, const bool temporalMerge, const u32 splitStage = Limit<u32>::s_Max, const bool combinedWavelet = false, const bool combinedTemporal = false, const bool diagnostics = false){
+    [[nodiscard]] b8 build(const b8 combinedUpsample, const b8 temporalMerge, const u32 splitStage = Limit<u32>::s_Max, const b8 combinedWavelet = false, const b8 combinedTemporal = false, const b8 diagnostics = false){
         const Name identities[] = {
             Name("tests/shadow_packet/opaque"), Name("tests/shadow_packet/opaque_wavelet"),
             Name("tests/shadow_packet/opaque_upsample"), Name("tests/shadow_packet/transparent_trace"),
@@ -116,7 +116,7 @@ public:
 
 
 TEST(ShadowVisibilityMergeValidator, FusionOmitsOnlyOpaqueUpsampleAndKeepsOptionalTemporalMerge){
-    for(const bool temporalMerge : { false, true }){
+    for(const b8 temporalMerge : { false, true }){
         ShadowPacketPlan fixture;
         ASSERT_TRUE(fixture.build(true, temporalMerge));
         const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
@@ -131,7 +131,7 @@ TEST(ShadowVisibilityMergeValidator, FusionOmitsOnlyOpaqueUpsampleAndKeepsOption
 }
 
 TEST(ShadowVisibilityMergeValidator, SeparateRouteRequiresItsOpaqueUpsample){
-    for(const bool temporalMerge : { false, true }){
+    for(const b8 temporalMerge : { false, true }){
         ShadowPacketPlan fixture;
         ASSERT_TRUE(fixture.build(false, temporalMerge));
         const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
@@ -147,7 +147,7 @@ TEST(ShadowVisibilityMergeValidator, SeparateRouteRequiresItsOpaqueUpsample){
 }
 
 TEST(ShadowVisibilityMergeValidator, MissingStagesAndForeignGraphIdentitiesCannotProveOneAcceptancePacket){
-    for(const bool combined : { false, true }){
+    for(const b8 combined : { false, true }){
         ShadowPacketPlan fixture;
         ShadowPacketPlan foreign;
         ASSERT_TRUE(fixture.build(combined, true));
@@ -174,7 +174,7 @@ TEST(ShadowVisibilityMergeValidator, MissingStagesAndForeignGraphIdentitiesCanno
 }
 
 TEST(ShadowVisibilityMergeValidator, EverySeparateSubmissionBoundaryRejectsThePreparedChain){
-    for(const bool combined : { false, true }){
+    for(const b8 combined : { false, true }){
         for(u32 splitStage = 1u; splitStage < 7u; ++splitStage){
             if(combined && splitStage == 2u)
                 continue;
@@ -190,7 +190,7 @@ TEST(ShadowVisibilityMergeValidator, EverySeparateSubmissionBoundaryRejectsThePr
 
 
 TEST(ShadowVisibilityMergeValidator, TrailingDiagnosticsCannotExportScratchStateFromAnotherAcceptancePacket){
-    for(const bool combined : { false, true }){
+    for(const b8 combined : { false, true }){
         {
             ShadowPacketPlan fixture;
             ASSERT_TRUE(fixture.build(combined, true, 7u, false, false, true));

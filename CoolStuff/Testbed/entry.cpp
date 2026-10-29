@@ -37,7 +37,7 @@ static constexpr TStringView s_DestroyRequiresIdleOrLoss = NWB_TEXT("Project-wor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ConfigureRuntime(NWB::ProjectStartupContext& context)noexcept{
+static b8 ConfigureRuntime(NWB::ProjectStartupContext& context)noexcept{
     NWB::Core::GraphicsRuntime& graphics = context.graphics;
     return graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()) && graphics.setHDR10OutputEnabled(true);
 }
@@ -89,7 +89,7 @@ static void DestroyInitialWorld(NWB::ProjectRuntimeContext& context, UniquePtr<N
     context.graphics.removeRenderPass(rendererSystem);
     context.graphics.removeRenderPass(uiLayerSystem);
 
-    const bool deviceIdle = context.graphics.waitForIdle();
+    const b8 deviceIdle = context.graphics.waitForIdle();
     NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), s_DestroyRequiresIdleOrLoss);
 
     world->clear();
@@ -120,7 +120,7 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
     return Testbed::__hidden_testbed_entry::s_WindowTitle;
 }
 
-bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
+b8 NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
     return Testbed::__hidden_testbed_entry::ConfigureRuntime(context);
 }
 

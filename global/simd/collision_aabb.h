@@ -25,11 +25,11 @@ struct alignas(SIMDVectorSingle) Bounds{
 };
 static_assert(alignof(Expected<Bounds>) >= alignof(Bounds));
 
-[[nodiscard]] bool NWB_SIMD_CALL Valid(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
+[[nodiscard]] b8 NWB_SIMD_CALL Valid(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
 void NWB_SIMD_CALL Reset(SIMDVectorSingle& outMinBounds, SIMDVectorSingle& outMaxBounds)noexcept;
 void NWB_SIMD_CALL Expand(SIMDVectorSingle point, SIMDVectorSingle& inOutMinBounds, SIMDVectorSingle& inOutMaxBounds)noexcept;
 void NWB_SIMD_CALL ExpandTriangle(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2, SIMDVectorSingle& inOutMinBounds, SIMDVectorSingle& inOutMaxBounds)noexcept;
-[[nodiscard]] bool NWB_SIMD_CALL Intersects(SIMDVectorSingle lhsMinBounds, SIMDVectorSingle lhsMaxBounds, SIMDVectorSingle rhsMinBounds, SIMDVectorSingle rhsMaxBounds)noexcept;
+[[nodiscard]] b8 NWB_SIMD_CALL Intersects(SIMDVectorSingle lhsMinBounds, SIMDVectorSingle lhsMaxBounds, SIMDVectorSingle rhsMinBounds, SIMDVectorSingle rhsMaxBounds)noexcept;
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL Center(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL Extents(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
 [[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL SurfaceArea(SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds)noexcept;
@@ -59,11 +59,11 @@ struct alignas(SIMDVectorDouble) Bounds{
 };
 static_assert(alignof(Expected<Bounds>) >= alignof(Bounds));
 
-[[nodiscard]] bool NWB_SIMD_CALL Valid(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
+[[nodiscard]] b8 NWB_SIMD_CALL Valid(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
 void NWB_SIMD_CALL Reset(SIMDVectorDouble& outMinBounds, SIMDVectorDouble& outMaxBounds)noexcept;
 void NWB_SIMD_CALL Expand(SIMDVectorDouble point, SIMDVectorDouble& inOutMinBounds, SIMDVectorDouble& inOutMaxBounds)noexcept;
 void NWB_SIMD_CALL ExpandTriangle(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2, SIMDVectorDouble& inOutMinBounds, SIMDVectorDouble& inOutMaxBounds)noexcept;
-[[nodiscard]] bool NWB_SIMD_CALL Intersects(SIMDVectorDouble lhsMinBounds, SIMDVectorDouble lhsMaxBounds, SIMDVectorDouble rhsMinBounds, SIMDVectorDouble rhsMaxBounds)noexcept;
+[[nodiscard]] b8 NWB_SIMD_CALL Intersects(SIMDVectorDouble lhsMinBounds, SIMDVectorDouble lhsMaxBounds, SIMDVectorDouble rhsMinBounds, SIMDVectorDouble rhsMaxBounds)noexcept;
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL Center(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL Extents(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
 [[nodiscard]] SIMDVectorDouble NWB_SIMD_CALL SurfaceArea(SIMDVectorDouble minBounds, SIMDVectorDouble maxBounds)noexcept;
@@ -80,11 +80,11 @@ void NWB_SIMD_CALL ExpandTriangle(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMD
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL AabbTests::Valid(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL AabbTests::Valid(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
     return !Vector3IsNaN(minBounds) && !Vector3IsInfinite(minBounds) && !Vector3IsNaN(maxBounds) && !Vector3IsInfinite(maxBounds) && Vector3LessOrEqual(minBounds, maxBounds);
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL AabbDoubleTests::Valid(const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL AabbDoubleTests::Valid(const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
     return !VectorDouble3IsNaN(minBounds) && !VectorDouble3IsInfinite(minBounds) && !VectorDouble3IsNaN(maxBounds) && !VectorDouble3IsInfinite(maxBounds) && VectorDouble3LessOrEqual(minBounds, maxBounds);
 }
 
@@ -130,11 +130,11 @@ NWB_INLINE void NWB_SIMD_CALL AabbDoubleTests::ExpandTriangle(const SIMDVectorDo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL AabbTests::Intersects(const SIMDVectorSingle lhsMinBounds, const SIMDVectorSingle lhsMaxBounds, const SIMDVectorSingle rhsMinBounds, const SIMDVectorSingle rhsMaxBounds)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL AabbTests::Intersects(const SIMDVectorSingle lhsMinBounds, const SIMDVectorSingle lhsMaxBounds, const SIMDVectorSingle rhsMinBounds, const SIMDVectorSingle rhsMaxBounds)noexcept{
     return AabbTests::Valid(lhsMinBounds, lhsMaxBounds) && AabbTests::Valid(rhsMinBounds, rhsMaxBounds) && CollisionDetail::MinMaxIntersects(lhsMinBounds, lhsMaxBounds, rhsMinBounds, rhsMaxBounds);
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL AabbDoubleTests::Intersects(const SIMDVectorDouble lhsMinBounds, const SIMDVectorDouble lhsMaxBounds, const SIMDVectorDouble rhsMinBounds, const SIMDVectorDouble rhsMaxBounds)noexcept{
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL AabbDoubleTests::Intersects(const SIMDVectorDouble lhsMinBounds, const SIMDVectorDouble lhsMaxBounds, const SIMDVectorDouble rhsMinBounds, const SIMDVectorDouble rhsMaxBounds)noexcept{
     return AabbDoubleTests::Valid(lhsMinBounds, lhsMaxBounds) && AabbDoubleTests::Valid(rhsMinBounds, rhsMaxBounds) && CollisionDoubleDetail::MinMaxIntersects(lhsMinBounds, lhsMaxBounds, rhsMinBounds, rhsMaxBounds);
 }
 

@@ -272,8 +272,8 @@ void AppendFrameGraphRuntimeStatisticsDot(
     const Telemetry::FrameGraphRuntimeStatistics& statistics,
     const usize physicalQueueRuntimeStatisticsCount,
     const usize packetSubmissionStatisticsCount,
-    const bool physicalQueueRuntimeStatisticsPresent,
-    const bool packetSubmissionStatisticsPresent
+    const b8 physicalQueueRuntimeStatisticsPresent,
+    const b8 packetSubmissionStatisticsPresent
 ){
     if(!statistics.present){
         out += ", runtime_statistics=\"none\"";

@@ -23,10 +23,10 @@ namespace DeletionMutation{
 class UiSelectionDeletionTests : public UiEditBoxHostTests{
 protected:
     [[nodiscard]] UiTextEditOwner owner()const noexcept;
-    [[nodiscard]] bool seed(bool reverse = false);
-    [[nodiscard]] bool mutate(DeletionMutation::Enum mutation);
+    [[nodiscard]] b8 seed(b8 reverse = false);
+    [[nodiscard]] b8 mutate(DeletionMutation::Enum mutation);
     void expectBaseline(u64 revision, u64 externalRevision, u64 selectionGeneration)const;
-    void sessionOrder(bool reverse);
+    void sessionOrder(b8 reverse);
     void sessionRejected(DeletionMutation::Enum mutation);
     void hostRejected(DeletionMutation::Enum mutation);
 };
@@ -39,11 +39,11 @@ UiTextEditOwner UiSelectionDeletionTests::owner()const noexcept{
     return { { 371u }, 3u, m_model.instanceGeneration() };
 }
 
-bool UiSelectionDeletionTests::seed(const bool reverse){
+b8 UiSelectionDeletionTests::seed(const b8 reverse){
     return m_model.setText("abcDEFghi") && m_model.setSelection(reverse ? 6u : 3u, reverse ? 3u : 6u);
 }
 
-bool UiSelectionDeletionTests::mutate(const DeletionMutation::Enum mutation){
+b8 UiSelectionDeletionTests::mutate(const DeletionMutation::Enum mutation){
     const usize anchor = m_model.anchor();
     const usize caret = m_model.caret();
     switch(mutation){
@@ -68,7 +68,7 @@ void UiSelectionDeletionTests::expectBaseline(const u64 revision, const u64 exte
     EXPECT_FALSE(m_model.composition().active);
 }
 
-void UiSelectionDeletionTests::sessionOrder(const bool reverse){
+void UiSelectionDeletionTests::sessionOrder(const b8 reverse){
     ASSERT_TRUE(seed(reverse));
     UiTextEditSession session(m_arena, m_textInput);
     ASSERT_EQ(session.begin(owner(), m_model, { 30, 40, 1, 18 }), TextInputAdmission::Accepted);
@@ -111,8 +111,8 @@ void UiSelectionDeletionTests::sessionRejected(const DeletionMutation::Enum muta
     const u64 externalRevision = m_model.externalRevision();
     const u64 selectionGeneration = m_model.selectionGeneration();
     const u64 compositionGeneration = m_model.compositionGeneration();
-    const bool canUndo = m_model.canUndo();
-    const bool canRedo = m_model.canRedo();
+    const b8 canUndo = m_model.canUndo();
+    const b8 canRedo = m_model.canRedo();
     EXPECT_FALSE(session.matchesPublished(owner(), m_model));
     const UiTextEditResult result = session.drain(owner(), m_model);
     EXPECT_EQ(result.status, UiTextEditStatus::StaleModel);
@@ -138,8 +138,8 @@ void UiSelectionDeletionTests::hostRejected(const DeletionMutation::Enum mutatio
     const u64 revision = m_model.revision();
     const u64 externalRevision = m_model.externalRevision();
     const u64 selectionGeneration = m_model.selectionGeneration();
-    const bool canUndo = m_model.canUndo();
-    const bool canRedo = m_model.canRedo();
+    const b8 canUndo = m_model.canUndo();
+    const b8 canRedo = m_model.canRedo();
     ASSERT_TRUE(frame(m_model));
     expectBaseline(revision, externalRevision, selectionGeneration);
     EXPECT_FALSE(m_result.textChanged);
@@ -277,7 +277,7 @@ TEST_F(UiSelectionDeletionTests, QueuedSelectionDeletionRejectsIdenticalExternal
 }
 
 TEST_F(UiSelectionDeletionTests, OrderedHostCopiesSelectionBasisAndPreservesBothDirectionalUndoSelections){
-    for(const bool reverse : { false, true }){
+    for(const b8 reverse : { false, true }){
         SCOPED_TRACE(reverse);
         ASSERT_TRUE(seed(reverse));
         ASSERT_TRUE(activate());

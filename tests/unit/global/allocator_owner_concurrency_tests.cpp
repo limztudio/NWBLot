@@ -25,7 +25,7 @@ namespace __hidden_allocator_owner_concurrency_tests{
 using namespace NWB::Core::Alloc;
 using ArenaOwnerTestSupport::OwnerStats;
 
-void WaitForFlag(const Atomic<bool>& flag)noexcept{
+void WaitForFlag(const Atomic<b8>& flag)noexcept{
     AtomicBackOff backoff;
     while(!flag.load(MemoryOrder::acquire))
         backoff.pause();
@@ -42,8 +42,8 @@ TEST(AllocationOwnerConcurrency, CapturesLiveAndRetiringArenasWithoutLosingHisto
     constexpr u64 s_Allocations = s_ThreadCount * s_Iterations * 5u;
     const usize poolBytes = PersistentArena::StructureAlignedSize(4096u);
     const ArenaMemoryStats before = OwnerStats(s_Owner);
-    Atomic<bool> failed{ false };
-    Atomic<bool> releaseFirstAllocations{ false };
+    Atomic<b8> failed{ false };
+    Atomic<b8> releaseFirstAllocations{ false };
     Atomic<usize> completed{ 0u };
     Latch firstAllocationsReady(s_ThreadCount);
     Thread workers[s_ThreadCount];
@@ -102,7 +102,7 @@ TEST(AllocationOwnerConcurrency, CapturesLiveAndRetiringArenasWithoutLosingHisto
     const ArenaMemoryStats simultaneouslyLive = OwnerStats(s_Owner);
     releaseFirstAllocations.store(true, MemoryOrder::release);
     ArenaMemoryStats previous = simultaneouslyLive;
-    bool snapshotsConsistent = true;
+    b8 snapshotsConsistent = true;
     do{
         const ArenaMemoryStats current = OwnerStats(s_Owner);
         snapshotsConsistent &= current.allocationCount >= previous.allocationCount;
@@ -137,14 +137,14 @@ TEST(AllocationOwnerConcurrency, CrossThreadRawReallocationAndFreeKeepSettledBac
     constexpr usize s_AllocationCount = 64u;
     u8* allocations[s_AllocationCount] = {};
     u64 allocatedBytes = 0u;
-    Atomic<bool> failed{ false };
-    Atomic<bool> producerReady{ false };
-    Atomic<bool> consumerReady{ false };
-    Atomic<bool> startProducer{ false };
-    Atomic<bool> startConsumer{ false };
-    Atomic<bool> produced{ false };
-    Atomic<bool> consumed{ false };
-    Atomic<bool> releaseWorkers{ false };
+    Atomic<b8> failed{ false };
+    Atomic<b8> producerReady{ false };
+    Atomic<b8> consumerReady{ false };
+    Atomic<b8> startProducer{ false };
+    Atomic<b8> startConsumer{ false };
+    Atomic<b8> produced{ false };
+    Atomic<b8> consumed{ false };
+    Atomic<b8> releaseWorkers{ false };
 
     Thread producer([&]()noexcept{
         void* const warmup = CoreAlloc(1u);

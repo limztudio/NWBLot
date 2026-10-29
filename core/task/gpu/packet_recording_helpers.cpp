@@ -31,8 +31,8 @@ namespace GpuPacketRecordingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, Alloc::ScratchArena& scratchArena, GpuTimingRecorder* const timingRecorder){
-    bool recordsTiming = false;
+b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, Alloc::ScratchArena& scratchArena, GpuTimingRecorder* const timingRecorder){
+    b8 recordsTiming = false;
     for(usize packetIndex = 0u; packetIndex < planAccess.packetCount(); ++packetIndex){
         const GpuCompiledPacketView packetView = planAccess.packet(planAccess.packetIdAt(packetIndex));
         if(!packetView.valid())
@@ -82,7 +82,7 @@ bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& decla
             if(!packetScopeName || !countScopeOccurrence(*packetScopeName))
                 return false;
         }
-        bool packetRecordsTiming = false;
+        b8 packetRecordsTiming = false;
         for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
             const GpuTaskId task = tasks[taskIndex];
             const GpuTaskGraphTaskView taskView = declarationAccess.taskAt(task.index);
@@ -94,7 +94,7 @@ bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& decla
             if(compiledTask->timingPolicy == GpuTaskTimingPolicy::Task && !countScopeOccurrence(taskView.identity))
                 return false;
         }
-        const bool recordsPacketEnvelopeTiming = packetTimingEnvelopeRange.valid() && packetIndex >= packetTimingEnvelopeRange.first.index && packetIndex - packetTimingEnvelopeRange.first.index < packetTimingEnvelopeRange.packetCount;
+        const b8 recordsPacketEnvelopeTiming = packetTimingEnvelopeRange.valid() && packetIndex >= packetTimingEnvelopeRange.first.index && packetIndex - packetTimingEnvelopeRange.first.index < packetTimingEnvelopeRange.packetCount;
         if(packet.recordsPacketEnvelopeTiming != recordsPacketEnvelopeTiming)
             return false;
         packetRecordsTiming = packetRecordsTiming || recordsPacketEnvelopeTiming;
@@ -112,7 +112,7 @@ bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& decla
 }
 
 
-bool HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList)noexcept{
+b8 HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList)noexcept{
     if(!declarationAccess.validResource(barrier.resource))
         return false;
 

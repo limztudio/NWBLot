@@ -27,7 +27,7 @@ void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     m_rayTracingState.m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
-bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets){
+b8 RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets){
     // Full-res additive targets with half-res temporal resolve ping-pong.
     targets.causticIrradianceFormat = Core::Format::RGBA16_FLOAT;
     targets.causticAccumulatorFormat = Core::Format::R32_UINT;
@@ -146,7 +146,7 @@ Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPrepar
     return Optional<Core::GpuUploadBlobId>{*blob};
 }
 
-bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena){
+b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena){
     // Emission targets are refractive world bounds. Freeze bytes here; graph declaration keeps only this snapshot.
     m_preparedCausticEmissionTargetBytes.clear();
     m_rayTracingState.m_causticRefractiveInstanceCount = 0u;

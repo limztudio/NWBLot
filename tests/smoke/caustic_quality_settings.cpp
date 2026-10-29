@@ -21,7 +21,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ApplyCausticQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::ScratchArena& arena, const Impl::CausticQualitySettings& baseSettings){
+b8 ApplyCausticQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::ScratchArena& arena, const Impl::CausticQualitySettings& baseSettings){
     Impl::CausticQualitySettings settings = baseSettings;
     const auto value = ReadSmokeEnvironmentText(arena, "NWB_CAUSTIC_PHOTON_GRID_DIVISOR");
     if(value){

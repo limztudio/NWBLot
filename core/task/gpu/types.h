@@ -121,13 +121,13 @@ struct GpuTaskId{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
-inline constexpr bool operator==(const GpuTaskId& lhs, const GpuTaskId& rhs)noexcept{
+inline constexpr b8 operator==(const GpuTaskId& lhs, const GpuTaskId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
 
-inline constexpr bool operator!=(const GpuTaskId& lhs, const GpuTaskId& rhs)noexcept{ return !(lhs == rhs); }
+inline constexpr b8 operator!=(const GpuTaskId& lhs, const GpuTaskId& rhs)noexcept{ return !(lhs == rhs); }
 
 struct GpuGraphResourceId{
     u64 generation = 0u;
@@ -135,13 +135,13 @@ struct GpuGraphResourceId{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
-inline constexpr bool operator==(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{
+inline constexpr b8 operator==(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
 
-inline constexpr bool operator!=(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{ return !(lhs == rhs); }
+inline constexpr b8 operator!=(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{ return !(lhs == rhs); }
 
 struct GpuGraphResourceIdHasher{
     [[nodiscard]] usize operator()(const GpuGraphResourceId& resource)const noexcept{
@@ -157,13 +157,13 @@ struct GpuGraphResourceVersionId{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
-inline constexpr bool operator==(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
+inline constexpr b8 operator==(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
 
-inline constexpr bool operator!=(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
+inline constexpr b8 operator!=(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -174,13 +174,13 @@ struct GpuGraphResourceSetId{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
-inline constexpr bool operator==(const GpuGraphResourceSetId& lhs, const GpuGraphResourceSetId& rhs)noexcept{
+inline constexpr b8 operator==(const GpuGraphResourceSetId& lhs, const GpuGraphResourceSetId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
 
-inline constexpr bool operator!=(const GpuGraphResourceSetId& lhs, const GpuGraphResourceSetId& rhs)noexcept{ return !(lhs == rhs); }
+inline constexpr b8 operator!=(const GpuGraphResourceSetId& lhs, const GpuGraphResourceSetId& rhs)noexcept{ return !(lhs == rhs); }
 
 // Upload bytes belong to one graph generation. Recording copies the blob via the staging allocator; chunk retirement owns GPU lifetime.
 struct GpuUploadBlobId{
@@ -189,13 +189,13 @@ struct GpuUploadBlobId{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
-inline constexpr bool operator==(const GpuUploadBlobId& lhs, const GpuUploadBlobId& rhs)noexcept{
+inline constexpr b8 operator==(const GpuUploadBlobId& lhs, const GpuUploadBlobId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
 
-inline constexpr bool operator!=(const GpuUploadBlobId& lhs, const GpuUploadBlobId& rhs)noexcept{
+inline constexpr b8 operator!=(const GpuUploadBlobId& lhs, const GpuUploadBlobId& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -218,13 +218,13 @@ struct GpuGraphPipelineId{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
-inline constexpr bool operator==(const GpuGraphPipelineId& lhs, const GpuGraphPipelineId& rhs)noexcept{
+inline constexpr b8 operator==(const GpuGraphPipelineId& lhs, const GpuGraphPipelineId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
 
-inline constexpr bool operator!=(const GpuGraphPipelineId& lhs, const GpuGraphPipelineId& rhs)noexcept{
+inline constexpr b8 operator!=(const GpuGraphPipelineId& lhs, const GpuGraphPipelineId& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -234,13 +234,13 @@ struct GpuExternalCompletionId{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
-inline constexpr bool operator==(const GpuExternalCompletionId& lhs, const GpuExternalCompletionId& rhs)noexcept{
+inline constexpr b8 operator==(const GpuExternalCompletionId& lhs, const GpuExternalCompletionId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
 
-inline constexpr bool operator!=(const GpuExternalCompletionId& lhs, const GpuExternalCompletionId& rhs)noexcept{
+inline constexpr b8 operator!=(const GpuExternalCompletionId& lhs, const GpuExternalCompletionId& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -251,13 +251,13 @@ struct GpuSubmissionPacketId{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
-inline constexpr bool operator==(const GpuSubmissionPacketId& lhs, const GpuSubmissionPacketId& rhs)noexcept{
+inline constexpr b8 operator==(const GpuSubmissionPacketId& lhs, const GpuSubmissionPacketId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
 
-inline constexpr bool operator!=(const GpuSubmissionPacketId& lhs, const GpuSubmissionPacketId& rhs)noexcept{
+inline constexpr b8 operator!=(const GpuSubmissionPacketId& lhs, const GpuSubmissionPacketId& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -269,7 +269,7 @@ struct GpuSubmissionPacketRange{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return first.valid() && packetCount != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return first.valid() && packetCount != 0u; }
 };
 
 
@@ -290,7 +290,7 @@ struct GpuTaskResourceUse{
     GpuTaskResourceAccess::Enum access = GpuTaskResourceAccess::Read;
     // The consumer brings an equivalent externally synced state source, so a matching concurrent read may skip the producer seed.
     // Accepted only for same-state Read-to-Read handoffs on compatible concurrent queues.
-    bool hasIndependentStateSource = false;
+    b8 hasIndependentStateSource = false;
 };
 
 // Resource versions provide semantic producer/consumer ordering without changing the physical state/access contract above.
@@ -306,7 +306,7 @@ struct GpuTaskResourceSetUse{
     GpuTaskResourceRange range;
     ResourceStates::Mask requiredState = ResourceStates::Unknown;
     GpuTaskResourceAccess::Enum access = GpuTaskResourceAccess::Read;
-    bool hasIndependentStateSource = false;
+    b8 hasIndependentStateSource = false;
 };
 
 struct GpuTaskDependencyEdge{
@@ -362,13 +362,13 @@ struct GpuCompiledBarrier{
     GpuCompiledBarrierType::Enum type = GpuCompiledBarrierType::TextureTransition;
     // A first-use marker. A known declaration inits an unknown tracker from `before`.
     // Unknown Read/ReadWrite first use needs a native source at record time; an imported handoff wins when open() gave one.
-    bool isGraphInitialState = false;
+    b8 isGraphInitialState = false;
     // Only the first use of an imported external ownership handoff consumes the descriptor-owned state source.
     // Later graph-internal ownership acquires use their producer packet snapshot instead.
-    bool isInitialOwnerHandoff = false;
+    b8 isInitialOwnerHandoff = false;
     // A same-state write hazard still requires native execution and memory dependencies even when the ordinary mutable UAV-barrier policy is disabled.
     // Initial-state, ownership, and export records never set this flag.
-    bool forceMemoryDependency = false;
+    b8 forceMemoryDependency = false;
 };
 static constexpr usize s_GpuCompiledBarrierByteSize = 72u;
 static_assert(sizeof(GpuCompiledBarrier) == s_GpuCompiledBarrierByteSize, "GpuCompiledBarrier should keep its compact runtime layout");

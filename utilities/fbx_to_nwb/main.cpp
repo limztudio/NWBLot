@@ -44,7 +44,7 @@ int Run(const int argc, char** argv){
     const u32 workerCount = coreCount > s_MinParallelCoreCount ? coreCount - s_MinParallelCoreCount : s_NoWorkerThreads;
     NWB::Core::CpuTaskScheduler cpuScheduler(workerCount);
 
-    bool prompted = false;
+    b8 prompted = false;
     const int result = NWB::FbxToNwb::Run(argc, argv, cpuScheduler, prompted);
     cpuScheduler.wait();
     if(prompted && result >= s_PromptSuccessThreshold){

@@ -65,10 +65,10 @@ struct RayTracingOpticalSceneGather{
     RayTracingOpticalSceneHeaderGpu header;
     Vector<RayTracingOpticalInstanceGpu, Core::Alloc::ScratchArena> instances;
     Vector<RayTracingOpticalRuntimeBounds, Core::Alloc::ScratchArena> runtimeBounds;
-    bool hasBounds = false;
-    bool boundsCompleteExceptRuntime = true;
+    b8 hasBounds = false;
+    b8 boundsCompleteExceptRuntime = true;
     // Policy-only specialization; incomplete geometry and bounds still reject transport in the shader.
-    bool unspecifiedBoundariesOnly = true;
+    b8 unspecifiedBoundariesOnly = true;
 
 
 public:
@@ -76,7 +76,7 @@ public:
 
 
 public:
-    void append(Core::ECS::EntityID entity, const RendererComponent& renderer, bool transparent, SIMDVectorSingle boundsMin, SIMDVectorSingle boundsMax, bool boundsValid);
+    void append(Core::ECS::EntityID entity, const RendererComponent& renderer, b8 transparent, SIMDVectorSingle boundsMin, SIMDVectorSingle boundsMax, b8 boundsValid);
     void appendRuntime(Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, Core::GpuDescriptorHandle boundsDescriptor, const Float34& objectToWorld);
     void markIncomplete()noexcept{
         header.flags &= ~NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID;

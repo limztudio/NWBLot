@@ -56,8 +56,8 @@ inline constexpr void CopyDebugName(char* dst, const usize dstSize, const BasicS
 
 class Name{
     friend struct std::hash<Name>;
-    friend constexpr bool operator==(const Name& a, const Name& b)noexcept;
-    friend constexpr bool operator<(const Name& a, const Name& b)noexcept;
+    friend constexpr b8 operator==(const Name& a, const Name& b)noexcept;
+    friend constexpr b8 operator<(const Name& a, const Name& b)noexcept;
 
 
 private:
@@ -152,7 +152,7 @@ public:
 
 
 public:
-    [[nodiscard]] constexpr explicit operator bool()const noexcept{
+    [[nodiscard]] constexpr explicit operator b8()const noexcept{
         return !NameDetail::IsZeroHash(m_hash);
     }
     // Binary identity access never records or resolves symbol text, including cooker builds.
@@ -234,24 +234,24 @@ private:
     char m_debugName[NameDetail::s_DebugNameCapacity];
 #endif
 #if defined(NWB_BUILD_SYMBOLS)
-    bool m_hasSymbolText;
+    b8 m_hasSymbolText;
 #endif
 };
 
 
-inline constexpr bool operator==(const Name& a, const Name& b)noexcept{
+inline constexpr b8 operator==(const Name& a, const Name& b)noexcept{
     return a.m_hash == b.m_hash;
 }
-inline constexpr bool operator!=(const Name& a, const Name& b)noexcept{
+inline constexpr b8 operator!=(const Name& a, const Name& b)noexcept{
     return !(a == b);
 }
-inline constexpr bool operator<(const Name& a, const Name& b)noexcept{
+inline constexpr b8 operator<(const Name& a, const Name& b)noexcept{
     return LessNameHash(a.m_hash, b.m_hash);
 }
 
 inline constexpr Name s_NameNone = {};
 static_assert(Name(nullptr) == s_NameNone, "Name(nullptr) must produce s_NameNone");
-static_assert(!static_cast<bool>(Name(nullptr)), "Name(nullptr) must be invalid");
+static_assert(!static_cast<b8>(Name(nullptr)), "Name(nullptr) must be invalid");
 static_assert(Name("") != s_NameNone, "Empty string hash must not be s_NameNone");
 static_assert(Name("A\\B") == Name("a/b"), "Name canonicalization must map '\\\\' to '/' and uppercase to lowercase");
 static_assert(Name("PATH/TO/FILE") == Name("path/to/file"), "Name canonicalization must be case-insensitive");
@@ -329,7 +329,7 @@ inline constexpr u64 s_DerivePrefixHash = UpdateFnv64TextCanonical(s_Fnv64Offset
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool UpdateDerivedNameHashText(NameHash& inOutDerivedHash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 UpdateDerivedNameHashText(NameHash& inOutDerivedHash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return NameDetail::UpdateCanonicalNameHashText(inOutDerivedHash, text);
 }
 

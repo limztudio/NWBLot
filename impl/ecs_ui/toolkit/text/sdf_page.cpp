@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool operator==(const SdfAtlasPageBinding& lhs, const SdfAtlasPageBinding& rhs)noexcept{
+b8 operator==(const SdfAtlasPageBinding& lhs, const SdfAtlasPageBinding& rhs)noexcept{
     return
         lhs.font == rhs.font && lhs.fontSha256 == rhs.fontSha256 && lhs.pixelsSha256 == rhs.pixelsSha256
         && lhs.fontGeneration == rhs.fontGeneration && lhs.atlasIdentity == rhs.atlasIdentity && lhs.generation == rhs.generation

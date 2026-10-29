@@ -58,7 +58,7 @@ def generate_table(kind, ranges):
     domain, function = names.get(kind, (None, "IsExtendedPictographic"))
     prefix = f"{domain}::" if domain else ""
     rows = LF.join(f"    {{ 0x{first:X}u, 0x{last:X}u, {prefix}{value if domain else '1u'} }}," for first, last, value in ranges)
-    return_type = f"{domain}::Enum" if domain else "bool"
+    return_type = f"{domain}::Enum" if domain else "b8"
     result = f"static_cast<{return_type}>(property)" if domain else "property != 0u"
     default = f"{domain}::" + ("Other" if kind == KIND_GRAPHEME else "None") if domain else "0u"
     hangul = """    if(codePoint >= 0xAC00u && codePoint <= 0xD7A3u)

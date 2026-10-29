@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskGraph& graph, bool allowEmptySceneLayer){
+Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskGraph& graph, b8 allowEmptySceneLayer){
     Core::GpuTaskGraphOutputLayer layer;
     if(!m_pending || !m_pending->m_prepared || !m_readyToDeclare)
         return layer;

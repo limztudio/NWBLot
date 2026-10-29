@@ -84,16 +84,16 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::RendererFrameGraphFeatures& features,
     const CsgFrameState& csgFrameState,
-    const bool clearAvboitTargets,
-    const bool hasTransparentRenderers,
-    const bool hasOpaqueCsgFrameWork,
+    const b8 clearAvboitTargets,
+    const b8 hasTransparentRenderers,
+    const b8 hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
     const Core::AcquiredPresentationFrame& presentationFrame,
-    const bool& asyncPrefixTimingSpansOnePacket,
+    const b8& asyncPrefixTimingSpansOnePacket,
     const Core::QueueSubmissionToken& surfelCounterReadbackCompletionToken,
     const Core::QueueSubmissionToken& laggedLightingHistoryReadReadyToken,
     const Core::QueueSubmissionToken& laggedLightingHistoryWriterDrainToken,
-    const bool includeLaggedLightingHistoryCapture,
+    const b8 includeLaggedLightingHistoryCapture,
     DeferredFrameTargets& deferredTargets,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
@@ -121,8 +121,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
     Optional<Core::GpuTimingMeasure>& opaqueSoftResolveTiming,
     Optional<Core::GpuTimingMeasure>& transparentSoftResolveTiming,
-    bool& shadowVisibilityOpaqueProduced,
-    bool& shadowVisibilityTransparentTraceProduced,
+    b8& shadowVisibilityOpaqueProduced,
+    b8& shadowVisibilityTransparentTraceProduced,
     u32& shadowVisibilityOpaqueFrameIndex,
     Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket,
     Core::GpuTimingSubmissionTicket& surfelGiTimingTicket,
@@ -154,10 +154,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const auto& device = m_graphics.getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const bool dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max && computeFamilyIndex != graphicsFamilyIndex;
-    const bool useLaggedLightingHistory = dedicatedAsyncCompute && features.frameLaggedAsyncLightingEnabled && features.laggedLightingHistoryReady && features.laggedLightingHistoryReadReady;
-    const bool declaresHardwareCaustics = features.hardwareCaustics;
-    const bool capturesLaggedLightingHistory = includeLaggedLightingHistoryCapture && dedicatedAsyncCompute && features.frameLaggedAsyncLightingEnabled;
+    const b8 dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max && computeFamilyIndex != graphicsFamilyIndex;
+    const b8 useLaggedLightingHistory = dedicatedAsyncCompute && features.frameLaggedAsyncLightingEnabled && features.laggedLightingHistoryReady && features.laggedLightingHistoryReadReady;
+    const b8 declaresHardwareCaustics = features.hardwareCaustics;
+    const b8 capturesLaggedLightingHistory = includeLaggedLightingHistoryCapture && dedicatedAsyncCompute && features.frameLaggedAsyncLightingEnabled;
     const DeferredLaggedLightingHistoryResources* const history = useLaggedLightingHistory ? &deferredTargets.laggedLightingHistory : nullptr;
     const DeferredLaggedLightingHistoryResources* const captureHistory = capturesLaggedLightingHistory ? &deferredTargets.laggedLightingHistory : nullptr;
     if(!presentationFrame.valid())
@@ -166,7 +166,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
     const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
     const ECSRenderDetail::MeshFrameBindingSnapshot frameBindings = m_meshSystem.meshFrameBindingSnapshot();
-    const bool retainRefractionCapPipeline = m_preparedRefractionActive && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork);
+    const b8 retainRefractionCapPipeline = m_preparedRefractionActive && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork);
     const ECSRenderDetail::CsgGraphResourceSnapshot csgResources = csgFrameState.empty() ? ECSRenderDetail::CsgGraphResourceSnapshot{} : m_csgSystem.csgGraphResourceSnapshot(retainRefractionCapPipeline);
     const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = frameBindings.meshView;
     if(
@@ -263,7 +263,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     const ECSRenderDetail::MeshViewBufferUpload meshViewUpload = m_meshSystem.prepareMeshViewBufferUpload(meshViewAspectRatio);
     const ECSRenderDetail::MeshViewGpuData& meshViewState = meshViewUpload.viewState;
-    const bool meshViewUploadRequired = meshViewUpload.uploadRequired;
+    const b8 meshViewUploadRequired = meshViewUpload.uploadRequired;
 
     ReflectionSceneContentStamp reflectionContentStamp;
     reflectionContentStamp.view = ComputeFnv64Bytes(&meshViewState, sizeof(meshViewState));
@@ -302,7 +302,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare accepted optical reader tracking"));
         return;
     }
-    const bool causticOpticalReader = declaresHardwareCaustics ? m_raytracingSystem.hasHwCausticWork(meshViewBufferSnapshot) : m_raytracingSystem.hasCausticWork(meshViewBufferSnapshot);
+    const b8 causticOpticalReader = declaresHardwareCaustics ? m_raytracingSystem.hasHwCausticWork(meshViewBufferSnapshot) : m_raytracingSystem.hasCausticWork(meshViewBufferSnapshot);
 
     const Span<const Core::GpuGraphResourceId> causticTraceGeometryResources = declaresHardwareCaustics
         ? Span<const Core::GpuGraphResourceId>(traceGeometry.hardwareTraceGeometry)
@@ -525,8 +525,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_deferredHardwareCausticsTask = hardwareCausticsStageResult->hardwareCausticsTask;
     }
 
-    const bool opticalCaptureRequested = hasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
-    const bool refractionActive = m_preparedRefractionActive && opticalCaptureRequested;
+    const b8 opticalCaptureRequested = hasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
+    const b8 refractionActive = m_preparedRefractionActive && opticalCaptureRequested;
     RayTracingRefractionGraphResources refractionResources = m_preparedRefractionResources;
     FrameGraphAvboitStage avboitStage(m_deferredLightingTaskGraph, m_arena, m_graphics, m_materialSystem, m_csgSystem, m_avboitSystem, m_deferredTaskTimingFeedback);
     const auto avboitStageResult = avboitStage.declare(

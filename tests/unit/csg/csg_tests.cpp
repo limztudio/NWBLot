@@ -60,7 +60,7 @@ struct TestCsgVisibilityFilter{
     NWB::Core::ECS::EntityID hiddenEntity = NWB::Core::ECS::s_InvalidEntityId;
 };
 
-static bool TestCsgReceiverVisible(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const NWB::Impl::CsgReceiverKind::Enum receiverKind, const NWB::Impl::CsgReceiverComponent& receiver, void* userData)noexcept{
+static b8 TestCsgReceiverVisible(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const NWB::Impl::CsgReceiverKind::Enum receiverKind, const NWB::Impl::CsgReceiverComponent& receiver, void* userData)noexcept{
     static_cast<void>(world);
     static_cast<void>(receiverKind);
     static_cast<void>(receiver);
@@ -426,7 +426,7 @@ TEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices){
     EXPECT_EQ(commitVertices[s_ThirdElementIndex].position.x, 1.0f);
     EXPECT_EQ(commitVertices[s_ThirdElementIndex].position.y, 1.0f);
     // The second cut refines the first cut's output: at least one split vertex sits on x == -0.5.
-    bool foundCutWall = false;
+    b8 foundCutWall = false;
     for(const NWB::Impl::CsgDeformVertex& vertex : commitVertices){
         if(vertex.position.x > -0.5001f && vertex.position.x < -0.4999f)
             foundCutWall = true;

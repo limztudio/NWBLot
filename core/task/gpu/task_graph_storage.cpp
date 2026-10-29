@@ -71,7 +71,7 @@ public:
 private:
     ContainerT& m_container;
     usize m_initialSize = 0u;
-    bool m_committed = false;
+    b8 m_committed = false;
 };
 
 
@@ -117,7 +117,7 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     if(!mutationAccess.validFor(*this))
         return MakeUnexpected(Failure{});
 
-    const bool appendPreludeDependency = m_normalExecutionPrelude.valid() && desc.dependencyCount == 0u && !desc.scheduling.joinsAcceptedQueueFrontier && !desc.scheduling.isRecoverySubmission;
+    const b8 appendPreludeDependency = m_normalExecutionPrelude.valid() && desc.dependencyCount == 0u && !desc.scheduling.joinsAcceptedQueueFrontier && !desc.scheduling.isRecoverySubmission;
     const usize preludeDependencyCount = appendPreludeDependency ? 1u : 0u;
     if(
         !desc.identity
@@ -288,8 +288,8 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
         return MakeUnexpected(Failure{});
 
     const usize queueFamilyIndexCount = queueAdmission ? queueAdmission->queueFamilyIndexCount : 0u;
-    const bool hasInitialOwnerHandoff = desc.initialOwnerHandoffSources != nullptr || desc.initialOwnerHandoffSourceCount != 0u;
-    const bool hasExternalFinalRelease = desc.externalFinalReleaseDestinationQueue.valid();
+    const b8 hasInitialOwnerHandoff = desc.initialOwnerHandoffSources != nullptr || desc.initialOwnerHandoffSourceCount != 0u;
+    const b8 hasExternalFinalRelease = desc.externalFinalReleaseDestinationQueue.valid();
     if(
         !desc.identity
         || desc.markerLabel.empty()
@@ -348,7 +348,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
                 // One completion names one queue timeline. Sharing it across queues would wait on the wrong frontier.
                 if(source.completion == previousSource.completion && source.sourceQueue != previousSource.sourceQueue)
                     return MakeUnexpected(Failure{});
-                const bool overlaps = desc.type == GpuGraphResourceType::Texture ? source.range.textureSubresources.overlaps(previousSource.range.textureSubresources) : desc.type == GpuGraphResourceType::AccelStruct
+                const b8 overlaps = desc.type == GpuGraphResourceType::Texture ? source.range.textureSubresources.overlaps(previousSource.range.textureSubresources) : desc.type == GpuGraphResourceType::AccelStruct
                         || source.range.bufferRange.overlaps(previousSource.range.bufferRange)
                 ;
                 if(overlaps)
@@ -441,8 +441,8 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
     }
 
     const NameHash& identityKey = desc.identity.identityHash();
-    bool identityInserted = false;
-    bool pointerInserted = false;
+    b8 identityInserted = false;
+    b8 pointerInserted = false;
     ScopeExit indexRollback([&]()noexcept{
         if(pointerInserted)
             m_resourcePointerIndex->erase(pointerKey);
@@ -560,7 +560,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
         m_resourceSetMembers.push_back(desc.members[memberIndex]);
 
     const NameHash& identityKey = desc.identity.identityHash();
-    bool identityInserted = false;
+    b8 identityInserted = false;
     ScopeExit indexRollback([&]()noexcept{
         if(identityInserted)
             m_resourceSetIdentityIndex->erase(identityKey);
@@ -606,7 +606,7 @@ Expected<GpuExternalCompletionId> GpuTaskGraph::appendExternalCompletion(const G
     const u16 tokenDeviceGeneration = completion.hasToken ? desc.token.deviceGeneration : 0u;
 
     const NameHash& identityKey = desc.identity.identityHash();
-    bool identityInserted = false;
+    b8 identityInserted = false;
     ScopeExit indexRollback([&]()noexcept{
         if(identityInserted)
             m_externalCompletionIdentityIndex->erase(identityKey);

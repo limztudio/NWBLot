@@ -38,8 +38,8 @@ struct BakeOptions{
     u32 spread = Impl::s_FontAtlasDefaultSpreadPixels;
     u32 extent = s_DefaultBakeExtent;
     u32 maxGroups = Impl::s_FontAtlasMaxGroupCount;
-    bool outline = false;
-    bool overwrite = false;
+    b8 outline = false;
+    b8 overwrite = false;
 
 
 public:
@@ -62,11 +62,11 @@ public:
 
 using RasterGlyphs = Core::Assets::AssetVector<RasterGlyph>;
 
-[[nodiscard]] bool ValidateOptions(const BakeOptions& options);
+[[nodiscard]] b8 ValidateOptions(const BakeOptions& options);
 // Options must already pass ValidateOptions.
 [[nodiscard]] Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch);
-[[nodiscard]] bool PackGlyphs(const BakeOptions& options, Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload);
-[[nodiscard]] bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
+[[nodiscard]] b8 PackGlyphs(const BakeOptions& options, Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload);
+[[nodiscard]] b8 WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
 int Run(int argc, char** argv);
 
 

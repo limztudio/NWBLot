@@ -64,7 +64,7 @@ public:
         return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 backwards)const noexcept override{
         invalidateText();
         return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index)noexcept{ return rawKey(index); });
     }
@@ -83,7 +83,7 @@ public:
         return { temporary.data(), 2u };
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         invalidateText();
         return rawKey(index) != disabled;
     }
@@ -107,9 +107,9 @@ public:
     u64 disabled = 0u;
     u64 specialIndex = Limit<u64>::s_Max;
     StringView specialText = "A\xCC\x81\xCC\x81 g\xCC\xA3\nPrevious\nNext";
-    bool reverse = false;
-    bool duplicate = false;
-    bool malformedLookup = false;
+    b8 reverse = false;
+    b8 duplicate = false;
+    b8 malformedLookup = false;
     mutable u64 keyCalls = 0u;
     mutable u64 lookupCalls = 0u;
     mutable u64 textCalls = 0u;
@@ -130,22 +130,22 @@ public:
 
 class UiListBuilderTests : public WidgetFixture{
 protected:
-    [[nodiscard]] bool prepare(const u64 generation, const ListOptions& options = Options()){
+    [[nodiscard]] b8 prepare(const u64 generation, const ListOptions& options = Options()){
         return prepareSource(generation, m_source, m_state, options);
     }
 
-    [[nodiscard]] bool prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options = Options(), const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f }){
+    [[nodiscard]] b8 prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options = Options(), const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f }){
         if(!begin(generation, display) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }))
             return false;
         m_result = m_builder.virtualList(s_ListKey, source, state, options);
         return m_result.valid && finishPanel();
     }
 
-    [[nodiscard]] bool accept(const u64 generation, const ListOptions& options = Options()){
+    [[nodiscard]] b8 accept(const u64 generation, const ListOptions& options = Options()){
         return prepare(generation, options) && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] bool preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup = nullptr, ListState* upperState = nullptr){
+    [[nodiscard]] b8 preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup = nullptr, ListState* upperState = nullptr){
         if(!begin(generation) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }))
             return false;
         if(!m_builder.virtualList(s_ListKey, m_source, m_state, Options()).valid || !m_builder.endPanel())
@@ -173,7 +173,7 @@ protected:
         return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), s_RowsKey)), key));
     }
 
-    [[nodiscard]] bool wheel(const f64 delta = -1.0){
+    [[nodiscard]] b8 wheel(const f64 delta = -1.0){
         const HitTarget* accepted = target(host());
         if(!accepted)
             return false;

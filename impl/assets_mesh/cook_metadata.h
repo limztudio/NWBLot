@@ -83,7 +83,7 @@ public:
     static constexpr AStringView s_Uv0FieldNameView = "uv0";
     static constexpr AStringView s_ColorsFieldNameView = "colors";
     static Expected<DiscoveredNwbFile> BuildDiscoveredNwbFile(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath);
-    static bool AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount)noexcept;
+    static b8 AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount)noexcept;
     static Expected<usize> CountFlattenedValueLeaves(const Core::Metascript::Value& value)noexcept;
     static ScratchString MakeIndexedLabel(Core::Alloc::ScratchArena& arena, const AStringView baseLabel, const usize index);
     [[nodiscard]] static Expected<NotNull<const Core::Metascript::Value*>> FindRequiredMetadataListField(const Path& nwbFilePath, const Core::Metascript::Value& map, const TStringView metaKind, const AStringView fieldName);
@@ -103,7 +103,7 @@ public:
     [[nodiscard]] static Expected<u32, MetadataU32ValueFailure::Enum> ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept;
     static void LogMetadataU32ValueFailure(const Path& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataU32ValueFailure::Enum failure);
     template<typename IndexVectorT>
-    static bool FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, Core::Alloc::ScratchArena& scratchArena, IndexVectorT& outIndices);
+    static b8 FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, Core::Alloc::ScratchArena& scratchArena, IndexVectorT& outIndices);
     static Expected<Core::Assets::AssetVector<u32>> ParseMetadataIndexField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 
@@ -182,12 +182,12 @@ Expected<ScratchVector<ElementT>> MeshCookMetadata::ParseMetadataFloatListField(
 
 
 template<typename IndexVectorT>
-bool MeshCookMetadata::FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, Core::Alloc::ScratchArena& scratchArena, IndexVectorT& outIndices){
+b8 MeshCookMetadata::FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, Core::Alloc::ScratchArena& scratchArena, IndexVectorT& outIndices){
     struct IndexBreadcrumb{
         const IndexBreadcrumb* parent = nullptr;
         usize index = 0u;
     };
-    const auto fill = [&](auto&& recurse, const Core::Metascript::Value& current, const IndexBreadcrumb* path) -> bool{
+    const auto fill = [&](auto&& recurse, const Core::Metascript::Value& current, const IndexBreadcrumb* path) -> b8{
         if(current.isList()){
             const auto& list = current.asList();
             for(usize i = 0u; i < list.size(); ++i){

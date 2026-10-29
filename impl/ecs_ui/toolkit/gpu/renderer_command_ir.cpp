@@ -27,7 +27,7 @@ namespace __hidden_ui_gpu_command_ir{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ReplayCaptured(const GpuFrame& frame, const Core::GpuTaskRecordContext& context, Core::CommandList& commands, const Core::GpuCommandIrCapture& capture){
+[[nodiscard]] static b8 ReplayCaptured(const GpuFrame& frame, const Core::GpuTaskRecordContext& context, Core::CommandList& commands, const Core::GpuCommandIrCapture& capture){
     if(capture.recordCount() == 0u)
         return !commands.commandRecordingFailed();
     const auto stream = capture.exportOwned(frame->m_arena);
@@ -37,7 +37,7 @@ namespace __hidden_ui_gpu_command_ir{
     return replay.valid() && !commands.commandRecordingFailed();
 }
 
-[[nodiscard]] static bool CaptureRasterState(
+[[nodiscard]] static b8 CaptureRasterState(
     const GpuRasterTask::Payload& payload,
     const Core::GpuTaskRecordContext& context,
     Core::GpuCommandIrCapture& capture,
@@ -64,7 +64,7 @@ namespace __hidden_ui_gpu_command_ir{
     return capture.captureBindGraphicsHeap(heap, frame->m_arena, context.task, context.packet, context.queue, payload.pipeline, frame->m_resources->m_pipeline, descriptorOwner);
 }
 
-[[nodiscard]] static bool CaptureOutputState(
+[[nodiscard]] static b8 CaptureOutputState(
     const GpuOutputTask::Payload& payload,
     const Core::GpuTaskRecordContext& context,
     Core::GpuCommandIrCapture& capture,
@@ -93,7 +93,7 @@ namespace __hidden_ui_gpu_command_ir{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
+b8 RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
     // A task-local stream must not silently disappear from a caller's separate packet capture.
     if(context.commandIrCapture)
         return false;
@@ -125,8 +125,8 @@ bool RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandL
     GpuPaintPushConstants push = *initialPush;
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
     Core::Rect boundScissor;
-    bool hasRasterState = false;
-    bool hasDraw = false;
+    b8 hasRasterState = false;
+    b8 hasDraw = false;
     for(const DrawCommand& draw : frame->m_snapshot.commands()){
         const auto resolvedScissor = geometry.scissor(draw);
         if(!resolvedScissor || draw.indexCount == 0u)
@@ -157,7 +157,7 @@ bool RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandL
     return true;
 }
 
-bool RecordOutputCommandIr(const GpuOutputTask::Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
+b8 RecordOutputCommandIr(const GpuOutputTask::Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
     if(context.commandIrCapture)
         return false;
     const GpuFrame& frame = payload.frame;

@@ -26,7 +26,7 @@ struct NativeResourceProvenance{
     CreateFlags flags = 0u;
     VkSharingMode sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     u32 queueFamilyIndexCount = 0u;
-    bool initialStateKnown = true;
+    b8 initialStateKnown = true;
 };
 
 

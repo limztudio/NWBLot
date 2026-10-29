@@ -70,7 +70,7 @@ namespace ShaderType{
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 
-    [[nodiscard]] inline constexpr bool IsValid(const Enum shaderType)noexcept{
+    [[nodiscard]] inline constexpr b8 IsValid(const Enum shaderType)noexcept{
         return shaderType < Count;
     }
 
@@ -165,7 +165,7 @@ struct ShaderDesc{
 
     ShaderType::Mask shaderType = ShaderType::None;
     FastGeometryShaderFlags::Mask fastGSFlags = FastGeometryShaderFlags::None;
-    bool useSpecificShaderExt = false;
+    b8 useSpecificShaderExt = false;
 
 
 public:
@@ -177,7 +177,7 @@ public:
 
     constexpr ShaderDesc& setHlslExtensionsUAV(i32 value)noexcept{ hlslExtensionsUAV = value; return *this; }
 
-    constexpr ShaderDesc& setUseSpecificShaderExt(bool value)noexcept{ useSpecificShaderExt = value; return *this; }
+    constexpr ShaderDesc& setUseSpecificShaderExt(b8 value)noexcept{ useSpecificShaderExt = value; return *this; }
 
     constexpr ShaderDesc& setCustomSemantics(u32 count, CustomSemantic* data)noexcept{ numCustomSemantics = count; customSemantics = data; return *this; }
 

@@ -47,7 +47,7 @@ void BackendContext::initDefaultExtensions(){
         m_rayTracingExtensions.emplace(GraphicsString(e.name, m_arena), e.feature);
 }
 
-bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
+b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
     VkResult res = VK_SUCCESS;
     m_hdr10ColorSpaceExtensionEnabled = false;
 
@@ -132,7 +132,7 @@ bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
 
     for(const auto& ext : availableExtensions){
         const AStringView name(ext.extensionName, NWB_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE));
-        const bool enableOptionalExtension = m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end();
+        const b8 enableOptionalExtension = m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end();
         requiredExtensions.erase(name);
         if(enableOptionalExtension)
             m_enabledExtensions.instance.emplace(name, m_arena);
@@ -179,7 +179,7 @@ bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
 
     for(const auto& layer : availableLayers){
         const AStringView name(layer.layerName, NWB_STRNLEN(layer.layerName, VK_MAX_EXTENSION_NAME_SIZE));
-        const bool enableOptionalLayer = m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end();
+        const b8 enableOptionalLayer = m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end();
         requiredLayers.erase(name);
         if(enableOptionalLayer)
             m_enabledExtensions.layers.emplace(name, m_arena);

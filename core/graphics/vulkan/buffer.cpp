@@ -24,11 +24,11 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes)noexcept{
+b8 IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes)noexcept{
     return offsetBytes <= desc.byteSize && sizeBytes <= desc.byteSize - offsetBytes;
 }
 
-bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept{
+b8 BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept{
     if(firstSizeBytes == 0 || secondSizeBytes == 0)
         return false;
     if(firstSizeBytes > Limit<u64>::s_Max - firstOffsetBytes || secondSizeBytes > Limit<u64>::s_Max - secondOffsetBytes)
@@ -88,7 +88,7 @@ using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator, const BufferDesc& creationDesc, const VkBufferCreateInfo& bufferInfo, const bool initialStateKnown)
+Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator, const BufferDesc& creationDesc, const VkBufferCreateInfo& bufferInfo, const b8 initialStateKnown)
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(creationDesc)
     , m_creationDesc(creationDesc)
@@ -137,7 +137,7 @@ Buffer::~Buffer()noexcept{
     m_allocator.unregisterBufferNativeIdentity(registeredNativeBuffer, *this);
 }
 
-bool Buffer::descriptionMatchesCreation()const noexcept{
+b8 Buffer::descriptionMatchesCreation()const noexcept{
     return VulkanBufferDetail::BufferDescriptionsEqual(m_desc, m_creationDesc);
 }
 
@@ -155,11 +155,11 @@ Object Buffer::getNativeHandle(ObjectType objectType)noexcept{
     return Object(m_buffer);
 }
 
-bool Buffer::isRetainedStateKnown()const noexcept{
+b8 Buffer::isRetainedStateKnown()const noexcept{
     return m_retainedStateKnown.load(MemoryOrder::acquire);
 }
 
-void Buffer::setRetainedStateKnown(const bool known)noexcept{
+void Buffer::setRetainedStateKnown(const b8 known)noexcept{
     if(m_creationDesc.keepInitialState)
         m_retainedStateKnown.store(known, MemoryOrder::release);
 }
@@ -277,7 +277,7 @@ Expected<BufferHandle> Device::createBuffer(const BufferDesc& d){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes){
+b8 CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes){
     if(dataSize == 0)
         return false;
 
@@ -376,7 +376,7 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
         return;
     }
 
-    const bool sameNativeBuffer = dest.m_buffer == src.m_buffer;
+    const b8 sameNativeBuffer = dest.m_buffer == src.m_buffer;
     const ResourceStates::Mask sourceState = sameNativeBuffer ? ResourceStates::CopySource | ResourceStates::CopyDest : ResourceStates::CopySource;
     const ResourceStates::Mask destinationState = sameNativeBuffer ? ResourceStates::CopySource | ResourceStates::CopyDest : ResourceStates::CopyDest;
     const VkBufferUsageFlags sourceUsage = sameNativeBuffer ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT : VK_BUFFER_USAGE_TRANSFER_SRC_BIT;

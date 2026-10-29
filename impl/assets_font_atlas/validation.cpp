@@ -29,7 +29,7 @@ static constexpr f32 s_GlyphPlaneSizeRelativeTolerance = 0.0001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool CheckGuardedOverlap(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static b8 CheckGuardedOverlap(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena){
     Vector<u64, Core::Alloc::ScratchArena> occupied(scratchArena);
     usize maxWords = 0u;
     for(const FontAtlasGroup& group : payload.groups)
@@ -77,7 +77,7 @@ static constexpr f32 s_GlyphPlaneSizeRelativeTolerance = 0.0001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena){
+b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena){
     if(!payload.font || payload.fontSha256 == Sha256Digest{} || payload.faceIndex != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
         return false;

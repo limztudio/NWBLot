@@ -50,7 +50,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool insert(const Identity identity){
+    [[nodiscard]] b8 insert(const Identity identity){
         if(m_index)
             return m_index->insert(identity).second;
         if(contains(identity))
@@ -69,7 +69,7 @@ public:
             appendNew(identity);
     }
 
-    [[nodiscard]] bool contains(const Identity identity)const noexcept{
+    [[nodiscard]] b8 contains(const Identity identity)const noexcept{
         if(m_index)
             return m_index->find(identity) != m_index->end();
         for(usize index = 0u; index < m_inlineCount; ++index){

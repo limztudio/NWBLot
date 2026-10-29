@@ -105,7 +105,7 @@ Expected<usize> Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum typ
         if(res != VK_SUCCESS)
             return MakeUnexpected(Failure{});
 
-        bool matrixInterpretationSupported = false;
+        b8 matrixInterpretationSupported = false;
         for(u32 i = 0u; i < propertyCount; ++i){
             if(properties[i].matrixInterpretation == componentType){
                 matrixInterpretationSupported = true;
@@ -359,7 +359,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchArena> vkConvertDescs(numDescs, scratchArena);
     Vector<usize, Alloc::ScratchArena> dstSizes(numDescs, scratchArena);
 
-    const auto addRequiredBufferState = [&requiredBufferStates](Buffer& buffer, const ResourceStates::Mask requiredState)noexcept -> bool{
+    const auto addRequiredBufferState = [&requiredBufferStates](Buffer& buffer, const ResourceStates::Mask requiredState)noexcept -> b8{
         for(BufferStateEntry& state : requiredBufferStates){
             if(state.buffer.get() == &buffer){
                 state.state |= requiredState;

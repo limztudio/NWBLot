@@ -105,10 +105,10 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize();
+    [[nodiscard]] b8 initialize();
     void attachSeat(wl_seat* seat, u32 seatGlobalName);
     void observeSerial(u32 serial)noexcept;
-    void setKeyboardFocus(bool focused)noexcept;
+    void setKeyboardFocus(b8 focused)noexcept;
     [[nodiscard]] virtual ClipboardCapabilities capabilities(ClipboardChannel::Enum channel)const noexcept override;
 
 
@@ -151,7 +151,7 @@ private:
     ClipboardTextAccumulator m_received;
     Timer m_readDeadline;
     int m_readFd = -1;
-    bool m_focused = false;
+    b8 m_focused = false;
 };
 
 

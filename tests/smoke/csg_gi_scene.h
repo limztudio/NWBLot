@@ -23,7 +23,7 @@ namespace NWB::Tests::Smoke{
 
 class CsgGiScene final{
 private:
-    [[nodiscard]] static bool ShouldCapture(void* context, u64 frameIndex)noexcept;
+    [[nodiscard]] static b8 ShouldCapture(void* context, u64 frameIndex)noexcept;
 
 
 public:
@@ -31,10 +31,10 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<bool> start();
+    [[nodiscard]] Expected<b8> start();
     void stop();
     void update();
-    [[nodiscard]] bool active()const noexcept{ return m_active; }
+    [[nodiscard]] b8 active()const noexcept{ return m_active; }
 
 
 private:
@@ -44,10 +44,10 @@ private:
     Timer m_liveWarmupStartTime = {};
     u64 m_requiredPresentations = 360u;
     u64 m_liveWarmupStartPresentations = 0u;
-    bool m_liveWarmupStarted = false;
-    bool m_liveWarmupComplete = false;
-    bool m_captureReceiptLogged = false;
-    bool m_active = false;
+    b8 m_liveWarmupStarted = false;
+    b8 m_liveWarmupComplete = false;
+    b8 m_captureReceiptLogged = false;
+    b8 m_active = false;
 };
 
 

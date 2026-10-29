@@ -76,7 +76,7 @@ void GlyphAtlas::reset()noexcept{
     m_identity = NextNonWrappingIdentity(__hidden_ui_text_atlas::s_NextAtlasIdentity);
 }
 
-bool GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize){
+b8 GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize){
     if(!face || !face->valid() || pixelSize == 0u)
         return false;
     if(find(face, glyphId, pixelSize))

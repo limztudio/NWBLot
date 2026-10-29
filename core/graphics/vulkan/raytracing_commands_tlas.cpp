@@ -48,7 +48,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     if(!vkBuildFlagsResult)
         return;
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
-    const bool allowEmptyInstances = (buildFlags & RayTracingAccelStructBuildFlags::AllowEmptyInstances) != 0u;
+    const b8 allowEmptyInstances = (buildFlags & RayTracingAccelStructBuildFlags::AllowEmptyInstances) != 0u;
     for(usize i = 0u; i < numInstances; ++i){
         auto* blas = instances[i].bottomLevelAS;
         if(!blas){
@@ -182,7 +182,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* acce
     retainResource(instanceBuffer);
 }
 
-bool CommandList::buildTopLevelAccelStructFromInstanceData(
+b8 CommandList::buildTopLevelAccelStructFromInstanceData(
     RayTracingAccelStruct& as,
     const VkDeviceAddress instanceDataAddress,
     const usize numInstances,
@@ -201,7 +201,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
         return false;
     }
 
-    const bool performUpdate = (buildFlags & RayTracingAccelStructBuildFlags::PerformUpdate) != 0u;
+    const b8 performUpdate = (buildFlags & RayTracingAccelStructBuildFlags::PerformUpdate) != 0u;
     if(performUpdate && !(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: PerformUpdate requires AllowUpdate"), operationName);
         return false;

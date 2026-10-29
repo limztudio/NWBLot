@@ -34,8 +34,8 @@ private:
         AString<Alloc::GlobalArena> utf8;
         AString<Alloc::GlobalArena> latin1;
         Time timestamp = 0u;
-        bool latin1Available = false;
-        bool owned = false;
+        b8 latin1Available = false;
+        b8 owned = false;
 
 
     public:
@@ -78,8 +78,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize();
-    [[nodiscard]] bool handleEvent(const XEvent& event);
+    [[nodiscard]] b8 initialize();
+    [[nodiscard]] b8 handleEvent(const XEvent& event);
     [[nodiscard]] virtual ClipboardCapabilities capabilities(ClipboardChannel::Enum channel)const noexcept override;
 
 
@@ -103,10 +103,10 @@ private:
 
 private:
     void answerSelection(const XSelectionRequestEvent& event);
-    [[nodiscard]] bool convertTarget(const XSelectionRequestEvent& event, Atom target, Atom property, OwnedSelection& selection);
-    [[nodiscard]] bool sendText(Window requestor, Atom property, Atom type, AStringView text);
+    [[nodiscard]] b8 convertTarget(const XSelectionRequestEvent& event, Atom target, Atom property, OwnedSelection& selection);
+    [[nodiscard]] b8 sendText(Window requestor, Atom property, Atom type, AStringView text);
     void sendChunk(usize index);
-    void releaseTransfer(usize index, bool requestorAlive);
+    void releaseTransfer(usize index, b8 requestorAlive);
 
 
 private:

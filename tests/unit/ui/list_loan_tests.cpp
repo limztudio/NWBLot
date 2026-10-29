@@ -60,7 +60,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, bool)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, b8)const noexcept override{
         u64 index = 0u;
         if(start >= 50u)
             return MakeUnexpected(Failure{});
@@ -73,7 +73,7 @@ public:
         return "row";
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         mutate(MutationKind::EnabledScroll);
         return index < 50u;
     }
@@ -122,7 +122,7 @@ public:
 
 
 protected:
-    [[nodiscard]] bool declareList(const u64 generation){
+    [[nodiscard]] b8 declareList(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }))
             return false;
         ListOptions options;
@@ -131,7 +131,7 @@ protected:
         return m_builder.virtualList(s_ListKey, m_source, m_state, options).valid;
     }
 
-    [[nodiscard]] bool acceptFirst(){
+    [[nodiscard]] b8 acceptFirst(){
         return declareList(1u) && finishPanel() && m_context.commitFrame(1u);
     }
 

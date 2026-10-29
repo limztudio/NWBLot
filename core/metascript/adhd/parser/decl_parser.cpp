@@ -20,7 +20,7 @@ namespace __hidden_adhd_decl_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ResolveEnumUnderlyingType(const MStringView sizeTypeName, usize& outSize, usize& outAlign)noexcept{
+[[nodiscard]] b8 ResolveEnumUnderlyingType(const MStringView sizeTypeName, usize& outSize, usize& outAlign)noexcept{
     if(sizeTypeName == "u8" || sizeTypeName == "i8"){
         outSize = 1u;
         outAlign = 1u;
@@ -54,7 +54,7 @@ namespace __hidden_adhd_decl_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
+b8 DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
     while(!m_cursor.check(TokenType::EndOfFile)){
         if(!parseTopLevelDeclaration(outUnit))
             return false;
@@ -62,7 +62,7 @@ bool DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
     return !m_cursor.failed();
 }
 
-bool DeclParser::isCurrentTokenImported()const noexcept{
+b8 DeclParser::isCurrentTokenImported()const noexcept{
     if(!m_preprocessor || m_activeSource.empty() || m_cursor.current().text.empty())
         return false;
     const MChar* base = m_activeSource.data();
@@ -73,8 +73,8 @@ bool DeclParser::isCurrentTokenImported()const noexcept{
     return m_preprocessor->isOffsetInIncludedRange(offset);
 }
 
-bool DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
-    const bool isImported = isCurrentTokenImported();
+b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
+    const b8 isImported = isCurrentTokenImported();
 
     MVector<ParsedAttribute> attributes(m_cursor.arena());
     if(m_cursor.check(TokenType::LeftBracket)){
@@ -262,7 +262,7 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const MVector<ParsedA
         return nullptr;
 
     while(!m_cursor.check(TokenType::RightBrace) && !m_cursor.check(TokenType::EndOfFile)){
-        bool isFlag = false;
+        b8 isFlag = false;
         if(m_cursor.matchIdentifier("flag")){
             isFlag = true;
         }

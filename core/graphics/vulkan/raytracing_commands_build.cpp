@@ -55,7 +55,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
 
-    const bool performUpdate = (buildFlags & RayTracingAccelStructBuildFlags::PerformUpdate) != 0u;
+    const b8 performUpdate = (buildFlags & RayTracingAccelStructBuildFlags::PerformUpdate) != 0u;
     if(performUpdate && !(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update BLAS: PerformUpdate requires AllowUpdate"));
         return;
@@ -81,7 +81,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     AccelStructGeometryBuildSignatureVector geometrySignatures(numGeometries, scratchArena);
 
     usize totalOpacityMicromapUsageCount = 0u;
-    bool hasOpacityMicromap = false;
+    b8 hasOpacityMicromap = false;
     for(usize i = 0u; i < numGeometries; ++i){
         opacityMicromapUsageOffsets[i] = Limit<usize>::s_Max;
         if(geometries[i].geometryType != RayTracingGeometryType::Triangles)
@@ -115,7 +115,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     opacityMicromapUsageCounts.resize(totalOpacityMicromapUsageCount);
 
     constexpr VkBufferUsageFlags s_BuildInputUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    const auto validateBuildInput = [&](Buffer* const buffer, const TStringView resourceName) -> bool{
+    const auto validateBuildInput = [&](Buffer* const buffer, const TStringView resourceName) -> b8{
         if(!buffer)
             return true;
         if(isBufferReadyForCommandQueue(buffer, s_BuildInputUsage))
@@ -299,7 +299,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     );
     if(!hasPriorBuildResult)
         return;
-    const bool hasPriorBuild = *hasPriorBuildResult;
+    const b8 hasPriorBuild = *hasPriorBuildResult;
 
     for(usize i = 0u; i < numGeometries; ++i){
         if(opacityMicromapUsageOffsets[i] == Limit<usize>::s_Max)

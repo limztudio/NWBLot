@@ -196,11 +196,11 @@ void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Allo
         *runtime = ModelRuntimeComponent{};
 }
 
-bool ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime){
+b8 ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime){
     runtime.model = model.virtualPath();
     runtime.objectCount = 0u;
 
-    bool complete = true;
+    b8 complete = true;
     for(const ModelSkeletonObject& object : model.skeletonObjects()){
         if(spawnSkeletonObject(owner, object))
             ++runtime.objectCount;
@@ -223,7 +223,7 @@ bool ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& mode
     return complete;
 }
 
-bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const ModelSkeletonObject& object){
+b8 ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const ModelSkeletonObject& object){
     const Name skeletonName = object.skeleton.name();
     NWB_ASSERT(skeletonName);
     auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext);
@@ -253,7 +253,7 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
     return true;
 }
 
-bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const ModelStaticMeshObject& object){
+b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const ModelStaticMeshObject& object){
     Core::ECS::Entity entity = m_world.createEntity();
     __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::StaticMesh);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
@@ -308,7 +308,7 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
     return true;
 }
 
-bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object){
+b8 ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object){
     const Core::ECS::EntityID skeletonEntity = findSpawnedObject(owner, object.skeletonObject);
     if(!skeletonEntity.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: skinned mesh object '{}' targets missing skeleton object"), ConvertString(object.name.resolvedText()));

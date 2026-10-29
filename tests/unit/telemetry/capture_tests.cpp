@@ -211,7 +211,7 @@ TEST(Telemetry, DiagnosticObserverCapturesDuringUnwindWithoutAllocating){
     ASSERT_TRUE(guard.installed());
     const auto prepared = testArena.arena.memoryStats();
     struct UnwindMarker{};
-    bool caught = false;
+    b8 caught = false;
     try{
         ScopeExit capture([]()noexcept{
             CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "unwind", .message = "cleanup failed", });
@@ -294,7 +294,7 @@ TEST(Telemetry, DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuringBuild
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     Telemetry::DiagnosticCaptureGuard guard(recorder);
     ASSERT_TRUE(guard.installed());
-    bool captureDidNotAllocate = false;
+    b8 captureDidNotAllocate = false;
     ASSERT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 7u, 3u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
         const auto before = testArena.arena.memoryStats();
         CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_ErrorEvent, .message = "builder callback", });
@@ -372,9 +372,9 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
         captureThreadStarted.wait(false, MemoryOrder::acquire);
 
     constexpr u32 s_IterationCount = 64u;
-    bool allGuardsInstalled = true;
-    bool allIterationsCaptured = true;
-    bool dropsMonotonic = true;
+    b8 allGuardsInstalled = true;
+    b8 allIterationsCaptured = true;
+    b8 dropsMonotonic = true;
     usize observedEventCount = 0u;
     u64 previousDroppedCount = 0u;
     for(u32 iteration = 0u; iteration < s_IterationCount; ++iteration){

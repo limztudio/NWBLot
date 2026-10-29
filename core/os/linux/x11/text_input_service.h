@@ -39,9 +39,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize();
-    [[nodiscard]] bool filterEvent(XEvent& event);
-    [[nodiscard]] bool dispatchKey(XKeyEvent& event);
+    [[nodiscard]] b8 initialize();
+    [[nodiscard]] b8 filterEvent(XEvent& event);
+    [[nodiscard]] b8 dispatchKey(XKeyEvent& event);
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override;
 
 
@@ -53,8 +53,8 @@ protected:
 
 private:
     void openMethod();
-    [[nodiscard]] bool createContext();
-    [[nodiscard]] bool convertPreeditText(const XIMText& text);
+    [[nodiscard]] b8 createContext();
+    [[nodiscard]] b8 convertPreeditText(const XIMText& text);
     void publishPreedit();
     void nativeFailure();
     void releaseContext()noexcept;
@@ -72,11 +72,11 @@ private:
     XVaNestedList m_caretAttributes = nullptr;
     TextInputSessionToken m_nativeToken;
     XPoint m_caretSpot{};
-    bool m_caretVisible = true;
-    bool m_resetting = false;
-    bool m_caretHintSupported = true;
-    bool m_reopenPending = false;
-    bool m_shuttingDown = false;
+    b8 m_caretVisible = true;
+    b8 m_resetting = false;
+    b8 m_caretHintSupported = true;
+    b8 m_reopenPending = false;
+    b8 m_shuttingDown = false;
     X11TextInputDispatchFence m_dispatch;
 };
 

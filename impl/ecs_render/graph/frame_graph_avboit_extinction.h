@@ -56,8 +56,8 @@ struct FrameGraphAvboitExtinctionUploadInputs{
     Core::GpuGraphResourceId csgClipContextSlots;
     Core::GpuGraphResourceId csgIntervalSampleState;
     Core::GpuTaskId uploadTask;
-    bool intervalOutputsGraphOwned = false;
-    bool hasTransparentRenderers = false;
+    b8 intervalOutputsGraphOwned = false;
+    b8 hasTransparentRenderers = false;
 };
 
 using FrameGraphAvboitExtinctionUploadResult = FrameGraphAvboitMaterialUploadResult;

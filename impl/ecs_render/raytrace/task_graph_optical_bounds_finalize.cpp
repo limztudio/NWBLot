@@ -51,7 +51,7 @@ struct FinalizeTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         const auto inputs = context.declarations.uploadBlobData(payload.inputUpload);
         if(!payload.source || !payload.finalize || !inputs || context.commandIrCapture)
             return false;

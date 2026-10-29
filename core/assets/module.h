@@ -43,7 +43,7 @@ inline constexpr TStringView s_UnnamedAssetPathText = NWB_TEXT("<unnamed>");
 #if defined(NWB_COOK)
 #define NWB_ASSET_CODEC_SERIALIZE_DECL() \
 public: \
-    virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
+    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #else
 #define NWB_ASSET_CODEC_SERIALIZE_DECL()
 #endif
@@ -78,7 +78,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool checkVirtualPath(const TStringView failureContext)const{
+    [[nodiscard]] b8 checkVirtualPath(const TStringView failureContext)const{
         if(virtualPath())
             return true;
 
@@ -137,11 +137,11 @@ public:
 
 
 public:
-    virtual bool serialize(const IAsset& asset, AssetBytes& outBinary)const = 0;
+    virtual b8 serialize(const IAsset& asset, AssetBytes& outBinary)const = 0;
 
 
 public:
-    [[nodiscard]] bool checkSerializeAssetType(const IAsset& asset, const TStringView failureContext)const{
+    [[nodiscard]] b8 checkSerializeAssetType(const IAsset& asset, const TStringView failureContext)const{
         if(asset.assetType() == assetType())
             return true;
 

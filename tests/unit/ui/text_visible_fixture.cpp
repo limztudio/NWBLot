@@ -72,7 +72,7 @@ void TextVisibleFixture::SetUp(){
     m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, Move(regions));
 }
 
-bool TextVisibleFixture::loadFont(Font& font, const StringView filename){
+b8 TextVisibleFixture::loadFont(Font& font, const StringView filename){
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / filename;
     Core::Assets::AssetBytes bytes(m_arena);
     auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
@@ -83,7 +83,7 @@ bool TextVisibleFixture::loadFont(Font& font, const StringView filename){
     return font.validatePayload();
 }
 
-bool TextVisibleFixture::installCoverageFonts(){
+b8 TextVisibleFixture::installCoverageFonts(){
     Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
     const FontSource sources[]{
         { Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u },

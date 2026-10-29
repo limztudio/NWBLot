@@ -37,10 +37,10 @@ struct ReflectionHistoryPlan{
     u32 previousSampleCount = 0u;
     u32 currentBank = 0u;
     u32 previousBank = 0u;
-    bool eligible = false;
-    bool reused = false;
-    bool reset = false;
-    bool previousHardwareReady = false;
+    b8 eligible = false;
+    b8 reused = false;
+    b8 reset = false;
+    b8 previousHardwareReady = false;
     ReflectionHistoryResetReason::Enum resetReason = ReflectionHistoryResetReason::None;
 };
 
@@ -49,13 +49,13 @@ struct ReflectionHistoryOutcome{
     u64 historyStartGraphicsFrame = 0u;
     u32 sampleIndex = 0u;
     u32 sampleCount = 0u;
-    bool eligible = false;
-    bool reused = false;
-    bool reset = false;
+    b8 eligible = false;
+    b8 reused = false;
+    b8 reset = false;
     ReflectionHistoryResetReason::Enum resetReason = ReflectionHistoryResetReason::None;
 };
 
-[[nodiscard]] ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(const ReflectionHistoryPlan& plan, bool hardwareReady)noexcept;
+[[nodiscard]] ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(const ReflectionHistoryPlan& plan, b8 hardwareReady)noexcept;
 
 // CPU acceptance chooses banks; GPU ordering protects reuse; owner never waits.
 class ReflectionHistoryState : NoCopy{
@@ -66,9 +66,9 @@ public:
 public:
     void reset(u16 deviceGeneration)noexcept;
     [[nodiscard]] ReflectionHistoryPlan plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, u64 graphicsFrameIndex)noexcept;
-    [[nodiscard]] bool reserve(const ReflectionHistoryPlan& plan)noexcept;
+    [[nodiscard]] b8 reserve(const ReflectionHistoryPlan& plan)noexcept;
     void discard(const ReflectionHistoryPlan& plan)noexcept;
-    void accept(const ReflectionHistoryPlan& plan, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
+    void accept(const ReflectionHistoryPlan& plan, const Core::QueueSubmissionToken& token, b8 hardwareReady)noexcept;
 
 
 private:
@@ -85,9 +85,9 @@ private:
     u32 m_acceptedBank = 0u;
     mutable Futex m_mutex;
     u16 m_deviceGeneration = 0u;
-    bool m_eligible = false;
-    bool m_hardwareReady = false;
-    bool m_resourcesChanged = false;
+    b8 m_eligible = false;
+    b8 m_hardwareReady = false;
+    b8 m_resourcesChanged = false;
 };
 
 using ReflectionHistoryControl = RefCounter<ReflectionHistoryState>;
@@ -107,15 +107,15 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_reserved; }
-    void accept(const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
+    [[nodiscard]] b8 valid()const noexcept{ return m_reserved; }
+    void accept(const Core::QueueSubmissionToken& token, b8 hardwareReady)noexcept;
     void discard()noexcept;
 
 
 private:
     ReflectionHistoryControlHandle m_control;
     ReflectionHistoryPlan m_plan;
-    bool m_reserved = false;
+    b8 m_reserved = false;
 };
 
 

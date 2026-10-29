@@ -26,7 +26,7 @@ static constexpr AStringView s_NewlineText = "\n";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool IsMutation(const EditCommand::Enum command)noexcept{
+static b8 IsMutation(const EditCommand::Enum command)noexcept{
     return
         command == EditCommand::Backspace || command == EditCommand::Delete || command == EditCommand::WordBackspace
         || command == EditCommand::WordDelete || command == EditCommand::Cut || command == EditCommand::Paste
@@ -34,11 +34,11 @@ static bool IsMutation(const EditCommand::Enum command)noexcept{
     ;
 }
 
-static bool SuppressRepeat(const EditCommand::Enum command)noexcept{
+static b8 SuppressRepeat(const EditCommand::Enum command)noexcept{
     return command == EditCommand::SelectAll || command == EditCommand::Copy || command == EditCommand::Cut || command == EditCommand::Paste || command == EditCommand::Submit || command == EditCommand::Cancel;
 }
 
-static bool EraseWord(EditModel& model, const bool forward){
+static b8 EraseWord(EditModel& model, const b8 forward){
     if(model.hasSelection())
         return model.replaceSelection({});
     const usize caret = model.caret();
@@ -60,7 +60,7 @@ static bool EraseWord(EditModel& model, const bool forward){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditCommandRequest TranslateEditCommand(const InputCommandIntent& intent, const bool repeat, const EditTextMode::Enum mode)noexcept{
+EditCommandRequest TranslateEditCommand(const InputCommandIntent& intent, const b8 repeat, const EditTextMode::Enum mode)noexcept{
     EditCommandRequest request{ EditCommand::None, intent.extend, repeat };
     if(!intent.edit || mode > EditTextMode::Multiline)
         return request;
@@ -98,7 +98,7 @@ EditCommandRequest TranslateEditCommand(const InputCommandIntent& intent, const 
     return request;
 }
 
-EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, const bool readOnly){
+EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, const b8 readOnly){
     EditCommandResult result;
     if(request.command == EditCommand::None || request.command > EditCommand::Newline)
         return result;
@@ -117,7 +117,7 @@ EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& r
     const u64 revision = model.revision();
     const usize anchor = model.anchor();
     const usize caret = model.caret();
-    bool applied = true;
+    b8 applied = true;
     switch(request.command){
     case EditCommand::Left: applied = model.move(EditMove::Left, request.extend); break;
     case EditCommand::Right: applied = model.move(EditMove::Right, request.extend); break;

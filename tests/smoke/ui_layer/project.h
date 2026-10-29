@@ -33,9 +33,9 @@ public:
 
 
 public:
-    virtual bool onStartup()override;
+    virtual b8 onStartup()override;
     virtual void onShutdown()override;
-    virtual bool onUpdate(f32 delta)override;
+    virtual b8 onUpdate(f32 delta)override;
 
 
 private:

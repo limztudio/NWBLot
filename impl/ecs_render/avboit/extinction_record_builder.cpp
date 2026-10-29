@@ -73,19 +73,19 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     if(!inputs.depthWarpCompletionTask.valid() || !inputs.uploadTask.valid())
         return MakeUnexpected(Failure{});
 
-    const bool generatedGeometryReused = inputs.generatedGeometryReused();
+    const b8 generatedGeometryReused = inputs.generatedGeometryReused();
     if(!inputs.generatedGeometryReusePlansValid())
         return MakeUnexpected(Failure{});
     extinctionPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_extinctionReusedGeometryProducer = inputs.reusedGeometryProducer;
 
-    const bool hasCsgIntervalReads = inputs.csgStreamsUploaded;
+    const b8 hasCsgIntervalReads = inputs.csgStreamsUploaded;
     NWB_ASSERT(!hasCsgIntervalReads || (extinctionPayload.extinctionPhasePrepared && extinctionPayload.extinctionSnapshot.captured));
     extinctionPayload.extinctionMaterialFrameStatesGraphOwned = inputs.streamsUploaded;
     extinctionPayload.extinctionMaterialGeometryStatesGraphOwned = inputs.streamsUploaded && extinctionPayload.extinctionMaterialGeometryStatesGraphOwned;
     Core::GpuGraphResourceSetId extinctionComputeEmulationOutputSet;
-    const bool extinctionComputeEmulationPlanCaptured = inputs.regularComputeEmulationPlanCaptured || inputs.csgComputeEmulationPlanCaptured;
-    bool extinctionComputeEmulationOutputStatesGraphOwned = false;
+    const b8 extinctionComputeEmulationPlanCaptured = inputs.regularComputeEmulationPlanCaptured || inputs.csgComputeEmulationPlanCaptured;
+    b8 extinctionComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.regularComputeEmulationPlanCaptured){
         const auto extinctionComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
             m_graph,
@@ -114,7 +114,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT Extinction compute-emulation output states"));
     }
     Core::GpuGraphResourceId extinctionSharedComputeEmulationOutput;
-    bool extinctionSharedComputeEmulationOutputStatesGraphOwned = false;
+    b8 extinctionSharedComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.sharedComputeEmulationPlanCaptured){
         const auto extinctionSharedComputeEmulationOutputResult = GatherRegularSharedComputeEmulationResource(m_graph, inputs.sharedComputeEmulationPlan, "AVBOIT Extinction Shared Compute Emulation Output");
         extinctionSharedComputeEmulationOutputStatesGraphOwned = extinctionSharedComputeEmulationOutputResult.has_value();
@@ -299,7 +299,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& planAlias = inputs.sharedComputeEmulationPlan;
         const usize countAlias = inputs.sharedComputeEmulationInstanceCount;
         const usize bytesAlias = inputs.sharedComputeEmulationMaterialTypedByteCount;
-        const bool streamsUploaded = inputs.streamsUploaded;
+        const b8 streamsUploaded = inputs.streamsUploaded;
         const NotNull<Core::GpuTaskGraph*> graphAlias(&m_graph);
         const NotNull<DeferredFrameTargets*> deferredTargetsPtr(&inputs.targets);
         const NotNull<Core::GraphicsRuntime*> graphicsAlias(&m_graphics);
@@ -324,8 +324,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
             const Core::GpuTaskId& dependency,
             const AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Enum phase,
             const usize drawIndex,
-            const bool beginTiming,
-            const bool finishTiming,
+            const b8 beginTiming,
+            const b8 finishTiming,
             const Span<const Core::GpuTaskResourceUse> resourceUses,
             const Span<const Core::GpuTaskResourceSetUse> resourceSetUses
         ){
@@ -382,7 +382,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         Core::GpuTaskId extinctionSharedComputeEmulationDependency = extinctionDependency;
         const Span<const Core::GpuTaskResourceSetUse> extinctionMaterialResourceSetUseSpan(extinctionMaterialResourceSetUses, extinctionMaterialResourceSetUseCount);
         for(usize phaseIndex = 0u; phaseIndex < extinctionSharedComputeEmulationPhaseCount; ++phaseIndex){
-            const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
+            const b8 isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             const auto extinctionSharedComputeEmulationTaskResult = addExtinctionSharedComputeEmulationPhase(
                 extinctionSharedComputeEmulationPhaseIdentities[phaseIndex],
                 extinctionSharedComputeEmulationPhaseMarkers[phaseIndex],

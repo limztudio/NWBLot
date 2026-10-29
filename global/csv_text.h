@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "string_view.h"
+#include "type.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,7 +13,7 @@
 
 template<typename StringT>
 inline void AppendCsvCell(StringT& out, const AStringView text)noexcept(noexcept(out.append(text.data(), text.size())) && noexcept(out += '"') && noexcept(out += "\"\"")){
-    bool quote = false;
+    b8 quote = false;
     for(const char ch : text){
         if(ch == ',' || ch == '"' || ch == '\n' || ch == '\r'){
             quote = true;

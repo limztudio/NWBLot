@@ -141,7 +141,7 @@ struct SceneBvhPrimitiveCalculation{
     Float4 aabbMin;
     Float4 aabbMax;
     Float4 centroid;
-    bool transparentOccluder = false;
+    b8 transparentOccluder = false;
 };
 
 struct SceneBvhNodeCalculation{
@@ -149,7 +149,7 @@ struct SceneBvhNodeCalculation{
     Float4 aabbMax;
     u32 leftChild = 0u;
     u32 rightChild = 0u;
-    bool containsTransparentOccluder = false;
+    b8 containsTransparentOccluder = false;
 };
 
 // CPU mirror of NwbBvhBuildPushConstants.
@@ -500,10 +500,10 @@ struct RenderableRayTracingMeshResources{
 };
 
 [[nodiscard]] Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(MeshSystem& meshSystem, RendererMeshSystem& rendererMeshSystem, Core::ECS::EntityID entity);
-[[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept;
-[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable);
-[[nodiscard]] bool EnsureHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable, Core::GpuDescriptorHandle& inOutHandle);
-[[nodiscard]] bool ReplaceHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable, Core::GpuDescriptorHandle& inOutHandle);
+[[nodiscard]] b8 IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept;
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, b8 writable);
+[[nodiscard]] b8 EnsureHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, b8 writable, Core::GpuDescriptorHandle& inOutHandle);
+[[nodiscard]] b8 ReplaceHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, b8 writable, Core::GpuDescriptorHandle& inOutHandle);
 void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle);
 u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, const Span<const u32> instanceLeafCost, const Span<u32> indices, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes);
 [[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(const MaterialSurfaceInfo& materialInfo, const u32 materialConstantByteOffset, const u32 meshInstanceIndex)noexcept;

@@ -86,7 +86,7 @@ inline constexpr StringView s_DiagnosticEventCategoryFatal = "logger_Fatal";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline constexpr bool ShouldBreak(const LoggerBreakPolicy::Enum breakPolicy, const LogType::Enum type)noexcept{
+[[nodiscard]] inline constexpr b8 ShouldBreak(const LoggerBreakPolicy::Enum breakPolicy, const LogType::Enum type)noexcept{
     switch(breakPolicy){
     case LoggerBreakPolicy::ReportOnly:
         return false;

@@ -87,7 +87,7 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTr
         if(lights[i].params.w < 0.f)
             continue;
         // params.y carries the light type (Directional=0, Point=1, Spot=2); point lights are excluded so only directional/spot reach here.
-        const bool directional = lights[i].params.y < ECSRenderDetail::s_LightTypeDirectionalMax;
+        const b8 directional = lights[i].params.y < ECSRenderDetail::s_LightTypeDirectionalMax;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})"), static_cast<u32>(lights[i].params.w), i, directional ? NWB_TEXT("directional") : NWB_TEXT("spot"));
     }
 }
@@ -108,7 +108,7 @@ RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotSh
 
 RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const noexcept{
     const auto& state = m_rayTracingState;
-    const bool hasCsgTrace = m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    const b8 hasCsgTrace = m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     usize contextReadTokenCount = 0u;
     for(const auto& token : state.m_rayTraceContextReadSubmissionTokens){
         if(token.valid()){
@@ -164,11 +164,11 @@ RayTracingSurfelPersistentResourceSnapshot RendererRayTracingSystem::snapshotSur
     };
 }
 
-RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotShadowVisibilityGraphPlan(const bool hardwareShadowSupported)const noexcept{
+RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotShadowVisibilityGraphPlan(const b8 hardwareShadowSupported)const noexcept{
     const auto& state = m_rayTracingState;
-    const bool hardwareTransparentTrace = hardwareShadowSupported && state.m_softTransparentReady && hardwareTransparentShadowReady();
-    const bool transparentSceneReady = hardwareTransparentTrace ? state.m_tlas && state.m_tlasHeapHandle.valid() : state.m_sceneBvhNodeBuffer && state.m_sceneInstanceBuffer;
-    const bool softTransparentFoldReady =
+    const b8 hardwareTransparentTrace = hardwareShadowSupported && state.m_softTransparentReady && hardwareTransparentShadowReady();
+    const b8 transparentSceneReady = hardwareTransparentTrace ? state.m_tlas && state.m_tlasHeapHandle.valid() : state.m_sceneBvhNodeBuffer && state.m_sceneInstanceBuffer;
+    const b8 softTransparentFoldReady =
         state.m_softShadowReady
         && state.m_softShadowSlotMask != 0u
         && softTransparentShadowReady()
@@ -193,7 +193,7 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
             && NWB_SHADOW_RESOLVE_PASS_COUNT == 1u && NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u,
         .combinedSoftWaveletReady = state.m_softShadowResolve.m_combinedWavelet.m_pipeline
             && state.m_softShadowTemporalReady && state.m_softTransparentTemporalReady,
-        .combinedSoftTemporalReady = static_cast<bool>(state.m_softShadowResolve.m_combinedTemporal.m_pipeline),
+        .combinedSoftTemporalReady = static_cast<b8>(state.m_softShadowResolve.m_combinedTemporal.m_pipeline),
         .softShadowHistoryReadable =
             state.m_softShadowTemporalReady
             && state.m_prevWorldToClipValid
@@ -204,7 +204,7 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
     };
 }
 
-bool RendererRayTracingSystem::surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept{
+b8 RendererRayTracingSystem::surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept{
     const Core::QueueSubmissionToken& accepted = m_rayTracingState.m_surfelCountReadbackSubmissionToken;
     return accepted.valid() && submissionToken.valid() && accepted.queue == submissionToken.queue && accepted.value == submissionToken.value && accepted.matchesPhysicalQueue(submissionToken.physicalQueueIndex, submissionToken.deviceGeneration);
 }
@@ -234,7 +234,7 @@ void RendererRayTracingSystem::logCapabilityOnce(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::shadowVisibilitySoftwareResourcesPreflighted()const noexcept{
+b8 RendererRayTracingSystem::shadowVisibilitySoftwareResourcesPreflighted()const noexcept{
     return m_shadowVisibilityTraceResourcesPreflighted && !m_shadowVisibilityHardwareSupported;
 }
 

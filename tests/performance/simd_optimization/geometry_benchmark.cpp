@@ -34,7 +34,7 @@ constexpr AStringView s_ValidateMode = "validate";
 constexpr AStringView s_AbsoluteMode = "abs";
 constexpr AStringView s_GuardMode = "guard";
 
-using Intersection = bool (NWB_SIMD_CALL *)(SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble)noexcept;
+using Intersection = b8 (NWB_SIMD_CALL *)(SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble)noexcept;
 
 struct TrianglePair{
     Double4 first[3];
@@ -63,7 +63,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL BaselineDot3(SIMDVectorDouble first, S
     return VectorDoubleAdd(result, VectorDoubleSplatZ(product));
 }
 
-NWB_NOINLINE bool NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+NWB_NOINLINE b8 NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -134,7 +134,7 @@ NWB_NOINLINE bool NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVe
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-NWB_NOINLINE bool NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+NWB_NOINLINE b8 NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -200,7 +200,7 @@ NWB_NOINLINE bool NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, c
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-NWB_NOINLINE bool NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+NWB_NOINLINE b8 NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -268,7 +268,7 @@ NWB_NOINLINE bool NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVe
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-NWB_NOINLINE bool NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+NWB_NOINLINE b8 NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -402,19 +402,19 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
     }
 }
 
-[[nodiscard]] static bool CheckPair(const TrianglePairVectors& pair, const bool expected)noexcept{
+[[nodiscard]] static b8 CheckPair(const TrianglePairVectors& pair, const b8 expected)noexcept{
     constexpr u32 s_Permutations[][3] = { { 0u, 1u, 2u }, { 0u, 2u, 1u }, { 1u, 0u, 2u }, { 1u, 2u, 0u }, { 2u, 0u, 1u }, { 2u, 1u, 0u } };
     for(const auto& firstOrder : s_Permutations){
         for(const auto& secondOrder : s_Permutations){
-            for(const bool reverse : { false, true }){
+            for(const b8 reverse : { false, true }){
                 const auto& first = reverse ? pair.second : pair.first;
                 const auto& second = reverse ? pair.first : pair.second;
                 const auto& firstIndices = reverse ? secondOrder : firstOrder;
                 const auto& secondIndices = reverse ? firstOrder : secondOrder;
-                const bool baseline = Baseline(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
-                const bool candidate = ZeroAxis(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
-                const bool production = TriangleDoubleTests::Intersects(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
-                const bool hoisted = AbsHoisted(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
+                const b8 baseline = Baseline(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
+                const b8 candidate = ZeroAxis(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
+                const b8 production = TriangleDoubleTests::Intersects(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
+                const b8 hoisted = AbsHoisted(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
                 if(baseline != expected || candidate != baseline || production != baseline || hoisted != baseline)
                     return false;
             }
@@ -430,7 +430,7 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
     return state;
 }
 
-[[nodiscard]] static bool CheckExceptionEquivalence(const TrianglePairVectors& pair)noexcept{
+[[nodiscard]] static b8 CheckExceptionEquivalence(const TrianglePairVectors& pair)noexcept{
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     if(!originalEnvironment)
@@ -439,19 +439,19 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             __builtin_trap();
     });
-    const bool original = Baseline(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
+    const b8 original = Baseline(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
     const i32 originalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    const bool reference = ZeroAxis(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
+    const b8 reference = ZeroAxis(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
     const i32 referenceFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    const bool hoisted = AbsHoisted(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
+    const b8 hoisted = AbsHoisted(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
     const i32 hoistedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    const bool production = TriangleDoubleTests::Intersects(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
+    const b8 production = TriangleDoubleTests::Intersects(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
     const i32 productionFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     return original == reference && reference == hoisted && hoisted == production && originalFlags == referenceFlags && referenceFlags == hoistedFlags && hoistedFlags == productionFlags;
 }
@@ -474,7 +474,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         const auto environment = HoldFloatingPointExceptions();
         if(!environment || feenableexcept(mask) < 0)
             _exit(127);
-        const bool result = implementation.get()(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
+        const b8 result = implementation.get()(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
         _exit(result ? 1 : 0);
     }
     i32 status = 0;
@@ -486,7 +486,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
 }
 #endif
 
-[[nodiscard]] static bool CheckTrapEquivalence(const TrianglePairVectors& pair)noexcept{
+[[nodiscard]] static b8 CheckTrapEquivalence(const TrianglePairVectors& pair)noexcept{
 #if defined(NWB_PLATFORM_LINUX)
     const auto production = MakeNotNull<Intersection>(TriangleDoubleTests::Intersects);
     for(const i32 mask : { FE_INVALID, FE_OVERFLOW, FE_INVALID | FE_OVERFLOW, FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT }){
@@ -506,7 +506,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     return true;
 }
 
-[[nodiscard]] static bool Validate()noexcept{
+[[nodiscard]] static b8 Validate()noexcept{
 #pragma STDC FENV_ACCESS ON
     TrianglePair pairs[s_FixtureCount];
     for(u32 kind = 0u; kind < 7u; ++kind){
@@ -564,19 +564,19 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     const auto environment = HoldFloatingPointExceptions();
     if(!environment)
         return false;
-    const bool baseline = Baseline(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
+    const b8 baseline = Baseline(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
     const i32 baselineExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    const bool candidate = ZeroAxis(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
+    const b8 candidate = ZeroAxis(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
     const i32 candidateExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    const bool production = TriangleDoubleTests::Intersects(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
+    const b8 production = TriangleDoubleTests::Intersects(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
     const i32 productionExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
-    const bool hoisted = AbsHoisted(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
+    const b8 hoisted = AbsHoisted(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
     const i32 hoistedExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!SetFloatingPointEnvironment(*environment))
         return false;
@@ -631,7 +631,7 @@ static void PrintSummary(const StringView workload, const f64 (&values)[s_Rounds
     NWB_COUT << "summary," << workload << ',' << sorted[s_Rounds / 2u] << ',' << sorted[0] << ',' << sorted[s_Rounds - 1u] << '\n';
 }
 
-static i32 Benchmark(const bool validationOnly, const bool measureAbs, const bool guardOnly){
+static i32 Benchmark(const b8 validationOnly, const b8 measureAbs, const b8 guardOnly){
     if(!Validate()){
         NWB_CERR << "validation failed\n";
         return 1;
@@ -656,7 +656,7 @@ static i32 Benchmark(const bool validationOnly, const bool measureAbs, const boo
         f64 baselineValues[s_Rounds], candidateValues[s_Rounds], ratios[s_Rounds];
         for(u32 round = 0u; round < s_Rounds; ++round){
             for(u32 step = 0u; step < 2u; ++step){
-                const bool candidate = ((round + step) & 1u) != 0u;
+                const b8 candidate = ((round + step) & 1u) != 0u;
                 const auto implementation = candidate ? selected : reference;
                 const Timer begin = TimerNow();
                 const u64 checksum = Run(implementation, pairs, s_Passes);

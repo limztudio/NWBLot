@@ -104,7 +104,7 @@ FrameGraphBuilder::FrameGraphBuilder(
 }
 
 
-bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(const FrameGraphNodeHandle owner, const FrameGraphPhysicalQueueRuntimeStatistics& statistics){
+b8 FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(const FrameGraphNodeHandle owner, const FrameGraphPhysicalQueueRuntimeStatistics& statistics){
     if(
         !m_physicalQueueRuntimeStatistics
         || !owner.valid()
@@ -128,7 +128,7 @@ bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(const FrameGraphNodeHa
     return true;
 }
 
-bool FrameGraphBuilder::addPacketSubmissionStatistics(const FrameGraphNodeHandle owner, const FrameGraphPacketSubmissionStatisticsRecord& statistics){
+b8 FrameGraphBuilder::addPacketSubmissionStatistics(const FrameGraphNodeHandle owner, const FrameGraphPacketSubmissionStatisticsRecord& statistics){
     if(!m_packetSubmissionStatistics || !owner.valid() || owner.index >= m_nodes.size() || m_nodes[owner.index].kind != FrameGraphNodeKind::Pass || statistics.ownerNodeIndex != owner.index || !IsValidFrameGraphPacketSubmissionStatistics(statistics))
         return false;
 

@@ -52,7 +52,7 @@ static void CanonicalizeRootIdentity(ScratchString& identity, const AssetRootDup
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRoots(const Path& repoRoot, const Span<const CookString> sources, const bool inferFromInputs, const AssetRootDuplicatePolicy::Enum duplicatePolicy, ScratchArena& scratchArena){
+Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRoots(const Path& repoRoot, const Span<const CookString> sources, const b8 inferFromInputs, const AssetRootDuplicatePolicy::Enum duplicatePolicy, ScratchArena& scratchArena){
     CookArena& arena = repoRoot.arena();
     CookVector<ResolvedAssetRoot> roots(arena);
     roots.reserve(sources.size());
@@ -86,7 +86,7 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
 
         ScratchString identity = PathToString(scratchArena, path);
         __hidden_cook_paths::CanonicalizeRootIdentity(identity, duplicatePolicy);
-        bool duplicate = false;
+        b8 duplicate = false;
         for(const ResolvedAssetRoot& root : roots){
             ScratchString existing = PathToString(scratchArena, root.path);
             __hidden_cook_paths::CanonicalizeRootIdentity(existing, duplicatePolicy);

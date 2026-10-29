@@ -48,11 +48,11 @@ public:
 
 
 public:
-    virtual bool mount(const VolumeMountDesc& desc)override;
-    virtual bool unmount()override;
+    virtual b8 mount(const VolumeMountDesc& desc)override;
+    virtual b8 unmount()override;
 
-    [[nodiscard]] virtual bool mounted()const noexcept override;
-    [[nodiscard]] virtual bool writable()const noexcept override;
+    [[nodiscard]] virtual b8 mounted()const noexcept override;
+    [[nodiscard]] virtual b8 writable()const noexcept override;
 
     [[nodiscard]] AStringView volumeName()const noexcept;
     [[nodiscard]] Path mountDirectory()const;
@@ -72,37 +72,37 @@ public:
 
 
 public:
-    virtual bool writeFile(const Name& virtualPath, const void* data, usize bytes)override;
-    virtual bool writeFileDeferred(const Name& virtualPath, const void* data, usize bytes)override;
-    virtual bool flush()override;
+    virtual b8 writeFile(const Name& virtualPath, const void* data, usize bytes)override;
+    virtual b8 writeFileDeferred(const Name& virtualPath, const void* data, usize bytes)override;
+    virtual b8 flush()override;
     virtual void reserveFileCapacity(usize fileCount)override;
 
     [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const override;
-    virtual bool seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const noexcept(!NWB_OCCUR_WARNING)override;
-    virtual bool removeFile(const Name& virtualPath)override;
-    virtual bool fileExists(const Name& virtualPath)const noexcept override;
+    virtual b8 seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const noexcept(!NWB_OCCUR_WARNING)override;
+    virtual b8 removeFile(const Name& virtualPath)override;
+    virtual b8 fileExists(const Name& virtualPath)const noexcept override;
     [[nodiscard]] virtual Expected<u64> fileSize(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING)override;
     virtual Vector<Name, VolumeArena> listFiles()const override;
-    bool compact(bool shrinkSegments = true);
+    b8 compact(b8 shrinkSegments = true);
 
 
 private:
-    bool writeFileLocked(const Name& virtualPath, const void* data, usize bytes, MetadataFlushMode::Enum flushMode);
-    bool scanSegmentsLocked();
+    b8 writeFileLocked(const Name& virtualPath, const void* data, usize bytes, MetadataFlushMode::Enum flushMode);
+    b8 scanSegmentsLocked();
 
-    bool createSegmentLocked(usize segmentIndex);
-    bool ensureCapacityLocked(u64 requiredBytes);
+    b8 createSegmentLocked(usize segmentIndex);
+    b8 ensureCapacityLocked(u64 requiredBytes);
     Expected<u64> computeLogicalCapacityLocked()const noexcept;
 
-    bool loadMetadataLocked(Alloc::ScratchArena& scratchArena);
-    bool flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name* excludedPath = nullptr);
-    bool canFitMetadataForFileCountLocked(u64 fileCount)const noexcept;
+    b8 loadMetadataLocked(Alloc::ScratchArena& scratchArena);
+    b8 flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name* excludedPath = nullptr);
+    b8 canFitMetadataForFileCountLocked(u64 fileCount)const noexcept;
     [[nodiscard]] Expected<FileRecord> readFileRecordLocked(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING);
     Expected<u64, ErrorCode> computePhysicalCapacityLocked()const noexcept(!NWB_OCCUR_WARNING);
 
-    bool readBytesLocked(u64 offset, void* data, u64 byteCount)const;
-    bool writeBytesLocked(u64 offset, const void* data, u64 byteCount);
-    bool trimSegmentsForNextFreeOffsetLocked();
+    b8 readBytesLocked(u64 offset, void* data, u64 byteCount)const;
+    b8 writeBytesLocked(u64 offset, const void* data, u64 byteCount);
+    b8 trimSegmentsForNextFreeOffsetLocked();
 
     void unmountLocked()noexcept;
     Path segmentPath(usize segmentIndex)const;
@@ -124,8 +124,8 @@ private:
     mutable Futex m_mutex;
 
     VolumeUsage::Enum m_usage = VolumeUsage::RuntimeReadOnly;
-    bool m_mounted = false;
-    bool m_writable = false;
+    b8 m_mounted = false;
+    b8 m_writable = false;
 };
 
 

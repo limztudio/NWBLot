@@ -66,10 +66,10 @@ public:
 
 
 protected:
-    [[nodiscard]] bool paintClipped(const TextLayout& layout, const Rect& clip, const Point origin = { 20.0f, 20.0f }){
+    [[nodiscard]] b8 paintClipped(const TextLayout& layout, const Rect& clip, const Point origin = { 20.0f, 20.0f }){
         m_paint.pushClip(clip);
-        const bool painted = m_text.paint(m_paint, layout, origin);
-        const bool popped = m_paint.popClip();
+        const b8 painted = m_text.paint(m_paint, layout, origin);
+        const b8 popped = m_paint.popClip();
         return painted && popped;
     }
 

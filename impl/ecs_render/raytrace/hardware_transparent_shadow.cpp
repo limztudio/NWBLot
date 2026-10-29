@@ -62,7 +62,7 @@ static_assert(offsetof(PushConstants, receiverFactor) == s_ReceiverFactorByteOff
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets){
+b8 RendererRayTracingSystem::prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets){
     auto& state = m_rayTracingState.m_hardwareTransparentShadow;
     state.m_ready = false;
     if(state.m_pipelineFailed)
@@ -180,7 +180,7 @@ void RendererRayTracingSystem::releaseHardwareTransparentShadowResources(){
     state = HardwareTransparentShadowState{};
 }
 
-bool RendererRayTracingSystem::hardwareTransparentShadowReady()const noexcept{
+b8 RendererRayTracingSystem::hardwareTransparentShadowReady()const noexcept{
     return m_shadowVisibilityHardwareSupported && m_rayTracingState.m_hardwareTransparentShadow.m_ready;
 }
 
@@ -216,7 +216,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandLi
             commandList.setBufferState(state.m_overflowArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess, true);
             commandList.commitBarriers();
-            const auto bind = [&](const u32 stage, const bool indirect){
+            const auto bind = [&](const u32 stage, const b8 indirect){
                 Core::ComputeState compute;
                 compute.setPipeline(state.m_pipelines[stage].get());
                 if(indirect)

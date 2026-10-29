@@ -34,7 +34,7 @@ struct GpuTaskExternalStateSource{
 
 // Task payloads live in graph-owned memory; these static thunks let the recorder invoke them with no per-task callable alloc.
 // Acceptance and discard stay separate from record: CPU-side effects publish only after queue submission is accepted.
-using GpuTaskRecordThunk = bool(*)(const void* payload, CommandList& commandList, const GpuTaskRecordContext& context);
+using GpuTaskRecordThunk = b8(*)(const void* payload, CommandList& commandList, const GpuTaskRecordContext& context);
 using GpuTaskAcceptedThunk = void(*)(void* payload, const QueueSubmissionToken& token);
 using GpuTaskDiscardedThunk = void(*)(void* payload);
 using GpuTaskPayloadDestroyThunk = void(*)(GraphicsArena& arena, void* payload)noexcept;
@@ -45,7 +45,7 @@ using GpuTaskPayloadDestroyThunk = void(*)(GraphicsArena& arena, void* payload)n
 struct GpuTaskCommandRequirements{
     GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
     // External frame timing uses the primary graphics submission timeline.
-    bool requiresPrimaryGraphicsQueue = false;
+    b8 requiresPrimaryGraphicsQueue = false;
     GpuQueueCapability::Mask alternativeCapabilities = GpuQueueCapability::None;
     // Built-ins preserve an independent hook alternative when composing their native command contract.
     GpuQueueCapability::Mask additionalAlternativeCapabilities = GpuQueueCapability::None;
@@ -61,46 +61,46 @@ public:
 
 struct GpuTaskSchedulingHint{
     GpuTaskCostHint::Enum cost = GpuTaskCostHint::Medium;
-    bool overlapPreferred = true;
-    bool avoidQueueCrossing = false;
-    bool forceSubmissionBoundary = false;
-    bool allowPacketMerge = true;
+    b8 overlapPreferred = true;
+    b8 avoidQueueCrossing = false;
+    b8 forceSubmissionBoundary = false;
+    b8 allowPacketMerge = true;
     // Sharing the preceding compatible packet instead of a new queue submission.
-    bool mergeWithPrevious = false;
+    b8 mergeWithPrevious = false;
     // An explicit immediate successor may keep an accepting packet whole despite direct cross-queue consumers.
     // Those consumers then wait for the full merged packet, tail work and final state included.
     // Queue routing never changes and shared-state tails keep serial recording.
-    bool allowMergeAcrossConsumerFrontier = false;
+    b8 allowMergeAcrossConsumerFrontier = false;
     // Late recovery/finalization packet: waits latest accepted work on every other queue (submitter derives waits).
     // No incoming deps/state sources/concrete uses; HazardDomains or outgoing edges only.
-    bool joinsAcceptedQueueFrontier = false;
+    b8 joinsAcceptedQueueFrontier = false;
     // True partial-submission recovery packet in the broader recovery/finalization class.
     // Recovery also joins the accepted queue frontier and counts only after native submission acceptance.
-    bool isRecoverySubmission = false;
+    b8 isRecoverySubmission = false;
     // Recording stays serial unless every task in a packet explicitly opts in.
     // A record thunk may run on a worker beside other opt-in packets from the same frontier: no shared CPU mutation, no thread-affine APIs.
     // Submission remains in compiler order.
-    bool allowParallelRecording = false;
+    b8 allowParallelRecording = false;
     // Deterministic load balancing across physical queues sharing the selected queue class and Vulkan family.
     // Default keeps one-transport-per-class; opt-in callers accept explicit timeline waits when producer and consumer land on different queues.
-    bool allowSameClassQueueRouting = false;
+    b8 allowSameClassQueueRouting = false;
     // Prefer a non-primary queue on equal-cost same-class routing.
     // Broad callers keep the primary transport; upload/offload work can use this for real overlap in an otherwise-empty standalone graph.
-    bool preferNonPrimarySameClassQueue = false;
+    b8 preferNonPrimarySameClassQueue = false;
     // Keeps the physical queue of the last compatible direct dependency.
     // For serial same-class chains (e.g. multi-mip uploads): the first task may offload, later tasks stay with it instead of crossing timelines.
-    bool preserveSameClassQueueWithDirectDependency = false;
+    b8 preserveSameClassQueueWithDirectDependency = false;
     // Extends physical routing to another Vulkan family.
     // Separately opt-in: exclusive uses cross that boundary through compiler-owned release/acquire pairs.
     // Same-class routing still requires allowSameClassQueueRouting; cross-class timing also requires its stronger opt-in below.
-    bool allowCrossFamilySameClassQueueRouting = false;
+    b8 allowCrossFamilySameClassQueueRouting = false;
     // Enables timing-history routing and bounded calibration for this task.
     // Separate from ordinary same-class routing so measurement stays scoped to a proven-safe subset.
     // Another family also needs allowCrossFamilySameClassQueueRouting: dual opt-in before the compiler plans an ownership-transfer route.
-    bool allowTimingFeedbackRouting = false;
+    b8 allowTimingFeedbackRouting = false;
     // Extends timing feedback to another queue class already permitted by the command contract.
     // Never relaxes capabilities or timeline constraints; accepted history only replaces an otherwise legal static placement.
-    bool allowCrossClassTimingFeedbackRouting = false;
+    b8 allowCrossClassTimingFeedbackRouting = false;
     // FrontierScored automatic coalescing requires this nonempty domain to match every task already in the preceding packet.
     // Empty domains are never scored-merge eligible; explicit mergeWithPrevious ignores it.
     Name frontierScoredMergeDomain = {};
@@ -166,7 +166,7 @@ struct GpuGraphResourceDesc{
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     // setInitialState() distinguishes explicit Unknown from an unspecified default inherited from the native descriptor.
-    bool hasExplicitInitialState = false;
+    b8 hasExplicitInitialState = false;
 
 
 public:
@@ -415,7 +415,7 @@ namespace GpuClearTextureTaskValueType{
 };
 
 // A typed clear can bracket its command with narrow instrumentation. Hooks stay outside capture/replay; the clear stays the portable POD op.
-using GpuClearTextureTaskRecordHook = bool(*)(void* context, CommandList& commandList, const GpuTaskRecordContext& recordContext);
+using GpuClearTextureTaskRecordHook = b8(*)(void* context, CommandList& commandList, const GpuTaskRecordContext& recordContext);
 using GpuClearTextureTaskDiscardedHook = void(*)(void* context);
 
 struct GpuClearTextureTaskRecordHooks{
@@ -436,8 +436,8 @@ struct GpuClearTextureTaskDesc{
     TextureSubresourceSet subresources = s_AllSubresources;
     GpuClearTextureTaskValueType::Enum valueType = GpuClearTextureTaskValueType::UInt;
     u8 stencilValue = 0u;
-    bool clearDepth = false;
-    bool clearStencil = false;
+    b8 clearDepth = false;
+    b8 clearStencil = false;
     Color floatValue{};
     UIntColor uintValue{};
     IntColor intValue{};

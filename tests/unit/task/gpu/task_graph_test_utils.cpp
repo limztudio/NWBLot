@@ -104,13 +104,13 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return graph.addTask(desc, commands);
 }
 
-[[nodiscard]] bool Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis){
+[[nodiscard]] b8 Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis){
     const Graphics::GpuTaskGraphCompiler compiler;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     return compiler.analyze(declarations, scratchArena, analysis);
 }
 
-[[nodiscard]] bool Assign(
+[[nodiscard]] b8 Assign(
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
@@ -123,7 +123,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return compiler.assignQueues(assignments, scratchArena, declarations, analysis, topology, options);
 }
 
-[[nodiscard]] bool Compile(
+[[nodiscard]] b8 Compile(
     Graphics::GpuTaskGraphAnalysis& analysis,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
@@ -140,7 +140,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, metadataOptions);
 }
 
-[[nodiscard]] bool CompileWithSeparatedCommandQueues(
+[[nodiscard]] b8 CompileWithSeparatedCommandQueues(
     Graphics::GpuTaskGraphAnalysis& analysis,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
@@ -152,8 +152,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     if(!topology.queues)
         return Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
 
-    bool hasComputeQueue = false;
-    bool hasTransferQueue = false;
+    b8 hasComputeQueue = false;
+    b8 hasTransferQueue = false;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         hasComputeQueue = hasComputeQueue || topology.queues[queueIndex].queueClass == Graphics::CommandQueue::Compute;
         hasTransferQueue = hasTransferQueue || topology.queues[queueIndex].queueClass == Graphics::CommandQueue::Transfer;
@@ -184,7 +184,7 @@ SingleQueueCompile::SingleQueueCompile(TestArena& testArena)
     , compiledGraph(testArena.arena){
 }
 
-[[nodiscard]] bool SingleQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
+[[nodiscard]] b8 SingleQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
     return Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
 }
 
@@ -204,7 +204,7 @@ TwoQueueCompile::TwoQueueCompile(TestArena& testArena)
     queueStorage[1u] = computeQueue;
 }
 
-[[nodiscard]] bool TwoQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
+[[nodiscard]] b8 TwoQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
     return CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
 }
 
@@ -226,7 +226,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     queueStorage[2u] = transferQueue;
 }
 
-[[nodiscard]] bool ThreeQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
+[[nodiscard]] b8 ThreeQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
     return CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
 }
 
@@ -301,8 +301,8 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     const Graphics::ResourceStates::Mask readState,
     const Graphics::ResourceStates::Mask externalFinalState,
     const Graphics::ResourceQueueSharing::Mask queueSharing,
-    const bool samePacket,
-    const bool finalizerDependsOnEarlier,
+    const b8 samePacket,
+    const b8 finalizerDependsOnEarlier,
     const Graphics::GpuPhysicalQueueId externalFinalReleaseDestinationQueue
 ){
     Graphics::GpuGraphResourceDesc resourceDesc;
@@ -353,7 +353,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     return ExternalFinalReadPair{ .resource = resource, .earlierReader = earlierReader, .finalizingReader = *finalizingReader, };
 }
 
-[[nodiscard]] bool HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard)noexcept{
+[[nodiscard]] b8 HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard)noexcept{
     for(const Graphics::GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
         if(edge.producer == producer && edge.consumer == consumer && edge.resource == resource && edge.hazard == hazard)
             return true;

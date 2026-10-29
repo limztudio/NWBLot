@@ -28,7 +28,7 @@ static Expected<Core::TextureHandle> CreateRenderTarget(
     const Core::Format::Enum format,
     const NameText<char> debugName,
     const Core::Color& clearValue,
-    const bool shareWithAsyncCompute = false
+    const b8 shareWithAsyncCompute = false
 ){
     Core::TextureDesc desc;
     desc.setWidth(width).setHeight(height).setFormat(format).setIsRenderTarget(true).setName(Name(debugName)).setClearValue(clearValue).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true);
@@ -108,7 +108,7 @@ void RendererAvboitSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     targets = AvboitFrameTargets{};
 }
 
-bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdTargets){
+b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdTargets){
     auto& device = m_graphics.getDevice();
     const Core::Format::Enum lowRasterFormat = SelectRendererAvboitLowRasterFormat(device);
     const Core::Format::Enum accumColorFormat = SelectRendererAvboitAccumColorFormat(device);
@@ -303,7 +303,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     const u64 tileCount = DivideUp(static_cast<u64>(createdTargets.width), static_cast<u64>(NWB_REFRACTION_GROUP_SIZE)) * DivideUp(static_cast<u64>(createdTargets.height), static_cast<u64>(NWB_REFRACTION_GROUP_SIZE));
     if(tileCount == 0u || tileCount > static_cast<u64>(Limit<u32>::s_Max) / sizeof(u32))
         return false;
-    const auto createTileBuffer = [&](const u64 byteSize, const Name name, const bool indirect){
+    const auto createTileBuffer = [&](const u64 byteSize, const Name name, const b8 indirect){
         Core::BufferDesc desc;
         desc.setByteSize(byteSize).setStructStride(sizeof(u32)).setCanHaveUAVs(true).setCanHaveRawViews(true).setIsDrawIndirectArgs(indirect)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setDebugName(name).enableAutomaticStateTracking(Core::ResourceStates::Common);

@@ -25,7 +25,7 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool VolumeFileSystem::compact(const bool shrinkSegments){
+b8 VolumeFileSystem::compact(const b8 shrinkSegments){
     ScopedLock lock(m_mutex);
     if(!m_mounted || !m_writable){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
@@ -56,7 +56,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
 
     u64 compactedWriteOffset = m_metadataBytes;
     u64 previousSourceEnd = m_metadataBytes;
-    bool movesPayload = false;
+    b8 movesPayload = false;
     for(auto& layout : layouts){
         if(layout.sourceOffset < previousSourceEnd){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "file layout overlap detected");
@@ -171,7 +171,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     return true;
 }
 
-bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
+b8 VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
 
     if(!m_writable || m_segmentSize == 0){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegments, FilesystemVolumeDetail::s_VolumeDetailNotWritableOrSizeZero);

@@ -26,8 +26,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
-    const bool hardwareCaustics,
+b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
+    const b8 hardwareCaustics,
     const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const Core::GpuGraphResourceId worldPosition,
@@ -88,7 +88,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const Core::GpuGraphResourceId sceneGeometryDomain = *sceneGeometryDomainResult;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> photonResourceUses{ scratchArena };
-    const bool softwareTraceGeometryStatesGraphOwned = softwareTraceGeometrySet.valid();
+    const b8 softwareTraceGeometryStatesGraphOwned = softwareTraceGeometrySet.valid();
     constexpr usize s_PhotonResourceUseCapacity = 20u;
     photonResourceUses.reserve(s_PhotonResourceUseCapacity + (rayTracingResources.csgTraceContextBuffer ? 1u : 0u) + rayTracingResources.csgTraceBoundsBuffers.size() + (softwareTraceGeometryStatesGraphOwned ? 0u : softwareTraceGeometryResources.size()));
     photonResourceUses.push_back(ReadTextureUse(worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
@@ -106,7 +106,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     };
 
     // Prepare writes the first ping-pong target; wavelets own the sequence.
-    constexpr bool s_CausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
+    constexpr b8 s_CausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
     const Core::GpuGraphResourceId oddWaveletSource = s_CausticResolvePrepareWritesHalf ? causticResolveHalf : causticHistory;
     const Core::GpuGraphResourceId oddWaveletDest = s_CausticResolvePrepareWritesHalf ? causticHistory : causticResolveHalf;
     const Core::GpuTaskResourceUse resolvePrepareResourceUses[] = {
@@ -149,7 +149,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         return false;
     if(opticalScene.valid())
         photonResourceUses.push_back(ReadUse(opticalScene));
-    const bool optionalResourcesImported =
+    const b8 optionalResourcesImported =
         appendOptionalReadBuffer(rayTracingResources.causticEmissionTargetBuffer, Name(RendererFramePipelineDetail::s_SoftwareCausticEmissionTargetsName), RendererFramePipelineDetail::s_CausticEmissionTargetsLabel, Core::ResourceStates::ShaderResource)
         && appendOptionalReadBuffer(meshViewBufferSnapshot.buffer, Name(RendererFramePipelineDetail::s_MeshViewName), RendererFramePipelineDetail::s_MeshViewLabel, Core::ResourceStates::ConstantBuffer)
         && RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(
@@ -233,7 +233,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     m_deferredCausticIrradianceClearTask = irradianceClearTask;
 
     Core::GpuTaskId causticsDependency = irradianceClearTask;
-    const bool graphOwnsNonTemporalAccumulatorClear = rayTracingResources.causticTemporalDecay <= 0.f;
+    const b8 graphOwnsNonTemporalAccumulatorClear = rayTracingResources.causticTemporalDecay <= 0.f;
     if(graphOwnsNonTemporalAccumulatorClear){
         Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
         accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
@@ -262,7 +262,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         m_deferredCausticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
         causticsDependency = accumulatorNonTemporalClearTask;
     }
-    const bool graphOwnsAccumulatorBootstrapClear = !rayTracingResources.causticAccumulatorInitialized && rayTracingResources.causticTemporalDecay > 0.f;
+    const b8 graphOwnsAccumulatorBootstrapClear = !rayTracingResources.causticAccumulatorInitialized && rayTracingResources.causticTemporalDecay > 0.f;
     if(graphOwnsAccumulatorBootstrapClear){
         Core::GpuTaskSchedulingHint accumulatorBootstrapClearScheduling;
         accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -295,7 +295,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         causticsDependency = accumulatorBootstrapClearTask;
     }
 
-    const bool graphOwnsAccumulatorDecay = rayTracingResources.causticAccumulatorInitialized && rayTracingResources.causticTemporalDecay > 0.f;
+    const b8 graphOwnsAccumulatorDecay = rayTracingResources.causticAccumulatorInitialized && rayTracingResources.causticTemporalDecay > 0.f;
     if(graphOwnsAccumulatorDecay){
         Core::GpuTaskSchedulingHint accumulatorDecayScheduling;
         accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;

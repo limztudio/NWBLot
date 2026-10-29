@@ -31,7 +31,7 @@ using namespace NWB::Core;
     return config;
 }
 
-void PumpUntil(CpuTaskScheduler& scheduler, const Atomic<bool>& done){
+void PumpUntil(CpuTaskScheduler& scheduler, const Atomic<b8>& done){
     const Timer start = TimerNow();
     while(!done.load(MemoryOrder::acquire)){
         if(DurationInMS<u64>(TimerNow(), start) > __hidden_cpu_task_range_tests::s_CompletionTimeoutMS)
@@ -95,7 +95,7 @@ TEST(CpuTaskRangeTests, SingleChunkKeepsItsCallingWorkersIdentity){
 TEST(CpuTaskRangeTests, ExternalSingleChunkUsesAWorkerInsteadOfTheProducer){
     using namespace __hidden_cpu_task_range_tests;
     CpuTaskScheduler scheduler(OneWorker());
-    Atomic<bool> done{ false };
+    Atomic<b8> done{ false };
     usize worker = 0u;
     Thread producer([&](){
         EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize)noexcept{ worker = scheduler.currentWorkerIndex(); })));
@@ -109,7 +109,7 @@ TEST(CpuTaskRangeTests, ExternalSingleChunkUsesAWorkerInsteadOfTheProducer){
 TEST(CpuTaskRangeTests, ExternalMainThreadRangeWaitsForTheOwner){
     using namespace __hidden_cpu_task_range_tests;
     CpuTaskScheduler scheduler(OneWorker());
-    Atomic<bool> done{ false };
+    Atomic<b8> done{ false };
     const ThreadId owner = QueryCurrentThreadId();
     u32 callbacks = 0u;
     Thread producer([&](){

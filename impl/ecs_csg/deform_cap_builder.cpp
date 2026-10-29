@@ -59,7 +59,7 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const
     // Deterministic boundary order: traversal input matches emitted triangle order.
 }
 
-bool CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Span<const CsgDeformCutLoopEdge> edges, Vector<u32, ScratchArena>& outLoop){
+b8 CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Span<const CsgDeformCutLoopEdge> edges, Vector<u32, ScratchArena>& outLoop){
     outLoop.clear();
     if(edges.empty())
         return true;
@@ -86,7 +86,7 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Sp
         remaining.erase(seed);
     }
     while(!remaining.empty()){
-        bool advanced = false;
+        b8 advanced = false;
         for(auto it = remaining.begin(); it != remaining.end(); ++it){
             if(it->first == cursor || it->second == cursor){
                 const u32 next = it->first == cursor ? it->second : it->first;
@@ -187,11 +187,11 @@ Expected<u32> CsgDeformCapBuilder::FillCutCaps(ScratchArena& scratchArena, Vecto
         loopMembers.insert(remaining.back().first);
         loopMembers.insert(remaining.back().second);
         remaining.pop_back();
-        for(bool grown = true; grown;){
+        for(b8 grown = true; grown;){
             grown = false;
             for(usize edgeIndex = 0u; edgeIndex < remaining.size();){
                 const CsgDeformCutLoopEdge& candidate = remaining[edgeIndex];
-                const bool adjacent = loopMembers.find(candidate.first) != loopMembers.end() || loopMembers.find(candidate.second) != loopMembers.end();
+                const b8 adjacent = loopMembers.find(candidate.first) != loopMembers.end() || loopMembers.find(candidate.second) != loopMembers.end();
                 if(adjacent){
                     loopEdges.push_back(candidate);
                     loopMembers.insert(candidate.first);

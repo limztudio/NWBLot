@@ -30,7 +30,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
 
 
 private:

@@ -28,7 +28,7 @@ namespace GpuGraphTaskContract{
 
 template<typename TaskT>
 concept RecordApi = requires{
-    static_cast<bool (*)(const typename TaskT::Payload&, CommandList&, const GpuTaskRecordContext&)>(&TaskT::Record);
+    static_cast<b8 (*)(const typename TaskT::Payload&, CommandList&, const GpuTaskRecordContext&)>(&TaskT::Record);
 };
 
 template<typename TaskT>

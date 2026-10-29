@@ -48,7 +48,7 @@ inline constexpr TStringView s_ClearStagingRangeInvalidReason = NWB_TEXT("stagin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline bool TextureClearRectEmpty(const Rect& rect)noexcept{
+inline b8 TextureClearRectEmpty(const Rect& rect)noexcept{
     return rect.minX >= rect.maxX || rect.minY >= rect.maxY;
 }
 
@@ -59,7 +59,7 @@ inline Rect ResolveTextureClearRect(const TextureDesc& desc, const MipLevel mipL
     return Rect(Max<i32>(0, Min<i32>(rect.minX, width)), Max<i32>(0, Min<i32>(rect.maxX, width)), Max<i32>(0, Min<i32>(rect.minY, height)), Max<i32>(0, Min<i32>(rect.maxY, height)));
 }
 
-inline bool TextureClearSubresourcesContainedBy(const TextureSubresourceSet& requested, const TextureSubresourceSet& container)noexcept{
+inline b8 TextureClearSubresourcesContainedBy(const TextureSubresourceSet& requested, const TextureSubresourceSet& container)noexcept{
     const MipLevel requestedMipEnd = requested.baseMipLevel + requested.numMipLevels;
     const MipLevel containerMipEnd = container.baseMipLevel + container.numMipLevels;
     const ArraySlice requestedArrayEnd = requested.baseArraySlice + requested.numArraySlices;
@@ -94,7 +94,7 @@ inline VkClearRect BuildTextureAttachmentClearRect(const TextureSubresourceSet& 
 struct TextureAttachmentClearTarget{
     TextureSubresourceSet resolvedSubresources;
     u32 colorAttachmentIndex = 0u;
-    bool isReadOnly = false;
+    b8 isReadOnly = false;
 };
 
 inline Expected<TextureSubresourceSet> ResolveTextureAttachmentClearSubresources(Texture& texture, const FramebufferAttachment& attachment, const TextureSubresourceSet& requestedSubresources)noexcept{
@@ -120,7 +120,7 @@ inline Expected<TextureAttachmentClearTarget> FindTextureColorAttachmentClearTar
     return MakeUnexpected(Failure{});
 }
 
-inline bool TextureAttachmentClearRectContainedByFramebuffer(const VkClearRect& clearRect, const FramebufferInfoEx& framebufferInfo)noexcept{
+inline b8 TextureAttachmentClearRectContainedByFramebuffer(const VkClearRect& clearRect, const FramebufferInfoEx& framebufferInfo)noexcept{
     if(clearRect.rect.offset.x < 0 || clearRect.rect.offset.y < 0)
         return false;
 
@@ -130,7 +130,7 @@ inline bool TextureAttachmentClearRectContainedByFramebuffer(const VkClearRect& 
     return endX <= framebufferInfo.width && endY <= framebufferInfo.height && endLayer <= framebufferInfo.arraySize;
 }
 
-inline bool TextureClearBoxAlignedToBlocks(const Box& box, const VkExtent3D& mipExtent, const VulkanDetail::TextureFormatBlockLayout& formatLayout)noexcept{
+inline b8 TextureClearBoxAlignedToBlocks(const Box& box, const VkExtent3D& mipExtent, const VulkanDetail::TextureFormatBlockLayout& formatLayout)noexcept{
     if(formatLayout.blockWidth <= 1u && formatLayout.blockHeight <= 1u)
         return true;
 
@@ -151,7 +151,7 @@ struct TextureClearUploadLayout{
     usize clearByteCount = 0u;
     u32 copyOffsetAlignment = 0u;
     u32 stagingAlignment = 0u;
-    bool mergeArrayLayerCopies = false;
+    b8 mergeArrayLayerCopies = false;
 };
 
 inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(const u64 elementCount, const u32 elementSize, const u64 arrayLayerCount)noexcept{
@@ -165,7 +165,7 @@ inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(const u6
     const auto layerPitch = AlignUpU64Checked(uploadSize, *copyOffsetAlignment);
     if(!stagingAlignment || !layerPitch)
         return MakeUnexpected(Failure{});
-    const bool mergeArrayLayerCopies = arrayLayerCount > 1ull && *layerPitch <= s_TextureClearMergedLayerUploadThreshold / arrayLayerCount;
+    const b8 mergeArrayLayerCopies = arrayLayerCount > 1ull && *layerPitch <= s_TextureClearMergedLayerUploadThreshold / arrayLayerCount;
     if(mergeArrayLayerCopies && arrayLayerCount - 1ull > (Limit<u64>::s_Max - uploadSize) / *layerPitch)
         return MakeUnexpected(Failure{});
     const u64 clearByteCount = mergeArrayLayerCopies ? *layerPitch * (arrayLayerCount - 1ull) + uploadSize : uploadSize;
@@ -174,7 +174,7 @@ inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(const u6
     return TextureClearUploadLayout{ uploadSize, *layerPitch, static_cast<usize>(clearByteCount), *copyOffsetAlignment, *stagingAlignment, mergeArrayLayerCopies };
 }
 
-[[nodiscard]] inline bool TextureClearStagingRangeValid(const void* const stagingBytes, const u64 stagingOffset, const u64 stagingBufferByteSize, const TextureClearUploadLayout& uploadLayout)noexcept{
+[[nodiscard]] inline b8 TextureClearStagingRangeValid(const void* const stagingBytes, const u64 stagingOffset, const u64 stagingBufferByteSize, const TextureClearUploadLayout& uploadLayout)noexcept{
     return
         stagingBytes != nullptr
         && (stagingOffset % uploadLayout.stagingAlignment) == 0u

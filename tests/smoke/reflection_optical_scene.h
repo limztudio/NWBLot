@@ -32,7 +32,7 @@ struct ReflectionCsgContextEntities{
 
 [[nodiscard]] Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(Core::ECS::World& world);
 
-[[nodiscard]] bool CreateReflectionOpticalScene(Core::ECS::World& world, AStringView caseName);
+[[nodiscard]] b8 CreateReflectionOpticalScene(Core::ECS::World& world, AStringView caseName);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

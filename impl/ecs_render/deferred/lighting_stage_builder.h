@@ -46,9 +46,9 @@ struct DeferredLightingStageInputs{
     Core::GpuTaskId softwareCausticsTask;
     Core::GpuExternalCompletionId historyReadReadyCompletion;
     const DeferredLaggedLightingHistoryResources* history = nullptr;
-    bool useLaggedLightingHistory = false;
-    bool declaresHardwareCaustics = false;
-    bool hasTransparentRenderers = false;
+    b8 useLaggedLightingHistory = false;
+    b8 declaresHardwareCaustics = false;
+    b8 hasTransparentRenderers = false;
 };
 
 struct DeferredLightingStageResult{

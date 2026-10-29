@@ -51,7 +51,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool mutate(EditModel& draft)const{
+    [[nodiscard]] b8 mutate(EditModel& draft)const{
         const usize anchor = draft.anchor();
         const usize caret = draft.caret();
         if(mutation == EpochMutation::SelectionRoundTrip)
@@ -71,7 +71,7 @@ public:
     mutable SelectionEpochSource* armSource = nullptr;
     EditModel* armDraft = nullptr;
     EpochMutation::Enum mutation = EpochMutation::SelectionRoundTrip;
-    mutable bool mutationApplied = false;
+    mutable b8 mutationApplied = false;
 };
 
 using UiNumericSelectionEpochTests = NumericFixture;

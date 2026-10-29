@@ -31,7 +31,7 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AppendPreparedShadersToManifest(
+[[nodiscard]] b8 AppendPreparedShadersToManifest(
     const Path& cacheDirectory,
     AStringView configurationSafeName,
     ShaderCook::CookArena& cookArena,

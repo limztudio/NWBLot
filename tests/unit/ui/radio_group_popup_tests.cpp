@@ -52,29 +52,29 @@ protected:
         return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey)), s_RadioGroupKey));
     }
 
-    [[nodiscard]] bool beginParent(const u64 generation){
+    [[nodiscard]] b8 beginParent(const u64 generation){
         if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()))
             return false;
         m_result = m_builder.radioGroup(s_RadioGroupKey, m_source, m_state);
         return m_result.valid;
     }
 
-    [[nodiscard]] bool declareFamily(const u64 generation){
+    [[nodiscard]] b8 declareFamily(const u64 generation){
         if(!beginParent(generation) || !m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()))
             return false;
         m_childResult = m_builder.radioGroup(s_RadioGroupKey, m_childSource, m_childState);
         return m_childResult.valid && m_builder.endPopup();
     }
 
-    [[nodiscard]] bool finishParent(){
+    [[nodiscard]] b8 finishParent(){
         return m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] bool acceptParent(const u64 generation){
+    [[nodiscard]] b8 acceptParent(const u64 generation){
         return beginParent(generation) && finishParent() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] bool acceptFamily(const u64 generation){
+    [[nodiscard]] b8 acceptFamily(const u64 generation){
         return declareFamily(generation) && finishParent() && m_context.commitFrame(generation);
     }
 

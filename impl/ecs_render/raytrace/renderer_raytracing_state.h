@@ -39,7 +39,7 @@ class RendererRayTracingSystem;
 struct RtMeshHeapHandleCacheEntry{
     Core::BufferHandle keepAlive; // Pins the Buffer* key.
     Core::GpuDescriptorHandle handle = Core::GpuDescriptorHandle::Invalid();
-    bool seenThisFrame = false;
+    b8 seenThisFrame = false;
 };
 
 using RtMeshHeapHandleCache = HashMap<NotNull<const Core::Buffer*>, RtMeshHeapHandleCacheEntry, Core::Alloc::GlobalArena, Hasher<NotNull<const Core::Buffer*>>, EqualTo<NotNull<const Core::Buffer*>>>;
@@ -113,24 +113,24 @@ struct RtSceneBvhState{
     // Previous-frame transform for soft-shadow reprojection; invalid after target recreation.
     Float44 m_prevWorldToClip = {};
 
-    bool m_tlasStaticSceneHashValid = false;
-    bool m_sceneSwBvhStaticSceneHashValid = false;
-    bool m_hwShadowMaterialContextHashValid = false;
-    bool m_swShadowMaterialContextHashValid = false;
+    b8 m_tlasStaticSceneHashValid = false;
+    b8 m_sceneSwBvhStaticSceneHashValid = false;
+    b8 m_hwShadowMaterialContextHashValid = false;
+    b8 m_swShadowMaterialContextHashValid = false;
     // A new backing generation stays Common until accepted Shadow Preparation publishes its final state.
-    bool m_tlasBackingFresh = false;
+    b8 m_tlasBackingFresh = false;
     // The selected tracing backend prepares transparency only when the scene requires it.
-    bool m_sceneHasTransparentOccluder = false;
-    bool m_prevWorldToClipValid = false;
-    bool m_swCausticDispatchLogged = false;
-    bool m_swCausticPipelineFailed = false;
-    bool m_swCausticCsgPipelineFailed = false;
-    bool m_hwCausticPipelineFailed = false;
-    bool m_hwCausticCsgPipelineFailed = false;
-    bool m_hwCausticDispatchLogged = false;
-    bool m_capabilityLogged = false;
-    bool m_bvhSortPipelineFailed = false;
-    bool m_bvhBuildPipelineFailed = false;
+    b8 m_sceneHasTransparentOccluder = false;
+    b8 m_prevWorldToClipValid = false;
+    b8 m_swCausticDispatchLogged = false;
+    b8 m_swCausticPipelineFailed = false;
+    b8 m_swCausticCsgPipelineFailed = false;
+    b8 m_hwCausticPipelineFailed = false;
+    b8 m_hwCausticCsgPipelineFailed = false;
+    b8 m_hwCausticDispatchLogged = false;
+    b8 m_capabilityLogged = false;
+    b8 m_bvhSortPipelineFailed = false;
+    b8 m_bvhBuildPipelineFailed = false;
 };
 
 
@@ -210,9 +210,9 @@ struct RtShadowState{
     Core::GpuDescriptorHandle m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
 
-    bool m_shadowPipelineFailed = false;
-    bool m_swShadowPipelineFailed = false;
-    bool m_swShadowDispatchLogged = false;
+    b8 m_shadowPipelineFailed = false;
+    b8 m_swShadowPipelineFailed = false;
+    b8 m_swShadowDispatchLogged = false;
 
 
 public:
@@ -263,19 +263,19 @@ struct RtSoftShadowState{
     // Transparent temporal gates; coarse/adaptive fallback remains available.
     TransparentShadowSamplingHistory m_transparentShadowSamplingHistory;
 
-    bool m_shadowSoftPipelineFailed = false;
-    bool m_shadowGeometryDownsamplePipelineFailed = false;
+    b8 m_shadowSoftPipelineFailed = false;
+    b8 m_shadowGeometryDownsamplePipelineFailed = false;
     // Nonfatal soft-shadow resource gate.
-    bool m_softShadowReady = false;
+    b8 m_softShadowReady = false;
     // Enables temporal soft-shadow merge; falls back to non-temporal mode.
-    bool m_softShadowTemporalReady = false;
+    b8 m_softShadowTemporalReady = false;
     // Set after the first temporal merge; reset when targets are recreated.
-    bool m_softShadowTemporalSeeded = false;
+    b8 m_softShadowTemporalSeeded = false;
     // Defer the history swap until the ordered submission succeeds.
-    bool m_softShadowTemporalHistoryAdvancePending = false;
-    bool m_shadowReprojectMergePipelineFailed = false;
-    bool m_softTransparentTemporalReady = false;
-    bool m_softTransparentReady = false;
+    b8 m_softShadowTemporalHistoryAdvancePending = false;
+    b8 m_shadowReprojectMergePipelineFailed = false;
+    b8 m_softTransparentTemporalReady = false;
+    b8 m_softTransparentReady = false;
 };
 
 
@@ -308,10 +308,10 @@ struct RtCausticState{
     // Splat-space EMA avoids image-space reprojection ghosts; resolve normalizes steady-state brightness.
     f32 m_causticTemporalDecay = ECSRenderDetail::s_DefaultCausticTemporalDecay;
 
-    bool m_causticEmissionGateLogged = false;
-    bool m_causticGeometryDownsamplePipelineFailed = false;
-    bool m_causticAccumulatorInitialized = false;
-    bool m_causticAccumulatorDecayPipelineFailed = false;
+    b8 m_causticEmissionGateLogged = false;
+    b8 m_causticGeometryDownsamplePipelineFailed = false;
+    b8 m_causticAccumulatorInitialized = false;
+    b8 m_causticAccumulatorDecayPipelineFailed = false;
 };
 
 
@@ -384,25 +384,25 @@ struct RtSurfelGiState{
     // Ray-rotation and age counter.
     u32 m_surfelFrameIndex = 0u;
 
-    bool m_surfelTraceHwPipelineFailed = false;
-    bool m_surfelUseHwTrace = false;
-    bool m_surfelUseCsgTrace = false;
-    bool m_surfelTraceCsgPipelineFailed = false;
-    bool m_surfelTraceCsgHwPipelineFailed = false;
-    bool m_surfelTraceBuildArgsPipelineFailed = false;
-    bool m_surfelUpsamplePipelineFailed = false;
-    bool m_surfelResolvePipelineFailed = false;
-    bool m_surfelResolveDispatchLogged = false;
-    bool m_surfelTracePipelineFailed = false;
-    bool m_surfelHashBuildPipelineFailed = false;
-    bool m_surfelAgeFreePipelineFailed = false;
-    bool m_surfelSpawnPipelineFailed = false;
-    bool m_surfelEnabled = false;
+    b8 m_surfelTraceHwPipelineFailed = false;
+    b8 m_surfelUseHwTrace = false;
+    b8 m_surfelUseCsgTrace = false;
+    b8 m_surfelTraceCsgPipelineFailed = false;
+    b8 m_surfelTraceCsgHwPipelineFailed = false;
+    b8 m_surfelTraceBuildArgsPipelineFailed = false;
+    b8 m_surfelUpsamplePipelineFailed = false;
+    b8 m_surfelResolvePipelineFailed = false;
+    b8 m_surfelResolveDispatchLogged = false;
+    b8 m_surfelTracePipelineFailed = false;
+    b8 m_surfelHashBuildPipelineFailed = false;
+    b8 m_surfelAgeFreePipelineFailed = false;
+    b8 m_surfelSpawnPipelineFailed = false;
+    b8 m_surfelEnabled = false;
     // First trace uses all surfels; later traces use the update divisor.
-    bool m_surfelSeeded = false;
+    b8 m_surfelSeeded = false;
     // Retries graph-owned resource clears after a rejected packet.
-    bool m_surfelResourcesNeedClear = false;
-    bool m_surfelResourcesClearPending = false;
+    b8 m_surfelResourcesNeedClear = false;
+    b8 m_surfelResourcesClearPending = false;
 };
 
 
@@ -415,7 +415,7 @@ struct RtRefractionState{
 
     Core::ShaderHandle m_refractionDiagnosticHwShaders[s_RefractionDiagnosticCsgVariantCount][s_RefractionDiagnosticDensityVariantCount];
     Core::ComputePipelineHandle m_refractionDiagnosticHwPipelines[s_RefractionDiagnosticCsgVariantCount][s_RefractionDiagnosticDensityVariantCount];
-    bool m_refractionDiagnosticHwPipelineFailed[s_RefractionDiagnosticCsgVariantCount][s_RefractionDiagnosticDensityVariantCount] = {};
+    b8 m_refractionDiagnosticHwPipelineFailed[s_RefractionDiagnosticCsgVariantCount][s_RefractionDiagnosticDensityVariantCount] = {};
     Core::BindingLayoutHandle m_refractionBindingLayout;
     Core::ShaderHandle m_refractionClassifyTilesShader;
     Core::ComputePipelineHandle m_refractionClassifyTilesPipeline;
@@ -433,15 +433,15 @@ struct RtRefractionState{
     Core::ComputePipelineHandle m_refractionDenseScreenPipeline;
     Core::ComputePipelineHandle m_refractionDenseHwPipeline;
     Core::ComputePipelineHandle m_refractionDenseCsgHwPipeline;
-    bool m_refractionScreenPipelineFailed = false;
-    bool m_refractionHwPipelineFailed = false;
-    bool m_refractionCsgHwPipelineFailed = false;
-    bool m_refractionDenseScreenPipelineFailed = false;
-    bool m_refractionDenseHwPipelineFailed = false;
-    bool m_refractionDenseCsgHwPipelineFailed = false;
+    b8 m_refractionScreenPipelineFailed = false;
+    b8 m_refractionHwPipelineFailed = false;
+    b8 m_refractionCsgHwPipelineFailed = false;
+    b8 m_refractionDenseScreenPipelineFailed = false;
+    b8 m_refractionDenseHwPipelineFailed = false;
+    b8 m_refractionDenseCsgHwPipelineFailed = false;
     u32 m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
-    bool m_refractionUseHardwareTrace = false;
-    bool m_refractionHardwareTracingEnabled = true;
+    b8 m_refractionUseHardwareTrace = false;
+    b8 m_refractionHardwareTracingEnabled = true;
 };
 
 class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState, public RtRefractionState{

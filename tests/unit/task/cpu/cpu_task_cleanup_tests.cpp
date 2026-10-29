@@ -68,13 +68,13 @@ public:
 struct ReentrantRetirementProbe{
     CpuTaskScheduler& m_scheduler;
     const CpuTaskHandle& m_handle;
-    bool& m_incomplete;
+    b8& m_incomplete;
     usize& m_outstanding;
-    bool m_active = true;
+    b8 m_active = true;
 
 
 public:
-    ReentrantRetirementProbe(CpuTaskScheduler& scheduler, const CpuTaskHandle& handle, bool& incomplete, usize& outstanding)noexcept
+    ReentrantRetirementProbe(CpuTaskScheduler& scheduler, const CpuTaskHandle& handle, b8& incomplete, usize& outstanding)noexcept
         : m_scheduler(scheduler)
         , m_handle(handle)
         , m_incomplete(incomplete)
@@ -100,14 +100,14 @@ public:
 
 
 struct CallbackLoanRetirementProbe final : NoCopy{
-    bool& ownerAlive;
+    b8& ownerAlive;
     Atomic<u32>& retirements;
     Atomic<u32>& lateRetirements;
-    bool active = true;
+    b8 active = true;
 
 
 public:
-    CallbackLoanRetirementProbe(bool& alive, Atomic<u32>& retired, Atomic<u32>& late)noexcept
+    CallbackLoanRetirementProbe(b8& alive, Atomic<u32>& retired, Atomic<u32>& late)noexcept
         : ownerAlive(alive)
         , retirements(retired)
         , lateRetirements(late)
@@ -131,7 +131,7 @@ public:
 
 class ShutdownSubmittingCallbacks final : public NWB::IProjectEntryCallbacks{
 public:
-    ShutdownSubmittingCallbacks(CpuTaskScope& tasks, bool& ownerAlive, Atomic<u32>& retirements, Atomic<u32>& lateRetirements, u32& callbacks)noexcept
+    ShutdownSubmittingCallbacks(CpuTaskScope& tasks, b8& ownerAlive, Atomic<u32>& retirements, Atomic<u32>& lateRetirements, u32& callbacks)noexcept
         : m_tasks(tasks)
         , m_ownerAlive(ownerAlive)
         , m_retirements(retirements)
@@ -163,7 +163,7 @@ public:
 
 private:
     CpuTaskScope& m_tasks;
-    bool& m_ownerAlive;
+    b8& m_ownerAlive;
     Atomic<u32>& m_retirements;
     Atomic<u32>& m_lateRetirements;
     u32& m_callbacks;
@@ -173,7 +173,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool WaitUntil(const Atomic<bool>& condition)noexcept{
+[[nodiscard]] b8 WaitUntil(const Atomic<b8>& condition)noexcept{
     const Timer begin = TimerNow();
     while(!condition.load(MemoryOrder::acquire)){
         if(DurationInMS<u64>(TimerNow(), begin) >= s_TaskTimeoutMS)
@@ -309,11 +309,11 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scope(scheduler);
     Atomic<u32> retirements{ 0u };
-    Atomic<bool> started{ false };
-    Atomic<bool> drainStarted{ false };
-    Atomic<bool> released{ false };
-    Atomic<bool> finished{ false };
-    Atomic<bool> expired{ false };
+    Atomic<b8> started{ false };
+    Atomic<b8> drainStarted{ false };
+    Atomic<b8> released{ false };
+    Atomic<b8> finished{ false };
+    Atomic<b8> expired{ false };
     u32 canceledCallbacks = 0u;
     const auto cpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
         EXPECT_TRUE(probe.retirements != nullptr);
@@ -396,7 +396,7 @@ TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCom
         }
     });
     CpuTaskHandle parent;
-    bool incompleteDuringRetirement = false;
+    b8 incompleteDuringRetirement = false;
     usize outstandingDuringRetirement = 0u;
     u32 callbacks = 0u;
     CpuTaskScheduler scheduler(0u);
@@ -427,7 +427,7 @@ TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCom
 
 TEST(CpuTaskCleanupTests, LoaderShutdownJoinsPostCallbackTasksBeforeCallbackOwnerExpires){
     using namespace __hidden_cpu_task_cleanup_tests;
-    bool ownerAlive = true;
+    b8 ownerAlive = true;
     Atomic<u32> retirements{ 0u };
     Atomic<u32> lateRetirements{ 0u };
     u32 callbacks = 0u;

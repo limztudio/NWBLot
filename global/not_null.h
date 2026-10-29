@@ -62,7 +62,7 @@ public:
         return *this;
     }
 
-    constexpr bool operator==(const NotNull&)const noexcept = default;
+    constexpr b8 operator==(const NotNull&)const noexcept = default;
 
     [[nodiscard]] constexpr T operator->()const noexcept{ return m_ptr; }
 

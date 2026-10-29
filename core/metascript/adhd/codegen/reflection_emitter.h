@@ -17,23 +17,23 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr bool IsFieldReflected(const FieldDecl& field)noexcept{
+[[nodiscard]] constexpr b8 IsFieldReflected(const FieldDecl& field)noexcept{
     return !field.isTransient && (field.access == AccessSpecifier::Public || field.isReflect);
 }
 
-[[nodiscard]] constexpr bool IsReflectedLinearContainerType(const MStringView tname)noexcept{
+[[nodiscard]] constexpr b8 IsReflectedLinearContainerType(const MStringView tname)noexcept{
     return tname == "Array" || tname == "FixedVector" || tname == "Vector"
         || tname == "Deque" || tname == "ParallelVector" || tname == "List"
         || tname == "ForwardList" || tname == "Set" || tname == "HashSet"
         || tname == "ParallelHashSet";
 }
 
-[[nodiscard]] constexpr bool IsReflectedMapContainerType(const MStringView tname)noexcept{
+[[nodiscard]] constexpr b8 IsReflectedMapContainerType(const MStringView tname)noexcept{
     return tname == "Map" || tname == "HashMap" || tname == "ParallelHashMap";
 }
 
-[[nodiscard]] bool IsAssetDependencyType(const TypeRef* type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
-[[nodiscard]] bool IsAssetDependencyField(const FieldDecl& field, const SymbolTable& symbols, u32 depth = 0u)noexcept;
+[[nodiscard]] b8 IsAssetDependencyType(const TypeRef* type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
+[[nodiscard]] b8 IsAssetDependencyField(const FieldDecl& field, const SymbolTable& symbols, u32 depth = 0u)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

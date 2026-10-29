@@ -32,7 +32,7 @@ public:
 private:
     NWB::Impl::Ui::EditModel m_document;
     NWB::Impl::Ui::TextAreaState m_state;
-    bool m_readOnly = false;
+    b8 m_readOnly = false;
 };
 
 

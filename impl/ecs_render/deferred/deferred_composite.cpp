@@ -71,7 +71,7 @@ struct DeferredCompositeGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         return ECSRenderDetail::RecordDeferredGraphTask(payload, commandList, [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
             return deferredSystem.renderDeferredComposite(taskCommandList, targets, payload.reflectionInputs);
@@ -89,7 +89,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererDeferredSystem::createDeferredCompositeResources(){
+b8 RendererDeferredSystem::createDeferredCompositeResources(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
@@ -146,7 +146,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
     return true;
 }
 
-bool RendererDeferredSystem::createDeferredCompositePipeline(){
+b8 RendererDeferredSystem::createDeferredCompositePipeline(){
     if(!createDeferredCompositeResources())
         return false;
 
@@ -171,7 +171,7 @@ bool RendererDeferredSystem::createDeferredCompositePipeline(){
     return true;
 }
 
-bool RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer& presentationFramebuffer){
+b8 RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer& presentationFramebuffer){
     if(!createDeferredCompositeResources())
         return false;
 
@@ -218,7 +218,7 @@ Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(
 }
 
 
-bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs){
+b8 RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs){
     NWB_ASSERT(m_deferredState.m_compositeComputePipeline);
 
     // Boundary states are graph-owned; this thunk holds only composite commands.
@@ -243,7 +243,7 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
     return true;
 }
 
-bool RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, const Core::GpuDescriptorHandle outputLayerImage){
+b8 RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, const Core::GpuDescriptorHandle outputLayerImage){
     NWB_ASSERT(presentationFrame.valid());
     NWB_ASSERT(m_deferredState.m_presentPipeline);
     Core::Framebuffer& presentationFramebuffer = *presentationFrame.framebuffer;

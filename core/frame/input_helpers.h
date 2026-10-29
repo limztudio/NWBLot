@@ -124,7 +124,7 @@ struct StructName{ \
 }
 
 template<typename Symbols>
-inline constexpr bool s_LinuxKeySymbolsUseIntegralOperands =
+inline constexpr b8 s_LinuxKeySymbolsUseIntegralOperands =
     IsIntegral_V<typename Symbols::value_type>
     && IsIntegral_V<decltype(Symbols::s_AltL)>
     && IsIntegral_V<decltype(Symbols::s_AltR)>

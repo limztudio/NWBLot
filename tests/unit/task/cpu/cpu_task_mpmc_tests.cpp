@@ -55,7 +55,7 @@ private:
 
 
 template<typename Predicate>
-[[nodiscard]] bool WaitUntil(const Predicate& predicate)noexcept(noexcept(static_cast<bool>(!predicate()))){
+[[nodiscard]] b8 WaitUntil(const Predicate& predicate)noexcept(noexcept(static_cast<b8>(!predicate()))){
     const Timer begin = TimerNow();
     while(!predicate()){
         if(DurationInMS<u64>(TimerNow(), begin) >= s_GateTimeoutMS)
@@ -67,14 +67,14 @@ template<typename Predicate>
 
 
 struct ProducerState{
-    Atomic<bool> start{ false };
-    Atomic<bool> expired{ false };
-    Atomic<bool> rejected{ false };
-    Atomic<bool> invalidOrder{ false };
+    Atomic<b8> start{ false };
+    Atomic<b8> expired{ false };
+    Atomic<b8> rejected{ false };
+    Atomic<b8> invalidOrder{ false };
     Atomic<u32> ready{ 0u };
     Atomic<u32> workerMask{ 0u };
     Atomic<u32> consumedPrefixMask{ 0u };
-    Atomic<bool> published[s_ProducerCount]{};
+    Atomic<b8> published[s_ProducerCount]{};
     CpuTaskHandle handles[s_ProducerCount][s_TasksPerProducer]{};
     Atomic<u32> visits[s_ProducerCount * s_TasksPerProducer * 4u]{};
 };
@@ -224,10 +224,10 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
     Atomic<u32> firstPublished{ 0u };
     Atomic<u32> finished{ 0u };
     Atomic<u32> invoked{ 0u };
-    Atomic<bool> start{ false };
-    Atomic<bool> expired{ false };
-    Atomic<bool> rejected{ false };
-    Atomic<bool> wrongThread{ false };
+    Atomic<b8> start{ false };
+    Atomic<b8> expired{ false };
+    Atomic<b8> rejected{ false };
+    Atomic<b8> wrongThread{ false };
     Atomic<u32> visits[s_ExternalProducerCount * s_TasksPerProducer]{};
     CpuTaskSchedulerConfig config;
     config.workerCount = s_WorkerCount;
@@ -327,8 +327,8 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
         ASSERT_TRUE(handleTaskAdmission);
         const auto handle = *handleTaskAdmission;
         ASSERT_TRUE(handle.valid());
-        Atomic<bool> start{ false };
-        Atomic<bool> expired{ false };
+        Atomic<b8> start{ false };
+        Atomic<b8> expired{ false };
         Atomic<u32> entered{ 0u };
         Atomic<u32> finished{ 0u };
         JoiningThread waiters[s_JoinKinds];

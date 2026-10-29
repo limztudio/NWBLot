@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources){
+b8 RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources){
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
         return false;
 
@@ -72,7 +72,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     if(!m_preparedMeshBlasBuildsReady)
         return;
 
-    bool allPlansCurrent = true;
+    b8 allPlansCurrent = true;
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
         auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
         if(!meshResourcesResult || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)){
@@ -108,11 +108,11 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     clearPreparedMeshBlasBuilds();
 }
 
-bool RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::ScratchArena& scratchArena){
+b8 RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::ScratchArena& scratchArena){
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
 
-    bool allResourcesReady = true;
+    b8 allResourcesReady = true;
     ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
@@ -131,7 +131,7 @@ bool RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::Scra
     return allResourcesReady;
 }
 
-bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::ScratchArena& scratchArena){
+b8 RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::ScratchArena& scratchArena){
     clearPreparedMeshBlasBuilds();
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
@@ -158,7 +158,7 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::Scratc
     return true;
 }
 
-bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(Core::CommandList& commandList, const bool meshBlasGeometryBuildInputStatesGraphOwned){
+b8 RendererRayTracingSystem::recordPreparedMeshBlasBuilds(Core::CommandList& commandList, const b8 meshBlasGeometryBuildInputStatesGraphOwned){
     if(!m_preparedMeshBlasBuildsReady || m_preparedMeshBlasBuilds.empty())
         return false;
 

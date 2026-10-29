@@ -21,7 +21,7 @@ ShadowPrepareGeometryResources::ShadowPrepareGeometryResources(const ShadowPrepa
     , m_scratchArena(scratchArena)
 {}
 
-void ShadowPrepareGeometryResources::prepareStorage(const bool blasInputStatesGraphOwned){
+void ShadowPrepareGeometryResources::prepareStorage(const b8 blasInputStatesGraphOwned){
     NWB_ASSERT(!m_storagePrepared);
     if(blasInputStatesGraphOwned){
         for(const PreparedMeshBlasBuild& build : m_inputs.blasBuilds){
@@ -35,7 +35,7 @@ void ShadowPrepareGeometryResources::prepareStorage(const bool blasInputStatesGr
     m_storagePrepared = true;
 }
 
-bool ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph& graph){
+b8 ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph& graph){
     NWB_ASSERT(m_storagePrepared && !m_inputsGathered);
     if(!resolveRequests(graph)){
         clearBuildInputs();
@@ -55,9 +55,9 @@ bool ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph&
     return true;
 }
 
-bool ShadowPrepareGeometryResources::gatherRemainingTraceResources()noexcept{
+b8 ShadowPrepareGeometryResources::gatherRemainingTraceResources()noexcept{
     NWB_ASSERT(m_inputsGathered);
-    const bool hasBlasInputs = !m_blasBuildInputs.empty();
+    const b8 hasBlasInputs = !m_blasBuildInputs.empty();
     for(const Core::GpuGraphResourceId resource : m_inputs.traceResources){
         if(!resource.valid())
             return false;
@@ -69,7 +69,7 @@ bool ShadowPrepareGeometryResources::gatherRemainingTraceResources()noexcept{
     return true;
 }
 
-bool ShadowPrepareGeometryResources::isPreparedMeshBlasBuild(const Name& meshName)const{
+b8 ShadowPrepareGeometryResources::isPreparedMeshBlasBuild(const Name& meshName)const{
     if(!m_inputs.blasBuildsGraphOwned)
         return false;
     if(m_inputs.blasBuilds.size() <= s_InlineCount){
@@ -137,7 +137,7 @@ void ShadowPrepareGeometryResources::promoteRequests(){
     m_requests.emplace(Move(requests));
 }
 
-bool ShadowPrepareGeometryResources::resolveRequests(const Core::GpuTaskGraph& graph){
+b8 ShadowPrepareGeometryResources::resolveRequests(const Core::GpuTaskGraph& graph){
     const usize requestCount = m_requests ? m_requests->size() : m_inlineRequestCount;
     if(requestCount == 0u)
         return true;
@@ -189,7 +189,7 @@ ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::f
     return nullptr;
 }
 
-bool ShadowPrepareGeometryResources::appendBuildInput(const Core::BufferHandle& buffer)noexcept{
+b8 ShadowPrepareGeometryResources::appendBuildInput(const Core::BufferHandle& buffer)noexcept{
     BufferRequest* const request = findRequest(buffer.get());
     if(!request || !request->resource.valid() || !request->listedForTrace)
         return false;
@@ -219,7 +219,7 @@ void ShadowPrepareGeometryResources::prepareNames()const{
             m_names->insert(MakeNotNull(&identity));
             continue;
         }
-        bool found = false;
+        b8 found = false;
         for(usize index = 0u; index < m_inlineNameCount; ++index){
             if(*m_inlineNames[index] == identity){
                 found = true;

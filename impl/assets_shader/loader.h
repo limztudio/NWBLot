@@ -33,7 +33,7 @@ namespace ShaderAssetLoader{
 
 template<typename ShaderT, typename ShaderPathResolver>
     requires(IsBaseOf_V<IShader, ShaderT> && !IsAbstract_V<ShaderT>)
-[[nodiscard]] bool Load(
+[[nodiscard]] b8 Load(
     Core::ShaderHandle& outShader,
     const Name& shaderName,
     const AStringView variantName,

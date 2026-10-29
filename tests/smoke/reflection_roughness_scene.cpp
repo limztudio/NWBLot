@@ -62,7 +62,7 @@ ReflectionRoughnessScene::ReflectionRoughnessScene(ProjectRuntimeContext& contex
     , m_light(light)
     , m_roughness(roughness){}
 
-bool ReflectionRoughnessScene::create(const AStringView caseName, const bool finalState){
+b8 ReflectionRoughnessScene::create(const AStringView caseName, const b8 finalState){
     using namespace __hidden_reflection_roughness_scene;
     if(caseName == "rough_furnace")
         m_case = ReflectionRoughnessCase::Furnace;
@@ -101,7 +101,7 @@ bool ReflectionRoughnessScene::create(const AStringView caseName, const bool fin
     return !finalState || applyMutation();
 }
 
-bool ReflectionRoughnessScene::applyMutation(){
+b8 ReflectionRoughnessScene::applyMutation(){
     using namespace __hidden_reflection_roughness_scene;
     if(m_finalState)
         return true;
@@ -153,7 +153,7 @@ NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMateri
     return entity;
 }
 
-bool ReflectionRoughnessScene::createDeformingSource(){
+b8 ReflectionRoughnessScene::createDeformingSource(){
     using namespace __hidden_reflection_roughness_scene;
     const auto modelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name());
     if(!modelAsset)

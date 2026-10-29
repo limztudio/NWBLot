@@ -41,7 +41,7 @@ struct SurfelGiLifecycleInputs{
     Span<const Core::GpuExternalCompletionId> externalDependencies{};
     Core::GpuTaskExternalStateSource computeStateSource;
     Core::GpuTaskExternalStateSource counterStateSource;
-    bool hasWork = false;
+    b8 hasWork = false;
 };
 
 struct SurfelGiLifecycleResult{

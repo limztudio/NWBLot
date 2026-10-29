@@ -33,7 +33,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ObjectGeometryCacheSnapshot::valid()const noexcept{
+b8 ObjectGeometryCacheSnapshot::valid()const noexcept{
     return buffer && decoderPipeline && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer && indexByteOffset != 0u && indexCount != 0u;
 }
 
@@ -60,7 +60,7 @@ Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(const u64 l
     return ObjectGeometryCacheLayout{ bufferByteSize, static_cast<u32>(indexByteOffset), primitiveIndexCount };
 }
 
-bool AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, const bool runtimeMesh)noexcept{
+b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, const b8 runtimeMesh)noexcept{
     ObjectGeometryCacheState& cache = mesh.objectGeometryCache;
     if(!expected.valid() || cache.buffer != expected.buffer)
         return false;
@@ -116,7 +116,7 @@ ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::ObjectGeometryC
     };
 }
 
-bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline){
+b8 RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline){
     if(!decoderPipeline)
         return false;
     ECSRenderDetail::ObjectGeometryCacheState& cache = mesh.objectGeometryCache;
@@ -174,7 +174,7 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
     return true;
 }
 
-bool RendererMeshSystem::confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, const bool runtimeMesh)noexcept{
+b8 RendererMeshSystem::confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, const b8 runtimeMesh)noexcept{
     const auto mesh = findMeshResources(meshKey);
     if(!mesh)
         return false;

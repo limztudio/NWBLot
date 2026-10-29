@@ -42,12 +42,12 @@ void FrameExecuteCpuRestore::RestoreSurfelGiCpuState(RendererRayTracingState& ra
 }
 
 
-void FrameExecuteCpuRestore::RestoreAvboitCpuState(RendererAvboitSystem& avboitSystem, const bool targetsNeedClear)noexcept{
+void FrameExecuteCpuRestore::RestoreAvboitCpuState(RendererAvboitSystem& avboitSystem, const b8 targetsNeedClear)noexcept{
     avboitSystem.restoreTargetClearState(targetsNeedClear);
 }
 
 
-void FrameExecuteCpuRestore::RestorePostGbufferEffectsCpuState(RendererRayTracingState& rayTracingState, RendererAvboitSystem& avboitSystem, const RayTracingFrameCpuStateSnapshot& snapshot, const bool avboitTargetsNeedClear)noexcept{
+void FrameExecuteCpuRestore::RestorePostGbufferEffectsCpuState(RendererRayTracingState& rayTracingState, RendererAvboitSystem& avboitSystem, const RayTracingFrameCpuStateSnapshot& snapshot, const b8 avboitTargetsNeedClear)noexcept{
     RestoreCausticsCpuState(rayTracingState, snapshot);
     RestoreSurfelGiCpuState(rayTracingState, snapshot);
     RestoreAvboitCpuState(avboitSystem, avboitTargetsNeedClear);
@@ -60,7 +60,7 @@ void FrameExecuteCpuRestore::RestorePostGbufferPacketCpuState(
     RendererRayTracingState& rayTracingState,
     RendererAvboitSystem& avboitSystem,
     const Snapshot& snapshot,
-    const bool restoreBindlessSlots,
+    const b8 restoreBindlessSlots,
     DeferredFrameTargets& targets
 )noexcept{
     if(restoreBindlessSlots)

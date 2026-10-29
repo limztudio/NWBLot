@@ -51,7 +51,7 @@ NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount)noe
     return delta;
 }
 
-bool ContainsText(const AStringView text, const AStringView needle)noexcept{
+b8 ContainsText(const AStringView text, const AStringView needle)noexcept{
     return text.find(needle) != AStringView::npos;
 }
 

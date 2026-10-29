@@ -90,7 +90,7 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceStreamIndex(const Path& nwbFilePath, const TStringView metaKind, const AStringView streamName, const u32 index, const usize streamCount){
+b8 MeshCookSourceStreams::ValidateSourceStreamIndex(const Path& nwbFilePath, const TStringView metaKind, const AStringView streamName, const u32 index, const usize streamCount){
     if(index < streamCount)
         return true;
 
@@ -99,7 +99,7 @@ bool MeshCookSourceStreams::ValidateSourceStreamIndex(const Path& nwbFilePath, c
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceIndexStream(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const usize vertexRefCount){
+b8 MeshCookSourceStreams::ValidateSourceIndexStream(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const usize vertexRefCount){
     if(indices.empty() || (indices.size() % s_MeshletTriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles"), metaKind, PathToString<tchar>(nwbFilePath));
         return false;
@@ -115,7 +115,7 @@ bool MeshCookSourceStreams::ValidateSourceIndexStream(const Path& nwbFilePath, c
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const SourceMeshStreams& streams){
+b8 MeshCookSourceStreams::ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const SourceMeshStreams& streams){
     for(const MeshVertexRef& ref : streams.vertexRefs){
         if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_cook_source_streams::s_VertexRefPositionName, ref.position, streams.positions.size()))
             return false;

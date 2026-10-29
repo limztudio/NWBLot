@@ -24,7 +24,7 @@ interface ISearchableListDataSource : public IListDataSource{
 
 
 public:
-    [[nodiscard]] virtual bool filter(AStringView query) = 0;
+    [[nodiscard]] virtual b8 filter(AStringView query) = 0;
     [[nodiscard]] virtual const IListDataSource& filtered()const = 0;
 };
 
@@ -38,7 +38,7 @@ struct SearchComboOptions{
 
 struct SearchComboResult{
     ComboResult combo;
-    bool queryChanged = false;
+    b8 queryChanged = false;
 };
 
 
@@ -85,13 +85,13 @@ private:
     u64 m_viewCount = 0u;
     u64 m_queryGeneration = 0u;
     u64 m_queryExternalRevision = 0u;
-    bool m_filterValid = false;
+    b8 m_filterValid = false;
 };
 
 class SearchComboBehavior final{
 public:
     // Reconcile the committed combo against the full source first; reconcile its preview against filtered() afterward.
-    [[nodiscard]] static bool Filter(SearchComboState& state, ISearchableListDataSource& source);
+    [[nodiscard]] static b8 Filter(SearchComboState& state, ISearchableListDataSource& source);
 };
 
 

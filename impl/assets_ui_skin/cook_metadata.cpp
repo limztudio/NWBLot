@@ -86,7 +86,7 @@ static constexpr f32 s_PaletteAlphaMax = 1.0f;
 }
 
 template<usize Count>
-[[nodiscard]] static Expected<Array<u32, Count>> ReadU32List(const Path& path, const Value& object, const AStringView fieldName, const bool required){
+[[nodiscard]] static Expected<Array<u32, Count>> ReadU32List(const Path& path, const Value& object, const AStringView fieldName, const b8 required){
     Array<u32, Count> values{};
 
     const Value* field = FindField(object, fieldName);
@@ -178,7 +178,7 @@ template<usize Count>
         return MakeUnexpected(Failure{});
     }
 
-    Array<bool, UiSkinColorRole::kCount> seen{};
+    Array<b8, UiSkinColorRole::kCount> seen{};
     for(const Value& value : (*colors)->asList()){
         if(!Core::Assets::CheckMetadataAssetMap(path, value, s_DiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, value, s_DiagnosticPrefix, { s_NameField, s_RgbaField }))
             return MakeUnexpected(Failure{});
@@ -290,7 +290,7 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, const A
     parsed.referenceDensity = *referenceDensityResult;
 
     AStringView toolkitContract;
-    bool hasToolkitContract = false;
+    b8 hasToolkitContract = false;
     auto toolkitContractResult = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_ToolkitContractField, false);
     if(!toolkitContractResult)
         return MakeUnexpected(Failure{});

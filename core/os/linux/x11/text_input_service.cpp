@@ -34,7 +34,7 @@ static constexpr usize s_InitialLookupBytes = 128u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ContainsStyle(const XIMStyles& styles, const XIMStyle requested)noexcept{
+[[nodiscard]] static b8 ContainsStyle(const XIMStyles& styles, const XIMStyle requested)noexcept{
     for(unsigned short index = 0u; index < styles.count_styles; ++index){
         if(styles.supported_styles[index] == requested)
             return true;
@@ -83,7 +83,7 @@ X11TextInputService::~X11TextInputService()noexcept{
         releaseContext();
 }
 
-bool X11TextInputService::initialize(){
+b8 X11TextInputService::initialize(){
     // Xlib binds an input method to LC_CTYPE; select the user's native text locale during Frame startup.
     if(!::setlocale(LC_CTYPE, "") || !XSupportsLocale() || !XSetLocaleModifiers("")){
         NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: native locale initialization unavailable"));
@@ -93,7 +93,7 @@ bool X11TextInputService::initialize(){
     return true;
 }
 
-bool X11TextInputService::filterEvent(XEvent& event){
+b8 X11TextInputService::filterEvent(XEvent& event){
     NWB_ASSERT(isOwnerThread());
     if(!m_context || !activeSession().valid())
         return false;
@@ -107,7 +107,7 @@ bool X11TextInputService::filterEvent(XEvent& event){
     return XFilterEvent(&event, None) != False;
 }
 
-bool X11TextInputService::dispatchKey(XKeyEvent& event){
+b8 X11TextInputService::dispatchKey(XKeyEvent& event){
     NWB_ASSERT(isOwnerThread());
     const TextInputSessionToken token = activeSession();
     if(!token.valid())
@@ -151,7 +151,7 @@ bool X11TextInputService::dispatchKey(XKeyEvent& event){
 }
 
 TextInputCapabilities X11TextInputService::capabilities()const noexcept{
-    const bool available = !m_shuttingDown && (m_method || m_reopenPending) && m_style;
+    const b8 available = !m_shuttingDown && (m_method || m_reopenPending) && m_style;
     return { available, available && (m_style & XIMPreeditCallbacks) != 0u, false, false, TextInputBackend::X11Xim };
 }
 
@@ -214,7 +214,7 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
     m_caretSpot = XPoint{ static_cast<short>(Clamp<i32>(caret.x, s_MinI16, s_MaxI16)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, s_MinI16, s_MaxI16)), };
     // Always send the spot, even unmoved: this IM round trip also drains forwarded-key sync and keeps text/key order.
     // Callback/no-preedit styles may ignore this optional candidate-window hint.
-    const bool unsupported = XSetICValues(m_context, XNPreeditAttributes, m_caretAttributes, nullptr) != nullptr;
+    const b8 unsupported = XSetICValues(m_context, XNPreeditAttributes, m_caretAttributes, nullptr) != nullptr;
     if(unsupported){
         m_caretHintSupported = false;
         NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: active input style does not support native caret positioning"));
@@ -247,7 +247,7 @@ void X11TextInputService::openMethod(){
         NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: input method destruction notification unavailable"));
 }
 
-bool X11TextInputService::createContext(){
+b8 X11TextInputService::createContext(){
     if((m_style & XIMPreeditCallbacks) == 0u){
         m_context = XCreateIC(m_method, XNInputStyle, m_style, XNClientWindow, m_window, XNFocusWindow, m_window, nullptr);
     }
@@ -322,13 +322,13 @@ Expected<GlobalUniquePtr<ITextInputService>> CreateX11TextInputService(Alloc::Gl
     return service;
 }
 
-bool FilterX11TextInputEvent(ITextInputService& service, XEvent& event){
+b8 FilterX11TextInputEvent(ITextInputService& service, XEvent& event){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::X11Xim)
         return false;
     return MakeNotNull(checked_cast<X11TextInputService*>(&service))->filterEvent(event);
 }
 
-bool DispatchX11TextInputKey(ITextInputService& service, XKeyEvent& event){
+b8 DispatchX11TextInputKey(ITextInputService& service, XKeyEvent& event){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::X11Xim)
         return false;
     return MakeNotNull(checked_cast<X11TextInputService*>(&service))->dispatchKey(event);

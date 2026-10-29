@@ -27,7 +27,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count);
+    [[nodiscard]] b8 setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count);
     [[nodiscard]] u64 identity()const noexcept{ return m_identity; }
 
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
@@ -35,7 +35,7 @@ public:
     // Logical extent plus visible glyph support for this display, including every native pixel-snap phase; no atlas admission or line/caret mutation.
     // Size from width/height and paint at contentOrigin - { x, y } to keep negative bearings and marks inside the content rectangle.
     [[nodiscard]] Expected<Rect> measure(const TextLayout& layout, const DisplayMetrics& display);
-    [[nodiscard]] bool paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color = {});
+    [[nodiscard]] b8 paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color = {});
 
 
 private:

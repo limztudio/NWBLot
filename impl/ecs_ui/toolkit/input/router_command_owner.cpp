@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::validCommandOwners()const noexcept{
+b8 InputRouter::validCommandOwners()const noexcept{
     for(const HitTarget& source : m_stagedTargets){
         if(!source.commandOwner.valid()){
             if(source.commandOwnerDeclarationGeneration != 0u || !source.commandControl.empty())
@@ -50,7 +50,7 @@ const HitTarget* InputRouter::commandHost(const HitTarget& source)const noexcept
     return host;
 }
 
-bool InputRouter::currentControlCommandOwner(const CommandSource& held)const noexcept{
+b8 InputRouter::currentControlCommandOwner(const CommandSource& held)const noexcept{
     const ControlCommandOwner& owner = held.controlOwner;
     const TargetOwner& sourceOwner = held.focusOwner;
     const HitTarget* host = findTarget(owner.host, owner.declarationGeneration);

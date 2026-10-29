@@ -59,12 +59,12 @@ struct AvboitRecordInputsBase{
     Core::BufferRange materialTypedRange;
     Core::BufferRange receiverRange;
     Core::BufferRange cutterRange;
-    bool producesReusableGeometry = false;
-    bool intervalOutputsGraphOwned = false;
-    bool csgStreamsUploaded = false;
-    bool regularComputeEmulationPlanCaptured = false;
-    bool csgComputeEmulationPlanCaptured = false;
-    bool sharedComputeEmulationPlanCaptured = false;
+    b8 producesReusableGeometry = false;
+    b8 intervalOutputsGraphOwned = false;
+    b8 csgStreamsUploaded = false;
+    b8 regularComputeEmulationPlanCaptured = false;
+    b8 csgComputeEmulationPlanCaptured = false;
+    b8 sharedComputeEmulationPlanCaptured = false;
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan sharedComputeEmulationPlan;
     usize sharedComputeEmulationInstanceCount = 0u;
     usize sharedComputeEmulationMaterialTypedByteCount = 0u;
@@ -79,14 +79,14 @@ public:
 
 public:
     // Reuse requires the regular emulation plan and excludes CSG/shared plans.
-    [[nodiscard]] bool generatedGeometryReusePlansValid()const noexcept{
-        const bool generatedGeometryReused = reusedGeometryProducer.valid();
+    [[nodiscard]] b8 generatedGeometryReusePlansValid()const noexcept{
+        const b8 generatedGeometryReused = reusedGeometryProducer.valid();
         if((generatedGeometryReused || producesReusableGeometry) && (!regularComputeEmulationPlanCaptured || csgComputeEmulationPlanCaptured || sharedComputeEmulationPlanCaptured))
             return false;
         return true;
     }
 
-    [[nodiscard]] bool generatedGeometryReused()const noexcept{
+    [[nodiscard]] b8 generatedGeometryReused()const noexcept{
         return reusedGeometryProducer.valid();
     }
 };

@@ -47,7 +47,7 @@ struct AccelStructGeometryBuildSignature{
     u32 maxVertex = 0u;
     VkRayTracingLssIndexingModeNV lssIndexingMode = VK_RAY_TRACING_LSS_INDEXING_MODE_MAX_ENUM_NV;
     VkRayTracingLssPrimitiveEndCapsModeNV lssEndCapsMode = VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_MAX_ENUM_NV;
-    bool transformDataPresent = false;
+    b8 transformDataPresent = false;
 };
 
 struct AccelStructBottomLevelReferences{
@@ -121,22 +121,22 @@ private:
         u64 resetRecordingAuthorizationGeneration = 0u;
         u64 consumedResetAuthorizationGeneration = 0u;
         u64 recordingID = 0u;
-        bool prerequisiteObservedComplete = false;
-        bool recordsReset = false;
-        bool recordsBegin = false;
-        bool recordsEnd = false;
-        bool consumesResetAuthorization = false;
+        b8 prerequisiteObservedComplete = false;
+        b8 recordsReset = false;
+        b8 recordsBegin = false;
+        b8 recordsEnd = false;
+        b8 consumesResetAuthorization = false;
     };
 
     struct TimerQueryClaimOwnerMatches{
-        bool resetOwnerMatches = false;
-        bool beginOwnerMatches = false;
-        bool endOwnerMatches = false;
+        b8 resetOwnerMatches = false;
+        b8 beginOwnerMatches = false;
+        b8 endOwnerMatches = false;
     };
 
 
 public:
-    TrackedCommandBuffer(Queue& queue, const VulkanContext& context, VkCommandPool commandPool, bool ownsCommandPool, Futex* sharedCommandPoolMutex)noexcept;
+    TrackedCommandBuffer(Queue& queue, const VulkanContext& context, VkCommandPool commandPool, b8 ownsCommandPool, Futex* sharedCommandPoolMutex)noexcept;
     ~TrackedCommandBuffer()noexcept;
 
 
@@ -146,16 +146,16 @@ private:
     [[nodiscard]] Expected<void, VkResult> initialize(u32 queueFamilyIndex);
     [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
     [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(TimerQuery& query, u64 generation)noexcept;
-    [[nodiscard]] bool recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;
+    [[nodiscard]] b8 recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;
     [[nodiscard]] TimerQueryClaimOwnerMatches resolveTimerQueryClaimOwnerMatches(const TimerQuery& query, const TimerQueryRecordingClaim& claim)const noexcept;
-    [[nodiscard]] bool validateTimerQueryRecordingClaims(const Queue& submissionQueue, const QueueSubmissionWait* localWaits, usize localWaitCount, const NotNull<TrackedCommandBuffer*>* precedingCommandBuffers, usize precedingCommandBufferCount)const noexcept;
+    [[nodiscard]] b8 validateTimerQueryRecordingClaims(const Queue& submissionQueue, const QueueSubmissionWait* localWaits, usize localWaitCount, const NotNull<TrackedCommandBuffer*>* precedingCommandBuffers, usize precedingCommandBufferCount)const noexcept;
     void commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept;
     void discardTimerQueryRecordingClaims()noexcept;
     void commitRetainedBufferStateCommits()noexcept;
     void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
     void commitRetainedTextureStateCommits()noexcept;
     void discardRetainedTextureStateCommits()noexcept;
-    [[nodiscard]] bool appendPendingAccelStructBuildCommit(
+    [[nodiscard]] b8 appendPendingAccelStructBuildCommit(
         AccelStruct& accelStruct,
         VkAccelerationStructureTypeKHR accelStructType,
         VkBuildAccelerationStructureFlagsKHR buildFlags,
@@ -165,7 +165,7 @@ private:
         usize instanceCount = 0u
     );
     [[nodiscard]] Expected<NotNull<const AccelStructBuildSignatureRole*>> getPendingAccelStructBuildSignature(const AccelStruct& accelStruct)const noexcept;
-    [[nodiscard]] bool validatePendingAccelStructBuildCommits()const noexcept;
+    [[nodiscard]] b8 validatePendingAccelStructBuildCommits()const noexcept;
     void commitPendingAccelStructBuildCommits()noexcept;
     void releasePendingAccelStructBuildCommits()noexcept;
     void retainTopLevelAccelStruct(AccelStruct& accelStruct);
@@ -174,7 +174,7 @@ private:
     void retainPendingTopLevelAccelStructReferences(const TrackedCommandBuffer& buildCommandBuffer);
     void abandonPendingAccelStructBuildCommits()noexcept;
     void appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap);
-    [[nodiscard]] bool hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept;
+    [[nodiscard]] b8 hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept;
     void commitPendingOpacityMicromapBuildCommits()noexcept;
     void discardPendingOpacityMicromapBuildCommits()noexcept;
     void clearTrackedReferences()noexcept;
@@ -204,7 +204,7 @@ private:
     u64 m_recordingWorkerDomain = 0u;
     u32 m_recordingWorkerIndex = 0u;
     TrackedCommandBufferArenaState::Enum m_arenaState = TrackedCommandBufferArenaState::Untracked;
-    bool m_ownsCmdPool = false;
+    b8 m_ownsCmdPool = false;
 
     const VulkanContext& m_context;
     Queue& m_queue;

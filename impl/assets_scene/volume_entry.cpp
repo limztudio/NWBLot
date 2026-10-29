@@ -31,7 +31,7 @@ namespace __hidden_assets_scene_volume_entry{
 using namespace SceneAssetCook;
 
 
-static bool RegisterTransformComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterTransformComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
     return RegisterComponentCookEntry<
         TransformComponentCookEntry,
         TransformComponentAsset,
@@ -40,7 +40,7 @@ static bool RegisterTransformComponentCookEntry(Core::Assets::CookEntryRegistry&
     >(registry);
 }
 
-static bool RegisterCameraComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterCameraComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
     return RegisterComponentCookEntry<
         CameraComponentCookEntry,
         CameraComponentAsset,
@@ -49,7 +49,7 @@ static bool RegisterCameraComponentCookEntry(Core::Assets::CookEntryRegistry& re
     >(registry);
 }
 
-static bool RegisterLightComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterLightComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
     return RegisterComponentCookEntry<
         LightComponentCookEntry,
         LightComponentAsset,
@@ -62,7 +62,7 @@ static bool RegisterLightComponentCookEntry(Core::Assets::CookEntryRegistry& reg
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ExtractEntityDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+static b8 ExtractEntityDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto entityEntry = ParseCookDependencyEntry<EntityCookEntry, &ParseEntityCookMetadata>(context, s_EntityDiagnosticPrefix);
     if(!entityEntry)
         return false;
@@ -74,7 +74,7 @@ static bool ExtractEntityDependencies(const Core::Assets::CookDependencyItemCont
     return true;
 }
 
-static bool RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
     Core::Assets::RegisterCompositeRootAssetType(EntityAsset::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<EntityCookEntry, EntityAsset, EntityAssetCodec>(
         registry,
@@ -89,14 +89,14 @@ static bool RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ExtractProjectDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+static b8 ExtractProjectDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto projectEntry = ParseCookDependencyEntry<ProjectCookEntry, &ParseProjectCookMetadata>(context, s_ProjectDiagnosticPrefix);
     if(!projectEntry)
         return false;
     return collector.addAssetDependency(projectEntry->startScene.name(), SceneAsset::AssetTypeName());
 }
 
-static bool RegisterProjectCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterProjectCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<ProjectCookEntry, ProjectAsset, ProjectAssetCodec>(
         registry,
         ProjectBinaryPayload::s_ProjectAssetKindLabel,
@@ -110,7 +110,7 @@ static bool RegisterProjectCookEntry(Core::Assets::CookEntryRegistry& registry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ExtractSceneDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+static b8 ExtractSceneDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto sceneEntry = ParseCookDependencyEntry<SceneCookEntry, &ParseSceneCookMetadata>(context, s_SceneDiagnosticPrefix);
     if(!sceneEntry)
         return false;
@@ -141,7 +141,7 @@ static bool ExtractSceneDependencies(const Core::Assets::CookDependencyItemConte
     return true;
 }
 
-static bool RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
     Core::Assets::RegisterCompositeRootAssetType(SceneAsset::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<SceneCookEntry, SceneAsset, SceneAssetCodec>(
         registry,
@@ -152,7 +152,7 @@ static bool RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
     );
 }
 
-static bool RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& registry){
+static b8 RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& registry){
     Core::Assets::RegisterCompositeRootAssetType(EntityAsset::AssetTypeName());
     Core::Assets::RegisterCompositeRootAssetType(SceneAsset::AssetTypeName());
     return

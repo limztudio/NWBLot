@@ -40,7 +40,7 @@ public:
 protected:
 
 
-    [[nodiscard]] bool shapeCurrent(){
+    [[nodiscard]] b8 shapeCurrent(){
         return m_view.snapshot(m_model) && m_view.shape(m_text, { .fontSize = 14.0f }) == TextLayoutStatus::Success;
     }
 

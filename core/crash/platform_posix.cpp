@@ -122,7 +122,7 @@ static void CaptureFramePointerCallstack(CrashDetail::CrashDumpRequestOptions& o
 // Pre-2.35 glibc may take the loader lock (dl_iterate_phdr); newer glibc uses lock-free __dl_find_object.
 // When the trigger IP is known, capture starts there (robust to inlining); otherwise only that IP is emitted.
 // Returns false when nothing unwound so the caller falls back to the frame-pointer walk.
-[[nodiscard]] static bool CaptureEhFrameCallstack(CrashDetail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
+[[nodiscard]] static b8 CaptureEhFrameCallstack(CrashDetail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
     void* unwoundAddresses[CrashDetail::s_MaxCallstackFrames];
     const int unwoundFrameCount = backtrace(unwoundAddresses, static_cast<int>(CrashDetail::s_MaxCallstackFrames));
     if(unwoundFrameCount <= 0)
@@ -272,7 +272,7 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-[[nodiscard]] static bool MoveFdAboveStdio(int& descriptor)noexcept{
+[[nodiscard]] static b8 MoveFdAboveStdio(int& descriptor)noexcept{
     if(descriptor > STDERR_FILENO)
         return true;
     const int duplicated = fcntl(descriptor, F_DUPFD, s_FirstNonStdioFileDescriptor);
@@ -287,12 +287,12 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
     return true;
 }
 
-[[nodiscard]] static bool SetCloseOnExec(const int descriptor)noexcept{
+[[nodiscard]] static b8 SetCloseOnExec(const int descriptor)noexcept{
     const int flags = fcntl(descriptor, F_GETFD, 0);
     return flags >= 0 && fcntl(descriptor, F_SETFD, flags | FD_CLOEXEC) == 0;
 }
 
-[[nodiscard]] static bool SendAllSocketNoSigpipe(const int descriptor, const void* const data, const usize byteCount)noexcept{
+[[nodiscard]] static b8 SendAllSocketNoSigpipe(const int descriptor, const void* const data, const usize byteCount)noexcept{
     return TransferAllPosix(static_cast<const u8*>(data), byteCount, [descriptor](const u8* const cursor, const usize remaining)noexcept{
         return send(descriptor, cursor, remaining, MSG_NOSIGNAL);
     });
@@ -313,7 +313,7 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
     _exit(s_HandlerExecFailureExitCode);
 }
 
-[[nodiscard]] static bool SilenceChildProcess(int& requestRead, int& ackWrite, int& startupWrite)noexcept{
+[[nodiscard]] static b8 SilenceChildProcess(int& requestRead, int& ackWrite, int& startupWrite)noexcept{
     if(!MoveFdAboveStdio(requestRead) || !MoveFdAboveStdio(ackWrite) || !MoveFdAboveStdio(startupWrite) || !SetCloseOnExec(startupWrite))
         return false;
     if(setsid() < 0)
@@ -401,13 +401,13 @@ static void DrainPendingAcks(const int ackReadFd)noexcept{
     }
 }
 
-static void WaitForOwnedChild(const bool terminateImmediately, pid_t& child, CrashDetail::PlatformCleanupObservations& observations)noexcept{
+static void WaitForOwnedChild(const b8 terminateImmediately, pid_t& child, CrashDetail::PlatformCleanupObservations& observations)noexcept{
     if(child <= 0)
         return;
     constexpr u32 s_WaitPollCount = 300u;
     constexpr int s_WaitPollMilliseconds = 10;
     constexpr u32 s_WaitPhaseCount = 2u;
-    bool terminated = terminateImmediately;
+    b8 terminated = terminateImmediately;
     for(u32 phase = 0u; phase < s_WaitPhaseCount; ++phase){
         if(phase != 0u || terminateImmediately){
             if(kill(child, SIGKILL) != 0 && errno != ESRCH){
@@ -482,7 +482,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 
     // Re-entrancy guard + writer serialization, matching Win32: a fault inside the transport bails, and one faulting thread owns the channel.
     // Async-safe (atomic CAS, no Futex).
-    static thread_local bool s_InTransport = false;
+    static thread_local b8 s_InTransport = false;
     if(s_InTransport)
         return CrashDumpTransportStatus::Failed;
     s_InTransport = true;
@@ -671,7 +671,7 @@ void UninstallPlatformResources(PlatformCleanupObservations& observations)noexce
         g_State.terminateHandlerInstalled = false;
         g_State.previousTerminateHandler = nullptr;
     }
-    bool pending = false;
+    b8 pending = false;
     for(usize remaining = s_MaxCrashSignals; remaining != 0u; --remaining){
         const usize index = remaining - 1u;
         if(!g_State.signalActionInstalled[index])

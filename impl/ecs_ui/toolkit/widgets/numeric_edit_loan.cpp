@@ -24,7 +24,7 @@ void Builder::snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draf
     frame.caret = draft.caret();
 }
 
-bool Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept{
+b8 Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept{
     return
         popupAncestorsVisible() && frame.state && draft.instanceGeneration() == frame.draftGeneration
         && draft.revision() == frame.draftRevision && draft.externalRevision() == frame.draftExternalRevision
@@ -36,7 +36,7 @@ bool Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel
     ;
 }
 
-bool Builder::numericEditMatches(const Item& item)const noexcept{
+b8 Builder::numericEditMatches(const Item& item)const noexcept{
     if(item.integerEdit != s_LayoutNoParent){
         if(item.integerEdit >= m_scope->m_integerEdits.size() || !numericEditFrameMatches(m_scope->m_integerEdits[item.integerEdit]))
             return false;
@@ -48,7 +48,7 @@ bool Builder::numericEditMatches(const Item& item)const noexcept{
     return true;
 }
 
-bool Builder::numericStateAvailable(const EditBoxState& state)const noexcept{
+b8 Builder::numericStateAvailable(const EditBoxState& state)const noexcept{
     for(usize index = 0u; index <= m_popupFrameCount; ++index){
         const BuilderScopeFrame& scope = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
         for(const auto& frame : scope.m_integerEdits){

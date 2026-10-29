@@ -37,7 +37,7 @@ namespace __hidden_ui_gpu_texture_image_validation_tests{
 constexpr AStringView s_VersionedImagePath = "tests/ui/versioned_gpu_image";
 constexpr AStringView s_OverflowImagePath = "tests/ui/overflow_gpu_image";
 
-[[nodiscard]] static bool ValidImageBindings(const DrawSnapshot& snapshot)noexcept{
+[[nodiscard]] static b8 ValidImageBindings(const DrawSnapshot& snapshot)noexcept{
     return GpuRendererState::ValidateGlyphPages(snapshot) && GpuRendererState::ValidateSdfPages(snapshot) && GpuRendererState::ValidateTextureImages(snapshot);
 }
 

@@ -70,7 +70,7 @@ class Client final : public ClientBase<Client, s_ClientName>{
 
 
 private:
-    static bool GlobalInit()noexcept;
+    static b8 GlobalInit()noexcept;
 
 
 public:
@@ -80,13 +80,13 @@ public:
 
 public:
     using ClientBaseType::enqueue;
-    [[nodiscard]] bool enqueueTelemetry(const void* bytes, usize byteCount);
+    [[nodiscard]] b8 enqueueTelemetry(const void* bytes, usize byteCount);
 
 
 protected:
-    bool internalInit(AStringView url);
-    bool internalUpdate();
-    [[nodiscard]] inline bool workerCanExit()const noexcept{
+    b8 internalInit(AStringView url);
+    b8 internalUpdate();
+    [[nodiscard]] inline b8 workerCanExit()const noexcept{
         return !m_hasPendingPayload && !m_messageCount.load(MemoryOrder::acquire) && !m_telemetryCount.load(MemoryOrder::acquire);
     }
 
@@ -104,7 +104,7 @@ protected:
         this->m_semaphore.release();
     }
 
-    inline bool tryDequeueMessage(MessageType& msg){
+    inline b8 tryDequeueMessage(MessageType& msg){
         auto dequeued = this->tryDequeue(msg);
         if(dequeued)
             m_messageCount.fetch_sub(1, MemoryOrder::relaxed);
@@ -118,7 +118,7 @@ private:
     AString<LogArena> m_messageUrl;
     AString<LogArena> m_telemetryUrl;
     ClientPayloadKind::Enum m_pendingPayloadKind;
-    bool m_hasPendingPayload;
+    b8 m_hasPendingPayload;
 
 
 private:
@@ -151,8 +151,8 @@ public:
 
 
 protected:
-    bool internalInit(BasicStringView<tchar> logFileNameBase = {});
-    bool internalUpdate();
+    b8 internalInit(BasicStringView<tchar> logFileNameBase = {});
+    b8 internalUpdate();
 
 
 protected:

@@ -46,7 +46,7 @@ inline constexpr AStringView s_TombstoneCallstackSectionHeader = "\n[tombstone_c
 
 void AppendAndroidTombstoneSummary(Core::Alloc::ScratchArena& arena, const CrashScratchPath& packageDirectory, CrashReportText& outReport){
     AString<Core::Alloc::ScratchArena> tombstone{arena};
-    const bool tombstonePresent = ReadTextFile(packageDirectory / CrashNames::s_AndroidTombstoneFileName, tombstone) && !tombstone.empty();
+    const b8 tombstonePresent = ReadTextFile(packageDirectory / CrashNames::s_AndroidTombstoneFileName, tombstone) && !tombstone.empty();
     if(!tombstonePresent){
         outReport += s_AndroidTombstoneMissingReport;
         return;

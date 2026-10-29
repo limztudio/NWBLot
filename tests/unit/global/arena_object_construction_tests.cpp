@@ -32,7 +32,7 @@ struct ConstructionState{
     usize liveMembers = 0u;
     usize memberDestructors = 0u;
     usize destructionOrder[8u] = {};
-    bool aligned = true;
+    b8 aligned = true;
 };
 
 template<typename Arena>
@@ -109,11 +109,11 @@ private:
 
 struct NestedConstruction{
     GlobalUniquePtr<ConstructionProbe<GlobalArena>> member;
-    bool& destroyed;
+    b8& destroyed;
 
 
 public:
-    NestedConstruction(GlobalArena& arena, ConstructionState& state, bool& destructorCalled)
+    NestedConstruction(GlobalArena& arena, ConstructionState& state, b8& destructorCalled)
         : member(MakeGlobalUnique<ConstructionProbe<GlobalArena>>(arena, arena, state))
         , destroyed(destructorCalled)
     {
@@ -208,7 +208,7 @@ struct PrivateDestructorProbe{
 
 public:
     OwnedMember<Arena> member;
-    bool* destroyed;
+    b8* destroyed;
 
 
 public:
@@ -216,7 +216,7 @@ public:
         : member(argument.arena, argument.state)
         , destroyed(nullptr)
     {}
-    PrivateDestructorProbe(Arena& arena, ConstructionState& state, bool& wasDestroyed)
+    PrivateDestructorProbe(Arena& arena, ConstructionState& state, b8& wasDestroyed)
         : member(arena, state)
         , destroyed(&wasDestroyed)
     {}
@@ -249,15 +249,15 @@ private:
 
 template<typename Arena>
 struct PrivateConstructorProbe{
-    friend PrivateConstructorProbe<Arena>* ::NewArenaObject<PrivateConstructorProbe<Arena>, Arena, bool&>(Arena&, bool&);
+    friend PrivateConstructorProbe<Arena>* ::NewArenaObject<PrivateConstructorProbe<Arena>, Arena, b8&>(Arena&, b8&);
 
 
 public:
-    bool& alive;
+    b8& alive;
 
 
 private:
-    explicit PrivateConstructorProbe(bool& wasConstructed)noexcept
+    explicit PrivateConstructorProbe(b8& wasConstructed)noexcept
         : alive(wasConstructed)
     { alive = true; }
 public:
@@ -271,11 +271,11 @@ struct RawPrivateDestructorProbe{
 
 
 public:
-    bool& destroyed;
+    b8& destroyed;
 
 
 public:
-    explicit RawPrivateDestructorProbe(bool& wasDestroyed)noexcept
+    explicit RawPrivateDestructorProbe(b8& wasDestroyed)noexcept
         : destroyed(wasDestroyed)
     {}
 private:
@@ -407,7 +407,7 @@ void VerifyScalarOwnerReentry(Arena& oldArena, Arena& newArena){
     EXPECT_EQ(newArena.memoryStats().usedBytes, newBefore.usedBytes);
 }
 
-template<typename Arena, bool Empty>
+template<typename Arena, b8 Empty>
 void VerifyArrayOwnerReentry(Arena& oldArena, Arena& newArena){
     const auto oldBefore = oldArena.memoryStats();
     const auto newBefore = newArena.memoryStats();
@@ -562,7 +562,7 @@ TEST(ArenaObjectConstruction, PersistentArrayFailureDestroysOnlyCompletedElement
 TEST(ArenaObjectConstruction, NestedFactorySuccessIsDestroyedWhenOuterConstructionThrows){
     GlobalArena arena(Name("tests/arena_object/nested_constructor_failure"));
     ConstructionState state;
-    bool outerDestroyed = false;
+    b8 outerDestroyed = false;
     const ArenaMemoryStats before = arena.memoryStats();
     EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<NestedConstruction>(arena, arena, state, outerDestroyed)), ConstructionFailure);
     const ArenaMemoryStats after = arena.memoryStats();
@@ -668,8 +668,8 @@ TEST(ArenaObjectConstruction, CanonicalPrivateDestructorsRetainOwningRollbackAnd
     EXPECT_EQ(globalState.memberDestructors, 1u);
     EXPECT_EQ(persistentState.liveMembers, 0u);
     EXPECT_EQ(persistentState.memberDestructors, 1u);
-    bool globalDestroyed = false;
-    bool persistentDestroyed = false;
+    b8 globalDestroyed = false;
+    b8 persistentDestroyed = false;
     {
         auto globalOwner = MakeGlobalUnique<PrivateDestructorProbe<GlobalArena>>(global, global, globalState, globalDestroyed);
         auto persistentOwner = MakePersistentUnique<PrivateDestructorProbe<PersistentArena>>(persistent, persistent, persistentState, persistentDestroyed);
@@ -678,7 +678,7 @@ TEST(ArenaObjectConstruction, CanonicalPrivateDestructorsRetainOwningRollbackAnd
     }
     EXPECT_TRUE(globalDestroyed);
     EXPECT_TRUE(persistentDestroyed);
-    bool rawDestroyed = false;
+    b8 rawDestroyed = false;
     auto* const raw = NewArenaObject<RawPrivateDestructorProbe<GlobalArena>>(global, rawDestroyed);
     ASSERT_NE(raw, nullptr);
     DestroyArenaObject(global, raw);
@@ -718,8 +718,8 @@ TEST(ArenaObjectConstruction, IndividualDeleterFriendRetainsCompletedRollbackAnd
     EXPECT_EQ(globalState.memberDestructors, 2u);
     EXPECT_EQ(persistentState.liveMembers, 0u);
     EXPECT_EQ(persistentState.memberDestructors, 2u);
-    bool globalPrivateAlive = false;
-    bool persistentPrivateAlive = false;
+    b8 globalPrivateAlive = false;
+    b8 persistentPrivateAlive = false;
     {
         auto globalPrivate = MakeGlobalUnique<PrivateConstructorProbe<GlobalArena>>(global, globalPrivateAlive);
         auto persistentPrivate = MakePersistentUnique<PrivateConstructorProbe<PersistentArena>>(persistent, persistentPrivateAlive);

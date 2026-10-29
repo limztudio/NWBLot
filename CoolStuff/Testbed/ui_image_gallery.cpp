@@ -21,7 +21,7 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiImageGallery::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+b8 UiImageGallery::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
     const NWB::Impl::UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<NWB::Impl::UiSubsystem>();
     if(!uiSubsystem || !uiSubsystem->basicSkin.valid())
         return false;
@@ -45,7 +45,7 @@ void UiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, cons
     Builder& ui = context.ui;
     if(!ui.beginPanel("image_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
         return;
-    bool valid = ui.label(s_TitleKey, "Atlas and engine images");
+    b8 valid = ui.label(s_TitleKey, "Atlas and engine images");
     valid = ui.beginRow("samples") && valid;
     ImageOptions sprite;
     sprite.width = { LayoutSizePolicy::Fixed, s_SpriteSize };

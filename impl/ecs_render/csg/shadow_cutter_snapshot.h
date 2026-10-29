@@ -25,7 +25,7 @@ struct CsgShadowReceiverInput{
     Core::ECS::EntityID entity;
     CsgReceiverPass::Enum receiverPass = CsgReceiverPass::Opaque;
     // Leave false when CPU bounds cannot conservatively contain the current deformed receiver.
-    bool boundsValid = false;
+    b8 boundsValid = false;
     Float3U worldMin = Float3U(0.f, 0.f, 0.f);
     Float3U worldMax = Float3U(0.f, 0.f, 0.f);
 };
@@ -49,7 +49,7 @@ struct CsgShadowSnapshot{
     Vector<CsgCutterGpuData, Core::Alloc::GlobalArena> cutters;
     u64 identity = 0u;
     u64 contentIdentity = 0u;
-    bool hasCsg = false;
+    b8 hasCsg = false;
 
 
 public:
@@ -60,7 +60,7 @@ public:
 };
 
 // Receiver order must match the shadow instance table; an empty CSG scene leaves both vectors empty.
-[[nodiscard]] bool BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, Span<const CsgShadowReceiverInput> receivers, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot);
+[[nodiscard]] b8 BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, Span<const CsgShadowReceiverInput> receivers, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

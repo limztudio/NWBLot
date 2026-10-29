@@ -27,11 +27,11 @@ public:
 public:
     void emitTypeCpp(MString& out, const TypeRef& type)const;
     void emitTypeArgListCpp(MString& out, const MVector<TypeArg>& args)const;
-    void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, bool topLevelConst = true)const;
+    void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, b8 topLevelConst = true)const;
     void emitTemplateHeaderCpp(MString& out, const MVector<TemplateParamDecl>& params)const;
-    void emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, bool isDeclarationInClass)const;
+    void emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, b8 isDeclarationInClass)const;
 
-    [[nodiscard]] static bool isSmallValueType(MStringView typeName, const SymbolTable& symbols)noexcept;
+    [[nodiscard]] static b8 isSmallValueType(MStringView typeName, const SymbolTable& symbols)noexcept;
 
 
 private:

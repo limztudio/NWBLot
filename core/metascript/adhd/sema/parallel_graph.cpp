@@ -14,16 +14,16 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParallelGraphValidator::validateMethod(const MethodDecl& method, MVector<ParseError>& errors){
+b8 ParallelGraphValidator::validateMethod(const MethodDecl& method, MVector<ParseError>& errors){
     if(!method.hasBody)
         return true;
 
     return validateBlock(method.body, errors);
 }
 
-bool ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVector<ParseError>& errors){
+b8 ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVector<ParseError>& errors){
     MVector<MStringView> declaredTaskNames(m_arena);
-    bool ok = true;
+    b8 ok = true;
 
     auto validateExprLambdas = [&](auto& self, const Expr* expr) -> void{
         if(!expr)
@@ -77,7 +77,7 @@ bool ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVe
                     continue;
                 }
 
-                bool foundDep = false;
+                b8 foundDep = false;
                 for(const MStringView& existing : declaredTaskNames){
                     if(existing == dep){
                         foundDep = true;
@@ -141,7 +141,7 @@ bool ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVe
                             break;
                         }
                     }
-                    bool foundTask = false;
+                    b8 foundTask = false;
                     for(const MStringView& existing : declaredTaskNames){
                         if(existing == arg->text){
                             foundTask = true;

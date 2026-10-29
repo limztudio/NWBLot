@@ -125,7 +125,7 @@ Expected<Core::GpuTaskId> GpuRendererState::declareStandalone(Core::GpuTaskGraph
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRenderer::renderStandalone(const Core::AcquiredPresentationFrame& frame){
+b8 GpuRenderer::renderStandalone(const Core::AcquiredPresentationFrame& frame){
     if(!GpuRendererState::MatchesAcquired(m_state->m_graphics.acquiredPresentationFrame(), frame))
         return false;
     // Only the exact accepted acquired image is already produced. A rejected claimed scene graph owns its recovery tail.

@@ -85,7 +85,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     const Core::GpuGraphResourceId sceneGeometryDomain = *sceneGeometryDomainResult;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwarePhotonResourceUses{ scratchArena };
-    const bool hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
+    const b8 hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
     const Core::GpuTaskResourceSetUse hardwareTraceGeometrySetUse{ .resourceSet = inputs.hardwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = inputs.traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     constexpr usize s_HardwarePhotonResourceSetUseCapacity = 2u;
@@ -120,7 +120,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     };
 
     // Prepare writes the parity-selected ping-pong target; wavelets own the alternating sequence.
-    constexpr bool s_HardwareCausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
+    constexpr b8 s_HardwareCausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
     const Core::GpuGraphResourceId oddWaveletSource = s_HardwareCausticResolvePrepareWritesHalf ? causticResolveHalf : causticHistory;
     const Core::GpuGraphResourceId oddWaveletDest = s_HardwareCausticResolvePrepareWritesHalf ? causticHistory : causticResolveHalf;
     const Core::GpuTaskResourceUse hardwareResolvePrepareResourceUses[] = {
@@ -158,7 +158,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         hardwarePhotonResourceUses.push_back(ReadUse(resource, state));
         return true;
     };
-    bool optionalResourcesImported =
+    b8 optionalResourcesImported =
         appendOptionalReadBuffer((*inputs.meshViewSnapshot).buffer, Name(RendererFramePipelineDetail::s_MeshViewName), RendererFramePipelineDetail::s_MeshViewLabel, Core::ResourceStates::ConstantBuffer)
         && appendOptionalReadBuffer(
             inputs.rayTracingResources->shadowInstanceMaterialBuffer,
@@ -247,7 +247,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     result.causticIrradianceClearTask = irradianceClearTask;
 
     Core::GpuTaskId causticsDependency = irradianceClearTask;
-    const bool graphOwnsNonTemporalAccumulatorClear = inputs.rayTracingResources->causticTemporalDecay <= 0.f;
+    const b8 graphOwnsNonTemporalAccumulatorClear = inputs.rayTracingResources->causticTemporalDecay <= 0.f;
     if(graphOwnsNonTemporalAccumulatorClear){
         Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
         accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
@@ -276,7 +276,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         result.causticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
         causticsDependency = accumulatorNonTemporalClearTask;
     }
-    const bool graphOwnsAccumulatorBootstrapClear = !inputs.rayTracingResources->causticAccumulatorInitialized && inputs.rayTracingResources->causticTemporalDecay > 0.f;
+    const b8 graphOwnsAccumulatorBootstrapClear = !inputs.rayTracingResources->causticAccumulatorInitialized && inputs.rayTracingResources->causticTemporalDecay > 0.f;
     if(graphOwnsAccumulatorBootstrapClear){
         Core::GpuTaskSchedulingHint accumulatorBootstrapClearScheduling;
         accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -309,7 +309,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         causticsDependency = accumulatorBootstrapClearTask;
     }
 
-    const bool graphOwnsAccumulatorDecay = inputs.rayTracingResources->causticAccumulatorInitialized && inputs.rayTracingResources->causticTemporalDecay > 0.f;
+    const b8 graphOwnsAccumulatorDecay = inputs.rayTracingResources->causticAccumulatorInitialized && inputs.rayTracingResources->causticTemporalDecay > 0.f;
     if(graphOwnsAccumulatorDecay){
         Core::GpuTaskSchedulingHint accumulatorDecayScheduling;
         accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;

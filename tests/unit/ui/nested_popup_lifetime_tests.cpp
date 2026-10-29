@@ -47,24 +47,24 @@ protected:
 
     [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_MenuKey)), s_MenuRowsKey)); }
 
-    [[nodiscard]] bool beginParent(const u64 generation){
+    [[nodiscard]] b8 beginParent(const u64 generation){
         if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()))
             return false;
-        const bool activated = m_builder.button(s_BeforeKey, "Before");
+        const b8 activated = m_builder.button(s_BeforeKey, "Before");
         return !activated;
     }
 
-    [[nodiscard]] bool finishParent(const u64 generation){
-        const bool activated = m_builder.button(s_AfterKey, "After");
+    [[nodiscard]] b8 finishParent(const u64 generation){
+        const b8 activated = m_builder.button(s_AfterKey, "After");
         return !activated && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] bool acceptPlain(const u64 generation){
+    [[nodiscard]] b8 acceptPlain(const u64 generation){
         if(!beginParent(generation))
             return false;
         m_childVisible = m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions());
         if(m_childVisible){
-            const bool activated = m_builder.button("apply", "Child");
+            const b8 activated = m_builder.button("apply", "Child");
             if(activated || !m_builder.endPopup())
                 return false;
         }
@@ -73,34 +73,34 @@ protected:
         return finishParent(generation);
     }
 
-    [[nodiscard]] bool acceptCombo(const u64 generation){
+    [[nodiscard]] b8 acceptCombo(const u64 generation){
         if(!beginParent(generation))
             return false;
         m_result = m_builder.comboBox(s_ComboKey, m_source, m_state, NWB::UiComboTests::Options());
         return m_result.valid && finishParent(generation);
     }
 
-    [[nodiscard]] bool acceptSearch(const u64 generation){
+    [[nodiscard]] b8 acceptSearch(const u64 generation){
         if(!beginParent(generation))
             return false;
         m_searchResult = m_builder.searchComboBox(s_ComboKey, m_searchSource, m_search, Options());
         return m_searchResult.combo.valid && finishParent(generation);
     }
 
-    [[nodiscard]] bool acceptMenu(const u64 generation){
+    [[nodiscard]] b8 acceptMenu(const u64 generation){
         if(!beginParent(generation))
             return false;
-        const bool activated = m_builder.button(s_AnchorKey, "Commands");
+        const b8 activated = m_builder.button(s_AnchorKey, "Commands");
         if(activated)
             return false;
         m_menuResult = m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_menuSource, m_menu);
         return m_menuResult.valid && finishParent(generation);
     }
 
-    [[nodiscard]] bool declareReserved(const u64 generation, const bool overflow){
+    [[nodiscard]] b8 declareReserved(const u64 generation, const b8 overflow){
         if(!beginParent(generation) || !m_builder.comboBox(s_ComboKey, m_source, m_state, NWB::UiComboTests::Options()).valid)
             return false;
-        const bool activated = m_builder.button(s_AnchorKey, "Commands");
+        const b8 activated = m_builder.button(s_AnchorKey, "Commands");
         if(activated || !m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_menuSource, m_menu).valid)
             return false;
         if(!m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()) || !m_builder.comboBox(s_ComboKey, m_source, m_childCombo, NWB::UiComboTests::Options()).valid)
@@ -111,14 +111,14 @@ protected:
         }
         if(overflow)
             return m_builder.beginPopup(s_DeepPopupKey, m_deeper[3u], UiWidgetTests::NestedChildOptions());
-        const bool leafActivated = m_builder.button(s_LeafKey, "Deepest");
+        const b8 leafActivated = m_builder.button(s_LeafKey, "Deepest");
         if(leafActivated)
             return false;
         for(usize index = 0u; index < 4u; ++index){
             if(!m_builder.endPopup())
                 return false;
         }
-        const bool afterActivated = m_builder.button(s_AfterKey, "Parent after");
+        const b8 afterActivated = m_builder.button(s_AfterKey, "Parent after");
         return !afterActivated && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame();
     }
 
@@ -143,7 +143,7 @@ protected:
     ContextMenuState m_menu;
     PopupToolsSource m_menuSource;
     ContextMenuResult m_menuResult;
-    bool m_childVisible = false;
+    b8 m_childVisible = false;
 };
 
 

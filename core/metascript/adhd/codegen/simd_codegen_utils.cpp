@@ -34,7 +34,7 @@ static constexpr const char* s_IntLaneGettersDouble[4] = {
     "::VectorDoubleGetIntW("
 };
 
-[[nodiscard]] constexpr bool IsFloatSimdVectorType(const MStringView simdType)noexcept{
+[[nodiscard]] constexpr b8 IsFloatSimdVectorType(const MStringView simdType)noexcept{
     return simdType == "f32x4"
         || simdType == "f64x2"
         || simdType == "f64x3"
@@ -42,7 +42,7 @@ static constexpr const char* s_IntLaneGettersDouble[4] = {
     ;
 }
 
-[[nodiscard]] constexpr bool TryMapSwizzleCharToLane(const char c, u32& outLane)noexcept{
+[[nodiscard]] constexpr b8 TryMapSwizzleCharToLane(const char c, u32& outLane)noexcept{
     switch(c){
     case 'x':
     case 'r':
@@ -75,7 +75,7 @@ static constexpr const char* s_IntLaneGettersDouble[4] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsRegisterPromotableSimdType(const MStringView simdType)noexcept{
+[[nodiscard]] b8 IsRegisterPromotableSimdType(const MStringView simdType)noexcept{
     return simdType == "f32x4"
         || simdType == "i32x4"
         || simdType == "u32x4"
@@ -92,7 +92,7 @@ static constexpr const char* s_IntLaneGettersDouble[4] = {
     ;
 }
 
-[[nodiscard]] bool IsDoubleSimdType(const MStringView simdType)noexcept{
+[[nodiscard]] b8 IsDoubleSimdType(const MStringView simdType)noexcept{
     return simdType == "f64x2"
         || simdType == "f64x3"
         || simdType == "f64x4"
@@ -104,7 +104,7 @@ static constexpr const char* s_IntLaneGettersDouble[4] = {
     ;
 }
 
-[[nodiscard]] bool IsIntSimdType(const MStringView simdType)noexcept{
+[[nodiscard]] b8 IsIntSimdType(const MStringView simdType)noexcept{
     return simdType == "i32x4"
         || simdType == "u32x4"
         || simdType == "i64x4"
@@ -112,7 +112,7 @@ static constexpr const char* s_IntLaneGettersDouble[4] = {
     ;
 }
 
-[[nodiscard]] bool IsSignedIntSimdType(const MStringView simdType)noexcept{
+[[nodiscard]] b8 IsSignedIntSimdType(const MStringView simdType)noexcept{
     return simdType == "i32x4" || simdType == "i64x4";
 }
 
@@ -123,7 +123,7 @@ static constexpr const char* s_IntLaneGettersDouble[4] = {
     return "u64";
 }
 
-[[nodiscard]] MStringView IntSimdRawWordType(const bool isDouble)noexcept{
+[[nodiscard]] MStringView IntSimdRawWordType(const b8 isDouble)noexcept{
     return isDouble ? "u64" : "u32";
 }
 
@@ -131,7 +131,7 @@ void AppendIntSimdLaneExtract(
     MString& out,
     const MStringView varName,
     const u32 lane,
-    const bool isDouble,
+    const b8 isDouble,
     const MStringView laneType
 ){
     const char* const getter = isDouble
@@ -155,7 +155,7 @@ void AppendIntSimdLaneExtract(
     return 4u;
 }
 
-[[nodiscard]] bool IsUnitFloatLiteral(const Expr& expr)noexcept{
+[[nodiscard]] b8 IsUnitFloatLiteral(const Expr& expr)noexcept{
     if(expr.kind != ExprKind::FloatLiteral && expr.kind != ExprKind::DoubleLiteral)
         return false;
     return expr.text == "1.0f" || expr.text == "1.0" || expr.text == "1.f";
@@ -218,7 +218,7 @@ void AppendIntSimdLaneExtract(
     return {};
 }
 
-[[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(const MStringView callee, const bool isDouble)noexcept{
+[[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(const MStringView callee, const b8 isDouble)noexcept{
     if(callee == "abs") return isDouble ? "::VectorDoubleAbs(" : "::VectorAbs(";
     if(callee == "floor") return isDouble ? "::VectorDoubleFloor(" : "::VectorFloor(";
     if(callee == "ceil") return isDouble ? "::VectorDoubleCeiling(" : "::VectorCeiling(";
@@ -233,7 +233,7 @@ void AppendIntSimdLaneExtract(
 
 void AppendSimdLaneCountIntrinsicPrefix(
     MString& out,
-    const bool isDouble,
+    const b8 isDouble,
     const u32 effLanes,
     const MStringView suffix
 ){
@@ -243,7 +243,7 @@ void AppendSimdLaneCountIntrinsicPrefix(
     out.push_back('(');
 }
 
-[[nodiscard]] bool IsSimdAssignmentOp(const TokenType::Enum op)noexcept{
+[[nodiscard]] b8 IsSimdAssignmentOp(const TokenType::Enum op)noexcept{
     switch(op){
     case TokenType::Equal:
     case TokenType::PlusEqual:
@@ -298,7 +298,7 @@ void AppendSimdLaneCountIntrinsicPrefix(
     return SimdBinaryScalarOpSymbol(MapSimdAssignToBinaryOp(op));
 }
 
-[[nodiscard]] bool IsSingleSwizzleLane(const MStringView text, u32& outLane)noexcept{
+[[nodiscard]] b8 IsSingleSwizzleLane(const MStringView text, u32& outLane)noexcept{
     return text.size() == 1u && __hidden_adhd_simd_codegen_utils::TryMapSwizzleCharToLane(text[0], outLane);
 }
 
@@ -308,7 +308,7 @@ void AppendSimdLaneCountIntrinsicPrefix(
     return lane;
 }
 
-[[nodiscard]] bool IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB)noexcept{
+[[nodiscard]] b8 IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB)noexcept{
     if(!expr || expr->kind != ExprKind::Binary || expr->op != TokenType::Star || !expr->lhs || !expr->rhs)
         return false;
     if(expr->resolvedSimdType.empty() || !__hidden_adhd_simd_codegen_utils::IsFloatSimdVectorType(expr->resolvedSimdType))
@@ -318,7 +318,7 @@ void AppendSimdLaneCountIntrinsicPrefix(
     return true;
 }
 
-[[nodiscard]] bool ExprContainsSimdMath(const Expr* expr, const SymbolTable& symbols)noexcept{
+[[nodiscard]] b8 ExprContainsSimdMath(const Expr* expr, const SymbolTable& symbols)noexcept{
     if(!expr)
         return false;
 

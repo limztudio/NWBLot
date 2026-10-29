@@ -55,11 +55,11 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
         return MakeUnexpected(Failure{});
 
     DeferredFrameTargets& deferredTargets = inputs.targets;
-    const bool useLaggedLightingHistory = inputs.useLaggedLightingHistory;
+    const b8 useLaggedLightingHistory = inputs.useLaggedLightingHistory;
     const DeferredLaggedLightingHistoryResources* const history = inputs.history;
     if(useLaggedLightingHistory && !history)
         return MakeUnexpected(Failure{});
-    const bool hasTransparentRenderers = inputs.hasTransparentRenderers;
+    const b8 hasTransparentRenderers = inputs.hasTransparentRenderers;
 
     // Live Lighting joins current producers via graph edges; lagged Lighting reads history.
     const Core::GpuTaskId hardwareLightingDependencies[] = { inputs.shadowVisibilityTask, inputs.surfelGiTask, inputs.avboitFinalTask, inputs.hardwareCausticsTask, };
@@ -69,7 +69,7 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
     constexpr usize s_TransparentLaggedLightingDependencyCount = 2u;
     const usize laggedLightingDependencyCount = hasTransparentRenderers ? s_TransparentLaggedLightingDependencyCount : 1u;
     const Core::GpuTaskId laggedLightingSelectorUploadDependencies[] = { inputs.graphicsPrefixTask };
-    const bool laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !history->slotsUploaded;
+    const b8 laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !history->slotsUploaded;
     Core::GpuTaskId historySlotsUploadTask;
     if(laggedBindlessSlotsGraphOwned){
         const auto laggedBindlessSlotsBlobResult = m_graph.copyUploadData(&history->slots, sizeof(history->slots), alignof(DeferredBindlessResourceSlots));

@@ -36,7 +36,7 @@ public:
 
 
 public:
-    virtual bool initialize() = 0;
+    virtual b8 initialize() = 0;
     virtual void finalize()noexcept = 0;
 };
 
@@ -82,7 +82,7 @@ private:
 
 
 public:
-    inline bool initialize(){
+    inline b8 initialize(){
         m_initializedItemCount = 0u;
         usize initializedItemCount = 0u;
         ScopeExit rollback([&]()noexcept{ finalizeInitialized(initializedItemCount); });
@@ -101,7 +101,7 @@ public:
         m_initializedItemCount = 0u;
     }
 
-    [[nodiscard]] inline bool acquire(){
+    [[nodiscard]] inline b8 acquire(){
         if(m_activeCount > 0u){
             ++m_activeCount;
             return true;
@@ -155,7 +155,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize(){
+    [[nodiscard]] b8 initialize(){
         if(m_initializer)
             return true;
 
@@ -213,9 +213,9 @@ private:
 
 
 public:
-    inline bool isActive()const noexcept{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
+    inline b8 isActive()const noexcept{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
 
-    inline void setActive(bool value)noexcept{ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
+    inline void setActive(b8 value)noexcept{ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
 
     inline HINSTANCE instance()const noexcept{ return static_cast<HINSTANCE>(m_data.ptr[s_InstancePointerSlot]); }
 
@@ -249,9 +249,9 @@ private:
 
 
 public:
-    inline bool isActive()const noexcept{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
+    inline b8 isActive()const noexcept{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
 
-    inline void setActive(bool value)noexcept{ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
+    inline void setActive(b8 value)noexcept{ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
 
     inline LinuxFrameBackend::Enum backend()const noexcept{ return static_cast<LinuxFrameBackend::Enum>(m_data.u8[s_BackendByteIndex]); }
 

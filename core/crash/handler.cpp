@@ -45,14 +45,14 @@ inline constexpr int s_ProcessFailureExitCode = -1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static CrashDetail::CrashAck MakeAck(const CrashDetail::CrashRequest& request, const bool packageWritten)noexcept{
+static CrashDetail::CrashAck MakeAck(const CrashDetail::CrashRequest& request, const b8 packageWritten)noexcept{
     CrashDetail::CrashAck ack;
     ack.packageWritten = packageWritten ? 1u : 0u;
     CopyFixedBuffer(ack.crashId, request.crashId);
     return ack;
 }
 
-[[nodiscard]] static bool SilenceProcess()noexcept{
+[[nodiscard]] static b8 SilenceProcess()noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #if defined(_MSC_VER) && defined(NWB_DEBUG)
@@ -110,7 +110,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         if(!CrashDetail::IsCurrentCrashRequest(request))
             break;
 
-        const bool packageWritten = CrashDetail::WriteCrashPackage(request);
+        const b8 packageWritten = CrashDetail::WriteCrashPackage(request);
         if(ackWriteHandle != INVALID_HANDLE_VALUE){
             const CrashDetail::CrashAck ack = __hidden_crash_handler::MakeAck(request, packageWritten);
             if(!WriteAllWin32Handle(ackWriteHandle, &ack, sizeof(ack)))
@@ -146,7 +146,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         if(!CrashDetail::IsCurrentCrashRequest(request))
             break;
 
-        const bool packageWritten = CrashDetail::WriteCrashPackage(request);
+        const b8 packageWritten = CrashDetail::WriteCrashPackage(request);
         if(ackWriteFd >= 0){
             const CrashDetail::CrashAck ack = __hidden_crash_handler::MakeAck(request, packageWritten);
             if(!WriteAllFileDescriptor(ackWriteFd, &ack, sizeof(ack)))

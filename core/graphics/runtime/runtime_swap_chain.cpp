@@ -62,7 +62,7 @@ Expected<SwapChainTransitionTicket> GraphicsRuntime::backBufferResizing(){
     return Move(*ticket);
 }
 
-bool GraphicsRuntime::backBufferResized(){
+b8 GraphicsRuntime::backBufferResized(){
     for(const auto renderPass : m_renderPasses)
         renderPass->backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
 
@@ -97,7 +97,7 @@ void GraphicsRuntime::displayScaleChanged(){
         renderPass->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
 
-bool GraphicsRuntime::resizeBackBuffer(const u32 width, const u32 height, const bool vsyncEnabled){
+b8 GraphicsRuntime::resizeBackBuffer(const u32 width, const u32 height, const b8 vsyncEnabled){
     auto transitionTicket = backBufferResizing();
     if(!transitionTicket)
         return false;

@@ -130,7 +130,7 @@ NWB_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)no
         return VectorDoubleReciprocalSqrt(VectorDouble4LengthSq(value));
 }
 
-template<u32 Dimension, bool Estimate>
+template<u32 Dimension, b8 Estimate>
 NWB_NOINLINE SIMDVectorDouble CurrentReciprocalLength(SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Dimension == 2u){

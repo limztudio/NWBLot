@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 
 
 // Uses the source buffer's caller-owned arena for native validation allocations.
-[[nodiscard]] bool ValidateFontSource(const Core::Assets::AssetBytes& bytes, u32 faceIndex);
+[[nodiscard]] b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, u32 faceIndex);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

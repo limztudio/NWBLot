@@ -25,7 +25,7 @@
 #if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID) || defined(NWB_PLATFORM_APPLE) || defined(NWB_PLATFORM_UNIX)
 template<typename PointerT, typename OperationT>
     requires((IsSame_V<PointerT, u8*> || IsSame_V<PointerT, const u8*>) && IsSame_V<decltype(DeclVal<OperationT&>()(DeclVal<PointerT&>(), DeclVal<usize&>())), ssize_t>)
-[[nodiscard]] inline bool TransferAllPosix(PointerT cursor, const usize byteCount, OperationT operation)noexcept(noexcept(DeclVal<OperationT&>()(DeclVal<PointerT&>(), DeclVal<usize&>())) && IsNothrowDestructible_V<OperationT>){
+[[nodiscard]] inline b8 TransferAllPosix(PointerT cursor, const usize byteCount, OperationT operation)noexcept(noexcept(DeclVal<OperationT&>()(DeclVal<PointerT&>(), DeclVal<usize&>())) && IsNothrowDestructible_V<OperationT>){
     usize remaining = byteCount;
     while(remaining > 0u){
         const ssize_t bytesTransferred = operation(cursor, remaining);
@@ -43,13 +43,13 @@ template<typename PointerT, typename OperationT>
     return true;
 }
 
-[[nodiscard]] inline bool ReadAllFileDescriptor(const int fd, void* const data, const usize byteCount)noexcept{
+[[nodiscard]] inline b8 ReadAllFileDescriptor(const int fd, void* const data, const usize byteCount)noexcept{
     return TransferAllPosix(static_cast<u8*>(data), byteCount, [fd](u8* const cursor, const usize remaining)noexcept{
         return read(fd, cursor, remaining);
     });
 }
 
-[[nodiscard]] inline bool WriteAllFileDescriptor(const int fd, const void* const data, const usize byteCount)noexcept{
+[[nodiscard]] inline b8 WriteAllFileDescriptor(const int fd, const void* const data, const usize byteCount)noexcept{
     return TransferAllPosix(static_cast<const u8*>(data), byteCount, [fd](const u8* const cursor, const usize remaining)noexcept{
         return write(fd, cursor, remaining);
     });
@@ -61,7 +61,7 @@ template<typename PointerT, typename OperationT>
 
 
 #if defined(NWB_PLATFORM_WINDOWS)
-[[nodiscard]] inline bool ReadAllWin32Handle(const HANDLE handle, void* const data, const usize byteCount)noexcept{
+[[nodiscard]] inline b8 ReadAllWin32Handle(const HANDLE handle, void* const data, const usize byteCount)noexcept{
     u8* cursor = static_cast<u8*>(data);
     usize remaining = byteCount;
     while(remaining > 0u){
@@ -76,7 +76,7 @@ template<typename PointerT, typename OperationT>
     return true;
 }
 
-[[nodiscard]] inline bool WriteAllWin32Handle(const HANDLE handle, const void* const data, const usize byteCount)noexcept{
+[[nodiscard]] inline b8 WriteAllWin32Handle(const HANDLE handle, const void* const data, const usize byteCount)noexcept{
     const u8* cursor = static_cast<const u8*>(data);
     usize remaining = byteCount;
     while(remaining > 0u){

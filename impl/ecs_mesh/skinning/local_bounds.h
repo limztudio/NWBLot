@@ -43,7 +43,7 @@ NWB_IMPL_BEGIN
 struct MeshSkinningRuntimeInstance;
 
 // Replacement is atomic; no uninitialized bounds become visible through the runtime mesh provider.
-[[nodiscard]] bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSkinningRuntimeInstance& instance);
+[[nodiscard]] b8 CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSkinningRuntimeInstance& instance);
 
 // Graph declarations retain resources; this snapshot keeps only the reduction dispatch contract.
 struct MeshSkinningLocalBoundsDispatch{
@@ -70,7 +70,7 @@ struct MeshSkinningLocalBoundsTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 

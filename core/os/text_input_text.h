@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 
 
 [[nodiscard]] TextInputAdmission::Enum ValidateTextInputUtf8(AStringView text, usize maxBytes)noexcept;
-[[nodiscard]] bool IsTextInputCaretRectValid(TextInputRect rect)noexcept;
+[[nodiscard]] b8 IsTextInputCaretRectValid(TextInputRect rect)noexcept;
 [[nodiscard]] Expected<usize, TextInputAdmission::Enum> EncodeTextInputCodePoint(u32 codePoint, char (&bytes)[s_Utf8MaxSequenceBytes])noexcept;
 
 

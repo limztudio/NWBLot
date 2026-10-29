@@ -34,7 +34,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         for(const auto& use : uses){
             if(!use.resource.valid())
                 return false;

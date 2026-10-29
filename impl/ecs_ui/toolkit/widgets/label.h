@@ -26,7 +26,7 @@ public:
 public:
     [[nodiscard]] TextLayoutStatus::Enum setText(const ShapeRequest& request);
     [[nodiscard]] Expected<Rect> measure(TextService& text, const DisplayMetrics& display);
-    [[nodiscard]] bool paint(TextService& text, PaintBuilder& paint, const Rect& bounds, const Color& color = {});
+    [[nodiscard]] b8 paint(TextService& text, PaintBuilder& paint, const Rect& bounds, const Color& color = {});
     [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }
 
 
@@ -39,7 +39,7 @@ private:
     f32 m_fontSize = s_TextDefaultFontSize;
     u32 m_scriptTag = s_TextDefaultScriptTag;
     TextDirection::Enum m_direction = TextDirection::LeftToRight;
-    bool m_dirty = true;
+    b8 m_dirty = true;
 };
 
 

@@ -79,29 +79,29 @@ public:
 
 
 public:
-    [[nodiscard]] bool shouldClearTargets(bool hasTransparentRenderers)const noexcept;
-    [[nodiscard]] bool captureTargetClearState()const noexcept;
-    void restoreTargetClearState(bool targetsNeedClear)noexcept;
-    void markFrameTargetUsage(bool hasTransparentRenderers)noexcept;
+    [[nodiscard]] b8 shouldClearTargets(b8 hasTransparentRenderers)const noexcept;
+    [[nodiscard]] b8 captureTargetClearState()const noexcept;
+    void restoreTargetClearState(b8 targetsNeedClear)noexcept;
+    void markFrameTargetUsage(b8 hasTransparentRenderers)noexcept;
     void invalidateResources()noexcept;
 
 public:
     // Host owns the graph artifact; AVBOIT owns its stage identifiers; users see the stage boundary.
     void resetTaskGraphStage()noexcept;
     [[nodiscard]] RendererAvboitTaskGraphStageState& taskGraphStage()noexcept{ return m_taskGraphStage; }
-    [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledGraph, bool clearTargets, bool hasTransparentRenderers)const noexcept;
-    [[nodiscard]] bool appendTaskGraphTimingTickets(const RendererAvboitTaskGraphValidation& validation, usize bindingCapacity, RendererAvboitTaskGraphTimingTickets& timingTickets, Core::GpuTaskGraphTaskTimingTicket* bindings, usize& bindingCount)const;
+    [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledGraph, b8 clearTargets, b8 hasTransparentRenderers)const noexcept;
+    [[nodiscard]] b8 appendTaskGraphTimingTickets(const RendererAvboitTaskGraphValidation& validation, usize bindingCapacity, RendererAvboitTaskGraphTimingTickets& timingTickets, Core::GpuTaskGraphTaskTimingTicket* bindings, usize& bindingCount)const;
 
 
 public:
-    [[nodiscard]] bool createAvboitSampler();
-    [[nodiscard]] bool createAvboitResources();
-    [[nodiscard]] bool createAvboitPipelines();
+    [[nodiscard]] b8 createAvboitSampler();
+    [[nodiscard]] b8 createAvboitResources();
+    [[nodiscard]] b8 createAvboitPipelines();
     void resetAvboitFrameTargets(AvboitFrameTargets& targets);
-    [[nodiscard]] bool createAvboitFrameTargets(DeferredFrameTargets& createdTargets);
-    [[nodiscard]] bool registerAvboitFrameTargetDescriptors(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets);
+    [[nodiscard]] b8 createAvboitFrameTargets(DeferredFrameTargets& createdTargets);
+    [[nodiscard]] b8 registerAvboitFrameTargetDescriptors(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets);
     [[nodiscard]] Core::Sampler& linearSampler()const noexcept;
-    [[nodiscard]] bool prepareAvboitPassResources(Core::Alloc::ScratchArena& scratchArena, const CsgFrameState& csgFrameState, DeferredFrameTargets& targets);
+    [[nodiscard]] b8 prepareAvboitPassResources(Core::Alloc::ScratchArena& scratchArena, const CsgFrameState& csgFrameState, DeferredFrameTargets& targets);
     void renderAvboitTransparentCsgIntervals(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -111,7 +111,7 @@ public:
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
         usize materialTypedByteCount,
-        bool materialGeometryStatesGraphOwned,
+        b8 materialGeometryStatesGraphOwned,
         Optional<Core::GpuTimingMeasure>& intervalTiming
     );
     void renderAvboitOccupancyPass(
@@ -123,12 +123,12 @@ public:
         const ECSRenderDetail::MeshFrameBindingSnapshot& preparedOccupancyFrameBindings,
         usize preparedOccupancyInstanceCount,
         usize preparedOccupancyMaterialTypedByteCount,
-        bool occupancyMaterialFrameStatesGraphOwned = false,
-        bool occupancyMaterialGeometryStatesGraphOwned = false,
+        b8 occupancyMaterialFrameStatesGraphOwned = false,
+        b8 occupancyMaterialGeometryStatesGraphOwned = false,
         // Graph may generate alias-free vertices; shared/direct paths keep local work.
-        bool occupancyComputeEmulationOutputStatesGraphOwned = false,
+        b8 occupancyComputeEmulationOutputStatesGraphOwned = false,
         // A frozen CSG-only producer may own this handoff; keep it separate.
-        bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false,
+        b8 occupancyCsgComputeEmulationOutputStatesGraphOwned = false, b8 generatedGeometryReused = false,
         Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr
     );
     void renderAvboitExtinctionPass(
@@ -140,11 +140,11 @@ public:
         const ECSRenderDetail::MeshFrameBindingSnapshot& preparedExtinctionFrameBindings,
         usize preparedExtinctionInstanceCount,
         usize preparedExtinctionMaterialTypedByteCount,
-        bool extinctionMaterialFrameStatesGraphOwned = false,
-        bool extinctionMaterialGeometryStatesGraphOwned = false,
-        bool extinctionComputeEmulationOutputStatesGraphOwned = false,
+        b8 extinctionMaterialFrameStatesGraphOwned = false,
+        b8 extinctionMaterialGeometryStatesGraphOwned = false,
+        b8 extinctionComputeEmulationOutputStatesGraphOwned = false,
         // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
-        bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false,
+        b8 extinctionCsgComputeEmulationOutputStatesGraphOwned = false, b8 generatedGeometryReused = false,
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr
     );
     void renderAvboitAccumulatePass(
@@ -156,15 +156,15 @@ public:
         const ECSRenderDetail::MeshFrameBindingSnapshot& preparedAccumulationFrameBindings,
         usize preparedAccumulationInstanceCount,
         usize preparedAccumulationMaterialTypedByteCount,
-        bool accumulationMaterialFrameStatesGraphOwned = false,
-        bool accumulationMaterialGeometryStatesGraphOwned = false,
-        bool accumulationComputeEmulationOutputStatesGraphOwned = false,
+        b8 accumulationMaterialFrameStatesGraphOwned = false,
+        b8 accumulationMaterialGeometryStatesGraphOwned = false,
+        b8 accumulationComputeEmulationOutputStatesGraphOwned = false,
         // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
-        bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false, bool generatedGeometryReused = false,
+        b8 accumulationCsgComputeEmulationOutputStatesGraphOwned = false, b8 generatedGeometryReused = false,
         Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr
     );
-    void dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets, Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution, bool* timingRecorded = nullptr);
-    void dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets, Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution, bool* timingRecorded = nullptr);
+    void dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets, Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution, b8* timingRecorded = nullptr);
+    void dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets, Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution, b8* timingRecorded = nullptr);
 
 
 private:

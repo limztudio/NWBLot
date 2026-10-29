@@ -35,7 +35,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     const auto widget = m_context.declare(stableKey, WidgetKind::VirtualList);
     if(!widget)
         return result;
-    const bool previouslyFocused = m_context.input().focus() == (*widget)->id;
+    const b8 previouslyFocused = m_context.input().focus() == (*widget)->id;
     const u64 previousSelection = state.selectedKey();
     if(!ListBehavior::Reconcile(state, source)){
         m_context.fail();
@@ -56,9 +56,9 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     }
     const WidgetId thumb = *thumbResult;
     auto gesture = m_context.takePartPointerGesture(**widget, thumb, options.enabled);
-    bool haveGesture = gesture && gesture->control == token;
+    b8 haveGesture = gesture && gesture->control == token;
     auto action = m_context.takeControlAction(**widget, options.enabled, token);
-    bool haveAction = action.has_value();
+    b8 haveAction = action.has_value();
     while(haveGesture || haveAction){
         if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
             if(!applyListGesture(state, *gesture)){
@@ -149,7 +149,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     return result;
 }
 
-bool Builder::prepareListMetrics(ListFrame& frame){
+b8 Builder::prepareListMetrics(ListFrame& frame){
     if(!listMatches(frame) || !m_skin)
         return false;
     const auto metrics = SelectablePainter::Measure(*m_skin, frame.style.row);
@@ -204,7 +204,7 @@ bool Builder::prepareListMetrics(ListFrame& frame){
     return listMatches(frame);
 }
 
-bool Builder::applyListGesture(ListState& state, const PointerGesture& gesture)noexcept{
+b8 Builder::applyListGesture(ListState& state, const PointerGesture& gesture)noexcept{
     const SIMDVectorDouble travelValue = VectorDoubleSubtract(VectorDoubleReplicate(static_cast<f64>(gesture.referenceRectangle.height)), VectorDoubleReplicate(static_cast<f64>(gesture.targetRectangle.height)));
     const f64 travel = VectorDoubleGetX(travelValue);
     if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)

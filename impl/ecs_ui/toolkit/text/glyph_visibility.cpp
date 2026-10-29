@@ -35,11 +35,11 @@ inline constexpr f64 s_HalfPixel = 0.5;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidLocation(const PlacedGlyph& glyph, const Point& topLeft)noexcept{
+[[nodiscard]] static b8 ValidLocation(const PlacedGlyph& glyph, const Point& topLeft)noexcept{
     return IsFinite(glyph.position.x) && IsFinite(glyph.position.y) && IsFinite(topLeft.x) && IsFinite(topLeft.y);
 }
 
-[[nodiscard]] static bool ValidFontSize(const f32 fontSize)noexcept{
+[[nodiscard]] static b8 ValidFontSize(const f32 fontSize)noexcept{
     return IsFinite(fontSize) && fontSize >= 1.0f / s_TextFixedPointScale && fontSize <= s_TextMaxFontSize;
 }
 

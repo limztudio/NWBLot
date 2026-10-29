@@ -26,7 +26,7 @@ namespace TaskGraphTestUtils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool CaptureAllBuiltinCommandIrRecords(Graphics::GpuCommandIrCapture& capture){
+[[nodiscard]] b8 CaptureAllBuiltinCommandIrRecords(Graphics::GpuCommandIrCapture& capture){
     Graphics::TextureSlice sourceSlice;
     sourceSlice.setOrigin(1u, 2u, 3u).setSize(4u, 5u, 6u).setMipLevel(7u).setArraySlice(8u);
     Graphics::TextureSlice destinationSlice;

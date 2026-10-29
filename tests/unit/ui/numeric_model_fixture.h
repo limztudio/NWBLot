@@ -84,8 +84,8 @@ private:
     u64 m_compositionGeneration = 0u;
     usize m_anchor = 0u;
     usize m_caret = 0u;
-    bool m_undo = false;
-    bool m_redo = false;
+    b8 m_undo = false;
+    b8 m_redo = false;
 };
 
 template<typename Model>
@@ -102,7 +102,7 @@ protected:
     Model m_model;
 };
 
-inline void ExpectRejected(const NumericEditResult& result, const bool restored = false){
+inline void ExpectRejected(const NumericEditResult& result, const b8 restored = false){
     EXPECT_TRUE(result.valid);
     EXPECT_TRUE(result.rejected);
     EXPECT_FALSE(result.committed);

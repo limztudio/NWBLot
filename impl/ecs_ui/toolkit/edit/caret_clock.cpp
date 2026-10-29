@@ -18,8 +18,8 @@ NWB_IMPL_UI_BEGIN
 
 
 f64 AdvanceCaretPhase(const f64 phase, const f64 deltaSeconds)noexcept{
-    const bool validPhase = IsFinite(phase) && phase > 0.0;
-    const bool validDelta = IsFinite(deltaSeconds) && deltaSeconds > 0.0;
+    const b8 validPhase = IsFinite(phase) && phase > 0.0;
+    const b8 validDelta = IsFinite(deltaSeconds) && deltaSeconds > 0.0;
     const SIMDVectorDouble one = VectorDoubleSplatOne();
     // Lanes are phase and delta. Bad inputs become zero, so only finite values >= 0 reach the wrap.
     // For those, x - Truncate(x) is the exact fraction, the same as FMod(x, 1.0), and whole numbers give +0.

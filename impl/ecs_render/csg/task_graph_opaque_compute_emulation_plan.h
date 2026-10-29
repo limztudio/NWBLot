@@ -47,7 +47,7 @@ public:
     ReceiverRangeVector receiverRanges;
     CutterVector cutters;
     CsgFrameWorkRegion workRegion;
-    bool captured = false;
+    b8 captured = false;
 
 
 public:
@@ -81,7 +81,7 @@ public:
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const MaterialPassDrawItemsView& sourceRegularDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const MaterialPassDrawItemsView& sourceRegularDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(receiverSurfaceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
             return false;
@@ -136,7 +136,7 @@ public:
         return captured;
     }
 
-    [[nodiscard]] bool matches(Core::Alloc::ScratchArena& scratchArena)const{
+    [[nodiscard]] b8 matches(Core::Alloc::ScratchArena& scratchArena)const{
         if(!captured || outputBuffers.size() != drawItems.size() || outputLayouts.size() != drawItems.size() || regularOutputBuffers.size() != regularDrawItems.size() || regularOutputLayouts.size() != regularDrawItems.size())
             return false;
         MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> receiverOutputs(scratchArena);
@@ -195,7 +195,7 @@ public:
     ReceiverRangeVector receiverRanges;
     CutterVector cutters;
     CsgFrameWorkRegion workRegion;
-    bool captured = false;
+    b8 captured = false;
 
 
 public:
@@ -225,7 +225,7 @@ public:
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItemsView& sourceDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(sourceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
             return false;
@@ -247,7 +247,7 @@ public:
         return captured;
     }
 
-    [[nodiscard]] bool matches()const noexcept{
+    [[nodiscard]] b8 matches()const noexcept{
         return MatchesRetainedGeneratedGeometryOutputs(captured, drawItems, outputBuffers, outputLayouts, outputHeapSlots);
     }
 

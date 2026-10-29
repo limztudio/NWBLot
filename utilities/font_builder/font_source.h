@@ -23,7 +23,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 class FontSource final : NoCopy{
     friend Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options);
-    friend bool ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload);
+    friend b8 ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload);
 
 
 private:
@@ -38,7 +38,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool open(const BakeOptions& options, Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
+    [[nodiscard]] b8 open(const BakeOptions& options, Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
 
 
 private:
@@ -49,7 +49,7 @@ private:
 };
 
 [[nodiscard]] Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options);
-[[nodiscard]] bool ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload);
+[[nodiscard]] b8 ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -266,7 +266,7 @@ struct CrashAck{
 
 // This fixed-size native protocol is shared only by the application and its same-build handler.
 // Native context admission does not provide mixed-binary or cross-architecture message framing.
-[[nodiscard]] inline bool IsCurrentCrashRequest(const CrashRequest& request)noexcept{
+[[nodiscard]] inline b8 IsCurrentCrashRequest(const CrashRequest& request)noexcept{
     if(request.magic != s_RequestMagic || request.version != s_RequestVersion)
         return false;
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -286,7 +286,7 @@ struct CrashAck{
 #endif
 }
 
-[[nodiscard]] inline bool CrashAckMatchesRequest(const CrashAck& ack, const CrashRequest& request)noexcept{
+[[nodiscard]] inline b8 CrashAckMatchesRequest(const CrashAck& ack, const CrashRequest& request)noexcept{
     return ack.magic == s_AckMagic && ack.version == s_RequestVersion && AStringView(ack.crashId) == AStringView(request.crashId);
 }
 
@@ -381,15 +381,15 @@ struct CrashState{
     stack_t previousSignalStack = {};
     struct sigaction previousSignalActions[s_MaxCrashSignals] = {};
     int installedSignals[s_MaxCrashSignals] = {};
-    bool signalActionInstalled[s_MaxCrashSignals] = {};
-    bool signalStackInstalled = false;
+    b8 signalActionInstalled[s_MaxCrashSignals] = {};
+    b8 signalStackInstalled = false;
     ThreadId signalStackOwner{};
 #elif defined(NWB_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
     struct sigaction previousSignalActions[s_MaxCrashSignals] = {};
     int installedSignals[s_MaxCrashSignals] = {};
-    bool signalActionInstalled[s_MaxCrashSignals] = {};
-    bool signalStackInstalled = false;
+    b8 signalActionInstalled[s_MaxCrashSignals] = {};
+    b8 signalStackInstalled = false;
     ThreadId signalStackOwner{};
 #endif
 
@@ -421,13 +421,13 @@ struct CrashState{
     char applicationName[s_MaxShortText] = {};
     char versionText[s_MaxShortText] = {};
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
-    bool installed = false;
-    bool handlerStarted = false;
-    bool platformRestorePending = false;
-    bool terminateHandlerInstalled = false;
+    b8 installed = false;
+    b8 handlerStarted = false;
+    b8 platformRestorePending = false;
+    b8 terminateHandlerInstalled = false;
 
 #if defined(NWB_PLATFORM_WINDOWS)
-    bool exceptionFilterInstalled = false;
+    b8 exceptionFilterInstalled = false;
 #endif
 };
 
@@ -474,7 +474,7 @@ template<typename ArenaT>
 void PublishCrashStateSnapshot()noexcept;
 void SnapshotCrashState(CrashRequest& outRequest, CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
 void SuppressNextPlatformCrashCapture()noexcept;
-[[nodiscard]] bool TryConsumeSuppressedPlatformCrashCapture()noexcept;
+[[nodiscard]] b8 TryConsumeSuppressedPlatformCrashCapture()noexcept;
 void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpContextStorage& storage)noexcept;
 [[nodiscard]] CrashRequest BuildCrashDumpRequest(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options)noexcept;
 [[nodiscard]] CrashDumpResult RequestCrashDump(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options);

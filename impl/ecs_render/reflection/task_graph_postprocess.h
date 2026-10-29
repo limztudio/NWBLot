@@ -27,7 +27,7 @@ namespace RendererTaskGraphDetail{
     Core::GpuTaskGraph& graph,
     const Core::TextureHandle& texture,
     AStringView resourceLabel = "Reflection Output",
-    bool firstWrite = true
+    b8 firstWrite = true
 );
 [[nodiscard]] Expected<Core::GpuGraphResourceId> ImportReflectionBuffer(Core::GpuTaskGraph& graph, const Core::BufferHandle& buffer);
 [[nodiscard]] Core::GpuTaskDesc ReflectionTaskDesc(Name identity, AStringView label, const Core::GpuTaskId& dependency)noexcept;
@@ -55,7 +55,7 @@ namespace RendererTaskGraphDetail{
     Core::GpuTaskGraph& graph,
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,
-    bool feedbackReserved,
+    b8 feedbackReserved,
     Core::GpuTaskId dependency,
     ReflectionGraphResult& result
 );

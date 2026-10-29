@@ -74,7 +74,7 @@ public:
     template<typename CookEntryT>
     [[nodiscard]] static MeshletCookMetrics BuildMeshletCookMetrics(const CookEntryT& entry)noexcept(
         noexcept(static_cast<u32>(entry.meshlets.size()))
-        && noexcept(static_cast<bool>(DeclVal<usize&>() < entry.meshlets.size()))
+        && noexcept(static_cast<b8>(DeclVal<usize&>() < entry.meshlets.size()))
         && noexcept(DeclVal<void(*)(const MeshletDesc&)noexcept>()(entry.meshlets[DeclVal<usize&>()]))
         && noexcept(DeclVal<void(*)(const MeshletBounds&)noexcept>()(entry.meshletBounds[DeclVal<usize&>()]))
     );
@@ -151,7 +151,7 @@ usize MeshletCookMetricsReport::EstimateCommonMeshletRuntimeBytes(const CookEntr
 template<typename CookEntryT>
 MeshletCookMetrics MeshletCookMetricsReport::BuildMeshletCookMetrics(const CookEntryT& entry)noexcept(
     noexcept(static_cast<u32>(entry.meshlets.size()))
-    && noexcept(static_cast<bool>(DeclVal<usize&>() < entry.meshlets.size()))
+    && noexcept(static_cast<b8>(DeclVal<usize&>() < entry.meshlets.size()))
     && noexcept(DeclVal<void(*)(const MeshletDesc&)noexcept>()(entry.meshlets[DeclVal<usize&>()]))
     && noexcept(DeclVal<void(*)(const MeshletBounds&)noexcept>()(entry.meshletBounds[DeclVal<usize&>()]))
 ){

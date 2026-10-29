@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::validateGraphicsState(const GraphicsState& state){
+b8 CommandList::validateGraphicsState(const GraphicsState& state){
     constexpr TStringView s_OperationName = s_SetGraphicsStateOperation;
     if(state.pipeline && &state.pipeline->m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline belongs to another device"));
@@ -103,7 +103,7 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
     BufferStateEntry requiredBufferStates[s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount]{};
     u32 requiredBufferStateCount = 0u;
 
-    const auto addRequiredBufferState = [&requiredBufferStates, &requiredBufferStateCount](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept -> bool{
+    const auto addRequiredBufferState = [&requiredBufferStates, &requiredBufferStateCount](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept -> b8{
         if(!buffer)
             return true;
         for(u32 stateIndex = 0u; stateIndex < requiredBufferStateCount; ++stateIndex){
@@ -141,7 +141,7 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
     return true;
 }
 
-bool CommandList::validateMeshletState(const MeshletState& state){
+b8 CommandList::validateMeshletState(const MeshletState& state){
     constexpr TStringView s_OperationName = s_SetMeshletStateOperation;
     if(state.pipeline && &state.pipeline->m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline belongs to another device"));
@@ -189,7 +189,7 @@ bool CommandList::validateMeshletState(const MeshletState& state){
     return true;
 }
 
-bool CommandList::validateGraphicsDrawState(const TStringView operationName, const bool indexed){
+b8 CommandList::validateGraphicsDrawState(const TStringView operationName, const b8 indexed){
     GraphicsPipeline* const pipeline = m_currentGraphicsState.pipeline;
     if(!m_renderPassActive || !m_renderPassFramebuffer || !pipeline || pipeline->m_pipeline == VK_NULL_HANDLE || pipeline->m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo){
         rejectCommandRecording(operationName, NWB_TEXT("no compatible graphics pipeline and render pass are active"));
@@ -203,7 +203,7 @@ bool CommandList::validateGraphicsDrawState(const TStringView operationName, con
     InputLayout* const inputLayout = pipeline->m_desc.inputLayout.get();
     if(inputLayout){
         for(const VkVertexInputBindingDescription& requiredBinding : inputLayout->m_bindings){
-            bool bindingFound = false;
+            b8 bindingFound = false;
             for(const VertexBufferBinding& binding : m_currentGraphicsState.vertexBuffers){
                 if(binding.slot == requiredBinding.binding){
                     bindingFound = true;
@@ -223,7 +223,7 @@ bool CommandList::validateGraphicsDrawState(const TStringView operationName, con
     return true;
 }
 
-bool CommandList::validateGraphicsDrawArguments(const DrawArguments& arguments, const bool indexed, const TStringView operationName){
+b8 CommandList::validateGraphicsDrawArguments(const DrawArguments& arguments, const b8 indexed, const TStringView operationName){
     if(!validateGraphicsDrawState(operationName, indexed))
         return false;
 
@@ -245,7 +245,7 @@ bool CommandList::validateGraphicsDrawArguments(const DrawArguments& arguments, 
         return true;
 
     for(const VkVertexInputBindingDescription& requiredBinding : inputLayout->m_bindings){
-        const bool instanceRate = requiredBinding.inputRate == VK_VERTEX_INPUT_RATE_INSTANCE;
+        const b8 instanceRate = requiredBinding.inputRate == VK_VERTEX_INPUT_RATE_INSTANCE;
         if(indexed && !instanceRate)
             continue;
         const VertexBufferBinding* boundBuffer = nullptr;
@@ -274,7 +274,7 @@ bool CommandList::validateGraphicsDrawArguments(const DrawArguments& arguments, 
     return true;
 }
 
-bool CommandList::validateIndirectBuffer(Buffer* const buffer, const u64 offsetBytes, const u64 commandSizeBytes, const u32 commandCount, const TStringView commandName){
+b8 CommandList::validateIndirectBuffer(Buffer* const buffer, const u64 offsetBytes, const u64 commandSizeBytes, const u32 commandCount, const TStringView commandName){
     if(!buffer){
         rejectCommandRecording(commandName, NWB_TEXT("no indirect-argument buffer is bound"));
         return false;
@@ -298,7 +298,7 @@ Expected<NotNull<Buffer*>> CommandList::prepareDrawIndirect(const u32 offsetByte
     if(drawCount == 0u)
         return MakeUnexpected(Failure{});
 
-    const bool indexed = indexMode == VulkanDetail::IndirectDrawIndexMode::Indexed;
+    const b8 indexed = indexMode == VulkanDetail::IndirectDrawIndexMode::Indexed;
     if(!validateGraphicsDrawState(operationLabel, indexed))
         return MakeUnexpected(Failure{});
     if(!m_context.drawIndirectFirstInstanceFeatureEnabled){

@@ -30,8 +30,8 @@ Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPrepar
     return Optional<Core::GpuUploadBlobId>{*blobResult};
 }
 
-bool RendererRayTracingSystem::prepareCausticOpticalReadTracking(const ECSRenderDetail::MeshViewBufferSnapshot& meshView){
-    const bool admitted = m_shadowVisibilityHardwareSupported ? hasHwCausticWork(meshView) : hasCausticWork(meshView);
+b8 RendererRayTracingSystem::prepareCausticOpticalReadTracking(const ECSRenderDetail::MeshViewBufferSnapshot& meshView){
+    const b8 admitted = m_shadowVisibilityHardwareSupported ? hasHwCausticWork(meshView) : hasCausticWork(meshView);
     if(!ensureRayTraceContextReadTracking(admitted))
         return false;
     m_opticalCausticReaderAdmitted = admitted;
@@ -49,15 +49,15 @@ void RendererRayTracingSystem::confirmRayTraceContextReadSubmission(const Core::
         previous = token;
 }
 
-bool RendererRayTracingSystem::ensureRayTraceContextReadTracking(const bool opticalCausticReader){
+b8 RendererRayTracingSystem::ensureRayTraceContextReadTracking(const b8 opticalCausticReader){
     auto& readTokens = m_rayTracingState.m_rayTraceContextReadSubmissionTokens;
-    const bool readerAdmitted = m_lightSpaceShadow.m_csg.snapshot.hasCsg || opticalCausticReader;
+    const b8 readerAdmitted = m_lightSpaceShadow.m_csg.snapshot.hasCsg || opticalCausticReader;
     if(!readerAdmitted && readTokens.empty())
         return true;
 
     auto& device = m_graphics.getDevice();
     // Keep pending readers when a later frame stops using their optical or CSG inputs.
-    bool readersPending = false;
+    b8 readersPending = false;
     for(auto& token : readTokens){
         if(!token.valid())
             continue;
@@ -86,7 +86,7 @@ bool RendererRayTracingSystem::ensureRayTraceContextReadTracking(const bool opti
     return true;
 }
 
-bool RendererRayTracingSystem::ensureCsgTraceContextResources(){
+b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     if(!ensureRayTraceContextReadTracking(false))
         return false;
     if(!m_lightSpaceShadow.m_csg.snapshot.hasCsg)

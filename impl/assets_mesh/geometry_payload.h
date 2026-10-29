@@ -94,7 +94,7 @@ protected:
         m_solidTriangleWords = Move(solidTriangleWords);
     }
 
-    [[nodiscard]] bool hasIncompleteGeometryPayload()const noexcept{
+    [[nodiscard]] b8 hasIncompleteGeometryPayload()const noexcept{
         return
             m_positionStream.empty()
             || m_normalStream.empty()
@@ -112,12 +112,12 @@ protected:
     }
 
     template<typename HeaderT>
-    [[nodiscard]] bool readGeometryAttributeStreams(const Span<const u8> binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
+    [[nodiscard]] b8 readGeometryAttributeStreams(const Span<const u8> binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
         return MeshAssetBinaryPayload::ReadMeshAttributeStreams(binary, header, failureContext, inOutCursor, m_positionStream, m_normalStream, m_tangentStream, m_uv0Stream, m_colorStream);
     }
 
     template<typename HeaderT>
-    [[nodiscard]] bool readGeometryMeshletStreams(const Span<const u8> binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
+    [[nodiscard]] b8 readGeometryMeshletStreams(const Span<const u8> binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
         return MeshAssetBinaryPayload::ReadMeshletStreams(
             binary,
             header,

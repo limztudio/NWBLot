@@ -73,7 +73,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     return SIMDVectorSingleResult{ tanHalfFovVector };
 }
 
-[[nodiscard]] inline bool CameraClipRangeValid(const SIMDVectorSingle nearPlane, const SIMDVectorSingle farPlane)noexcept{
+[[nodiscard]] inline b8 CameraClipRangeValid(const SIMDVectorSingle nearPlane, const SIMDVectorSingle farPlane)noexcept{
     return VectorIsFinite(nearPlane, VectorComponentMask::s_XYZW) && VectorIsFinite(farPlane, VectorComponentMask::s_XYZW) && Vector4Greater(nearPlane, s_SIMDZero) && Vector4Less(nearPlane, farPlane);
 }
 
@@ -84,7 +84,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     return VectorSelect(resolvedFallbackAspectRatio, cameraAspectRatio, cameraValid);
 }
 
-[[nodiscard]] inline bool CameraProjectionValuesValid(const SIMDVectorSingle projectionParams, const SIMDVectorSingle aspectRatio, const SIMDVectorSingle tanHalfVerticalFov, const SIMDVectorSingle nearPlane, const SIMDVectorSingle farPlane)noexcept{
+[[nodiscard]] inline b8 CameraProjectionValuesValid(const SIMDVectorSingle projectionParams, const SIMDVectorSingle aspectRatio, const SIMDVectorSingle tanHalfVerticalFov, const SIMDVectorSingle nearPlane, const SIMDVectorSingle farPlane)noexcept{
     const SIMDVectorSingle validProjectionParams = VectorOrInt(VectorAndInt(VectorGreater(projectionParams, s_SIMDZero), s_SIMDMask3), VectorAndInt(VectorLess(projectionParams, s_SIMDZero), s_SIMDMaskW));
     return
         !Vector4IsNaN(projectionParams)
@@ -108,7 +108,7 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     outFarPlane = VectorReplicate(projection.farPlane);
 }
 
-[[nodiscard]] inline bool CameraProjectionStorageValid(const CameraProjection& projection)noexcept{
+[[nodiscard]] inline b8 CameraProjectionStorageValid(const CameraProjection& projection)noexcept{
     SIMDVectorSingle projectionParams{};
     SIMDVectorSingle aspectRatio{};
     SIMDVectorSingle tanHalfVerticalFov{};
@@ -184,7 +184,7 @@ struct SceneCameraView{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return entity.valid() && transform != nullptr && camera != nullptr && CameraProjectionStorageValid(projection);
     }
 };

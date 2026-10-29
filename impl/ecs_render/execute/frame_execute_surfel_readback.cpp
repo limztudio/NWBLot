@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteSurfelReadback::PrepareReadbackFinalState(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
+[[nodiscard]] b8 FrameExecuteSurfelReadback::PrepareReadbackFinalState(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
     FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
     if(!context || context->buffers.empty())
         return false;
@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 }
 
 
-[[nodiscard]] bool FrameExecuteSurfelReadback::AcceptReadbackFinalState(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
+[[nodiscard]] b8 FrameExecuteSurfelReadback::AcceptReadbackFinalState(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
     FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
     if(!context || !context->finalStateReady)

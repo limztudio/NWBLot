@@ -38,7 +38,7 @@ namespace CallbackMutation{
 
 class ReconcileGate final : public IRadioGroupReconcileGuard{
 public:
-    [[nodiscard]] virtual bool current()const noexcept override{
+    [[nodiscard]] virtual b8 current()const noexcept override{
         if(mutateState && state){
             mutateState = false;
             state->select(state->selectedKey());
@@ -49,8 +49,8 @@ public:
 
 public:
     RadioGroupState* state = nullptr;
-    bool allowed = true;
-    mutable bool mutateState = false;
+    b8 allowed = true;
+    mutable b8 mutateState = false;
 };
 
 class ChoiceSource final : public IListDataSource{
@@ -96,7 +96,7 @@ public:
         return MakeUnexpected(Failure{});
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
         u64 index = 0u;
         ++findCalls;
         if(start >= count || count > s_RadioGroupMaxChoices)
@@ -121,7 +121,7 @@ public:
 
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "choice"; }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         callback(CallbackPhase::Enabled);
         return index < s_RadioGroupMaxChoices && rows[static_cast<usize>(index)].enabled;
     }
@@ -202,10 +202,10 @@ public:
     u32 triggerCount = 0u;
     CallbackPhase::Enum phase = CallbackPhase::None;
     CallbackMutation::Enum mutation = CallbackMutation::SelectIdentical;
-    bool badLookup = false;
-    bool missingLookup = false;
-    mutable bool armed = false;
-    mutable bool nestedSucceeded = true;
+    b8 badLookup = false;
+    b8 missingLookup = false;
+    mutable b8 armed = false;
+    mutable b8 nestedSucceeded = true;
 };
 
 

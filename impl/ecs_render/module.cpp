@@ -37,7 +37,7 @@ RendererSystem::RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World
 RendererSystem::~RendererSystem()noexcept = default;
 
 
-bool RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+b8 RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     return m_pipeline->validateResources(width, height, sampleCount);
 }
 
@@ -50,7 +50,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> RendererSystem::update(Core::E
     return {};
 }
 
-bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
+b8 RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     return m_pipeline->prepareResources(framebuffer);
 }
 
@@ -58,7 +58,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_pipeline->render(framebuffer);
 }
 
-bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
+b8 RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
     return m_pipeline->appendFrameGraph(builder);
 }
 
@@ -66,15 +66,15 @@ void RendererSystem::setActiveSceneSubsystems(const ActiveSceneSubsystems* subsy
     m_pipeline->setActiveSceneSubsystems(subsystems);
 }
 
-void RendererSystem::setRefractionEnabled(const bool enabled)noexcept{
+void RendererSystem::setRefractionEnabled(const b8 enabled)noexcept{
     m_pipeline->setRefractionEnabled(enabled);
 }
 
-void RendererSystem::setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
+void RendererSystem::setRefractionHardwareTracingEnabled(const b8 enabled)noexcept{
     m_pipeline->setRefractionHardwareTracingEnabled(enabled);
 }
 
-void RendererSystem::setRefractionDiagnosticsEnabled(const bool enabled)noexcept{
+void RendererSystem::setRefractionDiagnosticsEnabled(const b8 enabled)noexcept{
     m_pipeline->setRefractionDiagnosticsEnabled(enabled);
 }
 
@@ -82,23 +82,23 @@ Expected<RefractionStatistics> RendererSystem::tryGetLatestRefractionStatistics(
     return m_pipeline->tryGetLatestRefractionStatistics();
 }
 
-bool RendererSystem::setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
+b8 RendererSystem::setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
     return m_pipeline->setCausticQualitySettings(settings);
 }
 
-bool RendererSystem::setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
+b8 RendererSystem::setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
     return m_pipeline->setSurfelGiQualitySettings(settings);
 }
 
-bool RendererSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
+b8 RendererSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
     return m_pipeline->setSoftwareShadowSettings(settings);
 }
 
-bool RendererSystem::setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
+b8 RendererSystem::setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
     return m_pipeline->setShadowQualitySettings(settings);
 }
 
-bool RendererSystem::setReflectionSettings(const ReflectionSettings& settings)noexcept{
+b8 RendererSystem::setReflectionSettings(const ReflectionSettings& settings)noexcept{
     return m_pipeline->setReflectionSettings(settings);
 }
 
@@ -106,19 +106,19 @@ Expected<ReflectionStatistics> RendererSystem::tryGetLatestReflectionStatistics(
     return m_pipeline->tryGetLatestReflectionStatistics();
 }
 
-bool RendererSystem::setPresentationSettings(const PresentationSettings& settings)noexcept{
+b8 RendererSystem::setPresentationSettings(const PresentationSettings& settings)noexcept{
     return m_pipeline->setPresentationSettings(settings);
 }
 
-void RendererSystem::setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
+void RendererSystem::setFrameLaggedAsyncLightingEnabled(const b8 enabled)noexcept{
     m_pipeline->setFrameLaggedAsyncLightingEnabled(enabled);
 }
 
-bool RendererSystem::frameLaggedAsyncLightingEnabled()const noexcept{
+b8 RendererSystem::frameLaggedAsyncLightingEnabled()const noexcept{
     return m_pipeline->frameLaggedAsyncLightingEnabled();
 }
 
-bool RendererSystem::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
+b8 RendererSystem::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
     return m_pipeline->setTaskGraphTimingFeedbackPolicy(policy);
 }
 

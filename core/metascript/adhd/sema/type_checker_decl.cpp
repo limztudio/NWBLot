@@ -49,10 +49,10 @@ void CollectAssignedThisMembers(const MVector<Stmt*>& stmts, MVector<MStringView
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors){
+b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& errors){
     MethodDecl ifaceScope(m_arena);
     ifaceScope.templateParams = iface.templateParams;
-    bool ok = checkTemplateParamBounds(iface.templateParams, nullptr, &ifaceScope, errors);
+    b8 ok = checkTemplateParamBounds(iface.templateParams, nullptr, &ifaceScope, errors);
     for(usize i = 0u; i < iface.baseInterfaces.size(); ++i){
         const TypeRef* baseType = iface.baseInterfaces[i];
         if(!baseType)
@@ -108,8 +108,8 @@ bool TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& 
     return ok;
 }
 
-bool TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDecl& method, MVector<ParseError>& errors){
-    bool ok = checkTemplateParamBounds(method.templateParams, enclosingClass, &method, errors);
+b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDecl& method, MVector<ParseError>& errors){
+    b8 ok = checkTemplateParamBounds(method.templateParams, enclosingClass, &method, errors);
     if(method.returnType){
         if(!checkTypeRef(*method.returnType, enclosingClass, &method, errors, true))
             ok = false;
@@ -135,8 +135,8 @@ bool TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, Method
     return ok;
 }
 
-bool TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const FieldDecl& field)const noexcept{
-    const bool isAutoDefaultField = field.type && m_symbols.resolveRefMode(field.type) == ParamPassingMode::None && (
+b8 TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const FieldDecl& field)const noexcept{
+    const b8 isAutoDefaultField = field.type && m_symbols.resolveRefMode(field.type) == ParamPassingMode::None && (
         field.type->isFuncType
         || m_symbols.isSelfDefaultedType(field.type->name)
         || findTemplateParam(&classDecl, nullptr, field.type->name) != nullptr
@@ -144,8 +144,8 @@ bool TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const 
     return (field.defaultExpr != nullptr) || field.hasCtorInit || isAutoDefaultField;
 }
 
-bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors){
-    bool ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
+b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors){
+    b8 ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
 
     if(!classDecl.subsystemTypeName.empty()){
         if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.componentAssetTypeName.empty()
@@ -167,7 +167,7 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
                 continue;
             }
             const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
-            bool validSubsystemField = false;
+            b8 validSubsystemField = false;
             if(resolved && resolved->refMode == ParamPassingMode::None){
                 if(resolved->name == "AssetRef" && resolved->templateArgs.size() == 1u && resolved->templateArgs[0].type && !resolved->templateArgs[0].type->name.empty()){
                     validSubsystemField = true;
@@ -232,7 +232,7 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
             MethodDecl* impl = nullptr;
             for(MethodDecl* m : classDecl.methods){
                 if(!m->isConstructor && !m->isDestructor && m->isOperator == req->isOperator && m->name == req->name && m->params.size() == req->params.size()){
-                    bool exactParamsMatch = (m->isConst == req->isConst);
+                    b8 exactParamsMatch = (m->isConst == req->isConst);
                     if(exactParamsMatch){
                         for(usize pIdx = 0u; pIdx < req->params.size(); ++pIdx){
                             if(m->params[pIdx].mode != req->params[pIdx].mode
@@ -287,7 +287,7 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
 
     for(MethodDecl* m : classDecl.methods){
         if(m->isOverride){
-            bool matchesInterface = false;
+            b8 matchesInterface = false;
             const usize methodArity = m->params.size();
             for(const TypeRef* ifaceType : classDecl.implementedInterfaces){
                 if(!ifaceType)
@@ -311,7 +311,7 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
         }
     }
 
-    bool hasConstructor = false;
+    b8 hasConstructor = false;
     for(MethodDecl* m : classDecl.methods){
         if(m->isConstructor){
             hasConstructor = true;
@@ -355,7 +355,7 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
         if(field->defaultExpr || !field->ctorArgs.empty()){
             MethodDecl fieldInitDummy(m_arena);
             MVector<ScopedVarInfo> emptyScope(m_arena);
-            const bool savedClassArenaCtx = m_inClassArenaContext;
+            const b8 savedClassArenaCtx = m_inClassArenaContext;
             m_inClassArenaContext = true;
             if(field->defaultExpr && !checkExpr(&classDecl, fieldInitDummy, *field->defaultExpr, emptyScope, false, errors))
                 ok = false;
@@ -412,8 +412,8 @@ bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& erro
     return ok;
 }
 
-bool TypeChecker::checkConstructorInitialization(ClassDecl& classDecl, MethodDecl& ctor, MVector<ParseError>& errors){
-    bool ok = true;
+b8 TypeChecker::checkConstructorInitialization(ClassDecl& classDecl, MethodDecl& ctor, MVector<ParseError>& errors){
+    b8 ok = true;
     MVector<MStringView> assignedMembers(m_arena);
     MVector<SourceSpan> assignedSpans(m_arena);
     __hidden_adhd_type_checker::CollectAssignedThisMembers(ctor.body, assignedMembers, assignedSpans);
@@ -432,7 +432,7 @@ bool TypeChecker::checkConstructorInitialization(ClassDecl& classDecl, MethodDec
         if(hasFieldInlineOrAutoDefault(classDecl, *field))
             continue;
 
-        bool initializedInCtor = false;
+        b8 initializedInCtor = false;
         for(const MStringView& assigned : assignedMembers){
             if(assigned == field->name){
                 initializedInCtor = true;

@@ -67,7 +67,7 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
 
 GpuTaskGraph::~GpuTaskGraph()noexcept(false){
     ResetCompletionScope resetCompletion(*this);
-    bool teardownValid = true;
+    b8 teardownValid = true;
     {
         ScopedLock lock(m_lifecycleMutex);
         teardownValid = !m_teardownInProgress
@@ -90,7 +90,7 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
     }
     NWB_FATAL_ASSERT_MSG(teardownValid, "GpuTaskGraph destruction requires in-flight task work to resolve first");
 
-    const bool taskPayloadsDestroyed = UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
+    const b8 taskPayloadsDestroyed = UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
     if(!taskPayloadsDestroyed)
         NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph destruction requires in-flight task work to resolve first");
     resetCompletion.complete();
@@ -104,7 +104,7 @@ Expected<GpuTaskId> GpuTaskGraph::addTask(const GpuTaskDesc& desc, const GpuTask
     return appendTaskWithinMutation(desc, commands, nullptr, nullptr, nullptr, nullptr, 0u, mutation, nullptr);
 }
 
-bool GpuTaskGraph::setNormalExecutionPrelude(const GpuTaskId& task){
+b8 GpuTaskGraph::setNormalExecutionPrelude(const GpuTaskId& task){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid() || m_normalExecutionPrelude.valid() || !validTask(task) || task.index != 0u || m_tasks.size() != 1u)
         return false;

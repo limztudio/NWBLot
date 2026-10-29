@@ -60,11 +60,11 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool materialDrawBuffersUploaded = false;
-        bool csgFrameBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
-        bool conservativeGeometryScissor = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 csgFrameBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
+        b8 conservativeGeometryScissor = false;
 
 
     public:
@@ -88,7 +88,7 @@ struct AvboitExtinctionComputeEmulationGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.extinctionTiming);
@@ -117,11 +117,11 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
         usize drawIndex = 0u;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool materialDrawBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
-        bool beginTiming = false;
-        bool finishTiming = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
+        b8 beginTiming = false;
+        b8 finishTiming = false;
         Phase::Enum phase = Phase::Generate;
     };
 
@@ -129,7 +129,7 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.extinctionTiming);
@@ -149,13 +149,13 @@ struct AvboitExtinctionGraphTask{
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot extinctionSnapshot;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
-        bool extinctionPhasePrepared = false;
-        bool extinctionMaterialFrameStatesGraphOwned = false;
-        bool extinctionMaterialGeometryStatesGraphOwned = false;
-        bool extinctionComputeEmulationOutputStatesGraphOwned = false;
-        bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false;
-        bool generatedGeometryReused = false;
-        bool hasTransparentRenderers = false;
+        b8 extinctionPhasePrepared = false;
+        b8 extinctionMaterialFrameStatesGraphOwned = false;
+        b8 extinctionMaterialGeometryStatesGraphOwned = false;
+        b8 extinctionComputeEmulationOutputStatesGraphOwned = false;
+        b8 extinctionCsgComputeEmulationOutputStatesGraphOwned = false;
+        b8 generatedGeometryReused = false;
+        b8 hasTransparentRenderers = false;
 
 
     public:
@@ -169,7 +169,7 @@ struct AvboitExtinctionGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.extinctionComputeEmulationTiming);
@@ -188,7 +188,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
     static void Discarded(Payload& payload)noexcept;
 };

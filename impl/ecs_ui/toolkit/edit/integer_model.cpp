@@ -18,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NumericEditResult IntegerEditModel::commit(const IntegerBounds& bounds, const bool canonical){
+NumericEditResult IntegerEditModel::commit(const IntegerBounds& bounds, const b8 canonical){
     if(!ValidateIntegerBounds(bounds))
         return {};
     NumericEditResult result = NumericEditDetail::CommitDraft(
@@ -31,7 +31,7 @@ NumericEditResult IntegerEditModel::commit(const IntegerBounds& bounds, const bo
     return result;
 }
 
-Expected<bool, ErrorCode> IntegerEditModel::canonicalize(const i64 value){
+Expected<b8, ErrorCode> IntegerEditModel::canonicalize(const i64 value){
     char buffer[s_NumericEditMaxBytes];
     return NumericEditDetail::CanonicalizeDraft(FormatI64(value, buffer), m_draft, m_acceptedDraft);
 }
@@ -59,11 +59,11 @@ NumericParseStatus::Enum IntegerEditModel::status(const IntegerBounds& bounds)co
     return NumericEditDetail::DraftStatus(ParseIntegerDraft(m_draft.text()), bounds);
 }
 
-bool IntegerEditModel::dirty()const noexcept{
+b8 IntegerEditModel::dirty()const noexcept{
     return NumericEditDetail::DraftDirty(m_draft, m_acceptedDraft);
 }
 
-bool IntegerEditModel::setValue(const i64 value){
+b8 IntegerEditModel::setValue(const i64 value){
     if(!canonicalize(value))
         return false;
     m_value = value;
@@ -71,7 +71,7 @@ bool IntegerEditModel::setValue(const i64 value){
     return true;
 }
 
-bool IntegerEditModel::setDraft(const AStringView text){
+b8 IntegerEditModel::setDraft(const AStringView text){
     return NumericEditDetail::SetDraftText(text, m_draft, m_revision);
 }
 

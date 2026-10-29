@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LightSpaceShadowStorageFits(const LightSpacePlan& plan, const LightSpaceShadowStorageCapacity& capacity)noexcept{
+b8 LightSpaceShadowStorageFits(const LightSpacePlan& plan, const LightSpaceShadowStorageCapacity& capacity)noexcept{
     return
         plan.viewCount != 0u && plan.textureResolution != 0u
         && plan.countByteSize != 0u && plan.eventByteSize != 0u && plan.viewByteSize != 0u && plan.drawArgumentByteSize != 0u
@@ -52,7 +52,7 @@ Expected<u32> LightSpaceShadowDrawCount(const Span<const LightSpaceShadowCaster>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
+b8 RendererRayTracingSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
     if(!ValidateSoftwareShadowSettings(settings))
         return false;
     auto& state = m_lightSpaceShadow;
@@ -82,7 +82,7 @@ LightSpaceShadowSnapshot RendererRayTracingSystem::lightSpaceShadowSnapshot()con
     return result;
 }
 
-void RendererRayTracingSystem::acceptLightSpaceShadowCapture(const LightSpaceCaptureTicket& ticket, const bool prepared){
+void RendererRayTracingSystem::acceptLightSpaceShadowCapture(const LightSpaceCaptureTicket& ticket, const b8 prepared){
     auto& state = m_lightSpaceShadow;
     if(!prepared || !state.m_captureHistory.accept(ticket))
         return;
@@ -262,7 +262,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const ECSRend
     snapshot.push.csgFlags = state.m_csg.snapshot.hasCsg ? NWB_CSG_SHADOW_FLAG_ENABLED | (m_shadowVisibilityHardwareSupported ? NWB_CSG_SHADOW_FLAG_HW_COMPOSE : 0u) : 0u;
     snapshot.csgTlasDescriptor = m_shadowVisibilityHardwareSupported ? m_rayTracingState.m_tlasHeapHandle : Core::GpuDescriptorHandle::Invalid();
     if(state.m_csg.snapshot.hasCsg){
-        bool hasOrdinaryTransparent = false;
+        b8 hasOrdinaryTransparent = false;
         for(const LightSpaceShadowCaster& caster : state.m_casters)
             hasOrdinaryTransparent = hasOrdinaryTransparent || (caster.transparent && !caster.csg);
         if(!hasOrdinaryTransparent)

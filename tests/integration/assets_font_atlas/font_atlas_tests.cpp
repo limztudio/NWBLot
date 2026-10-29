@@ -373,7 +373,7 @@ TEST(AssetsFontAtlas, GuardedOverlapReusesCallerScratchAcrossGroupsAndRejectedCh
     ASSERT_TRUE(ValidateFontAtlasPayload(payload, testArena.scratchArena));
     const ArenaMemoryStats warm = testArena.scratchArena.memoryStats();
     for(usize iteration = 0u; iteration < 16u; ++iteration){
-        const bool valid = iteration % 2u == 0u;
+        const b8 valid = iteration % 2u == 0u;
         payload.glyphs[3u].channel = valid ? 3u : 2u;
         EXPECT_EQ(ValidateFontAtlasPayload(payload, testArena.scratchArena), valid);
         const ArenaMemoryStats current = testArena.scratchArena.memoryStats();

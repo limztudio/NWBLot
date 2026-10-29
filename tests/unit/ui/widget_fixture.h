@@ -90,7 +90,7 @@ template<usize Capacity, typename Input>
 }
 
 template<typename Input>
-void ExpectAcceptedTargets(const Input& input, const Span<const HitTarget> targets, const usize count, const bool checkOwnerDeclaration = false){
+void ExpectAcceptedTargets(const Input& input, const Span<const HitTarget> targets, const usize count, const b8 checkOwnerDeclaration = false){
     ASSERT_EQ(input.targets().size(), count);
     ASSERT_LE(count, targets.size());
     for(usize index = 0u; index < count; ++index){
@@ -148,13 +148,13 @@ inline constexpr AStringView s_ChildPopupKey = "child";
     return options;
 }
 
-[[nodiscard]] inline u64 ArithmeticFixtureRowKey(const u64 count, const u64 removed, const bool reverse, const u64 index)noexcept{
+[[nodiscard]] inline u64 ArithmeticFixtureRowKey(const u64 count, const u64 removed, const b8 reverse, const u64 index)noexcept{
     const u64 forward = reverse ? count - 1u - index : index;
     const u64 value = forward + 1u;
     return value + (removed != 0u && value >= removed ? 1u : 0u);
 }
 
-[[nodiscard]] inline Expected<u64> FindArithmeticFixtureRowIndex(const u64 count, const u64 removed, const bool reverse, const u64 value)noexcept{
+[[nodiscard]] inline Expected<u64> FindArithmeticFixtureRowIndex(const u64 count, const u64 removed, const b8 reverse, const u64 value)noexcept{
     if(value == 0u || value == removed || value > count + (removed != 0u ? 1u : 0u))
         return MakeUnexpected(Failure{});
     const u64 forward = value - 1u - (removed != 0u && value > removed ? 1u : 0u);
@@ -163,7 +163,7 @@ inline constexpr AStringView s_ChildPopupKey = "child";
 }
 
 template<typename KeyLookup>
-[[nodiscard]] Expected<u64> FindSingleDisabledFixtureRow(const u64 count, const u64 start, const bool backwards, const u64 disabled, KeyLookup&& rawKey)noexcept(noexcept(static_cast<bool>(rawKey(DeclVal<u64&>()) != disabled))){
+[[nodiscard]] Expected<u64> FindSingleDisabledFixtureRow(const u64 count, const u64 start, const b8 backwards, const u64 disabled, KeyLookup&& rawKey)noexcept(noexcept(static_cast<b8>(rawKey(DeclVal<u64&>()) != disabled))){
     u64 index = 0u;
     if(start >= count)
         return MakeUnexpected(Failure{});
@@ -190,7 +190,7 @@ struct SkinPaintSample{
     usize quads = 0u;
 };
 
-[[nodiscard]] bool InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
+[[nodiscard]] b8 InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
 
 class WidgetFixture : public testing::Test{
 protected:
@@ -254,26 +254,26 @@ protected:
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 16u, 1.0f, Move(regions));
     }
 
-    [[nodiscard]] bool begin(const u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f }){
+    [[nodiscard]] b8 begin(const u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f }){
         if(!m_context.beginFrame(generation))
             return false;
         m_paint.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         return m_context.beginRoot(m_root);
     }
 
-    [[nodiscard]] bool finishWindow(){
+    [[nodiscard]] b8 finishWindow(){
         return m_builder.endWindow() && m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] bool panel(const u64 generation, const AStringView key = "panel", const Rect& bounds = { 10.0f, 10.0f, 360.0f, 400.0f }){
+    [[nodiscard]] b8 panel(const u64 generation, const AStringView key = "panel", const Rect& bounds = { 10.0f, 10.0f, 360.0f, 400.0f }){
         return begin(generation) && m_builder.beginPanel(key, bounds);
     }
 
-    [[nodiscard]] bool finishRoot(){
+    [[nodiscard]] b8 finishRoot(){
         return m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] bool finishPanel(){
+    [[nodiscard]] b8 finishPanel(){
         return m_builder.endPanel() && finishRoot();
     }
 
@@ -312,7 +312,7 @@ protected:
         EXPECT_TRUE(send({ .position = destination , .type = InputEventType::PrimaryUp }).pointerConsumed);
     }
 
-    void press(const Core::Key::Enum value, const bool repeat = false, const bool shift = false){
+    void press(const Core::Key::Enum value, const b8 repeat = false, const b8 shift = false){
         InputEvent event;
         event.type = InputEventType::KeyDown;
         event.key = value;
@@ -327,7 +327,7 @@ protected:
 
     [[nodiscard]] Expected<SkinPaintSample> sampleSkinPaint(const DrawSnapshot& snapshot, const Name& name)const noexcept;
 
-    [[nodiscard]] bool installKoreanFallback();
+    [[nodiscard]] b8 installKoreanFallback();
 
     [[nodiscard]] Expected<Rect> skinQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
         const SIMDVectorSingle edges = VectorDivide(VectorSet(static_cast<f32>(slot), static_cast<f32>(slot + 1u), 0.0f, 0.0f), VectorReplicate(16.0f));

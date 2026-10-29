@@ -91,7 +91,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool insert(SymbolArena& arena, const NameHash& hash, const AStringView text){
+    [[nodiscard]] b8 insert(SymbolArena& arena, const NameHash& hash, const AStringView text){
         if(NameDetail::IsZeroHash(hash))
             return false;
 
@@ -106,7 +106,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool resolve(char* const outText, const usize outTextSize, const NameHash& hash)const{
+    [[nodiscard]] b8 resolve(char* const outText, const usize outTextSize, const NameHash& hash)const{
         if(outText == nullptr || outTextSize == 0u || NameDetail::IsZeroHash(hash))
             return false;
 
@@ -180,11 +180,11 @@ public:
 
 
 public:
-    [[nodiscard]] bool insert(const NameHash& hash, const AStringView text){
+    [[nodiscard]] b8 insert(const NameHash& hash, const AStringView text){
         return m_symbols.insert(m_arena, hash, text);
     }
 
-    [[nodiscard]] bool resolve(char* const outText, const usize outTextSize, const NameHash& hash)const{
+    [[nodiscard]] b8 resolve(char* const outText, const usize outTextSize, const NameHash& hash)const{
         return m_symbols.resolve(outText, outTextSize, hash);
     }
 
@@ -205,7 +205,7 @@ public:
         return {};
     }
 
-    [[nodiscard]] bool writeDefaultFile(){
+    [[nodiscard]] b8 writeDefaultFile(){
         Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
         const auto executableDirectory = ::GetExecutableDirectory(scratchArena);
         if(!executableDirectory)
@@ -220,7 +220,7 @@ public:
         return writeFile(outputPath, scratchArena);
     }
 
-    [[nodiscard]] bool loadLine(const AStringView line, Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] b8 loadLine(const AStringView line, Alloc::ScratchArena& scratchArena){
         if(line.empty())
             return false;
 
@@ -265,7 +265,7 @@ private:
     [[nodiscard]] Expected<void> recordArenaOwnerSymbols()noexcept{ return {}; }
 #endif
 
-    [[nodiscard]] bool writeFile(const ::Path<Alloc::ScratchArena>& path, Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] b8 writeFile(const ::Path<Alloc::ScratchArena>& path, Alloc::ScratchArena& scratchArena){
         if(!recordArenaOwnerSymbols())
             return false;
         AString<Alloc::ScratchArena> fileText(scratchArena);
@@ -330,7 +330,7 @@ void RecordSymbol(const NameHash& hash, const AStringView text, void* const user
         return;
 }
 
-[[nodiscard]] bool ResolveSymbol(char* const outText, const usize outTextSize, const NameHash& hash, void* const userData){
+[[nodiscard]] b8 ResolveSymbol(char* const outText, const usize outTextSize, const NameHash& hash, void* const userData){
     auto* const registry = static_cast<RuntimeRegistry*>(userData);
     return registry && registry->resolve(outText, outTextSize, hash);
 }
@@ -351,7 +351,7 @@ namespace NameSymbols{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Resolve(char* const outText, const usize outTextSize, const NameHash& hash){
+b8 Resolve(char* const outText, const usize outTextSize, const NameHash& hash){
     return __hidden_common_name_symbols::Registry().resolve(outText, outTextSize, hash);
 }
 
@@ -378,7 +378,7 @@ void ClearRuntimeSymbols(){
     __hidden_common_name_symbols::Registry().clear();
 }
 
-bool LoadFromMemory(const AStringView text, Alloc::ScratchArena& scratchArena){
+b8 LoadFromMemory(const AStringView text, Alloc::ScratchArena& scratchArena){
     const usize headerEnd = text.find('\n');
     AStringView header = text.substr(0u, headerEnd);
     if(!header.empty() && header.back() == '\r')
@@ -402,18 +402,18 @@ bool LoadFromMemory(const AStringView text, Alloc::ScratchArena& scratchArena){
     return true;
 }
 
-bool LoadFromMemory(const AStringView text){
+b8 LoadFromMemory(const AStringView text){
     Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
     return LoadFromMemory(text, scratchArena);
 }
 
-Expected<bool, DefaultFileLoadFailure> LoadDefaultFile(){
+Expected<b8, DefaultFileLoadFailure> LoadDefaultFile(){
     Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
     const auto executableDirectory = ::GetExecutableDirectory(scratchArena);
     if(!executableDirectory)
         return MakeUnexpected(DefaultFileLoadFailure{ executableDirectory.error(), false });
 
-    bool loadedAny = false;
+    b8 loadedAny = false;
     ErrorCode firstError;
 
     const auto directory = ::DirectoryIterator<Alloc::ScratchArena>::Create(*executableDirectory);
@@ -447,7 +447,7 @@ Expected<bool, DefaultFileLoadFailure> LoadDefaultFile(){
     return loadedAny;
 }
 
-bool WriteDefaultFile(){
+b8 WriteDefaultFile(){
     return __hidden_common_name_symbols::Registry().writeDefaultFile();
 }
 

@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GraphicsRuntime::setDebugRuntimeEnabled(bool enabled)noexcept{
+b8 GraphicsRuntime::setDebugRuntimeEnabled(b8 enabled)noexcept{
     if(enabled && !CanEnableDebugRuntime())
         return false;
     if(m_instanceCreated && m_deviceCreationParams.enableDebugRuntime != enabled)
@@ -26,7 +26,7 @@ bool GraphicsRuntime::setDebugRuntimeEnabled(bool enabled)noexcept{
     return true;
 }
 
-bool GraphicsRuntime::setHardwareRayTracingPolicy(const HardwareRayTracingPolicy::Enum policy)noexcept{
+b8 GraphicsRuntime::setHardwareRayTracingPolicy(const HardwareRayTracingPolicy::Enum policy)noexcept{
     if(m_instanceCreated || !IsValidHardwareRayTracingPolicy(policy))
         return false;
 
@@ -34,7 +34,7 @@ bool GraphicsRuntime::setHardwareRayTracingPolicy(const HardwareRayTracingPolicy
     return true;
 }
 
-bool GraphicsRuntime::setNativeMeshShadersEnabled(const bool enabled)noexcept{
+b8 GraphicsRuntime::setNativeMeshShadersEnabled(const b8 enabled)noexcept{
     if(m_instanceCreated)
         return false;
 
@@ -42,7 +42,7 @@ bool GraphicsRuntime::setNativeMeshShadersEnabled(const bool enabled)noexcept{
     return true;
 }
 
-bool GraphicsRuntime::setAsyncComputeLaneEnabled(const bool enabled)noexcept{
+b8 GraphicsRuntime::setAsyncComputeLaneEnabled(const b8 enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -50,7 +50,7 @@ bool GraphicsRuntime::setAsyncComputeLaneEnabled(const bool enabled)noexcept{
     return true;
 }
 
-bool GraphicsRuntime::setTransferQueueEnabled(const bool enabled)noexcept{
+b8 GraphicsRuntime::setTransferQueueEnabled(const b8 enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -58,7 +58,7 @@ bool GraphicsRuntime::setTransferQueueEnabled(const bool enabled)noexcept{
     return true;
 }
 
-bool GraphicsRuntime::setSameClassMultiQueueEnabled(const bool enabled)noexcept{
+b8 GraphicsRuntime::setSameClassMultiQueueEnabled(const b8 enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -66,7 +66,7 @@ bool GraphicsRuntime::setSameClassMultiQueueEnabled(const bool enabled)noexcept{
     return true;
 }
 
-bool GraphicsRuntime::setCrossFamilySameClassQueueRoutingEnabled(const bool enabled)noexcept{
+b8 GraphicsRuntime::setCrossFamilySameClassQueueRoutingEnabled(const b8 enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -74,7 +74,7 @@ bool GraphicsRuntime::setCrossFamilySameClassQueueRoutingEnabled(const bool enab
     return true;
 }
 
-bool GraphicsRuntime::setAdapterIndex(const i32 index)noexcept{
+b8 GraphicsRuntime::setAdapterIndex(const i32 index)noexcept{
     if(index < -1 || m_backend->getDevice())
         return false;
 
@@ -82,7 +82,7 @@ bool GraphicsRuntime::setAdapterIndex(const i32 index)noexcept{
     return true;
 }
 
-bool GraphicsRuntime::setHDR10OutputEnabled(const bool enabled)noexcept{
+b8 GraphicsRuntime::setHDR10OutputEnabled(const b8 enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -90,7 +90,7 @@ bool GraphicsRuntime::setHDR10OutputEnabled(const bool enabled)noexcept{
     return true;
 }
 
-bool GraphicsRuntime::setSwapChainReadbackEnabled(const bool enabled)noexcept{
+b8 GraphicsRuntime::setSwapChainReadbackEnabled(const b8 enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -98,7 +98,7 @@ bool GraphicsRuntime::setSwapChainReadbackEnabled(const bool enabled)noexcept{
     return true;
 }
 
-bool GraphicsRuntime::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept{
+b8 GraphicsRuntime::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept{
     if(!abi.valid() || m_backend->getDevice())
         return false;
 
@@ -110,7 +110,7 @@ void GraphicsRuntime::setPipelineCacheDirectory(const Path& directory){
     m_deviceCreationParams.pipelineCacheDirectory = directory;
 }
 
-bool GraphicsRuntime::setFilesystemFactory(const Filesystem::FilesystemFactory& factory){
+b8 GraphicsRuntime::setFilesystemFactory(const Filesystem::FilesystemFactory& factory){
     if(m_backend->getDevice())
         return false;
     m_deviceCreationParams.filesystemFactory = factory;

@@ -104,7 +104,7 @@ template<typename ArenaT, typename StringT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool WriteTextFile(const Path<ArenaT>& path, const AStringView content){
+[[nodiscard]] inline b8 WriteTextFile(const Path<ArenaT>& path, const AStringView content){
     if(!CanRepresentStreamSize(static_cast<u64>(content.size())))
         return false;
 
@@ -122,21 +122,21 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ReadStreamExact(InputFileStream& stream, const NotNull<void*> destination, const usize byteCount){
+[[nodiscard]] inline b8 ReadStreamExact(InputFileStream& stream, const NotNull<void*> destination, const usize byteCount){
     if(!CanRepresentStreamSize(static_cast<u64>(byteCount)))
         return false;
     stream.read(reinterpret_cast<char*>(destination.get()), static_cast<StreamSize>(byteCount));
     return stream.gcount() == static_cast<StreamSize>(byteCount) && !stream.bad();
 }
 
-[[nodiscard]] inline bool VerifyStreamAtEnd(InputFileStream& stream){
+[[nodiscard]] inline b8 VerifyStreamAtEnd(InputFileStream& stream){
     char extraByte = 0;
     stream.read(&extraByte, 1);
     return stream.gcount() == 0 && stream.eof() && !stream.bad();
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool VerifyBinaryFileBytes(const Path<ArenaT>& path, const void* const expected, const usize count){
+[[nodiscard]] inline b8 VerifyBinaryFileBytes(const Path<ArenaT>& path, const void* const expected, const usize count){
     InputFileStream stream(path, InputFileStream::binary);
     if(!stream.is_open())
         return false;
@@ -159,7 +159,7 @@ template<typename ArenaT, typename Container>
 }
 
 template<typename ArenaT, typename Container>
-[[nodiscard]] inline bool WriteBinaryFile(const Path<ArenaT>& path, const Container& bytes){
+[[nodiscard]] inline b8 WriteBinaryFile(const Path<ArenaT>& path, const Container& bytes){
     if(!CanRepresentStreamSize(static_cast<u64>(bytes.size())))
         return false;
 
@@ -175,7 +175,7 @@ template<typename ArenaT, typename Container>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<void, ErrorCode> StageNewBinaryFileDurable(const Path<ArenaT>& path, const void* const data, const usize count, bool& outCreated)noexcept{
+[[nodiscard]] inline Expected<void, ErrorCode> StageNewBinaryFileDurable(const Path<ArenaT>& path, const void* const data, const usize count, b8& outCreated)noexcept{
     outCreated = false;
 #if defined(NWB_PLATFORM_WINDOWS)
     if(static_cast<u64>(count) > static_cast<u64>(Limit<i64>::s_Max))
@@ -253,10 +253,10 @@ template<typename ArenaT>
 
     LARGE_INTEGER offset{};
     offset.QuadPart = static_cast<LONGLONG>(byteCount);
-    const bool seekSucceeded = SetFilePointerEx(file, offset, nullptr, FILE_BEGIN) != 0;
-    const bool resizeSucceeded = seekSucceeded && SetEndOfFile(file) != 0;
+    const b8 seekSucceeded = SetFilePointerEx(file, offset, nullptr, FILE_BEGIN) != 0;
+    const b8 resizeSucceeded = seekSucceeded && SetEndOfFile(file) != 0;
     const ErrorCode errorCode = resizeSucceeded ? ErrorCode{} : LastSystemError();
-    const bool closeSucceeded = CloseHandle(file) != 0;
+    const b8 closeSucceeded = CloseHandle(file) != 0;
     const ErrorCode closeError = closeSucceeded ? ErrorCode{} : LastSystemError();
     if(errorCode)
         return MakeUnexpected(errorCode);

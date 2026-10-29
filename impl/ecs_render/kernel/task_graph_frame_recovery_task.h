@@ -34,13 +34,13 @@ struct FrameRecoveryGraphTask{
     // The armed/retire flags are caller-owned outputs the tail clears.
     struct Payload{
         Core::GpuTimingFrameTransaction& frameTimingTransaction;
-        bool& armed;
-        bool& retiresFrameTiming;
+        b8& armed;
+        b8& retiresFrameTiming;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
     static void Discarded(Payload& payload);
 };

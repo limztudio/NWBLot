@@ -69,7 +69,7 @@ static RefractionPushConstants MakePushConstants(const DeferredFrameTargets& tar
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareRefractionResources(){
+b8 RendererRayTracingSystem::prepareRefractionResources(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     m_rayTracingState.m_refractionUseHardwareTrace = false;
@@ -112,18 +112,18 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
 
     if(m_refractionDiagnosticsEnabled && !m_refractionStatistics.prepareResources())
         return false;
-    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
-    const auto ensurePipeline = [&](const bool hardware, const bool dense) -> bool{
-        const bool diagnostics = m_refractionDiagnosticsEnabled;
+    const b8 csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    const auto ensurePipeline = [&](const b8 hardware, const b8 dense) -> b8{
+        const b8 diagnostics = m_refractionDiagnosticsEnabled;
         Core::ComputePipelineHandle& hardwarePipeline = diagnostics ? m_rayTracingState.m_refractionDiagnosticHwPipelines[csg ? 1u : 0u][dense ? 1u : 0u]
             : (csg ? (dense ? m_rayTracingState.m_refractionDenseCsgHwPipeline : m_rayTracingState.m_refractionCsgHwPipeline) : (dense ? m_rayTracingState.m_refractionDenseHwPipeline : m_rayTracingState.m_refractionHwPipeline));
         Core::ShaderHandle& hardwareShader = diagnostics ? m_rayTracingState.m_refractionDiagnosticHwShaders[csg ? 1u : 0u][dense ? 1u : 0u]
             : (csg ? (dense ? m_rayTracingState.m_refractionDenseCsgHwShader : m_rayTracingState.m_refractionCsgHwShader) : (dense ? m_rayTracingState.m_refractionDenseHwShader : m_rayTracingState.m_refractionHwShader));
-        bool& hardwareFailed = diagnostics ? m_rayTracingState.m_refractionDiagnosticHwPipelineFailed[csg ? 1u : 0u][dense ? 1u : 0u]
+        b8& hardwareFailed = diagnostics ? m_rayTracingState.m_refractionDiagnosticHwPipelineFailed[csg ? 1u : 0u][dense ? 1u : 0u]
             : (csg ? (dense ? m_rayTracingState.m_refractionDenseCsgHwPipelineFailed : m_rayTracingState.m_refractionCsgHwPipelineFailed) : (dense ? m_rayTracingState.m_refractionDenseHwPipelineFailed : m_rayTracingState.m_refractionHwPipelineFailed));
         Core::ComputePipelineHandle& pipeline = hardware ? hardwarePipeline : (dense ? m_rayTracingState.m_refractionDenseScreenPipeline : m_rayTracingState.m_refractionScreenPipeline);
         Core::ShaderHandle& shader = hardware ? hardwareShader : (dense ? m_rayTracingState.m_refractionDenseScreenShader : m_rayTracingState.m_refractionScreenShader);
-        bool& failed = hardware ? hardwareFailed : (dense ? m_rayTracingState.m_refractionDenseScreenPipelineFailed : m_rayTracingState.m_refractionScreenPipelineFailed);
+        b8& failed = hardware ? hardwareFailed : (dense ? m_rayTracingState.m_refractionDenseScreenPipelineFailed : m_rayTracingState.m_refractionScreenPipelineFailed);
         if(pipeline)
             return true;
         if(failed)
@@ -159,7 +159,7 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
     // A separate shader keeps ray-tracing capabilities off unsupported devices.
     if(!ensurePipeline(false, false) || !ensurePipeline(false, true))
         return false;
-    const bool hardwareReady = m_rayTracingState.m_refractionHardwareTracingEnabled && shadowVisibilityHardwareSupported()
+    const b8 hardwareReady = m_rayTracingState.m_refractionHardwareTracingEnabled && shadowVisibilityHardwareSupported()
         && m_shadowVisibilityTraceResourcesPreflighted && m_shadowVisibilityBackendPipelinePreflighted
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
         && heap.hasAccelStructLayout()
@@ -170,11 +170,11 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
     return true;
 }
 
-void RendererRayTracingSystem::setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
+void RendererRayTracingSystem::setRefractionHardwareTracingEnabled(const b8 enabled)noexcept{
     m_rayTracingState.m_refractionHardwareTracingEnabled = enabled;
 }
 
-void RendererRayTracingSystem::setRefractionDiagnosticsEnabled(const bool enabled)noexcept{
+void RendererRayTracingSystem::setRefractionDiagnosticsEnabled(const b8 enabled)noexcept{
     m_refractionDiagnosticsEnabled = enabled;
 }
 
@@ -198,7 +198,7 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
     resources.finalizeTilesPipeline = m_rayTracingState.m_refractionFinalizeTilesPipeline;
     resources.viewHeapSlot = view.heapHandle.slot();
     resources.usesHardwareTrace = m_rayTracingState.m_refractionUseHardwareTrace;
-    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    const b8 csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     resources.pipeline = resources.usesHardwareTrace
         ? (m_refractionDiagnosticsEnabled ? m_rayTracingState.m_refractionDiagnosticHwPipelines[csg ? 1u : 0u][0]
             : (csg ? m_rayTracingState.m_refractionCsgHwPipeline : m_rayTracingState.m_refractionHwPipeline))
@@ -228,7 +228,7 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
     return resources;
 }
 
-bool RendererRayTracingSystem::recordRefractionTileClassification(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const{
+b8 RendererRayTracingSystem::recordRefractionTileClassification(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const{
     if(!resources.valid() || !targets.bindless.valid() || !targets.avboit.refractionTileListDescriptor.valid() || !targets.avboit.refractionTileArgumentsDescriptor.valid() || targets.width == 0u || targets.height == 0u)
         return false;
     const auto push = __hidden_rt_refraction::MakePushConstants(targets, resources);
@@ -251,7 +251,7 @@ bool RendererRayTracingSystem::recordRefractionTileClassification(Core::CommandL
     return true;
 }
 
-bool RendererRayTracingSystem::recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const{
+b8 RendererRayTracingSystem::recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const{
     if(!resources.valid() || !targets.bindless.valid() || targets.width == 0u || targets.height == 0u)
         return false;
 

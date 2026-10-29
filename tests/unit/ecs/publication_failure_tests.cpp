@@ -39,7 +39,7 @@ struct ThrowingConstructionComponent{
 
 
 public:
-    ThrowingConstructionComponent(bool reject, u32 valueArg)
+    ThrowingConstructionComponent(b8 reject, u32 valueArg)
         : value(valueArg)
     {
         if(reject)
@@ -48,12 +48,12 @@ public:
 };
 
 struct ThrowingMoveAssignmentComponent{
-    bool& rejectMove;
+    b8& rejectMove;
     u32 value;
 
 
 public:
-    ThrowingMoveAssignmentComponent(bool& rejectMoveArg, u32 valueArg)noexcept
+    ThrowingMoveAssignmentComponent(b8& rejectMoveArg, u32 valueArg)noexcept
         : rejectMove(rejectMoveArg)
         , value(valueArg)
     {}
@@ -73,13 +73,13 @@ public:
 };
 
 struct ThrowingMoveMessage{
-    bool& rejectMove;
+    b8& rejectMove;
     u32& moveAttempts;
     u32& destructions;
 
 
 public:
-    ThrowingMoveMessage(bool& rejectMoveArg, u32& moveAttemptsArg, u32& destructionsArg)noexcept
+    ThrowingMoveMessage(b8& rejectMoveArg, u32& moveAttemptsArg, u32& destructionsArg)noexcept
         : rejectMove(rejectMoveArg)
         , moveAttempts(moveAttemptsArg)
         , destructions(destructionsArg)
@@ -104,13 +104,13 @@ public:
 };
 
 struct SystemLifetimeState{
-    bool providerAlive = false;
-    bool borrowerObservedProvider = false;
+    b8 providerAlive = false;
+    b8 borrowerObservedProvider = false;
     Array<u32, 2u> destructionOrder{};
     usize destructionCount = 0u;
 };
 
-template<bool IsProvider>
+template<b8 IsProvider>
 class LifetimeSystem final : public NWB::Core::ECS::ISystem{
 public:
     LifetimeSystem(NWB::Core::Alloc::GlobalArena& arena, SystemLifetimeState& state)noexcept
@@ -166,7 +166,7 @@ TEST(Ecs, FailedComponentConstructionDoesNotPublishMembership){
 }
 
 TEST(Ecs, FailedComponentMoveAssignmentPreservesEntityMappings){
-    bool rejectMove = false;
+    b8 rejectMove = false;
     TestWorld testWorld;
     auto first = testWorld.world.createEntity();
     auto second = testWorld.world.createEntity();
@@ -192,7 +192,7 @@ TEST(Ecs, FailedComponentMoveAssignmentPreservesEntityMappings){
 }
 
 TEST(Ecs, FailedEntityDestructionRetainsRemainingMembershipForRetry){
-    bool rejectMove = false;
+    b8 rejectMove = false;
     TestWorld testWorld;
     auto first = testWorld.world.createEntity();
     auto second = testWorld.world.createEntity();
@@ -221,7 +221,7 @@ TEST(Ecs, FailedEntityDestructionRetainsRemainingMembershipForRetry){
 }
 
 TEST(Ecs, WorldUnwindDestroysPendingMessagesWithoutMovingThem){
-    bool rejectMove = false;
+    b8 rejectMove = false;
     u32 moveAttempts = 0u;
     u32 destructions = 0u;
     const auto failWithPendingMessage = [&](){
@@ -236,7 +236,7 @@ TEST(Ecs, WorldUnwindDestroysPendingMessagesWithoutMovingThem){
 }
 
 TEST(Ecs, OrdinaryWorldDestructionDestroysPendingMessagesWithoutMovingThem){
-    bool rejectMove = true;
+    b8 rejectMove = true;
     u32 moveAttempts = 0u;
     u32 destructions = 0u;
     {

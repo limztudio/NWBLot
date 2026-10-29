@@ -18,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::beginWindow(const AStringView stableKey, const StringView title, WindowState& state, const WindowOptions& options){
+b8 Builder::beginWindow(const AStringView stableKey, const StringView title, WindowState& state, const WindowOptions& options){
     if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || m_context.failed()){
         m_context.fail();
         return false;
@@ -120,7 +120,7 @@ bool Builder::beginWindow(const AStringView stableKey, const StringView title, W
     return !state.collapsed;
 }
 
-bool Builder::endWindow(){
+b8 Builder::endWindow(){
     if(declarationBlocked() || !m_scope->m_windowActive || !m_scope->m_panelActive || !m_scope->m_window.state || m_scope->m_stack.size() != 1u || m_context.failed()){
         m_context.fail();
         return false;
@@ -128,7 +128,7 @@ bool Builder::endWindow(){
     m_finalizing = true;
     ScopeExit finish([this]()noexcept{ m_finalizing = false; });
     WindowState& state = *m_scope->m_window.state;
-    bool arranged = true;
+    b8 arranged = true;
     if(!state.collapsed){
         const DisplayMetrics& display = m_paint.displayMetrics();
         const SIMDVectorSingle boundsSize = VectorSet(m_scope->m_bounds.width, m_scope->m_bounds.height, m_scope->m_bounds.width, m_scope->m_bounds.height);
@@ -152,13 +152,13 @@ bool Builder::endWindow(){
         else
             arranged = false;
     }
-    const bool painted = arranged && paintWindow();
-    const bool popped = m_context.popScope();
+    const b8 painted = arranged && paintWindow();
+    const b8 popped = m_context.popScope();
     m_scope->m_panelActive = false;
     m_scope->m_windowActive = false;
     m_scope->m_window.state = nullptr;
     m_scope->m_stack.clear();
-    const bool combosPainted = painted && popped && paintDeferred();
+    const b8 combosPainted = painted && popped && paintDeferred();
     publishSliderResults(combosPainted);
     releaseDeferredLoans();
     if(!combosPainted)

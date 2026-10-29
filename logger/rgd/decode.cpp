@@ -112,7 +112,7 @@ AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchAre
             txt << s_PageFaultSummaryDivider << '\n' << '\n';
 
             RgdResourceInfoSerializer resourceSerializer;
-            const bool resourceHistoryReady = resourceSerializer.InitializeWithTraceFile(config.crash_dump_file);
+            const b8 resourceHistoryReady = resourceSerializer.InitializeWithTraceFile(config.crash_dump_file);
             if(!resourceHistoryReady)
                 txt << "ERROR: failed to initialize page-fault resource history." << '\n';
 

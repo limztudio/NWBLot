@@ -14,7 +14,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CrashUploadAuthorizationMatches(const AStringView expectedToken, const AStringView authorizationHeader)noexcept{
+b8 CrashUploadAuthorizationMatches(const AStringView expectedToken, const AStringView authorizationHeader)noexcept{
     if(expectedToken.empty())
         return true;
     if(authorizationHeader.empty())

@@ -28,9 +28,9 @@ private:
         ClipboardOperation::Enum operation = ClipboardOperation::ReadText;
         ClipboardChannel::Enum channel = ClipboardChannel::Clipboard;
         ClipboardStatus::Enum status = ClipboardStatus::Unavailable;
-        bool completed = false;
-        bool executing = false;
-        bool started = false;
+        b8 completed = false;
+        b8 executing = false;
+        b8 started = false;
 
 
     public:
@@ -46,12 +46,12 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool isOwnerThread()const noexcept override final{ return QueryCurrentThreadId() == m_ownerThread; }
+    [[nodiscard]] virtual b8 isOwnerThread()const noexcept override final{ return QueryCurrentThreadId() == m_ownerThread; }
     [[nodiscard]] virtual Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestReadText(ClipboardChannel::Enum channel)override final;
     [[nodiscard]] virtual Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWriteText(ClipboardChannel::Enum channel, AStringView text)override final;
     [[nodiscard]] virtual ClipboardPollResult::Enum poll(ClipboardRequestToken token, ClipboardCompletion& completion)override final;
-    [[nodiscard]] virtual bool cancel(ClipboardRequestToken token)override final;
-    [[nodiscard]] virtual bool pump()override final;
+    [[nodiscard]] virtual b8 cancel(ClipboardRequestToken token)override final;
+    [[nodiscard]] virtual b8 pump()override final;
 
 
 protected:
@@ -59,7 +59,7 @@ protected:
     virtual void startNativeRequest(ClipboardRequestToken token, ClipboardOperation::Enum operation, ClipboardChannel::Enum channel, AStringView text) = 0;
     virtual void cancelNativeRequest(ClipboardRequestToken token);
     virtual void pumpNativeRequests();
-    [[nodiscard]] bool completeNativeRequest(ClipboardRequestToken token, ClipboardStatus::Enum status, AStringView text = {});
+    [[nodiscard]] b8 completeNativeRequest(ClipboardRequestToken token, ClipboardStatus::Enum status, AStringView text = {});
 
 
 private:
@@ -73,7 +73,7 @@ private:
     const u64 m_serviceIdentity;
     u64 m_nextGeneration = 1u;
     const ThreadId m_ownerThread;
-    bool m_pumping = false;
+    b8 m_pumping = false;
 };
 
 

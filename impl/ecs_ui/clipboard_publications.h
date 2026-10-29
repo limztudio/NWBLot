@@ -51,7 +51,7 @@ public:
 public:
     [[nodiscard]] UiClipboardPublicationStatus::Enum request(AStringView text, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard);
     [[nodiscard]] UiClipboardPublicationResult drain();
-    [[nodiscard]] bool cancel();
+    [[nodiscard]] b8 cancel();
     [[nodiscard]] usize pending()const noexcept{ return m_requests.size(); }
 
 

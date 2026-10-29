@@ -51,7 +51,7 @@ static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4
 // A fresh capture keeps node and instance bytes together for one graph upload; accepted static-cache reuse keeps only identity, counts, and hash.
 class PreparedSceneBvhUpload final : NoCopy{
 private:
-    [[nodiscard]] static bool StorageReady(const RendererRayTracingState& state, usize nodeCount, usize instanceCount)noexcept;
+    [[nodiscard]] static b8 StorageReady(const RendererRayTracingState& state, usize nodeCount, usize instanceCount)noexcept;
 
 
 public:
@@ -62,20 +62,20 @@ public:
 
 
 public:
-    [[nodiscard]] bool capture(const RendererRayTracingState& state, bool staticScene, u64 staticSceneHash, Span<const NwbBvhNodeGpu> nodes, Span<const SceneSwBvhInstanceGpu> instances);
-    [[nodiscard]] bool captureCacheReuse(const RendererRayTracingState& state, u64 staticSceneHash, u32 instanceCount)noexcept;
+    [[nodiscard]] b8 capture(const RendererRayTracingState& state, b8 staticScene, u64 staticSceneHash, Span<const NwbBvhNodeGpu> nodes, Span<const SceneSwBvhInstanceGpu> instances);
+    [[nodiscard]] b8 captureCacheReuse(const RendererRayTracingState& state, u64 staticSceneHash, u32 instanceCount)noexcept;
     void clear()noexcept;
 
     [[nodiscard]] Expected<PreparedSceneBvhUploads> retainUploads(const RendererRayTracingState& state, Core::GpuTaskGraph& graph)const;
     // Publishes the accepted static-scene hash; false when no fresh upload was pending.
-    [[nodiscard]] bool publishAcceptedUpload(RendererRayTracingState& state)const noexcept;
+    [[nodiscard]] b8 publishAcceptedUpload(RendererRayTracingState& state)const noexcept;
 
-    [[nodiscard]] bool storageMatches(const RendererRayTracingState& state)const noexcept;
-    [[nodiscard]] bool covers(usize sceneInstanceCount)const noexcept{ return m_ready && m_instanceCount == sceneInstanceCount; }
+    [[nodiscard]] b8 storageMatches(const RendererRayTracingState& state)const noexcept;
+    [[nodiscard]] b8 covers(usize sceneInstanceCount)const noexcept{ return m_ready && m_instanceCount == sceneInstanceCount; }
     // A fresh upload stays valid; cache reuse still needs the accepted static-scene hash over the same instances.
-    [[nodiscard]] bool snapshotAccepted(const RendererRayTracingState& state)const noexcept;
-    [[nodiscard]] bool ready()const noexcept{ return m_ready; }
-    [[nodiscard]] bool uploadRequired()const noexcept{ return m_uploadRequired; }
+    [[nodiscard]] b8 snapshotAccepted(const RendererRayTracingState& state)const noexcept;
+    [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
+    [[nodiscard]] b8 uploadRequired()const noexcept{ return m_uploadRequired; }
     [[nodiscard]] const Core::BufferHandle& nodeBuffer()const noexcept{ return m_nodeBuffer; }
     [[nodiscard]] Core::GpuDescriptorHandle nodeHeapHandle()const noexcept{ return m_nodeHeapHandle; }
 
@@ -92,9 +92,9 @@ private:
     u64 m_staticSceneHash = 0u;
     Core::GpuDescriptorHandle m_nodeHeapHandle;
     Core::GpuDescriptorHandle m_instanceHeapHandle;
-    bool m_static = false;
-    bool m_ready = false;
-    bool m_uploadRequired = false;
+    b8 m_static = false;
+    b8 m_ready = false;
+    b8 m_uploadRequired = false;
 };
 
 

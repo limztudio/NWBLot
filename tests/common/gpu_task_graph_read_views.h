@@ -44,7 +44,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return declarations.valid() && compiled.valid() && compiled.validFor(declarations);
     }
 };

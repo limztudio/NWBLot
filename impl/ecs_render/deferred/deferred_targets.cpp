@@ -257,7 +257,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     return createdTargets;
 }
 
-bool RendererDeferredSystem::createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler){
+b8 RendererDeferredSystem::createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler){
     if(!createDeferredBindlessFrameResources(targets, avboitLinearSampler))
         return false;
     if(createLaggedLightingHistoryResources(targets))

@@ -49,8 +49,8 @@ struct ObjectGeometryCacheState{
     Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::Invalid();
     u32 indexByteOffset = 0u;
     u32 indexCount = 0u;
-    bool acceptedContent = false;
-    bool initialized = false;
+    b8 acceptedContent = false;
+    b8 initialized = false;
 };
 
 // The declaration retains the buffer and current content generation; acceptance validates them against the mesh owner.
@@ -61,16 +61,16 @@ struct ObjectGeometryCacheSnapshot{
     Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::Invalid();
     u32 indexByteOffset = 0u;
     u32 indexCount = 0u;
-    bool initialized = false;
-    bool requiresDecode = true;
+    b8 initialized = false;
+    b8 requiresDecode = true;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept;
+    [[nodiscard]] b8 valid()const noexcept;
 };
 
 [[nodiscard]] Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(u64 localVertexRefByteSize, u32 primitiveIndexCount)noexcept;
-[[nodiscard]] bool AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, bool runtimeMesh)noexcept;
+[[nodiscard]] b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, b8 runtimeMesh)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

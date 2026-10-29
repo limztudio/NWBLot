@@ -30,11 +30,11 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidOptions(const TooltipOptions& options)noexcept{
+[[nodiscard]] static b8 ValidOptions(const TooltipOptions& options)noexcept{
     return IsFinite(options.delaySeconds) && options.delaySeconds >= 0.0f && IsFinite(options.maximumWidth) && options.maximumWidth > 0.0f && IsFinite(options.gap) && options.gap >= 0.0f && options.side <= PopupPlacementSide::Center;
 }
 
-[[nodiscard]] static bool SameOptions(const TooltipOptions& lhs, const TooltipOptions& rhs)noexcept{
+[[nodiscard]] static b8 SameOptions(const TooltipOptions& lhs, const TooltipOptions& rhs)noexcept{
     return lhs.enabled == rhs.enabled && lhs.delaySeconds == rhs.delaySeconds && lhs.maximumWidth == rhs.maximumWidth && lhs.gap == rhs.gap && lhs.side == rhs.side;
 }
 
@@ -78,21 +78,21 @@ void TooltipState::advanceRevision()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TooltipBehavior::Update(
+b8 TooltipBehavior::Update(
     TooltipState& state, const WidgetId anchor, const u64 declarationGeneration,
     const PopupToken& popup, const u64 focusLossGeneration, const u64 hoverActivityGeneration,
-    const bool hovered, const f32 deltaSeconds, const TooltipOptions& options
+    const b8 hovered, const f32 deltaSeconds, const TooltipOptions& options
 )noexcept{
     using namespace __hidden_ui_tooltip;
     if(!anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !(popup == PopupToken{})) || !IsFinite(deltaSeconds) || deltaSeconds < 0.0f || !ValidOptions(options))
         return false;
-    const bool sameBinding = state.m_anchor == anchor && state.m_declarationGeneration == declarationGeneration && state.m_popup == popup && state.m_focusLossGeneration == focusLossGeneration && state.m_hoverActivityGeneration == hoverActivityGeneration;
-    const bool sameOptions = SameOptions(state.m_options, options);
-    const bool activeHover = options.enabled && hovered;
+    const b8 sameBinding = state.m_anchor == anchor && state.m_declarationGeneration == declarationGeneration && state.m_popup == popup && state.m_focusLossGeneration == focusLossGeneration && state.m_hoverActivityGeneration == hoverActivityGeneration;
+    const b8 sameOptions = SameOptions(state.m_options, options);
+    const b8 activeHover = options.enabled && hovered;
     f64 elapsed = 0.0;
     if(activeHover && state.m_hovered && sameBinding && sameOptions)
         elapsed = VectorDoubleGetX(VectorDoubleMin(VectorDoubleAdd(VectorDoubleReplicate(state.m_elapsed), VectorDoubleReplicate(static_cast<f64>(deltaSeconds))), VectorDoubleReplicate(static_cast<f64>(options.delaySeconds))));
-    const bool visible = activeHover && elapsed >= static_cast<f64>(options.delaySeconds);
+    const b8 visible = activeHover && elapsed >= static_cast<f64>(options.delaySeconds);
     if(!sameBinding || !sameOptions || state.m_hovered != activeHover || state.m_elapsed != elapsed || state.m_visible != visible){
         state.advanceRevision();
         state.m_anchor = anchor;

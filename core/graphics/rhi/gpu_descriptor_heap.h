@@ -84,15 +84,15 @@ public:
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return value != s_Invalid; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return value != s_Invalid; }
 
     [[nodiscard]] constexpr GpuDescriptorClass::Enum descriptorClass()const noexcept{ return static_cast<GpuDescriptorClass::Enum>(value >> s_ClassShift); }
 
     [[nodiscard]] constexpr u32 slot()const noexcept{ return value & s_SlotMask; }
 };
-inline constexpr bool operator==(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value == rhs.value; }
+inline constexpr b8 operator==(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value == rhs.value; }
 
-inline constexpr bool operator!=(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value != rhs.value; }
+inline constexpr b8 operator!=(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value != rhs.value; }
 static constexpr usize s_GpuDescriptorHandleByteSize = 4;
 static_assert(sizeof(GpuDescriptorHandle) == s_GpuDescriptorHandleByteSize, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
@@ -119,7 +119,7 @@ struct GpuDescriptorHeapAbi{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return
             resourceSetIndex != s_Unspecified
             && samplerSetIndex != s_Unspecified
@@ -162,7 +162,7 @@ public:
 // Resource slots share one namespace for every non-sampler, non-TLAS class; TLAS slots use per-generation blocks.
 struct GpuDescriptorHeapLifecycleStatistics{
     // False after shutdown or before initialization. The remaining counters are ordinarily zero in that state.
-    bool initialized = false;
+    b8 initialized = false;
     u32 resourceCapacity = 0u;
     u32 samplerCapacity = 0u;
     u32 accelStructCapacity = 0u;
@@ -227,7 +227,7 @@ public:
 private:
     HeapT& m_heap;
     Span<const GpuDescriptorHandle> m_handles;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 

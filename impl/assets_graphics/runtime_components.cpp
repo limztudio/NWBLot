@@ -30,7 +30,7 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_MeshComponentAssetAutoRegistrar, MeshComp
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, RendererComponentAsset);
 
 
-[[nodiscard]] static bool LoadSingleAssetRefComponentPayload(
+[[nodiscard]] static b8 LoadSingleAssetRefComponentPayload(
     const Span<const u8> payload,
     const TStringView context,
     Name& outVirtualPath
@@ -52,7 +52,7 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, Rend
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
+b8 ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
     return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(
         payload,
         NWB_TEXT("ModelComponentAsset::loadComponentPayload"),
@@ -60,7 +60,7 @@ bool ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
     );
 }
 
-bool ModelComponentAsset::validatePayload()const{
+b8 ModelComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("ModelComponentAsset::validatePayload")))
         return false;
     if(!component.model.valid()){
@@ -77,7 +77,7 @@ bool ModelComponentAsset::validatePayload()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
+b8 MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
     return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(
         payload,
         NWB_TEXT("MeshComponentAsset::loadComponentPayload"),
@@ -85,7 +85,7 @@ bool MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
     );
 }
 
-bool MeshComponentAsset::validatePayload()const{
+b8 MeshComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("MeshComponentAsset::validatePayload")))
         return false;
     if(!component.mesh.valid()){
@@ -102,7 +102,7 @@ bool MeshComponentAsset::validatePayload()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
+b8 RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::RendererComponentPayloadBinary>(
         payload,
         NWB_TEXT("RendererComponentAsset::loadComponentPayload")
@@ -130,7 +130,7 @@ bool RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
     return true;
 }
 
-bool RendererComponentAsset::validatePayload()const{
+b8 RendererComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("RendererComponentAsset::validatePayload")))
         return false;
     if(!component.material.valid()){

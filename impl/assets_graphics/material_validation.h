@@ -31,7 +31,7 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateMaterials(ShaderCook& shaderCook, Span<const PreparedShaderEntry> preparedEntries, Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena);
+[[nodiscard]] b8 ValidateMaterials(ShaderCook& shaderCook, Span<const PreparedShaderEntry> preparedEntries, Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

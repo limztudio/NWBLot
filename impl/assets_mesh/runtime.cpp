@@ -32,7 +32,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MeshAssetCodecAutoRegistrar, MeshAssetCodec);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Mesh::loadBinary(const Span<const u8> binary){
+b8 Mesh::loadBinary(const Span<const u8> binary){
     if(!checkVirtualPath(MeshBinaryPayload::s_MeshLoadBinaryContext))
         return false;
 
@@ -72,7 +72,7 @@ bool Mesh::loadBinary(const Span<const u8> binary){
 }
 
 
-bool Mesh::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+b8 Mesh::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     const TString<Core::Alloc::ScratchArena> meshPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
     if(hasIncompleteGeometryPayload()){

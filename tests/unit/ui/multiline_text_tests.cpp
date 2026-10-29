@@ -56,9 +56,9 @@ TEST(UiMultilineText, ControlsAndPrintableAsciiBoundariesRespectCanonicalLfAndNo
         SCOPED_TRACE(scalar);
         const char bytes[]{ 'a', static_cast<char>(scalar), 'b' };
         const AStringView text(bytes, 3u);
-        const bool canonical = scalar == s_UnicodeLineFeed || (scalar >= s_UnicodeSpace && scalar < s_UnicodeDelete);
+        const b8 canonical = scalar == s_UnicodeLineFeed || (scalar >= s_UnicodeSpace && scalar < s_UnicodeDelete);
         EXPECT_EQ(ValidateMultilineText(text), canonical);
-        const bool normalizable = canonical || scalar == s_UnicodeTab || scalar == s_UnicodeCarriageReturn;
+        const b8 normalizable = canonical || scalar == s_UnicodeTab || scalar == s_UnicodeCarriageReturn;
         auto normalized = NormalizeMultilineText(arena.arena, text, 3u);
         EXPECT_EQ(normalized.has_value(), normalizable);
         if(normalizable){

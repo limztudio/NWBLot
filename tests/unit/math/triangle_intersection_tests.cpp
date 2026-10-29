@@ -24,7 +24,7 @@ namespace __hidden_math_triangle_intersection_tests{
 
 
 template<typename VectorT>
-static void CheckWindingAndOperandOrder(const VectorT (&first)[3], const VectorT (&second)[3], const bool expected){
+static void CheckWindingAndOperandOrder(const VectorT (&first)[3], const VectorT (&second)[3], const b8 expected){
     constexpr u32 s_Permutations[][3] = { { 0u, 1u, 2u }, { 0u, 2u, 1u }, { 1u, 0u, 2u }, { 1u, 2u, 0u }, { 2u, 0u, 1u }, { 2u, 1u, 0u } };
     for(const auto& firstOrder : s_Permutations){
         for(const auto& secondOrder : s_Permutations){
@@ -40,7 +40,7 @@ static void CheckWindingAndOperandOrder(const VectorT (&first)[3], const VectorT
     }
 }
 
-static void CheckBothPrecisions(const f64 (&first)[3][3], const f64 (&second)[3][3], const bool expected){
+static void CheckBothPrecisions(const f64 (&first)[3][3], const f64 (&second)[3][3], const b8 expected){
     SIMDVectorSingle firstSingle[3], secondSingle[3];
     SIMDVectorDouble firstDouble[3], secondDouble[3];
     for(u32 index = 0u; index < 3u; ++index){
@@ -164,12 +164,12 @@ TEST(MathTriangleIntersection, InactiveSignalingNaNsDoNotRaiseInvalidDuringInter
         VectorDoubleSetIntW(VectorDoubleSet(0.0, 2.0, 0.0, 0.0), doubleInactiveBits)
     };
     ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const bool singleIntersects = TriangleTests::Intersects(firstSingle[0], firstSingle[1], firstSingle[2], firstSingle[0], firstSingle[1], firstSingle[2]);
+    const b8 singleIntersects = TriangleTests::Intersects(firstSingle[0], firstSingle[1], firstSingle[2], firstSingle[0], firstSingle[1], firstSingle[2]);
     const i32 singleInvalid = TestFloatingPointExceptions(FE_INVALID);
     EXPECT_TRUE(singleIntersects);
     EXPECT_EQ(singleInvalid, 0);
     ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const bool doubleIntersects = TriangleDoubleTests::Intersects(firstDouble[0], firstDouble[1], firstDouble[2], firstDouble[0], firstDouble[1], firstDouble[2]);
+    const b8 doubleIntersects = TriangleDoubleTests::Intersects(firstDouble[0], firstDouble[1], firstDouble[2], firstDouble[0], firstDouble[1], firstDouble[2]);
     const i32 doubleInvalid = TestFloatingPointExceptions(FE_INVALID);
     EXPECT_TRUE(doubleIntersects);
     EXPECT_EQ(doubleInvalid, 0);

@@ -32,7 +32,7 @@ static constexpr AStringView s_MaterialMetaDiagnosticPrefix = "Material meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool HasProjectAssetVirtualRoot(const AStringView virtualPath, ScratchArena& scratchArena){
+static b8 HasProjectAssetVirtualRoot(const AStringView virtualPath, ScratchArena& scratchArena){
     const auto virtualRoot = Core::Assets::AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, scratchArena);
     if(!virtualRoot)
         return false;
@@ -155,7 +155,7 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
             canonicalVariantSize += assignment.key->size() + assignment.value->size() + 1u;
 
         canonicalVariant.reserve(canonicalVariantSize);
-        bool first = true;
+        b8 first = true;
         for(const AssignmentPtr& assignment : sortedAssignments){
             if(!first)
                 canonicalVariant += ';';
@@ -236,7 +236,7 @@ static Expected<MaterialCookEntry::StageShaderMap> ParseMaterialStageShaders(con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ValidateMaterialOpticalStageContract(const Path& nwbFilePath, const MaterialCookEntry& entry){
+static b8 ValidateMaterialOpticalStageContract(const Path& nwbFilePath, const MaterialCookEntry& entry){
     if(entry.stageShaders.empty() || !entry.surfaceSource.empty() || (!entry.transparent && !entry.refractive))
         return true;
 
@@ -260,7 +260,7 @@ static Expected<MaterialCookEntry::ParameterMap> ParseMaterialParameters(const P
     }
     parameters.reserve(parametersValue->asMap().size());
 
-    auto appendParameter = [&](const AStringView paramKeyText, const Core::Metascript::Value& paramValue) -> bool{
+    auto appendParameter = [&](const AStringView paramKeyText, const Core::Metascript::Value& paramValue) -> b8{
         if(!paramValue.isString()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' must be a string"), PathToString<tchar>(nwbFilePath), ConvertString(paramKeyText));
             return false;
@@ -421,7 +421,7 @@ static Expected<CookString> ParseMaterialVirtualAssetField(const Path& nwbFilePa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<bool> ParseMaterialBoolProperty(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName){
+static Expected<b8> ParseMaterialBoolProperty(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName){
     const auto* propertyValue = asset.findField(fieldName);
     if(!propertyValue){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' is required and must be 0 or 1"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));

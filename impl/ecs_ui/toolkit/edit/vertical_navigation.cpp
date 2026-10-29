@@ -43,11 +43,11 @@ EditNavigationSnapshot EditNavigationState::snapshot()const noexcept{
     return { m_instanceGeneration, m_generation, m_preferredX, m_valid };
 }
 
-bool EditNavigationState::matches(const EditNavigationSnapshot& snapshot)const noexcept{
+b8 EditNavigationState::matches(const EditNavigationSnapshot& snapshot)const noexcept{
     return snapshot.instanceGeneration == m_instanceGeneration && snapshot.generation == m_generation && snapshot.preferredX == m_preferredX && snapshot.valid == m_valid;
 }
 
-bool EditNavigationState::setPreferredX(const f32 preferredX)noexcept{
+b8 EditNavigationState::setPreferredX(const f32 preferredX)noexcept{
     if(!IsFinite(preferredX))
         return false;
     advanceGeneration();

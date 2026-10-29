@@ -190,7 +190,7 @@ public:
 };
 
 
-static thread_local bool s_EcsCallerThread = false;
+static thread_local b8 s_EcsCallerThread = false;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -567,8 +567,8 @@ TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
     NWB::Core::CpuTaskScheduler taskScheduler(3u);
     NWB::Core::ECS::World world(arena, taskScheduler);
     const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
-    Atomic<bool> dependentCompleted{ false };
-    Atomic<bool> independentObservedCompletion{ false };
+    Atomic<b8> dependentCompleted{ false };
+    Atomic<b8> independentObservedCompletion{ false };
     i32 value = 0;
 
     ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&]()noexcept{ value = 5; });
@@ -597,7 +597,7 @@ TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
     NWB::Core::ECS::World world(arena, taskScheduler);
     const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
     s_EcsCallerThread = true;
-    bool executedOnCaller = false;
+    b8 executedOnCaller = false;
     i32 value = 0;
 
     ScheduledSystem worker(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&]()noexcept{ value = 23; });
@@ -683,9 +683,9 @@ TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
     NWB::Core::CpuTaskScheduler taskScheduler(s_ExpectedDualCount);
     NWB::Core::CpuTaskScope unrelatedTasks(taskScheduler);
     NWB::Core::ECS::World world(arena, taskScheduler);
-    Atomic<bool> started{ false };
-    Atomic<bool> release{ false };
-    Atomic<bool> completed{ false };
+    Atomic<b8> started{ false };
+    Atomic<b8> release{ false };
+    Atomic<b8> completed{ false };
     const auto cpuTaskAdmission = unrelatedTasks.submit([&]()noexcept{
         started.store(true, MemoryOrder::release);
         started.notify_all();
@@ -699,7 +699,7 @@ TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
     started.wait(false, MemoryOrder::acquire);
     world.createEntity().addComponent<PositionComponent>();
     world.clear();
-    const bool unrelatedStillRunning = !completed.load(MemoryOrder::acquire);
+    const b8 unrelatedStillRunning = !completed.load(MemoryOrder::acquire);
     release.store(true, MemoryOrder::release);
     unrelatedTasks.wait();
     EXPECT_TRUE(unrelatedStillRunning);

@@ -65,8 +65,8 @@ struct State{
     PFN_GFSDK_Aftermath_EnableGpuCrashDumps enable = nullptr;
     PFN_GFSDK_Aftermath_DisableGpuCrashDumps disable = nullptr;
     PFN_GFSDK_Aftermath_GetCrashDumpStatus getStatus = nullptr;
-    bool active = false;
-    bool dumpReady = false;
+    b8 active = false;
+    b8 dumpReady = false;
 
     Futex dumpMutex;
     Vector<u8, Alloc::GlobalArena> dumpBytes;
@@ -122,7 +122,7 @@ static void GFSDK_AFTERMATH_CALL OnCrashDumpDescription(PFN_GFSDK_Aftermath_AddG
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Initialize(){
+b8 Initialize(){
 #if !defined(NWB_WITH_AFTERMATH)
     return false;
 #else
@@ -199,7 +199,7 @@ void Shutdown(){
 #endif
 }
 
-bool IsActive(){
+b8 IsActive(){
 #if defined(NWB_WITH_AFTERMATH)
     return __hidden_aftermath::GetState().active;
 #else

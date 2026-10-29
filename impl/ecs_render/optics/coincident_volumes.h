@@ -75,7 +75,7 @@ public:
     // Candidates must contain each entity at most once.
     void select(Span<const CoincidentOpticalVolumeCandidate> candidates, Core::Alloc::ScratchArena& scratchArena);
     void reset()noexcept;
-    [[nodiscard]] bool isSuppressed(Core::ECS::EntityID entity)const noexcept;
+    [[nodiscard]] b8 isSuppressed(Core::ECS::EntityID entity)const noexcept;
 
 
 private:

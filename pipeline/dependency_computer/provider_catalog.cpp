@@ -27,7 +27,7 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool MatchesExpectedAssetType(
+[[nodiscard]] static b8 MatchesExpectedAssetType(
     const Name& actualType,
     const Name& expectedType,
     const Assets::CookDependencyRegistry* const dependencyRegistry
@@ -48,7 +48,7 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
     return Optional<Name>(*parentName);
 }
 
-[[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory, const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const Span<u8> selected, Vector<usize, Assets::ScratchArena>& order){
+[[nodiscard]] static b8 SelectInput(const NWB::Path& path, const b8 directory, const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const Span<u8> selected, Vector<usize, Assets::ScratchArena>& order){
     Assets::ScratchString input = PathToString(scratchArena, path);
 #if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(input);
@@ -56,7 +56,7 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
     if(!directory)
         CanonicalizeTextInPlace(input);
 #endif
-    bool matched = false;
+    b8 matched = false;
     for(usize index = 0u; index < files.size(); ++index){
         const auto& file = files[index];
         if(directory){
@@ -96,7 +96,7 @@ DependencyProviderCatalog::DependencyProviderCatalog(NWB::Core::Assets::AssetAre
     , m_virtualPaths(arena)
 {}
 
-bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena){
+b8 DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_dependency_provider_catalog;
     const AStringView repoText = options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot);
     const auto absoluteRoot = AbsolutePath(NWB::Path(m_arena, repoText));
@@ -179,13 +179,13 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
         }
         const NWB::Path& path = *resolved;
         const auto directoryResult = IsDirectory(path);
-        const auto regular = directoryResult && *directoryResult ? Expected<bool, ErrorCode>(true) : IsRegularFile(path);
+        const auto regular = directoryResult && *directoryResult ? Expected<b8, ErrorCode>(true) : IsRegularFile(path);
         if(!directoryResult || (!*directoryResult && (!regular || !*regular))){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input is not a file or directory '{}'"), PathToString<tchar>(path));
             return MakeUnexpected(Failure{});
         }
-        const bool directory = *directoryResult;
-        bool contained = !directory;
+        const b8 directory = *directoryResult;
+        b8 contained = !directory;
         if(directory){
             Assets::ScratchString inputPath = PathToString(scratchArena, path);
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -235,7 +235,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
     const Optional<Name> parentVirtualPath = ExtractParentVirtualPath(virtualPathText);
 
     usize matched = Limit<usize>::s_Max;
-    const auto recordMatch = [&](const usize index) -> bool{
+    const auto recordMatch = [&](const usize index) -> b8{
         if(matched != Limit<usize>::s_Max && matched != index){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: multiple physical providers for '{}'"), ConvertString(virtualPath));
             return false;
@@ -309,7 +309,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
             const auto hasBunch = Assets::AssetsBunchCook::HasAssetBunchDeclaration(*document);
             if(!hasBunch)
                 return MakeUnexpected(Failure{});
-            const auto hasComposite = *hasBunch ? Expected<bool, NameTextError::Enum>(false) : Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);
+            const auto hasComposite = *hasBunch ? Expected<b8, NameTextError::Enum>(false) : Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);
             if(!hasComposite)
                 return MakeUnexpected(Failure{});
             if(!*hasBunch && !*hasComposite)
@@ -322,7 +322,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
             if(!expanded)
                 return MakeUnexpected(Failure{});
 
-            bool bunchItemMatched = false;
+            b8 bunchItemMatched = false;
             for(const Assets::ExpandedAssetMetadata& item : *expanded){
                 if(item.virtualPath != virtualPath)
                     continue;

@@ -43,7 +43,7 @@ NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_REGISTER_SHADER_ASSET_CODEC)
 IShader::~IShader()noexcept = default;
 
 
-bool IShader::loadBinaryForStage(const Span<const u8> binary, const Core::ShaderType::Enum shaderType){
+b8 IShader::loadBinaryForStage(const Span<const u8> binary, const Core::ShaderType::Enum shaderType){
     if(!checkVirtualPath(NWB_TEXT("IShader::loadBinaryForStage")))
         return false;
 

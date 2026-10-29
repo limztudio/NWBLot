@@ -23,7 +23,7 @@ namespace __hidden_gpu_task_graph_compiler_queue_placement{
 using namespace GpuTaskGraphCompilerDetail;
 
 
-[[nodiscard]] bool AccumulateExactQueueConstraint(const GpuPhysicalQueueId queue, GpuPhysicalQueueId& inOutQueue)noexcept{
+[[nodiscard]] b8 AccumulateExactQueueConstraint(const GpuPhysicalQueueId queue, GpuPhysicalQueueId& inOutQueue)noexcept{
     if(!queue.valid())
         return true;
     if(inOutQueue.valid() && inOutQueue != queue)
@@ -33,7 +33,7 @@ using namespace GpuTaskGraphCompilerDetail;
 }
 
 
-[[nodiscard]] bool AccumulateInitialOwnershipQueue(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, GpuPhysicalQueueId& inOutQueue)noexcept{
+[[nodiscard]] b8 AccumulateInitialOwnershipQueue(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range, GpuPhysicalQueueId& inOutQueue)noexcept{
     if(resource.initialOwnerHandoffSourceCount == 0u)
         return AccumulateExactQueueConstraint(resource.initialOwnerQueue, inOutQueue);
 
@@ -111,7 +111,7 @@ using namespace GpuTaskGraphCompilerDetail;
 }
 
 
-[[nodiscard]] bool RequestsCompatiblePrecedingMerge(const GpuTaskGraphTaskView& preceding, const GpuTaskGraphTaskView& task)noexcept{
+[[nodiscard]] b8 RequestsCompatiblePrecedingMerge(const GpuTaskGraphTaskView& preceding, const GpuTaskGraphTaskView& task)noexcept{
     if(!task.scheduling.mergeWithPrevious || !GpuTaskGraphCompilerDetail::TaskAllowsPacketMerge(preceding) || !GpuTaskGraphCompilerDetail::TaskAllowsPacketMerge(task))
         return false;
     if(!task.scheduling.allowMergeAcrossConsumerFrontier)
@@ -169,7 +169,7 @@ namespace GpuTaskGraphCompilerDetail{
             || !IsBetterQueue(candidate, result)
         )
             continue;
-        bool legal = true;
+        b8 legal = true;
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount && legal; ++taskOffset){
             const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
             legal = IsLegalQueueAssignmentCandidate(graph, topology, graph.taskAt(taskID.index), candidate);
@@ -251,7 +251,7 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuPhysicalQueueInfo& candidate
 )noexcept{
     GpuTaskQueueScoreExclusions exclusions{ .assignmentOffset = group.assignmentOffset, .assignmentCount = group.assignmentCount, .totalCost = 0u, .candidateQueueCost = 0u, };
-    bool allTasksAllowOverlap = true;
+    b8 allTasksAllowOverlap = true;
     for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
         const GpuTaskQueueAssignment& assignment = assignments[group.assignmentOffset + taskOffset];
         const u64 cost = scoringData.m_taskCosts[assignment.task.index];

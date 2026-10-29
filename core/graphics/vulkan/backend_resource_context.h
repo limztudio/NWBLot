@@ -188,17 +188,17 @@ inline constexpr VkImageLayout s_ReadOnlyImageLayout = VK_IMAGE_LAYOUT_READ_ONLY
 
 
 VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states)noexcept;
-VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool rayTracingStageAvailable)noexcept;
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, b8 rayTracingStageAvailable)noexcept;
 VkImageLayout GetVkImageLayout(ResourceStates::Mask states)noexcept;
 VkFormat ConvertFormat(Format::Enum format)noexcept;
 VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount)noexcept;
 extern VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset = 0)noexcept;
-bool IsSupportedSampleCount(u32 sampleCount)noexcept;
-bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName);
+b8 IsSupportedSampleCount(u32 sampleCount)noexcept;
+b8 ValidateTextureShape(const TextureDesc& desc, TStringView operationName);
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo)noexcept;
 Expected<TextureFormatBlockLayout> GetTextureFormatBlockLayout(const FormatInfo& formatInfo)noexcept;
 Expected<u32> TryComputeUploadSuballocationAlignment(u32 requiredAlignment)noexcept;
-bool IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
+b8 IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel)noexcept;
 Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
     const VkExtent3D& extent,
@@ -211,7 +211,7 @@ Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
 );
 VkImageSubresourceLayers BuildImageSubresourceLayers(VkImageAspectFlags aspectMask, MipLevel mipLevel, ArraySlice arraySlice, ArraySlice layerCount = 1u)noexcept;
 VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, VkImageAspectFlags aspectMask)noexcept;
-Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture, const TextureSubresourceSet& resolvedSubresources, TextureDimension::Enum dimension, Format::Enum format, TStringView operationName, bool assertFailure);
+Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture, const TextureSubresourceSet& resolvedSubresources, TextureDimension::Enum dimension, Format::Enum format, TStringView operationName, b8 assertFailure);
 Expected<StagingTextureRange> BuildStagingTextureRange(
     const TextureSlice& resolvedSlice,
     const StagingTextureMipLayout& mipLayout,
@@ -219,33 +219,33 @@ Expected<StagingTextureRange> BuildStagingTextureRange(
     u64 arrayByteSize,
     u64 totalByteSize,
     u32 requiredOffsetAlignment,
-    bool requireHostPointerRange
+    b8 requireHostPointerRange
 )noexcept;
 Expected<TextureSlice> ResolveTextureSlice(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout)noexcept;
-bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes)noexcept;
+b8 IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes)noexcept;
 
 template<typename... Pointers>
-[[nodiscard]] constexpr bool AreAllPointersValid(Pointers... pointers)noexcept{
+[[nodiscard]] constexpr b8 AreAllPointersValid(Pointers... pointers)noexcept{
     return (... && (pointers != nullptr));
 }
 
-[[nodiscard]] constexpr bool IsTextureSubresourceRangeValid(const TextureSubresourceSet& subresources)noexcept{
+[[nodiscard]] constexpr b8 IsTextureSubresourceRangeValid(const TextureSubresourceSet& subresources)noexcept{
     return subresources.numMipLevels != 0u && subresources.numArraySlices != 0u;
 }
 
-[[nodiscard]] constexpr bool IsPushConstantByteSizeValid(const u32 byteSize, const u32 maximumByteSize)noexcept{
+[[nodiscard]] constexpr b8 IsPushConstantByteSizeValid(const u32 byteSize, const u32 maximumByteSize)noexcept{
     return byteSize != 0u && (byteSize & s_BufferAlignmentMask) == 0u && byteSize <= maximumByteSize;
 }
 
-[[nodiscard]] constexpr bool AreDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32 (&maximumGroupCounts)[3u])noexcept{
+[[nodiscard]] constexpr b8 AreDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32 (&maximumGroupCounts)[3u])noexcept{
     return groupsX <= maximumGroupCounts[0u] && groupsY <= maximumGroupCounts[1u] && groupsZ <= maximumGroupCounts[2u];
 }
 
-bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept;
+b8 BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept;
 u32 GetPushConstantByteSize(const BindingLayoutDesc& desc)noexcept;
-bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, TStringView operationName);
+b8 ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, TStringView operationName);
 Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, TStringView operationName);
-void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
+void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, b8& ownsPipelineLayout);
 [[nodiscard]] Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, TStringView operationName);
 Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
@@ -438,7 +438,7 @@ inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const Fr
     return colorBlending;
 }
 
-Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(u32 sampleCount, bool alphaToCoverageEnable, TStringView operationName);
+Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(u32 sampleCount, b8 alphaToCoverageEnable, TStringView operationName);
 void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState)noexcept;
 
 [[nodiscard]] inline Expected<void, CpuTaskAdmissionError::Enum> CopyHostMemory(void* dst, CpuTaskScheduler& cpuScheduler, const void* src, usize size, usize parallelThreshold = s_CopyHostMemoryParallelThreshold, usize chunkSize = s_CopyHostMemoryChunkSize){

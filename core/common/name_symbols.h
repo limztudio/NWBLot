@@ -38,36 +38,36 @@ inline constexpr AStringView s_FileHeader = "nwb_namesym_v1";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool Resolve(char* outText, usize outTextSize, const NameHash& hash);
+[[nodiscard]] b8 Resolve(char* outText, usize outTextSize, const NameHash& hash);
 
 void InstallRuntimeRegistry();
 // Detaches callbacks before registry teardown so static use cannot dereference it.
 void UninstallRuntimeRegistry()noexcept;
 void ClearRuntimeSymbols();
 
-[[nodiscard]] bool WriteDefaultFile();
+[[nodiscard]] b8 WriteDefaultFile();
 
 [[nodiscard]] usize EntryCount();
 // Serializes the registry using the current `.namesym` document format.
 [[nodiscard]] Expected<void> Serialize(AString<Alloc::GlobalArena>& outText);
 
 // Admits only the current document header before importing symbol records.
-[[nodiscard]] bool LoadFromMemory(AStringView text, Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool LoadFromMemory(AStringView text);
+[[nodiscard]] b8 LoadFromMemory(AStringView text, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 LoadFromMemory(AStringView text);
 
 struct DefaultFileLoadFailure final{
     ErrorCode code;
-    bool loadedAny = false;
+    b8 loadedAny = false;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<bool, DefaultFileLoadFailure> LoadDefaultFile();
+[[nodiscard]] Expected<b8, DefaultFileLoadFailure> LoadDefaultFile();
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> LoadFile(const ::Path<ArenaT>& path, Alloc::ScratchArena& scratchArena){
+[[nodiscard]] inline Expected<b8, ErrorCode> LoadFile(const ::Path<ArenaT>& path, Alloc::ScratchArena& scratchArena){
     AString<Alloc::ScratchArena> text(scratchArena);
     const auto read = ::ReadTextFile(path, text);
     if(!read)
@@ -77,7 +77,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> LoadFile(const ::Path<ArenaT>& path){
+[[nodiscard]] inline Expected<b8, ErrorCode> LoadFile(const ::Path<ArenaT>& path){
     Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
     return LoadFile(path, scratchArena);
 }

@@ -20,10 +20,10 @@ namespace __hidden_adhd_type_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsConcreteConstTemplateArgText(const MStringView text, const SymbolTable& symbols)noexcept{
+[[nodiscard]] b8 IsConcreteConstTemplateArgText(const MStringView text, const SymbolTable& symbols)noexcept{
     if(text.empty())
         return false;
-    const bool isNumericOrBoolConst = (text[0] >= '0' && text[0] <= '9') || text == "true" || text == "false";
+    const b8 isNumericOrBoolConst = (text[0] >= '0' && text[0] <= '9') || text == "true" || text == "false";
     return isNumericOrBoolConst || symbols.findGlobalConstant(text) != nullptr;
 }
 
@@ -38,8 +38,8 @@ namespace __hidden_adhd_type_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsKnownConcreteTypeName(const MStringView name, const SymbolTable& symbols)noexcept{
-    if(name == "bool" || name == "void"
+[[nodiscard]] b8 IsKnownConcreteTypeName(const MStringView name, const SymbolTable& symbols)noexcept{
+    if(name == "b8" || name == "void"
         || IsIntegerScalarType(name) || IsFloatScalarType(name)
         || name == "Name" || name == "Path" || name == "String" || name == "StringView" || name == "CompactString"
         || name == "EntityID"
@@ -62,7 +62,7 @@ namespace __hidden_adhd_type_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsNonThreadSafeContainer(const MStringView typeName)noexcept{
+[[nodiscard]] b8 IsNonThreadSafeContainer(const MStringView typeName)noexcept{
     return typeName == "Vector"
         || typeName == "FixedVector"
         || typeName == "ForwardList"
@@ -76,14 +76,14 @@ namespace __hidden_adhd_type_utils{
         || typeName == "String";
 }
 
-[[nodiscard]] bool CheckSwizzlePattern(const MStringView text, const u32 maxLanes, bool& outIsPattern, bool& outValidLanes)noexcept{
+[[nodiscard]] b8 CheckSwizzlePattern(const MStringView text, const u32 maxLanes, b8& outIsPattern, b8& outValidLanes)noexcept{
     outIsPattern = false;
     outValidLanes = true;
     if(text.empty() || text.size() > 4u)
         return false;
 
-    bool usesXYZW = false;
-    bool usesRGBA = false;
+    b8 usesXYZW = false;
+    b8 usesRGBA = false;
     u32 highestLane = 0u;
 
     for(usize i = 0u; i < text.size(); ++i){
@@ -116,7 +116,7 @@ namespace __hidden_adhd_type_utils{
     return true;
 }
 
-[[nodiscard]] bool IsSingleTypeParamBuiltinGeneric(const MStringView name)noexcept{
+[[nodiscard]] b8 IsSingleTypeParamBuiltinGeneric(const MStringView name)noexcept{
     return name == "Vector"
         || name == "ParallelVector"
         || name == "ForwardList"
@@ -133,20 +133,20 @@ namespace __hidden_adhd_type_utils{
         || name == "Atomic";
 }
 
-[[nodiscard]] bool IsTwoTypeParamBuiltinGeneric(const MStringView name)noexcept{
+[[nodiscard]] b8 IsTwoTypeParamBuiltinGeneric(const MStringView name)noexcept{
     return name == "Map"
         || name == "HashMap"
         || name == "ParallelHashMap"
         || name == "Expected";
 }
 
-[[nodiscard]] bool IsTypeAndCountBuiltinGeneric(const MStringView name)noexcept{
+[[nodiscard]] b8 IsTypeAndCountBuiltinGeneric(const MStringView name)noexcept{
     return name == "Array"
         || name == "FixedVector"
         || name == "ParallelBlockQueue";
 }
 
-[[nodiscard]] bool IsVoidTypeRef(const TypeRef* ref)noexcept{
+[[nodiscard]] b8 IsVoidTypeRef(const TypeRef* ref)noexcept{
     if(!ref)
         return true;
     return ref->name == "void"
@@ -156,11 +156,11 @@ namespace __hidden_adhd_type_utils{
         && ref->templateArgs.empty();
 }
 
-[[nodiscard]] bool AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b, const SymbolTable& symbols)noexcept{
+[[nodiscard]] b8 AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b, const SymbolTable& symbols)noexcept{
     return AreTypeRefsEquivalentWithSubst(a, b, nullptr, nullptr, symbols);
 }
 
-[[nodiscard]] bool AreTypeRefsEquivalentWithSubst(
+[[nodiscard]] b8 AreTypeRefsEquivalentWithSubst(
     const TypeRef* actual,
     const TypeRef* pattern,
     const MVector<TemplateParamDecl>* ifaceParams,
@@ -224,7 +224,7 @@ namespace __hidden_adhd_type_utils{
     return true;
 }
 
-[[nodiscard]] bool AreTemplateArgListsEqual(const MVector<TypeArg>& a, const MVector<TypeArg>& b, const SymbolTable& symbols)noexcept{
+[[nodiscard]] b8 AreTemplateArgListsEqual(const MVector<TypeArg>& a, const MVector<TypeArg>& b, const SymbolTable& symbols)noexcept{
     if(a.size() != b.size())
         return false;
     for(usize i = 0u; i < a.size(); ++i){
@@ -242,7 +242,7 @@ namespace __hidden_adhd_type_utils{
     return true;
 }
 
-[[nodiscard]] bool DoParamListsMatch(const MVector<ParamDecl>& a, const MVector<ParamDecl>& b, const SymbolTable& symbols)noexcept{
+[[nodiscard]] b8 DoParamListsMatch(const MVector<ParamDecl>& a, const MVector<ParamDecl>& b, const SymbolTable& symbols)noexcept{
     if(a.size() != b.size())
         return false;
     for(usize i = 0u; i < a.size(); ++i){
@@ -271,7 +271,7 @@ namespace __hidden_adhd_type_utils{
     return nullptr;
 }
 
-[[nodiscard]] bool HasConstValueTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, const MStringView name)noexcept{
+[[nodiscard]] b8 HasConstValueTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, const MStringView name)noexcept{
     if(method){
         for(const TemplateParamDecl& tp : method->templateParams){
             if(tp.constValueType && tp.name == name)
@@ -287,7 +287,7 @@ namespace __hidden_adhd_type_utils{
     return false;
 }
 
-[[nodiscard]] bool NormalizeConstantTemplateArg(
+[[nodiscard]] b8 NormalizeConstantTemplateArg(
     TypeArg& arg,
     const ClassDecl* enclosingClass,
     const MethodDecl* enclosingMethod,
@@ -355,7 +355,7 @@ namespace __hidden_adhd_type_utils{
     return val > 0u ? val : 1u;
 }
 
-[[nodiscard]] bool IsConcreteTypeRef(const TypeRef& type, const SymbolTable& symbols)noexcept{
+[[nodiscard]] b8 IsConcreteTypeRef(const TypeRef& type, const SymbolTable& symbols)noexcept{
     if(type.isAuto)
         return false;
     if(type.isFuncType){
@@ -384,7 +384,7 @@ namespace __hidden_adhd_type_utils{
     return true;
 }
 
-[[nodiscard]] bool IsConcreteTemplateArgList(
+[[nodiscard]] b8 IsConcreteTemplateArgList(
     const MVector<TemplateParamDecl>& params,
     const MVector<TypeArg>& args,
     const SymbolTable& symbols
@@ -405,7 +405,7 @@ namespace __hidden_adhd_type_utils{
     return true;
 }
 
-[[nodiscard]] bool TypeContainsArenaBackedContainer(
+[[nodiscard]] b8 TypeContainsArenaBackedContainer(
     const TypeRef& type,
     const SymbolTable& symbols,
     const u32 depth

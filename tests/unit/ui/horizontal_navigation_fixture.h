@@ -42,11 +42,11 @@ public:
 
 protected:
     [[nodiscard]] InputRoutingResult send(const InputEvent& event);
-    [[nodiscard]] InputRoutingResult keyDown(Core::Key::Enum key, bool repeat = false);
+    [[nodiscard]] InputRoutingResult keyDown(Core::Key::Enum key, b8 repeat = false);
     [[nodiscard]] InputRoutingResult keyUp(Core::Key::Enum key);
     void press(Core::Key::Enum key);
     void focusTarget(usize index = 0u);
-    [[nodiscard]] bool publish(usize count = 2u, const PopupScope* popups = nullptr, usize popupCount = 0u);
+    [[nodiscard]] b8 publish(usize count = 2u, const PopupScope* popups = nullptr, usize popupCount = 0u);
     [[nodiscard]] Expected<ControlAction> take(usize index = 0u)noexcept;
     void bindEditor(usize hostIndex = 0u)noexcept;
 

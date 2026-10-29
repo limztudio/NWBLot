@@ -135,7 +135,7 @@ Stmt* StmtParser::parseNativeStatement(const SourceSpan span){
 }
 
 Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const DiagnosticKind::Enum kind, const MVector<ParsedAttribute>& attributes){
-    bool isEssential = false;
+    b8 isEssential = false;
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "essential" && attr.arguments.empty()){
             isEssential = true;
@@ -256,7 +256,7 @@ Stmt* StmtParser::parseVarDeclAfterType(TypeRef* varType, const SourceSpan span)
     return stmt;
 }
 
-bool StmtParser::applySchedulingAttributes(const MVector<ParsedAttribute>& attributes, ParallelCoreKind::Enum& outCore, ParallelPriorityKind::Enum& outPriority){
+b8 StmtParser::applySchedulingAttributes(const MVector<ParsedAttribute>& attributes, ParallelCoreKind::Enum& outCore, ParallelPriorityKind::Enum& outPriority){
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "core"){
             if(attr.arguments.size() != 1u){

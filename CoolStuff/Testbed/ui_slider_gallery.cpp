@@ -24,7 +24,7 @@ void UiSliderGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, con
     Builder& ui = context.ui;
     if(!ui.beginPanel("slider_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
         return;
-    bool valid = ui.label(s_TitleKey, "Continuous slider");
+    b8 valid = ui.label(s_TitleKey, "Continuous slider");
     if(ui.checkbox(s_EnabledKey, "Enable slider", m_enabled))
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom slider enabled={}"), m_enabled);
     SliderOptions options;

@@ -12,7 +12,7 @@
 
 
 using NameSymbolRecordCallback = void(*)(const NameHash& hash, AStringView text, void* userData);
-using NameSymbolResolveCallback = bool(*)(char* outText, usize outTextSize, const NameHash& hash, void* userData);
+using NameSymbolResolveCallback = b8(*)(char* outText, usize outTextSize, const NameHash& hash, void* userData);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,19 +45,19 @@ struct NameSymbolResolverState{
     return s_State;
 }
 
-[[nodiscard]] inline bool& SymbolRecordInProgress()noexcept{
-    thread_local static bool s_InProgress = false;
+[[nodiscard]] inline b8& SymbolRecordInProgress()noexcept{
+    thread_local static b8 s_InProgress = false;
     return s_InProgress;
 }
 
-[[nodiscard]] inline bool& SymbolResolveInProgress()noexcept{
-    thread_local static bool s_InProgress = false;
+[[nodiscard]] inline b8& SymbolResolveInProgress()noexcept{
+    thread_local static b8 s_InProgress = false;
     return s_InProgress;
 }
 
 class ScopedSymbolCallbackFlag final{
 public:
-    explicit ScopedSymbolCallbackFlag(bool& flag)noexcept
+    explicit ScopedSymbolCallbackFlag(b8& flag)noexcept
         : m_flag(flag)
     {
         m_flag = true;
@@ -73,7 +73,7 @@ public:
 
 
 private:
-    bool& m_flag;
+    b8& m_flag;
 };
 
 // Rotating thread-local scratch for Name text in opt/fin; ring avoids aliasing in one expression.
@@ -104,7 +104,7 @@ inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callbac
     state.userData = userData;
 }
 
-[[nodiscard]] inline bool ResolveNameSymbolText(char* const outText, const usize outTextSize, const NameHash& hash){
+[[nodiscard]] inline b8 ResolveNameSymbolText(char* const outText, const usize outTextSize, const NameHash& hash){
     if(IsZeroHash(hash) || outText == nullptr || outTextSize == 0u)
         return false;
 
@@ -112,7 +112,7 @@ inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callbac
     if(!state.callback)
         return false;
 
-    bool& inProgress = SymbolResolveInProgress();
+    b8& inProgress = SymbolResolveInProgress();
     if(inProgress)
         return false;
     ScopedSymbolCallbackFlag resolveFlag(inProgress);
@@ -129,7 +129,7 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
     if(!state.callback)
         return;
 
-    bool& inProgress = SymbolRecordInProgress();
+    b8& inProgress = SymbolRecordInProgress();
     if(inProgress)
         return;
     ScopedSymbolCallbackFlag recordFlag(inProgress);
@@ -156,7 +156,7 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
 }
 
 #if defined(NWB_BUILD_SYMBOLS)
-inline void RecordStoredNameSymbolText(const NameHash& hash, const AStringView text, const bool hasText){
+inline void RecordStoredNameSymbolText(const NameHash& hash, const AStringView text, const b8 hasText){
     if(!hasText || text.empty() || IsZeroHash(hash))
         return;
 

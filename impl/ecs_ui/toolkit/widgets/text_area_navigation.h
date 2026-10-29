@@ -30,7 +30,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool current()const noexcept;
+    [[nodiscard]] b8 current()const noexcept;
 
 
 private:

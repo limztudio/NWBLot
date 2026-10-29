@@ -46,7 +46,7 @@ struct ThrowingResetTask{
     struct Payload{
         u32& destructionCount;
         u32& discardCount;
-        bool owned = true;
+        b8 owned = true;
 
 
     public:
@@ -74,16 +74,16 @@ struct ThrowingResetTask{
 
 struct BorrowedPayloadLifetimeTask{
     struct Payload{
-        bool& ownerAlive;
+        b8& ownerAlive;
         u32& destructionCount;
         u32& discardCount;
         u32& lateUseCount;
-        bool throwOnDiscard = false;
-        bool owned = true;
+        b8 throwOnDiscard = false;
+        b8 owned = true;
 
 
     public:
-        Payload(bool& alive, u32& destructions, u32& discards, u32& lateUses, const bool throws)noexcept
+        Payload(b8& alive, u32& destructions, u32& discards, u32& lateUses, const b8 throws)noexcept
             : ownerAlive(alive)
             , destructionCount(destructions)
             , discardCount(discards)
@@ -398,7 +398,7 @@ TEST(GpuTaskGraph, ResetDuringUnwindPreservesOriginalFailureWithoutCallingDiscar
 
 TEST(GpuTaskGraph, RetiresOperationPayloadsBeforeBorrowedStateExpiresAndPreservesDeclarations){
     TestArena testArena;
-    bool ownerAlive = true;
+    b8 ownerAlive = true;
     u32 destructionCount = 0u;
     u32 discardCount = 0u;
     u32 lateUseCount = 0u;
@@ -445,7 +445,7 @@ TEST(GpuTaskGraph, RetiresOperationPayloadsBeforeBorrowedStateExpiresAndPreserve
 
 TEST(GpuTaskGraph, OperationPayloadRetirementPreservesObserverFailureAndFinishesAllDestruction){
     TestArena testArena;
-    bool ownerAlive = true;
+    b8 ownerAlive = true;
     u32 destructionCount = 0u;
     u32 discardCount = 0u;
     u32 lateUseCount = 0u;
@@ -481,7 +481,7 @@ TEST(GpuTaskGraph, OperationPayloadRetirementPreservesObserverFailureAndFinishes
 
 TEST(GpuTaskGraph, OperationPayloadRetirementDuringUnwindPreservesOriginalFailureWithoutObservers){
     TestArena testArena;
-    bool ownerAlive = true;
+    b8 ownerAlive = true;
     u32 destructionCount = 0u;
     u32 discardCount = 0u;
     u32 lateUseCount = 0u;

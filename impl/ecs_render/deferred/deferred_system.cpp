@@ -38,7 +38,7 @@ void RendererDeferredSystem::invalidateResources()noexcept{
     m_deferredState.invalidateResources();
 }
 
-bool RendererDeferredSystem::setPresentationSettings(const PresentationSettings& settings)noexcept{
+b8 RendererDeferredSystem::setPresentationSettings(const PresentationSettings& settings)noexcept{
     if(!ValidatePresentationSettings(settings))
         return false;
     m_deferredState.m_presentationSettings = settings;

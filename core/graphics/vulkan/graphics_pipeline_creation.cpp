@@ -119,9 +119,9 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
     pso->m_desc = desc;
     pso->m_framebufferInfo = fbinfo;
 
-    const bool hasTessellationControlShader = static_cast<bool>(desc.hullShader);
-    const bool hasTessellationEvaluationShader = static_cast<bool>(desc.domainShader);
-    const bool usesTessellation = hasTessellationControlShader || hasTessellationEvaluationShader || desc.primType == PrimitiveType::PatchList || desc.patchControlPoints > 0;
+    const b8 hasTessellationControlShader = static_cast<b8>(desc.hullShader);
+    const b8 hasTessellationEvaluationShader = static_cast<b8>(desc.domainShader);
+    const b8 usesTessellation = hasTessellationControlShader || hasTessellationEvaluationShader || desc.primType == PrimitiveType::PatchList || desc.patchControlPoints > 0;
 
     if(hasTessellationControlShader != hasTessellationEvaluationShader){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation control and evaluation shaders must both be provided"));

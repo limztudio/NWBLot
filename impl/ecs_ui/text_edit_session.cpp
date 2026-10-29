@@ -121,7 +121,7 @@ UiTextEditResult UiTextEditSession::drain(const UiTextEditOwner& owner, Ui::Edit
     return result;
 }
 
-bool UiTextEditSession::end(const UiTextEditOwner& owner, Ui::EditModel& model){
+b8 UiTextEditSession::end(const UiTextEditOwner& owner, Ui::EditModel& model){
     if(!m_service.isOwnerThread() || !m_token.valid() || !(m_owner == owner))
         return false;
     if(m_expectedModel.matches(model))
@@ -130,7 +130,7 @@ bool UiTextEditSession::end(const UiTextEditOwner& owner, Ui::EditModel& model){
 }
 
 
-bool UiTextEditSession::matchesPublishedModel(const Ui::EditModel& model)const noexcept{
+b8 UiTextEditSession::matchesPublishedModel(const Ui::EditModel& model)const noexcept{
     return
         model.revision() == m_publishedModelRevision && model.externalRevision() == m_publishedExternalRevision
         && model.selectionGeneration() == m_publishedSelectionGeneration
@@ -153,7 +153,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::publishSurrounding(const Ui::E
     return Core::TextInputAdmission::Accepted;
 }
 
-bool UiTextEditSession::release(){
+b8 UiTextEditSession::release(){
     if(!m_token.valid())
         return true;
     if(!m_service.isOwnerThread())

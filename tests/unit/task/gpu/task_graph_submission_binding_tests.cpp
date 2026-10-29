@@ -49,7 +49,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool prepare(usize taskCount, usize mergeGroupSize = 1u);
+    [[nodiscard]] b8 prepare(usize taskCount, usize mergeGroupSize = 1u);
     [[nodiscard]] Graphics::QueueSubmissionPreSubmitHook hook(u64 identity)noexcept;
 };
 
@@ -66,7 +66,7 @@ SubmissionBindingFixture::SubmissionBindingFixture()
     , tasks(testArena.arena)
 {}
 
-[[nodiscard]] bool SubmissionBindingFixture::prepare(const usize taskCount, const usize mergeGroupSize){
+[[nodiscard]] b8 SubmissionBindingFixture::prepare(const usize taskCount, const usize mergeGroupSize){
     tasks.reserve(taskCount);
     tickets.reserve(taskCount);
     const Graphics::GpuTaskCommandRequirements commands{ Graphics::GpuQueueCapability::Graphics };

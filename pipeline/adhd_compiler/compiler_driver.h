@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RunAdhdCompilerDriver(
+[[nodiscard]] b8 RunAdhdCompilerDriver(
     const AdhdCompilerOptions& options,
     NWB::Core::Metascript::MetaArena& arena
 );

@@ -38,7 +38,7 @@ namespace VulkanDetail{
     }
 }
 
-[[nodiscard]] inline bool IsViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limits)noexcept{
+[[nodiscard]] inline b8 IsViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limits)noexcept{
     if(!IsFinite(viewport.minX) || !IsFinite(viewport.maxX) || !IsFinite(viewport.minY) || !IsFinite(viewport.maxY) || !IsFinite(viewport.minZ) || !IsFinite(viewport.maxZ))
         return false;
     if(viewport.maxX <= viewport.minX || viewport.maxY < viewport.minY || viewport.minZ < 0.0f || viewport.minZ > 1.0f || viewport.maxZ < 0.0f || viewport.maxZ > 1.0f)
@@ -57,7 +57,7 @@ namespace VulkanDetail{
     ;
 }
 
-[[nodiscard]] inline bool IsImplicitScissorValid(const Viewport& viewport)noexcept{
+[[nodiscard]] inline b8 IsImplicitScissorValid(const Viewport& viewport)noexcept{
     if(!IsFinite(viewport.minX) || !IsFinite(viewport.maxX) || !IsFinite(viewport.minY) || !IsFinite(viewport.maxY))
         return false;
 
@@ -82,7 +82,7 @@ namespace VulkanDetail{
     return scissor;
 }
 
-[[nodiscard]] constexpr bool TextureSubresourceRangesOverlap(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
+[[nodiscard]] constexpr b8 TextureSubresourceRangesOverlap(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
     const u64 lhsMipEnd = static_cast<u64>(lhs.baseMipLevel) + lhs.numMipLevels;
     const u64 rhsMipEnd = static_cast<u64>(rhs.baseMipLevel) + rhs.numMipLevels;
     const u64 lhsArrayEnd = static_cast<u64>(lhs.baseArraySlice) + lhs.numArraySlices;
@@ -91,7 +91,7 @@ namespace VulkanDetail{
 }
 
 [[nodiscard]] constexpr TextureDimension::Enum GetFramebufferAttachmentViewDimension(const TextureDesc& desc, const TextureSubresourceSet& resolvedSubresources)noexcept{
-    const bool arrayView = resolvedSubresources.numArraySlices > 1u;
+    const b8 arrayView = resolvedSubresources.numArraySlices > 1u;
     switch(desc.dimension){
     case TextureDimension::Texture2D:
     case TextureDimension::Texture2DArray:
@@ -108,7 +108,7 @@ namespace VulkanDetail{
     }
 }
 
-[[nodiscard]] constexpr bool IsFramebufferAttachmentSubresourceSetValid(const TextureDesc& desc, const TextureSubresourceSet& subresources)noexcept{
+[[nodiscard]] constexpr b8 IsFramebufferAttachmentSubresourceSetValid(const TextureDesc& desc, const TextureSubresourceSet& subresources)noexcept{
     if(desc.mipLevels == 0u || subresources.baseMipLevel >= desc.mipLevels)
         return false;
     const u32 remainingMipLevels = desc.mipLevels - subresources.baseMipLevel;
@@ -140,7 +140,7 @@ struct RenderPassAttachmentOperations{
     VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 };
 
-[[nodiscard]] constexpr bool IsRenderPassAttachmentActionsValid(const RenderPassAttachmentActions& actions)noexcept{
+[[nodiscard]] constexpr b8 IsRenderPassAttachmentActionsValid(const RenderPassAttachmentActions& actions)noexcept{
     return actions.loadAction < RenderPassLoadAction::Count && actions.storeAction < RenderPassStoreAction::Count;
 }
 
@@ -172,14 +172,14 @@ struct RenderPassAttachmentOperations{
     return { ConvertRenderPassLoadAction(actions.loadAction), ConvertRenderPassStoreAction(actions.storeAction), };
 }
 
-[[nodiscard]] inline bool IsPipelineColorAttachmentFormatClassValid(const Format::Enum format)noexcept{
+[[nodiscard]] inline b8 IsPipelineColorAttachmentFormatClassValid(const Format::Enum format)noexcept{
     if(ConvertFormat(format) == VK_FORMAT_UNDEFINED)
         return false;
     const FormatInfo& formatInfo = GetFormatInfo(format);
     return !formatInfo.hasDepth && !formatInfo.hasStencil;
 }
 
-[[nodiscard]] constexpr bool IsStridedBufferRangeValid(const BufferDesc& desc, const u64 bindingOffsetBytes, const u32 firstElement, const u32 elementCount, const u32 elementStrideBytes, const u32 requiredElementBytes)noexcept{
+[[nodiscard]] constexpr b8 IsStridedBufferRangeValid(const BufferDesc& desc, const u64 bindingOffsetBytes, const u32 firstElement, const u32 elementCount, const u32 elementStrideBytes, const u32 requiredElementBytes)noexcept{
     if(elementCount == 0u)
         return true;
     if(elementStrideBytes == 0u || requiredElementBytes == 0u || requiredElementBytes > elementStrideBytes)
@@ -200,24 +200,24 @@ struct RenderPassAttachmentOperations{
     return format == Format::R16_UINT ? sizeof(u16) : format == Format::R32_UINT ? sizeof(u32) : 0u;
 }
 
-[[nodiscard]] constexpr bool IsIndexFormatSupported(const Format::Enum format, const bool fullDrawIndexUint32Enabled)noexcept{
+[[nodiscard]] constexpr b8 IsIndexFormatSupported(const Format::Enum format, const b8 fullDrawIndexUint32Enabled)noexcept{
     return format == Format::R16_UINT || (format == Format::R32_UINT && fullDrawIndexUint32Enabled);
 }
 
-[[nodiscard]] constexpr bool IsStencilReadOnlyCompatible(const DepthStencilState& state)noexcept{
+[[nodiscard]] constexpr b8 IsStencilReadOnlyCompatible(const DepthStencilState& state)noexcept{
     const auto keepsStencil = [](const DepthStencilState::StencilOpDesc& stencilState)constexpr noexcept{
         return stencilState.failOp == StencilOp::Keep && stencilState.depthFailOp == StencilOp::Keep && stencilState.passOp == StencilOp::Keep;
     };
     return !state.stencilEnable || state.stencilWriteMask == 0u || (keepsStencil(state.frontFaceStencil) && keepsStencil(state.backFaceStencil));
 }
 
-[[nodiscard]] constexpr bool IsDepthStencilReadOnlyCompatible(const DepthStencilState& state, const VkImageAspectFlags attachmentAspects)noexcept{
-    const bool depthCompatible = (attachmentAspects & VK_IMAGE_ASPECT_DEPTH_BIT) == 0u || !state.depthTestEnable || !state.depthWriteEnable;
-    const bool stencilCompatible = (attachmentAspects & VK_IMAGE_ASPECT_STENCIL_BIT) == 0u || IsStencilReadOnlyCompatible(state);
+[[nodiscard]] constexpr b8 IsDepthStencilReadOnlyCompatible(const DepthStencilState& state, const VkImageAspectFlags attachmentAspects)noexcept{
+    const b8 depthCompatible = (attachmentAspects & VK_IMAGE_ASPECT_DEPTH_BIT) == 0u || !state.depthTestEnable || !state.depthWriteEnable;
+    const b8 stencilCompatible = (attachmentAspects & VK_IMAGE_ASPECT_STENCIL_BIT) == 0u || IsStencilReadOnlyCompatible(state);
     return depthCompatible && stencilCompatible;
 }
 
-[[nodiscard]] constexpr bool IsIndexDrawRangeValid(const BufferDesc& desc, const u64 bindingOffsetBytes, const u32 startIndex, const u32 indexCount, const u32 indexElementByteSize)noexcept{
+[[nodiscard]] constexpr b8 IsIndexDrawRangeValid(const BufferDesc& desc, const u64 bindingOffsetBytes, const u32 startIndex, const u32 indexCount, const u32 indexElementByteSize)noexcept{
     if(indexElementByteSize == 0u || (bindingOffsetBytes % indexElementByteSize) != 0u)
         return false;
 
@@ -229,7 +229,7 @@ struct RenderPassAttachmentOperations{
     return drawOffsetBytes <= desc.byteSize && indexBytes <= desc.byteSize - drawOffsetBytes;
 }
 
-[[nodiscard]] constexpr bool IsIndirectCommandRangeValid(const BufferDesc& desc, const u64 offsetBytes, const u64 commandSizeBytes, const u32 commandCount)noexcept{
+[[nodiscard]] constexpr b8 IsIndirectCommandRangeValid(const BufferDesc& desc, const u64 offsetBytes, const u64 commandSizeBytes, const u32 commandCount)noexcept{
     if(commandCount == 0u || commandSizeBytes == 0u || (offsetBytes & s_BufferAlignmentMask) != 0u)
         return false;
     if(commandSizeBytes > Limit<u64>::s_Max / commandCount)
@@ -238,11 +238,11 @@ struct RenderPassAttachmentOperations{
     return offsetBytes <= desc.byteSize && totalBytes <= desc.byteSize - offsetBytes;
 }
 
-[[nodiscard]] constexpr bool IsIndirectDrawCountValid(const u32 drawCount, const u32 maximumDrawCount, const bool multiDrawIndirectEnabled)noexcept{
+[[nodiscard]] constexpr b8 IsIndirectDrawCountValid(const u32 drawCount, const u32 maximumDrawCount, const b8 multiDrawIndirectEnabled)noexcept{
     return drawCount != 0u && drawCount <= maximumDrawCount && (drawCount == 1u || multiDrawIndirectEnabled);
 }
 
-[[nodiscard]] constexpr bool AreMeshDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32 (&maximumGroupCounts)[3], const u32 maximumTotalGroupCount)noexcept{
+[[nodiscard]] constexpr b8 AreMeshDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32 (&maximumGroupCounts)[3], const u32 maximumTotalGroupCount)noexcept{
     if(groupsX == 0u || groupsY == 0u || groupsZ == 0u || groupsX > maximumGroupCounts[0u] || groupsY > maximumGroupCounts[1u] || groupsZ > maximumGroupCounts[2u])
         return false;
 
@@ -255,7 +255,7 @@ struct MeshDispatchLimits{
     u32 maximumTotalGroupCount = 0u;
 };
 
-[[nodiscard]] inline MeshDispatchLimits GetMeshDispatchLimits(const VkPhysicalDeviceMeshShaderPropertiesEXT& properties, const bool taskShaderActive)noexcept{
+[[nodiscard]] inline MeshDispatchLimits GetMeshDispatchLimits(const VkPhysicalDeviceMeshShaderPropertiesEXT& properties, const b8 taskShaderActive)noexcept{
     return taskShaderActive ? MeshDispatchLimits{ properties.maxTaskWorkGroupCount, properties.maxTaskWorkGroupTotalCount } : MeshDispatchLimits{ properties.maxMeshWorkGroupCount, properties.maxMeshWorkGroupTotalCount };
 }
 

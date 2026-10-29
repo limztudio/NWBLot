@@ -27,7 +27,7 @@ struct SoftShadowResolveStageState{
 struct SoftShadowResolveChannelState{
     SoftShadowResolveStageState m_wavelet;
     SoftShadowResolveStageState m_upsample;
-    bool m_failed = false;
+    b8 m_failed = false;
 };
 
 struct SoftShadowResolveState{
@@ -39,9 +39,9 @@ struct SoftShadowResolveState{
     SoftShadowResolveStageState m_combinedWavelet;
     Core::BindingLayoutHandle m_combinedTemporalBindingLayout;
     SoftShadowResolveStageState m_combinedTemporal;
-    bool m_combinedUpsampleFailed = false;
-    bool m_combinedWaveletFailed = false;
-    bool m_combinedTemporalFailed = false;
+    b8 m_combinedUpsampleFailed = false;
+    b8 m_combinedWaveletFailed = false;
+    b8 m_combinedTemporalFailed = false;
 };
 
 

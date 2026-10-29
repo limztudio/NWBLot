@@ -22,13 +22,13 @@ class X11TextInputDispatchFence final : private NoCopy{
 public:
     void enter()noexcept{ ++m_depth; }
 
-    [[nodiscard]] bool leave()noexcept{
+    [[nodiscard]] b8 leave()noexcept{
         NWB_ASSERT(m_depth > 0u);
         --m_depth;
         return m_depth == 0u && m_retiring;
     }
 
-    [[nodiscard]] bool retire()noexcept{
+    [[nodiscard]] b8 retire()noexcept{
         m_retiring = true;
         return m_depth == 0u;
     }
@@ -38,7 +38,7 @@ public:
 
 private:
     u32 m_depth = 0u;
-    bool m_retiring = false;
+    b8 m_retiring = false;
 };
 
 

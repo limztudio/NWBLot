@@ -57,27 +57,27 @@ namespace EditClipboardAction{
 
 struct EditCommandRequest{
     EditCommand::Enum command = EditCommand::None;
-    bool extend = false;
-    bool repeat = false;
+    b8 extend = false;
+    b8 repeat = false;
 };
 
 struct EditCommandResult{
     EditClipboardAction::Enum clipboard = EditClipboardAction::None;
-    bool handled = false;
-    bool textChanged = false;
-    bool selectionChanged = false;
-    bool compositionChanged = false;
-    bool submitted = false;
-    bool cancelled = false;
+    b8 handled = false;
+    b8 textChanged = false;
+    b8 selectionChanged = false;
+    b8 compositionChanged = false;
+    b8 submitted = false;
+    b8 cancelled = false;
 };
 
 // Bindings or device adapters supply admitted editing intent; native-consumed input is filtered before translation.
 // Accept inserts LF in multiline mode and submits in single-line mode; Submit always submits.
-[[nodiscard]] EditCommandRequest TranslateEditCommand(const InputCommandIntent& intent, bool repeat, EditTextMode::Enum mode = EditTextMode::SingleLine)noexcept;
+[[nodiscard]] EditCommandRequest TranslateEditCommand(const InputCommandIntent& intent, b8 repeat, EditTextMode::Enum mode = EditTextMode::SingleLine)noexcept;
 // Active preedit owns editing keys and Enter.
 // Escape first cancels preedit without cancelling the widget.
 // Clipboard actions describe requests; the host borrows its OS service to perform the actual exchange.
-[[nodiscard]] EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, bool readOnly = false);
+[[nodiscard]] EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, b8 readOnly = false);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

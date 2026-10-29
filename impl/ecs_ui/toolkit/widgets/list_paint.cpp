@@ -28,7 +28,7 @@ Expected<Builder::ListRow> Builder::prepareListRow(const ListFrame& frame, const
     const auto resolved = frame.source->indexOf(key);
     if(!resolved || *resolved != index || !listStateMatches(frame))
         return MakeUnexpected(Failure{});
-    const bool enabled = frame.options.enabled && frame.source->enabled(index);
+    const b8 enabled = frame.options.enabled && frame.source->enabled(index);
     if(!listStateMatches(frame))
         return MakeUnexpected(Failure{});
     const ShapeRequest request{ frame.source->text(index), StringView(frame.measureKey.language.data()), frame.widgetStyle.fontSize, frame.measureKey.scriptTag, TextDirection::LeftToRight };
@@ -58,7 +58,7 @@ Expected<ScrollPlacement> Builder::measureListPlacement(ListFrame& frame, const 
     ScrollState scroll;
     if(!listMatches(frame) || !scroll.setOffset(frame.scrollOffset))
         return MakeUnexpected(Failure{});
-    const bool revealCursor = frame.revealCursor && frame.cursorKey != 0u;
+    const b8 revealCursor = frame.revealCursor && frame.cursorKey != 0u;
     u64 cursorIndex = 0u;
     if(revealCursor){
         const auto resolved = frame.source->indexOf(frame.cursorKey);
@@ -118,7 +118,7 @@ Expected<ScrollPlacement> Builder::measureListPlacement(ListFrame& frame, const 
     }
 }
 
-bool Builder::paintList(const Item& item, const LayoutBox& box){
+b8 Builder::paintList(const Item& item, const LayoutBox& box){
     if(item.list >= m_scope->m_lists.size())
         return false;
     ListFrame& frame = m_scope->m_lists[item.list];
@@ -140,8 +140,8 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     if(!background)
         return false;
     m_paint.pushClip(clip);
-    const bool painted = m_paint.drawRegion(background->name, box.rectangle);
-    const bool popped = m_paint.popClip();
+    const b8 painted = m_paint.drawRegion(background->name, box.rectangle);
+    const b8 popped = m_paint.popClip();
     if(!painted || !popped)
         return false;
     HitTarget host;
@@ -168,14 +168,14 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
         if(!thumbIdResult)
             return false;
         const WidgetId thumbId = *thumbIdResult;
-        const bool hover = m_context.input().hover() == thumbId;
+        const b8 hover = m_context.input().hover() == thumbId;
         const UiSkinRegion* thumb = region(hover ? frame.style.thumbHover : frame.style.thumb, frame.style.thumbFallback);
         if(!track || !thumb)
             return false;
         m_paint.pushClip(clip);
-        const bool trackPainted = m_paint.drawRegion(track->name, placement.track);
-        const bool thumbPainted = trackPainted && m_paint.drawRegion(thumb->name, placement.thumb);
-        const bool trackPopped = m_paint.popClip();
+        const b8 trackPainted = m_paint.drawRegion(track->name, placement.track);
+        const b8 thumbPainted = trackPainted && m_paint.drawRegion(thumb->name, placement.thumb);
+        const b8 trackPopped = m_paint.popClip();
         if(!thumbPainted || !trackPopped)
             return false;
         if(item.enabled){
@@ -197,20 +197,20 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     return true;
 }
 
-bool Builder::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
+b8 Builder::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
     const auto& rows = frame.rows;
     const auto rowsIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_Rows);
     if(!rowsIdResult)
         return false;
     const WidgetId rowsId = *rowsIdResult;
-    const bool focused = m_context.input().focus() == item.state.id || (frame.commandFocus.valid() && m_context.input().focus() == frame.commandFocus);
+    const b8 focused = m_context.input().focus() == item.state.id || (frame.commandFocus.valid() && m_context.input().focus() == frame.commandFocus);
     auto found = LowerBound(rows.begin(), rows.end(), placement.firstRow, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
     for(u64 index = placement.firstRow; index < placement.endRow; ++index, ++found){
         if(found == rows.end() || found->index != index || !listStateMatches(frame))
             return false;
         const ListRow& row = *found;
         const u64 key = row.key;
-        const bool enabled = item.enabled && row.enabled;
+        const b8 enabled = item.enabled && row.enabled;
         const auto partResult = MakeWidgetPartId(rowsId, key);
         if(!partResult)
             return false;

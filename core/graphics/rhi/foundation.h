@@ -154,9 +154,9 @@ using GraphicsHashMap = HashMap<T, V, GraphicsArena>;
     constexpr MaskType& operator|=(MaskType& lhs, MaskType rhs)noexcept{ lhs = lhs | rhs; return lhs; } \
     constexpr MaskType& operator&=(MaskType& lhs, MaskType rhs)noexcept{ lhs = lhs & rhs; return lhs; } \
     constexpr MaskType operator~(MaskType value)noexcept{ return static_cast<MaskType>(~static_cast<u32>(value)); } \
-    constexpr bool operator!(MaskType value)noexcept{ return static_cast<u32>(value) == 0; } \
-    constexpr bool operator==(MaskType lhs, MaskType rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); } \
-    constexpr bool operator!=(MaskType lhs, MaskType rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
+    constexpr b8 operator!(MaskType value)noexcept{ return static_cast<u32>(value) == 0; } \
+    constexpr b8 operator==(MaskType lhs, MaskType rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); } \
+    constexpr b8 operator!=(MaskType lhs, MaskType rhs)noexcept{ return static_cast<u32>(lhs) != static_cast<u32>(rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

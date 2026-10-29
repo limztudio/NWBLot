@@ -40,7 +40,7 @@ public:
 public:
     Value parseExpression();
 
-    bool parseReferencePath(ScratchPath& path);
+    b8 parseReferencePath(ScratchPath& path);
 
 
 private:

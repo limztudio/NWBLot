@@ -40,7 +40,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool add(const PopupState& state, const PopupToken& token)noexcept{
+    [[nodiscard]] b8 add(const PopupState& state, const PopupToken& token)noexcept{
         if(m_count == s_InputMaxPopups)
             return false;
         m_popups[m_count].emplace(PopupLoan{ state, token });
@@ -48,7 +48,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] virtual bool current()const noexcept override{
+    [[nodiscard]] virtual b8 current()const noexcept override{
         if(m_context.failed())
             return false;
         for(usize index = 0u; index < m_count; ++index){
@@ -102,7 +102,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
         return result;
     }
     frame.m_metrics = *metrics;
-    const bool previouslyFocused = m_context.input().focus() == (*widget)->id;
+    const b8 previouslyFocused = m_context.input().focus() == (*widget)->id;
     __hidden_builder_radio_group::ReconcileGuard guard(m_context);
     for(const BuilderScopeFrame* scope = m_scope.get(); scope; scope = scope->m_parent){
         if(scope->m_popupState && !guard.add(*scope->m_popupState, scope->m_popupToken)){
@@ -111,7 +111,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
         }
     }
     const auto choices = RadioGroupBehavior::Reconcile(state, result, source, &guard);
-    const bool reconciled = choices.has_value();
+    const b8 reconciled = choices.has_value();
     if(choices)
         frame.m_choices = *choices;
     if(m_context.failed()){
@@ -131,7 +131,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     frame.m_snapshot = state.snapshot();
     frame.m_token = { state.inputGeneration(), frame.m_choices.sourceGeneration, frame.m_choices.sourceRevision };
     m_context.input().fenceControl((*widget)->id, (*widget)->declarationGeneration, frame.m_token);
-    bool interactive = false;
+    b8 interactive = false;
     for(u32 index = 0u; index < frame.m_choices.count; ++index)
         interactive = interactive || frame.m_choices.rows[index].enabled;
     interactive = interactive && options.enabled;
@@ -172,7 +172,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     return result;
 }
 
-bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
+b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
     if(!radioGroupMatches(frame))
         return false;
     SIMDVectorSingle maximumLabelSize = VectorZero();

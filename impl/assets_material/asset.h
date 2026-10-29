@@ -34,8 +34,8 @@ class Texture;
 
 
 // Transparent materials need all three pass shaders; opaque materials carry none.
-[[nodiscard]] inline bool HasValidMaterialAvboitPixelShaderContract(
-    const bool transparent,
+[[nodiscard]] inline b8 HasValidMaterialAvboitPixelShaderContract(
+    const b8 transparent,
     const Core::Assets::AssetRef<PixelShader>& accumulatePixelShader,
     const Core::Assets::AssetRef<PixelShader>& occupancyPixelShader,
     const Core::Assets::AssetRef<PixelShader>& extinctionPixelShader
@@ -48,7 +48,7 @@ class Texture;
 }
 
 // Materials hold only mesh and pixel stages. The compute emulation shader is found by the mesh shader name, so it is never stored here.
-[[nodiscard]] inline constexpr bool IsSupportedMaterialShaderStage(const Core::ShaderType::Enum shaderType)noexcept{
+[[nodiscard]] inline constexpr b8 IsSupportedMaterialShaderStage(const Core::ShaderType::Enum shaderType)noexcept{
     return shaderType == Core::ShaderType::MeshStage || shaderType == Core::ShaderType::PixelStage;
 }
 
@@ -67,7 +67,7 @@ static_assert(
 );
 
 // Resource fields name an engine/project asset resolved to a heap slot at runtime.
-[[nodiscard]] inline bool IsMaterialAssetReference(const AStringView resourceName)noexcept{
+[[nodiscard]] inline b8 IsMaterialAssetReference(const AStringView resourceName)noexcept{
     const usize rootEnd = resourceName.find('/');
     if(rootEnd == AStringView::npos || rootEnd == 0u || rootEnd + 1u >= resourceName.size())
         return false;
@@ -89,12 +89,12 @@ static_assert(
     return true;
 }
 
-[[nodiscard]] inline bool IsSupportedMaterialResourceReference(const MaterialResourceKind::Enum resourceKind, const AStringView resourceName)noexcept{
+[[nodiscard]] inline b8 IsSupportedMaterialResourceReference(const MaterialResourceKind::Enum resourceKind, const AStringView resourceName)noexcept{
     return IsValidMaterialResourceKind(resourceKind) && IsMaterialAssetReference(resourceName);
 }
 
 // Serialized resource paths arrive as Name hashes; their original text is validated during cooking.
-[[nodiscard]] inline bool IsValidSerializedMaterialResourceReference(const MaterialResourceKind::Enum resourceKind, const Name& resourceName)noexcept{
+[[nodiscard]] inline b8 IsValidSerializedMaterialResourceReference(const MaterialResourceKind::Enum resourceKind, const Name& resourceName)noexcept{
     return resourceName && IsValidMaterialResourceKind(resourceKind);
 }
 
@@ -110,7 +110,7 @@ static_assert(
     return AlignUpU32Checked(byteSize, NWB_MATERIAL_TYPED_WORD_BYTES);
 }
 
-[[nodiscard]] inline bool AssignMaterialResourceReferenceAsset(MaterialResourceReference& reference, const MaterialResourceKind::Enum resourceKind, const Name& resourceName)noexcept{
+[[nodiscard]] inline b8 AssignMaterialResourceReferenceAsset(MaterialResourceReference& reference, const MaterialResourceKind::Enum resourceKind, const Name& resourceName)noexcept{
     switch(resourceKind){
     case MaterialResourceKind::SampledImage2D:
         reference.textureAsset.virtualPath = resourceName;
@@ -164,7 +164,7 @@ public:
 
 
 public:
-    bool loadBinary(Span<const u8> binary);
+    b8 loadBinary(Span<const u8> binary);
 
 public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
@@ -181,14 +181,14 @@ public:
 
     void setAvboitExtinctionPixelShader(const Core::Assets::AssetRef<PixelShader>& shaderAsset)noexcept{ m_avboitExtinctionPixelShader = shaderAsset; }
 
-    void setTransparent(const bool transparent)noexcept{ m_transparent = transparent; }
+    void setTransparent(const b8 transparent)noexcept{ m_transparent = transparent; }
 
-    void setTwoSided(const bool twoSided)noexcept{ m_twoSided = twoSided; }
+    void setTwoSided(const b8 twoSided)noexcept{ m_twoSided = twoSided; }
 
-    void setRefractive(const bool refractive)noexcept{ m_refractive = refractive; }
+    void setRefractive(const b8 refractive)noexcept{ m_refractive = refractive; }
     void setTypedLayout(u64 layoutHash, Span<const MaterialTypedLayoutBlock> blocks, Span<const MaterialTypedLayoutField> fields, Span<const u8> blockBytes);
     void setResourceReferences(Span<const MaterialResourceReference> resourceReferences);
-    bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept;
+    b8 setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept;
 
     template<typename TShader>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
@@ -232,11 +232,11 @@ public:
 
     [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitExtinctionPixelShader()const noexcept{ return m_avboitExtinctionPixelShader; }
 
-    [[nodiscard]] bool transparent()const noexcept{ return m_transparent; }
+    [[nodiscard]] b8 transparent()const noexcept{ return m_transparent; }
 
-    [[nodiscard]] bool twoSided()const noexcept{ return m_twoSided; }
+    [[nodiscard]] b8 twoSided()const noexcept{ return m_twoSided; }
     // Refractive-caster flag, separate from `transparent`. Refraction values stay shader-side (NwbMeshSurface).
-    [[nodiscard]] bool refractive()const noexcept{ return m_refractive; }
+    [[nodiscard]] b8 refractive()const noexcept{ return m_refractive; }
 
 
 private:
@@ -251,9 +251,9 @@ private:
     ResourceReferenceVector m_resourceReferences;
     StageShaderArray m_stageShaders;
     u32 m_stageShaderCount = 0;
-    bool m_transparent = false;
-    bool m_twoSided = false;
-    bool m_refractive = false;
+    b8 m_transparent = false;
+    b8 m_twoSided = false;
+    b8 m_refractive = false;
     Core::Assets::AssetRef<PixelShader> m_avboitAccumulatePixelShader;
     Core::Assets::AssetRef<PixelShader> m_avboitOccupancyPixelShader;
     Core::Assets::AssetRef<PixelShader> m_avboitExtinctionPixelShader;

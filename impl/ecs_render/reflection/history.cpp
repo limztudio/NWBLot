@@ -22,7 +22,7 @@ namespace __hidden_reflection_history{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool SameEstimatorSettings(const ReflectionSettings& a, const ReflectionSettings& b)noexcept{
+[[nodiscard]] b8 SameEstimatorSettings(const ReflectionSettings& a, const ReflectionSettings& b)noexcept{
     // Diagnostics/filter leave the temporal estimator unchanged.
     return a.temporalEnabled == b.temporalEnabled && a.temporalMaxSamples == b.temporalMaxSamples && SameReflectionTraceSettings(a, b);
 }
@@ -37,8 +37,8 @@ namespace __hidden_reflection_history{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(const ReflectionHistoryPlan& plan, const bool hardwareReady)noexcept{
-    const bool hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
+ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(const ReflectionHistoryPlan& plan, const b8 hardwareReady)noexcept{
+    const b8 hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
     ReflectionHistoryOutcome result;
     result.epoch = plan.epoch + (hardwareChanged ? 1u : 0u);
     result.sampleIndex = hardwareChanged ? 0u : plan.sampleIndex;
@@ -110,7 +110,7 @@ ReflectionHistoryPlan ReflectionHistoryState::plan(const ReflectionSceneContentS
     return result;
 }
 
-bool ReflectionHistoryState::reserve(const ReflectionHistoryPlan& plan)noexcept{
+b8 ReflectionHistoryState::reserve(const ReflectionHistoryPlan& plan)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(m_deviceGeneration == 0u || m_reservedSequence != 0u || plan.generation != m_generation || plan.sequence == 0u || plan.acceptedSequence != m_acceptedSequence)
@@ -126,7 +126,7 @@ void ReflectionHistoryState::discard(const ReflectionHistoryPlan& plan)noexcept{
         m_reservedSequence = 0u;
 }
 
-void ReflectionHistoryState::accept(const ReflectionHistoryPlan& plan, const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
+void ReflectionHistoryState::accept(const ReflectionHistoryPlan& plan, const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(plan.generation != m_generation || plan.sequence != m_reservedSequence)
@@ -193,7 +193,7 @@ ReflectionHistoryReservation& ReflectionHistoryReservation::operator=(Reflection
     return *this;
 }
 
-void ReflectionHistoryReservation::accept(const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
+void ReflectionHistoryReservation::accept(const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
     if(m_reserved)
         m_control->accept(m_plan, token, hardwareReady);
     m_reserved = false;

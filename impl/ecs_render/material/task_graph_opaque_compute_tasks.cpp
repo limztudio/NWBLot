@@ -31,8 +31,8 @@ OpaqueRegularComputeEmulationGraphTask::Payload::Payload(
     RendererMaterialSystem& materialSystemIn,
     DeferredFrameTargets& targetsIn,
     Core::GpuTimingSubmissionTicket*& timingTicketIn,
-    const bool& meshViewSetupReadyIn,
-    const bool& sceneShadingSetupReadyIn
+    const b8& meshViewSetupReadyIn,
+    const b8& sceneShadingSetupReadyIn
 )noexcept
     : materialSystem(materialSystemIn)
     , targets(targetsIn)
@@ -46,21 +46,21 @@ OpaqueRegularComputeEmulationGraphTask::Payload::Payload(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.plan.captured)
         return false;
 
     RendererMaterialSystem& materialSystem = payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
+    const b8 frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(!frameSetupReady)
         return true;
 
     // Reject corrupted streams instead of dispatching outside the imported handle set.
     if(!payload.plan.matches(payload.plan.drawItems))
         return false;
-    const bool drawResourcesReady =
+    const b8 drawResourcesReady =
         materialSystem.meshMaterialPassDrawResourcesReady(payload.plan.meshDrawItems, payload.frameBindings)
         && materialSystem.indexedMaterialPassDrawResourcesReady(payload.plan.indexedDrawItems, payload.frameBindings)
         && materialSystem.computeMaterialPassDrawResourcesReady(payload.plan.drawItems, payload.frameBindings)
@@ -79,7 +79,7 @@ bool OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     if(!payload.plan.captured)
         return false;
@@ -93,7 +93,7 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload
     }
 
     RendererMaterialSystem& materialSystem = payload.materialSystem;
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
+    const b8 frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(!frameSetupReady || !payload.plan.matches(payload.drawIndex))
         return false;
 

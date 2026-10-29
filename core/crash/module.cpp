@@ -70,7 +70,7 @@ static void StoreBreadcrumb(const AStringView category, const AStringView messag
     CrashDetail::PublishCrashStateSnapshot();
 }
 
-static bool CapturePolicyAllows(const CrashCapturePolicy& policy, const AStringView event, const AStringView category)noexcept{
+static b8 CapturePolicyAllows(const CrashCapturePolicy& policy, const AStringView event, const AStringView category)noexcept{
     if(category == DiagnosticEventCategory::s_Assert)
         return policy.captureAssertions;
     if(category == DiagnosticEventCategory::s_FatalAssert)
@@ -99,11 +99,11 @@ static u64 DiagnosticSiteHash(const DiagnosticEventRecord& record)noexcept{
     return hash;
 }
 
-static bool DiagnosticResultCanSuppressDuplicatePlatformCrash(const CrashDumpResult& result)noexcept{
+static b8 DiagnosticResultCanSuppressDuplicatePlatformCrash(const CrashDumpResult& result)noexcept{
     return result.status != CrashDumpStatus::NotInstalled && result.status != CrashDumpStatus::RequestFailed && result.status != CrashDumpStatus::PackageWriteFailed;
 }
 
-static bool ReserveDiagnosticCapture(const DiagnosticEventRecord& record, const AStringView event, const AStringView category)noexcept{
+static b8 ReserveDiagnosticCapture(const DiagnosticEventRecord& record, const AStringView event, const AStringView category)noexcept{
     NothrowScopedLock lock(CrashDetail::g_State.mutex);
     if(!CrashDetail::g_State.installed)
         return false;
@@ -257,7 +257,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-bool InstallCrashHandler(const CrashConfigT<ArenaT>& config){
+b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config){
     CrashDetail::PlatformCleanupObservations observations;
     ScopedLock lock(CrashDetail::g_State.mutex);
     if(CrashDetail::g_State.installed)
@@ -322,7 +322,7 @@ void UninstallCrashHandler()noexcept{
     CrashDetail::UninstallPlatformResources(observations);
 }
 
-bool SetCrashMetadata(const AStringView key, const AStringView value)noexcept{
+b8 SetCrashMetadata(const AStringView key, const AStringView value)noexcept{
     if(key.empty())
         return false;
 
@@ -351,7 +351,7 @@ bool SetCrashMetadata(const AStringView key, const AStringView value)noexcept{
     return true;
 }
 
-bool SetCrashUploadDestination(const AStringView logServerUrl, const AStringView crashUploadToken)noexcept{
+b8 SetCrashUploadDestination(const AStringView logServerUrl, const AStringView crashUploadToken)noexcept{
     NothrowScopedLock lock(CrashDetail::g_State.mutex);
     if(!CrashDetail::g_State.installed)
         return false;
@@ -369,7 +369,7 @@ void AddCrashBreadcrumb(const AStringView category, const AStringView message)no
 
 template ::Path<Alloc::PersistentArena> DefaultCrashSpoolDirectory(Alloc::PersistentArena& arena);
 template ::Path<Alloc::PersistentArena> DefaultCrashHandlerExecutablePath(Alloc::PersistentArena& arena);
-template bool InstallCrashHandler(const CrashConfigT<Alloc::PersistentArena>& config);
+template b8 InstallCrashHandler(const CrashConfigT<Alloc::PersistentArena>& config);
 
 CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView message){
     CrashDetail::CrashDumpRequestOptions options;

@@ -24,9 +24,9 @@ namespace MathTypeDetail{
 
 
 #if defined(NWB_HAS_SSE4) || defined(NWB_HAS_NEON) || defined(NWB_HAS_SSE2)
-inline constexpr bool s_NativeEqualityPackets = true;
+inline constexpr b8 s_NativeEqualityPackets = true;
 #else
-inline constexpr bool s_NativeEqualityPackets = false;
+inline constexpr b8 s_NativeEqualityPackets = false;
 #endif
 inline constexpr i32 s_ByteMovemaskAllEqual = 0xFFFF;
 inline constexpr i32 s_FloatMovemaskAllEqual = 0xF;
@@ -41,7 +41,7 @@ using EqualityPacket = Element __attribute__((ext_vector_type(s_SIMDVectorBytes 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool EqualFloatPacket(const EqualityPacket<f32> lhs, const EqualityPacket<f32> rhs)noexcept{
+[[nodiscard]] NWB_INLINE b8 EqualFloatPacket(const EqualityPacket<f32> lhs, const EqualityPacket<f32> rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
 #if defined(NWB_HAS_SSE2)
     return _mm_movemask_ps(_mm_cmpeq_ps(BitCast<__m128>(lhs), BitCast<__m128>(rhs))) == s_FloatMovemaskAllEqual;
@@ -54,7 +54,7 @@ using EqualityPacket = Element __attribute__((ext_vector_type(s_SIMDVectorBytes 
 }
 
 template<typename Element>
-[[nodiscard]] NWB_INLINE bool EqualIntegralPacket(const EqualityPacket<Element> lhs, const EqualityPacket<Element> rhs)noexcept{
+[[nodiscard]] NWB_INLINE b8 EqualIntegralPacket(const EqualityPacket<Element> lhs, const EqualityPacket<Element> rhs)noexcept{
 #if defined(NWB_HAS_SSE2)
     return _mm_movemask_epi8(_mm_cmpeq_epi8(BitCast<__m128i>(lhs), BitCast<__m128i>(rhs))) == s_ByteMovemaskAllEqual;
 #elif defined(NWB_HAS_NEON)
@@ -66,10 +66,10 @@ template<typename Element>
 }
 
 template<typename Element, usize Count>
-[[nodiscard]] NWB_INLINE bool EqualElements(const NotNull<const Element*> lhs, const NotNull<const Element*> rhs)noexcept{
+[[nodiscard]] NWB_INLINE b8 EqualElements(const NotNull<const Element*> lhs, const NotNull<const Element*> rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     // Clang bool vectors use packed bits; wide integers are not supported native lane elements.
-    if constexpr(s_NativeEqualityPackets && (IsSame_V<Element, f32> || (IsIntegral_V<Element> && !IsSame_V<Element, bool> && sizeof(Element) <= sizeof(u64)))){
+    if constexpr(s_NativeEqualityPackets && (IsSame_V<Element, f32> || (IsIntegral_V<Element> && !IsSame_V<Element, b8> && sizeof(Element) <= sizeof(u64)))){
         constexpr usize s_Lanes = s_SIMDVectorBytes / sizeof(Element);
         for(usize first = 0u; first < Count; first += s_Lanes){
             const usize count = Count - first < s_Lanes ? Count - first : s_Lanes;
@@ -109,13 +109,13 @@ template<typename Element, usize Count>
 }
 
 template<typename Value, usize Count>
-[[nodiscard]] NWB_INLINE bool EqualArray(const Value& lhs, const Value& rhs)noexcept{
+[[nodiscard]] NWB_INLINE b8 EqualArray(const Value& lhs, const Value& rhs)noexcept{
     using Element = RemoveCVRef_T<decltype(lhs.raw[0])>;
     return EqualElements<Element, Count>(MakeNotNull<const Element*>(lhs.raw), MakeNotNull<const Element*>(rhs.raw));
 }
 
 template<typename Value>
-[[nodiscard]] NWB_INLINE bool EqualMixedFloat3(const Value& lhs, const Value& rhs)noexcept{
+[[nodiscard]] NWB_INLINE b8 EqualMixedFloat3(const Value& lhs, const Value& rhs)noexcept{
     f32 lhsValues[3], rhsValues[3];
     // Copy XYZ as storage so an unused signaling NaN never crosses a scalar FP ABI.
     __builtin_memcpy(lhsValues, &lhs, sizeof(lhsValues));
@@ -443,7 +443,7 @@ template<typename Matrix>
 
 
 template<MathStorageValue Value>
-[[nodiscard]] NWB_INLINE bool operator==(const Value& lhs, const Value& rhs)noexcept{
+[[nodiscard]] NWB_INLINE b8 operator==(const Value& lhs, const Value& rhs)noexcept{
     if constexpr(requires{ lhs.raw; }){
         constexpr usize s_Count = sizeof(lhs.raw) / sizeof(lhs.raw[0]);
         return MathTypeDetail::EqualArray<Value, s_Count>(lhs, rhs);
@@ -455,7 +455,7 @@ template<MathStorageValue Value>
 }
 
 template<MathStorageValue Value>
-[[nodiscard]] NWB_INLINE bool operator!=(const Value& lhs, const Value& rhs)noexcept{
+[[nodiscard]] NWB_INLINE b8 operator!=(const Value& lhs, const Value& rhs)noexcept{
     return !(lhs == rhs);
 }
 

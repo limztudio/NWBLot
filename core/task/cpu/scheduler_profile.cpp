@@ -61,8 +61,8 @@ CpuTaskProfileLabel CpuTaskScheduler::registerProfileLabel(const Name& name){
     return label;
 }
 
-void CpuTaskScheduler::setProfiling(const bool enabled, const u64 frameIndex){
-    const bool active = enabled && m_profileEventCapacity != 0u;
+void CpuTaskScheduler::setProfiling(const b8 enabled, const u64 frameIndex){
+    const b8 active = enabled && m_profileEventCapacity != 0u;
     if(!active && !m_profileEnabled.load(MemoryOrder::relaxed))
         return;
     NothrowScopedLock lock(m_mutex);

@@ -86,19 +86,19 @@ struct Expr{
     TypeRef* lambdaReturnType = nullptr;
     MVector<Stmt*> lambdaBody;
     TokenType::Enum op = TokenType::EndOfFile;
-    bool isPostfix = false;
-    bool isSwizzle = false;
-    bool moveAtLastUse = false;
-    bool adaptToTChar = false;
-    bool isPointerMemberAccess = false;
-    bool isNotNullRebind = false;
-    bool derefNotNull = false;
-    bool isMutArg = false;
-    bool injectScratchArena = false;
-    bool injectClassArena = false;
-    bool lambdaUsesScratchArena = false;
-    bool lambdaUsesTaskScope = false;
-    bool hasMutLocalCapture = false;
+    b8 isPostfix = false;
+    b8 isSwizzle = false;
+    b8 moveAtLastUse = false;
+    b8 adaptToTChar = false;
+    b8 isPointerMemberAccess = false;
+    b8 isNotNullRebind = false;
+    b8 derefNotNull = false;
+    b8 isMutArg = false;
+    b8 injectScratchArena = false;
+    b8 injectClassArena = false;
+    b8 lambdaUsesScratchArena = false;
+    b8 lambdaUsesTaskScope = false;
+    b8 hasMutLocalCapture = false;
 
 
 public:

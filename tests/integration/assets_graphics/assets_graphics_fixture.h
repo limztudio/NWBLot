@@ -124,22 +124,22 @@ public:
     static AString BuildTriangleMeta(const AStringView assetHeader, const AStringView normalField, const AStringView tangentField, const AStringView vertexRefsField, const AStringView suffix);
     static AString BuildMeshTriangleMeta(const AStringView normalField, const AStringView tangentField, const AStringView vertexRefsField);
 #endif
-    static bool PrepareCleanDirectory(const Path& directory);
-    static bool WriteTextFile(const Path& filePath, const AStringView text);
+    static b8 PrepareCleanDirectory(const Path& directory);
+    static b8 WriteTextFile(const Path& filePath, const AStringView text);
     static AStringView AssetsGraphicsTestConfigurationName()noexcept;
     static Path AssetsGraphicsTestRepoRoot(TestArena& testArena);
     static Path AssetsGraphicsTestCaseRoot(TestArena& testArena, const AStringView caseName);
     static Expected<Path> PrepareAssetsGraphicsCaseRoot(TestArena& testArena, const AStringView caseName);
     static Expected<CookCase> PrepareAssetsGraphicsCookCase(TestArena& testArena, const AStringView caseName);
-    static bool BuildPreparedGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const InitializerList<Path> assetRoots, const u32 workerThreadCount = 0u);
-    static bool CookPreparedGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const InitializerList<Path> assetRoots, const u32 workerThreadCount = 0u);
-    static bool CookSingleGraphicsMeta(const AStringView metaText, AStringView assetDirectory, AStringView assetFilename, TestArena& testArena, const CookCase& cookCase);
-    static bool CookSingleMinimalAssetMeta(const AStringView metaText, const MinimalAssetCookInfo& cookInfo, TestArena& testArena, const CookCase& cookCase);
-    static bool CookSingleMeshMeta(const AStringView metaText, TestArena& testArena, const CookCase& cookCase);
+    static b8 BuildPreparedGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const InitializerList<Path> assetRoots, const u32 workerThreadCount = 0u);
+    static b8 CookPreparedGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const InitializerList<Path> assetRoots, const u32 workerThreadCount = 0u);
+    static b8 CookSingleGraphicsMeta(const AStringView metaText, AStringView assetDirectory, AStringView assetFilename, TestArena& testArena, const CookCase& cookCase);
+    static b8 CookSingleMinimalAssetMeta(const AStringView metaText, const MinimalAssetCookInfo& cookInfo, TestArena& testArena, const CookCase& cookCase);
+    static b8 CookSingleMeshMeta(const AStringView metaText, TestArena& testArena, const CookCase& cookCase);
     static Expected<AString> ReadSmokeAssetMeta(TestArena& testArena, AStringView assetDirectory, AStringView assetFilename);
-    static bool CookSmokeAssetMeta(AStringView assetDirectory, AStringView assetFilename, TestArena& testArena, const CookCase& cookCase);
-    static bool CookSmokeMeshMeta(AStringView assetFilename, TestArena& testArena, const CookCase& cookCase);
-    static bool CookMinimalMeshWithMaterialBind(const AStringView bindText, TestArena& testArena, const CookCase& cookCase);
+    static b8 CookSmokeAssetMeta(AStringView assetDirectory, AStringView assetFilename, TestArena& testArena, const CookCase& cookCase);
+    static b8 CookSmokeMeshMeta(AStringView assetFilename, TestArena& testArena, const CookCase& cookCase);
+    static b8 CookMinimalMeshWithMaterialBind(const AStringView bindText, TestArena& testArena, const CookCase& cookCase);
     static Expected<NWB::Impl::MaterialBindEntry> ParseMaterialBindFromText(TestArena& testArena, const AStringView bindText, const Path& root, NWB::Core::Alloc::ScratchArena& scratchArena);
     #if defined(NWB_FINAL)
     [[nodiscard]] static Expected<Path> EmitDuplicateGeneratedMaterialBindIncludePath(TestArena& testArena, const CookCase& cookCase);
@@ -159,14 +159,14 @@ public:
         }
     }
 
-    static bool WriteMaterialBindShaderProbeSource(TestArena& testArena, const Path& assetRoot, AStringView shaderAssetType, AStringView metaFilename, AStringView sourceFilename, const AStringView sourceText);
+    static b8 WriteMaterialBindShaderProbeSource(TestArena& testArena, const Path& assetRoot, AStringView shaderAssetType, AStringView metaFilename, AStringView sourceFilename, const AStringView sourceText);
 
-    static bool WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(TestArena& testArena, const Path& assetRoot, const AStringView bindText, const AStringView materialText, const AStringView pixelSourceText);
-    static bool WriteMaterialBindMaterialIntegrationAssets(TestArena& testArena, const Path& assetRoot, const AStringView bindText, const AStringView materialText);
+    static b8 WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(TestArena& testArena, const Path& assetRoot, const AStringView bindText, const AStringView materialText, const AStringView pixelSourceText);
+    static b8 WriteMaterialBindMaterialIntegrationAssets(TestArena& testArena, const Path& assetRoot, const AStringView bindText, const AStringView materialText);
 
-    static bool CookMaterialBindMaterialIntegrationWithPixelSource(const AStringView bindText, const AStringView materialText, const AStringView pixelSourceText, TestArena& testArena, const CookCase& cookCase);
+    static b8 CookMaterialBindMaterialIntegrationWithPixelSource(const AStringView bindText, const AStringView materialText, const AStringView pixelSourceText, TestArena& testArena, const CookCase& cookCase);
 
-    static bool CookMaterialBindMaterialIntegration(const AStringView bindText, const AStringView materialText, TestArena& testArena, const CookCase& cookCase);
+    static b8 CookMaterialBindMaterialIntegration(const AStringView bindText, const AStringView materialText, TestArena& testArena, const CookCase& cookCase);
     // Only volumes selecting graphics metadata or materials include a shader archive index.
     template<typename AssetCodecT>
     static Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedAsset(TestArena& testArena, const Path& outputDirectory, const Name assetName, const usize expectedVolumeFileCount){
@@ -174,7 +174,7 @@ public:
         mountDesc.volumeName = "graphics";
         mountDesc.mountDirectory = outputDirectory;
         auto filesystemResult = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
-        const bool loadedVolume = static_cast<bool>(filesystemResult);
+        const b8 loadedVolume = static_cast<b8>(filesystemResult);
         EXPECT_TRUE(loadedVolume);
         if(!loadedVolume)
             return MakeUnexpected(filesystemResult.error());
@@ -184,7 +184,7 @@ public:
             EXPECT_EQ(filesystem->fileCount(), expectedVolumeFileCount);
 
         NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-        const bool loadedBinary = filesystem->readFile(assetName, binary);
+        const b8 loadedBinary = filesystem->readFile(assetName, binary);
         EXPECT_TRUE(loadedBinary);
         EXPECT_FALSE(binary.empty());
         if(!loadedBinary || binary.empty())
@@ -203,7 +203,7 @@ public:
 
 public:
     template<typename T>
-    static bool OverwritePOD(const Span<u8> binary, const usize offset, const T value)noexcept(noexcept(NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
+    static b8 OverwritePOD(const Span<u8> binary, const usize offset, const T value)noexcept(noexcept(NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
         if(offset > binary.size() || sizeof(value) > binary.size() - offset)
             return false;
 
@@ -211,10 +211,10 @@ public:
         return true;
     }
 
-    static bool EncodeTestMeshletRefs(
+    static b8 EncodeTestMeshletRefs(
         Span<const NWB::Impl::MeshletPositionStreamRef> positionRefs,
         Span<const NWB::Impl::MeshletAttributeStreamRef> attributeRefs,
-        const bool skinRequired,
+        const b8 skinRequired,
         Span<NWB::Impl::MeshletDesc> meshlets,
         NWB::Core::Assets::AssetVector<u8>& outPositionRefDeltas,
         NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas

@@ -58,7 +58,7 @@ inline void Fnv64AppendBuffer(u64& inOutHash, const u8* bytes, const usize byteC
     inOutHash = UpdateFnv64(inOutHash, bytes, byteCount);
 }
 
-inline void Fnv64AppendBool(u64& inOutHash, const bool value)noexcept{
+inline void Fnv64AppendBool(u64& inOutHash, const b8 value)noexcept{
     const u8 byteValue = value ? 1u : 0u;
     Fnv64AppendValue(inOutHash, byteValue);
 }

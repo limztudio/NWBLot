@@ -43,7 +43,7 @@ HitTarget Control(const u64 id = 1u)noexcept{
     return target;
 }
 
-InputEvent Command(const InputEventType::Enum type, const InputSource source, const InputCommand::Enum command, const bool repeat = false)noexcept{
+InputEvent Command(const InputEventType::Enum type, const InputSource source, const InputCommand::Enum command, const b8 repeat = false)noexcept{
     InputEvent event;
     event.type = type;
     event.source = source;
@@ -52,7 +52,7 @@ InputEvent Command(const InputEventType::Enum type, const InputSource source, co
     return event;
 }
 
-InputEvent Key(const InputEventType::Enum type, const bool shift = false, const bool repeat = false)noexcept{
+InputEvent Key(const InputEventType::Enum type, const b8 shift = false, const b8 repeat = false)noexcept{
     InputEvent event;
     event.type = type;
     event.key = Core::Key::W;

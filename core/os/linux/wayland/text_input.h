@@ -25,10 +25,10 @@ NWB_CORE_BEGIN
 // Borrow the Frame display, surface and selected seat. Destroy this service before those objects.
 [[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandTextInputService(Alloc::GlobalArena& arena, wl_display& display, wl_surface& surface);
 void AttachWaylandTextInputSeat(ITextInputService& service, wl_seat* seat, u32 seatGlobalName);
-[[nodiscard]] bool SetWaylandTextInputKeyboardFocus(ITextInputService& service, bool focused);
+[[nodiscard]] b8 SetWaylandTextInputKeyboardFocus(ITextInputService& service, b8 focused);
 void SetWaylandTextInputBufferScale(ITextInputService& service, i32 scale);
 // An active protocol session suppresses xkb characters. Without v3, physical text commits enter the same OS queue.
-[[nodiscard]] bool DispatchWaylandDirectTextInput(ITextInputService& service, u32 codePoint);
+[[nodiscard]] b8 DispatchWaylandDirectTextInput(ITextInputService& service, u32 codePoint);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

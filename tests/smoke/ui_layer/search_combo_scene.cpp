@@ -59,7 +59,7 @@ UiSearchComboSmokeScene::~UiSearchComboSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiSearchComboSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiSearchComboSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     ObserveSmokeDisplay(__hidden_ui_search_combo_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     m_source.beginFrame();
@@ -98,7 +98,7 @@ bool UiSearchComboSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiSearchComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+b8 UiSearchComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key < Core::Key::F4 || key > Core::Key::F9)
@@ -116,7 +116,7 @@ bool UiSearchComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, 
         m_source.remove(m_state.combo().selectedKey());
         break;
     case Core::Key::F7:{
-        const bool cleared = m_state.query().setText({});
+        const b8 cleared = m_state.query().setText({});
         NWB_FATAL_ASSERT(cleared);
         break;
     }
@@ -206,11 +206,11 @@ void UiSearchComboSmokeScene::observeState(Impl::Ui::TextService& text){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerSearchComboSmokeEnabled(){
+b8 IsUiLayerSearchComboSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_SEARCH_COMBO");
 }
 
-bool IsUiLayerSearchComboSkinSmokeEnabled(){
+b8 IsUiLayerSearchComboSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_SEARCH_COMBO_SKIN");
 }
 

@@ -23,7 +23,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShadowPrepareGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 ShadowPrepareGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
@@ -77,7 +77,7 @@ void ShadowPrepareGraphTask::Discarded(Payload& payload){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShadowPrepareSoftwareBvhBuildGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 ShadowPrepareSoftwareBvhBuildGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     return payload.raytracingSystem.recordPreparedMeshSwBvhBuildAfterGraphClears(commandList, payload.build);

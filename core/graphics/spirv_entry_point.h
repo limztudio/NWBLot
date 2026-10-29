@@ -28,7 +28,7 @@ namespace SpirvEntryPointLookupResult{
 };
 
 
-[[nodiscard]] bool IsValidSpirvModuleWords(const u32* words, usize wordCount)noexcept;
+[[nodiscard]] b8 IsValidSpirvModuleWords(const u32* words, usize wordCount)noexcept;
 
 // The result borrows unchanged module words and excludes the validated terminating null.
 [[nodiscard]] Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(const u32* words, usize wordCount, AStringView entryName, ShaderType::Mask shaderType)noexcept;

@@ -38,13 +38,13 @@ public:
     [[nodiscard]] static SIMDVectorSingle NWB_SIMD_CALL TransformSphereValue(SIMDVectorSingle sphereValue, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVectorSingle sphereValue, SIMDVectorSingle point)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(SIMDVectorSingle sphereValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
-    [[nodiscard]] static bool NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorSingle sphereValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
+    [[nodiscard]] static b8 NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorSingle sphereValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
     [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(SIMDVectorSingle sphereValue, SIMDVectorSingle plane)noexcept;
     [[nodiscard]] static Expected<f32> NWB_SIMD_CALL IntersectsRayValue(SIMDVectorSingle sphereValue, SIMDVectorSingle origin, SIMDVectorSingle direction)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
         SIMDVectorSingle sphereValue, SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5
     )noexcept;
-    [[nodiscard]] static SIMDVectorSingle NWB_SIMD_CALL MergeSphereValues(SIMDVectorSingle sphereValue0, SIMDVectorSingle sphereValue1, bool& outDirectCopy, bool& outCopyFirst)noexcept;
+    [[nodiscard]] static SIMDVectorSingle NWB_SIMD_CALL MergeSphereValues(SIMDVectorSingle sphereValue0, SIMDVectorSingle sphereValue1, b8& outDirectCopy, b8& outCopyFirst)noexcept;
     [[nodiscard]] static SIMDVectorSingle NWB_SIMD_CALL SphereFromCenterExtentsValue(SIMDVectorSingle centerValue, SIMDVectorSingle extentsValue)noexcept;
     static void CreateMerged(BoundingSphere& outSphere, const BoundingSphere& sphere0, const BoundingSphere& sphere1)noexcept;
     static void CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept;
@@ -78,14 +78,14 @@ public:
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsFrustumValues(
         SIMDVectorSingle sphereValue, SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue
     )const noexcept;
-    [[nodiscard]] bool intersects(const BoundingSphere& sphere)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingOrientedBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingFrustum& frustum)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsSphereValue(SIMDVectorSingle sphereValue, SIMDVectorSingle otherSphereValue)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsBoxValues(SIMDVectorSingle sphereValue, SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVectorSingle sphereValue, SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingSphere& sphere)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingOrientedBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingFrustum& frustum)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsSphereValue(SIMDVectorSingle sphereValue, SIMDVectorSingle otherSphereValue)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsBoxValues(SIMDVectorSingle sphereValue, SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVectorSingle sphereValue, SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVectorSingle plane)const noexcept;
     [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVectorSingle origin, SIMDVectorSingle direction)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept;
@@ -104,13 +104,13 @@ public:
     [[nodiscard]] static SIMDVectorDouble NWB_SIMD_CALL TransformSphereValue(SIMDVectorDouble sphereValue, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVectorDouble sphereValue, SIMDVectorDouble point)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(SIMDVectorDouble sphereValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
-    [[nodiscard]] static bool NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorDouble sphereValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
+    [[nodiscard]] static b8 NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorDouble sphereValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
     [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(SIMDVectorDouble sphereValue, SIMDVectorDouble plane)noexcept;
     [[nodiscard]] static Expected<f64> NWB_SIMD_CALL IntersectsRayValue(SIMDVectorDouble sphereValue, SIMDVectorDouble origin, SIMDVectorDouble direction)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
         SIMDVectorDouble sphereValue, SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5
     )noexcept;
-    [[nodiscard]] static SIMDVectorDouble NWB_SIMD_CALL MergeSphereValues(SIMDVectorDouble sphereValue0, SIMDVectorDouble sphereValue1, bool& outDirectCopy, bool& outCopyFirst)noexcept;
+    [[nodiscard]] static SIMDVectorDouble NWB_SIMD_CALL MergeSphereValues(SIMDVectorDouble sphereValue0, SIMDVectorDouble sphereValue1, b8& outDirectCopy, b8& outCopyFirst)noexcept;
     [[nodiscard]] static SIMDVectorDouble NWB_SIMD_CALL SphereFromCenterExtentsValue(SIMDVectorDouble centerValue, SIMDVectorDouble extentsValue)noexcept;
     static void CreateMerged(BoundingDoubleSphere& outSphere, const BoundingDoubleSphere& sphere0, const BoundingDoubleSphere& sphere1)noexcept;
     static void CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleBox& box)noexcept;
@@ -146,14 +146,14 @@ public:
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsFrustumValues(
         SIMDVectorDouble sphereValue, SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue
     )const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleSphere& sphere)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleOrientedBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleFrustum& frustum)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsSphereValue(SIMDVectorDouble sphereValue, SIMDVectorDouble otherSphereValue)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsBoxValues(SIMDVectorDouble sphereValue, SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVectorDouble sphereValue, SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleSphere& sphere)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleOrientedBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleFrustum& frustum)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsSphereValue(SIMDVectorDouble sphereValue, SIMDVectorDouble otherSphereValue)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsBoxValues(SIMDVectorDouble sphereValue, SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVectorDouble sphereValue, SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVectorDouble plane)const noexcept;
     [[nodiscard]] Expected<f64> NWB_SIMD_CALL intersects(SIMDVectorDouble origin, SIMDVectorDouble direction)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept;
@@ -177,7 +177,7 @@ public:
     static void NWB_SIMD_CALL TransformBoxValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle point)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
-    [[nodiscard]] static bool NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
+    [[nodiscard]] static b8 NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
     [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle plane)noexcept;
     [[nodiscard]] static Expected<f32> NWB_SIMD_CALL IntersectsRayValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle origin, SIMDVectorSingle direction)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
@@ -218,13 +218,13 @@ public:
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsFrustumValues(
         SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue
     )const noexcept;
-    [[nodiscard]] bool intersects(const BoundingSphere& sphere)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingOrientedBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingFrustum& frustum)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsBoxValues(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle otherBoxCenter, SIMDVectorSingle otherBoxExtents)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle otherBoxCenter, SIMDVectorSingle otherBoxExtents, SIMDVectorSingle otherBoxOrientation)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingSphere& sphere)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingOrientedBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingFrustum& frustum)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsBoxValues(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle otherBoxCenter, SIMDVectorSingle otherBoxExtents)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle otherBoxCenter, SIMDVectorSingle otherBoxExtents, SIMDVectorSingle otherBoxOrientation)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVectorSingle plane)const noexcept;
     [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVectorSingle origin, SIMDVectorSingle direction)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept;
@@ -248,7 +248,7 @@ public:
     static void NWB_SIMD_CALL TransformBoxValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble point)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
-    [[nodiscard]] static bool NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
+    [[nodiscard]] static b8 NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
     [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble plane)noexcept;
     [[nodiscard]] static Expected<f64> NWB_SIMD_CALL IntersectsRayValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble origin, SIMDVectorDouble direction)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
@@ -293,13 +293,13 @@ public:
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsFrustumValues(
         SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue
     )const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleSphere& sphere)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleOrientedBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleFrustum& frustum)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsBoxValues(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble otherBoxCenter, SIMDVectorDouble otherBoxExtents)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble otherBoxCenter, SIMDVectorDouble otherBoxExtents, SIMDVectorDouble otherBoxOrientation)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleSphere& sphere)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleOrientedBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleFrustum& frustum)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsBoxValues(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble otherBoxCenter, SIMDVectorDouble otherBoxExtents)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble otherBoxCenter, SIMDVectorDouble otherBoxExtents, SIMDVectorDouble otherBoxOrientation)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVectorDouble plane)const noexcept;
     [[nodiscard]] Expected<f64> NWB_SIMD_CALL intersects(SIMDVectorDouble origin, SIMDVectorDouble direction)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept;
@@ -321,14 +321,14 @@ public:
 
 public:
     static void NWB_SIMD_CALL TransformOrientedBoxValue(
-        SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, const SIMDMatrix& matrix, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents, SIMDVectorSingle& outOrientation, bool& outCollapsedToAxisAligned
+        SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, const SIMDMatrix& matrix, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents, SIMDVectorSingle& outOrientation, b8& outCollapsedToAxisAligned
     )noexcept;
     static void NWB_SIMD_CALL TransformOrientedBoxValue(
         SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, f32 scale, SIMDVectorSingle rotation, SIMDVectorSingle translation, SIMDVectorSingle& outCenter, SIMDVectorSingle& outExtents, SIMDVectorSingle& outOrientation
     )noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle point)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
-    [[nodiscard]] static bool NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
+    [[nodiscard]] static b8 NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept;
     [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle plane)noexcept;
     [[nodiscard]] static Expected<f32> NWB_SIMD_CALL IntersectsRayValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle origin, SIMDVectorSingle direction)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
@@ -370,15 +370,15 @@ public:
         SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue,
         f32 nearPlaneValue, f32 farPlaneValue
     )const noexcept;
-    [[nodiscard]] bool intersects(const BoundingSphere& sphere)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingOrientedBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingFrustum& frustum)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsBoxValues(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle otherBoxCenter, SIMDVectorSingle otherBoxExtents)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(
+    [[nodiscard]] b8 intersects(const BoundingSphere& sphere)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingOrientedBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingFrustum& frustum)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsBoxValues(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle otherBoxCenter, SIMDVectorSingle otherBoxExtents)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsOrientedBoxValues(
         SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle otherBoxCenter, SIMDVectorSingle otherBoxExtents, SIMDVectorSingle otherBoxOrientation
     )const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVectorSingle plane)const noexcept;
     [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVectorSingle origin, SIMDVectorSingle direction)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept;
@@ -400,14 +400,14 @@ public:
 
 public:
     static void NWB_SIMD_CALL TransformOrientedBoxValue(
-        SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents, SIMDVectorDouble& outOrientation, bool& outCollapsedToAxisAligned
+        SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents, SIMDVectorDouble& outOrientation, b8& outCollapsedToAxisAligned
     )noexcept;
     static void NWB_SIMD_CALL TransformOrientedBoxValue(
         SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, f64 scale, SIMDVectorDouble rotation, SIMDVectorDouble translation, SIMDVectorDouble& outCenter, SIMDVectorDouble& outExtents, SIMDVectorDouble& outOrientation
     )noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble point)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
-    [[nodiscard]] static bool NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
+    [[nodiscard]] static b8 NWB_SIMD_CALL IntersectsTriangleValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept;
     [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble plane)noexcept;
     [[nodiscard]] static Expected<f64> NWB_SIMD_CALL IntersectsRayValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble origin, SIMDVectorDouble direction)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
@@ -453,15 +453,15 @@ public:
         SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue,
         f64 nearPlaneValue, f64 farPlaneValue
     )const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleSphere& sphere)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleOrientedBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleFrustum& frustum)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsBoxValues(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble otherBoxCenter, SIMDVectorDouble otherBoxExtents)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(
+    [[nodiscard]] b8 intersects(const BoundingDoubleSphere& sphere)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleOrientedBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleFrustum& frustum)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsBoxValues(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble otherBoxCenter, SIMDVectorDouble otherBoxExtents)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersectsOrientedBoxValues(
         SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble otherBoxCenter, SIMDVectorDouble otherBoxExtents, SIMDVectorDouble otherBoxOrientation
     )const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVectorDouble plane)const noexcept;
     [[nodiscard]] Expected<f64> NWB_SIMD_CALL intersects(SIMDVectorDouble origin, SIMDVectorDouble direction)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept;
@@ -487,7 +487,7 @@ public:
 
 
 public:
-    static void NWB_SIMD_CALL CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, bool rightHandedCoordinates = false)noexcept;
+    static void NWB_SIMD_CALL CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, b8 rightHandedCoordinates = false)noexcept;
 
 
 public:
@@ -512,7 +512,7 @@ public:
         , nearPlane(nearPlaneValue)
         , farPlane(farPlaneValue)
     {}
-    explicit BoundingFrustum(const SIMDMatrix& projection, bool rightHandedCoordinates = false)noexcept;
+    explicit BoundingFrustum(const SIMDMatrix& projection, b8 rightHandedCoordinates = false)noexcept;
 
 
 public:
@@ -525,11 +525,11 @@ public:
     [[nodiscard]] ContainmentType::Enum contains(const BoundingBox& box)const noexcept;
     [[nodiscard]] ContainmentType::Enum contains(const BoundingOrientedBox& box)const noexcept;
     [[nodiscard]] ContainmentType::Enum contains(const BoundingFrustum& frustum)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingSphere& sphere)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingOrientedBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingFrustum& frustum)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingSphere& sphere)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingOrientedBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingFrustum& frustum)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVectorSingle plane)const noexcept;
     [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVectorSingle rayOrigin, SIMDVectorSingle direction)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorSingle plane0, SIMDVectorSingle plane1, SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5)const noexcept;
@@ -556,7 +556,7 @@ public:
 
 
 public:
-    static void NWB_SIMD_CALL CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, bool rightHandedCoordinates = false)noexcept;
+    static void NWB_SIMD_CALL CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, b8 rightHandedCoordinates = false)noexcept;
 
 
 public:
@@ -600,7 +600,7 @@ public:
         , nearPlane(nearPlaneValue)
         , farPlane(farPlaneValue)
     {}
-    explicit BoundingDoubleFrustum(const SIMDMatrixDouble& projection, bool rightHandedCoordinates = false)noexcept;
+    explicit BoundingDoubleFrustum(const SIMDMatrixDouble& projection, b8 rightHandedCoordinates = false)noexcept;
 
 
 public:
@@ -614,11 +614,11 @@ public:
     [[nodiscard]] ContainmentType::Enum contains(const BoundingDoubleBox& box)const noexcept;
     [[nodiscard]] ContainmentType::Enum contains(const BoundingDoubleOrientedBox& box)const noexcept;
     [[nodiscard]] ContainmentType::Enum contains(const BoundingDoubleFrustum& frustum)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleSphere& sphere)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleOrientedBox& box)const noexcept;
-    [[nodiscard]] bool intersects(const BoundingDoubleFrustum& frustum)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleSphere& sphere)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleOrientedBox& box)const noexcept;
+    [[nodiscard]] b8 intersects(const BoundingDoubleFrustum& frustum)const noexcept;
+    [[nodiscard]] b8 NWB_SIMD_CALL intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVectorDouble plane)const noexcept;
     [[nodiscard]] Expected<f64> NWB_SIMD_CALL intersects(SIMDVectorDouble rayOrigin, SIMDVectorDouble direction)const noexcept;
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept;

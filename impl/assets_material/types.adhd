@@ -23,7 +23,7 @@ enum<u32> MaterialBlockClass{
     enum MaterialMutable
 }
 
-bool IsValidMaterialBlockClass(in MaterialBlockClass blockClass){
+b8 IsValidMaterialBlockClass(in MaterialBlockClass blockClass){
     return blockClass == MaterialBlockClass::Enum::MaterialConstant || blockClass == MaterialBlockClass::Enum::MaterialMutable;
 }
 
@@ -34,7 +34,7 @@ enum<u32> MaterialResourceKind{
     enum Sampler
 }
 
-bool IsValidMaterialResourceKind(in MaterialResourceKind resourceKind){
+b8 IsValidMaterialResourceKind(in MaterialResourceKind resourceKind){
     return resourceKind == MaterialResourceKind::Enum::SampledImage2D || resourceKind == MaterialResourceKind::Enum::Sampler;
 }
 
@@ -87,15 +87,15 @@ const u32 s_MaterialLayoutFieldComponentsPerValueType = 4u;
 const u32 s_MaterialLayoutFieldFirstTypeId = cast<u32>(MaterialLayoutFieldType::Enum::b8);
 const u32 s_MaterialParameterFirstValueTypeId = cast<u32>(MaterialParameterValueType::Enum::b8);
 
-bool IsValidMaterialLayoutFieldType(in MaterialLayoutFieldType fieldType){
+b8 IsValidMaterialLayoutFieldType(in MaterialLayoutFieldType fieldType){
     return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::Enum::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Enum::Sampler);
 }
 
-bool IsMaterialLayoutNumericFieldType(in MaterialLayoutFieldType fieldType){
+b8 IsMaterialLayoutNumericFieldType(in MaterialLayoutFieldType fieldType){
     return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::Enum::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Enum::f32x4);
 }
 
-bool IsMaterialLayoutResourceFieldType(in MaterialLayoutFieldType fieldType){
+b8 IsMaterialLayoutResourceFieldType(in MaterialLayoutFieldType fieldType){
     return fieldType == MaterialLayoutFieldType::Enum::SampledImage2D || fieldType == MaterialLayoutFieldType::Enum::Sampler;
 }
 

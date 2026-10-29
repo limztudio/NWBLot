@@ -41,7 +41,7 @@ static constexpr InputSource s_Cursor{ 12u, 1u };
     return target;
 }
 
-[[nodiscard]] static PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position = { 20.0f, 20.0f }, const PointerIntent::Enum intent = PointerIntent::Activate, const bool hoverCapable = false)noexcept{
+[[nodiscard]] static PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position = { 20.0f, 20.0f }, const PointerIntent::Enum intent = PointerIntent::Activate, const b8 hoverCapable = false)noexcept{
     PointerInput input;
     input.phase = phase;
     input.source = source;

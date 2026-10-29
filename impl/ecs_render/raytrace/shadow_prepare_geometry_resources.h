@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 struct ShadowPrepareGeometryInputs{
     Span<const PreparedMeshBlasBuild> blasBuilds{};
     Span<const Core::GpuGraphResourceId> traceResources{};
-    bool blasBuildsGraphOwned = false;
+    b8 blasBuildsGraphOwned = false;
 };
 
 // One declaration owns selection and scratch; inputs stay frozen, phases run once.
@@ -35,8 +35,8 @@ private:
     struct BufferRequest{
         const Core::BufferHandle* source = nullptr;
         Core::GpuGraphResourceId resource;
-        bool listedForTrace = false;
-        bool selected = false;
+        b8 listedForTrace = false;
+        b8 selected = false;
     };
     struct InlineRequest{
         Core::Buffer* buffer = nullptr;
@@ -57,7 +57,7 @@ private:
         }
     };
     struct NameReferenceEqual{
-        [[nodiscard]] bool operator()(const NameReference& lhs, const NameReference& rhs)const noexcept{
+        [[nodiscard]] b8 operator()(const NameReference& lhs, const NameReference& rhs)const noexcept{
             return *lhs == *rhs;
         }
     };
@@ -79,19 +79,19 @@ public:
 
 public:
     // Collect identities without reading graph state; size outputs from distinct buffers.
-    void prepareStorage(bool blasInputStatesGraphOwned);
-    [[nodiscard]] bool gatherBuildInputs(const Core::GpuTaskGraph& graph);
-    [[nodiscard]] bool gatherRemainingTraceResources()noexcept;
-    [[nodiscard]] bool isPreparedMeshBlasBuild(const Name& meshName)const;
+    void prepareStorage(b8 blasInputStatesGraphOwned);
+    [[nodiscard]] b8 gatherBuildInputs(const Core::GpuTaskGraph& graph);
+    [[nodiscard]] b8 gatherRemainingTraceResources()noexcept;
+    [[nodiscard]] b8 isPreparedMeshBlasBuild(const Name& meshName)const;
 
 
 private:
     void addRequest(const Core::BufferHandle& buffer);
     [[nodiscard]] BufferRequest* findRequest(Core::Buffer* buffer)noexcept;
     void promoteRequests();
-    [[nodiscard]] bool resolveRequests(const Core::GpuTaskGraph& graph);
+    [[nodiscard]] b8 resolveRequests(const Core::GpuTaskGraph& graph);
     [[nodiscard]] BufferRequest* findResolvedRequest(Core::GpuGraphResourceId resource)noexcept;
-    [[nodiscard]] bool appendBuildInput(const Core::BufferHandle& buffer)noexcept;
+    [[nodiscard]] b8 appendBuildInput(const Core::BufferHandle& buffer)noexcept;
     void clearBuildInputs()noexcept;
     void prepareNames()const;
 
@@ -114,10 +114,10 @@ private:
     mutable const NameHash* m_inlineNames[s_InlineCount];
     mutable usize m_inlineNameCount = 0u;
     mutable Optional<NameIndex> m_names;
-    bool m_preparedBlasPolicy = false;
-    bool m_storagePrepared = false;
-    bool m_inputsGathered = false;
-    mutable bool m_namesPrepared = false;
+    b8 m_preparedBlasPolicy = false;
+    b8 m_storagePrepared = false;
+    b8 m_inputsGathered = false;
+    mutable b8 m_namesPrepared = false;
 };
 
 

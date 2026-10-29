@@ -122,8 +122,8 @@ private:
     u64 m_previousCount = 0u;
     Timer m_previousObservationTime = {};
     Timer m_previousPresentationTime = {};
-    bool m_started = false;
-    bool m_pendingStallCounted = false;
+    b8 m_started = false;
+    b8 m_pendingStallCounted = false;
     u64 m_stalls = 0u;
 };
 

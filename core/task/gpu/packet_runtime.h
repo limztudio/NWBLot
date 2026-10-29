@@ -78,14 +78,14 @@ struct GpuTaskGraphTaskSubmissionHook{
 struct GpuTaskGraphTaskAcceptedCallback{
     GpuTaskId task;
     void* context = nullptr;
-    [[nodiscard]] bool (*invoke)(void* context, const QueueSubmissionToken& token) = nullptr;
+    [[nodiscard]] b8 (*invoke)(void* context, const QueueSubmissionToken& token) = nullptr;
 };
 
 // Runs after a task records and exports packet state, before submit. The anchor checks final-state candidates.
 struct GpuTaskGraphTaskRecordedCallback{
     GpuTaskId task;
     void* context = nullptr;
-    [[nodiscard]] bool (*invoke)(void* context, const CommandListResourceStateHandoff* finalState) = nullptr;
+    [[nodiscard]] b8 (*invoke)(void* context, const CommandListResourceStateHandoff* finalState) = nullptr;
 };
 
 
@@ -139,7 +139,7 @@ struct GpuTaskGraphSubmissionStatistics{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };
 
 
@@ -152,8 +152,8 @@ struct GpuTaskGraphPacketSubmissionStatistics{
     GpuPhysicalQueueId queue;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     u16 deviceGeneration = 0u;
-    bool joinsAcceptedQueueFrontier = false;
-    bool isRecoverySubmission = false;
+    b8 joinsAcceptedQueueFrontier = false;
+    b8 isRecoverySubmission = false;
     usize taskCount = 0u;
     usize nativeCommandListCount = 0u;
     usize plannedWaitTokenCount = 0u;
@@ -165,7 +165,7 @@ struct GpuTaskGraphPacketSubmissionStatistics{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return
             graphGeneration != 0u
             && planGeneration != 0u
@@ -208,7 +208,7 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
     }
 };
@@ -261,7 +261,7 @@ private:
         PacketRuntimeState::Enum state = PacketRuntimeState::Declared;
         // A post-reservation submit-path failure is terminally rejected, but ordinary discard/rejection never sets this flag.
         // It can occur before the backend execute call, such as while validating a timing ticket.
-        bool nativeSubmissionRejected = false;
+        b8 nativeSubmissionRejected = false;
     };
 
 private:
@@ -272,9 +272,9 @@ private:
 
 
     public:
-        [[nodiscard]] bool acquire(const GpuGraphSubmissionTransaction& transaction, bool tryOnly)noexcept;
+        [[nodiscard]] b8 acquire(const GpuGraphSubmissionTransaction& transaction, b8 tryOnly)noexcept;
         void reset()noexcept;
-        [[nodiscard]] bool valid()const noexcept{ return m_transaction != nullptr; }
+        [[nodiscard]] b8 valid()const noexcept{ return m_transaction != nullptr; }
 
 
     private:
@@ -287,13 +287,13 @@ private:
 
 
     public:
-        [[nodiscard]] static bool Active()noexcept{ return s_ActiveOperation != nullptr; }
+        [[nodiscard]] static b8 Active()noexcept{ return s_ActiveOperation != nullptr; }
 
-        [[nodiscard]] static bool ActiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
+        [[nodiscard]] static b8 ActiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
             return s_ActiveOperation && s_ActiveOperation->m_transaction == &transaction;
         }
 
-        [[nodiscard]] static bool ActiveExclusiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
+        [[nodiscard]] static b8 ActiveExclusiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
             return ActiveFor(transaction) && s_ActiveOperation->m_exclusive;
         }
 
@@ -304,15 +304,15 @@ private:
 
 
     public:
-        [[nodiscard]] bool valid()const noexcept{ return m_transaction != nullptr; }
+        [[nodiscard]] b8 valid()const noexcept{ return m_transaction != nullptr; }
 
 
     private:
         const GpuGraphSubmissionTransaction* m_transaction = nullptr;
         SubmissionOperation* m_previousOperation = nullptr;
         SubmissionWriterReservation m_writerReservation;
-        bool m_exclusive = false;
-        bool m_composite = false;
+        b8 m_exclusive = false;
+        b8 m_composite = false;
     };
 
 private:
@@ -352,7 +352,7 @@ private:
 
 
 private:
-    [[nodiscard]] static bool WaitForSubmissionExceptionClosing(GpuGraphSubmissionTransaction& transaction, GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{
+    [[nodiscard]] static b8 WaitForSubmissionExceptionClosing(GpuGraphSubmissionTransaction& transaction, GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{
         if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
             return true;
         if(!graph.waitForSubmissionExceptionRecordingClaims(compiledGraph, recordingAttemptGeneration, submissionBinding)){
@@ -402,16 +402,16 @@ public:
 public:
     void reset(const GpuCompiledGraph& compiledGraph);
     // False while this transaction still owns any nonterminal packet; changes nothing.
-    [[nodiscard]] bool tryReset(const GpuCompiledGraph& compiledGraph);
+    [[nodiscard]] b8 tryReset(const GpuCompiledGraph& compiledGraph);
 
-    [[nodiscard]] bool validFor(const GpuCompiledGraph::ReadView& planAccess)const noexcept;
+    [[nodiscard]] b8 validFor(const GpuCompiledGraph::ReadView& planAccess)const noexcept;
     // Task rejection resolves the current packet inside the transaction, so recovery revokes unaccepted work directly.
     void rejectTask(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, GpuTaskId task, u64 recordingAttemptGeneration);
     // Returns false when a packet is actively recording/submitting or the transaction no longer owns this attempt.
     // Callers must retain the graph until a true result confirms that every unaccepted packet was resolved.
-    [[nodiscard]] bool discardUnaccepted(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration);
+    [[nodiscard]] b8 discardUnaccepted(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration);
 
-    [[nodiscard]] bool hasAcceptedPackets()const noexcept;
+    [[nodiscard]] b8 hasAcceptedPackets()const noexcept;
     [[nodiscard]] GpuTaskGraphSubmissionStatistics submissionStatistics()const noexcept;
     // Copies one accepted native packet's wait decomposition and compiler role under the transaction mutex.
     // The result owns every field; the required plan proof protects metadata during the copy.
@@ -425,7 +425,7 @@ public:
     // Generation-checked: a task from an older compiled graph is never an accepted submission on a replacement device or packetization.
     [[nodiscard]] QueueSubmissionToken taskToken(const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task)const noexcept;
     // Publishes the external handoff after every terminal producer packet accepts; the caller snapshot keeps state after admission.
-    [[nodiscard]] bool externalResourceHandoff(
+    [[nodiscard]] b8 externalResourceHandoff(
         const GpuTaskGraph& graph,
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph& compiledGraph,
@@ -439,24 +439,24 @@ public:
 private:
     // Appends one latest accepted token for every physical queue other than `destinationQueue`.
     // A recovery packet submitted on that destination does not need to wait on its own queue because queue order already supplies the dependency.
-    [[nodiscard]] bool appendAcceptedQueueFrontierWaitTokens(const GpuPhysicalQueueId& destinationQueue, Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens)const;
+    [[nodiscard]] b8 appendAcceptedQueueFrontierWaitTokens(const GpuPhysicalQueueId& destinationQueue, Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens)const;
 
-    [[nodiscard]] bool validForLocked(const GpuCompiledGraph::ReadView& planAccess)const noexcept;
-    [[nodiscard]] bool hasUnresolvedSubmissionBinding(const GpuCompiledGraph& compiledGraph)const noexcept;
-    [[nodiscard]] bool waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()const noexcept;
+    [[nodiscard]] b8 validForLocked(const GpuCompiledGraph::ReadView& planAccess)const noexcept;
+    [[nodiscard]] b8 hasUnresolvedSubmissionBinding(const GpuCompiledGraph& compiledGraph)const noexcept;
+    [[nodiscard]] b8 waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()const noexcept;
     [[nodiscard]] QueueSubmissionToken packetTokenLocked(const GpuSubmissionPacketId& packet)const noexcept;
     [[nodiscard]] QueueSubmissionToken taskTokenLocked(const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task)const noexcept;
 
 
 private:
     void finishPayloadLifetime(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph);
-    [[nodiscard]] bool allPacketsTerminalLocked()const noexcept;
-    [[nodiscard]] bool bindRecordingAttemptWithinSubmissionOperation(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuRecordingAttemptScope* preparationAttempt = nullptr)noexcept;
-    [[nodiscard]] bool matchesRecordingAttemptBinding(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
+    [[nodiscard]] b8 allPacketsTerminalLocked()const noexcept;
+    [[nodiscard]] b8 bindRecordingAttemptWithinSubmissionOperation(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuRecordingAttemptScope* preparationAttempt = nullptr)noexcept;
+    [[nodiscard]] b8 matchesRecordingAttemptBinding(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
 
 
     [[nodiscard]] Expected<SubmissionExceptionClosing> beginSubmissionExceptionClosingWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept;
-    [[nodiscard]] bool submissionExceptionClosingResolved(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept;
+    [[nodiscard]] b8 submissionExceptionClosingResolved(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept;
     void completeSubmissionExceptionClosingWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -468,8 +468,8 @@ private:
     void rejectTaskWithinSubmissionOperation(GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task, u64 recordingAttemptGeneration);
 
     // Reserves native submission first. While Submitting, cancellation cannot run the discard callback or claim the graph.
-    [[nodiscard]] bool beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, GpuSubmissionPacketId packetID, u64 recordingAttemptGeneration, GpuPacketSubmissionLease& outLease)noexcept;
-    [[nodiscard]] bool acceptSubmittingPacket(
+    [[nodiscard]] b8 beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, GpuSubmissionPacketId packetID, u64 recordingAttemptGeneration, GpuPacketSubmissionLease& outLease)noexcept;
+    [[nodiscard]] b8 acceptSubmittingPacket(
         GpuTaskGraph& graph,
         GpuPacketSubmissionLease& lease,
         const GpuCompiledGraph& compiledGraph,
@@ -485,7 +485,7 @@ private:
     void rejectPacket(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID, u64 recordingAttemptGeneration);
     void rejectSubmittingPacket(GpuTaskGraph& graph, GpuPacketSubmissionLease& lease, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packetID);
     void abandonSubmittingPacketAfterExceptionWithinSubmissionOperation(GpuTaskGraph& graph, GpuPacketSubmissionLease& lease, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packetID)noexcept;
-    void completeRejectedPacketWithinSubmissionOperation(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packetID, bool nativeSubmissionRejected)noexcept;
+    void completeRejectedPacketWithinSubmissionOperation(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packetID, b8 nativeSubmissionRejected)noexcept;
     void abandonUnacceptedPacketsAfterExceptionWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)noexcept;
 
 
@@ -521,8 +521,8 @@ private:
     mutable Futex m_resolutionMutex;
     mutable Futex m_mutex;
     u16 m_deviceGeneration = 0u;
-    bool m_submissionBindingResolved = false;
-    bool m_valid = false;
+    b8 m_submissionBindingResolved = false;
+    b8 m_valid = false;
 };
 
 
@@ -533,7 +533,7 @@ struct GpuTaskGraphRuntimeStatistics{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return
             compile.valid()
             && recording.valid()

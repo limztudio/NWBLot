@@ -26,7 +26,7 @@ inline constexpr u8 s_MinSafeArchivePathCharacter = 0x20u;
 
 
 template<typename CharT>
-[[nodiscard]] inline bool IsArchivePathSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 IsArchivePathSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     return ch == static_cast<CharT>('/') || ch == static_cast<CharT>('\\');
 }
 
@@ -40,13 +40,13 @@ template<typename CharT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool IsSafeArchiveRelativePath(const AStringView pathText)noexcept{
+[[nodiscard]] inline b8 IsSafeArchiveRelativePath(const AStringView pathText)noexcept{
     if(pathText.empty() || GlobalFilesystemArchiveDetail::IsArchivePathSeparator(pathText.front()))
         return false;
 
     usize segmentBegin = 0u;
     for(usize i = 0u; i <= pathText.size(); ++i){
-        const bool atEnd = i == pathText.size();
+        const b8 atEnd = i == pathText.size();
         const char ch = atEnd ? '/' : pathText[i];
         if(!atEnd && (static_cast<unsigned char>(ch) < GlobalFilesystemArchiveDetail::s_MinSafeArchivePathCharacter || ch == ':'))
             return false;

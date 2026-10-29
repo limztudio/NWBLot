@@ -21,16 +21,16 @@ struct LightSpaceCaptureIdentity{
     u64 scene = 0u;
     u64 lighting = 0u;
     u64 layout = 0u;
-    bool trusted = false;
+    b8 trusted = false;
 };
 
 struct LightSpaceCaptureTicket{
     u64 sequence = 0u;
-    bool reuse = false;
+    b8 reuse = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return sequence != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return sequence != 0u; }
 };
 
 // A capture publishes only after its complete native packet and retained resource states are accepted.
@@ -39,7 +39,7 @@ public:
     void beginFrame()noexcept;
     [[nodiscard]] LightSpaceCaptureTicket prepare(const LightSpaceCaptureIdentity& identity, SoftwareShadowCaptureCadence::Enum cadence)noexcept;
     void recordCapture(const LightSpaceCaptureTicket& ticket)noexcept;
-    [[nodiscard]] bool accept(const LightSpaceCaptureTicket& ticket)noexcept;
+    [[nodiscard]] b8 accept(const LightSpaceCaptureTicket& ticket)noexcept;
     void invalidate()noexcept;
     [[nodiscard]] u64 acceptedCaptures()const noexcept{ return m_acceptedCaptures; }
 
@@ -57,9 +57,9 @@ private:
     u64 m_acceptedReuses = 0u;
     u8 m_acceptedReuseCount = 0u;
     u8 m_pendingReuseLimit = 0u;
-    bool m_accepted = false;
-    bool m_captureRecorded = false;
-    bool m_frameAccepted = false;
+    b8 m_accepted = false;
+    b8 m_captureRecorded = false;
+    b8 m_frameAccepted = false;
 };
 
 

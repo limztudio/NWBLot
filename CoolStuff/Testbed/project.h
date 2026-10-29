@@ -37,29 +37,29 @@ public:
 
 
 public:
-    virtual bool onStartup()override;
+    virtual b8 onStartup()override;
     virtual void onShutdown()override;
 
 public:
-    virtual bool onUpdate(f32 delta)override;
+    virtual b8 onUpdate(f32 delta)override;
 
 public:
-    virtual void windowFocusUpdate(bool focused)noexcept override;
+    virtual void windowFocusUpdate(b8 focused)noexcept override;
     virtual void pointerCaptureLost()noexcept override;
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
-    virtual bool mousePosUpdate(f64 xpos, f64 ypos)noexcept override;
-    virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)noexcept override;
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+    virtual b8 mousePosUpdate(f64 xpos, f64 ypos)noexcept override;
+    virtual b8 mouseButtonUpdate(i32 button, i32 action, i32 mods)noexcept override;
 
 
 private:
     void drawUiControls(NWB::Impl::UiPaintContext& context);
     void drawCustomUiControls(NWB::Impl::UiPaintContext& context);
-    [[nodiscard]] bool createDefaultScene();
+    [[nodiscard]] b8 createDefaultScene();
     void registerInputHandler();
     void unregisterInputHandler();
     void clearInputState()noexcept;
-    void setKeyState(i32 key, bool pressed)noexcept;
-    [[nodiscard]] bool keyPressed(i32 key)const noexcept;
+    void setKeyState(i32 key, b8 pressed)noexcept;
+    [[nodiscard]] b8 keyPressed(i32 key)const noexcept;
     void updateMainCamera(f32 delta)noexcept;
     void destroyWorld();
 
@@ -74,10 +74,10 @@ private:
     f64 m_lastMouseY = 0.0;
     f32 m_pendingMouseDeltaX = 0.0f;
     f32 m_pendingMouseDeltaY = 0.0f;
-    bool m_inputRegistered = false;
-    bool m_mouseLookActive = false;
-    bool m_mousePositionValid = false;
-    Array<bool, s_KeyStateCount> m_keyPressed = {};
+    b8 m_inputRegistered = false;
+    b8 m_mouseLookActive = false;
+    b8 m_mousePositionValid = false;
+    Array<b8, s_KeyStateCount> m_keyPressed = {};
 };
 
 

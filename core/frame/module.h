@@ -54,8 +54,8 @@ private:
 
 
 public:
-    using ProjectUpdateCallback = bool(*)(void* userData, f32 delta);
-    using TelemetryUploadCallback = bool(*)(void* userData, const void* bytes, usize byteCount);
+    using ProjectUpdateCallback = b8(*)(void* userData, f32 delta);
+    using TelemetryUploadCallback = b8(*)(void* userData, const void* bytes, usize byteCount);
 
 
 private:
@@ -68,17 +68,17 @@ public:
 
 
 public:
-    bool init();
-    bool showFrame();
-    bool mainLoop();
+    b8 init();
+    b8 showFrame();
+    b8 mainLoop();
     void requestQuit()noexcept{ m_quitRequested = true; }
 
     template<typename T>
     inline T& data()noexcept{ return static_cast<T&>(m_data); }
 
-    bool startup();
+    b8 startup();
     void cleanup();
-    bool update(f32 delta);
+    b8 update(f32 delta);
 
     inline void setProjectUpdateCallback(ProjectUpdateCallback callback, void* userData)noexcept{
         m_projectUpdateCallback = callback;
@@ -103,7 +103,7 @@ public:
 
     void setTelemetryCapture(const Telemetry::CaptureOptions& options);
     void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData)noexcept;
-    [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
+    [[nodiscard]] b8 flushTelemetryUpload(b8 clearAfterUpload = false);
     // Toggle perf capture without telemetry; flips both halves of the GPU-timing gate.
     void setPerfCapture(const Perf::CaptureOptions& options);
     // Available after startup; the native window and its OS service outlive project borrowers.
@@ -129,9 +129,9 @@ public:
 
     [[nodiscard]] TStringView windowTitleOrDefault()const noexcept;
 
-    [[nodiscard]] inline bool quitRequested()const noexcept{ return m_quitRequested; }
+    [[nodiscard]] inline b8 quitRequested()const noexcept{ return m_quitRequested; }
 
-    [[nodiscard]] Optional<TStringView> syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
+    [[nodiscard]] Optional<TStringView> syncGraphicsWindowState(u32 width, u32 height, b8 windowVisible, b8 windowIsInFocus);
 
 
 private:
@@ -139,7 +139,7 @@ private:
     [[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> createPlatformTextInputService();
     void setupPlatform(void* inst)noexcept;
     void cleanupPlatform()noexcept;
-    bool updateFrame(f32 delta);
+    b8 updateFrame(f32 delta);
 
 
 private:
@@ -163,7 +163,7 @@ private:
     void* m_projectUpdateUserData = nullptr;
     TelemetryUploadCallback m_telemetryUploadCallback = nullptr;
     void* m_telemetryUploadUserData = nullptr;
-    bool m_quitRequested = false;
+    b8 m_quitRequested = false;
     // Timing scope registered during startup and retained across capture enable/clear, never per frame in updateFrame().
     Perf::TimingScopeId m_projectUpdateTimingScope;
 };

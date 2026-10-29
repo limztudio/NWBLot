@@ -38,7 +38,7 @@ const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(const GpuPhysicalQueueTopology
 }
 
 
-bool IsLegalQueueAssignmentCandidate(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& candidate)noexcept{
+b8 IsLegalQueueAssignmentCandidate(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& candidate)noexcept{
     if(
         !HasCapabilities(candidate.capabilities, task.commands.requiredCapabilities)
         || (task.commands.externalQueue.valid() && task.commands.externalQueue != candidate.id)
@@ -48,7 +48,7 @@ bool IsLegalQueueAssignmentCandidate(const GpuTaskGraph::DeclarationReadView& gr
         return false;
 
     const GpuPresentEndpoint* const presentEndpoint = graph.presentEndpoint();
-    bool requiresPrimaryGraphicsQueue = task.commands.requiresPrimaryGraphicsQueue || (presentEndpoint && presentEndpoint->producer == task.id);
+    b8 requiresPrimaryGraphicsQueue = task.commands.requiresPrimaryGraphicsQueue || (presentEndpoint && presentEndpoint->producer == task.id);
     if(presentEndpoint){
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex)
             requiresPrimaryGraphicsQueue = requiresPrimaryGraphicsQueue || task.resourceUses[useIndex].resource == presentEndpoint->backBuffer;
@@ -108,7 +108,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     NWB_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
     u64 queueLoad = assignedQueueCost - exclusions.candidateQueueCost;
     const u32 taskAssignmentIndex = assignmentIndicesByTask[task.id.index];
-    const bool taskExcluded = taskAssignmentIndex >= ignoredAssignmentOffset && taskAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount;
+    const b8 taskExcluded = taskAssignmentIndex >= ignoredAssignmentOffset && taskAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount;
     const GpuTaskQueueAssignment* const ownAssignment = FindQueueAssignment(assignments, assignmentIndicesByTask, task.id);
     const u64 ownCost = ownAssignment && !taskExcluded ? scoringData.m_taskCosts[task.id.index] : 0u;
     if(ownAssignment && ownAssignment->queue == candidate.id)
@@ -184,7 +184,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         if(resource.type == GpuGraphResourceType::HazardDomain)
             continue;
 
-        const bool concurrentQueuePair = ResourceSharesQueuePairConcurrently(resource, topology, *producerQueue, *consumerQueue);
+        const b8 concurrentQueuePair = ResourceSharesQueuePairConcurrently(resource, topology, *producerQueue, *consumerQueue);
         if(!concurrentQueuePair)
             ++ownershipTransfers;
     }
@@ -193,7 +193,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
 }
 
 
-bool IsBetterAutomaticQueueAssignmentCandidate(const GpuQueueAssignmentScore& candidateScore, const GpuPhysicalQueueInfo& candidate, const GpuQueueAssignmentScore& currentScore, const GpuPhysicalQueueInfo* const current, const bool compareTotalScore)noexcept{
+b8 IsBetterAutomaticQueueAssignmentCandidate(const GpuQueueAssignmentScore& candidateScore, const GpuPhysicalQueueInfo& candidate, const GpuQueueAssignmentScore& currentScore, const GpuPhysicalQueueInfo* const current, const b8 compareTotalScore)noexcept{
     if(!current)
         return true;
 

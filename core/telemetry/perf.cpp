@@ -22,11 +22,11 @@ namespace __hidden_telemetry_perf{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsValidMemorySource(const u32 source)noexcept{
+[[nodiscard]] static b8 IsValidMemorySource(const u32 source)noexcept{
     return source == Perf::MemorySource::ExplicitScope || source == Perf::MemorySource::Arena || source == Perf::MemorySource::HeapBacking;
 }
 
-[[nodiscard]] static bool TimingDurationsAreFinite(const f64 seconds, const f64 minSeconds, const f64 maxSeconds, const f64 lastSeconds)noexcept{
+[[nodiscard]] static b8 TimingDurationsAreFinite(const f64 seconds, const f64 minSeconds, const f64 maxSeconds, const f64 lastSeconds)noexcept{
     constexpr u64 s_ExponentMask = 0x7FF0000000000000ull;
     return
         (BitCast<u64>(seconds) & s_ExponentMask) != s_ExponentMask && (BitCast<u64>(minSeconds) & s_ExponentMask) != s_ExponentMask
@@ -34,7 +34,7 @@ namespace __hidden_telemetry_perf{
     ;
 }
 
-[[nodiscard]] static bool ValidateHeader(const EncodedPerfTimingPayloadHeader& header)noexcept{
+[[nodiscard]] static b8 ValidateHeader(const EncodedPerfTimingPayloadHeader& header)noexcept{
     return
         header.magic == s_PerfTimingPayloadMagic
         && header.version == s_PerfTimingPayloadVersion
@@ -46,16 +46,16 @@ namespace __hidden_telemetry_perf{
     ;
 }
 
-[[nodiscard]] static bool ValidateHeader(const EncodedPerfMemoryPayloadHeader& header)noexcept{
+[[nodiscard]] static b8 ValidateHeader(const EncodedPerfMemoryPayloadHeader& header)noexcept{
     constexpr u16 s_KnownFlags = PerfMemoryPayloadFlag::HasDelta;
     return header.magic == s_PerfMemoryPayloadMagic && header.version == s_PerfMemoryPayloadVersion && (header.flags & ~s_KnownFlags) == 0u && IsValidMemorySource(header.source) && !NameDetail::IsZeroHash(header.scopeHash);
 }
 
-[[nodiscard]] static bool ValidateTimingInput(const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats)noexcept{
-    return IsValidPerfTimingSource(source) && static_cast<bool>(scopeName) && !scopeText.empty() && scopeText.size() <= Limit<u32>::s_Max && stats.valid() && TimingDurationsAreFinite(stats.seconds, stats.minSeconds, stats.maxSeconds, stats.lastSeconds);
+[[nodiscard]] static b8 ValidateTimingInput(const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats)noexcept{
+    return IsValidPerfTimingSource(source) && static_cast<b8>(scopeName) && !scopeText.empty() && scopeText.size() <= Limit<u32>::s_Max && stats.valid() && TimingDurationsAreFinite(stats.seconds, stats.minSeconds, stats.maxSeconds, stats.lastSeconds);
 }
 
-[[nodiscard]] static bool ValidateMemoryInput(const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta)noexcept{
+[[nodiscard]] static b8 ValidateMemoryInput(const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta)noexcept{
     if(!scopeName || !IsValidMemorySource(snapshot.source) || snapshot.scopeName != scopeName || !snapshot.valid() || scopeText.empty() || scopeText.size() > Limit<u32>::s_Max)
         return false;
 
@@ -63,7 +63,7 @@ namespace __hidden_telemetry_perf{
 }
 
 template<typename HeaderT>
-[[nodiscard]] static bool AppendPerfPayloadWithScopeText(const HeaderT& header, const AStringView scopeText, TelemetryBytes& outPayload){
+[[nodiscard]] static b8 AppendPerfPayloadWithScopeText(const HeaderT& header, const AStringView scopeText, TelemetryBytes& outPayload){
     usize payloadBytes = sizeof(HeaderT);
     if(!AddBinaryReserveBytes(payloadBytes, scopeText.size()))
         return false;
@@ -105,7 +105,7 @@ template<typename HeaderT>
     return ParsedPerfPayload<HeaderT>{ .header = *header, .scopeText = AStringView(reinterpret_cast<const char*>(encoded.data() + cursor), header->scopeNameBytes), };
 }
 
-static void RecordTimingView(const PerfTimingSource::Enum source, const Perf::TimingView& timing, const u32 streamId, Recorder& recorder, u32& outRecordedEvents, bool& inOutSucceeded){
+static void RecordTimingView(const PerfTimingSource::Enum source, const Perf::TimingView& timing, const u32 streamId, Recorder& recorder, u32& outRecordedEvents, b8& inOutSucceeded){
     if(!recorder.enabled(EventKind::PerfFrame)){
         inOutSucceeded = false;
         return;
@@ -124,7 +124,7 @@ static void RecordTimingView(const PerfTimingSource::Enum source, const Perf::Ti
     }
 }
 
-static void RecordMemoryView(const Perf::MemoryView& memory, const u32 streamId, Recorder& recorder, u32& outRecordedEvents, bool& inOutSucceeded){
+static void RecordMemoryView(const Perf::MemoryView& memory, const u32 streamId, Recorder& recorder, u32& outRecordedEvents, b8& inOutSucceeded){
     if(!recorder.enabled(EventKind::MemoryFrame)){
         inOutSucceeded = false;
         return;
@@ -153,7 +153,7 @@ static void RecordMemoryView(const Perf::MemoryView& memory, const u32 streamId,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsValidPerfTimingSource(const PerfTimingSource::Enum source)noexcept{
+b8 IsValidPerfTimingSource(const PerfTimingSource::Enum source)noexcept{
     switch(source){
     case PerfTimingSource::Cpu:
     case PerfTimingSource::Gpu:
@@ -163,7 +163,7 @@ bool IsValidPerfTimingSource(const PerfTimingSource::Enum source)noexcept{
     }
 }
 
-bool BuildPerfTimingPayload(TelemetryArena&, const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats, TelemetryBytes& outPayload){
+b8 BuildPerfTimingPayload(TelemetryArena&, const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats, TelemetryBytes& outPayload){
     outPayload.clear();
 
     if(!__hidden_telemetry_perf::ValidateTimingInput(source, scopeName, scopeText, stats))
@@ -185,7 +185,7 @@ bool BuildPerfTimingPayload(TelemetryArena&, const PerfTimingSource::Enum source
     return __hidden_telemetry_perf::AppendPerfPayloadWithScopeText(header, scopeText, outPayload);
 }
 
-bool BuildPerfTimingPayload(TelemetryArena& arena, const PerfTimingSource::Enum source, const Name& scopeName, const Perf::TimingStats& stats, TelemetryBytes& outPayload){
+b8 BuildPerfTimingPayload(TelemetryArena& arena, const PerfTimingSource::Enum source, const Name& scopeName, const Perf::TimingStats& stats, TelemetryBytes& outPayload){
     return BuildPerfTimingPayload(arena, source, scopeName, scopeName.resolvedText(), stats, outPayload);
 }
 
@@ -211,17 +211,17 @@ Expected<PerfTimingPayload> ParsePerfTimingPayload(const void* const payload, co
     return parsedPayload;
 }
 
-bool RecordPerfTiming(Recorder& recorder, const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats, const u32 streamId){
+b8 RecordPerfTiming(Recorder& recorder, const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::PerfFrame, stats.publishFrameIndex, streamId, [source, &scopeName, scopeText, &stats](TelemetryArena& arena, TelemetryBytes& payload){
         return BuildPerfTimingPayload(arena, source, scopeName, scopeText, stats, payload);
     });
 }
 
-bool RecordPerfTiming(Recorder& recorder, const PerfTimingSource::Enum source, const Name& scopeName, const Perf::TimingStats& stats, const u32 streamId){
+b8 RecordPerfTiming(Recorder& recorder, const PerfTimingSource::Enum source, const Name& scopeName, const Perf::TimingStats& stats, const u32 streamId){
     return RecordPerfTiming(recorder, source, scopeName, scopeName.resolvedText(), stats, streamId);
 }
 
-bool BuildPerfMemoryPayload(TelemetryArena&, const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, TelemetryBytes& outPayload){
+b8 BuildPerfMemoryPayload(TelemetryArena&, const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, TelemetryBytes& outPayload){
     outPayload.clear();
 
     if(!__hidden_telemetry_perf::ValidateMemoryInput(scopeName, scopeText, snapshot, delta))
@@ -253,7 +253,7 @@ bool BuildPerfMemoryPayload(TelemetryArena&, const Name& scopeName, const AStrin
     return __hidden_telemetry_perf::AppendPerfPayloadWithScopeText(header, scopeText, outPayload);
 }
 
-bool BuildPerfMemoryPayload(TelemetryArena& arena, const Name& scopeName, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, TelemetryBytes& outPayload){
+b8 BuildPerfMemoryPayload(TelemetryArena& arena, const Name& scopeName, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, TelemetryBytes& outPayload){
     return BuildPerfMemoryPayload(arena, scopeName, scopeName.resolvedText(), snapshot, delta, outPayload);
 }
 
@@ -292,13 +292,13 @@ Expected<PerfMemoryPayload> ParsePerfMemoryPayload(const void* const payload, co
     return parsedPayload;
 }
 
-bool RecordPerfMemory(Recorder& recorder, const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, const u32 streamId){
+b8 RecordPerfMemory(Recorder& recorder, const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::MemoryFrame, snapshot.frameIndex, streamId, [&scopeName, scopeText, &snapshot, &delta](TelemetryArena& arena, TelemetryBytes& payload){
         return BuildPerfMemoryPayload(arena, scopeName, scopeText, snapshot, delta, payload);
     });
 }
 
-bool RecordPerfMemory(Recorder& recorder, const Name& scopeName, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, const u32 streamId){
+b8 RecordPerfMemory(Recorder& recorder, const Name& scopeName, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, const u32 streamId){
     return RecordPerfMemory(recorder, scopeName, scopeName.resolvedText(), snapshot, delta, streamId);
 }
 

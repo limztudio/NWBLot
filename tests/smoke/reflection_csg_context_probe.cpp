@@ -29,7 +29,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer, const u32 rayCapacity, const u64 sourceFrame, const bool csg){
+void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer, const u32 rayCapacity, const u64 sourceFrame, const b8 csg){
     NWB::Core::Telemetry::FrameGraphNodeDescs nodes(context.objectArena);
     NWB::Core::Telemetry::FrameGraphEdgeDescs edges(context.objectArena);
     NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(context.objectArena);
@@ -37,10 +37,10 @@ void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::Renderer
     NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(context.objectArena);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/smoke/reflection_frame_graph"));
     NWB::Core::Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame);
-    const bool graphAvailable = renderer.appendFrameGraph(builder);
+    const b8 graphAvailable = renderer.appendFrameGraph(builder);
     const auto primaryGraphics = context.graphics.getDevice().getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
     u64 planGeneration = 0u;
-    bool runtimePresent = false;
+    b8 runtimePresent = false;
     for(const auto& node : nodes){
         if(node.name == Name("ecs_render/frame") && node.runtimeStatistics.present){
             // Native packet tables are exported only for the renderer's actual source frame, not the builder's label.
@@ -92,7 +92,7 @@ void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::Renderer
         if(!runtimePresent || !node.compiledTask.present || node.compiledTask.planGeneration != planGeneration)
             continue;
         ++compiledNodes;
-        bool unique = true;
+        b8 unique = true;
         for(const u32 packetIndex : uniquePackets){
             if(packetIndex == node.compiledTask.packetIndex){
                 unique = false;
@@ -127,7 +127,7 @@ void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::Renderer
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ReflectionCsgContextProbe::ShouldCapture(void* owner, const u64 sourceFrame)noexcept{
+b8 ReflectionCsgContextProbe::ShouldCapture(void* owner, const u64 sourceFrame)noexcept{
     return sourceFrame == MakeNotNull(static_cast<ReflectionCsgContextProbe*>(owner))->m_targetSource;
 }
 
@@ -139,7 +139,7 @@ ReflectionCsgContextProbe::ReflectionCsgContextProbe(ProjectRuntimeContext& cont
     , m_rayCapacity(rayCapacity)
 {}
 
-bool ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
+b8 ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
     const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
     if(!output){
         NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: application framebuffer capture is required"));
@@ -161,7 +161,7 @@ bool ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
     return beginPhase();
 }
 
-bool ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics){
+b8 ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics){
     // Wait before advancing the world so latest-only diagnostic rows are not skipped.
     if(!m_context.graphics.waitForIdle()){
         NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: diagnostic frame synchronization failed"));
@@ -210,9 +210,9 @@ bool ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionSt
     return true;
 }
 
-bool ReflectionCsgContextProbe::beginPhase(){
-    const bool small = m_phase == 0u || m_phase == 3u;
-    const bool csg = m_phase != 2u;
+b8 ReflectionCsgContextProbe::beginPhase(){
+    const b8 small = m_phase == 0u || m_phase == 3u;
+    const b8 csg = m_phase != 2u;
     m_world.entity(m_entities.smallReceiver).getComponent<Impl::RendererComponent>().visible = small;
     // Keep the inactive dense receiver in the current scene during small phases, away from all reflected probe rays.
     m_world.entity(m_entities.denseReceiver).getComponent<Impl::Scene::TransformComponent>().position.x = small ? 40.f : 0.f;

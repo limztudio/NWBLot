@@ -27,9 +27,9 @@ class UiSelectionEpochTests : public UiEditBoxHostTests{
 protected:
     [[nodiscard]] UiTextEditOwner owner()const noexcept{ return { { 271u }, 3u, m_model.instanceGeneration() }; }
 
-    [[nodiscard]] bool seedSelection(){ return m_model.setText("abcd") && m_model.setSelection(1u, 3u); }
+    [[nodiscard]] b8 seedSelection(){ return m_model.setText("abcd") && m_model.setSelection(1u, 3u); }
 
-    [[nodiscard]] bool mutate(const EpochMutation::Enum mutation){
+    [[nodiscard]] b8 mutate(const EpochMutation::Enum mutation){
         const usize anchor = m_model.anchor();
         const usize caret = m_model.caret();
         if(mutation == EpochMutation::SelectionRoundTrip)
@@ -77,7 +77,7 @@ protected:
         }
     }
 
-    void sessionRejected(const EpochMutation::Enum mutation, const bool refresh){
+    void sessionRejected(const EpochMutation::Enum mutation, const b8 refresh){
         ASSERT_TRUE(seedSelection());
         UiTextEditSession session(m_arena, m_textInput);
         const TextInputRect caret{ 100, 32, 1, 18 };

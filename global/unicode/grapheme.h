@@ -15,21 +15,21 @@
 struct GraphemeBoundaryState{
     usize regionalRun = 0u;
     GraphemeBreak::Enum previous = GraphemeBreak::Other;
-    bool pictographExtendRun = false;
-    bool previousZwjAfterPictograph = false;
-    bool indicConsonantRun = false;
-    bool indicLinker = false;
-    bool first = true;
+    b8 pictographExtendRun = false;
+    b8 previousZwjAfterPictograph = false;
+    b8 indicConsonantRun = false;
+    b8 indicLinker = false;
+    b8 first = true;
 
 
 private:
-    static bool IsControl(const GraphemeBreak::Enum property)noexcept{
+    static b8 IsControl(const GraphemeBreak::Enum property)noexcept{
         return property == GraphemeBreak::CR || property == GraphemeBreak::LF || property == GraphemeBreak::Control;
     }
 
 
 public:
-    [[nodiscard]] bool breaksBefore(const GraphemeBreak::Enum current, const IndicConjunct::Enum indic, const bool pictograph)const noexcept{
+    [[nodiscard]] b8 breaksBefore(const GraphemeBreak::Enum current, const IndicConjunct::Enum indic, const b8 pictograph)const noexcept{
         if(first)
             return true;
         if(previous == GraphemeBreak::CR && current == GraphemeBreak::LF)
@@ -55,7 +55,7 @@ public:
         return true;
     }
 
-    void advance(const GraphemeBreak::Enum current, const IndicConjunct::Enum indic, const bool pictograph)noexcept{
+    void advance(const GraphemeBreak::Enum current, const IndicConjunct::Enum indic, const b8 pictograph)noexcept{
         previousZwjAfterPictograph = current == GraphemeBreak::ZWJ && pictographExtendRun;
         if(pictograph)
             pictographExtendRun = true;

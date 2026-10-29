@@ -29,11 +29,11 @@ inline constexpr Core::ResourceStates::Mask s_GeneratedGeometryRasterState = Cor
 // Buffer identity alone does not describe which regions a retained draw generates and consumes.
 struct GeneratedGeometryOutputLayout{
     u32 m_indexByteOffset = 0u;
-    bool m_indexed = false;
+    b8 m_indexed = false;
 
 
 public:
-    [[nodiscard]] constexpr bool matches(const u32 indexByteOffset, const bool indexed)const noexcept{
+    [[nodiscard]] constexpr b8 matches(const u32 indexByteOffset, const b8 indexed)const noexcept{
         return m_indexByteOffset == indexByteOffset && m_indexed == indexed;
     }
 };

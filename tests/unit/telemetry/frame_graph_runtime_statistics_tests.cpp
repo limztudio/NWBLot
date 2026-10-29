@@ -165,7 +165,7 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
     ;
     Telemetry::EncodedFrameGraphRuntimeStatistics first;
     Telemetry::EncodedFrameGraphRuntimeStatistics second;
-    const auto loadRuntimeStatistics = [&]()->bool{
+    const auto loadRuntimeStatistics = [&]()->b8{
         if(!Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 911u, nodes, edges, payload))
             return false;
         NWB_MEMCPY(&first, sizeof(first), payload.data() + runtimeStatisticsOffset, sizeof(first));

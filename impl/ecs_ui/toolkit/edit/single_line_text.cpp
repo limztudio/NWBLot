@@ -24,7 +24,7 @@ namespace __hidden_ui_single_line_text{
 struct TextStep{
     usize sourceBytes = 0u;
     usize outputBytes = 0u;
-    bool space = false;
+    b8 space = false;
 };
 
 static Expected<TextStep> ReadStep(const AStringView source, const usize offset)noexcept{
@@ -32,7 +32,7 @@ static Expected<TextStep> ReadStep(const AStringView source, const usize offset)
     const auto decoded = DecodeUtf8Scalar(source.substr(offset, s_Utf8MaxSequenceBytes));
     NWB_ASSERT(decoded);
     const u32 scalar = decoded->codePoint;
-    const bool space = (scalar >= s_UnicodeTab && scalar <= s_UnicodeCarriageReturn) || scalar == s_UnicodeNextLine || scalar == s_UnicodeLineSeparator || scalar == s_UnicodeParagraphSeparator;
+    const b8 space = (scalar >= s_UnicodeTab && scalar <= s_UnicodeCarriageReturn) || scalar == s_UnicodeNextLine || scalar == s_UnicodeLineSeparator || scalar == s_UnicodeParagraphSeparator;
     if(!space && (scalar < s_UnicodeSpace || scalar == s_UnicodeDelete))
         return MakeUnexpected(Failure{});
     TextStep step;

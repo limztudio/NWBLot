@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::comboStateMatches(const ComboFrame& frame)const noexcept{
+b8 Builder::comboStateMatches(const ComboFrame& frame)const noexcept{
     return
         popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->isOpen() == frame.open
         && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken
@@ -24,7 +24,7 @@ bool Builder::comboStateMatches(const ComboFrame& frame)const noexcept{
     ;
 }
 
-bool Builder::comboMatches(const ComboFrame& frame)const{
+b8 Builder::comboMatches(const ComboFrame& frame)const{
     return
         frame.source && comboStateMatches(frame) && (!frame.searchSource || &frame.searchSource->filtered() == frame.results) && comboStateMatches(frame)
         && frame.source->instanceGeneration() == frame.token.contentGeneration && comboStateMatches(frame)
@@ -36,7 +36,7 @@ bool Builder::comboMatches(const ComboFrame& frame)const{
     ;
 }
 
-bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result){
+b8 Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result){
     InputRouter& input = m_context.input();
     ComboState& state = *frame.state;
     input.fenceControl(field.id, field.declarationGeneration, frame.token);
@@ -89,7 +89,7 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
     return !state.isOpen() || applyComboListInput(frame, result);
 }
 
-bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
+b8 Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
     InputRouter& input = m_context.input();
     ComboState& state = *frame.state;
     const auto thumbResult = MakeWidgetId(frame.rows.id, WidgetPartKey::s_Scrollbar);
@@ -97,9 +97,9 @@ bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
         return false;
     const WidgetId thumb = *thumbResult;
     auto gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
-    bool haveGesture = gesture && gesture->control == frame.listToken && gesture->popup == frame.popupToken;
+    b8 haveGesture = gesture && gesture->control == frame.listToken && gesture->popup == frame.popupToken;
     auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
-    bool haveAction = action && action->popup == frame.popupToken;
+    b8 haveAction = action && action->popup == frame.popupToken;
     ListOptions options;
     options.wheelRows = frame.options.wheelRows;
     options.selectOnNavigate = false;
@@ -113,7 +113,7 @@ bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
             haveGesture = gesture && gesture->control == frame.listToken && gesture->popup == frame.popupToken;
         }
         else{
-            const bool fromEditor = frame.editor != s_LayoutNoParent && action->source == m_scope->m_comboEditors[frame.editor].state.id;
+            const b8 fromEditor = frame.editor != s_LayoutNoParent && action->source == m_scope->m_comboEditors[frame.editor].state.id;
             if(fromEditor && (frame.search->query().composition().active || (action->kind == ControlActionKind::Submit && !frame.editorSubmitted))){
                 action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
                 haveAction = action && action->popup == frame.popupToken;

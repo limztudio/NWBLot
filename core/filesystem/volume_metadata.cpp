@@ -66,7 +66,7 @@ Expected<u64> ComputeVolumeMetadataRequirement(const u64 fileCount)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
+b8 VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
     FilesystemVolumeDetail::VolumeHeaderDisk header;
     if(!readBytesLocked(0, &header, sizeof(header))){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "failed to read metadata header");
@@ -194,7 +194,7 @@ bool VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
     return true;
 }
 
-bool VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name* excludedPath){
+b8 VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name* excludedPath){
     NWB_ASSERT(excludedPath == nullptr || m_files.find(*excludedPath) != m_files.end());
     if(m_segmentPaths.empty()){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, FilesystemVolumeDetail::s_VolumeDetailNoSegmentsMounted);
@@ -271,7 +271,7 @@ bool VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, co
     return false;
 }
 
-bool VolumeFileSystem::canFitMetadataForFileCountLocked(const u64 fileCount)const noexcept{
+b8 VolumeFileSystem::canFitMetadataForFileCountLocked(const u64 fileCount)const noexcept{
     const auto metadataBytes = FilesystemVolumeDetail::ComputeVolumeMetadataRequirement(fileCount);
     return metadataBytes && *metadataBytes <= m_metadataBytes;
 }

@@ -28,7 +28,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         out.append(decl.subsystemTypeName.data(), decl.subsystemTypeName.size());
         out.append("\")\r\n\r\n");
 
-        bool hasVectorField = false;
+        b8 hasVectorField = false;
         for(const FieldDecl* field : decl.fields){
             if(!field || !field->type)
                 continue;
@@ -164,8 +164,8 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         out.append(decl.name.data(), decl.name.size());
         out.append(">::TypedComponent;\r\n\r\n");
         out.append("public:\r\n");
-        out.append("    [[nodiscard]] virtual bool loadComponentPayload(Span<const u8> payload)override;\r\n");
-        out.append("    [[nodiscard]] virtual bool validatePayload()const override;\r\n");
+        out.append("    [[nodiscard]] virtual b8 loadComponentPayload(Span<const u8> payload)override;\r\n");
+        out.append("    [[nodiscard]] virtual b8 validatePayload()const override;\r\n");
         out.append("    virtual void applyToEntity(::NWB::Core::ECS::Entity& entity)const override{\r\n");
         out.append("        entity.addComponent<");
         if(!decl.fields.empty() && decl.fields[0] && decl.fields[0]->type)
@@ -173,7 +173,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         out.append(">() = component;\r\n");
         out.append("    }\r\n");
         out.append("#if defined(NWB_COOK)\r\n");
-        out.append("    [[nodiscard]] virtual bool serializeComponentPayload(::NWB::Core::Assets::AssetBytes& outPayload)const override;\r\n");
+        out.append("    [[nodiscard]] virtual b8 serializeComponentPayload(::NWB::Core::Assets::AssetBytes& outPayload)const override;\r\n");
         out.append("#endif\r\n");
         out.append("};\r\n\r\n");
         return;
@@ -306,7 +306,7 @@ void HeaderEmitter::emitClassMethodsCpp(
     MString& out,
     const ClassDecl& decl,
     const MVector<FieldDecl*>& orderedFields,
-    const bool forceInlineBody
+    const b8 forceInlineBody
 )const{
     if(decl.needsClassArena){
         out.append("private:\r\n");
@@ -329,7 +329,7 @@ void HeaderEmitter::emitClassMethodsCpp(
             m_typeEmitter.emitTemplateHeaderCpp(out, method->templateParams);
             out.append("    ");
         }
-        const bool emitInlineBody = forceInlineBody || method->isInline || !method->templateParams.empty();
+        const b8 emitInlineBody = forceInlineBody || method->isInline || !method->templateParams.empty();
         m_typeEmitter.emitMethodSignature(out, &decl, *method, true);
         if(emitInlineBody && method->hasBody){
             if(method->isConstructor)
@@ -378,7 +378,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& 
         else if(field->hasCtorInit){
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
             u32 ctorVecLanes = 0u;
-            const bool isScalarSplatCtor = !baseFieldType.empty()
+            const b8 isScalarSplatCtor = !baseFieldType.empty()
                 && (m_symbols.isSimdVectorType(baseFieldType, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseFieldType, ctorVecLanes))
                 && field->ctorArgs.size() == 1u && field->ctorArgs[0]
                 && field->ctorArgs[0]->resolvedSimdType.empty();

@@ -33,7 +33,7 @@ AvboitTimingRenderPass::~AvboitTimingRenderPass()noexcept{
     stop();
 }
 
-bool AvboitTimingRenderPass::start(const bool includeCaustics){
+b8 AvboitTimingRenderPass::start(const b8 includeCaustics){
     if(m_registered)
         return m_includeCaustics == includeCaustics;
     constexpr u32 s_InFlightRanges = 32u;

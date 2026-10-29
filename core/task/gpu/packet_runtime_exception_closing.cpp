@@ -52,7 +52,7 @@ Expected<GpuGraphSubmissionTransaction::SubmissionExceptionClosing> GpuGraphSubm
     return SubmissionExceptionClosing{ m_exceptionClosingRecordingAttemptGeneration, m_exceptionClosingBinding };
 }
 
-bool GpuGraphSubmissionTransaction::submissionExceptionClosingResolved(const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{
+b8 GpuGraphSubmissionTransaction::submissionExceptionClosingResolved(const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     NothrowScopedLock lock(m_mutex);
     if(!m_submissionExceptionClosing.test(MemoryOrder::acquire) || m_exceptionClosingRecordingAttemptGeneration != recordingAttemptGeneration || m_exceptionClosingBinding != submissionBinding)
@@ -83,7 +83,7 @@ void GpuGraphSubmissionTransaction::completeSubmissionExceptionClosingWithinSubm
         TerminateInvariant();
     {
         NothrowScopedLock lock(m_mutex);
-        const bool closureValid = m_submissionExceptionClosing.test(MemoryOrder::acquire)
+        const b8 closureValid = m_submissionExceptionClosing.test(MemoryOrder::acquire)
             && planAccess.validFor(compiledGraph)
             && validForLocked(planAccess)
             && m_recordingAttemptGeneration == recordingAttemptGeneration

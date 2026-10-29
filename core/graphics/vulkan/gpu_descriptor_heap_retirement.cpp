@@ -38,7 +38,7 @@ void GpuDescriptorHeap::collectRetired(){
                 continue;
 
             const GpuPhysicalQueueId queue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
-            bool alreadyTracked = false;
+            b8 alreadyTracked = false;
             for(const QueueCompletion& completion : completions){
                 if(completion.queue == queue){
                     alreadyTracked = true;
@@ -58,7 +58,7 @@ void GpuDescriptorHeap::collectRetired(){
     }
 
     ScopedLock lock(m_mutex);
-    const auto heapUseComplete = [&](const HeapUse& heapUse)noexcept -> bool {
+    const auto heapUseComplete = [&](const HeapUse& heapUse)noexcept -> b8 {
         const QueueSubmissionToken& token = heapUse.submissionToken;
         if(!token.valid())
             return heapUse.commandBuffer == nullptr;
@@ -77,7 +77,7 @@ void GpuDescriptorHeap::collectRetired(){
     // Admission IDs increase and compaction preserves order; one completed prefix applies to this locked completion snapshot.
     usize completedHeapUsePrefix = 0u;
     u64 firstIncompleteHeapUseID = 0u;
-    bool hasIncompleteHeapUse = false;
+    b8 hasIncompleteHeapUse = false;
     usize keptRetired = 0u;
     for(usize retiredIndex = 0u; retiredIndex < m_retiredCount; ++retiredIndex){
         const RetiredSlot& retired = m_retired[retiredIndex];
@@ -92,7 +92,7 @@ void GpuDescriptorHeap::collectRetired(){
             }
             ++completedHeapUsePrefix;
         }
-        const bool canRetire = !hasIncompleteHeapUse || firstIncompleteHeapUseID > retired.lastRequiredHeapUseID;
+        const b8 canRetire = !hasIncompleteHeapUse || firstIncompleteHeapUseID > retired.lastRequiredHeapUseID;
 
         if(canRetire){
             SlotAllocator& allocator = allocatorForClass(retired.handle.descriptorClass());
@@ -133,7 +133,7 @@ void GpuDescriptorHeap::collectRetired(){
     m_heapUses.resize(keptHeapUses);
 }
 
-bool GpuDescriptorHeap::isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept{
+b8 GpuDescriptorHeap::isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept{
     for(const HeapUse& heapUse : m_heapUses){
         if(!heapUse.commandBuffer)
             continue;
@@ -145,7 +145,7 @@ bool GpuDescriptorHeap::isResourceAdmittedToActiveUsesLocked(const ResourceQueue
     return true;
 }
 
-bool GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept{
+b8 GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept{
     for(u32 slot = 0u; slot < m_resourceSlots.nextFresh; ++slot){
         const BufferHandle& retainedBuffer = m_resourceDescriptorBuffers[slot];
         if(retainedBuffer && (!m_device.isBufferReadyForGpuUse(retainedBuffer.get()) || !ResourceQueueAdmissionAdmitsQueue(retainedBuffer->getQueueAdmissionSnapshot(), queue)))
@@ -168,7 +168,7 @@ bool GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQu
     return true;
 }
 
-bool GpuDescriptorHeap::retainedResourcesReadyForQueue(const GpuPhysicalQueueId& queue)const noexcept{
+b8 GpuDescriptorHeap::retainedResourcesReadyForQueue(const GpuPhysicalQueueId& queue)const noexcept{
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(queue);
     if(!queueInfo)
         return false;
@@ -177,7 +177,7 @@ bool GpuDescriptorHeap::retainedResourcesReadyForQueue(const GpuPhysicalQueueId&
     return m_initialized && retainedResourcesReadyForQueueLocked(*queueInfo);
 }
 
-bool GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer, const GpuPhysicalQueueId& physicalQueue){
+b8 GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer, const GpuPhysicalQueueId& physicalQueue){
     if(!m_initialized || !m_device.getPhysicalQueueInfo(physicalQueue))
         return false;
 

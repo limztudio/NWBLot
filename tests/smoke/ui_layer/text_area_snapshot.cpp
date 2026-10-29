@@ -48,10 +48,10 @@ static constexpr TStringView s_RectNames[]{ NWB_TEXT("bounds"), NWB_TEXT("conten
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
+b8 UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     using namespace __hidden_ui_text_area_snapshot;
-    if(!m_observed.snapshot(m_model) || m_observed.shape(context.text, { {}, 16.0f }) != TextLayoutStatus::Success)
+    if(!m_observed.snapshot(m_model) || m_observed.shape(context.text, { .fontSize = 16.0f }) != TextLayoutStatus::Success)
         return false;
     if(!m_observed.measure(context.text, context.display))
         return false;
@@ -98,7 +98,7 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     }
     const SIMDVectorSingle caretOffset = VectorSubtract(VectorSet(placement.caret.x, placement.caret.y, 0.0f, 0.0f), VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f));
     const SIMDVectorSingle caretError = VectorAbs(VectorSubtract(caretOffset, VectorSet(localCaret->x, localCaret->y, 0.0f, 0.0f)));
-    const bool coherent = VectorGetX(caretError) < 0.02f
+    const b8 coherent = VectorGetX(caretError) < 0.02f
         && VectorGetY(caretError) < 0.02f
         && current.scroll.x == placement.scroll && current.scroll.y == placement.scrollY
         && SameSmokeRect(placement.content, scrollbars.viewport) && SameSmokeRect(placement.clip, scrollbars.contentClip)
@@ -111,7 +111,7 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
         m_abandons, m_outside, m_clipboardSeeds, static_cast<u64>(m_clipboardToken.valid()), m_model.revision(),
         m_model.externalRevision(), m_model.selectionGeneration(), static_cast<u64>(coherent), geometry.lines().size(),
         static_cast<u64>(m_model.canUndo()), static_cast<u64>(m_model.canRedo()) };
-    bool changed = current.values != m_snapshot.values || current.selectionCount != m_snapshot.selectionCount
+    b8 changed = current.values != m_snapshot.values || current.selectionCount != m_snapshot.selectionCount
         || current.scroll.x != m_snapshot.scroll.x || current.scroll.y != m_snapshot.scroll.y
         || current.maximum.x != m_snapshot.maximum.x || current.maximum.y != m_snapshot.maximum.y
         || current.measure.x != m_snapshot.measure.x || current.measure.y != m_snapshot.measure.y || current.lineHeight != m_snapshot.lineHeight;
@@ -120,7 +120,7 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     for(usize index = 0u; index < current.selections.size(); ++index)
         changed |= !SameSmokeRect(current.selections[index], m_snapshot.selections[index]);
     const auto& previous = m_snapshot.display;
-    const bool displayChanged = context.display.logicalWidth != previous.logicalWidth || context.display.logicalHeight != previous.logicalHeight || context.display.pixelScaleX != previous.pixelScaleX || context.display.pixelScaleY != previous.pixelScaleY;
+    const b8 displayChanged = context.display.logicalWidth != previous.logicalWidth || context.display.logicalHeight != previous.logicalHeight || context.display.pixelScaleX != previous.pixelScaleX || context.display.pixelScaleY != previous.pixelScaleY;
     if(m_snapshot.sequence != 0u && !changed && !displayChanged)
         return true;
     current.sequence = m_snapshot.sequence + 1u;

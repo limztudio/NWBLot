@@ -37,7 +37,7 @@ struct SourceTriangleCorner{
     Vec2 uv0;
     Vec4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
     MeshSkinInfluence skin;
-    bool hasTangent = false;
+    b8 hasTangent = false;
 };
 static_assert(IsTriviallyCopyable_V<SourceTriangleCorner>);
 
@@ -58,7 +58,7 @@ struct PositionKeyHasher{
 };
 
 struct PositionKeyEqual{
-    bool operator()(const PositionKey& lhs, const PositionKey& rhs)const noexcept{
+    b8 operator()(const PositionKey& lhs, const PositionKey& rhs)const noexcept{
         return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
     }
 };
@@ -97,7 +97,7 @@ struct SourceVertexRefHasher{
 
 
 struct SourceVertexRefEqual{
-    bool operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept{
+    b8 operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept{
         return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv0 == rhs.uv0 && lhs.color == rhs.color && lhs.skin == rhs.skin;
     }
 };
@@ -141,15 +141,15 @@ public:
 
 class FbxSourceMeshStreams final : NoCopy{
 public:
-    static void ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const bool wantsSkinning);
-    static void ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const bool wantsSkinning);
-    [[nodiscard]] static bool SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept;
-    [[nodiscard]] static bool DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static bool EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices);
+    static void ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const b8 wantsSkinning);
+    static void ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const b8 wantsSkinning);
+    [[nodiscard]] static b8 SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept;
+    [[nodiscard]] static b8 DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static b8 EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices);
     template<typename Value, typename Lookup>
     [[nodiscard]] static Expected<u32> InternSourceValue(UtilityVector<Value>& stream, Lookup& lookup, const Value& value, const AStringView streamName);
-    [[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(SourceMeshStreams& mesh, const bool usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<u32> InternSourceCorner(SourceMeshBuildContext& context, const SourceTriangleCorner& corner, const bool wantsSkinning);
+    [[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(SourceMeshStreams& mesh, const b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static Expected<u32> InternSourceCorner(SourceMeshBuildContext& context, const SourceTriangleCorner& corner, const b8 wantsSkinning);
 
 
 public:

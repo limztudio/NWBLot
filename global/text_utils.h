@@ -61,9 +61,9 @@ template<typename StringT>
     using First = const Decay_T<decltype(DeclVal<StringT&>().front())>;
     using Last = const Decay_T<decltype(DeclVal<StringT&>().back())>;
     return
-        noexcept(TrimInPlace(DeclVal<StringT&>())) && noexcept(static_cast<bool>(DeclVal<StringT&>().size() >= 2u))
+        noexcept(TrimInPlace(DeclVal<StringT&>())) && noexcept(static_cast<b8>(DeclVal<StringT&>().size() >= 2u))
         && noexcept(DeclVal<void(*)(First)noexcept>()(DeclVal<StringT&>().front())) && noexcept(DeclVal<void(*)(Last)noexcept>()(DeclVal<StringT&>().back()))
-        && noexcept(static_cast<bool>(
+        && noexcept(static_cast<b8>(
             (DeclVal<First&>() == static_cast<First>('"') && DeclVal<Last&>() == static_cast<Last>('"'))
             || (DeclVal<First&>() == static_cast<First>('\'') && DeclVal<Last&>() == static_cast<Last>('\''))
         ))
@@ -91,32 +91,32 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool IsAsciiDigit(CharT ch)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 IsAsciiDigit(CharT ch)noexcept(IsArithmetic_V<CharT>){
     return ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9');
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool IsAsciiAlpha(CharT ch)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 IsAsciiAlpha(CharT ch)noexcept(IsArithmetic_V<CharT>){
     return (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z')) || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z'));
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool IsAsciiAlphaNumeric(CharT ch)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 IsAsciiAlphaNumeric(CharT ch)noexcept(IsArithmetic_V<CharT>){
     return IsAsciiDigit(ch) || IsAsciiAlpha(ch);
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool IsAsciiIdentifierStart(CharT ch)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 IsAsciiIdentifierStart(CharT ch)noexcept(IsArithmetic_V<CharT>){
     return IsAsciiAlpha(ch) || ch == static_cast<CharT>('_');
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool IsAsciiIdentifierChar(CharT ch)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 IsAsciiIdentifierChar(CharT ch)noexcept(IsArithmetic_V<CharT>){
     return IsAsciiIdentifierStart(ch) || IsAsciiDigit(ch);
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool IsAsciiIdentifier(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 IsAsciiIdentifier(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     if(text.empty() || !IsAsciiIdentifierStart(text.front()))
         return false;
     for(usize i = 1u; i < text.size(); ++i){
@@ -127,7 +127,7 @@ template<typename CharT>
 }
 
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline constexpr bool IsAsciiIdentifier(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 IsAsciiIdentifier(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return IsAsciiIdentifier<CharT>(BasicStringView<CharT>{text});
 }
 
@@ -139,7 +139,7 @@ inline constexpr CharT Canonicalize(CharT c)noexcept(IsArithmetic_V<CharT>){
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
     if(text == expected)
         return true;
     if(text.size() != expected.size())
@@ -154,17 +154,17 @@ template<typename CharT>
 }
 
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 EqualsAsciiIgnoreCase(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
     return EqualsAsciiIgnoreCase<CharT>(BasicStringView<CharT>{text}, expected);
 }
 
 template<typename CharT, usize N>
-[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N])noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N])noexcept(IsArithmetic_V<CharT>){
     return EqualsAsciiIgnoreCase<CharT>(text, BasicStringView<CharT>(expected, N > 0 ? N - 1 : 0));
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
     if(expected.empty())
         return true;
     if(text.size() < expected.size())
@@ -172,7 +172,7 @@ template<typename CharT>
 
     const usize lastBegin = text.size() - expected.size();
     for(usize begin = 0u; begin <= lastBegin; ++begin){
-        bool matched = true;
+        b8 matched = true;
         for(usize i = 0u; i < expected.size(); ++i){
             if(ToAsciiLower(text[begin + i]) != ToAsciiLower(expected[i])){
                 matched = false;
@@ -186,7 +186,7 @@ template<typename CharT>
 }
 
 template<typename CharT, usize N>
-[[nodiscard]] inline constexpr bool ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N])noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline constexpr b8 ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N])noexcept(IsArithmetic_V<CharT>){
     return ContainsAsciiIgnoreCase<CharT>(text, BasicStringView<CharT>(expected, N > 0 ? N - 1 : 0));
 }
 
@@ -234,7 +234,7 @@ template<typename CharT, typename ArenaT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool HasEmbeddedNull(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 HasEmbeddedNull(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(const CharT ch : text){
         if(ch == CharT{})
             return true;
@@ -248,13 +248,13 @@ template<typename StringT>
         text.data();
         text.size();
     }
-[[nodiscard]] inline bool HasEmbeddedNull(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>(text.data(), text.size())) && IsArithmetic_V<typename StringT::value_type>){
+[[nodiscard]] inline b8 HasEmbeddedNull(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>(text.data(), text.size())) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
     return HasEmbeddedNull(BasicStringView<CharT>(text.data(), text.size()));
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool HasLineBreak(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 HasLineBreak(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(const CharT ch : text){
         if(ch == CharT('\n') || ch == CharT('\r'))
             return true;
@@ -271,7 +271,7 @@ struct NamedEnumCase{
 
 template<typename EnumT, typename ViewT = AStringView>
 [[nodiscard]] inline Expected<EnumT> ParseNamedEnumText(const ViewT value, const Span<const NamedEnumCase<EnumT>> cases)noexcept(
-    noexcept(static_cast<bool>(value == ViewT(cases[DeclVal<usize&>()].text.data(), cases[DeclVal<usize&>()].text.size())))
+    noexcept(static_cast<b8>(value == ViewT(cases[DeclVal<usize&>()].text.data(), cases[DeclVal<usize&>()].text.size())))
     && noexcept(Expected<EnumT>(cases[DeclVal<usize&>()].value))
 ){
     for(const NamedEnumCase<EnumT>& item : cases){
@@ -283,7 +283,7 @@ template<typename EnumT, typename ViewT = AStringView>
 
 template<typename EnumT, typename TextFunction, typename ViewT = AStringView>
 [[nodiscard]] inline Expected<EnumT> ParseNormalizedEnumText(const ViewT value, TextFunction textFunction, const Span<const EnumT> values)noexcept(
-    noexcept(static_cast<bool>(value == textFunction(values[DeclVal<usize&>()])))
+    noexcept(static_cast<b8>(value == textFunction(values[DeclVal<usize&>()])))
     && noexcept(Expected<EnumT>(values[DeclVal<usize&>()]))
 ){
     for(const EnumT& item : values){

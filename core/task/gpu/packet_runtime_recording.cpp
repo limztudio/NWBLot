@@ -46,7 +46,7 @@ private:
     GpuRecordedGraph& m_recordedGraph;
     const GpuRecordedGraph::ArtifactOperation& m_artifactAccess;
     GpuSubmissionPacketId m_packet;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 
@@ -95,19 +95,19 @@ public:
             TerminateInvariant();
         if(m_recordingLease.valid()){
             if(m_deferredAbort){
-                const bool abortDeferred = m_graph.deferPacketRecordingAbort(m_compiledGraph, m_planAccess, m_packet, m_recordingLease, *m_deferredAbort);
+                const b8 abortDeferred = m_graph.deferPacketRecordingAbort(m_compiledGraph, m_planAccess, m_packet, m_recordingLease, *m_deferredAbort);
                 NWB_FATAL_ASSERT_MSG(abortDeferred, "throwing packet recorder must transfer its exact recording claim");
             }
             else{
                 m_recordedGraph.abandonPacketTimingTicketWithoutCallbacks(m_packet, m_artifactAccess);
-                const bool recordingAbandoned = m_graph.abandonPacketRecordingWithoutCallbacks(m_compiledGraph, m_planAccess, m_packet, m_recordingLease);
+                const b8 recordingAbandoned = m_graph.abandonPacketRecordingWithoutCallbacks(m_compiledGraph, m_planAccess, m_packet, m_recordingLease);
                 NWB_FATAL_ASSERT_MSG(recordingAbandoned, "throwing packet recorder must abandon its exact recording claim");
             }
         }
         if(m_deferredAbort)
             return;
 
-        const bool recordingAttemptResolved = m_graph.resolveRecordingAttemptIfTerminal(m_compiledGraph, m_recordingAttemptGeneration);
+        const b8 recordingAttemptResolved = m_graph.resolveRecordingAttemptIfTerminal(m_compiledGraph, m_recordingAttemptGeneration);
         NWB_FATAL_ASSERT_MSG(recordingAttemptResolved, "throwing packet recorder must resolve a terminal recording-plan lease");
     }
 
@@ -132,7 +132,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuNativePacketRecorder::recordPacket(
+b8 GpuNativePacketRecorder::recordPacket(
     GpuRecordedGraph& outRecordedGraph,
     GpuRecordedGraph::PacketRecordingScratch& scratch,
     GpuCommandIrCapture* const commandIrCapture,
@@ -183,7 +183,7 @@ bool GpuNativePacketRecorder::recordPacket(
         || !queue
         || queue->queueClass >= CommandQueue::kCount
         || !m_device.matchesPhysicalQueueIdentity(packet.queue)
-        || packet.recordsTiming != static_cast<bool>(packetTimingTicket)
+        || packet.recordsTiming != static_cast<b8>(packetTimingTicket)
         || (packetTimingTicket && (!m_timingRecorder || outRecordedGraph.timingRecorderWithinArtifactOperation(artifactAccess) != m_timingRecorder))
     )
         return false;
@@ -194,7 +194,7 @@ bool GpuNativePacketRecorder::recordPacket(
     GpuPacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
         if(deferredAbort){
-            const bool abortDeferred = graph.deferPacketRecordingAbort(compiledGraph, planAccess, packetID, recordingLease, *deferredAbort);
+            const b8 abortDeferred = graph.deferPacketRecordingAbort(compiledGraph, planAccess, packetID, recordingLease, *deferredAbort);
             NWB_FATAL_ASSERT_MSG(abortDeferred, "failed to transfer an active packet recording abort");
             return;
         }
@@ -259,8 +259,8 @@ bool GpuNativePacketRecorder::recordPacket(
     const f64 commandListAcquisitionSeconds = DurationInSeconds<f64>(TimerNow(), commandListAcquisitionBegin);
     const u64 packetRecordingLeaseSerial = commandList->recordingLeaseSerial();
     CommandList::GraphRecordingOwnership graphRecordingOwnership(*commandList, packetRecordingLeaseSerial);
-    bool recorded = commandList->hasCommandBuffer() && !commandList->commandRecordingFailed();
-    bool packetRecordingLeaseIntact = commandList->matchesRecordingLease(packetRecordingLeaseSerial);
+    b8 recorded = commandList->hasCommandBuffer() && !commandList->commandRecordingFailed();
+    b8 packetRecordingLeaseIntact = commandList->matchesRecordingLease(packetRecordingLeaseSerial);
     Optional<GpuTimingSubmissionTicket::RecordingScope> packetTimingRecordingScope;
     Optional<GpuTimingMeasure> packetTiming;
     CommandMarkerRecordingToken packetMarker;
@@ -328,7 +328,7 @@ bool GpuNativePacketRecorder::recordPacket(
             commandList->commitBarriers();
         graphBarrierRecordingSeconds = VectorDoubleAdd(graphBarrierRecordingSeconds, VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin)));
         const u64 taskRecordingLeaseSerial = commandList->recordingLeaseSerial();
-        bool taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
+        b8 taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
         if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed())){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: rejecting task '{}' because its prologue invalidated or replaced the native command buffer"), ConvertString(taskView.markerLabel));
             recorded = false;
@@ -349,7 +349,7 @@ bool GpuNativePacketRecorder::recordPacket(
             }
         }
 #if defined(NWB_DEBUG)
-        bool taskCapabilityTrackingStarted = false;
+        b8 taskCapabilityTrackingStarted = false;
         if(recorded){
             commandList->beginTaskCapabilityTracking(taskView.commands.allowedCapabilities());
             taskCapabilityTrackingStarted = true;
@@ -358,8 +358,8 @@ bool GpuNativePacketRecorder::recordPacket(
         if(recorded){
             const Timer taskRecordBegin = TimerNow();
             const auto taskRecorded = graph.recordTask(task, *commandList, context, recordingLease);
-            recorded = static_cast<bool>(taskRecorded);
-            const bool recordThunkInvoked = !taskRecorded && taskRecorded.error().recordThunkInvoked;
+            recorded = static_cast<b8>(taskRecorded);
+            const b8 recordThunkInvoked = !taskRecorded && taskRecorded.error().recordThunkInvoked;
             taskRecordSeconds = VectorDoubleAdd(taskRecordSeconds, VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), taskRecordBegin)));
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact){
@@ -500,13 +500,13 @@ bool GpuNativePacketRecorder::recordPacket(
     graphRecordingOwnership.publish();
     recordedPacket.commandListCount = 1u;
     PacketArtifactPublicationScope artifactPublication(outRecordedGraph, packetID, artifactAccess);
-    const bool packetRecordingCompleted = graph.completePacketRecording(compiledGraph, planAccess, packetID, recordingLease);
+    const b8 packetRecordingCompleted = graph.completePacketRecording(compiledGraph, planAccess, packetID, recordingLease);
     NWB_FATAL_ASSERT_MSG(packetRecordingCompleted, "recorded artifact publication must retain its exact graph packet claim");
     artifactPublication.complete();
     return true;
 }
 
-bool GpuNativePacketRecorder::prepareRecordingAttempt(
+b8 GpuNativePacketRecorder::prepareRecordingAttempt(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketRange& range,
@@ -520,7 +520,7 @@ bool GpuNativePacketRecorder::prepareRecordingAttempt(
         return false;
     if(!GpuPacketRecordingDetail::PrepareCompiledTimingQueries(declarationAccess, planAccess, scratchArena, m_timingRecorder))
         return false;
-    const bool artifactMatchesPlan = outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess);
+    const b8 artifactMatchesPlan = outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess);
     if(artifactMatchesPlan && graph.matchesRecordingAttempt(compiledGraph, outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess))){
         GpuTimingRecorder* const artifactTimingRecorder = outRecordedGraph.timingRecorderWithinArtifactOperation(artifactAccess);
         return !artifactTimingRecorder || artifactTimingRecorder == m_timingRecorder;

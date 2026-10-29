@@ -72,7 +72,7 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
         ASSERT_TRUE(completion.valid());
         const Core::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
         Core::GpuTaskId previousTask;
-        bool accepted = true;
+        b8 accepted = true;
         const ArenaMemoryStats memoryBefore = testArena.arena.memoryStats();
         for(usize index = 0u; index < s_TaskCount; ++index){
             Core::GpuTaskDesc desc;
@@ -129,7 +129,7 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
     Core::GpuTaskGraph graph(testArena.arena);
     Vector<Core::GpuUploadBlobId, Core::Alloc::ScratchArena> uploads(scratchArena);
     uploads.reserve(s_RecordCount);
-    bool accepted = true;
+    b8 accepted = true;
     for(usize index = 0u; index < s_RecordCount; ++index){
         const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Resource").setType(Core::GpuGraphResourceType::Buffer));
         ASSERT_TRUE(resourceResult);

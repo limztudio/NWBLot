@@ -40,7 +40,7 @@ namespace __hidden_ui_numeric_parse{
 
 [[nodiscard]] static NumericParseStatus::Enum FloatGrammar(const AStringView text)noexcept{
     usize index = SkipSign(text);
-    bool digits = false;
+    b8 digits = false;
     while(index < text.size() && IsAsciiDigit(text[index])){
         digits = true;
         ++index;
@@ -77,11 +77,11 @@ namespace __hidden_ui_numeric_parse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateIntegerBounds(const IntegerBounds& bounds)noexcept{
+b8 ValidateIntegerBounds(const IntegerBounds& bounds)noexcept{
     return bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
 }
 
-bool ValidateFloatBounds(const FloatBounds& bounds)noexcept{
+b8 ValidateFloatBounds(const FloatBounds& bounds)noexcept{
     return IsFinite(bounds.minimum) && IsFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
 }
 

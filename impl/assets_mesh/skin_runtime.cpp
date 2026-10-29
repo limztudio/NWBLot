@@ -40,7 +40,7 @@ NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_SkinningSubsystemAssetAutoRegistrar, Skin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Skin::loadBinary(const Span<const u8> binary){
+b8 Skin::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, SkinBinaryPayload::s_SkinMagic, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_SkinAssetKindLabel, cursor);
     if(!headerResult)
@@ -66,7 +66,7 @@ bool Skin::loadBinary(const Span<const u8> binary){
     return true;
 }
 
-bool Skin::validatePayload()const{
+b8 Skin::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("Skin::validatePayload")))
         return false;
     if(!m_mesh.valid()){

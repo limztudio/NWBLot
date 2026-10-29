@@ -117,15 +117,15 @@ public:
 
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return full.indexOf(key); }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
         return full.findEnabled(start, reverse);
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{ return full.text(index); }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return full.enabled(index); }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return full.enabled(index); }
 
-    [[nodiscard]] virtual bool filter(const AStringView query)override{
+    [[nodiscard]] virtual b8 filter(const AStringView query)override{
         ++filterCalls;
         const AStringView previous{ m_query.data(), m_query.size() };
         if(previous != query){
@@ -179,11 +179,11 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] bool beginParent(const u64 generation){
+    [[nodiscard]] b8 beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions());
     }
 
-    [[nodiscard]] bool acceptBase(const u64 generation){
+    [[nodiscard]] b8 acceptBase(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("base", { 0.0f, 0.0f, 100.0f, 80.0f }))
             return false;
         if(!m_builder.label("label", "Baseline") || !m_builder.endPanel() || !finishRoot())
@@ -191,7 +191,7 @@ protected:
         return m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] bool declareLists(const u64 generation){
+    [[nodiscard]] b8 declareLists(const u64 generation){
         if(!beginParent(generation) || !m_builder.virtualList(s_ListKey, m_parentSource, m_parentList, ListOptions()).valid)
             return false;
         if(!m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()) || !m_builder.virtualList(s_ListKey, m_childSource, m_childList, ListOptions()).valid)
@@ -199,11 +199,11 @@ protected:
         return m_builder.endPopup();
     }
 
-    [[nodiscard]] bool acceptLists(const u64 generation){
+    [[nodiscard]] b8 acceptLists(const u64 generation){
         return declareLists(generation) && m_builder.endPopup() && finishRoot() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] bool declareChildCompounds(const u64 generation){
+    [[nodiscard]] b8 declareChildCompounds(const u64 generation){
         if(!beginParent(generation) || !m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()))
             return false;
         if(!m_builder.virtualList(s_ListKey, m_childSource, m_childList, ListOptions()).valid || !m_builder.comboBox(s_ComboKey, m_comboSource, m_combo, Options()).valid)
@@ -216,7 +216,7 @@ protected:
         WidgetOptions anchorOptions;
         anchorOptions.width = { LayoutSizePolicy::Fixed, 220.0f };
         anchorOptions.height = { LayoutSizePolicy::Fixed, 30.0f };
-        const bool activated = m_builder.button(s_AnchorKey, "Menu", anchorOptions);
+        const b8 activated = m_builder.button(s_AnchorKey, "Menu", anchorOptions);
         if(activated)
             return false;
         if(!m_builder.contextMenu("menu", s_AnchorKey, m_menuSource, m_menu).valid)

@@ -44,7 +44,7 @@ static void BuildRecordIndex(Vector<usize, Alloc::ScratchArena>& index, const St
 }
 
 template<typename States, typename ResourceGetter>
-[[nodiscard]] static bool DeduplicatePermanentIndex(Vector<usize, Alloc::ScratchArena>& index, const States& states, const ResourceGetter resourceGetter)noexcept{
+[[nodiscard]] static b8 DeduplicatePermanentIndex(Vector<usize, Alloc::ScratchArena>& index, const States& states, const ResourceGetter resourceGetter)noexcept{
     usize uniqueCount = 0u;
     for(const usize stateIndex : index){
         const auto& state = states[stateIndex];
@@ -91,11 +91,11 @@ template<typename States, typename Resource, typename ResourceGetter>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuInitialStateHandoffValidation::ValidBufferRange(const BufferRange& range, const u64 bufferSize)noexcept{
+b8 GpuInitialStateHandoffValidation::ValidBufferRange(const BufferRange& range, const u64 bufferSize)noexcept{
     return range.hasExtent() && range.byteOffset < bufferSize && (range.byteSize == BufferRange::s_AllBytes || range.byteSize <= bufferSize - range.byteOffset);
 }
 
-bool GpuInitialStateHandoffValidation::validate(){
+b8 GpuInitialStateHandoffValidation::validate(){
     using namespace __hidden_gpu_packet_runtime_initial_state_validation;
 
     m_permanentTexturesIndexed = false;

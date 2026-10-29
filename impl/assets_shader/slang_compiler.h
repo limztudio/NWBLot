@@ -38,7 +38,7 @@ inline constexpr AStringView s_SpvRayQueryCapabilityText = "spvRayQueryKHR";
 
 
 [[nodiscard]] Expected<u64> ComputeCompilerFingerprint(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool CompileVariant(const ShaderCook::ShaderCompilerRequest& request, Core::Alloc::ScratchArena& scratchArena, ShaderCook::CookVector<u8>& outBytecode);
+[[nodiscard]] b8 CompileVariant(const ShaderCook::ShaderCompilerRequest& request, Core::Alloc::ScratchArena& scratchArena, ShaderCook::CookVector<u8>& outBytecode);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

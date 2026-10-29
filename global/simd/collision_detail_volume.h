@@ -93,11 +93,11 @@ NWB_INLINE void ObbAxes(const SIMDVectorSingle orientation, SIMDVectorSingle& ou
     return Vector3InverseRotate(VectorSubtract(point, center), orientation);
 }
 
-[[nodiscard]] NWB_INLINE bool PointInsideObb(const SIMDVectorSingle point, const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation)noexcept{
+[[nodiscard]] NWB_INLINE b8 PointInsideObb(const SIMDVectorSingle point, const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation)noexcept{
     return Vector3LessOrEqual(VectorAbs(PointToObbLocal(point, center, orientation)), extents);
 }
 
-[[nodiscard]] inline bool PointsInsideObb(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation)noexcept{
+[[nodiscard]] inline b8 PointsInsideObb(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation)noexcept{
     for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         if(Vector3AnyTrue(VectorGreater(VectorAbs(PointToObbLocal(points[pointIndex], center, orientation)), extents)))
             return false;
@@ -135,7 +135,7 @@ inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle 
         outPlanes[i] = PlaneNormalizeSafe(TransformPlane(localPlanes[i], orientation, origin));
 }
 
-[[nodiscard]] inline bool FrustumPlanesIntersectAxisAlignedBox(const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorSingle center, const SIMDVectorSingle extents)noexcept{
+[[nodiscard]] inline b8 FrustumPlanesIntersectAxisAlignedBox(const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorSingle center, const SIMDVectorSingle extents)noexcept{
     for(u32 planeIndex = 0u; planeIndex < s_FrustumPlaneCount; ++planeIndex){
         SIMDVectorSingle outside{};
         SIMDVectorSingle inside{};
@@ -146,7 +146,7 @@ inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle 
     return true;
 }
 
-[[nodiscard]] inline bool FrustumPlanesIntersectSphere(const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorSingle centerRadius)noexcept{
+[[nodiscard]] inline b8 FrustumPlanesIntersectSphere(const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorSingle centerRadius)noexcept{
     const SIMDVectorSingle center = SphereCenter(centerRadius);
     const SIMDVectorSingle radius = SphereRadius(centerRadius);
     for(u32 planeIndex = 0u; planeIndex < s_FrustumPlaneCount; ++planeIndex){
@@ -159,7 +159,7 @@ inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle 
     return true;
 }
 
-[[nodiscard]] inline bool FrustumPlanesIntersectOrientedBox(const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation)noexcept{
+[[nodiscard]] inline b8 FrustumPlanesIntersectOrientedBox(const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation)noexcept{
     SIMDVectorSingle axis0{};
     SIMDVectorSingle axis1{};
     SIMDVectorSingle axis2{};
@@ -174,7 +174,7 @@ inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle 
     return true;
 }
 
-[[nodiscard]] inline bool FrustumPlanesIntersectPoints(const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount], const Span<const SIMDVectorSingle> points)noexcept{
+[[nodiscard]] inline b8 FrustumPlanesIntersectPoints(const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount], const Span<const SIMDVectorSingle> points)noexcept{
     for(u32 planeIndex = 0u; planeIndex < s_FrustumPlaneCount; ++planeIndex){
         SIMDVectorSingle outside{};
         SIMDVectorSingle inside{};
@@ -189,7 +189,7 @@ inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ObbIntersectsObb(
+[[nodiscard]] inline b8 ObbIntersectsObb(
     const SIMDVectorSingle lhsCenter,
     const SIMDVectorSingle lhsExtents,
     const SIMDVectorSingle lhsOrientation,
@@ -294,7 +294,7 @@ inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle 
     return Vector4NotEqualInt(noIntersection, VectorTrueInt());
 }
 
-[[nodiscard]] inline bool TriangleAabbOverlap(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
+[[nodiscard]] inline b8 TriangleAabbOverlap(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
     const SIMDVectorSingle triangleMin = VectorMin(v0, VectorMin(v1, v2));
     const SIMDVectorSingle triangleMax = VectorMax(v0, VectorMax(v1, v2));
     if(!MinMaxIntersects(triangleMin, triangleMax, minBounds, maxBounds))
@@ -425,11 +425,11 @@ NWB_INLINE void ObbAxes(const SIMDVectorDouble orientation, SIMDVectorDouble& ou
     return VectorDouble3InverseRotate(VectorDoubleSubtract(point, center), orientation);
 }
 
-[[nodiscard]] NWB_INLINE bool PointInsideObb(const SIMDVectorDouble point, const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation)noexcept{
+[[nodiscard]] NWB_INLINE b8 PointInsideObb(const SIMDVectorDouble point, const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation)noexcept{
     return VectorDouble3LessOrEqual(VectorDoubleAbs(PointToObbLocal(point, center, orientation)), extents);
 }
 
-[[nodiscard]] inline bool PointsInsideObb(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation)noexcept{
+[[nodiscard]] inline b8 PointsInsideObb(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation)noexcept{
     for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         if(VectorDouble3AnyTrue(VectorDoubleGreater(VectorDoubleAbs(PointToObbLocal(points[pointIndex], center, orientation)), extents)))
             return false;
@@ -467,7 +467,7 @@ inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble 
         outPlanes[i] = PlaneDoubleNormalizeSafe(TransformPlane(localPlanes[i], orientation, origin));
 }
 
-[[nodiscard]] inline bool FrustumPlanesIntersectAxisAlignedBox(const SIMDVectorDouble (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorDouble center, const SIMDVectorDouble extents)noexcept{
+[[nodiscard]] inline b8 FrustumPlanesIntersectAxisAlignedBox(const SIMDVectorDouble (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorDouble center, const SIMDVectorDouble extents)noexcept{
     for(u64 planeIndex = 0u; planeIndex < s_DoubleFrustumPlaneCount; ++planeIndex){
         SIMDVectorDouble outside{};
         SIMDVectorDouble inside{};
@@ -478,7 +478,7 @@ inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble 
     return true;
 }
 
-[[nodiscard]] inline bool FrustumPlanesIntersectSphere(const SIMDVectorDouble (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorDouble centerRadius)noexcept{
+[[nodiscard]] inline b8 FrustumPlanesIntersectSphere(const SIMDVectorDouble (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorDouble centerRadius)noexcept{
     const SIMDVectorDouble center = SphereCenter(centerRadius);
     const SIMDVectorDouble radius = SphereRadius(centerRadius);
     for(u64 planeIndex = 0u; planeIndex < s_DoubleFrustumPlaneCount; ++planeIndex){
@@ -491,7 +491,7 @@ inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble 
     return true;
 }
 
-[[nodiscard]] inline bool FrustumPlanesIntersectOrientedBox(const SIMDVectorDouble (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation)noexcept{
+[[nodiscard]] inline b8 FrustumPlanesIntersectOrientedBox(const SIMDVectorDouble (&planes)[CollisionDetail::s_FrustumPlaneCount], const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation)noexcept{
     SIMDVectorDouble axis0{};
     SIMDVectorDouble axis1{};
     SIMDVectorDouble axis2{};
@@ -506,7 +506,7 @@ inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble 
     return true;
 }
 
-[[nodiscard]] inline bool FrustumPlanesIntersectPoints(const SIMDVectorDouble (&planes)[CollisionDetail::s_FrustumPlaneCount], const Span<const SIMDVectorDouble> points)noexcept{
+[[nodiscard]] inline b8 FrustumPlanesIntersectPoints(const SIMDVectorDouble (&planes)[CollisionDetail::s_FrustumPlaneCount], const Span<const SIMDVectorDouble> points)noexcept{
     for(u64 planeIndex = 0u; planeIndex < s_DoubleFrustumPlaneCount; ++planeIndex){
         SIMDVectorDouble outside{};
         SIMDVectorDouble inside{};
@@ -521,7 +521,7 @@ inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ObbIntersectsObb(
+[[nodiscard]] inline b8 ObbIntersectsObb(
     const SIMDVectorDouble lhsCenter,
     const SIMDVectorDouble lhsExtents,
     const SIMDVectorDouble lhsOrientation,
@@ -626,7 +626,7 @@ inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble 
     return VectorDouble4NotEqualInt(noIntersection, VectorDoubleTrueInt());
 }
 
-[[nodiscard]] inline bool TriangleAabbOverlap(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
+[[nodiscard]] inline b8 TriangleAabbOverlap(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
     const SIMDVectorDouble triangleMin = VectorDoubleMin(v0, VectorDoubleMin(v1, v2));
     const SIMDVectorDouble triangleMax = VectorDoubleMax(v0, VectorDoubleMax(v1, v2));
     if(!MinMaxIntersects(triangleMin, triangleMax, minBounds, maxBounds))

@@ -74,7 +74,7 @@ using NWB::Tests::CrashTestPaths::TestRootDirectory;
     return BucketDirectory(arena, testGroup, bucketName) / packageName;
 }
 
-[[nodiscard]] inline bool CreatePackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName, const AStringView packageName){
+[[nodiscard]] inline b8 CreatePackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName, const AStringView packageName){
     const CrashTestPath packageDirectory = PackageDirectory(arena, testGroup, bucketName, packageName);
     if(!EnsureDirectories(packageDirectory))
         return false;

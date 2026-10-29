@@ -55,7 +55,7 @@ UiImageSmokeScene::~UiImageSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiImageSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiImageSmokeScene::paint(Impl::UiPaintContext& context){
     auto& ui = context.ui;
     ui.style().fontSize = 14.0f;
     ui.style().gap = 8.0f;
@@ -71,13 +71,13 @@ bool UiImageSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiImageSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
+b8 UiImageSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     return HandlePassiveSmokeKeyboard(key, action, m_phase, m_parent, m_child);
 }
 
-bool UiImageSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
+b8 UiImageSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     if(!ui.beginPanel("image_main", bounds))
         return false;
@@ -120,7 +120,7 @@ bool UiImageSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& b
     return ui.endPanel();
 }
 
-bool UiImageSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
+b8 UiImageSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     if(!ui.beginPanel("image_frozen", bounds))
         return false;
@@ -144,7 +144,7 @@ bool UiImageSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect&
     return ui.endPanel();
 }
 
-bool UiImageSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl::Ui::Rect& bounds){
+b8 UiImageSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     auto& ui = context.ui;
     const SIMDVectorSingle content = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 40.0f));
@@ -156,12 +156,12 @@ bool UiImageSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl:
     ImageOptions options;
     options.width = { LayoutSizePolicy::Stretch, 1.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    const bool painted = ui.beginPanel("image_external", bounds) && ui.image("external", Name(__hidden_ui_image_smoke::s_ProgressRegion), options) && ui.endPanel();
-    const bool popped = context.paint.popClip();
+    const b8 painted = ui.beginPanel("image_external", bounds) && ui.image("external", Name(__hidden_ui_image_smoke::s_ProgressRegion), options) && ui.endPanel();
+    const b8 popped = context.paint.popClip();
     return painted && popped;
 }
 
-bool UiImageSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
+b8 UiImageSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
     using namespace Impl::Ui;
     PopupOptions parent;
     parent.anchor = { right, 300.0f, 8.0f, 24.0f };
@@ -205,11 +205,11 @@ bool UiImageSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerImageSmokeEnabled(){
+b8 IsUiLayerImageSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_IMAGE");
 }
 
-bool IsUiLayerImageSkinSmokeEnabled(){
+b8 IsUiLayerImageSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_IMAGE_SKIN");
 }
 

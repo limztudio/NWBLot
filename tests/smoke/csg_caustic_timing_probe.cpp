@@ -53,7 +53,7 @@ CsgCausticTimingProbe::CsgCausticTimingProbe(ProjectRuntimeContext& context)noex
     , m_startPath(context.objectArena)
 {}
 
-bool CsgCausticTimingProbe::initialize(const bool diagnostic, const bool csg, const bool hardware, const AStringView outputPath, const AStringView cpuOutputPath, const AStringView startPath){
+b8 CsgCausticTimingProbe::initialize(const b8 diagnostic, const b8 csg, const b8 hardware, const AStringView outputPath, const AStringView cpuOutputPath, const AStringView startPath){
     if(!m_context.requestQuit || outputPath.empty() || startPath.empty() || diagnostic != !cpuOutputPath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: explicit outputs, focus gate and quit callback are required"));
         return false;
@@ -84,7 +84,7 @@ bool CsgCausticTimingProbe::initialize(const bool diagnostic, const bool csg, co
     return true;
 }
 
-bool CsgCausticTimingProbe::update(){
+b8 CsgCausticTimingProbe::update(){
     if(m_complete)
         return true;
     const u64 presentations = m_context.graphics.getSuccessfulPresentationCount();
@@ -105,7 +105,7 @@ bool CsgCausticTimingProbe::update(){
             return true;
         // Steady warm-up starts only after every measured GPU pass has completed real work.
         for(const Core::GpuTimingScopeDefinition& scope : s_CausticGpuTimingScopes){
-            bool ready = false;
+            b8 ready = false;
             for(usize index = 0u; index < view.scopeCount(); ++index){
                 if(view.scopeNameAt(index) == scope.identity && view.statsAt(index).valid() && view.statsAt(index).seconds > 0.0)
                     ready = true;
@@ -170,7 +170,7 @@ void CsgCausticTimingProbe::finish(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CsgCausticTimingProbe::capture(const Core::Perf::TimingView& view, const u64 sourceFrame, const bool cpu){
+b8 CsgCausticTimingProbe::capture(const Core::Perf::TimingView& view, const u64 sourceFrame, const b8 cpu){
     if(!view.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: timing view is invalid"));
         return false;
@@ -220,7 +220,7 @@ bool CsgCausticTimingProbe::capture(const Core::Perf::TimingView& view, const u6
     return true;
 }
 
-Expected<bool> CsgCausticTimingProbe::selectCommonWindow(){
+Expected<b8> CsgCausticTimingProbe::selectCommonWindow(){
     const u32 mask = (1u << static_cast<u32>(m_diagnostic ? s_ScopeCount : s_GpuScopeCount)) - 1u;
     if(m_commonBegin == Limit<usize>::s_Max){
         for(usize index = 0u; index + 1u < m_native.size(); ++index){
@@ -283,7 +283,7 @@ Expected<bool> CsgCausticTimingProbe::selectCommonWindow(){
     return true;
 }
 
-bool CsgCausticTimingProbe::write(const u64 collectionEndSource){
+b8 CsgCausticTimingProbe::write(const u64 collectionEndSource){
     OutputFileStream output(m_output.c_str(), s_FileOpenTruncate);
     if(!output.is_open()){
         NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: output open failed"));

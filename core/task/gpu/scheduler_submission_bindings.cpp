@@ -48,7 +48,7 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
     , nextTimingTicket(scratchArena)
 {}
 
-[[nodiscard]] bool TaskSubmissionBindings::resolve(
+[[nodiscard]] b8 TaskSubmissionBindings::resolve(
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuSubmissionPacketRange& range,
@@ -106,7 +106,7 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
         if(!packet.valid() || packet.index < range.first.index || static_cast<usize>(packet.index) >= rangeEnd)
             return false;
 
-        bool ticketAlreadyBound = false;
+        b8 ticketAlreadyBound = false;
         if(timingTicketIndices){
             auto [it, inserted] = timingTicketIndices->try_emplace(MakeNotNull(binding.timingTicket), timingTickets.size());
             if(!inserted){
@@ -169,7 +169,7 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
     return true;
 }
 
-[[nodiscard]] bool TaskSubmissionBindings::validateOwnedTimingTicket(const GpuSubmissionPacketId packet, GpuTimingSubmissionTicket* const timingTicket)const noexcept{
+[[nodiscard]] b8 TaskSubmissionBindings::validateOwnedTimingTicket(const GpuSubmissionPacketId packet, GpuTimingSubmissionTicket* const timingTicket)const noexcept{
     if(!timingTicket)
         return true;
     if(timingTicketIndices){

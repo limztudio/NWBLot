@@ -46,7 +46,7 @@ static constexpr AStringView s_AllowedAssetFields[] = { s_InterfaceField, s_Surf
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool IsAllowedAssetField(const AStringView fieldName)noexcept{
+[[nodiscard]] inline b8 IsAllowedAssetField(const AStringView fieldName)noexcept{
     for(const AStringView allowedField : s_AllowedAssetFields){
         if(fieldName == allowedField)
             return true;

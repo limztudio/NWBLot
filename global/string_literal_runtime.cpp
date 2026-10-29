@@ -63,7 +63,7 @@ static void DecodeStringLiteralPool(const usize begin, const usize end)noexcept{
         const usize remaining = end - cursor;
         const usize paddingSize = remaining < s_RecordAlignment ? remaining : s_RecordAlignment;
         const u8* const recordBytes = reinterpret_cast<const u8*>(cursor);
-        bool zeroPadding = true;
+        b8 zeroPadding = true;
         for(usize i = 0; i < paddingSize; ++i){
             if(recordBytes[i] != 0){
                 zeroPadding = false;

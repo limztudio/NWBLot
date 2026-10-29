@@ -32,7 +32,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool HasNamedLeaf(const BasicStringView<CharT> path, const usize end)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 HasNamedLeaf(const BasicStringView<CharT> path, const usize end)noexcept(IsArithmetic_V<CharT>){
     usize begin = end;
     while(begin != 0u && !GlobalFilesystemPathDetail::IsSeparator(path[begin - 1u]))
         --begin;
@@ -63,7 +63,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
     return ErrorCode(static_cast<i32>(error), std::system_category());
 }
 
-[[nodiscard]] inline bool IsMissing(const DWORD error)noexcept{
+[[nodiscard]] inline b8 IsMissing(const DWORD error)noexcept{
     return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
 }
 
@@ -118,7 +118,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
             WIN32_FIND_DATAW data = {};
             const HANDLE findHandle = FindFirstFileW(path, &data);
             path[end] = 0;
-            bool hasChild = false;
+            b8 hasChild = false;
             ErrorCode iterationError;
             if(findHandle != INVALID_HANDLE_VALUE){
                 for(;;){
@@ -174,7 +174,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool IsMissing(const int error)noexcept{
+[[nodiscard]] inline b8 IsMissing(const int error)noexcept{
     return error == ENOENT || error == ENOTDIR;
 }
 
@@ -264,7 +264,7 @@ template<typename ArenaT>
     if(end >= GlobalFilesystemCleanupDetail::s_DevicePrefixLength && buffer[0] == L'\\' && buffer[1] == L'\\' && buffer[2] == L'.' && buffer[3] == L'\\')
         buffer[2] = L'?';
     if(!(end >= GlobalFilesystemCleanupDetail::s_DevicePrefixLength && buffer[0] == L'\\' && buffer[1] == L'\\' && buffer[2] == L'?' && buffer[3] == L'\\')){
-        const bool unc = end >= GlobalFilesystemCleanupDetail::s_UncPrefixLength && buffer[0] == L'\\' && buffer[1] == L'\\';
+        const b8 unc = end >= GlobalFilesystemCleanupDetail::s_UncPrefixLength && buffer[0] == L'\\' && buffer[1] == L'\\';
         const usize prefix = unc ? GlobalFilesystemCleanupDetail::s_DeviceUncInsertLength : GlobalFilesystemCleanupDetail::s_DevicePrefixLength;
         if(end > GlobalFilesystemCleanupDetail::s_PathCapacity - prefix - 1u)
             return MakeUnexpected(GlobalFilesystemCleanupDetail::WindowsError(ERROR_FILENAME_EXCED_RANGE));

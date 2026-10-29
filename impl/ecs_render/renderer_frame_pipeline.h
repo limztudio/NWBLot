@@ -154,53 +154,53 @@ public:
 
 
 public:
-    [[nodiscard]] bool validateResources(u32 width, u32 height, u32 sampleCount);
+    [[nodiscard]] b8 validateResources(u32 width, u32 height, u32 sampleCount);
     void invalidateResources();
 
     void update(Core::ECS::World& world, f32 delta)noexcept;
 
-    [[nodiscard]] bool prepareResources(Core::Framebuffer* framebuffer);
+    [[nodiscard]] b8 prepareResources(Core::Framebuffer* framebuffer);
     void render(Core::Framebuffer* framebuffer);
-    [[nodiscard]] bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
+    [[nodiscard]] b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; m_shaderSystem.setActiveSceneSubsystems(subsystems); }
-    [[nodiscard]] bool isTransparentFeatureEnabled()const noexcept{
+    [[nodiscard]] b8 isTransparentFeatureEnabled()const noexcept{
         return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem<TransparentSubsystem>();
     }
-    [[nodiscard]] bool isCsgFeatureEnabled()const noexcept{
+    [[nodiscard]] b8 isCsgFeatureEnabled()const noexcept{
         return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem<CsgSubsystem>();
     }
     // Trades one frame of effect latency for overlap; off by default, self-bootstraps on toggle.
-    void setRefractionEnabled(const bool enabled)noexcept{ m_refractionEnabled = enabled; }
+    void setRefractionEnabled(const b8 enabled)noexcept{ m_refractionEnabled = enabled; }
 
-    void setRefractionDiagnosticsEnabled(const bool enabled)noexcept{ m_raytracingSystem.setRefractionDiagnosticsEnabled(enabled); }
+    void setRefractionDiagnosticsEnabled(const b8 enabled)noexcept{ m_raytracingSystem.setRefractionDiagnosticsEnabled(enabled); }
     [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept;
 
-    void setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
+    void setRefractionHardwareTracingEnabled(const b8 enabled)noexcept{
         m_raytracingSystem.setRefractionHardwareTracingEnabled(enabled);
     }
 
-    [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
+    [[nodiscard]] b8 setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
         return m_raytracingSystem.setCausticQualitySettings(settings);
     }
 
-    [[nodiscard]] bool setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
+    [[nodiscard]] b8 setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
         if(!ValidateSurfelGiQualitySettings(settings))
             return false;
         m_surfelGiQualitySettings = settings;
         return true;
     }
 
-    [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
+    [[nodiscard]] b8 setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
         return m_raytracingSystem.setSoftwareShadowSettings(settings);
     }
 
-    [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
+    [[nodiscard]] b8 setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
         return m_raytracingSystem.setShadowQualitySettings(settings);
     }
-    [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings)noexcept;
+    [[nodiscard]] b8 setReflectionSettings(const ReflectionSettings& settings)noexcept;
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const noexcept;
-    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings)noexcept;
-    void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
+    [[nodiscard]] b8 setPresentationSettings(const PresentationSettings& settings)noexcept;
+    void setFrameLaggedAsyncLightingEnabled(const b8 enabled)noexcept{
         if(m_frameLaggedAsyncLightingEnabled == enabled)
             return;
     // Proof that disabling the mode returned to the current-frame path: set when turning off, cleared by the next accepted normal frame.
@@ -215,17 +215,17 @@ public:
         resetLaggedLightingHistoryReadTracking();
     }
 
-    [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
-    [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
+    [[nodiscard]] b8 frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
+    [[nodiscard]] b8 setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
     // Telemetry for current deferred graph artifacts. Valid until the next graph/recording/transaction reset.
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
 
 
 private:
-    [[nodiscard]] bool prepareGpuTimingScopes();
-    [[nodiscard]] bool prepareDeferredGraphPacketEnvelopeMetrics(const Core::GpuTaskGraph::DeclarationReadView& graph, const Core::GpuCompiledGraph::ReadView& compiledGraph, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool declareFrameTimingBeginTask(Core::GpuTimingFrameTransaction& frameTimingTransaction);
-    [[nodiscard]] bool scheduleDeferredLightingTaskGraphForExecution(Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 prepareGpuTimingScopes();
+    [[nodiscard]] b8 prepareDeferredGraphPacketEnvelopeMetrics(const Core::GpuTaskGraph::DeclarationReadView& graph, const Core::GpuCompiledGraph::ReadView& compiledGraph, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 declareFrameTimingBeginTask(Core::GpuTimingFrameTransaction& frameTimingTransaction);
+    [[nodiscard]] b8 scheduleDeferredLightingTaskGraphForExecution(Core::Alloc::ScratchArena& scratchArena);
     void commitFrameTargets(DeferredFrameTargets&& targets);
     void resetFrameTargets();
     void resetDeferredTaskGraphRuntime();
@@ -243,14 +243,14 @@ private:
     void invalidateLaggedLightingHistoryWriterDrain()noexcept;
     void resetLaggedLightingHistoryReadTracking()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
-    [[nodiscard]] bool declareDeferredShadowPrepareTask(
+    [[nodiscard]] b8 declareDeferredShadowPrepareTask(
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         Core::GpuGraphResourceId currentBindlessSlots,
         Core::GpuGraphResourceId materialContextSlots,
         Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
         Span<const Core::GpuGraphResourceId> softwareBvhBuildStateResources,
-        bool softwareTraceResourcesPrepared,
+        b8 softwareTraceResourcesPrepared,
         Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
@@ -260,14 +260,14 @@ private:
         const CsgFrameState& csgFrameState,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        bool hasOpaqueCsgFrameWork,
+        b8 hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
         const ECSRenderDetail::MeshViewGpuData& meshViewState,
-        bool meshViewUploadRequired,
+        b8 meshViewUploadRequired,
         const DeferredGraphResourceImportResult& resources,
         Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
         Core::GpuGraphResourceSetId shadowTraceGeometrySet,
-        const bool& asyncPrefixTimingSpansOnePacket,
+        const b8& asyncPrefixTimingSpansOnePacket,
         Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         ObjectGeometryCacheGraph& objectGeometry,
@@ -279,13 +279,13 @@ private:
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket** timingTickets
     );
-    [[nodiscard]] bool declareDeferredShadowVisibilityTask(
+    [[nodiscard]] b8 declareDeferredShadowVisibilityTask(
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan,
         const RayTracingSceneGraphReads& hardwareSceneReads,
-        bool hardwareShadowSupported,
+        b8 hardwareShadowSupported,
         Core::GpuGraphResourceId worldPosition,
         Core::GpuGraphResourceId normal,
         Core::GpuGraphResourceId depth,
@@ -306,12 +306,12 @@ private:
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
         Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
         Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
-        bool& opaqueProduced,
-        bool& transparentTraceProduced,
+        b8& opaqueProduced,
+        b8& transparentTraceProduced,
         u32& opaqueFrameIndex
     );
-    [[nodiscard]] bool declareDeferredSoftwareCausticsTask(
-        bool hardwareCaustics,
+    [[nodiscard]] b8 declareDeferredSoftwareCausticsTask(
+        b8 hardwareCaustics,
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         Core::GpuGraphResourceId worldPosition,
@@ -331,7 +331,7 @@ private:
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
         Optional<Core::GpuTimingMeasure>& causticResolveTiming
     );
-    [[nodiscard]] bool declareDeferredSurfelGiTask(
+    [[nodiscard]] b8 declareDeferredSurfelGiTask(
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
@@ -346,7 +346,7 @@ private:
         Core::GpuGraphResourceSetId traceGeometrySet,
         Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTaskId effectsTask,
-        bool useLaggedLightingHistory,
+        b8 useLaggedLightingHistory,
         Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
         Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
@@ -358,16 +358,16 @@ private:
         Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::RendererFrameGraphFeatures& features,
         const CsgFrameState& csgFrameState,
-        bool clearAvboitTargets,
-        bool hasTransparentRenderers,
-        bool hasOpaqueCsgFrameWork,
+        b8 clearAvboitTargets,
+        b8 hasTransparentRenderers,
+        b8 hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
         const Core::AcquiredPresentationFrame& presentationFrame,
-        const bool& asyncPrefixTimingSpansOnePacket,
+        const b8& asyncPrefixTimingSpansOnePacket,
         const Core::QueueSubmissionToken& surfelCounterReadbackCompletionToken,
         const Core::QueueSubmissionToken& laggedLightingHistoryReadReadyToken,
         const Core::QueueSubmissionToken& laggedLightingHistoryWriterDrainToken,
-        bool includeLaggedLightingHistoryCapture,
+        b8 includeLaggedLightingHistoryCapture,
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
@@ -395,8 +395,8 @@ private:
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
         Optional<Core::GpuTimingMeasure>& opaqueSoftResolveTiming,
         Optional<Core::GpuTimingMeasure>& transparentSoftResolveTiming,
-        bool& shadowVisibilityOpaqueProduced,
-        bool& shadowVisibilityTransparentTraceProduced,
+        b8& shadowVisibilityOpaqueProduced,
+        b8& shadowVisibilityTransparentTraceProduced,
         u32& shadowVisibilityOpaqueFrameIndex,
         Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket,
         Core::GpuTimingSubmissionTicket& surfelGiTimingTicket,
@@ -537,19 +537,19 @@ private:
     // Distinct completions even for the same history-copy token: Lighting waits for readable history, producers wait until the copy stops reading.
     Core::GpuExternalCompletionId m_deferredLightingHistoryReadReadyCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryWriterDrainCompletion;
-    bool m_deferredShadowCombinedUpsample = false;
-    bool m_deferredShadowCombinedWavelet = false;
-    bool m_deferredShadowCombinedTemporal = false;
-    bool m_deferredCausticProducerDispatched = false;
+    b8 m_deferredShadowCombinedUpsample = false;
+    b8 m_deferredShadowCombinedWavelet = false;
+    b8 m_deferredShadowCombinedTemporal = false;
+    b8 m_deferredCausticProducerDispatched = false;
     // A partially accepted frame with an unsubmittable recovery packet is not recoverable. End this device generation and rebuild resources.
-    bool m_frameRenderRecoveryFailed = false;
-    bool m_graphicsPrefixMeshViewSetupReady = false;
-    bool m_graphicsPrefixSceneShadingSetupReady = false;
-    bool m_deferredFrameRecoveryArmed = false;
-    bool m_deferredFrameRecoveryRetiresTiming = false;
-    bool m_deferredLightingTaskGraphDeclared = false;
-    bool m_deferredLightingTaskGraphScheduled = false;
-    bool m_deferredPresentationOverlayRequired = false;
+    b8 m_frameRenderRecoveryFailed = false;
+    b8 m_graphicsPrefixMeshViewSetupReady = false;
+    b8 m_graphicsPrefixSceneShadingSetupReady = false;
+    b8 m_deferredFrameRecoveryArmed = false;
+    b8 m_deferredFrameRecoveryRetiresTiming = false;
+    b8 m_deferredLightingTaskGraphDeclared = false;
+    b8 m_deferredLightingTaskGraphScheduled = false;
+    b8 m_deferredPresentationOverlayRequired = false;
     u32 m_reflectionFrameIndex = 0u;
     f64 m_deferredLightingTaskGraphDeclarationSeconds = 0.0;
     Core::IGpuTaskGraphPresentationContributor* m_preparedTaskGraphPresentationContributor = nullptr;
@@ -584,19 +584,19 @@ private:
     // The next Surfel-GI packet imports this cache through its first-use declaration.
     Core::GpuPersistentResourceStateCache m_surfelGiCounterPersistentState;
     Core::GpuPersistentResourceStateCache m_surfelIrradianceReturnState;
-    bool m_laggedLightingCurrentFrameAcceptancePending = false;
-    bool m_preparedRefractionActive = false;
-    bool m_refractionHardwareLogged = false;
-    bool m_refractionScreenLogged = false;
-    bool m_preparedReflectionSceneAvailable = false;
-    bool m_reflectionHardwareLogged = false;
-    bool m_reflectionFallbackLogged = false;
-    bool m_refractionEnabled = true;
+    b8 m_laggedLightingCurrentFrameAcceptancePending = false;
+    b8 m_preparedRefractionActive = false;
+    b8 m_refractionHardwareLogged = false;
+    b8 m_refractionScreenLogged = false;
+    b8 m_preparedReflectionSceneAvailable = false;
+    b8 m_reflectionHardwareLogged = false;
+    b8 m_reflectionFallbackLogged = false;
+    b8 m_refractionEnabled = true;
     LaggedLightingReport::Enum m_laggedLightingReport = LaggedLightingReport::Unreported;
-    bool m_preparedCsgFrameStateValid = false;
-    bool m_preparedHasTransparentRenderers = false;
+    b8 m_preparedCsgFrameStateValid = false;
+    b8 m_preparedHasTransparentRenderers = false;
     ShadowPreparationOutcome m_shadowPreparationOutcome;
-    bool m_frameLaggedAsyncLightingEnabled = false;
+    b8 m_frameLaggedAsyncLightingEnabled = false;
     SurfelGiQualitySettings m_surfelGiQualitySettings;
     ReflectionSettings m_reflectionSettings;
     RayTracingRefractionGraphResources m_preparedRefractionResources;

@@ -56,7 +56,7 @@ GpuCompiledGraph::ReadView::~ReadView()noexcept{
 }
 
 
-bool GpuCompiledGraph::ReadView::validFor(const GpuTaskGraphDeclarationReadView& graph)const noexcept{
+b8 GpuCompiledGraph::ReadView::validFor(const GpuTaskGraphDeclarationReadView& graph)const noexcept{
     if(!m_graph || !graph.valid())
         return false;
 
@@ -85,11 +85,11 @@ usize GpuCompiledGraph::ReadView::taskCount()const noexcept{ return m_graph ? m_
 
 usize GpuCompiledGraph::ReadView::packetCount()const noexcept{ return m_graph ? m_graph->packetCount() : 0u; }
 
-bool GpuCompiledGraph::ReadView::validPacket(const GpuSubmissionPacketId& packetID)const noexcept{
+b8 GpuCompiledGraph::ReadView::validPacket(const GpuSubmissionPacketId& packetID)const noexcept{
     return m_graph && m_graph->validPacket(packetID);
 }
 
-bool GpuCompiledGraph::ReadView::validPacketRange(const GpuSubmissionPacketRange& range)const noexcept{
+b8 GpuCompiledGraph::ReadView::validPacketRange(const GpuSubmissionPacketRange& range)const noexcept{
     return m_graph && m_graph->validPacketRange(range);
 }
 
@@ -138,23 +138,23 @@ GpuTaskPacketizationDecision::Enum GpuCompiledGraph::ReadView::packetizationDeci
     return m_graph ? m_graph->packetizationDecisionForTask(task) : GpuTaskPacketizationDecision::Unknown;
 }
 
-bool GpuCompiledGraph::ReadView::tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
+b8 GpuCompiledGraph::ReadView::tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     return m_graph && m_graph->tasksSharePacket(first, second);
 }
 
-bool GpuCompiledGraph::ReadView::taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
+b8 GpuCompiledGraph::ReadView::taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     return m_graph && m_graph->taskPrecedesOrSharesPacket(first, second);
 }
 
-bool GpuCompiledGraph::ReadView::taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
+b8 GpuCompiledGraph::ReadView::taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     return m_graph && m_graph->taskPrecedesInSamePacket(first, second);
 }
 
-bool GpuCompiledGraph::ReadView::tasksFormContiguousPacketSequence(const GpuTaskId* const tasks, const usize taskCount)const noexcept{
+b8 GpuCompiledGraph::ReadView::tasksFormContiguousPacketSequence(const GpuTaskId* const tasks, const usize taskCount)const noexcept{
     return m_graph && m_graph->tasksFormContiguousPacketSequence(tasks, taskCount);
 }
 
-bool GpuCompiledGraph::ReadView::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept{
+b8 GpuCompiledGraph::ReadView::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept{
     return m_graph && m_graph->taskJoinsAcceptedQueueFrontier(task);
 }
 

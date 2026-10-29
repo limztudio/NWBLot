@@ -71,7 +71,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     // SW-BVH streams stay separate; triangle index is the reconstructed RT stream.
     Core::GpuDescriptorHandle swBvhPositionHeapHandle;
     Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle;
-    bool swBvhBuildAccepted = false;
+    b8 swBvhBuildAccepted = false;
     Core::BufferHandle swBvhNodeBuffer;     // per-mesh software LBVH nodes (no-hardware-RT shadow fallback)
     Core::BufferHandle swBvhParentBuffer;   // per-mesh software LBVH parent links (persist across refits)
     // Build and traversal share these descriptors; build via push constants.
@@ -86,19 +86,19 @@ struct MeshResources : public RuntimeMeshBuffers{
     u64 runtimeGeometryContentRevision = 0u;
     u64 blasGeometryContentRevision = 0u;
     u64 swBvhGeometryContentRevision = 0u;
-    bool runtimeMesh = false;
-    bool dynamicMeshletBoundsFresh = false;
-    bool dynamicMeshletConesFresh = false;
-    bool blasBuildPending = false;
+    b8 runtimeMesh = false;
+    b8 dynamicMeshletBoundsFresh = false;
+    b8 dynamicMeshletConesFresh = false;
+    b8 blasBuildPending = false;
     // New backing starts in Common until a build or accepted handoff publishes state.
-    bool blasBackingFresh = false;
-    bool swBvhBuildPending = false;     // static mesh awaiting its one-time software BVH build
-    bool swBvhTopologyBuilt = false;    // a full software BVH build initialized the persistent topology
-    bool blasBuildAccepted = false;
+    b8 blasBackingFresh = false;
+    b8 swBvhBuildPending = false;     // static mesh awaiting its one-time software BVH build
+    b8 swBvhTopologyBuilt = false;    // a full software BVH build initialized the persistent topology
+    b8 blasBuildAccepted = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return meshName != s_NameNone && buffersValid() && meshletCount > 0 && meshletPrimitiveIndexCount > 0 && solidTriangleWords != nullptr;
     }
 };

@@ -32,10 +32,10 @@ struct RefractionStatistics{
 #define NWB_REFRACTION_STATISTICS_FIELD(name, offset) u32 name = 0u;
     NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_REFRACTION_STATISTICS_FIELD)
 #undef NWB_REFRACTION_STATISTICS_FIELD
-    bool hardwareRequested = false;
-    bool hardwareAvailable = false;
-    bool hardwareReady = false;
-    bool csgHardwareEnabled = false;
+    b8 hardwareRequested = false;
+    b8 hardwareAvailable = false;
+    b8 hardwareReady = false;
+    b8 csgHardwareEnabled = false;
 };
 
 

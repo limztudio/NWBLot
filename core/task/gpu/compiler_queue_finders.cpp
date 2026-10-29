@@ -28,8 +28,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& baseQueue,
-    const bool allowCrossFamilyRouting,
-    const bool preferNonPrimaryQueue
+    const b8 allowCrossFamilyRouting,
+    const b8 preferNonPrimaryQueue
 )noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
     u64 resultLoad = Limit<u64>::s_Max;
@@ -41,9 +41,9 @@ namespace GpuTaskGraphCompilerDetail{
         u64 load = prefixQueueCosts[queueIndex];
         const u64 externalQueueLoad = scoringData.externalQueueLoad(candidate.id);
         load = load > Limit<u64>::s_Max - externalQueueLoad ? Limit<u64>::s_Max : load + externalQueueLoad;
-        const bool candidateIsNonPrimary = candidate.id != baseQueue.id;
-        const bool resultIsNonPrimary = result && result->id != baseQueue.id;
-        bool winsEqualLoad = IsBetterQueue(candidate, result);
+        const b8 candidateIsNonPrimary = candidate.id != baseQueue.id;
+        const b8 resultIsNonPrimary = result && result->id != baseQueue.id;
+        b8 winsEqualLoad = IsBetterQueue(candidate, result);
         if(preferNonPrimaryQueue && candidateIsNonPrimary != resultIsNonPrimary)
             winsEqualLoad = candidateIsNonPrimary;
         if(!result || load < resultLoad || (load == resultLoad && winsEqualLoad)){
@@ -63,7 +63,7 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueInfo& baseQueue,
     const usize assignedPrefixCount,
-    const bool allowCrossFamilyRouting
+    const b8 allowCrossFamilyRouting
 )noexcept{
     // Balancing runs after every task has a dense assignment from the same topology; the prefix ends at the current group.
     NWB_ASSERT(assignedPrefixCount <= assignments.size());
@@ -90,14 +90,14 @@ namespace GpuTaskGraphCompilerDetail{
     return result;
 }
 
-[[nodiscard]] bool AllowsTimingFeedbackRouting(const GpuTaskGraphTaskView& task)noexcept{
+[[nodiscard]] b8 AllowsTimingFeedbackRouting(const GpuTaskGraphTaskView& task)noexcept{
     return task.scheduling.allowTimingFeedbackRouting && (task.scheduling.allowSameClassQueueRouting || task.scheduling.allowCrossClassTimingFeedbackRouting) && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing;
 }
 
 // Same-class routing retains its independent physical-queue opt-in.
 // Every route into another Vulkan family keeps the separate family opt-in.
 // Cross-class timing is a stronger explicit opt-in and only uses command-compatible classes.
-[[nodiscard]] bool IsLegalTimingFeedbackRoute(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& incumbent, const GpuPhysicalQueueInfo& candidate)noexcept{
+[[nodiscard]] b8 IsLegalTimingFeedbackRoute(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& incumbent, const GpuPhysicalQueueInfo& candidate)noexcept{
     if(!AllowsTimingFeedbackRouting(task) || !IsLegalQueueAssignmentCandidate(graph, topology, task, candidate))
         return false;
     if(candidate.familyIndex != incumbent.familyIndex && !task.scheduling.allowCrossFamilySameClassQueueRouting)
@@ -131,7 +131,7 @@ namespace GpuTaskGraphCompilerDetail{
     return *acceptedQueue;
 }
 
-[[nodiscard]] bool HasUsableTimingFeedback(const GpuTaskGraphQueueAssignmentOptions& options, const u16 deviceGeneration)noexcept{
+[[nodiscard]] b8 HasUsableTimingFeedback(const GpuTaskGraphQueueAssignmentOptions& options, const u16 deviceGeneration)noexcept{
     // assignQueues() rejects an enabled invalid policy before this query.
     NWB_ASSERT(!options.timingFeedbackPolicy.enabled || options.timingFeedbackPolicy.valid());
     return options.timingFeedbackPolicy.enabled && options.timingHistory && options.timingHistory->valid() && options.timingHistory->deviceGeneration() == deviceGeneration;
@@ -160,7 +160,7 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuPhysicalQueueInfo* result = nullptr;
     const GpuTaskTimingHistory* resultHistory = nullptr;
     GpuQueueAssignmentScore resultScore;
-    bool hasResultScore = false;
+    b8 hasResultScore = false;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
         if(candidate.id == incumbent.id || !IsLegalTimingFeedbackRoute(graph, topology, task, incumbent, candidate))
@@ -171,7 +171,7 @@ namespace GpuTaskGraphCompilerDetail{
             continue;
 
         // A fresh store may finish calibration with no probe as incumbent; the static route is then the baseline.
-        const bool canSwitch = assignmentState ? GpuTaskTimingFeedbackCanSwitch(*incumbentHistory, *candidateHistory, *assignmentState, incumbent.id, candidate.id, frameIndex, policy) : GpuTaskTimingHistoryMeetsMinimumSamples(*incumbentHistory, policy)
+        const b8 canSwitch = assignmentState ? GpuTaskTimingFeedbackCanSwitch(*incumbentHistory, *candidateHistory, *assignmentState, incumbent.id, candidate.id, frameIndex, policy) : GpuTaskTimingHistoryMeetsMinimumSamples(*incumbentHistory, policy)
                 && GpuTaskTimingHistoryMeetsMinimumSamples(*candidateHistory, policy)
                 && GpuTaskTimingBenefitExceedsHysteresis(*incumbentHistory, *candidateHistory, policy)
         ;
@@ -225,7 +225,7 @@ namespace GpuTaskGraphCompilerDetail{
 
     auto result = MakeNotNull(&incumbent);
     u32 resultSampleCount = sampleCountFor(incumbent);
-    bool needsCalibration = resultSampleCount < policy.minimumSampleCount;
+    b8 needsCalibration = resultSampleCount < policy.minimumSampleCount;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
         if(candidate.id == incumbent.id || !IsLegalTimingFeedbackRoute(graph, topology, task, incumbent, candidate))

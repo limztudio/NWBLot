@@ -60,7 +60,7 @@ GpuGraphSubmissionTransaction::SubmissionWriterReservation::~SubmissionWriterRes
 }
 
 
-bool GpuGraphSubmissionTransaction::SubmissionWriterReservation::acquire(const GpuGraphSubmissionTransaction& transaction, const bool tryOnly)noexcept{
+b8 GpuGraphSubmissionTransaction::SubmissionWriterReservation::acquire(const GpuGraphSubmissionTransaction& transaction, const b8 tryOnly)noexcept{
     if(m_transaction)
         TerminateInvariant();
     if(tryOnly){
@@ -135,14 +135,14 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
     if(transaction.m_compositeOperationActive.test(MemoryOrder::acquire))
         return;
 
-    const bool composite = mode == SubmissionOperationMode::CompositeBarrier;
-    const bool tryExclusive = mode == SubmissionOperationMode::TryExclusiveBarrier;
-    const bool exceptionFinalizer = mode == SubmissionOperationMode::ExceptionFinalizer;
-    const bool exceptionClosing = transaction.m_submissionExceptionClosing.test(MemoryOrder::acquire);
+    const b8 composite = mode == SubmissionOperationMode::CompositeBarrier;
+    const b8 tryExclusive = mode == SubmissionOperationMode::TryExclusiveBarrier;
+    const b8 exceptionFinalizer = mode == SubmissionOperationMode::ExceptionFinalizer;
+    const b8 exceptionClosing = transaction.m_submissionExceptionClosing.test(MemoryOrder::acquire);
     if(exceptionClosing != exceptionFinalizer)
         return;
-    const bool exclusive = mode != SubmissionOperationMode::OrdinaryPacket;
-    const bool tryWriter = tryExclusive;
+    const b8 exclusive = mode != SubmissionOperationMode::OrdinaryPacket;
+    const b8 tryWriter = tryExclusive;
     if(exclusive){
         if(!m_writerReservation.acquire(transaction, tryWriter))
             return;
@@ -180,7 +180,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
                 transaction.m_submissionGateState.notify_all();
         }
     }
-    const bool closingAfterAdmission = transaction.m_submissionExceptionClosing.test(MemoryOrder::acquire);
+    const b8 closingAfterAdmission = transaction.m_submissionExceptionClosing.test(MemoryOrder::acquire);
     if(closingAfterAdmission != exceptionFinalizer){
         if(exclusive){
             transaction.m_submissionGateState.store(0u, MemoryOrder::release);

@@ -56,17 +56,17 @@ enum<u8> PointerGestureState{
 class InputEvent{
     public InputEventType type = InputEventType::Enum::PointerMove;
     public InputCommand command = InputCommand::Enum::None;
-    public bool extend = false;
-    public bool edit = true;
+    public b8 extend = false;
+    public b8 edit = true;
     public Point position;
     public i32 key = s_InputKeyUnknown;
-    public bool shift = false;
-    public bool repeat = false;
-    public bool control = false;
-    public bool alt = false;
-    public bool super = false;
-    public bool allowText = false;
-    public bool hoverCapable = false;
+    public b8 shift = false;
+    public b8 repeat = false;
+    public b8 control = false;
+    public b8 alt = false;
+    public b8 super = false;
+    public b8 allowText = false;
+    public b8 hoverCapable = false;
     public f64 scrollX = 0.0;
     public f64 scrollY = 0.0;
     // Optional monotonic timestamp at native ingress; zero leaves pointer clicks ungrouped.
@@ -97,17 +97,17 @@ class HitTarget{
     public Rect gestureReference;
     public u32 paintOrder = 0u;
     public u32 layer = 0u;
-    public bool enabled = true;
-    public bool focusable = false;
-    public bool activatable = false;
-    public bool pointerGesture = false;
-    public bool textEditable = false;
-    public bool navigable = false;
-    public bool scrollable = false;
-    public bool focusOnCommit = false;
+    public b8 enabled = true;
+    public b8 focusable = false;
+    public b8 activatable = false;
+    public b8 pointerGesture = false;
+    public b8 textEditable = false;
+    public b8 navigable = false;
+    public b8 scrollable = false;
+    public b8 focusOnCommit = false;
     // A focused editor may borrow vertical navigation and submission from another accepted control lifetime.
-    public bool contextMenu = false;
-    public bool horizontalNavigation = false;
+    public b8 contextMenu = false;
+    public b8 horizontalNavigation = false;
 }
 
 // Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.
@@ -117,15 +117,15 @@ class InputActionId{
     public u64 layoutGeneration = 0u;
     public u64 sequence = 0u;
 
-    public bool valid()const{
+    public b8 valid()const{
         return this.target.valid() && this.declarationGeneration != 0u && this.layoutGeneration != 0u && this.sequence != 0u;
     }
 
-    public bool operator==(in InputActionId rhs)const{
+    public b8 operator==(in InputActionId rhs)const{
         return this.target == rhs.target && this.declarationGeneration == rhs.declarationGeneration && this.layoutGeneration == rhs.layoutGeneration && this.sequence == rhs.sequence;
     }
 
-    public bool operator!=(in InputActionId rhs)const{
+    public b8 operator!=(in InputActionId rhs)const{
         return this.target != rhs.target || this.declarationGeneration != rhs.declarationGeneration || this.layoutGeneration != rhs.layoutGeneration || this.sequence != rhs.sequence;
     }
 }
@@ -187,13 +187,13 @@ class PointerGesture{
 }
 
 class InputRoutingResult{
-    public bool pointerConsumed = false;
-    public bool commandConsumed = false;
-    public bool wantsPointer = false;
-    public bool wantsCommands = false;
-    public bool pointerRouted = false;
-    public bool activationOverflow = false;
-    public bool gestureOverflow = false;
+    public b8 pointerConsumed = false;
+    public b8 commandConsumed = false;
+    public b8 wantsPointer = false;
+    public b8 wantsCommands = false;
+    public b8 pointerRouted = false;
+    public b8 activationOverflow = false;
+    public b8 gestureOverflow = false;
     public WidgetId hover;
     public WidgetId focus;
     public WidgetId capture;

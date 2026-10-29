@@ -19,7 +19,7 @@ EditModelSnapshot::EditModelSnapshot(Core::Alloc::GlobalArena& arena)noexcept
     , m_expectedPreedit(arena)
 {}
 
-bool EditModelSnapshot::matches(const EditModel& model)const noexcept{
+b8 EditModelSnapshot::matches(const EditModel& model)const noexcept{
     const auto composition = model.composition();
     return
         model.revision() == m_expectedRevision && model.externalRevision() == m_expectedExternalRevision

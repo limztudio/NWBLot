@@ -36,8 +36,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
 
 
 private:
@@ -62,15 +62,15 @@ private:
     u32 m_rejects = 0u;
     u32 m_clamps = 0u;
     u32 m_restored = 0u;
-    bool m_enabled = true;
-    bool m_readOnly = false;
-    bool m_clamp = true;
+    b8 m_enabled = true;
+    b8 m_readOnly = false;
+    b8 m_clamp = true;
 };
 
 using SharedUiNumericEditSmokeScene = RefCountPtr< RefCounter<UiNumericEditSmokeScene>, ArenaRefDeleter<RefCounter<UiNumericEditSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerNumericEditSmokeEnabled();
-[[nodiscard]] bool IsUiLayerNumericEditSkinSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerNumericEditSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerNumericEditSkinSmokeEnabled();
 [[nodiscard]] SharedUiNumericEditSmokeScene CreateUiNumericEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
 
 

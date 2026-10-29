@@ -37,7 +37,7 @@ struct AvboitClearChainInputs{
     Core::GpuGraphResourceId extinction;
     Core::GpuGraphResourceId extinctionOverflow;
     Core::GpuTaskId uploadTask;
-    bool clearTargets = false;
+    b8 clearTargets = false;
 };
 
 struct AvboitClearChainResult{

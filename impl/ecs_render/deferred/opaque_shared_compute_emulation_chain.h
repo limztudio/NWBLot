@@ -38,8 +38,8 @@ struct OpaqueSharedComputeEmulationChainInputs{
     const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan;
     Span<const Core::GpuTaskResourceUse> objectGeometryReads;
     Core::GpuTimingSubmissionTicket*& timingTicket;
-    const bool& meshViewSetupReady;
-    const bool& sceneShadingSetupReady;
+    const b8& meshViewSetupReady;
+    const b8& sceneShadingSetupReady;
     Optional<Core::GpuTimingMeasure>& sharedComputeEmulationTiming;
     Core::GpuTaskResourceSetUse materialGeometrySetUse{};
     Core::GpuTaskResourceSetUse materialSampledTextureSetUse{};
@@ -49,9 +49,9 @@ struct OpaqueSharedComputeEmulationChainInputs{
     Core::GpuTaskId gbufferTask;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
-    bool materialDrawBuffersUploaded = false;
-    bool materialFrameStatesGraphOwned = false;
-    bool materialGeometryStatesGraphOwned = false;
+    b8 materialDrawBuffersUploaded = false;
+    b8 materialFrameStatesGraphOwned = false;
+    b8 materialGeometryStatesGraphOwned = false;
 };
 
 struct OpaqueSharedComputeEmulationChainResult{
@@ -87,7 +87,7 @@ private:
         const Core::GpuTaskId& dependency,
         ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum phase,
         usize drawIndex,
-        bool finishTiming,
+        b8 finishTiming,
         Span<const Core::GpuTaskResourceUse> resourceUses,
         Span<const Core::GpuTaskResourceSetUse> resourceSetUses
     );

@@ -56,8 +56,8 @@ public:
 public:
     mutable u32 m_calls = 0u;
     mutable u32 m_mutations = 0u;
-    mutable bool m_beginAccepted = false;
-    mutable bool m_endAccepted = false;
+    mutable b8 m_beginAccepted = false;
+    mutable b8 m_endAccepted = false;
 
 
 private:
@@ -93,17 +93,17 @@ protected:
 protected:
     virtual void SetUp()override;
     void configureSliderSkin();
-    [[nodiscard]] bool declare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
-    [[nodiscard]] bool prepare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
-    [[nodiscard]] bool accept(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
-    [[nodiscard]] bool sibling(AStringView key = "later");
+    [[nodiscard]] b8 declare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] b8 prepare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] b8 accept(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
+    [[nodiscard]] b8 sibling(AStringView key = "later");
     [[nodiscard]] WidgetId host()const;
     [[nodiscard]] WidgetId track()const;
     [[nodiscard]] WidgetId thumb()const;
     [[nodiscard]] Point trackPoint(f64 normalized, const SliderState& state)const noexcept;
     [[nodiscard]] Point thumbPoint()const noexcept;
     [[nodiscard]] SliderAcceptedFrame accepted()const noexcept;
-    void expectAccepted(const SliderAcceptedFrame& saved, bool popupFocus = true)const;
+    void expectAccepted(const SliderAcceptedFrame& saved, b8 popupFocus = true)const;
 
 
 protected:

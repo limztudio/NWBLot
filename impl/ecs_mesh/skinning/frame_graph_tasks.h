@@ -56,10 +56,10 @@ namespace MeshSkinningGraphDetail{
 
 
 // Deformation and post-dispatch share the same plan loop; only the per-plan recorder differs.
-using SkinningPlanRecorder = bool (MeshSkinningSystem::*)(const MeshSkinningGraphDispatchPlan&, Core::CommandList&, const Core::GpuTaskRecordContext&);
+using SkinningPlanRecorder = b8 (MeshSkinningSystem::*)(const MeshSkinningGraphDispatchPlan&, Core::CommandList&, const Core::GpuTaskRecordContext&);
 
 template<SkinningPlanRecorder Recorder>
-[[nodiscard]] inline bool RecordSkinningPlans(
+[[nodiscard]] inline b8 RecordSkinningPlans(
     MeshSkinningSystem& system,
     const Span<const MeshSkinningGraphDispatchPlan> plans,
     const Core::GpuTaskRecordContext& context,
@@ -104,7 +104,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         return RecordSkinningPlans<&MeshSkinningSystem::recordGraphOwnedSkinningDeformation>(payload.system, payload.plans, context, payload.timingTicket, commandList);
     }
 };
@@ -120,7 +120,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         return RecordSkinningPlans<&MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch>(payload.system, payload.plans, context, payload.timingTicket, commandList);
     }
 };
@@ -145,7 +145,7 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
         if(payload.plans.empty())
             return false;
 

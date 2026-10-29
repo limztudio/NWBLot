@@ -38,7 +38,7 @@ inline constexpr u64 s_PendingSubmissionCost = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskScheduler::scheduleGraph(
+b8 GpuTaskScheduler::scheduleGraph(
     const GpuTaskGraph& graph,
     Alloc::ScratchArena& scratchArena,
     GpuTaskGraphAnalysis& analysis,
@@ -51,7 +51,7 @@ bool GpuTaskScheduler::scheduleGraph(
     return scheduleGraph(graph, compileOptions, scratchArena, analysis, assignments, compiledGraph, recordedGraph, transaction);
 }
 
-bool GpuTaskScheduler::scheduleGraph(
+b8 GpuTaskScheduler::scheduleGraph(
     const GpuTaskGraph& graph,
     const GpuTaskGraphCompileOptions& compileOptions,
     Alloc::ScratchArena& scratchArena,
@@ -68,7 +68,7 @@ bool GpuTaskScheduler::scheduleGraph(
     return compileGraph(graph, compileOptions, scratchArena, analysis, assignments, compiledGraph, recordedGraph, transaction);
 }
 
-bool GpuTaskScheduler::executeGraph(
+b8 GpuTaskScheduler::executeGraph(
     const GpuTaskGraphNormalExecutionDesc& desc,
     Alloc::ScratchArena& scratchArena,
     GpuTaskGraph& graph,
@@ -87,7 +87,7 @@ bool GpuTaskScheduler::executeGraph(
     return submitGraph(compiledGraph, recorder, desc, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
 }
 
-bool GpuTaskScheduler::executeAcceptedFrontierTask(
+b8 GpuTaskScheduler::executeAcceptedFrontierTask(
     const GpuCompiledGraph& compiledGraph,
     const GpuTaskId task,
     Alloc::ScratchArena& scratchArena,
@@ -106,7 +106,7 @@ bool GpuTaskScheduler::executeAcceptedFrontierTask(
     return recordAndSubmitAcceptedFrontierTask(compiledGraph, recorder, task, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
 }
 
-bool GpuTaskScheduler::executeTask(
+b8 GpuTaskScheduler::executeTask(
     const GpuCompiledGraph& compiledGraph,
     const GpuTaskId task,
     const GpuTaskGraphTaskRecordedCallback* const recordedCallback,
@@ -127,7 +127,7 @@ bool GpuTaskScheduler::executeTask(
     return recordAndSubmitTask(compiledGraph, recorder, task, recordedCallback, acceptedCallback, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
 }
 
-bool GpuTaskScheduler::compileGraph(
+b8 GpuTaskScheduler::compileGraph(
     const GpuTaskGraph& graph,
     const GpuTaskGraphCompileOptions& compileOptions,
     Alloc::ScratchArena& scratchArena,

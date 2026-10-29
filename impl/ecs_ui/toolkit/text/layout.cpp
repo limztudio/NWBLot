@@ -30,11 +30,11 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool FitsCoordinate(f64 value)noexcept{
+[[nodiscard]] static b8 FitsCoordinate(f64 value)noexcept{
     return IsFinite(value) && value >= -static_cast<f64>(Limit<f32>::s_Max) && value <= static_cast<f64>(Limit<f32>::s_Max);
 }
 
-[[nodiscard]] static bool FitsCoordinateXY(const SIMDVectorDouble value)noexcept{
+[[nodiscard]] static b8 FitsCoordinateXY(const SIMDVectorDouble value)noexcept{
     const SIMDVectorDouble limit = VectorDoubleReplicate(static_cast<f64>(Limit<f32>::s_Max));
     return VectorDoubleIsFinite(value, VectorDoubleComponentMask::s_DoubleXY) && (VectorDoubleMoveMask(VectorDoubleInBounds(value, limit)) & VectorDoubleComponentMask::s_DoubleXY) == VectorDoubleComponentMask::s_DoubleXY;
 }
@@ -51,7 +51,7 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
     return SIMDVectorDoubleResult{ ConvertVectorSingleToDouble(rectangle) };
 }
 
-[[nodiscard]] static bool ValidateRun(const ShapedRun& run, StringView text, TextDirection::Enum direction)noexcept{
+[[nodiscard]] static b8 ValidateRun(const ShapedRun& run, StringView text, TextDirection::Enum direction)noexcept{
     if(
         !IsFinite(run.metrics.ascender) || !IsFinite(run.metrics.descender) || !IsFinite(run.metrics.lineGap)
         || run.metrics.ascender < 0.0f || run.metrics.descender < 0.0f || run.metrics.lineGap < 0.0f
@@ -87,7 +87,7 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
     return true;
 }
 
-[[nodiscard]] static bool IncludeInk(SIMDVectorDouble& bounds, bool& hasInk, const SIMDVectorDouble ink)noexcept{
+[[nodiscard]] static b8 IncludeInk(SIMDVectorDouble& bounds, b8& hasInk, const SIMDVectorDouble ink)noexcept{
     if((VectorDoubleMoveMask(VectorDoubleLessOrEqual(VectorDoubleSwizzle<2, 3, 2, 3>(ink), VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXY) != 0u)
         return true;
     if(!hasInk){
@@ -185,7 +185,7 @@ Expected<Rect> TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge)co
     }
     for(const TextLine& line : m_lines){
         if(byteOffset == line.byteBegin || byteOffset == line.byteEnd){
-            const bool atBegin = byteOffset == line.byteBegin;
+            const b8 atBegin = byteOffset == line.byteBegin;
             const f32 x = (atBegin == (m_direction == TextDirection::LeftToRight)) ? 0.0f : line.advance;
             return Rect{ x, line.top, 0.0f, line.height };
         }
@@ -214,7 +214,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
     result.m_glyphs.reserve(request.text.size());
     result.m_clusters.reserve(request.text.size());
     result.m_lines.reserve(1u);
-    bool hasInk = false;
+    b8 hasInk = false;
     SIMDVectorDouble inkBounds = VectorDoubleZero();
     usize byteBegin = 0u;
     while(true){

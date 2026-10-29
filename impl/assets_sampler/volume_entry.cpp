@@ -33,7 +33,7 @@ static Expected<SamplerCookEntry> ParseSamplerDocument(const Path& assetRoot, co
     return ParseSamplerCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
-static bool RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<SamplerCookEntry, Sampler, SamplerAssetCodec>(
         registry,
         SamplerBinaryPayload::s_SamplerAssetKindLabel,

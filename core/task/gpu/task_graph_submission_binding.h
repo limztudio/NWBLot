@@ -29,7 +29,7 @@ class GpuGraphSubmissionBinding final{
     friend class GpuCompiledGraph;
     friend class GpuTaskGraph;
     friend class GpuGraphSubmissionTransaction;
-    friend bool operator==(const GpuGraphSubmissionBinding& lhs, const GpuGraphSubmissionBinding& rhs)noexcept;
+    friend b8 operator==(const GpuGraphSubmissionBinding& lhs, const GpuGraphSubmissionBinding& rhs)noexcept;
 
 
 public:
@@ -42,7 +42,7 @@ private:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return m_transactionIdentity != 0u && m_resetGeneration != 0u;
     }
 
@@ -53,11 +53,11 @@ private:
 };
 
 
-[[nodiscard]] inline bool operator==(const GpuGraphSubmissionBinding& lhs, const GpuGraphSubmissionBinding& rhs)noexcept{
+[[nodiscard]] inline b8 operator==(const GpuGraphSubmissionBinding& lhs, const GpuGraphSubmissionBinding& rhs)noexcept{
     return lhs.m_transactionIdentity == rhs.m_transactionIdentity && lhs.m_resetGeneration == rhs.m_resetGeneration;
 }
 
-[[nodiscard]] inline bool operator!=(const GpuGraphSubmissionBinding& lhs, const GpuGraphSubmissionBinding& rhs)noexcept{
+[[nodiscard]] inline b8 operator!=(const GpuGraphSubmissionBinding& lhs, const GpuGraphSubmissionBinding& rhs)noexcept{
     return !(lhs == rhs);
 }
 

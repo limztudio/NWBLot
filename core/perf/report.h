@@ -20,10 +20,10 @@ NWB_PERF_BEGIN
 
 
 struct CaptureOptions{
-    bool enabled = false;
-    bool cpuTiming = false;
-    bool gpuTiming = false;
-    bool memory = false;
+    b8 enabled = false;
+    b8 cpuTiming = false;
+    b8 gpuTiming = false;
+    b8 memory = false;
 
 
 public:
@@ -47,11 +47,11 @@ public:
         return options;
     }
 
-    [[nodiscard]] bool cpuTimingActive()const noexcept{ return enabled && cpuTiming; }
+    [[nodiscard]] b8 cpuTimingActive()const noexcept{ return enabled && cpuTiming; }
 
-    [[nodiscard]] bool gpuTimingActive()const noexcept{ return enabled && gpuTiming; }
+    [[nodiscard]] b8 gpuTimingActive()const noexcept{ return enabled && gpuTiming; }
 
-    [[nodiscard]] bool memoryActive()const noexcept{ return enabled && memory; }
+    [[nodiscard]] b8 memoryActive()const noexcept{ return enabled && memory; }
 };
 
 struct SessionReport{

@@ -39,7 +39,7 @@ struct MemoryScopeId{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 
 struct MemorySnapshot{
@@ -55,7 +55,7 @@ struct MemorySnapshot{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return scopeName != s_NameNone; }
+    [[nodiscard]] b8 valid()const noexcept{ return scopeName != s_NameNone; }
 };
 
 struct MemoryDelta{
@@ -68,11 +68,11 @@ struct MemoryDelta{
     i64 reallocationCount = 0;
     i64 deallocationCount = 0;
     // False when snapshots are incomparable or any signed counter difference is unrepresentable.
-    bool hasSamples = false;
+    b8 hasSamples = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return hasSamples; }
+    [[nodiscard]] b8 valid()const noexcept{ return hasSamples; }
 };
 
 [[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(const Name& scopeName, const u64 frameIndex, const ::ArenaMemoryStats& stats, const MemorySource::Enum source = MemorySource::ExplicitScope)noexcept{
@@ -151,7 +151,7 @@ private:
         }
     };
     struct ScopeKeyEqual{
-        bool operator()(const ScopeKey& lhs, const ScopeKey& rhs)const noexcept{
+        b8 operator()(const ScopeKey& lhs, const ScopeKey& rhs)const noexcept{
             return lhs.name == rhs.name && lhs.source == rhs.source;
         }
     };
@@ -188,7 +188,7 @@ public:
 
 
 public:
-    void setEnabled(bool enabled)noexcept;
+    void setEnabled(b8 enabled)noexcept;
     void clear()noexcept;
     [[nodiscard]] Expected<MemoryScopeId> registerScope(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope);
     void recordSnapshot(MemoryScopeId scope, const ::ArenaMemoryStats& stats, u64 frameIndex)noexcept;
@@ -216,7 +216,7 @@ private:
     MemorySnapshot m_emptySnapshot;
     MemoryDelta m_emptyDelta;
     u32 m_generation = 1u;
-    bool m_enabled = false;
+    b8 m_enabled = false;
 };
 
 
@@ -232,7 +232,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_recorder != nullptr; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_recorder != nullptr; }
     [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const noexcept;
     [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const noexcept;
     [[nodiscard]] const MemoryDelta& delta(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const noexcept;

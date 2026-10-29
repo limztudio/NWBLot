@@ -38,16 +38,16 @@ void EmitSimdMatrixRowLoopSuffix(MString& out, const MStringView matRegType, con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SourceEmitter::tryEmitSimdBinaryOpReg(
+b8 SourceEmitter::tryEmitSimdBinaryOpReg(
     MString& out,
     const TokenType::Enum binaryOp,
     const Expr& lhs,
     const Expr& rhs,
     const MStringView simdType
 )const{
-    const bool isDouble = IsDoubleSimdType(simdType);
-    const bool isInt = IsIntSimdType(simdType);
-    const bool isMatrix = m_symbols.isSimdMatrixType(simdType);
+    const b8 isDouble = IsDoubleSimdType(simdType);
+    const b8 isInt = IsIntSimdType(simdType);
+    const b8 isMatrix = m_symbols.isSimdMatrixType(simdType);
 
     const auto emitBinaryRegCall = [&](const MStringView fnPrefix, const Expr& a, const Expr& b){
         out.append(fnPrefix.data(), fnPrefix.size());
@@ -237,9 +237,9 @@ void SourceEmitter::emitSimdRegExpr(
     const MStringView expectedSimdType
 )const{
     const MStringView simdType = !expr.resolvedSimdType.empty() ? expr.resolvedSimdType : expectedSimdType;
-    const bool isDouble = IsDoubleSimdType(simdType);
-    const bool isInt = IsIntSimdType(simdType);
-    const bool isMatrix = m_symbols.isSimdMatrixType(simdType);
+    const b8 isDouble = IsDoubleSimdType(simdType);
+    const b8 isInt = IsIntSimdType(simdType);
+    const b8 isMatrix = m_symbols.isSimdMatrixType(simdType);
 
     if(expr.resolvedSimdType.empty() && !expectedSimdType.empty()){
         if(isInt){
@@ -410,7 +410,7 @@ void SourceEmitter::emitSimdRegExpr(
                 return;
             }
             if(callee == "lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
-                const bool vectorT = !expr.arguments[2]->resolvedSimdType.empty();
+                const b8 vectorT = !expr.arguments[2]->resolvedSimdType.empty();
                 if(vectorT)
                     out.append(isDouble ? "::VectorDoubleLerpV(" : "::VectorLerpV(");
                 else
@@ -445,8 +445,8 @@ void SourceEmitter::emitSimdRegExpr(
             if(callee == "mul" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
                 const MStringView lhsSimd = expr.arguments[0]->resolvedSimdType;
                 const MStringView rhsSimd = expr.arguments[1]->resolvedSimdType;
-                const bool lhsIsMat = m_symbols.isSimdMatrixType(lhsSimd);
-                const bool rhsIsMat = m_symbols.isSimdMatrixType(rhsSimd);
+                const b8 lhsIsMat = m_symbols.isSimdMatrixType(lhsSimd);
+                const b8 rhsIsMat = m_symbols.isSimdMatrixType(rhsSimd);
                 if(lhsIsMat && rhsIsMat){
                     out.append(isDouble ? "::MatrixDoubleMultiply(" : "::MatrixMultiply(");
                     emitSimdRegExpr(out, *expr.arguments[0], lhsSimd);

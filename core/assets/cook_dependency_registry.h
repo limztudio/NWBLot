@@ -59,14 +59,14 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool addAssetDependency(const Name& virtualPath, const Name& expectedAssetType = s_NameNone) = 0;
+    [[nodiscard]] virtual b8 addAssetDependency(const Name& virtualPath, const Name& expectedAssetType = s_NameNone) = 0;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookDependencyExtractFunction = bool (*)(const CookDependencyItemContext& context, ICookDependencyCollector& collector);
+using CookDependencyExtractFunction = b8 (*)(const CookDependencyItemContext& context, ICookDependencyCollector& collector);
 
 struct DefaultCookEntryAssetDescriptor{
     Name virtualPath = s_NameNone;
@@ -89,13 +89,13 @@ public:
 
 
 public:
-    bool registerType(const Name& assetType, CookDependencyExtractFunction extractDependencies, const Name& categoryAssetType = s_NameNone);
-    bool registerDefaultEntryAsset(const Name& virtualPath, const Name& assetType, AStringView virtualPathText);
+    b8 registerType(const Name& assetType, CookDependencyExtractFunction extractDependencies, const Name& categoryAssetType = s_NameNone);
+    b8 registerDefaultEntryAsset(const Name& virtualPath, const Name& assetType, AStringView virtualPathText);
 
     [[nodiscard]] CookDependencyExtractFunction find(const Name& assetType)const noexcept;
-    [[nodiscard]] bool matchesAssetType(const Name& actualType, const Name& expectedType)const noexcept;
+    [[nodiscard]] b8 matchesAssetType(const Name& actualType, const Name& expectedType)const noexcept;
     [[nodiscard]] const DefaultCookEntryAssetDescriptor& defaultEntryAsset()const noexcept{ return m_defaultEntryAsset; }
-    [[nodiscard]] bool extractDependencies(const CookDependencyItemContext& context, ICookDependencyCollector& collector)const;
+    [[nodiscard]] b8 extractDependencies(const CookDependencyItemContext& context, ICookDependencyCollector& collector)const;
 
 
 private:
@@ -108,7 +108,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookDependencyRegistrationFunction = bool (*)(CookDependencyRegistry& registry);
+using CookDependencyRegistrationFunction = b8 (*)(CookDependencyRegistry& registry);
 
 class CookDependencyAutoRegistrar final{
 public:
@@ -118,7 +118,7 @@ public:
 #define NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(registrarVariable, registerFunction) \
     Core::Assets::CookDependencyAutoRegistrar registrarVariable(&registerFunction)
 
-[[nodiscard]] bool RegisterAutoCollectedCookDependencyTypes(CookDependencyRegistry& registry, ScratchArena& scratchArena);
+[[nodiscard]] b8 RegisterAutoCollectedCookDependencyTypes(CookDependencyRegistry& registry, ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

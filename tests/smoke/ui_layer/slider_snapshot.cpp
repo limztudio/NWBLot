@@ -105,7 +105,7 @@ void UiSliderSmokeScene::observeState(Impl::UiPaintContext& context){
             focusScope = static_cast<u32>(target.popup.valid());
         }
     }
-    const bool open = m_parent.isOpen();
+    const b8 open = m_parent.isOpen();
     current.values = { focusCode, m_changes, m_popupChanges, m_beforeClicks, m_afterClicks,
         static_cast<u64>(m_enabled), static_cast<u64>(m_narrowRange), static_cast<u64>(m_coarseStep),
         static_cast<u64>(open), static_cast<u64>(input.popupCount()), focusScope,
@@ -114,8 +114,8 @@ void UiSliderSmokeScene::observeState(Impl::UiPaintContext& context){
         m_externalIntents };
     current.bits = { BitCast<u64>(m_state.value()), BitCast<u64>(m_disabled.value()), BitCast<u64>(m_constant.value()), BitCast<u64>(m_popupSlider.value()) };
     const DisplayMetrics& previous = m_snapshot.display;
-    const bool displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
-    bool changed = current.values != m_snapshot.values || current.bits != m_snapshot.bits;
+    const b8 displayChanged = current.display.logicalWidth != previous.logicalWidth || current.display.logicalHeight != previous.logicalHeight || current.display.pixelScaleX != previous.pixelScaleX || current.display.pixelScaleY != previous.pixelScaleY;
+    b8 changed = current.values != m_snapshot.values || current.bits != m_snapshot.bits;
     for(usize index = 0u; index < current.rectangles.size(); ++index)
         changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
     if(m_snapshot.sequence != 0u && !changed && !displayChanged)

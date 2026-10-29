@@ -15,7 +15,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::createInstance(){
+b8 BackendContext::createInstance(){
     {
         ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
         if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
@@ -40,7 +40,7 @@ bool BackendContext::createInstance(){
     return createVulkanInstance(scratchArena);
 }
 
-bool BackendContext::createDevice(){
+b8 BackendContext::createDevice(){
     if(!IsValidHardwareRayTracingPolicy(m_deviceParams.hardwareRayTracingPolicy)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid hardware ray tracing device policy."));
         return false;
@@ -259,11 +259,11 @@ bool BackendContext::createDevice(){
     }
 
     if(m_deviceParams.hardwareRayTracingPolicy == HardwareRayTracingPolicy::Disabled){
-        const bool rayQuery = m_rhiDevice->queryFeatureSupport(Feature::RayQuery);
-        const bool rayTracingPipeline = m_rhiDevice->queryFeatureSupport(Feature::RayTracingPipeline);
-        const bool accelerationStructure = m_rhiDevice->queryFeatureSupport(Feature::RayTracingAccelStruct);
+        const b8 rayQuery = m_rhiDevice->queryFeatureSupport(Feature::RayQuery);
+        const b8 rayTracingPipeline = m_rhiDevice->queryFeatureSupport(Feature::RayTracingPipeline);
+        const b8 accelerationStructure = m_rhiDevice->queryFeatureSupport(Feature::RayTracingAccelStruct);
         const GpuDescriptorHeapLifecycleStatistics heap = m_rhiDevice->getDescriptorHeap().lifecycleStatistics();
-        const bool accelerationStructureLayout = m_rhiDevice->getDescriptorHeap().hasAccelStructLayout();
+        const b8 accelerationStructureLayout = m_rhiDevice->getDescriptorHeap().hasAccelStructLayout();
         if(rayQuery || rayTracingPipeline || accelerationStructure || heap.accelStructCapacity != 0u || accelerationStructureLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Disabled hardware ray tracing policy produced incompatible device capabilities."));
             m_rhiDevice = nullptr;
@@ -281,7 +281,7 @@ bool BackendContext::createDevice(){
     return true;
 }
 
-bool BackendContext::createSwapChain(){
+b8 BackendContext::createSwapChain(){
     ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
     if(m_swapChainLifecycleState != SwapChainLifecycleState::Ready || m_swapChain || !m_swapChainImages.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Swapchain creation requires an empty ready lifecycle."));
@@ -306,7 +306,7 @@ bool BackendContext::createSwapChain(){
     return false;
 }
 
-bool BackendContext::destroy(){
+b8 BackendContext::destroy(){
     {
         ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
         if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed)
@@ -333,7 +333,7 @@ Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(c
         return ticket;
     }
     if(m_swapChainLifecycleState == SwapChainLifecycleState::PreparedResize || m_swapChainLifecycleState == SwapChainLifecycleState::PreparedDestroy){
-        const bool preparedForRequestedKind =
+        const b8 preparedForRequestedKind =
             (m_swapChainLifecycleState == SwapChainLifecycleState::PreparedResize && kind == SwapChainTransitionKind::Resize)
             || (m_swapChainLifecycleState == SwapChainLifecycleState::PreparedDestroy && kind == SwapChainTransitionKind::Destroy)
         ;
@@ -397,7 +397,7 @@ Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(c
         return MakeUnexpected(Failure{});
     }
 
-    const bool acquireProofsComplete = waitAcquireSyncSlotsForLifecycle();
+    const b8 acquireProofsComplete = waitAcquireSyncSlotsForLifecycle();
     if(!acquireProofsComplete && (!m_rhiDevice || !m_rhiDevice->isDeviceLost())){
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove WSI acquire completion."));
@@ -452,7 +452,7 @@ Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(c
     return ticket;
 }
 
-bool BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket){
+b8 BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket){
     ScopedLock lifecycleLock(m_swapChainLifecycleMutex);
     if(!validPreparedTicket(ticket, SwapChainTransitionKind::Resize))
         return false;
@@ -483,10 +483,10 @@ bool BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket){
     return true;
 }
 
-bool BackendContext::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept{
+b8 BackendContext::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept{
     NothrowScopedLock lifecycleLock(m_swapChainLifecycleMutex);
     if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
-        const bool validNoOpTicket = ticket.valid() && ticket.owner == this && ticket.kind == SwapChainTransitionKind::Destroy && ticket.epoch == m_swapChainLifecycleEpoch;
+        const b8 validNoOpTicket = ticket.valid() && ticket.owner == this && ticket.kind == SwapChainTransitionKind::Destroy && ticket.epoch == m_swapChainLifecycleEpoch;
         ticket = {};
         return validNoOpTicket;
     }
@@ -536,7 +536,7 @@ bool BackendContext::commitDestroy(SwapChainTransitionTicket&& ticket)noexcept{
     return true;
 }
 
-bool BackendContext::createSwapChainResources(Alloc::ScratchArena& scratchArena){
+b8 BackendContext::createSwapChainResources(Alloc::ScratchArena& scratchArena){
     if(!createVulkanSwapChain(scratchArena))
         return false;
 
@@ -592,7 +592,7 @@ bool BackendContext::createSwapChainResources(Alloc::ScratchArena& scratchArena)
     return true;
 }
 
-bool BackendContext::validPreparedTicket(const SwapChainTransitionTicket& ticket, const SwapChainTransitionKind::Enum kind)const noexcept{
+b8 BackendContext::validPreparedTicket(const SwapChainTransitionTicket& ticket, const SwapChainTransitionKind::Enum kind)const noexcept{
     const SwapChainLifecycleState::Enum requiredState = kind == SwapChainTransitionKind::Resize ? SwapChainLifecycleState::PreparedResize : SwapChainLifecycleState::PreparedDestroy;
     return ticket.valid() && ticket.owner == this && ticket.kind == kind && ticket.epoch == m_swapChainLifecycleEpoch && m_swapChainLifecycleState == requiredState;
 }

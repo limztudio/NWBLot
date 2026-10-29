@@ -35,7 +35,7 @@ inline constexpr usize s_ManifoldEdgeTriangleCount = 2u;
 struct TriangleEdge{
     u64 positions = 0u;
     u32 triangle = 0u;
-    bool forward = false;
+    b8 forward = false;
 };
 
 [[nodiscard]] static u32 FindComponent(const Span<u32> parents, u32 triangle)noexcept{
@@ -58,7 +58,7 @@ static void JoinComponents(const Span<u32> parents, const Span<u8> ranks, const 
         ++ranks[firstRoot];
 }
 
-[[nodiscard]] static bool DegenerateTriangle(const SIMDVectorDouble a, const SIMDVectorDouble b, const SIMDVectorDouble c)noexcept{
+[[nodiscard]] static b8 DegenerateTriangle(const SIMDVectorDouble a, const SIMDVectorDouble b, const SIMDVectorDouble c)noexcept{
     const SIMDVectorDouble ab = VectorDoubleSubtract(b, a);
     const SIMDVectorDouble ac = VectorDoubleSubtract(c, a);
     const auto equalProducts = [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
@@ -140,7 +140,7 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
         usize end = first + 1u;
         while(end < edges.size() && edges[end].positions == edges[first].positions)
             ++end;
-        const bool validEdge = end - first == s_ManifoldEdgeTriangleCount &&edges[first].forward != edges[first + 1u].forward;
+        const b8 validEdge = end - first == s_ManifoldEdgeTriangleCount &&edges[first].forward != edges[first + 1u].forward;
         for(usize index = first; index < end; ++index){
             JoinComponents(parents, ranks, edges[first].triangle, edges[index].triangle);
             if(!validEdge)

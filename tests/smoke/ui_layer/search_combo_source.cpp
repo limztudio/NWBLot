@@ -30,7 +30,7 @@ u64 UiSearchComboSmokeSource::View::key(const u64 index)const noexcept{
     const u64 removed = m_source.removedKey();
     for(usize rangeIndex = 0u; rangeIndex < m_source.m_rangeCount; ++rangeIndex){
         const Range& range = m_source.m_ranges[rangeIndex];
-        const bool excludes = removed >= range.first && removed < range.past;
+        const b8 excludes = removed >= range.first && removed < range.past;
         const u64 count = range.past - range.first - static_cast<u64>(excludes);
         if(remaining >= count){
             remaining -= count;
@@ -52,7 +52,7 @@ Expected<u64> UiSearchComboSmokeSource::View::indexOf(const u64 keyValue)const n
     const u64 removed = m_source.removedKey();
     for(usize rangeIndex = 0u; rangeIndex < m_source.m_rangeCount; ++rangeIndex){
         const Range& range = m_source.m_ranges[rangeIndex];
-        const bool excludes = removed >= range.first && removed < range.past;
+        const b8 excludes = removed >= range.first && removed < range.past;
         if(keyValue >= range.first && keyValue < range.past){
             const u64 natural = offset + keyValue - range.first - static_cast<u64>(excludes && removed < keyValue);
             index = m_source.reversed() ? rowCount() - 1u - natural : natural;
@@ -63,7 +63,7 @@ Expected<u64> UiSearchComboSmokeSource::View::indexOf(const u64 keyValue)const n
     return MakeUnexpected(Failure{});
 }
 
-Expected<u64> UiSearchComboSmokeSource::View::findEnabled(const u64 start, const bool reverse)const noexcept{
+Expected<u64> UiSearchComboSmokeSource::View::findEnabled(const u64 start, const b8 reverse)const noexcept{
     return FindAdjacentEnabledRow(*this, start, reverse);
 }
 
@@ -74,7 +74,7 @@ StringView UiSearchComboSmokeSource::View::text(const u64 index)const noexcept{
     return m_source.m_rows.text(*fullIndex);
 }
 
-bool UiSearchComboSmokeSource::View::enabled(const u64 index)const noexcept{
+b8 UiSearchComboSmokeSource::View::enabled(const u64 index)const noexcept{
     return index < rowCount() && key(index) != 5u;
 }
 
@@ -86,15 +86,15 @@ UiSearchComboSmokeSource::UiSearchComboSmokeSource(Core::Alloc::GlobalArena& are
     : m_query(arena)
     , m_view(*this)
 {
-    const bool initialized = filter({});
+    const b8 initialized = filter({});
     NWB_FATAL_ASSERT(initialized);
 }
 
-Expected<u64> UiSearchComboSmokeSource::findEnabled(const u64 start, const bool reverse)const noexcept{
+Expected<u64> UiSearchComboSmokeSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
     return m_rows.findEnabled(start, reverse);
 }
 
-bool UiSearchComboSmokeSource::filter(const AStringView query){
+b8 UiSearchComboSmokeSource::filter(const AStringView query){
     if(query == AStringView(m_query.data(), m_query.size()) && m_cachedSourceRevision == revision())
         return true;
     if(query.empty())
@@ -108,7 +108,7 @@ bool UiSearchComboSmokeSource::filter(const AStringView query){
         addRange(1u, 100001u);
     else{
         u64 prefix = 0u;
-        bool valid = query.size() <= 6u && query.front() != '0';
+        b8 valid = query.size() <= 6u && query.front() != '0';
         for(const char character : query){
             if(character < '0' || character > '9'){
                 valid = false;

@@ -53,7 +53,7 @@ struct X11PropertyFailure{
 
 // Foreign selection requestors can disappear between Xlib calls. Check those errors without a fatal Xlib handler.
 class X11CheckedOperation final : NoCopy{
-    friend Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, Window window, Atom property, bool remove, usize maxBytes);
+    friend Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, Window window, Atom property, b8 remove, usize maxBytes);
 
 
 private:
@@ -66,7 +66,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool succeeded();
+    [[nodiscard]] b8 succeeded();
 
 
 private:
@@ -76,7 +76,7 @@ private:
 };
 
 
-[[nodiscard]] Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, Window window, Atom property, bool remove, usize maxBytes);
+[[nodiscard]] Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, Window window, Atom property, b8 remove, usize maxBytes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

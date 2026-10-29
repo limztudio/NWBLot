@@ -253,7 +253,7 @@ void CommandList::setViewportState(const ViewportState& viewportState){
     }
 }
 
-bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params){
+b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params){
     NWB_ASSERT(framebuffer.m_framebufferInfo.width != 0u && framebuffer.m_framebufferInfo.height != 0u && framebuffer.m_framebufferInfo.arraySize != 0u);
 
     const FramebufferDesc& fbDesc = framebuffer.m_desc;
@@ -289,8 +289,8 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
 
     auto depthAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
     auto stencilAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
-    bool hasDepth = false;
-    bool hasStencil = false;
+    b8 hasDepth = false;
+    b8 hasStencil = false;
 
     if(fbDesc.depthAttachment.texture){
         auto& depthTex = *MakeNotNull(fbDesc.depthAttachment.texture);
@@ -343,7 +343,7 @@ void CommandList::endDynamicRendering(){
     m_context.deviceDispatch.vkCmdEndRendering(m_currentCmdBuf->m_cmdBuf);
 }
 
-bool CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
+b8 CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
     if(!framebuffer)
         return true;
 

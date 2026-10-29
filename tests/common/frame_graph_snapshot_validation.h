@@ -24,11 +24,11 @@ namespace Tests::Smoke{
 
 
 // Normal completion accepts every task, or discards only the independent recovery task without submitting it.
-[[nodiscard]] inline bool ValidateNormalFrameSnapshotCompletion(const Core::Telemetry::FrameGraphPayload& payload, const Core::Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
+[[nodiscard]] inline b8 ValidateNormalFrameSnapshotCompletion(const Core::Telemetry::FrameGraphPayload& payload, const Core::Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
     const auto& compile = statistics.compile;
     const auto& submission = statistics.submission;
-    const bool allAccepted = submission.rejectedPacketCount == 0u && submission.rejectedTaskCount == 0u;
-    const bool unusedRecovery = submission.rejectedPacketCount == 1u && submission.rejectedTaskCount == 1u;
+    const b8 allAccepted = submission.rejectedPacketCount == 0u && submission.rejectedTaskCount == 0u;
+    const b8 unusedRecovery = submission.rejectedPacketCount == 1u && submission.rejectedTaskCount == 1u;
     const u64 discarded = unusedRecovery ? 1u : 0u;
     if(
         compile.packetCount == 0u || compile.taskCount == 0u || (!allAccepted && !unusedRecovery)
@@ -66,7 +66,7 @@ namespace Tests::Smoke{
         ++compiledTasks;
         if(node.compiledTask.planGeneration != statistics.planGeneration || node.compiledTask.packetIndex >= compile.packetCount)
             return false;
-        bool accepted = false;
+        b8 accepted = false;
         for(const auto& packet : payload.packetSubmissionStatistics)
             accepted = accepted || packet.packetIndex == node.compiledTask.packetIndex;
         if(node.name == Name("render.frame_recovery")){

@@ -21,8 +21,8 @@ NWB_IMPL_UI_BEGIN
 // Committed doubles are finite; signed zero and every finite value survive canonical text roundtrips.
 class FloatEditModel final : NoCopy{
 private:
-    [[nodiscard]] NumericEditResult commit(const FloatBounds& bounds, bool canonical);
-    [[nodiscard]] Expected<bool, ErrorCode> canonicalize(f64 value);
+    [[nodiscard]] NumericEditResult commit(const FloatBounds& bounds, b8 canonical);
+    [[nodiscard]] Expected<b8, ErrorCode> canonicalize(f64 value);
     void advanceRevision()noexcept;
 
 
@@ -35,13 +35,13 @@ public:
 
     [[nodiscard]] const EditModel& draft()const noexcept{ return m_draft; }
     [[nodiscard]] NumericParseStatus::Enum status(const FloatBounds& bounds = {})const noexcept;
-    [[nodiscard]] bool dirty()const noexcept;
+    [[nodiscard]] b8 dirty()const noexcept;
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
     // Neither the returned reference nor a view into it may outlive the synchronous edit operation.
     [[nodiscard]] EditModel& lendDraft()noexcept{ return m_draft; }
     // Nonfinite values fail atomically. Successful external replacements always fence pending input.
-    [[nodiscard]] bool setValue(f64 value);
-    [[nodiscard]] bool setDraft(AStringView text);
+    [[nodiscard]] b8 setValue(f64 value);
+    [[nodiscard]] b8 setDraft(AStringView text);
     [[nodiscard]] NumericEditResult submit(const FloatBounds& bounds = {});
     [[nodiscard]] NumericEditResult blur(const FloatBounds& bounds = {});
     [[nodiscard]] NumericEditResult cancel();

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "type_borrow.h"
+#include "type.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,8 +18,8 @@ using Void_T = void;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<bool Val>
-using BoolConstant = IntegralConstant<bool, Val>;
+template<b8 Val>
+using BoolConstant = IntegralConstant<b8, Val>;
 
 using TrueType = BoolConstant<true>;
 using FalseType = BoolConstant<false>;
@@ -65,7 +65,7 @@ template<typename T>
 struct IsCompleteType<T, EnableIf_T<IsFunction_V<T>>> : public TrueType{};
 
 template<typename T>
-inline constexpr bool IsCompleteType_V = IsCompleteType<T, void>::value;
+inline constexpr b8 IsCompleteType_V = IsCompleteType<T, void>::value;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

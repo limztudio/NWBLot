@@ -56,7 +56,7 @@ namespace __hidden_shadow_cutter_snapshot{
 void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgReceiverDrawState& drawState, const CsgFrameReceiverLookup& receiverLookup, const CsgShapeRegistry& shapeRegistry, CsgShadowSnapshot& snapshot, CsgShadowReceiverRangeGpu& range){
     const SIMDVectorSingle receiverMin = LoadFloat(receiver.worldMin);
     const SIMDVectorSingle receiverMax = LoadFloat(receiver.worldMax);
-    const bool boundsCanCull = receiver.boundsValid && AabbTests::Valid(receiverMin, receiverMax);
+    const b8 boundsCanCull = receiver.boundsValid && AabbTests::Valid(receiverMin, receiverMax);
     range.firstCutter = static_cast<u32>(snapshot.cutters.size());
     receiverLookup.forEachReceiverCutter(drawState, [&](const Core::ECS::EntityID entity, const CsgCutterComponent& cutter){
         const auto shapeType = shapeRegistry.findShapeType(cutter.shapeType);
@@ -122,7 +122,7 @@ void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgRece
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, const Span<const CsgShadowReceiverInput> receivers, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot){
+b8 BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, const Span<const CsgShadowReceiverInput> receivers, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot){
     outSnapshot.receiverRanges.clear();
     outSnapshot.cutters.clear();
     outSnapshot.identity = 0u;
@@ -139,7 +139,7 @@ bool BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, const Span<co
         return true;
     Vector<CsgReceiverDrawState, Core::Alloc::ScratchArena> drawStates(scratchArena);
     drawStates.resize(receiverCount);
-    bool hasReceiver = false;
+    b8 hasReceiver = false;
     usize cutterCapacity = 0u;
     for(usize index = 0u; index < receiverCount; ++index){
         const auto drawState = receiverLookup.resolveReceiverDrawState(receivers[index].entity, receivers[index].receiverPass);

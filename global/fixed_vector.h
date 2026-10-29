@@ -109,7 +109,7 @@ public:
 
     constexpr const_iterator cend()const noexcept{ return const_iterator(cbegin()) + m_currentSize; }
 
-    constexpr bool empty()const noexcept{ return m_currentSize == 0; }
+    constexpr b8 empty()const noexcept{ return m_currentSize == 0; }
 
     constexpr size_type size()const noexcept{ return m_currentSize; }
 

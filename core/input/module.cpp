@@ -44,7 +44,7 @@ void InputDispatcher::setMousePositionScale(f32 x, f32 y)noexcept{
     m_mousePositionScaleY = y != 0.f ? y : 1.f;
 }
 
-void InputDispatcher::windowFocusUpdate(const bool focused){
+void InputDispatcher::windowFocusUpdate(const b8 focused){
     if(!focused){
         ++m_keyboardTextPolicyEpoch;
         m_keyboardTextPolicies.fill(false);
@@ -75,8 +75,8 @@ void InputDispatcher::pointerCaptureLost(){
 }
 
 void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods){
-    const bool captureText = action == InputAction::Press || action == InputAction::Repeat;
-    const bool hasScancode = scancode >= 0 && static_cast<usize>(scancode) < m_keyboardTextPolicies.size();
+    const b8 captureText = action == InputAction::Press || action == InputAction::Repeat;
+    const b8 hasScancode = scancode >= 0 && static_cast<usize>(scancode) < m_keyboardTextPolicies.size();
     if(captureText){
         m_keyboardTextBlocked = false;
         if(hasScancode)
@@ -87,9 +87,9 @@ void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods
     const u64 policyEpoch = m_keyboardTextPolicyEpoch;
 
     dispatchToHandlers([&](IInputEventHandler& handler){
-        const bool consumed = handler.keyboardUpdate(key, scancode, action, mods);
+        const b8 consumed = handler.keyboardUpdate(key, scancode, action, mods);
         if(captureText && consumed){
-            const bool blocked = handler.blocksKeyboardText();
+            const b8 blocked = handler.blocksKeyboardText();
             if(policyEpoch == m_keyboardTextPolicyEpoch){
                 m_keyboardTextBlocked = m_windowFocused && blocked;
                 if(hasScancode)
@@ -101,7 +101,7 @@ void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods
     });
 }
 
-bool InputDispatcher::keyboardTextBlocked(const i32 scancode)const noexcept{
+b8 InputDispatcher::keyboardTextBlocked(const i32 scancode)const noexcept{
     if(scancode >= 0 && static_cast<usize>(scancode) < m_keyboardTextPolicies.size())
         return m_keyboardTextPolicies[static_cast<usize>(scancode)];
     return m_keyboardTextBlocked;
@@ -128,7 +128,7 @@ void InputDispatcher::mouseButtonUpdate(i32 button, i32 action, i32 mods){
         return;
 
     dispatchToHandlers([&](IInputEventHandler& handler){
-        const bool consumed = handler.mouseButtonUpdate(button, action, mods);
+        const b8 consumed = handler.mouseButtonUpdate(button, action, mods);
         return action != InputAction::Release && consumed;
     });
 }
@@ -170,7 +170,7 @@ void InputDispatcher::applyPendingHandlerMutations(){
     m_pendingHandlerRemovalCount = 0;
 }
 
-bool InputDispatcher::isHandlerPendingRemoval(const IInputEventHandler& handler)const noexcept{
+b8 InputDispatcher::isHandlerPendingRemoval(const IInputEventHandler& handler)const noexcept{
     for(const HandlerMutation& mutation : m_pendingHandlerMutations){
         if(mutation.handler.get() == &handler && mutation.type == HandlerMutationType::Remove)
             return true;

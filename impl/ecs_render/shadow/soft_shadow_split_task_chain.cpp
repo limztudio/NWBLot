@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SoftShadowSplitTaskChainBuilder::declare(const SoftShadowSplitTaskChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, SoftShadowSplitResourceUses& uses, SoftShadowSplitTasks& tasks){
+b8 SoftShadowSplitTaskChainBuilder::declare(const SoftShadowSplitTaskChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, SoftShadowSplitResourceUses& uses, SoftShadowSplitTasks& tasks){
     using namespace RendererTaskGraphDetail;
 
     Core::GpuTaskId shadowTraceDependency = inputs.prefixTask;
@@ -165,7 +165,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
     return result;
 }
 
-bool SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
+b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     const SoftShadowSplitTaskChainInputs& inputs,
     const SoftShadowSplitResourceUses& uses,
     const Core::GpuTaskId& shadowTraceDependency,
@@ -287,7 +287,7 @@ bool SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     return true;
 }
 
-bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
+b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     const SoftShadowSplitTaskChainInputs& inputs,
     const SoftShadowSplitResourceUses& uses,
     const Core::GpuTaskSchedulingHint& tailScheduling,

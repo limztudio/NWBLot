@@ -104,7 +104,7 @@ u64 GetRayTracingVertexComponentAlignment(const FormatInfo& formatInfo)noexcept{
     return Max<u64>(static_cast<u64>(formatInfo.bytesPerBlock) / componentCount, 1u);
 }
 
-bool ValidateAccelStructBuildInputRange(Buffer* bufferResource, u64 offset, u64 byteSize, u64 requiredAddressAlignment, TStringView operation, TStringView resourceName){
+b8 ValidateAccelStructBuildInputRange(Buffer* bufferResource, u64 offset, u64 byteSize, u64 requiredAddressAlignment, TStringView operation, TStringView resourceName){
     auto* buffer = bufferResource;
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer is invalid"), operation, resourceName);
@@ -135,7 +135,7 @@ bool ValidateAccelStructBuildInputRange(Buffer* bufferResource, u64 offset, u64 
     return true;
 }
 
-bool ValidateStridedBuildInputRange(Buffer* buffer, u64 offset, u32 elementCount, u64 stride, u64 elementSize, TStringView operation, TStringView resourceName){
+b8 ValidateStridedBuildInputRange(Buffer* buffer, u64 offset, u32 elementCount, u64 stride, u64 elementSize, TStringView operation, TStringView resourceName){
     const auto byteSizeResult = ComputeStridedRangeByteSize(elementCount, stride, elementSize);
     if(!byteSizeResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer range overflows"), operation, resourceName);
@@ -146,7 +146,7 @@ bool ValidateStridedBuildInputRange(Buffer* buffer, u64 offset, u32 elementCount
     return ValidateAccelStructBuildInputRange(buffer, offset, byteSize, 1u, operation, resourceName);
 }
 
-Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context, const RayTracingGeometryDesc& geomDesc, TStringView operation, bool requireBuffers){
+Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context, const RayTracingGeometryDesc& geomDesc, TStringView operation, b8 requireBuffers){
     BlasGeometry result;
     auto& geometry = result.geometry;
     auto& spheresData = result.spheresData;

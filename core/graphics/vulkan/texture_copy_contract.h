@@ -97,14 +97,14 @@ struct TextureCopyContract{
 
     const VkExtent3D sourceMipExtent = VulkanDetail::GetTextureMipExtent(sourceDesc, contract.sourceSlice.mipLevel);
     const VkExtent3D destinationMipExtent = VulkanDetail::GetTextureMipExtent(destinationDesc, contract.destinationSlice.mipLevel);
-    const bool sourceWholeMip = contract.sourceSlice.x == 0u
+    const b8 sourceWholeMip = contract.sourceSlice.x == 0u
         && contract.sourceSlice.y == 0u
         && contract.sourceSlice.z == 0u
         && contract.sourceSlice.width == sourceMipExtent.width
         && contract.sourceSlice.height == sourceMipExtent.height
         && contract.sourceSlice.depth == sourceMipExtent.depth
     ;
-    const bool destinationWholeMip = contract.destinationSlice.x == 0u
+    const b8 destinationWholeMip = contract.destinationSlice.x == 0u
         && contract.destinationSlice.y == 0u
         && contract.destinationSlice.z == 0u
         && contract.destinationSlice.width == destinationMipExtent.width

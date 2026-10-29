@@ -22,7 +22,7 @@ inline constexpr f32 s_TooltipDefaultDelaySeconds = 0.5f;
 inline constexpr f32 s_TooltipDefaultMaximumWidth = 320.0f;
 
 struct TooltipOptions{
-    bool enabled = true;
+    b8 enabled = true;
     PopupPlacementSide::Enum side = PopupPlacementSide::Below;
     f32 delaySeconds = s_TooltipDefaultDelaySeconds;
     f32 maximumWidth = s_TooltipDefaultMaximumWidth;
@@ -54,7 +54,7 @@ public:
 
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
 
-    [[nodiscard]] bool visible()const noexcept{ return m_visible; }
+    [[nodiscard]] b8 visible()const noexcept{ return m_visible; }
 
     [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_placement; }
 
@@ -75,15 +75,15 @@ private:
     u64 m_hoverActivityGeneration = 0u;
     TooltipOptions m_options;
     PopupPlacement m_placement;
-    bool m_hovered = false;
-    bool m_visible = false;
+    b8 m_hovered = false;
+    b8 m_visible = false;
     f64 m_elapsed = 0.0;
 };
 
 class TooltipBehavior final{
 public:
     // A new hover starts at zero; only contiguous accepted hover updates accrue time. Invalid inputs preserve the state.
-    [[nodiscard]] static bool Update(TooltipState& state, WidgetId anchor, u64 declarationGeneration, const PopupToken& popup, u64 focusLossGeneration, u64 hoverActivityGeneration, bool hovered, f32 deltaSeconds, const TooltipOptions& options)noexcept;
+    [[nodiscard]] static b8 Update(TooltipState& state, WidgetId anchor, u64 declarationGeneration, const PopupToken& popup, u64 focusLossGeneration, u64 hoverActivityGeneration, b8 hovered, f32 deltaSeconds, const TooltipOptions& options)noexcept;
 };
 
 

@@ -38,13 +38,13 @@ namespace NWB::Tests::Smoke{
 
 class StressCsgScene final{
 public:
-    [[nodiscard]] bool initialize(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* owners, usize ownerCount, bool opaqueOnly);
-    [[nodiscard]] bool update(Core::ECS::World& world, f32 yaw);
+    [[nodiscard]] b8 initialize(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* owners, usize ownerCount, b8 opaqueOnly);
+    [[nodiscard]] b8 update(Core::ECS::World& world, f32 yaw);
 
 
 private:
     Core::ECS::EntityID m_cutters[2] = {};
-    bool m_enabled = false;
+    b8 m_enabled = false;
 };
 
 

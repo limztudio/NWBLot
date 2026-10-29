@@ -35,7 +35,7 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs)noexcept{
+b8 operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs)noexcept{
     return
         lhs.instanceGeneration == rhs.instanceGeneration && lhs.inputGeneration == rhs.inputGeneration
         && lhs.revision == rhs.revision && lhs.admissionGeneration == rhs.admissionGeneration && lhs.valueBits == rhs.valueBits
@@ -62,11 +62,11 @@ SliderSnapshot SliderState::snapshot()const noexcept{
     return { .instanceGeneration = m_instanceGeneration, .inputGeneration = m_inputGeneration, .revision = m_revision, .admissionGeneration = m_admissionGeneration, .valueBits = BitCast<u64>(m_value), .press = m_press, .pressMoved = m_pressMoved };
 }
 
-bool SliderState::matches(const SliderSnapshot& value)const noexcept{
+b8 SliderState::matches(const SliderSnapshot& value)const noexcept{
     return snapshot() == value;
 }
 
-bool SliderState::setValue(const f64 value)noexcept{
+b8 SliderState::setValue(const f64 value)noexcept{
     if(!IsFinite(value))
         return false;
     advanceRevision();

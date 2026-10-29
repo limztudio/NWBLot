@@ -79,9 +79,9 @@ struct ShadowPrepareUploadChain{
     Core::GpuGraphResourceId shadowMaterialTyped;
     Core::GpuGraphResourceId sceneBvhNodes;
     Core::GpuGraphResourceId sceneBvhInstances;
-    bool currentBindlessSlotsGraphOwned = false;
-    bool shadowMaterialContextBatchGraphOwned = false;
-    bool sceneBvhBatchGraphOwned = false;
+    b8 currentBindlessSlotsGraphOwned = false;
+    b8 shadowMaterialContextBatchGraphOwned = false;
+    b8 sceneBvhBatchGraphOwned = false;
 };
 
 
@@ -100,15 +100,15 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(Core::Alloc::ScratchArena& scratchArena, const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
+    [[nodiscard]] b8 declare(Core::Alloc::ScratchArena& scratchArena, const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
 
 
 private:
     [[nodiscard]] Expected<Core::GpuGraphResourceId> importBuffer(const Core::BufferHandle& buffer, const Name& identity, AStringView label);
-    [[nodiscard]] bool declareSelectorAndContextUploads(Core::Alloc::ScratchArena& scratchArena, const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
-    [[nodiscard]] bool declareSurfelFrameConstantsUpload(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
-    [[nodiscard]] bool declareShadowMaterialContextUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
-    [[nodiscard]] bool declareSceneBvhUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
+    [[nodiscard]] b8 declareSelectorAndContextUploads(Core::Alloc::ScratchArena& scratchArena, const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
+    [[nodiscard]] b8 declareSurfelFrameConstantsUpload(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
+    [[nodiscard]] b8 declareShadowMaterialContextUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
+    [[nodiscard]] b8 declareSceneBvhUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain);
 
 
 private:

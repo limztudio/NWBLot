@@ -27,7 +27,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, EntityBinaryPayload::s_EntitySerializeContext))
         return false;
 
@@ -42,7 +42,7 @@ bool EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         componentHashes.push_back(item.name().hash());
 
     usize reserveBytes = sizeof(EntityBinaryPayload::EntityHeaderBinary);
-    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, componentHashes);
+    const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, componentHashes);
 
     outBinary.clear();
     if(canReserve)
@@ -55,7 +55,7 @@ bool EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     return Core::Assets::AppendVectorPayload(outBinary, componentHashes, EntityBinaryPayload::s_EntitySerializeContext, EntityBinaryPayload::s_ComponentsPayloadLabel);
 }
 
-bool ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, ProjectBinaryPayload::s_ProjectSerializeContext))
         return false;
 
@@ -68,7 +68,7 @@ bool ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     return ComponentAssetSerialization::WriteSinglePodPayload(header, outBinary);
 }
 
-bool SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, SceneBinaryPayload::s_SceneSerializeContext))
         return false;
 
@@ -101,7 +101,7 @@ bool SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     });
 
     usize reserveBytes = sizeof(SceneBinaryPayload::SceneHeaderBinary);
-    const bool canReserve =
+    const b8 canReserve =
         AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes)
         && AddBinaryVectorReserveBytes(reserveBytes, entityHashes)
         && AddBinaryVectorReserveBytes(reserveBytes, assetEntries)

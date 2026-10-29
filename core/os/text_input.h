@@ -60,10 +60,10 @@ inline constexpr usize s_TextInputMaxSurroundingBytes = 1024u * 1024u;
 
 
 struct TextInputCapabilities{
-    bool commit = false;
-    bool preedit = false;
-    bool surrounding = false;
-    bool deleteSurrounding = false;
+    b8 commit = false;
+    b8 preedit = false;
+    b8 surrounding = false;
+    b8 deleteSurrounding = false;
     TextInputBackend::Enum backend = TextInputBackend::Unsupported;
 };
 
@@ -73,10 +73,10 @@ struct TextInputSessionToken{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return service != 0u && generation != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return service != 0u && generation != 0u; }
 };
 
-[[nodiscard]] inline bool operator==(const TextInputSessionToken& lhs, const TextInputSessionToken& rhs)noexcept{
+[[nodiscard]] inline b8 operator==(const TextInputSessionToken& lhs, const TextInputSessionToken& rhs)noexcept{
     return lhs.service == rhs.service && lhs.generation == rhs.generation;
 }
 
@@ -105,7 +105,7 @@ struct TextInputEvent{
     usize deleteBeforeBytes = 0u;
     usize deleteAfterBytes = 0u;
     TextInputEventKind::Enum kind = TextInputEventKind::Commit;
-    bool caretVisible = true;
+    b8 caretVisible = true;
     TextInputCancelReason::Enum cancelReason = TextInputCancelReason::NativeCancelled;
     TextInputDeletionBasis::Enum deletionBasis = TextInputDeletionBasis::Caret;
 
@@ -138,16 +138,16 @@ public:
 
 public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept = 0;
-    [[nodiscard]] virtual bool isOwnerThread()const noexcept = 0;
+    [[nodiscard]] virtual b8 isOwnerThread()const noexcept = 0;
     [[nodiscard]] virtual TextInputSessionToken activeSession()const noexcept = 0;
     [[nodiscard]] virtual u64 surroundingRevision(TextInputSessionToken token)const noexcept = 0;
     [[nodiscard]] virtual Expected<TextInputSessionToken, TextInputAdmission::Enum> begin(const TextInputSessionDesc& desc) = 0;
-    [[nodiscard]] virtual bool end(TextInputSessionToken token) = 0;
+    [[nodiscard]] virtual b8 end(TextInputSessionToken token) = 0;
     [[nodiscard]] virtual TextInputAdmission::Enum updateCaret(TextInputSessionToken token, TextInputRect caret) = 0;
     [[nodiscard]] virtual TextInputAdmission::Enum updateSurrounding(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, TextInputChangeCause::Enum cause = TextInputChangeCause::Other) = 0;
     [[nodiscard]] virtual TextInputPollResult::Enum poll(TextInputSessionToken token, TextInputEvent& event) = 0;
     // Called by Frame's native focus path before ordinary input focus dispatch. Initially unfocused.
-    [[nodiscard]] virtual bool setFocused(bool focused) = 0;
+    [[nodiscard]] virtual b8 setFocused(b8 focused) = 0;
 };
 
 // The native HWND is borrowed until service destruction.

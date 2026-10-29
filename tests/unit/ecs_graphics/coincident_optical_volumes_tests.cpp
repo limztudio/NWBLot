@@ -133,7 +133,7 @@ TEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries)
     context.selection.select(candidates, context.scratch);
 
     for(usize index = 0u; index < LengthOf(candidates); ++index){
-        const bool expectedSuppressed = index == 1u || index == 3u || index == 5u;
+        const b8 expectedSuppressed = index == 1u || index == 3u || index == 5u;
         EXPECT_EQ(context.selection.isSuppressed(candidates[index].entity), expectedSuppressed) << index;
     }
 }

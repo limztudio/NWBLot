@@ -33,7 +33,7 @@ inline constexpr u32 s_ScriptTagLetterMask = 0xffu;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextLayoutStatus::Enum ValidateTextRequest(const ShapeRequest& request, bool allowLineBreaks)noexcept{
+TextLayoutStatus::Enum ValidateTextRequest(const ShapeRequest& request, b8 allowLineBreaks)noexcept{
     using namespace __hidden_ui_text_types;
     if(
         request.text.size() > s_TextMaxBytes || !IsFinite(request.fontSize) || request.fontSize < 1.0f / s_TextFixedPointScale

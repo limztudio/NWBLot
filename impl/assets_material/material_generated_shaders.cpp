@@ -94,8 +94,8 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
     }
 
     for(MaterialCookEntry& entry : materialEntries){
-        const bool hasExplicitShaders = !entry.stageShaders.empty();
-        const bool hasSurface = !entry.surfaceSource.empty();
+        const b8 hasExplicitShaders = !entry.stageShaders.empty();
+        const b8 hasSurface = !entry.surfaceSource.empty();
         if(hasExplicitShaders){
             if(hasSurface){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' declares both 'surface' and 'shaders'; declare exactly one"), ConvertString(AStringView(entry.virtualPath)));

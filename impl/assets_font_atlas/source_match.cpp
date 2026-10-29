@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font){
+b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font){
     const Core::Assets::AssetBytes& source = font.fontBytes();
     if(payload.font.name() != font.virtualPath() || payload.faceIndex != font.faceIndex() || ComputeSha256({ source.data(), source.size() }) != payload.fontSha256 || source.size() < s_FontSfntHeaderBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: font identity, source hash, or face index differs"));
@@ -29,8 +29,8 @@ bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& f
         return false;
     const FontSfntDirectory& directory = *directoryResult;
     usize matched = 0u;
-    bool hasHead = false;
-    bool hasMaxp = false;
+    b8 hasHead = false;
+    b8 hasMaxp = false;
     for(u16 index = 0u; index < directory.tableCount(); ++index){
         const auto sourceTableResult = directory.table(index);
         if(!sourceTableResult)

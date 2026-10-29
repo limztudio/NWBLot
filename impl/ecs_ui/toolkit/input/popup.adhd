@@ -21,19 +21,19 @@ class PopupToken{
     public u64 instanceGeneration = 0u;
     public u64 openGeneration = 0u;
 
-    public bool valid()const{
+    public b8 valid()const{
         return this.widget.valid() && this.declarationGeneration != 0u && this.instanceGeneration != 0u && this.openGeneration != 0u;
     }
 
-    public bool empty()const{
+    public b8 empty()const{
         return !this.widget.valid() && this.declarationGeneration == 0u && this.instanceGeneration == 0u && this.openGeneration == 0u;
     }
 
-    public bool operator==(in PopupToken rhs)const{
+    public b8 operator==(in PopupToken rhs)const{
         return this.widget == rhs.widget && this.declarationGeneration == rhs.declarationGeneration && this.instanceGeneration == rhs.instanceGeneration && this.openGeneration == rhs.openGeneration;
     }
 
-    public bool operator!=(in PopupToken rhs)const{
+    public b8 operator!=(in PopupToken rhs)const{
         return this.widget != rhs.widget || this.declarationGeneration != rhs.declarationGeneration || this.instanceGeneration != rhs.instanceGeneration || this.openGeneration != rhs.openGeneration;
     }
 }
@@ -51,11 +51,11 @@ class PopupScope{
     public Rect bounds;
     public Rect viewport;
     public u32 layer = 0u;
-    public bool modal = false;
-    public bool dismissOutside = true;
-    public bool dismissCancel = true;
-    public bool dismissFocusTraversal = false;
-    public bool autofocus = true;
+    public b8 modal = false;
+    public b8 dismissOutside = true;
+    public b8 dismissCancel = true;
+    public b8 dismissFocusTraversal = false;
+    public b8 autofocus = true;
     public PopupToken parent;
     public WidgetId focusAnchor;
     public u64 focusAnchorDeclarationGeneration = 0u;

@@ -29,7 +29,7 @@ TrackedResourceStateHistory::TrackedResourceStateHistory(Vector<TrackedCompiledR
 }
 
 
-bool TrackedResourceStateHistory::append(const TrackedCompiledResourceState& state){
+b8 TrackedResourceStateHistory::append(const TrackedCompiledResourceState& state){
     if(!validFor(m_states) || !validResource(state.resource))
         return false;
 

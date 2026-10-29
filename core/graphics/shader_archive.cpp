@@ -43,7 +43,7 @@ struct RecordHeaderDisk{
 };
 
 
-bool LessRecord(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs){
+b8 LessRecord(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs){
     const NameHash& lhsShaderHash = lhs.shaderName.hash();
     const NameHash& rhsShaderHash = rhs.shaderName.hash();
     if(lhsShaderHash != rhsShaderHash)
@@ -61,12 +61,12 @@ bool LessRecord(const ShaderArchive::Record& lhs, const ShaderArchive::Record& r
 }
 
 
-bool SameShaderVariantStage(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs)noexcept{
+b8 SameShaderVariantStage(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs)noexcept{
     return lhs.shaderName == rhs.shaderName && lhs.variantName == rhs.variantName && lhs.stage == rhs.stage;
 }
 
 
-bool ValidateRecord(const ShaderArchive::Record& record){
+b8 ValidateRecord(const ShaderArchive::Record& record){
     if(!record.shaderName || record.variantName.empty() || !record.stage){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::SerializeIndex failed: record has empty mandatory field"));
         return false;

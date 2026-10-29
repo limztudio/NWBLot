@@ -47,9 +47,9 @@ void ShaderSourceDependencies::SpliceSourceLines(AString<Alloc::ScratchArena>& i
 }
 
 void ShaderSourceDependencies::MaskSourceComments(AString<Alloc::ScratchArena>& inOutSource)noexcept{
-    bool blockComment = false;
-    bool lineComment = false;
-    bool escaped = false;
+    b8 blockComment = false;
+    b8 lineComment = false;
+    b8 escaped = false;
     char quote = '\0';
     for(usize cursor = 0u; cursor < inOutSource.size(); ++cursor){
         char& ch = inOutSource[cursor];

@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
+b8 RendererRayTracingSystem::setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
     if(!ValidateShadowQualitySettings(settings))
         return false;
     if(m_shadowQualitySettings.transparentSampling == settings.transparentSampling && m_shadowQualitySettings.receiverResolution == settings.receiverResolution)
@@ -36,7 +36,7 @@ u32 RendererRayTracingSystem::requestedShadowReceiverFactor()const noexcept{
 }
 
 u32 RendererRayTracingSystem::transparentShadowSampleCount()const noexcept{
-    const bool historyUsable = m_rayTracingState.m_softTransparentTemporalReady && softShadowTemporalHistoryUsable() && m_rayTracingState.m_transparentShadowSamplingHistory.covers(m_rayTracingState.m_softShadowSlotMask);
+    const b8 historyUsable = m_rayTracingState.m_softTransparentTemporalReady && softShadowTemporalHistoryUsable() && m_rayTracingState.m_transparentShadowSamplingHistory.covers(m_rayTracingState.m_softShadowSlotMask);
     return ResolveTransparentShadowSampleCount(m_shadowQualitySettings, historyUsable);
 }
 

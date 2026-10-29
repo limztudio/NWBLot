@@ -53,7 +53,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
     immutableUploadScheduling.allowPacketMerge = true;
     immutableUploadScheduling.mergeWithPrevious = true;
 
-    const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
+    const b8 hasOpaqueDrawItems = !opaqueDrawItems.empty();
     result.hasOpaqueDrawItems = hasOpaqueDrawItems;
     Core::GpuTaskId materialDrawUploadTask = inputs.dependencyTask;
     if(hasOpaqueDrawItems){
@@ -105,7 +105,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
 
     // Freeze every opaque CSG upload byte after preflight fixed the buffer, descriptor, and target generations.
     // Native G-buffer recording consumes these values without rebuilding either CSG uniform payload from live state.
-    const bool hasCsgFrameGpuWork = csgFrameData.hasWork();
+    const b8 hasCsgFrameGpuWork = csgFrameData.hasWork();
     result.hasCsgFrameGpuWork = hasCsgFrameGpuWork;
     Core::GpuTaskId csgFrameUploadTask = materialDrawUploadTask;
     if(hasCsgFrameGpuWork){

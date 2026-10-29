@@ -29,7 +29,7 @@ Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries){
+b8 ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries){
     return MaterialCookDetail::ValidateMaterialCookInterfaces(materialBindEntries, scratchArena, materialEntries);
 }
 
@@ -71,7 +71,7 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
 using OptionalAvboitPixelShaderSetter = void(Material::*)(const Core::Assets::AssetRef<PixelShader>&);
 
 template<OptionalAvboitPixelShaderSetter Setter>
-static bool SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry, const AStringView shaderNameText, const AStringView passLabel, Material& outMaterial){
+static b8 SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry, const AStringView shaderNameText, const AStringView passLabel, Material& outMaterial){
     static_assert(Setter != nullptr);
     if(shaderNameText.empty())
         return true;
@@ -152,7 +152,7 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
+b8 AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     return MaterialCookDetail::AssignMaterialShadingModelIdsImpl(materialEntries, scratchArena);
 }
 
@@ -239,7 +239,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExt
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     static constexpr TStringView s_SerializeFailureContext = NWB_TEXT("MaterialAssetCodec::serialize");
     if(!checkSerializeAssetType(asset, s_SerializeFailureContext))
         return false;
@@ -297,7 +297,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         return false;
     }
     usize reserveBytes = sizeof(u32);
-    bool canReserve = AddBinaryStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
+    b8 canReserve = AddBinaryStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
         && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
         && AddBinaryReserveBytes(reserveBytes, sizeof(u64))
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))

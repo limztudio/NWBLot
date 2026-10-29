@@ -66,7 +66,7 @@ Frame::Frame(void*)noexcept{
 
 Frame::~Frame()noexcept = default;
 
-bool Frame::init()noexcept{
+b8 Frame::init()noexcept{
     FrameDetail::s_ShouldExit = 0;
 
     if(!SetSignalHandler(ProcessSignal::Interrupt, FrameDetail::SignalHandler))
@@ -81,7 +81,7 @@ void Frame::showFrame(){
     NWB_TCOUT << NWB_TEXT("nwb_logserver is running in console mode. Press Ctrl+C to exit.") << static_cast<tchar>('\n');
 }
 
-bool Frame::mainLoop()noexcept{
+b8 Frame::mainLoop()noexcept{
     while(!FrameDetail::s_ShouldExit)
         SleepMS(FrameDetail::s_ConsoleUpdateIntervalMilliseconds);
 

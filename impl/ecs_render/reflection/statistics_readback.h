@@ -49,7 +49,7 @@ public:
 
 
 public:
-    void accept(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, bool hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
+    void accept(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, b8 hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
     void complete(const ReflectionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept;
 };
 
@@ -65,7 +65,7 @@ public:
 
 
 public:
-    void accept(const Core::QueueSubmissionToken& token, bool hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
+    void accept(const Core::QueueSubmissionToken& token, b8 hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
 };
 
 struct ReflectionStatisticsReadbackSnapshot{
@@ -81,7 +81,7 @@ public:
 
 public:
     void invalidateResources()noexcept;
-    [[nodiscard]] bool prepareResources();
+    [[nodiscard]] b8 prepareResources();
     void pollCompleted();
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
     [[nodiscard]] ReflectionStatisticsReadbackSnapshot snapshot(const ReflectionStatistics& metadata)const noexcept;

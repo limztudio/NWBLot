@@ -311,8 +311,8 @@ struct GpuCommandIrBuiltinTaskRecord{
     TextureUploadAspect::Enum uploadAspect = TextureUploadAspect::Automatic;
     ResourceStates::Mask finalState = ResourceStates::Unknown;
     u8 stencilClearValue = 0u;
-    bool clearDepth = false;
-    bool clearStencil = false;
+    b8 clearDepth = false;
+    b8 clearStencil = false;
 };
 
 struct GpuCommandIrDecodedRecord;
@@ -356,15 +356,15 @@ struct GpuCommandIrStreamValidationResult{
     usize byteOffset = 0u;
     u64 recordIndex = Limit<u64>::s_Max;
     GpuCommandIrStreamValidationError::Enum error = GpuCommandIrStreamValidationError::None;
-    bool complete = false;
+    b8 complete = false;
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return complete && error == GpuCommandIrStreamValidationError::None;
     }
 
-    [[nodiscard]] constexpr bool failed()const noexcept{
+    [[nodiscard]] constexpr b8 failed()const noexcept{
         return error != GpuCommandIrStreamValidationError::None;
     }
 };
@@ -507,7 +507,7 @@ struct GpuCommandIrReplayResult{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return error == GpuCommandIrReplayError::None;
     }
 };
@@ -540,15 +540,15 @@ public:
 
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
     // A non-empty capture belongs to one recording attempt, even when graph and plan survive a rejected retry.
-    [[nodiscard]] bool beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
+    [[nodiscard]] b8 beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
     [[nodiscard]] BinaryByteView commandBytes()const;
     [[nodiscard]] Expected<GpuCommandIrOwnedStream> exportOwned(GraphicsArena& arena)const;
     [[nodiscard]] GpuCommandIrCaptureCheckpoint checkpoint()const noexcept;
-    [[nodiscard]] bool rollback(const GpuCommandIrCaptureCheckpoint& target)noexcept;
-    [[nodiscard]] bool captureSetGraphicsState(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state);
+    [[nodiscard]] b8 rollback(const GpuCommandIrCaptureCheckpoint& target)noexcept;
+    [[nodiscard]] b8 captureSetGraphicsState(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state);
     // ownerArena and the descriptor owner's arena must outlive every exported stream that retains this heap binding.
     // The Device and its heap must outlive the last retained lease/artifact.
-    [[nodiscard]] bool captureBindGraphicsHeap(
+    [[nodiscard]] b8 captureBindGraphicsHeap(
         GpuDescriptorHeap& heap,
         GraphicsArena& ownerArena,
         GpuTaskId task,
@@ -558,14 +558,14 @@ public:
         const GraphicsPipelineHandle& pipelineOwner,
         const GpuCommandIrOwnerAnchor& descriptorOwner
     );
-    [[nodiscard]] bool capturePushConstants(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, BinaryByteView bytes);
-    [[nodiscard]] bool captureDraw(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const DrawArguments& arguments, bool indexed);
-    [[nodiscard]] bool captureEndRenderPass(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue);
+    [[nodiscard]] b8 capturePushConstants(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, BinaryByteView bytes);
+    [[nodiscard]] b8 captureDraw(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, const DrawArguments& arguments, b8 indexed);
+    [[nodiscard]] b8 captureEndRenderPass(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue);
     // Packet recording checkpoints before invoking task payloads and rolls back an incomplete task-recording attempt.
     // This is a recording trace; a later reader may separately correlate it with submission acceptance.
     void rollback(usize recordCount)noexcept;
 
-    [[nodiscard]] bool captureUploadBuffer(
+    [[nodiscard]] b8 captureUploadBuffer(
         GpuTaskId task,
         GpuSubmissionPacketId packet,
         GpuPhysicalQueueId queue,
@@ -575,7 +575,7 @@ public:
         BinaryByteView sourceBytes,
         ResourceStates::Mask finalState
     );
-    [[nodiscard]] bool captureUploadTexture(
+    [[nodiscard]] b8 captureUploadTexture(
         GpuTaskId task,
         GpuSubmissionPacketId packet,
         GpuPhysicalQueueId queue,
@@ -589,18 +589,18 @@ public:
         ResourceStates::Mask finalState
     );
 
-    [[nodiscard]] bool captureCopyBuffer(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId source, u64 sourceOffsetBytes, GpuGraphResourceId destination, u64 destinationOffsetBytes, u64 dataSizeBytes);
-    [[nodiscard]] bool captureCopyTexture(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId source, TextureSlice sourceSlice, GpuGraphResourceId destination, TextureSlice destinationSlice);
-    [[nodiscard]] bool captureClearBuffer(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId destination, u32 clearValue);
-    [[nodiscard]] bool captureClearTexture(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId destination, const GpuClearTextureTaskDesc& clearDesc);
-    [[nodiscard]] bool captureClearTextureRectUInt(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId destination, const GpuClearTextureRectUIntTaskDesc& clearDesc);
+    [[nodiscard]] b8 captureCopyBuffer(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId source, u64 sourceOffsetBytes, GpuGraphResourceId destination, u64 destinationOffsetBytes, u64 dataSizeBytes);
+    [[nodiscard]] b8 captureCopyTexture(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId source, TextureSlice sourceSlice, GpuGraphResourceId destination, TextureSlice destinationSlice);
+    [[nodiscard]] b8 captureClearBuffer(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId destination, u32 clearValue);
+    [[nodiscard]] b8 captureClearTexture(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId destination, const GpuClearTextureTaskDesc& clearDesc);
+    [[nodiscard]] b8 captureClearTextureRectUInt(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, GpuGraphResourceId destination, const GpuClearTextureRectUIntTaskDesc& clearDesc);
 
 
 private:
-    [[nodiscard]] bool append(const GpuCommandIrBuiltinTaskRecord& record);
-    [[nodiscard]] bool appendUpload(GpuCommandIrBuiltinTaskRecord record, BinaryByteView bytes);
-    [[nodiscard]] bool appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& record);
-    [[nodiscard]] bool appendRasterBytes(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, BinaryByteView encoded, BinaryByteView blob, const GpuCommandIrRasterStateOwner* stateOwner, const GpuCommandIrRasterHeapOwner* heapOwner);
+    [[nodiscard]] b8 append(const GpuCommandIrBuiltinTaskRecord& record);
+    [[nodiscard]] b8 appendUpload(GpuCommandIrBuiltinTaskRecord record, BinaryByteView bytes);
+    [[nodiscard]] b8 appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& record);
+    [[nodiscard]] b8 appendRasterBytes(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, BinaryByteView encoded, BinaryByteView blob, const GpuCommandIrRasterStateOwner* stateOwner, const GpuCommandIrRasterHeapOwner* heapOwner);
     void writeStreamHeader()noexcept;
     void rollbackPrefix(usize recordCount, u64 graphGeneration, u64 planGeneration, u64 attemptGeneration)noexcept;
 
@@ -614,7 +614,7 @@ private:
     GpuCommandIrRasterOwnerTable* m_rasterOwners = nullptr;
     mutable GraphicsBytes m_packedBytes;
     GraphicsArena& m_arena;
-    mutable bool m_packedDirty = true;
+    mutable b8 m_packedDirty = true;
     u64 m_ownerIdentity = 0u;
     u64 m_resetEpoch = 1u;
     u64 m_nextSerial = 1u;

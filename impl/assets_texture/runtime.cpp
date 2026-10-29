@@ -122,7 +122,7 @@ using TextureFormat::ComputeMipSliceCount;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Texture::validatePayload()const{
+b8 Texture::validatePayload()const{
     if(!checkVirtualPath(__hidden_texture_runtime::s_ValidatePayloadContext))
         return false;
     if(!IsValidTexturePayloadFormat(m_payloadFormat)){
@@ -189,7 +189,7 @@ bool Texture::validatePayload()const{
 }
 
 
-bool Texture::loadBinary(const Span<const u8> binary){
+b8 Texture::loadBinary(const Span<const u8> binary){
     if(!checkVirtualPath(__hidden_texture_runtime::s_LoadBinaryContext))
         return false;
 

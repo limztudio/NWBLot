@@ -25,7 +25,7 @@ public:
 public:
     [[nodiscard]] const Path<ArenaT>& path()const noexcept{ return m_path; }
 
-    [[nodiscard]] Expected<bool, ErrorCode> isRegularFile()const noexcept{ return IsRegularFile(m_path); }
+    [[nodiscard]] Expected<b8, ErrorCode> isRegularFile()const noexcept{ return IsRegularFile(m_path); }
 
 
 private:

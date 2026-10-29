@@ -45,7 +45,7 @@ void ListState::select(const u64 key)noexcept{
     m_ensureCursor = key != 0u;
 }
 
-bool ListState::scrollTo(const f64 offset)noexcept{
+b8 ListState::scrollTo(const f64 offset)noexcept{
     if(!m_scroll.setOffset(offset))
         return false;
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_list_state::s_NextIdentity);

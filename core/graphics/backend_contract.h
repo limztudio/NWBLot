@@ -34,19 +34,19 @@ concept BackendApi = requires(T& backend, const T& constBackend, const Common::F
     { backend.getBackBufferCount() }->SameAs<u32>;
 
     backend.setPlatformFrameParam(frameParam);
-    { backend.createInstance() }->SameAs<bool>;
-    { backend.createDevice() }->SameAs<bool>;
-    { backend.createSwapChain() }->SameAs<bool>;
-    { backend.destroy() }->SameAs<bool>;
+    { backend.createInstance() }->SameAs<b8>;
+    { backend.createDevice() }->SameAs<b8>;
+    { backend.createSwapChain() }->SameAs<b8>;
+    { backend.destroy() }->SameAs<b8>;
     { backend.prepareSwapChainTransition(SwapChainTransitionKind::Resize) }->SameAs<Expected<SwapChainTransitionTicket>>;
-    { backend.commitSwapChainResize(Move(transitionTicket)) }->SameAs<bool>;
-    { backend.commitDestroy(Move(transitionTicket)) }->SameAs<bool>;
+    { backend.commitSwapChainResize(Move(transitionTicket)) }->SameAs<b8>;
+    { backend.commitDestroy(Move(transitionTicket)) }->SameAs<b8>;
     { backend.beginFrame() }->SameAs<BeginFrameResult>;
-    { backend.abandonAcquiredFrame() }->SameAs<bool>;
+    { backend.abandonAcquiredFrame() }->SameAs<b8>;
     { backend.claimFramePresentationSignal() }->SameAs<QueueSubmissionPreSubmitHook>;
-    { backend.confirmFramePresentationSignal(presentationClaim, submissionToken) }->SameAs<bool>;
-    { backend.cancelFramePresentationSignal(presentationClaim) }->SameAs<bool>;
-    { backend.present() }->SameAs<Expected<bool, PresentationFailure>>;
+    { backend.confirmFramePresentationSignal(presentationClaim, submissionToken) }->SameAs<b8>;
+    { backend.cancelFramePresentationSignal(presentationClaim) }->SameAs<b8>;
+    { backend.present() }->SameAs<Expected<b8, PresentationFailure>>;
 };
 
 template<typename T>
@@ -89,7 +89,7 @@ concept DeviceApi = requires(
     { device.createHeap(heapDesc) }->SameAs<Expected<HeapHandle>>;
     { device.createTexture(textureDesc) }->SameAs<Expected<TextureHandle>>;
     { device.getTextureMemoryRequirements(texture) }->SameAs<Expected<MemoryRequirements>>;
-    { device.bindTextureMemory(texture, heap, u64{}) }->SameAs<bool>;
+    { device.bindTextureMemory(texture, heap, u64{}) }->SameAs<b8>;
     { device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc, {}) }->SameAs<Expected<TextureHandle>>;
     requires (!requires{ device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc); });
     { device.createStagingTexture(textureDesc, CpuAccessMode::Read) }->SameAs<Expected<StagingTextureHandle>>;
@@ -100,7 +100,7 @@ concept DeviceApi = requires(
     { device.mapBuffer(buffer, CpuAccessMode::Write) }->SameAs<Expected<void*>>;
     device.unmapBuffer(buffer);
     { device.getBufferMemoryRequirements(buffer) }->SameAs<Expected<MemoryRequirements>>;
-    { device.bindBufferMemory(buffer, heap, u64{}) }->SameAs<bool>;
+    { device.bindBufferMemory(buffer, heap, u64{}) }->SameAs<b8>;
     { device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, {}) }->SameAs<Expected<BufferHandle>>;
     requires (!requires{ device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, u32{}); });
 
@@ -111,14 +111,14 @@ concept DeviceApi = requires(
     { device.createInputLayout(vertexAttributeDescs, u32{}, shader) }->SameAs<Expected<InputLayoutHandle>>;
 
     { device.createEventQuery() }->SameAs<Expected<EventQueryHandle>>;
-    { device.setEventQuery(eventQuery, CommandQueue::Graphics) }->SameAs<bool>;
-    { device.pollEventQuery(eventQuery) }->SameAs<Expected<bool>>;
-    { device.waitEventQuery(eventQuery) }->SameAs<bool>;
+    { device.setEventQuery(eventQuery, CommandQueue::Graphics) }->SameAs<b8>;
+    { device.pollEventQuery(eventQuery) }->SameAs<Expected<b8>>;
+    { device.waitEventQuery(eventQuery) }->SameAs<b8>;
     { device.createTimerQuery() }->SameAs<Expected<TimerQueryHandle>>;
-    { device.pollTimerQuery(timerQuery) }->SameAs<Expected<bool>>;
+    { device.pollTimerQuery(timerQuery) }->SameAs<Expected<b8>>;
     { device.getTimerQueryResult(timerQuery) }->SameAs<Expected<TimerQueryResult>>;
     { device.getTimerQueryTime(timerQuery) }->SameAs<Expected<f32>>;
-    { device.resetTimerQuery(timerQuery) }->SameAs<bool>;
+    { device.resetTimerQuery(timerQuery) }->SameAs<b8>;
 
     { device.createFramebuffer(framebufferDesc) }->SameAs<Expected<FramebufferHandle>>;
     { device.createGraphicsPipeline(graphicsPipelineDesc, framebufferInfo) }->SameAs<Expected<GraphicsPipelineHandle>>;
@@ -132,7 +132,7 @@ concept DeviceApi = requires(
     { device.createAccelStruct(accelStructDesc) }->SameAs<Expected<RayTracingAccelStructHandle>>;
     { device.getAccelStructMemoryRequirements(*accelStruct) }->SameAs<Expected<MemoryRequirements>>;
     { device.getClusterOperationSizeInfo(clusterOperationParams) }->SameAs<Expected<RayTracingClusterOperationSizeInfo>>;
-    { device.bindAccelStructMemory(*accelStruct, heap, u64{}) }->SameAs<bool>;
+    { device.bindAccelStructMemory(*accelStruct, heap, u64{}) }->SameAs<b8>;
 
     { device.createCommandList(commandListParams) }->SameAs<Expected<CommandListHandle>>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, submissionDesc) }->SameAs<Expected<QueueSubmissionReceipt>>;
@@ -146,21 +146,21 @@ concept DeviceApi = requires(
     { device.getQueueTimelineSnapshot(GpuPhysicalQueueId{}) }->SameAs<Expected<GpuQueueTimelineSnapshot>>;
     { device.getCommandArenaStatistics(GpuPhysicalQueueId{}) }->SameAs<GpuCommandArenaStatistics>;
     { device.getCommandArenaWorkerStatistics(GpuPhysicalQueueId{}, u64{}, u32{}) }->SameAs<GpuCommandArenaWorkerStatistics>;
-    { device.matchesPhysicalQueueIdentity(CommandQueue::Graphics, u16{}, u16{}) }->SameAs<bool>;
-    { device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{}) }->SameAs<bool>;
-    { device.validateSubmissionWaitToken(QueueSubmissionToken{}) }->SameAs<bool>;
-    { device.isDeviceLost() }->SameAs<bool>;
-    { device.requiresRecreation() }->SameAs<bool>;
-    { device.waitForIdle() }->SameAs<bool>;
+    { device.matchesPhysicalQueueIdentity(CommandQueue::Graphics, u16{}, u16{}) }->SameAs<b8>;
+    { device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{}) }->SameAs<b8>;
+    { device.validateSubmissionWaitToken(QueueSubmissionToken{}) }->SameAs<b8>;
+    { device.isDeviceLost() }->SameAs<b8>;
+    { device.requiresRecreation() }->SameAs<b8>;
+    { device.waitForIdle() }->SameAs<b8>;
     device.runGarbageCollection();
-    { constDevice.queryFeatureSupport(Feature::Meshlets) }noexcept->SameAs<bool>;
+    { constDevice.queryFeatureSupport(Feature::Meshlets) }noexcept->SameAs<b8>;
     { constDevice.getWaveLaneCounts() }noexcept->SameAs<WaveLaneCountRange>;
     { device.queryFormatSupport(Format::RGBA8_UNORM) }->SameAs<FormatSupport::Mask>;
     { device.queryCoopVecFeatures() }->SameAs<Expected<CooperativeVectorDeviceFeatures>>;
     { device.getCoopVecMatrixSize(CooperativeVectorDataType::Float16, CooperativeVectorMatrixLayout::RowMajor, i32{}, i32{}) }->SameAs<Expected<usize>>;
     { device.getNativeQueue(ObjectType{}, CommandQueue::Graphics) }->SameAs<Object>;
     { device.getNativeQueue(ObjectType{}, GpuPhysicalQueueId{}) }->SameAs<Object>;
-    { device.isGpuCrashDiagnosticsEnabled() }->SameAs<bool>;
+    { device.isGpuCrashDiagnosticsEnabled() }->SameAs<b8>;
     { device.getGpuCrashTracker() }->SameAs<GpuCrashTracker&>;
 };
 
@@ -200,11 +200,11 @@ concept CommandListApi = requires(
 ){
     commandList.open();
     commandList.close();
-    { commandList.hasCommandBuffer() }->SameAs<bool>;
+    { commandList.hasCommandBuffer() }->SameAs<b8>;
     commandList.open(&resourceStateHandoff);
     commandList.close(&resourceStateHandoff);
     resourceStateHandoff.reset();
-    { resourceStateHandoff.valid() }->SameAs<bool>;
+    { resourceStateHandoff.valid() }->SameAs<b8>;
     commandList.clearState();
     commandList.beginRenderPass(framebuffer, renderPassParameters);
     commandList.endRenderPass();
@@ -212,9 +212,9 @@ concept CommandListApi = requires(
     commandList.clearTextureFloat(texture, subresources, color);
     commandList.clearTextureRectFloat(texture, subresources, rect, color);
     commandList.clearTextureBoxFloat(texture, subresources, box, color);
-    commandList.clearDepthStencilTexture(texture, subresources, bool{}, f32{}, bool{}, u8{});
-    commandList.clearDepthStencilTextureRect(texture, subresources, rect, bool{}, f32{}, bool{}, u8{});
-    commandList.clearDepthStencilTextureBox(texture, subresources, box, bool{}, f32{}, bool{}, u8{});
+    commandList.clearDepthStencilTexture(texture, subresources, b8{}, f32{}, b8{}, u8{});
+    commandList.clearDepthStencilTextureRect(texture, subresources, rect, b8{}, f32{}, b8{}, u8{});
+    commandList.clearDepthStencilTextureBox(texture, subresources, box, b8{}, f32{}, b8{}, u8{});
     commandList.clearTextureUInt(texture, subresources, u32{});
     commandList.clearTextureUInt(texture, subresources, uintColor);
     commandList.clearTextureRectUInt(texture, subresources, rect, u32{});
@@ -230,10 +230,10 @@ concept CommandListApi = requires(
     commandList.copyTexture(texture, textureSlice, texture, textureSlice);
     commandList.copyTexture(stagingTexture, textureSlice, texture, textureSlice);
     commandList.copyTexture(texture, textureSlice, stagingTexture, textureSlice);
-    { commandList.tryWriteTexture(texture, u32{}, u32{}, data, usize{}, usize{}) }->SameAs<bool>;
+    { commandList.tryWriteTexture(texture, u32{}, u32{}, data, usize{}, usize{}) }->SameAs<b8>;
     commandList.writeTexture(texture, u32{}, u32{}, data, usize{}, usize{});
     commandList.resolveTexture(texture, subresources, texture, subresources);
-    { commandList.tryWriteBuffer(buffer, data, usize{}, u64{}) }->SameAs<bool>;
+    { commandList.tryWriteBuffer(buffer, data, usize{}, u64{}) }->SameAs<b8>;
     commandList.writeBuffer(buffer, data, usize{}, u64{});
     commandList.clearBufferUInt(buffer, u32{});
     commandList.copyBuffer(buffer, u64{}, buffer, u64{}, u64{});
@@ -259,17 +259,17 @@ concept CommandListApi = requires(
     commandList.executeMultiIndirectClusterOperation(clusterOperationDesc);
     commandList.buildTopLevelAccelStructFromBuffer(accelStruct, &buffer, u64{}, usize{}, RayTracingAccelStructBuildFlags::None);
     commandList.convertCoopVecMatrices(coopVecConvertDescs, usize{});
-    { commandList.resetTimerQuery(timerQuery) }->SameAs<bool>;
+    { commandList.resetTimerQuery(timerQuery) }->SameAs<b8>;
     { commandList.beginTimerQuery(timerQuery) }->SameAs<Expected<TimerQueryRecordingToken>>;
-    { commandList.endTimerQuery(timerQuery, timerQueryRecordingToken) }->SameAs<bool>;
-    { commandList.endTimerQueryFromExistingClaim(timerQuery, timerQueryRecordingToken) } noexcept -> SameAs<bool>;
+    { commandList.endTimerQuery(timerQuery, timerQueryRecordingToken) }->SameAs<b8>;
+    { commandList.endTimerQueryFromExistingClaim(timerQuery, timerQueryRecordingToken) } noexcept -> SameAs<b8>;
     commandList.beginMarker(markerName);
     commandList.endMarker();
     commandList.abandonMarker();
 
     commandList.setResourceStatesForFramebuffer(framebuffer);
-    commandList.setEnableUavBarriersForTexture(&texture, bool{});
-    commandList.setEnableUavBarriersForBuffer(&buffer, bool{});
+    commandList.setEnableUavBarriersForTexture(&texture, b8{});
+    commandList.setEnableUavBarriersForBuffer(&buffer, b8{});
     commandList.beginTrackingTextureState(&texture, subresources, ResourceStates::ShaderResource);
     commandList.beginTrackingBufferState(&buffer, ResourceStates::ShaderResource);
     commandList.setTextureState(&texture, subresources, ResourceStates::ShaderResource);
@@ -303,15 +303,15 @@ concept DescribedResourceApi = requires(const T& resource){
 template<typename T>
 concept BufferApi = DescribedResourceApi<T, BufferDesc> && requires(const T& buffer){
     { buffer.getCreationDescription() }->SameAs<const BufferDesc&>;
-    { buffer.descriptionMatchesCreation() }->SameAs<bool>;
+    { buffer.descriptionMatchesCreation() }->SameAs<b8>;
     { buffer.getGpuVirtualAddress() }->SameAs<GpuVirtualAddress>;
 };
 
 template<typename T>
 concept TextureApi = DescribedResourceApi<T, TextureDesc> && requires(T& texture, TextureSubresourceSet subresources){
     { texture.getCreationDescription() }->SameAs<const TextureDesc&>;
-    { texture.descriptionMatchesCreation() }->SameAs<bool>;
-    { texture.getNativeView(ObjectType{}, Format::UNKNOWN, subresources, TextureDimension::Unknown, bool{}) }->SameAs<Expected<Object>>;
+    { texture.descriptionMatchesCreation() }->SameAs<b8>;
+    { texture.getNativeView(ObjectType{}, Format::UNKNOWN, subresources, TextureDimension::Unknown, b8{}) }->SameAs<Expected<Object>>;
 };
 
 template<typename T>
@@ -372,7 +372,7 @@ concept RayTracingPipelineApi = DescribedResourceApi<T, RayTracingPipelineDesc> 
 
 template<typename T>
 concept RayTracingShaderTableApi = requires(T& shaderTable, AStringView exportName){
-    { shaderTable.setRayGenerationShader(exportName) }->SameAs<bool>;
+    { shaderTable.setRayGenerationShader(exportName) }->SameAs<b8>;
     { shaderTable.addMissShader(exportName) }->SameAs<Expected<u32>>;
     { shaderTable.addHitGroup(exportName) }->SameAs<Expected<u32>>;
     { shaderTable.addCallableShader(exportName) }->SameAs<Expected<u32>>;

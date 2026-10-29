@@ -27,8 +27,8 @@ public:
     static void ClearMeshletFrontier(Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags)noexcept;
     static void RemoveMeshletFrontierCandidate(Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags, const usize frontierOffset)noexcept;
     static void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags);
-    [[nodiscard]] static bool AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs, MeshletDesc& meshlet, Core::Assets::AssetVector<u8>& primitiveIndices);
-    [[nodiscard]] static bool AddVisitedMeshletTriangle(
+    [[nodiscard]] static b8 AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs, MeshletDesc& meshlet, Core::Assets::AssetVector<u8>& primitiveIndices);
+    [[nodiscard]] static b8 AddVisitedMeshletTriangle(
         const Path& nwbFilePath,
         const TStringView metaKind,
         const u32 triangleIndex,
@@ -41,7 +41,7 @@ public:
         Vector<u32, Core::Alloc::ScratchArena>& frontier,
         Span<u8> frontierFlags
     );
-    [[nodiscard]] static bool GrowMeshletFromFrontier(
+    [[nodiscard]] static b8 GrowMeshletFromFrontier(
         const Path& nwbFilePath,
         const TStringView metaKind,
         const usize seedSearchOffset,
@@ -57,7 +57,7 @@ public:
         Span<u8> frontierFlags
     );
     template<typename CookEntryT>
-    static bool BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, Span<const u32> indices, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, CookEntryT& entry);
+    static b8 BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, Span<const u32> indices, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, CookEntryT& entry);
 
 
 public:
@@ -69,7 +69,7 @@ public:
 
 
 template<typename CookEntryT>
-bool MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, CookEntryT& entry){
+b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, CookEntryT& entry){
     entry.meshlets.clear();
     entry.meshletBounds.clear();
     entry.meshletPositionStreamRefs.clear();
@@ -118,7 +118,7 @@ bool MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView 
         MeshletCandidateSearch::ResetMeshletScoreState(scoreState);
     };
 
-    auto flushMeshlet = [&]() -> bool{
+    auto flushMeshlet = [&]() -> b8{
         const u32 primitiveCount = MeshletPrimitiveCount(current);
         if(primitiveCount == 0u)
             return true;

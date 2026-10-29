@@ -125,7 +125,7 @@ public:
         }
     }
 
-    bool try_lock()noexcept{
+    b8 try_lock()noexcept{
         u32 expected = s_Unlocked;
         return m_state.compare_exchange_strong(expected, s_Locked, MemoryOrder::acquire, MemoryOrder::relaxed);
     }
@@ -159,7 +159,7 @@ public:
         : m_count(1)
         {}
     // This constructor pauses immediately; do not use on hot paths.
-    AtomicBackOff(bool)noexcept
+    AtomicBackOff(b8)noexcept
         : m_count(1)
         { pause(); }
     AtomicBackOff(const AtomicBackOff&) = delete;
@@ -181,7 +181,7 @@ public:
     }
 
     // Returns false once the pause threshold saturates.
-    bool boundedPause()noexcept{
+    b8 boundedPause()noexcept{
         MachinePause(m_count);
         if(m_count < s_LoopsBeforeYield){
             m_count <<= 1;
@@ -208,14 +208,14 @@ class MallocMutex : NoCopy{
 public:
     void lock()noexcept{
         AtomicBackOff backoff;
-        bool locked = m_flag.testAndSet();
+        b8 locked = m_flag.testAndSet();
         while(locked){
             backoff.pause();
             locked = m_flag.testAndSet();
         }
     }
 
-    bool try_lock()noexcept{ return (!m_flag.testAndSet()); }
+    b8 try_lock()noexcept{ return (!m_flag.testAndSet()); }
 
     void unlock()noexcept{ m_flag.clear(MemoryOrder::release); }
 

@@ -172,8 +172,8 @@ TEST(GpuTaskGraphAnalysis, ReductionRetainsAnUnreachedMiddleTargetAfterReachingT
     Graphics::GpuTaskGraphAnalysis analysis(arena.arena);
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
     ASSERT_EQ(analysis.schedulingEdges().size(), 3u);
-    bool retainsMiddle = false;
-    bool retainsRedundantLast = false;
+    b8 retainsMiddle = false;
+    b8 retainsRedundantLast = false;
     for(const auto& edge : analysis.schedulingEdges()){
         retainsMiddle = retainsMiddle || (edge.producer == root && edge.consumer == middle);
         retainsRedundantLast = retainsRedundantLast || (edge.producer == root && edge.consumer == last);

@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const noexcept{
+b8 GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const noexcept{
     const auto packetView = ResolveLeasedPacketView(compiledGraph, planAccess, packet, lease);
     if(!packetView)
         return false;
@@ -38,7 +38,7 @@ bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(const GpuCompiledGraph
     return true;
 }
 
-bool GpuTaskGraph::abandonPacketRecordingAbortWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuPacketRecordingAbort& abort)const noexcept{
+b8 GpuTaskGraph::abandonPacketRecordingAbortWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuPacketRecordingAbort& abort)const noexcept{
     if(!abort.valid())
         return false;
 

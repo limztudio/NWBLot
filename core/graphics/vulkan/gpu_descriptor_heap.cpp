@@ -35,7 +35,7 @@ namespace __hidden_vulkan_descriptor_heap{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-    bool IsBindlessHeapAbiValid(const GpuDescriptorHeapAbi& abi)noexcept{
+    b8 IsBindlessHeapAbiValid(const GpuDescriptorHeapAbi& abi)noexcept{
         if(!abi.valid())
             return false;
         if(abi.resourceSetIndex != 0u || abi.samplerSetIndex != abi.resourceSetIndex + 1u || abi.accelStructSetIndex != abi.samplerSetIndex + 1u)
@@ -112,7 +112,7 @@ GpuDescriptorHeap::PendingRecordingLease GpuDescriptorHeap::acquirePendingRecord
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
+b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     using namespace __hidden_vulkan_descriptor_heap;
     ScopedLock lock(m_mutex);
 
@@ -157,7 +157,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GpuDescriptorHeap requires VK_EXT_descriptor_buffer and an initialized DescriptorBufferManager."));
         return failInitialization();
     }
-    bool managerGenerationCaptured = false;
+    b8 managerGenerationCaptured = false;
     {
         DescriptorBufferManager& manager = *m_context.descriptorBufferManager;
         ScopedLock lifecycleLock(manager.m_lifecycleMutex);
@@ -310,7 +310,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return failInitialization();
 
     auto& manager = *MakeNotNull(m_context.descriptorBufferManager);
-    bool managerGenerationReady = false;
+    b8 managerGenerationReady = false;
     {
         ScopedLock lifecycleLock(manager.m_lifecycleMutex);
         managerGenerationReady = manager.m_enabled && !manager.m_lifecycleTransitioning && manager.m_bindingGeneration == m_descriptorBufferGeneration;
@@ -378,7 +378,7 @@ GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()con
 }
 
 Expected<GpuDescriptorHandle> GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum descriptorClass){
-    bool hasRetiredSlots = false;
+    b8 hasRetiredSlots = false;
     {
         ScopedLock lock(m_mutex);
         hasRetiredSlots = m_initialized && descriptorClass < GpuDescriptorClass::Count && (descriptorClass != GpuDescriptorClass::AccelStruct || m_accelStructLayout) && m_retiredCount != 0u;
@@ -417,7 +417,7 @@ Expected<GpuDescriptorHandle> GpuDescriptorHeap::allocate(const GpuDescriptorCla
     if(allocator.freeCount > allocator.freeList.size())
         TerminateInvariant();
     u32 slot = Limit<u32>::s_Max;
-    bool recycled = false;
+    b8 recycled = false;
     if(allocator.freeCount != 0u){
         slot = allocator.freeList[allocator.freeCount - 1u];
         recycled = true;
@@ -633,7 +633,7 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
     m_initialized = false;
 }
 
-bool GpuDescriptorHeap::initializeStorage(const u32 resourceCapacity, const u32 samplerCapacity, const u32 accelStructCapacity){
+b8 GpuDescriptorHeap::initializeStorage(const u32 resourceCapacity, const u32 samplerCapacity, const u32 accelStructCapacity){
     const usize retirementJournalCapacity = AddSize(AddSize(resourceCapacity, samplerCapacity), accelStructCapacity);
     const usize tableBytes[] = {
         SlotAllocator::RequiredBytes(resourceCapacity),

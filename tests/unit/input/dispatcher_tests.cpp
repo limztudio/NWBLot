@@ -26,7 +26,7 @@ public:
 
 
 public:
-    virtual void windowFocusUpdate(const bool focused)override{
+    virtual void windowFocusUpdate(const b8 focused)override{
         ASSERT_LT(m_focusCount, m_focusValues.size());
         m_focusValues[m_focusCount] = focused;
         ++m_focusCount;
@@ -42,7 +42,7 @@ public:
             m_dispatcher.removeHandler(*this);
     }
 
-    virtual bool keyboardUpdate(i32, i32, const i32 action, i32)override{
+    virtual b8 keyboardUpdate(i32, i32, const i32 action, i32)override{
         if(action == InputAction::Release)
             ++m_keyReleases;
         else
@@ -57,12 +57,12 @@ public:
         return m_consumeKeys;
     }
 
-    [[nodiscard]] virtual bool blocksKeyboardText()const noexcept override{
+    [[nodiscard]] virtual b8 blocksKeyboardText()const noexcept override{
         ++m_textPolicyQueries;
         return m_blockText;
     }
 
-    virtual bool mouseButtonUpdate(i32, const i32 action, i32)noexcept override{
+    virtual b8 mouseButtonUpdate(i32, const i32 action, i32)noexcept override{
         if(action == InputAction::Release)
             ++m_buttonReleases;
         else
@@ -73,7 +73,7 @@ public:
 
 public:
     InputDispatcher& m_dispatcher;
-    Array<bool, 8u> m_focusValues{};
+    Array<b8, 8u> m_focusValues{};
     usize m_focusCount = 0u;
     usize m_keyPresses = 0u;
     usize m_keyReleases = 0u;
@@ -82,13 +82,13 @@ public:
     mutable usize m_textPolicyQueries = 0u;
     IInputEventHandler* m_removeTarget = nullptr;
     IInputEventHandler* m_addTarget = nullptr;
-    bool m_removeSelf = false;
-    bool m_loseFocusOnPress = false;
-    bool m_regainFocusOnPress = false;
-    bool m_removeSelfOnPress = false;
-    bool m_blockText = false;
-    bool m_consumeKeys = false;
-    bool m_consumeButtons = false;
+    b8 m_removeSelf = false;
+    b8 m_loseFocusOnPress = false;
+    b8 m_regainFocusOnPress = false;
+    b8 m_removeSelfOnPress = false;
+    b8 m_blockText = false;
+    b8 m_consumeKeys = false;
+    b8 m_consumeButtons = false;
 };
 
 
@@ -98,14 +98,14 @@ public:
 
 
 public:
-    ThrowingHandler(InputDispatcher& dispatcher, const bool nestedDispatch)noexcept
+    ThrowingHandler(InputDispatcher& dispatcher, const b8 nestedDispatch)noexcept
         : m_dispatcher(dispatcher)
         , m_nestedDispatch(nestedDispatch)
     {}
 
 
 public:
-    virtual bool keyboardUpdate(i32, i32, i32, i32)override{
+    virtual b8 keyboardUpdate(i32, i32, i32, i32)override{
         ++m_keyUpdates;
         if(m_nestedDispatch)
             m_dispatcher.pointerLeave();
@@ -118,7 +118,7 @@ public:
 public:
     InputDispatcher& m_dispatcher;
     usize m_keyUpdates = 0u;
-    const bool m_nestedDispatch;
+    const b8 m_nestedDispatch;
 };
 
 
@@ -351,7 +351,7 @@ TEST(InputDispatcher, RemovingTheConsumingHandlerPreservesOnlyItsQueuedCharacter
 }
 
 TEST(InputDispatcher, HandlerExceptionsRestoreDirectAndNestedDispatchDepth){
-    for(const bool nestedDispatch : { false, true }){
+    for(const b8 nestedDispatch : { false, true }){
         InputDispatcher dispatcher;
         ThrowingHandler throwing(dispatcher, nestedDispatch);
         FocusHandler added(dispatcher);

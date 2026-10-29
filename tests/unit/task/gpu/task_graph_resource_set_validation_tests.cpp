@@ -43,7 +43,7 @@ struct ResourceSetContext{
     Core::GpuTaskGraph graph{ graphArena };
     Core::Alloc::GlobalArena inputArena{ Name("tests/resource_set_validation/input") };
     Vector<Core::GpuGraphResourceId, Core::Alloc::GlobalArena> members{ inputArena };
-    bool ready = false;
+    b8 ready = false;
 
 
 public:
@@ -53,7 +53,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool fill(const usize count){
+    [[nodiscard]] b8 fill(const usize count){
         members.clear();
         members.reserve(count);
         for(usize index = 0u; index < count; ++index){

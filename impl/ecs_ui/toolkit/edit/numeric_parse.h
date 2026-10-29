@@ -44,21 +44,21 @@ struct FloatBounds{
 };
 
 struct NumericEditResult{
-    bool valid = false;
-    bool committed = false;
-    bool valueChanged = false;
-    bool cancelled = false;
-    bool rejected = false;
-    bool clamped = false;
-    bool restored = false;
+    b8 valid = false;
+    b8 committed = false;
+    b8 valueChanged = false;
+    b8 cancelled = false;
+    b8 rejected = false;
+    b8 clamped = false;
+    b8 restored = false;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateIntegerBounds(const IntegerBounds& bounds)noexcept;
-[[nodiscard]] bool ValidateFloatBounds(const FloatBounds& bounds)noexcept;
+[[nodiscard]] b8 ValidateIntegerBounds(const IntegerBounds& bounds)noexcept;
+[[nodiscard]] b8 ValidateFloatBounds(const FloatBounds& bounds)noexcept;
 // ASCII edge whitespace is ignored; incomplete and malformed drafts retain their classification.
 [[nodiscard]] Expected<i64, NumericParseStatus::Enum> ParseIntegerDraft(AStringView text)noexcept;
 [[nodiscard]] Expected<f64, NumericParseStatus::Enum> ParseFloatDraft(AStringView text)noexcept;

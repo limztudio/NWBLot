@@ -37,7 +37,7 @@ TEST(AdhdCompiler, EnforcesPrivateReflectionFilterSimdMutCallReloadsAndSafeLastU
         "class RunnerBox<T : IRunnable> {\r\n"
         "    public T item;\r\n"
         "}\r\n"
-        "bool tweakSimd(mut f32x4 v) {\r\n"
+        "b8 tweakSimd(mut f32x4 v) {\r\n"
         "    v = v + f32x4(1.0f, 1.0f, 1.0f, 1.0f);\r\n"
         "    return true;\r\n"
         "}\r\n"
@@ -48,7 +48,7 @@ TEST(AdhdCompiler, EnforcesPrivateReflectionFilterSimdMutCallReloadsAndSafeLastU
         "f32 runPipeline(mut f32x4 pos, in f32x4 offset) {\r\n"
         "    RunnerBox<JobNodeAlias> box = RunnerBox<JobNodeAlias>();\r\n"
         "    pos = pos + offset;\r\n"
-        "    const bool stepped = tweakSimd(pos);\r\n"
+        "    const b8 stepped = tweakSimd(pos);\r\n"
         "    native(mut p = pos) {\r\n"
         "        p.x += 2.0f;\r\n"
         "    }\r\n"
@@ -78,7 +78,7 @@ TEST(AdhdCompiler, EnforcesPrivateReflectionFilterSimdMutCallReloadsAndSafeLastU
     EXPECT_NE(cppView.find("return \"reflectedSecret\";"), MStringView::npos);
     EXPECT_EQ(cppView.find("return \"internalHelper\";"), MStringView::npos);
     EXPECT_NE(cppView.find("return \"reflectedHelper\";"), MStringView::npos);
-    EXPECT_NE(cppView.find("const bool stepped = tweakSimd(pos);\r\n    __adhd_simd_pos = ::LoadFloat(pos);"), MStringView::npos);
+    EXPECT_NE(cppView.find("const b8 stepped = tweakSimd(pos);\r\n    __adhd_simd_pos = ::LoadFloat(pos);"), MStringView::npos);
     EXPECT_NE(cppView.find("__adhd_simd_pos = ::LoadFloat(pos);\r\n    }"), MStringView::npos);
     EXPECT_NE(cppView.find("consumeVec(::Move(movedVec));"), MStringView::npos);
     EXPECT_NE(cppView.find("mutateVec(mutOnlyVec);"), MStringView::npos);
@@ -182,7 +182,7 @@ TEST(AdhdCompiler, SupportsGlobalConstAndContainerIndexInferenceLambdaSyncAndOrd
         "    public u8 flagByte = 1;\r\n"
         "    public f32x4 origin = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
         "    public Array<QualityLevel, 2> tiers = Array<QualityLevel, 2>();\r\n"
-        "    public FixedVector<bool, 4> toggles;\r\n"
+        "    public FixedVector<b8, 4> toggles;\r\n"
         "    public Optional<QualityLevel> overrideQuality;\r\n"
         "    public Optional<AssetRef<TextureAsset>> fallbackTex;\r\n"
         "}\r\n"
@@ -359,7 +359,7 @@ TEST(AdhdCompiler, SupportsIntegerAndMatrixSimdLoweringAndStorageSyncForNonSimdU
         "    return out;\r\n"
         "}\r\n"
         "\r\n"
-        "bool syncAndMutateLane(mut f32x4 v, in f32x4 other) {\r\n"
+        "b8 syncAndMutateLane(mut f32x4 v, in f32x4 other) {\r\n"
         "    v += other;\r\n"
         "    tweakScalar(v.x);\r\n"
         "    native(mut lx = v.x) {\r\n"

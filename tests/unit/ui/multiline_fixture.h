@@ -92,8 +92,8 @@ private:
     usize m_anchor = 0u;
     usize m_caret = 0u;
     EditTextMode::Enum m_mode = EditTextMode::SingleLine;
-    bool m_undo = false;
-    bool m_redo = false;
+    b8 m_undo = false;
+    b8 m_redo = false;
 };
 
 

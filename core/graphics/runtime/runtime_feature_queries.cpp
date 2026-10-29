@@ -34,7 +34,7 @@ constexpr u32 s_DefaultWaveLaneCount = 64u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GraphicsRuntime::queryFeatureSupport(const Feature::Enum feature)const noexcept{
+b8 GraphicsRuntime::queryFeatureSupport(const Feature::Enum feature)const noexcept{
     auto& device = getDevice();
     return device.queryFeatureSupport(feature);
 }

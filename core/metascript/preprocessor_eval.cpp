@@ -42,7 +42,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool evaluate(i64& outValue){
+    [[nodiscard]] b8 evaluate(i64& outValue){
         outValue = parseLogicalOr();
         if(m_failed)
             return false;
@@ -257,7 +257,7 @@ private:
             if(ident == "false")
                 return 0;
             if(ident == "defined"){
-                bool hasParen = false;
+                b8 hasParen = false;
                 if(m_current.type == TokenType::LeftParen){
                     hasParen = true;
                     advance();
@@ -292,7 +292,7 @@ private:
     MVector<ParseError>& m_errors;
     Token m_current;
     u32 m_line = 1;
-    bool m_failed = false;
+    b8 m_failed = false;
 };
 
 
@@ -305,13 +305,13 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MString& outExpanded){
+b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MString& outExpanded){
     using namespace __hidden_metascript_preprocessor;
 
     MString current(lineText.data(), lineText.size(), m_arena);
 
     for(u32 pass = 0u; pass < s_MaxMacroExpansionPasses; ++pass){
-        bool anyReplaced = false;
+        b8 anyReplaced = false;
         MString next(m_arena);
         next.reserve(current.size());
 
@@ -441,7 +441,7 @@ bool Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, 
                         while(b < macro.body.size() && IsAsciiIdentifierChar(macro.body[b]))
                             ++b;
                         const MStringView tokenName(macro.body.data() + pStart, b - pStart);
-                        bool matchedParam = false;
+                        b8 matchedParam = false;
                         for(usize pIdx = 0u; pIdx < macro.parameters.size(); ++pIdx){
                             if(MStringView(macro.parameters[pIdx]) == tokenName){
                                 next.append(args[pIdx].data(), args[pIdx].size());
@@ -472,7 +472,7 @@ bool Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, 
     return true;
 }
 
-bool Preprocessor::evaluateCondition(const MStringView exprText, const u32 line, bool& outResult){
+b8 Preprocessor::evaluateCondition(const MStringView exprText, const u32 line, b8& outResult){
     using namespace __hidden_metascript_preprocessor;
 
     MString expanded(m_arena);

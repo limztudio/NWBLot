@@ -62,7 +62,7 @@ class WidgetStyle{
 class WidgetOptions{
     public LayoutSize width;
     public LayoutSize height;
-    public bool enabled = true;
+    public b8 enabled = true;
 }
 
 class ContainerOptions{

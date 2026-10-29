@@ -47,7 +47,7 @@ namespace __hidden_gpu_task_graph_builtin_clears{
     return commands;
 }
 
-[[nodiscard]] static bool IncludeHookCommandRequirements(GpuTaskCommandRequirements& commands, const GpuTaskCommandRequirements& hookCommands)noexcept{
+[[nodiscard]] static b8 IncludeHookCommandRequirements(GpuTaskCommandRequirements& commands, const GpuTaskCommandRequirements& hookCommands)noexcept{
     // A hook declares one alternative clause; the additional clause belongs to the composed built-in contract.
     if(hookCommands.additionalAlternativeCapabilities != GpuQueueCapability::None)
         return false;
@@ -73,7 +73,7 @@ struct ClearBufferPayload{
 };
 
 struct ClearBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ClearBufferPayload>{
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         NWB_ASSERT(payload.destination);
         if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.destinationResource, payload.clearValue))
             return false;
@@ -92,7 +92,7 @@ struct HookedTextureClearTaskBase{
     };
 
     template<typename CaptureFn, typename IssueClearFn>
-    [[nodiscard]] static bool RecordHookedClear(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context, CaptureFn&& captureClear, IssueClearFn&& issueClear){
+    [[nodiscard]] static b8 RecordHookedClear(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context, CaptureFn&& captureClear, IssueClearFn&& issueClear){
         if(!captureClear())
             return false;
         if(payload.clearDesc.recordHooks.beforeClear && !payload.clearDesc.recordHooks.beforeClear(payload.clearDesc.recordHooks.context, commandList, context))
@@ -121,7 +121,7 @@ struct HookedTextureClearTaskBase{
 };
 
 struct ClearTextureTask : HookedTextureClearTaskBase<GpuClearTextureTaskDesc>{
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         NWB_ASSERT(payload.destination && payload.clearDesc.valueType < GpuClearTextureTaskValueType::Count);
         return RecordHookedClear(
             payload,
@@ -154,7 +154,7 @@ struct ClearTextureTask : HookedTextureClearTaskBase<GpuClearTextureTaskDesc>{
 };
 
 struct ClearTextureRectUIntTask : HookedTextureClearTaskBase<GpuClearTextureRectUIntTaskDesc>{
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         NWB_ASSERT(payload.destination);
         return RecordHookedClear(
             payload,

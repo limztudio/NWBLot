@@ -54,8 +54,8 @@ struct AssignmentRange{
     AssignmentRange outRange;
     Core::Metascript::Lexer lexer(source);
     Core::Metascript::Token token = lexer.next();
-    bool statementBegin = true;
-    bool foundAssignment = false;
+    b8 statementBegin = true;
+    b8 foundAssignment = false;
     while(token.type != Core::Metascript::TokenType::EndOfFile){
         if(token.type == Core::Metascript::TokenType::Error)
             return MakeUnexpected(Failure{});
@@ -66,7 +66,7 @@ struct AssignmentRange{
                 token = lexer.next();
                 if(token.type == Core::Metascript::TokenType::Identifier && token.text == fieldName){
                     token = lexer.next();
-                    const bool assignment = token.type == Core::Metascript::TokenType::Equal || token.type == Core::Metascript::TokenType::PlusEqual || token.type == Core::Metascript::TokenType::MinusEqual
+                    const b8 assignment = token.type == Core::Metascript::TokenType::Equal || token.type == Core::Metascript::TokenType::PlusEqual || token.type == Core::Metascript::TokenType::MinusEqual
                         || token.type == Core::Metascript::TokenType::StarEqual || token.type == Core::Metascript::TokenType::SlashEqual;
                     if(assignment){
                         // Parsed values can combine assignments, but rewriting needs one authoritative literal list.
@@ -140,7 +140,7 @@ template<typename Value, typename WriteValue>
     return Move(out).str();
 }
 
-[[nodiscard]] bool AddReplacement(TextReplacements& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, ScratchString&& replacementText){
+[[nodiscard]] b8 AddReplacement(TextReplacements& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, ScratchString&& replacementText){
     auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
     if(!replacementResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), ConvertString(variableName), ConvertString(fieldName));
@@ -152,7 +152,7 @@ template<typename Value, typename WriteValue>
     return true;
 }
 
-[[nodiscard]] bool AppendMeshReplacements(TextReplacements& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] b8 AppendMeshReplacements(TextReplacements& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena){
     if(before.positions != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList<Vec3>(after.positions, [](ScratchStringStream& out, const Vec3& value){ WriteVec3(out, value); }, scratchArena)))
         return false;
     if(before.normals != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList<Vec3>(after.normals, [](ScratchStringStream& out, const Vec3& value){ WriteVec3(out, value); }, scratchArena)))
@@ -164,7 +164,7 @@ template<typename Value, typename WriteValue>
     if(before.colors != after.colors.size() && !AddReplacement(replacements, source, variableName, s_ColorsStreamLabel, WriteValueList<Vec4>(after.colors, [](ScratchStringStream& out, const Vec4& value){ WriteVec4(out, value); }, scratchArena)))
         return false;
 
-    const bool componentRefsChanged =
+    const b8 componentRefsChanged =
         before.positions != after.positions.size()
         || before.normals != after.normals.size()
         || before.tangents != after.tangents.size()
@@ -198,7 +198,7 @@ void ApplyTextReplacements(ScratchString& inOutSource, const Span<TextReplacemen
     }
 }
 
-[[nodiscard]] bool IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
+[[nodiscard]] b8 IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
     if(value.isReference())
         return value.asReference() == variableName;
     if(value.isString())

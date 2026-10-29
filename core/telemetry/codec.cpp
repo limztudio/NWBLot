@@ -22,15 +22,15 @@ namespace __hidden_telemetry_codec{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidatePayloadPointer(const void* const payload, const usize payloadBytes)noexcept{
+[[nodiscard]] static b8 ValidatePayloadPointer(const void* const payload, const usize payloadBytes)noexcept{
     return payloadBytes == 0u || payload != nullptr;
 }
 
-[[nodiscard]] static bool ValidateEventPayload(const EventHeader& header, const void* const payload, const usize payloadBytes)noexcept{
+[[nodiscard]] static b8 ValidateEventPayload(const EventHeader& header, const void* const payload, const usize payloadBytes)noexcept{
     return ValidatePayloadPointer(payload, payloadBytes) && header.payloadBytes == payloadBytes && header.valid();
 }
 
-[[nodiscard]] static bool ValidateStreamHeader(const EncodedStreamHeader& header)noexcept{
+[[nodiscard]] static b8 ValidateStreamHeader(const EncodedStreamHeader& header)noexcept{
     return header.magic == s_StreamMagic && header.version == s_TelemetryFormatVersion && header.reserved == 0u;
 }
 
@@ -79,11 +79,11 @@ static void AppendEncodedEvent(TelemetryBytes& outBytes, const EventHeader& head
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EncodeEvent(const EventRecord& event, TelemetryBytes& outBytes){
+b8 EncodeEvent(const EventRecord& event, TelemetryBytes& outBytes){
     return EncodeEvent(event.header, event.payload.data(), event.payload.size(), outBytes);
 }
 
-bool EncodeEvent(const EventHeader& header, const void* payload, const usize payloadBytes, TelemetryBytes& outBytes){
+b8 EncodeEvent(const EventHeader& header, const void* payload, const usize payloadBytes, TelemetryBytes& outBytes){
     if(!__hidden_telemetry_codec::ValidateEventPayload(header, payload, payloadBytes))
         return false;
     usize encodedBytes = sizeof(EncodedEventHeader);
@@ -112,7 +112,7 @@ bool EncodeEvent(const EventHeader& header, const void* payload, const usize pay
     return true;
 }
 
-bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
+b8 EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
     if(!events.valid())
         return false;
 

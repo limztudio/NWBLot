@@ -174,7 +174,7 @@ TEST_F(MinidumpBoundaryTests, ShortExceptionContextCannotBorrowSurroundingFileBy
 }
 
 TEST_F(MinidumpBoundaryTests, Memory64OffsetsAndLengthsCannotTruncateIntoASmallFile){
-    for(const bool oversizedOffset : Array<bool, 2u>{ false, true }){
+    for(const b8 oversizedOffset : Array<b8, 2u>{ false, true }){
         constexpr usize s_StreamSize = offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges) + sizeof(MINIDUMP_MEMORY_DESCRIPTOR64);
         auto bytes = ExceptionDump(m_testArena.arena, Memory64ListStream, s_StreamSize);
         const usize streamOffset = bytes.size() - s_StreamSize;
@@ -206,8 +206,8 @@ TEST_F(MinidumpBoundaryTests, TruncatedModuleListCannotReadBeyondItsAdmittedStre
 TEST_F(MinidumpBoundaryTests, InvalidModuleNameLengthsAndTerminatorsCannotBorrowOtherDumpBytes){
     struct InvalidName{
         ULONG byteCount;
-        bool terminated;
-        bool includeTerminator;
+        b8 terminated;
+        b8 includeTerminator;
     };
     for(const auto& invalid : Array<InvalidName, 4u>{ InvalidName{ 1u, true, true }, InvalidName{ Limit<ULONG>::s_Max - 1u, true, true }, InvalidName{ sizeof(wchar), false, true }, InvalidName{ sizeof(wchar), false, false } }){
         constexpr usize s_StreamSize = offsetof(MINIDUMP_MODULE_LIST, Modules) + sizeof(MINIDUMP_MODULE);

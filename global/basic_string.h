@@ -218,19 +218,19 @@ inline constexpr u32 s_InvalidCodePointReplacement = static_cast<u32>('?');
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline constexpr bool IsUtf16HighSurrogate(const u32 codeUnit)noexcept{
+[[nodiscard]] inline constexpr b8 IsUtf16HighSurrogate(const u32 codeUnit)noexcept{
     return codeUnit >= BasicStringDetail::s_UnicodeHighSurrogateMin && codeUnit <= BasicStringDetail::s_UnicodeHighSurrogateMax;
 }
 
-[[nodiscard]] inline constexpr bool IsUtf16LowSurrogate(const u32 codeUnit)noexcept{
+[[nodiscard]] inline constexpr b8 IsUtf16LowSurrogate(const u32 codeUnit)noexcept{
     return codeUnit >= BasicStringDetail::s_UnicodeLowSurrogateMin && codeUnit <= BasicStringDetail::s_UnicodeLowSurrogateMax;
 }
 
-[[nodiscard]] inline constexpr bool IsUnicodeSurrogate(const u32 codePoint)noexcept{
+[[nodiscard]] inline constexpr b8 IsUnicodeSurrogate(const u32 codePoint)noexcept{
     return codePoint >= BasicStringDetail::s_UnicodeHighSurrogateMin && codePoint <= BasicStringDetail::s_UnicodeLowSurrogateMax;
 }
 
-[[nodiscard]] inline constexpr bool IsUnicodeScalarValue(const u32 codePoint)noexcept{
+[[nodiscard]] inline constexpr b8 IsUnicodeScalarValue(const u32 codePoint)noexcept{
     return codePoint <= s_UnicodeMaxCodePoint && !IsUnicodeSurrogate(codePoint);
 }
 
@@ -374,7 +374,7 @@ inline void WriteUtf8AsWString(Out& out, const AStringView src)noexcept(noexcept
 }
 
 template<typename CharT, typename Out, typename In>
-[[nodiscard]] inline constexpr bool ConvertedTextIsNothrow()noexcept{
+[[nodiscard]] inline constexpr b8 ConvertedTextIsNothrow()noexcept{
     if constexpr(CanMakeCharView<In>){
         if constexpr(IsSame_V<CharT, char>)
             return noexcept(AStringView(DeclVal<const In&>())) && noexcept(*DeclVal<Out&>()++ = DeclVal<const char&>());

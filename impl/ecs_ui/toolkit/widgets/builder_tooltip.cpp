@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, const StringView text, TooltipState& state, const TooltipOptions& options){
+b8 Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, const StringView text, TooltipState& state, const TooltipOptions& options){
     Item* anchor = annotationAnchor(anchorKey);
     if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed() || !anchor || m_scope->m_tooltips.size() >= s_LayoutMaxNodes){
         m_context.fail();
@@ -34,8 +34,8 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
     const InputRouter& input = m_context.input();
     const HitTarget* accepted = input.findTarget(anchor->state.id, anchor->state.declarationGeneration);
     const HitTarget* hovered = input.findTarget(input.hover());
-    const bool overAnchor = hovered && (hovered->id == anchor->state.id || hovered->owner == anchor->state.id);
-    const bool eligible = options.enabled && anchor->enabled && input.windowFocused() && input.pointerKnown()
+    const b8 overAnchor = hovered && (hovered->id == anchor->state.id || hovered->owner == anchor->state.id);
+    const b8 eligible = options.enabled && anchor->enabled && input.windowFocused() && input.pointerKnown()
         && !m_pointerBusy && !input.primaryDown() && !input.secondaryDown() && !input.capture().valid()
         && accepted && accepted->enabled && accepted->popup == m_context.popupToken() && overAnchor;
     if(!TooltipBehavior::Update(state, anchor->state.id, anchor->state.declarationGeneration, m_context.popupToken(), input.focusLossGeneration(), input.hoverActivityGeneration(), eligible, m_deltaSeconds, options)){
@@ -63,7 +63,7 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
     return true;
 }
 
-bool Builder::paintTooltips(){
+b8 Builder::paintTooltips(){
     for(auto& frame : m_scope->m_tooltips){
         if(!frame.state || frame.state->revision() != frame.revision || frame.anchorIndex >= m_scope->m_items.size())
             return false;
@@ -116,18 +116,18 @@ bool Builder::paintTooltips(){
         if(!placement || !m_paint.beginOverlay(frame.layer))
             return false;
         m_paint.pushClip(placement->bounds);
-        const bool backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
+        const b8 backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
         const SIMDVectorSingle inset = InsetRectValue(VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
         const Rect content{ VectorGetX(inset), VectorGetY(inset), VectorGetZ(inset), VectorGetW(inset) };
         m_paint.pushClip(content);
-        bool painted = false;
+        b8 painted = false;
         if(backgroundPainted){
             const SIMDVectorSingle textOrigin = VectorSubtract(VectorSwizzle<0, 1, 0, 1>(inset), VectorSet(textBounds->x, textBounds->y, textBounds->x, textBounds->y));
             painted = m_text.paint(m_paint, frame.text, { VectorGetX(textOrigin), VectorGetY(textOrigin) }, frame.style.text);
         }
-        const bool contentPopped = m_paint.popClip();
-        const bool popped = m_paint.popClip();
-        const bool ended = m_paint.endOverlay();
+        const b8 contentPopped = m_paint.popClip();
+        const b8 popped = m_paint.popClip();
+        const b8 ended = m_paint.endOverlay();
         if(!painted || !contentPopped || !popped || !ended || frame.state->revision() != frame.revision)
             return false;
         frame.state->m_placement = *placement;

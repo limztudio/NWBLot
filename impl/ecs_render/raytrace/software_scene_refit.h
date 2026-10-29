@@ -90,7 +90,7 @@ public:
     );
 
 private:
-    [[nodiscard]] bool ensurePipeline(RendererShaderSystem& shaderSystem);
+    [[nodiscard]] b8 ensurePipeline(RendererShaderSystem& shaderSystem);
 
 
 private:

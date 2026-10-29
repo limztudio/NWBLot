@@ -44,7 +44,7 @@ inline constexpr StringView s_CleanupCategory = "filesystem_volume_cleanup";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RemoveStagedDirectoryIfPresent(const Path& directoryPath, const AStringView operationName, const AStringView label){
+b8 RemoveStagedDirectoryIfPresent(const Path& directoryPath, const AStringView operationName, const AStringView label){
 
     if(const auto operation = RemoveAllIfExists(directoryPath); !operation){
         const ErrorCode errorCode = operation.error();
@@ -63,7 +63,7 @@ void CleanupStagedDirectoryBestEffort(const Path& directoryPath, const AStringVi
     }
 }
 
-bool EnsureEmptyStagedDirectory(const Path& directoryPath, const AStringView operationName, const AStringView label){
+b8 EnsureEmptyStagedDirectory(const Path& directoryPath, const AStringView operationName, const AStringView label){
 
     if(const auto operation = ::EnsureEmptyDirectory(directoryPath); !operation){
         const ErrorCode errorCode = operation.error();
@@ -199,7 +199,7 @@ static Expected<usize> CountExistingVolumeSegments(const Path& fromDirectory, co
     }
 }
 
-bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer){
+b8 PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer){
     if(segmentCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), ConvertString(volumeName));
         return false;
@@ -233,8 +233,8 @@ bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outpu
         }
     }
 
-    bool promoted = true;
-    bool rollbackComplete = true;
+    b8 promoted = true;
+    b8 rollbackComplete = true;
     usize movedCount = 0u;
     {
         ScopeExit rollbackMoves([&]()noexcept{
@@ -280,7 +280,7 @@ bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outpu
     return promoted;
 }
 
-bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
+b8 RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
 
     const auto outputExists = FileExists(outputDirectory);
     if(!outputExists){
@@ -342,11 +342,11 @@ bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena){
+b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena){
     return FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedPaths, outputDirectory, volumeName, segmentCount, scratchArena);
 }
 
-bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
+b8 RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
     if(!ValidVolumeName(volumeName)){
         FilesystemVolumeDetail::LogFailure(volumeName, FilesystemVolumeDetail::s_VolumeOpRemove, FilesystemVolumeDetail::s_VolumeDetailInvalidVolumeName);
         return false;

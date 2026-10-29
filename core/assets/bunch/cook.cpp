@@ -38,14 +38,14 @@ namespace Metascript = Core::Metascript;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<bool, NameTextError::Enum> IsCompositeRootType(const AStringView typeName){
+[[nodiscard]] static Expected<b8, NameTextError::Enum> IsCompositeRootType(const AStringView typeName){
     const auto name = ToName(typeName);
     if(!name)
         return MakeUnexpected(name.error());
     return *name && Core::Assets::IsCompositeRootAssetType(**name);
 }
 
-[[nodiscard]] static Expected<bool, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
+[[nodiscard]] static Expected<b8, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
     for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
         const auto isBunch = IsAssetBunchType(declaration.type);
         if(!isBunch)
@@ -211,11 +211,11 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
     return assets;
 }
 
-Expected<bool, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
+Expected<b8, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
     return __hidden_assets_bunch_cook::HasAssetBunchDeclaration(doc);
 }
 
-Expected<bool, NameTextError::Enum> HasCompositeAssetDeclarations(const Core::Metascript::Document& doc){
+Expected<b8, NameTextError::Enum> HasCompositeAssetDeclarations(const Core::Metascript::Document& doc){
     using namespace __hidden_assets_bunch_cook;
 
     const auto hasBunch = HasAssetBunchDeclaration(doc);

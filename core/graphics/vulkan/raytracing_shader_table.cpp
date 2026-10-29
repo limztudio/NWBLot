@@ -93,7 +93,7 @@ ShaderTable::ShaderTable(const VulkanContext& context, Device& device)noexcept
 
 ShaderTable::~ShaderTable()noexcept{}
 
-bool ShaderTable::setRayGenerationShader(const AStringView exportName){
+b8 ShaderTable::setRayGenerationShader(const AStringView exportName){
     constexpr TStringView s_OperationName = NWB_TEXT("set ray generation shader");
     constexpr TStringView s_RecordName = NWB_TEXT("ray generation");
     ScopedLock lock(m_mutex);
@@ -208,7 +208,7 @@ Expected<u32> ShaderTable::findGroupIndex(const AStringView exportName, const Sh
 
     u32 groupIndex = 0u;
     u32 matchingKindCount = 0u;
-    bool foundDifferentKind = false;
+    b8 foundDifferentKind = false;
     for(const ShaderTableGroupMetadata& metadata : m_pipeline->m_shaderGroups){
         if(AStringView(metadata.exportName) != exportName)
             continue;

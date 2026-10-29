@@ -15,7 +15,7 @@ NWB_PERF_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void MemoryRecorder::setEnabled(const bool enabled)noexcept{
+void MemoryRecorder::setEnabled(const b8 enabled)noexcept{
     m_enabled = enabled;
     if(m_enabled)
         return;

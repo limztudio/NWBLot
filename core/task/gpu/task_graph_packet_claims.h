@@ -44,9 +44,9 @@ public:
 
 
 private:
-    void activateWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, u64 preparationSerial, bool previousPlanWasActive)noexcept;
+    void activateWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, u64 preparationSerial, b8 previousPlanWasActive)noexcept;
     void completeWithinLock()noexcept;
-    [[nodiscard]] bool validPreparationWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, u64 preparationSerial)const noexcept;
+    [[nodiscard]] b8 validPreparationWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, u64 preparationSerial)const noexcept;
 
 
 private:
@@ -54,7 +54,7 @@ private:
     const GpuCompiledGraph* m_compiledGraph = nullptr;
     u64 m_recordingAttemptGeneration = 0u;
     u64 m_preparationSerial = 0u;
-    bool m_previousPlanWasActive = false;
+    b8 m_previousPlanWasActive = false;
 };
 
 
@@ -74,7 +74,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return m_packet.valid() && m_planGeneration != 0u && m_recordingAttemptGeneration != 0u && m_claimGeneration != 0u;
     }
 
@@ -115,10 +115,10 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return m_packet.valid() && m_planGeneration != 0u && m_recordingAttemptGeneration != 0u && m_claimGeneration != 0u;
     }
-    [[nodiscard]] bool validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet)const noexcept;
+    [[nodiscard]] b8 validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet)const noexcept;
 
 
 private:
@@ -152,8 +152,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet)const noexcept;
-    [[nodiscard]] bool validForTask(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& task)const noexcept;
+    [[nodiscard]] b8 validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet)const noexcept;
+    [[nodiscard]] b8 validForTask(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& task)const noexcept;
 
 
 private:
@@ -186,7 +186,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return m_packet.valid() && m_planGeneration != 0u && m_recordingAttemptGeneration != 0u && m_claimGeneration != 0u && m_submissionBinding.valid();
     }
 

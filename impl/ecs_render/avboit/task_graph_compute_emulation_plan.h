@@ -38,7 +38,7 @@ public:
     BufferVector outputBuffers;
     OutputLayoutVector outputLayouts;
     HeapSlotVector outputHeapSlots;
-    bool captured = false;
+    b8 captured = false;
 
 
 public:
@@ -59,7 +59,7 @@ public:
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItemsView& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(sourceDrawItems.computeDrawItems.empty())
             return false;
@@ -72,7 +72,7 @@ public:
         return captured;
     }
 
-    [[nodiscard]] bool matches()const noexcept{
+    [[nodiscard]] b8 matches()const noexcept{
         return MatchesRetainedGeneratedGeometryOutputs(captured, drawItems, outputBuffers, outputLayouts, outputHeapSlots);
     }
 };

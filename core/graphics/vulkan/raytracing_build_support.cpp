@@ -28,7 +28,7 @@ AccelStructGeometryBuildSignature MakeAccelStructGeometryBuildSignature(
     const VkAccelerationStructureGeometrySpheresDataNV* const spheresData,
     const VkAccelerationStructureGeometryLinearSweptSpheresDataNV* const lssData,
     const u32 primitiveCount,
-    const bool transformDataPresent
+    const b8 transformDataPresent
 )noexcept{
     AccelStructGeometryBuildSignature signature;
     signature.geometryType = geometry.geometryType;
@@ -67,7 +67,7 @@ AccelStructGeometryBuildSignature MakeAccelStructGeometryBuildSignature(
     return signature;
 }
 
-bool AccelStructGeometryBuildSignaturesEqual(const AccelStructGeometryBuildSignature& previous, const AccelStructGeometryBuildSignature& current)noexcept{
+b8 AccelStructGeometryBuildSignaturesEqual(const AccelStructGeometryBuildSignature& previous, const AccelStructGeometryBuildSignature& current)noexcept{
     if(previous.geometryType != current.geometryType || previous.geometryFlags != current.geometryFlags || previous.primitiveCount != current.primitiveCount)
         return false;
 
@@ -205,13 +205,13 @@ Expected<BufferSuballocation> CommandList::suballocateBuildInput(const u64 byteC
     return BufferSuballocation{ allocation->buffer, allocation->offset + inputOffset, static_cast<u8*>(allocation->cpuAddress) + inputOffset };
 }
 
-Expected<bool> CommandList::validateAccelStructBuildSignature(
+Expected<b8> CommandList::validateAccelStructBuildSignature(
     AccelStruct& accelStruct,
     const VkAccelerationStructureTypeKHR accelStructType,
     const VkBuildAccelerationStructureFlagsKHR buildFlags,
     const AccelStructGeometryBuildSignature* const geometrySignatures,
     const usize geometrySignatureCount,
-    const bool performUpdate,
+    const b8 performUpdate,
     const TStringView operationName
 ){
     const auto validatePriorSignature = [
@@ -220,7 +220,7 @@ Expected<bool> CommandList::validateAccelStructBuildSignature(
         geometrySignatures,
         geometrySignatureCount,
         operationName
-    ](const VkAccelerationStructureTypeKHR priorAccelStructType, const VkBuildAccelerationStructureFlagsKHR priorBuildFlags, const AccelStructGeometryBuildSignature* const priorGeometrySignatures, const usize priorGeometrySignatureCount) -> bool{
+    ](const VkAccelerationStructureTypeKHR priorAccelStructType, const VkBuildAccelerationStructureFlagsKHR priorBuildFlags, const AccelStructGeometryBuildSignature* const priorGeometrySignatures, const usize priorGeometrySignatureCount) -> b8{
         if((priorBuildFlags & VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR) == 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: the prior accepted build did not allow updates"), operationName);
             return false;

@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets, const f32 decayFactor){
+b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets, const f32 decayFactor){
     if(!targets.causticAccumulator || !targets.bindless.causticAccumulatorStorage.valid() || !m_rayTracingState.m_causticAccumulatorDecayPipeline)
         return false;
 
@@ -39,7 +39,7 @@ bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList
 }
 
 
-bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets& targets){
+b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets& targets){
     // Prepare heap-only software pipelines once geometry and emission targets exist.
     if(m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery))
         return true;
@@ -49,9 +49,9 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
     return prepareCausticResources(meshView, targets, false);
 }
 
-bool RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
+b8 RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
     // Software photons require a caustic light, refractor, and software scene BVH.
-    const bool hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
+    const b8 hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
     return
         !hardwareShadowSupported
         && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_swCausticCsgPipeline : m_rayTracingState.m_swCausticPipeline)
@@ -72,7 +72,7 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandLi
     const f32 temporalDecay = m_rayTracingState.m_causticTemporalDecay;
     const f32 effectiveIntensity = VectorGetX(EffectiveCausticIntensity(VectorReplicate(temporalDecay)));
     // Alternate the prepare output and its counterpart while doubling the wavelet sampling distance.
-    const bool inputIsHalfB = ((static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) + passIndex) % 2u) == 0u;
+    const b8 inputIsHalfB = ((static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) + passIndex) % 2u) == 0u;
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA{ targets.causticHistory.get(), targets.bindless.causticHistory.slot(), targets.bindless.causticHistoryStorage.slot() };
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{ targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };
     const u32 stepWidth = 1u << passIndex;

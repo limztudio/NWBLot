@@ -68,7 +68,7 @@ Expected<RayTracingHandleLayout> ComputeRayTracingHandleLayout(const VulkanConte
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device, const bool allowClusterAccelerationStructures)noexcept
+RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device, const b8 allowClusterAccelerationStructures)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(context.objectArena)
     , m_shaderGroupHandles(context.objectArena)
@@ -139,7 +139,7 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
             return MakeUnexpected(Failure{});
     }
     for(const auto& hitGroup : desc.hitGroups){
-        if(hitGroup.isProceduralPrimitive != static_cast<bool>(hitGroup.intersectionShader)){
+        if(hitGroup.isProceduralPrimitive != static_cast<b8>(hitGroup.intersectionShader)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: hit-group topology does not match its intersection shader"));
             return MakeUnexpected(Failure{});
         }
@@ -301,7 +301,7 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
     if(!configurePipelineBindings(desc.globalBindingLayouts, NWB_TEXT("ray tracing pipeline"), scratchArena, *pso))
         return MakeUnexpected(Failure{});
 
-    const bool enablePipelineFlags2 = desc.allowSpheres || desc.allowLinearSweptSpheres;
+    const b8 enablePipelineFlags2 = desc.allowSpheres || desc.allowLinearSweptSpheres;
     auto pipelineFlags2 = VulkanDetail::MakeVkStruct<VkPipelineCreateFlags2CreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO);
     pipelineFlags2.flags = VulkanDetail::ComputeRayTracingPipelineCreateFlags(desc);
 

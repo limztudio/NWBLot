@@ -99,8 +99,8 @@ private:
 public:
     f32 scalarAdvance = s_CaretGlyphAdvance;
     ShaperFault::Enum fault = ShaperFault::None;
-    bool variedHeight = false;
-    bool zeroAdvance = false;
+    b8 variedHeight = false;
+    b8 zeroAdvance = false;
 };
 
 class EditCaretFixture : public testing::Test{
@@ -120,7 +120,7 @@ protected:
         return m_builder.layout({ .text = text, .fontSize = 16.0f, .direction = direction });
     }
 
-    [[nodiscard]] bool identityMapping(const StringView text){
+    [[nodiscard]] b8 identityMapping(const StringView text){
         auto boundaries = GraphemeSegmentation::Build(m_arena, text);
         if(!boundaries)
             return false;
@@ -132,12 +132,12 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool adopt(const StringView text, const usize committedBytes, const EditTextMode::Enum mode = EditTextMode::Multiline){
+    [[nodiscard]] b8 adopt(const StringView text, const usize committedBytes, const EditTextMode::Enum mode = EditTextMode::Multiline){
         auto candidate = layout(text);
         return candidate && m_geometry.adoptLayout(Move(*candidate), text, m_mapping, committedBytes, mode);
     }
 
-    [[nodiscard]] bool adoptText(const StringView text, const EditTextMode::Enum mode = EditTextMode::Multiline){
+    [[nodiscard]] b8 adoptText(const StringView text, const EditTextMode::Enum mode = EditTextMode::Multiline){
         return identityMapping(text) && adopt(text, text.size(), mode);
     }
 

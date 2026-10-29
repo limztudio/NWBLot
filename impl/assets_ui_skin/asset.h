@@ -89,9 +89,9 @@ public:
 
 
 public:
-    bool loadBinary(Span<const u8> binary);
-    [[nodiscard]] bool validatePayload()const;
-    [[nodiscard]] bool validateTexture(const Texture& texture)const;
+    b8 loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload()const;
+    [[nodiscard]] b8 validateTexture(const Texture& texture)const;
 
     void setAtlas(Core::Assets::AssetRef<Texture> texture, u32 width, u32 height, f32 referenceDensity, RegionVector&& regions);
     void setPalette(const UiSkinPalette& palette)noexcept{ m_palette = palette; }

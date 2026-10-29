@@ -129,7 +129,7 @@ TEST(SkeletonPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndInva
     const ArenaMemoryStats warm = inputs.scratchArena.memoryStats();
     for(usize iteration = 0u; iteration < 16u; ++iteration){
         Skeleton::JointIndexMap jointIndices(inputs.skeleton.jointIndices());
-        const bool valid = iteration % s_ExpectedDualCount == 0u;
+        const b8 valid = iteration % s_ExpectedDualCount == 0u;
         jointIndices.at(Name(s_Left)) = valid ? 1u : 0u;
         inputs.skeleton.setJoints(Skeleton::JointVector(inputs.skeleton.joints()), Move(jointIndices));
         EXPECT_EQ(inputs.skeleton.validatePayload(inputs.scratchArena), valid);

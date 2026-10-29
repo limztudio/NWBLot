@@ -76,11 +76,11 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, u64 plannedFileCount);
-[[nodiscard]] bool AppendObjectFilePayloadToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Path& objectPath, const AssetVolumePayloadIdentity& identity);
-[[nodiscard]] bool AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const void* payloadBytes, usize payloadByteCount, u64 cookKeyHash = 0u);
+[[nodiscard]] b8 ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, u64 plannedFileCount);
+[[nodiscard]] b8 AppendObjectFilePayloadToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Path& objectPath, const AssetVolumePayloadIdentity& identity);
+[[nodiscard]] b8 AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const void* payloadBytes, usize payloadByteCount, u64 cookKeyHash = 0u);
 
-[[nodiscard]] inline bool AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Span<const u8> payloadBytes, const u64 cookKeyHash = 0u){
+[[nodiscard]] inline b8 AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Span<const u8> payloadBytes, const u64 cookKeyHash = 0u){
     return AppendPayloadBytesToManifest(manifest, virtualPath, payloadBytes.empty() ? nullptr : payloadBytes.data(), payloadBytes.size(), cookKeyHash);
 }
 

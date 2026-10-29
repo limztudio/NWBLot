@@ -31,10 +31,10 @@ public:
     [[nodiscard]] virtual u64 key(u64 index)const = 0;
     [[nodiscard]] virtual Expected<u64> indexOf(u64 key)const = 0;
     // Inclusive search from start in the requested direction; failure means no enabled row remains.
-    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const = 0;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const = 0;
     // Text may be temporary until the next source call; the list shapes/copies it before that call.
     [[nodiscard]] virtual StringView text(u64 index)const = 0;
-    [[nodiscard]] virtual bool enabled(u64 index)const = 0;
+    [[nodiscard]] virtual b8 enabled(u64 index)const = 0;
 };
 
 inline constexpr f32 s_ListDefaultHeight = 240.0f;
@@ -46,15 +46,15 @@ struct ListOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
     LayoutSize height = { LayoutSizePolicy::Fixed, s_ListDefaultHeight };
     f32 wheelRows = s_StyleScrollWheelStep;
-    bool enabled = true;
-    bool selectOnNavigate = true;
+    b8 enabled = true;
+    b8 selectOnNavigate = true;
 };
 
 struct ListResult{
-    bool valid = false;
-    bool selectionChanged = false;
-    bool activated = false;
-    bool focused = false;
+    b8 valid = false;
+    b8 selectionChanged = false;
+    b8 activated = false;
+    b8 focused = false;
 };
 
 
@@ -83,7 +83,7 @@ private:
 
 
     public:
-        [[nodiscard]] bool operator==(const MeasureKey&)const noexcept = default;
+        [[nodiscard]] b8 operator==(const MeasureKey&)const noexcept = default;
     };
 
 
@@ -110,7 +110,7 @@ public:
     [[nodiscard]] const ScrollPlacement& placement()const noexcept{ return m_placement; }
     // Explicit application changes start a new input lifetime even when the value is unchanged.
     void select(u64 key)noexcept;
-    [[nodiscard]] bool scrollTo(f64 offset)noexcept;
+    [[nodiscard]] b8 scrollTo(f64 offset)noexcept;
 
 
 private:
@@ -127,13 +127,13 @@ private:
     u64 m_cursor = 0u;
     u64 m_sourceGeneration = 0u;
     u64 m_sourceRevision = 0u;
-    bool m_ensureCursor = false;
+    b8 m_ensureCursor = false;
 };
 
 class ListBehavior final{
 public:
-    [[nodiscard]] static bool Reconcile(ListState& state, const IListDataSource& source);
-    [[nodiscard]] static bool Apply(ListState& state, ListResult& result, const IListDataSource& source, const ListOptions& options, const ControlAction& action);
+    [[nodiscard]] static b8 Reconcile(ListState& state, const IListDataSource& source);
+    [[nodiscard]] static b8 Apply(ListState& state, ListResult& result, const IListDataSource& source, const ListOptions& options, const ControlAction& action);
 };
 
 

@@ -36,7 +36,7 @@ public:
         return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
     }
 
-    [[nodiscard]] bool deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
+    [[nodiscard]] b8 deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
         return completeNativeRequest(token, status, text);
     }
 
@@ -222,7 +222,7 @@ TEST(UiEditClipboard, OwnerThreadViolationCannotPollApplyOrCancelAHostRequest){
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
     UiEditClipboardStatus::Enum requestStatus = UiEditClipboardStatus::Idle;
     UiEditClipboardStatus::Enum drainStatus = UiEditClipboardStatus::Idle;
-    bool cancelled = true;
+    b8 cancelled = true;
     Thread other([&]()noexcept{
         requestStatus = controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status;
         drainStatus = controller.drain(s_Owner, model).status;

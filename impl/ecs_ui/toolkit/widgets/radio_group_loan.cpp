@@ -14,11 +14,11 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept{
+b8 Builder::radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept{
     return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot);
 }
 
-bool Builder::radioGroupMatches(const RadioGroupFrame& frame)const{
+b8 Builder::radioGroupMatches(const RadioGroupFrame& frame)const{
     constexpr u32 s_StampFencePassCount = 2u;
     // Repeat the stamp fence to catch a one-shot metadata mutation from the final count callback.
     for(u32 pass = 0u; pass < s_StampFencePassCount; ++pass){

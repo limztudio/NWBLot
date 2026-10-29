@@ -54,7 +54,7 @@ static constexpr AStringView s_NativeCleanupFailedFormat = "Font native cleanup 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidateSfntDirectory(const Span<const u8> bytes)noexcept{
+[[nodiscard]] static b8 ValidateSfntDirectory(const Span<const u8> bytes)noexcept{
     const auto directoryResult = FontSfntDirectory::Read(bytes);
     if(!directoryResult)
         return false;
@@ -64,14 +64,14 @@ static constexpr AStringView s_NativeCleanupFailedFormat = "Font native cleanup 
         return false;
 
     u32 tags[s_FontMaxTableCount];
-    bool hasHead = false;
-    bool hasCmap = false;
-    bool hasMaxp = false;
-    bool hasHhea = false;
-    bool hasHmtx = false;
-    bool hasGlyf = false;
-    bool hasLoca = false;
-    bool hasCff = false;
+    b8 hasHead = false;
+    b8 hasCmap = false;
+    b8 hasMaxp = false;
+    b8 hasHhea = false;
+    b8 hasHmtx = false;
+    b8 hasGlyf = false;
+    b8 hasLoca = false;
+    b8 hasCff = false;
     for(u16 index = 0u; index < directory.tableCount(); ++index){
         const auto tableResult = directory.table(index);
         if(!tableResult || tableResult->offset < directory.directoryBytes())
@@ -196,7 +196,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateFontSource(const Core::Assets::AssetBytes& bytes, const u32 faceIndex){
+b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, const u32 faceIndex){
     if(faceIndex != 0u || bytes.empty() || bytes.size() > s_FontMaxSourceBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: face index must be zero and source size must be 1..{} bytes"), s_FontMaxSourceBytes);
         return false;

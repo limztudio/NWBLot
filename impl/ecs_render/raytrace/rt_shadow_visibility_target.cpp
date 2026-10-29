@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
+b8 RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
     if(targets.shadowReceiverFactor != s_ShadowReceiverFactorHalf && targets.shadowReceiverFactor != s_ShadowReceiverFactorQuarter)
         return false;
     // Deferred lighting always samples this per-slot transmittance target.
@@ -238,7 +238,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     // All resolve allocations belong to this target generation. Verify both history selectors once, before publication.
     constexpr u32 s_HistorySelectorCount = 2u;
     for(u32 selector = 0u; selector < s_HistorySelectorCount; ++selector){
-        const bool frontIsA = selector != 0u;
+        const b8 frontIsA = selector != 0u;
         const SoftShadowCombinedWaveletInputs waveletInputs{
             .opaqueHistory = frontIsA ? targets.shadowHistB.get() : targets.shadowHistA.get(),
             .opaqueMoments = frontIsA ? targets.shadowMomentsB.get() : targets.shadowMomentsA.get(),
@@ -296,9 +296,9 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const bool splitSoftTransparentFold,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const bool splitOpaqueSoftResolve,
+    const b8 splitSoftTransparentFold,
+    const b8 graphOwnsOpaqueTemporalMergeEntryStates,
+    const b8 splitOpaqueSoftResolve,
     const LightSpaceShadowSnapshot* const lightSpace
 ){
     u32 producedFrameIndex = 0u;

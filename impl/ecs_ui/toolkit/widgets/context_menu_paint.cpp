@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::paintContextMenus(){
+b8 Builder::paintContextMenus(){
     for(auto& frame : m_scope->m_contextMenus){
         if(!contextMenuMatches(frame) || frame.list >= m_scope->m_lists.size() || frame.anchorIndex >= m_scope->m_items.size())
             return false;
@@ -27,7 +27,7 @@ bool Builder::paintContextMenus(){
     return true;
 }
 
-bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
+b8 Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     const Item& anchor = m_scope->m_items[frame.anchorIndex];
     const LayoutBox* anchorBox = m_scope->m_layout.box(anchor.node);
     const UiSkinRegion* background = region(frame.popupStyle.background, frame.popupStyle.fallback);
@@ -59,7 +59,7 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     if(!m_context.updatePopupScope(frame.popupToken, scope) || !m_context.activatePopupScope(frame.popupToken))
         return false;
     if(!m_paint.beginOverlay(m_context.popupLayer())){
-        const bool ended = m_context.endPopupScope(false);
+        const b8 ended = m_context.endPopupScope(false);
         if(!ended)
             m_context.fail();
         return false;
@@ -69,12 +69,12 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     const SIMDVectorSingle paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
     const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
     m_paint.pushClip(placement->bounds);
-    const bool backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
-    const bool popped = m_paint.popClip();
+    const b8 backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
+    const b8 popped = m_paint.popClip();
     HitTarget barrier;
     barrier.rectangle = placement->bounds;
     barrier.clip = placement->viewport;
-    bool painted = backgroundPainted && popped && m_context.addTarget(frame.popup, barrier);
+    b8 painted = backgroundPainted && popped && m_context.addTarget(frame.popup, barrier);
     if(painted){
         Item item(m_arena);
         item.state = frame.rows;
@@ -85,8 +85,8 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
         box.clip = placement->bounds;
         painted = paintList(item, box) && contextMenuMatches(frame);
     }
-    const bool overlayEnded = m_paint.endOverlay();
-    const bool scopeEnded = m_context.endPopupScope(painted);
+    const b8 overlayEnded = m_paint.endOverlay();
+    const b8 scopeEnded = m_context.endPopupScope(painted);
     if(painted)
         frame.state->m_popup.m_placement = *placement;
     return painted && overlayEnded && scopeEnded;

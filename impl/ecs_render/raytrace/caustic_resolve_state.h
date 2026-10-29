@@ -35,7 +35,7 @@ struct CausticResolveState{
     CausticResolveStageState m_waveletStepTwo;
     CausticResolveStageState m_waveletDirect;
     CausticResolveStageState m_upsample;
-    bool m_failed = false;
+    b8 m_failed = false;
 };
 
 

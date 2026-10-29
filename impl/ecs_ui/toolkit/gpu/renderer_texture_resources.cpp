@@ -33,7 +33,7 @@ static constexpr AStringView s_ImageMarkerLabel = "UI Texture Image";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidSource(const SharedImageSource& source)noexcept{
+[[nodiscard]] static b8 ValidSource(const SharedImageSource& source)noexcept{
     if(!source || source->generation() == 0u || !source->identity().valid())
         return false;
     const Texture& texture = source->texture();
@@ -47,7 +47,7 @@ static constexpr AStringView s_ImageMarkerLabel = "UI Texture Image";
     ;
 }
 
-[[nodiscard]] static bool ValidVersion(const GpuTextureImageVersion& version)noexcept{
+[[nodiscard]] static b8 ValidVersion(const GpuTextureImageVersion& version)noexcept{
     if(!ValidSource(version.m_source) || !version.m_texture.valid())
         return false;
     const TextureGpuResource& resource = version.m_texture;
@@ -94,7 +94,7 @@ GpuTextureImageVersion::~GpuTextureImageVersion()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept{
+b8 GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept{
     const auto& images = snapshot.textureImages();
     if(images.size() > s_PaintMaxImages || snapshot.glyphPages().size() > s_PaintMaxImages || snapshot.sdfPages().size() > s_PaintMaxImages || images.size() + snapshot.glyphPages().size() + snapshot.sdfPages().size() > s_PaintMaxImages)
         return false;
@@ -150,7 +150,7 @@ Expected<GpuVersion<GpuTextureImageVersion>> GpuRendererState::prepareTextureIma
     return Move(version);
 }
 
-bool GpuRendererState::prepareTextureImages(GpuFrameData& frame){
+b8 GpuRendererState::prepareTextureImages(GpuFrameData& frame){
     const auto& images = frame.m_snapshot.textureImages();
     frame.m_textureImages.reserve(images.size());
     while(frame.m_textureImages.size() < images.size()){

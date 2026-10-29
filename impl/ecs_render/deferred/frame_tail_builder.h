@@ -24,8 +24,8 @@ NWB_IMPL_BEGIN
 struct DeferredFrameTailInputs{
     Core::GpuTimingFrameTransaction& frameTimingTransaction;
     Core::QueueSubmissionToken& historyCopySubmissionToken;
-    bool& recoveryArmed;
-    bool& recoveryRetiresFrameTiming;
+    b8& recoveryArmed;
+    b8& recoveryRetiresFrameTiming;
     Core::GpuTaskId terminalPresentationTask;
     Core::GpuGraphResourceId historyCopyShadowVisibility;
     Core::GpuGraphResourceId historyCopyCausticIrradiance;
@@ -33,7 +33,7 @@ struct DeferredFrameTailInputs{
     Core::GpuGraphResourceId historyCopyDestinationShadowVisibility;
     Core::GpuGraphResourceId historyCopyDestinationCausticIrradiance;
     Core::GpuGraphResourceId historyCopyDestinationSurfelIrradiance;
-    bool capturesLaggedLightingHistory = false;
+    b8 capturesLaggedLightingHistory = false;
 };
 
 struct DeferredFrameTailResult{

@@ -74,7 +74,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     }
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(m_graph);
-        const bool hasColor = outputLayer.color.valid();
+        const b8 hasColor = outputLayer.color.valid();
         if(!declarations.valid() || !outputLayer.validShape() || (outputLayer.readyTask.valid() && !declarations.validTask(outputLayer.readyTask)))
             return MakeUnexpected(Failure{});
         if(hasColor){

@@ -41,7 +41,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool start()noexcept;
+    [[nodiscard]] b8 start()noexcept;
     [[nodiscard]] inline u16 port()const noexcept{ return m_port; }
 
     [[nodiscard]] inline u32 requestCount()const noexcept{ return m_requestCount.load(MemoryOrder::acquire); }
@@ -51,7 +51,7 @@ private:
     MHD_Daemon* m_daemon = nullptr;
     Atomic<u32> m_requestCount = 0u;
     u16 m_port = 0u;
-    Atomic<bool> m_delayedFirstRequest = false;
+    Atomic<b8> m_delayedFirstRequest = false;
 };
 
 
@@ -107,7 +107,7 @@ ShutdownCaptureServer::~ShutdownCaptureServer()noexcept{
 }
 
 
-bool ShutdownCaptureServer::start()noexcept{
+b8 ShutdownCaptureServer::start()noexcept{
     if(m_daemon)
         return false;
 

@@ -53,7 +53,7 @@ Expected<u64> UiRadioGroupSmokeSource::indexOf(const u64 keyValue)const noexcept
     return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
 }
 
-Expected<u64> UiRadioGroupSmokeSource::findEnabled(const u64 start, const bool reverseValue)const noexcept{
+Expected<u64> UiRadioGroupSmokeSource::findEnabled(const u64 start, const b8 reverseValue)const noexcept{
     u64 index = 0u;
     invalidateText();
     const u64 count = m_removed == 0u ? 5u : 4u;
@@ -87,7 +87,7 @@ StringView UiRadioGroupSmokeSource::text(const u64 index)const noexcept{
     return { m_label.data(), label.size() };
 }
 
-bool UiRadioGroupSmokeSource::enabled(const u64 index)const noexcept{
+b8 UiRadioGroupSmokeSource::enabled(const u64 index)const noexcept{
     invalidateText();
     const u64 choice = rawKey(index);
     return choice != 0u && choice != 30u;

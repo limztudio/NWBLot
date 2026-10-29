@@ -121,9 +121,9 @@ protected:
     LRESULT m_lastContextDefaultResult = 0;
     TextInputSessionToken m_cancelledDuringContextToken;
     u32 m_sceneCodePoint = 0u;
-    bool m_cancelOnNextContextForward = false;
-    bool m_contextFocusLossSucceeded = false;
-    bool m_contextFocusRestoreSucceeded = false;
+    b8 m_cancelOnNextContextForward = false;
+    b8 m_contextFocusLossSucceeded = false;
+    b8 m_contextFocusRestoreSucceeded = false;
 };
 
 
@@ -145,7 +145,7 @@ TEST_F(Win32TextInputFixture, RepeatedExplicitContextReleasePreservesActiveNativ
 
 TEST_F(Win32TextInputFixture, ContextScopeUnwindPreservesOriginalThrownMarkerAndNativeSession){
     struct UnwindMarker final{};
-    bool caughtOriginal = false;
+    b8 caughtOriginal = false;
     try{
         const HIMC nativeContext = ImmGetContext(m_window);
         ASSERT_NE(nativeContext, nullptr);

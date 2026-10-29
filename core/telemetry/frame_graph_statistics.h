@@ -143,7 +143,7 @@ struct FrameGraphRuntimeStatistics{
     FrameGraphRecordingRuntimeStatistics recording;
     FrameGraphSubmissionRuntimeStatistics submission;
     u16 deviceGeneration = 0u;
-    bool present = false;
+    b8 present = false;
 };
 
 // Exact CPU telemetry per physical queue; absent rows are unknown, not zero.
@@ -224,8 +224,8 @@ struct FrameGraphPacketSubmissionStatisticsRecord{
     u32 packetIndex = Limit<u32>::s_Max;
     FrameGraphPhysicalQueueId queue;
     FrameGraphQueueClass::Enum queueClass = FrameGraphQueueClass::Unknown;
-    bool joinsAcceptedQueueFrontier = false;
-    bool recoverySubmission = false;
+    b8 joinsAcceptedQueueFrontier = false;
+    b8 recoverySubmission = false;
     u64 plannedWaitTokenCount = 0u;
     u64 sameQueueWaitElisionCount = 0u;
     u64 timelineWaitCount = 0u;

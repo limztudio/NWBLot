@@ -87,7 +87,7 @@ namespace __hidden_gpu_task_scheduler{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskScheduler::submitGraph(
+b8 GpuTaskScheduler::submitGraph(
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
     const GpuTaskGraphNormalExecutionDesc& desc,
@@ -195,7 +195,7 @@ bool GpuTaskScheduler::submitGraph(
 }
 
 
-bool GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
+b8 GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
     const GpuTaskId task,
@@ -266,7 +266,7 @@ bool GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
 }
 
 
-bool GpuTaskScheduler::recordAndSubmitTask(
+b8 GpuTaskScheduler::recordAndSubmitTask(
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
     const GpuTaskId task,
@@ -311,7 +311,7 @@ bool GpuTaskScheduler::recordAndSubmitTask(
 }
 
 
-bool GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
+b8 GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuRecordedGraph::ArtifactOperation& artifactAccess,
@@ -370,7 +370,7 @@ bool GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
 }
 
 
-bool GpuTaskScheduler::prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
+b8 GpuTaskScheduler::prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,
     const GpuRecordedGraph::ArtifactOperation& artifactAccess,

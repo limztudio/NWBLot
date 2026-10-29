@@ -31,13 +31,13 @@ struct MaterialPassMeshResourceSnapshot{
     u32 emulationIndexByteOffset = 0u;
     u32 meshletCount = 0u;
     u32 meshletPrimitiveIndexCount = 0u;
-    bool runtimeMesh = false;
-    bool dynamicMeshletBoundsFresh = false;
-    bool dynamicMeshletConesFresh = false;
+    b8 runtimeMesh = false;
+    b8 dynamicMeshletBoundsFresh = false;
+    b8 dynamicMeshletConesFresh = false;
 
 
 public:
-    [[nodiscard]] bool geometryHeapHandlesReady()const noexcept{
+    [[nodiscard]] b8 geometryHeapHandlesReady()const noexcept{
         constexpr u32 s_SourceBindingSlots[] = {
             NWB_MESH_BINDING_POSITION,
             NWB_MESH_BINDING_NORMAL,
@@ -59,7 +59,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return sourceBuffers.buffersValid() && geometryHeapHandlesReady() && meshletCount > 0u && meshletPrimitiveIndexCount > 0u;
     }
 };
@@ -70,8 +70,8 @@ struct MaterialPassPipelineResourceSnapshot{
     Core::MeshletPipelineHandle meshletPipeline;
     Core::ComputePipelineHandle computePipeline;
     Core::ComputePipelineHandle objectGeometryDecodePipeline;
-    bool sharedGeometryComputeProgram = false;
-    bool indexedGeometryOutput = false;
+    b8 sharedGeometryComputeProgram = false;
+    b8 indexedGeometryOutput = false;
 };
 
 template<typename BufferHandler>
@@ -101,7 +101,7 @@ struct MaterialPassDrawItem{
     u32 instanceIndex = 0;
     u32 materialConstantByteOffset = 0u;
     u32 shadingModelId = 0u;
-    bool meshletConeCullScaleSafe = false;
+    b8 meshletConeCullScaleSafe = false;
 };
 
 struct MaterialInstanceMutableCacheEntry{
@@ -143,7 +143,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
+    [[nodiscard]] b8 empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
 
     void reserve(const usize capacity){
         meshDrawItems.reserve(capacity);
@@ -173,7 +173,7 @@ public:
 
 
 public:
-    [[nodiscard]] constexpr bool empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
+    [[nodiscard]] constexpr b8 empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
 };
 
 struct MaterialPassDrawItemPartitions{
@@ -191,7 +191,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
+    [[nodiscard]] b8 empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
 
     void reserve(const usize capacity){
         regular.reserve(capacity);
@@ -221,7 +221,7 @@ public:
 
 
 public:
-    [[nodiscard]] constexpr bool empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
+    [[nodiscard]] constexpr b8 empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
 };
 
 

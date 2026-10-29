@@ -92,11 +92,11 @@ public:
 
 
 };
-inline bool operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs)noexcept{
+inline b8 operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs)noexcept{
     return lhs.slot == rhs.slot && lhs.type == rhs.type && lhs.size == rhs.size;
 }
 
-inline bool operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs)noexcept{ return !(lhs == rhs); }
 static_assert(sizeof(BindingLayoutItem) == BindingLayoutItem::s_ByteSize, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
 
 struct BindingLayoutDesc{
@@ -300,7 +300,7 @@ public:
 
     constexpr DescriptorWriteItem& setRange(BufferRange value)noexcept{ range = value; return *this; }
 };
-inline bool operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs)noexcept{
+inline b8 operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs)noexcept{
     return
         lhs.resourceHandle == rhs.resourceHandle
         && lhs.slot == rhs.slot
@@ -313,7 +313,7 @@ inline bool operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem
     ;
 }
 
-inline bool operator!=(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs)noexcept{ return !(lhs == rhs); }
 static_assert(sizeof(DescriptorWriteItem) == DescriptorWriteItem::s_ByteSize, "sizeof(DescriptorWriteItem) is supposed to be 40 bytes");
 
 

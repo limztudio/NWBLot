@@ -124,7 +124,7 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
     return path;
 }
 
-[[nodiscard]] constexpr bool IsCompoundOrSimpleAssignment(const TokenType::Enum op)noexcept{
+[[nodiscard]] constexpr b8 IsCompoundOrSimpleAssignment(const TokenType::Enum op)noexcept{
     return op == TokenType::Equal
         || op == TokenType::PlusEqual
         || op == TokenType::MinusEqual
@@ -153,8 +153,8 @@ inline void AppendCamelToSnakeCase(MString& out, const MStringView text){
         if(ch >= 'A' && ch <= 'Z'){
             if(i > 0u){
                 const char prev = text[i - 1u];
-                const bool prevLowerOrDigit = (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9');
-                const bool nextLower = (i + 1u < text.size()) && (text[i + 1u] >= 'a' && text[i + 1u] <= 'z');
+                const b8 prevLowerOrDigit = (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9');
+                const b8 nextLower = (i + 1u < text.size()) && (text[i + 1u] >= 'a' && text[i + 1u] <= 'z');
                 if(prevLowerOrDigit || nextLower)
                     out.push_back('_');
             }

@@ -24,13 +24,13 @@ struct FormatMapping{
     VkFormat vkFormat;
     u32 bytesPerPixel;
     Format::Enum format;
-    bool hasDepth;
-    bool hasStencil;
-    bool isCompressed;
+    b8 hasDepth;
+    b8 hasStencil;
+    b8 isCompressed;
 
 
 public:
-    constexpr FormatMapping(const Format::Enum inFormat, const VkFormat inVkFormat, const u32 inBytesPerPixel, const bool inHasDepth, const bool inHasStencil, const bool inIsCompressed)noexcept
+    constexpr FormatMapping(const Format::Enum inFormat, const VkFormat inVkFormat, const u32 inBytesPerPixel, const b8 inHasDepth, const b8 inHasStencil, const b8 inIsCompressed)noexcept
         : vkFormat(inVkFormat)
         , bytesPerPixel(inBytesPerPixel)
         , format(inFormat)
@@ -238,7 +238,7 @@ VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states)noexcept{
     return flags;
 }
 
-VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool rayTracingStageAvailable)noexcept{
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, b8 rayTracingStageAvailable)noexcept{
     VkPipelineStageFlags2 flags = 0;
 
     if(states & ResourceStates::VertexBuffer)

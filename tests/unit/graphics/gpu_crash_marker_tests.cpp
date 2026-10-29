@@ -155,7 +155,7 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
     Latch growthStart(3u);
     Latch growthMidpoint(3u);
     Atomic<u32> activeWriters{ 2u };
-    Atomic<bool> invalidObservation{ false };
+    Atomic<b8> invalidObservation{ false };
     const auto insertMarkers = [&]<usize MarkerCount>(const AStringView (&markerNames)[MarkerCount]){
         {
             Core::GpuCrashMarkerTracker commandListTracker(crashTracker, testArena.arena);

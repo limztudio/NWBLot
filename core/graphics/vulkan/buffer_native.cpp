@@ -25,7 +25,7 @@ namespace __hidden_buffer_native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidateNativeBufferSharing(const Device& device, const VolkInstanceTable& instanceDispatch, const VkPhysicalDevice physicalDevice, const BufferDesc& desc, const NativeBufferProvenance& provenance){
+[[nodiscard]] static b8 ValidateNativeBufferSharing(const Device& device, const VolkInstanceTable& instanceDispatch, const VkPhysicalDevice physicalDevice, const BufferDesc& desc, const NativeBufferProvenance& provenance){
     return VulkanNativeSharingDetail::ValidateNativeResourceSharing(device, instanceDispatch, physicalDevice, desc.queueSharing, provenance, "buffer handle for native buffer");
 }
 

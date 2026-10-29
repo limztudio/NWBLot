@@ -29,7 +29,7 @@ public:
 private:
     NWB::Impl::Ui::PopupState m_popup;
     u32 m_choice = 0u;
-    bool m_keepOpen = false;
+    b8 m_keepOpen = false;
 };
 
 

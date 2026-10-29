@@ -103,9 +103,9 @@ public:
 
 
 private:
-    [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena, SkinnedMeshBindingComponent& component);
+    [[nodiscard]] b8 ensureRuntimeMesh(Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena, SkinnedMeshBindingComponent& component);
     [[nodiscard]] Expected<NotNull<MeshSkinningSource*>> ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset);
-    [[nodiscard]] bool uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<RuntimeMeshHandle> allocateHandle();
     void releaseRuntimeMesh(Core::ECS::EntityID entity)noexcept;
     void releaseSource(const Name& sourceName)noexcept;

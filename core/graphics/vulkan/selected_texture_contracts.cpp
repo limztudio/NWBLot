@@ -30,7 +30,7 @@ static_assert(static_cast<u8>(TextureCopyQueueRequirement::Graphics) == static_c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<TextureClearContract> ResolveTextureClearContract(const TextureDesc& description, const TextureSubresourceSet& subresources, const TextureClearValueKind::Enum valueKind, const bool clearDepth, const bool clearStencil)noexcept{
+Expected<TextureClearContract> ResolveTextureClearContract(const TextureDesc& description, const TextureSubresourceSet& subresources, const TextureClearValueKind::Enum valueKind, const b8 clearDepth, const b8 clearStencil)noexcept{
     const auto nativeContract = VulkanTextureDetail::ResolveTextureClearContract(description, subresources, static_cast<VulkanTextureDetail::TextureClearValueKind::Enum>(valueKind), clearDepth, clearStencil);
     if(!nativeContract)
         return MakeUnexpected(nativeContract.error());

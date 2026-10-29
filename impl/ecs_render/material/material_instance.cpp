@@ -26,7 +26,7 @@ namespace __hidden_material_instance{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool WriteMaterialInstanceOverrideBytes(
+[[nodiscard]] static b8 WriteMaterialInstanceOverrideBytes(
     const Core::ECS::EntityID entity,
     const Name& materialName,
     const MaterialInstanceParameter& parameter,
@@ -48,7 +48,7 @@ namespace __hidden_material_instance{
 
 
 // Single source of truth for cache validity shared by prepare and find paths.
-[[nodiscard]] static bool MaterialInstanceMutableCacheEntryMatches(const MaterialInstanceMutableCacheEntry& cacheEntry, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance)noexcept{
+[[nodiscard]] static b8 MaterialInstanceMutableCacheEntryMatches(const MaterialInstanceMutableCacheEntry& cacheEntry, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance)noexcept{
     return
         cacheEntry.materialName == materialInfo.materialName
         && cacheEntry.materialInterface == materialInfo.materialInterface
@@ -75,7 +75,7 @@ Expected<MaterialInstanceOverrideField> RendererMaterialSystem::FindMaterialInst
         // MaterialSurfaceInfo copies the already-validated cooked layout; keep a debug-only invariant here.
         NWB_ASSERT(IsValidMaterialBlockClass(block.blockClass));
 
-        const bool mutableBlock = block.blockClass == MaterialBlockClass::MaterialMutable;
+        const b8 mutableBlock = block.blockClass == MaterialBlockClass::MaterialMutable;
         const u32 blockByteBegin = mutableBlock ? mutableBlockByteBegin : constantBlockByteBegin;
         u32& blockByteEnd = mutableBlock ? mutableBlockByteBegin : constantBlockByteBegin;
         // MaterialSurfaceInfo copies the already-validated cooked byte sizes; keep a debug-only invariant here.
@@ -104,7 +104,7 @@ Expected<MaterialInstanceOverrideField> RendererMaterialSystem::FindMaterialInst
     return MakeUnexpected(Failure{});
 }
 
-bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, const Span<u8> inOutMutableTypedBytes){
+b8 RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, const Span<u8> inOutMutableTypedBytes){
     if(!materialInstance.materialInterface){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} require a material interface"), entity.id);
         return false;

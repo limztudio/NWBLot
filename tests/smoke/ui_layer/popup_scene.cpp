@@ -63,7 +63,7 @@ UiPopupSmokeScene::UiPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::Inpu
     , m_popupText(arena)
     , m_outsideText(arena)
 {
-    const bool initialized = m_popupText.setText("Popup") && m_outsideText.setText("Outside focus sentinel");
+    const b8 initialized = m_popupText.setText("Popup") && m_outsideText.setText("Outside focus sentinel");
     NWB_FATAL_ASSERT_MSG(initialized, NWB_TEXT("Popup smoke text models must contain valid UTF8"));
     m_input.addHandlerToBack(*this);
 }
@@ -72,7 +72,7 @@ UiPopupSmokeScene::~UiPopupSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     ObserveSmokeDisplay(__hidden_ui_popup_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     Builder& ui = context.ui;
@@ -145,7 +145,7 @@ bool UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiPopupSmokeScene::paintLaterRoot(Impl::UiPaintContext& context)const{
+b8 UiPopupSmokeScene::paintLaterRoot(Impl::UiPaintContext& context)const{
     using namespace Impl::Ui;
     Rect bounds = m_popup.placement().bounds;
     if(bounds.width <= 0.0f)
@@ -159,7 +159,7 @@ bool UiPopupSmokeScene::paintLaterRoot(Impl::UiPaintContext& context)const{
     return true;
 }
 
-bool UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
+b8 UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
@@ -216,11 +216,11 @@ void UiPopupSmokeScene::observeState(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerPopupSmokeEnabled(){
+b8 IsUiLayerPopupSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_POPUP");
 }
 
-bool IsUiLayerPopupSkinSmokeEnabled(){
+b8 IsUiLayerPopupSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_POPUP_SKIN");
 }
 

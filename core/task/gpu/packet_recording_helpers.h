@@ -51,12 +51,12 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
     return GpuTaskPacketTimingScopeName(task.identity);
 }
 
-[[nodiscard]] bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, Alloc::ScratchArena& scratchArena, GpuTimingRecorder* const timingRecorder);
+[[nodiscard]] b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, Alloc::ScratchArena& scratchArena, GpuTimingRecorder* const timingRecorder);
 
-[[nodiscard]] bool HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList)noexcept;
+[[nodiscard]] b8 HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList)noexcept;
 
 #if defined(NWB_DEBUG)
-[[nodiscard]] inline bool HasQueueCapabilities(const GpuQueueCapability::Mask available, const GpuQueueCapability::Mask required)noexcept{
+[[nodiscard]] inline b8 HasQueueCapabilities(const GpuQueueCapability::Mask available, const GpuQueueCapability::Mask required)noexcept{
     return (static_cast<u8>(available) & static_cast<u8>(required)) == static_cast<u8>(required);
 }
 #endif

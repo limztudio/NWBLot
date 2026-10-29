@@ -50,7 +50,7 @@ struct PathFixture{
 struct RelativeCase{
     AStringView input;
     AStringView expected;
-    bool accepted;
+    b8 accepted;
 };
 
 
@@ -75,7 +75,7 @@ static void PrepareWorkload(PathFixture& fixture, const usize directoryCount, co
     fixture.expectedDerived.append(fixture.expectedRelative.data(), fixture.expectedRelative.size() - 4u);
 }
 
-[[nodiscard]] static bool BuildAndVerifyDerivedPath(const PathFixture& fixture, Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static b8 BuildAndVerifyDerivedPath(const PathFixture& fixture, Alloc::ScratchArena& scratchArena){
     const auto output = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView("project"), fixture.sourcePath, scratchArena);
     return output && AStringView(*output) == AStringView(fixture.expectedDerived);
 }
@@ -194,7 +194,7 @@ TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPaths){
 }
 
 TEST(AssetPaths, LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaUse){
-    for(const bool unicode : { false, true }){
+    for(const b8 unicode : { false, true }){
         PathFixture fixture;
         PrepareWorkload(fixture, 8u, unicode ? AStringView("ÉTAGE_한글_東京_😀_") : AStringView("Long_COMPONENT_"), unicode ? 8u : 12u);
         Alloc::ScratchArena scratchArena(Name("tests/asset_path/repeated_scratch"), 65536u);

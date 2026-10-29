@@ -51,7 +51,7 @@ CommandList::GraphPublicationReadOwnership::~GraphPublicationReadOwnership()noex
     if(!m_acquired)
         return;
 
-    const bool ownershipMatches = m_commandList.m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationReading;
+    const b8 ownershipMatches = m_commandList.m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationReading;
     NWB_FATAL_ASSERT_MSG(ownershipMatches, "command-list diagnostic read lost its exact publication capability");
     m_commandList.m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
 }
@@ -65,7 +65,7 @@ CommandList::GraphRecordingOwnership::Capability*& CommandList::GraphRecordingOw
     return capability;
 }
 
-bool CommandList::GraphRecordingOwnership::HasCapability(const CommandList& commandList, const u64 recordingLeaseSerial)noexcept{
+b8 CommandList::GraphRecordingOwnership::HasCapability(const CommandList& commandList, const u64 recordingLeaseSerial)noexcept{
     for(const Capability* capability = CurrentCapability(); capability; capability = capability->previous){
         if(capability->commandList == &commandList && capability->recordingLeaseSerial == recordingLeaseSerial)
             return true;
@@ -86,7 +86,7 @@ CommandList::GraphRecordingOwnership::~GraphRecordingOwnership()noexcept{
     release();
 }
 
-bool CommandList::GraphRecordingOwnership::finish(const bool semanticSuccess, CommandListResourceStateHandoff* const finalStates){
+b8 CommandList::GraphRecordingOwnership::finish(const b8 semanticSuccess, CommandListResourceStateHandoff* const finalStates){
     if(!m_acquired || !semanticSuccess){
         if(finalStates)
             finalStates->reset();
@@ -137,7 +137,7 @@ void CommandList::GraphRecordingOwnership::detachCapability()noexcept{
     auto capability = MakeNotNull(&CurrentCapability());
     while(*capability && *capability != &m_capability)
         capability = MakeNotNull(&(*capability)->previous);
-    const bool capabilityFound = *capability == &m_capability;
+    const b8 capabilityFound = *capability == &m_capability;
     NWB_FATAL_ASSERT_MSG(capabilityFound, "task-graph recording capability left its owning thread-local stack");
     *capability = m_capability.previous;
 

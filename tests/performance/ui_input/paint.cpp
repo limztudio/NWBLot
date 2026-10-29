@@ -23,7 +23,7 @@ using namespace NWB::Impl::Ui;
 
 class PaintCase final{
 public:
-    PaintCase(const u32 commands, const bool descending)
+    PaintCase(const u32 commands, const b8 descending)
         : m_arena(Name("tests/performance/ui_input/paint"))
         , m_skin(m_arena, Name(s_SkinPath))
         , m_builder(m_arena)
@@ -37,7 +37,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool operation(){
+    [[nodiscard]] b8 operation(){
         m_builder.begin({ 128.0f, 128.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
         m_builder.reserve(m_commands);
         for(u32 command = 0u; command < m_commands; ++command){
@@ -83,7 +83,7 @@ private:
     PaintBuilder m_builder;
     DrawSnapshot m_snapshot;
     const u32 m_commands;
-    const bool m_descending;
+    const b8 m_descending;
 };
 
 
@@ -96,12 +96,12 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RunPaintBenchmarks(){
+b8 RunPaintBenchmarks(){
     constexpr u32 s_Counts[]{ 64u, 256u, 1024u };
     constexpr AStringView s_MonotonicNames[]{ "paint.monotonic.64", "paint.monotonic.256", "paint.monotonic.1024" };
     constexpr AStringView s_DescendingNames[]{ "paint.descending.64", "paint.descending.256", "paint.descending.1024" };
     for(usize index = 0u; index < 3u; ++index){
-        for(const bool descending : { false, true }){
+        for(const b8 descending : { false, true }){
             __hidden_ui_paint_benchmark::PaintCase benchmark(s_Counts[index], descending);
             if(!benchmark.operation() || !benchmark.checksum())
                 return false;

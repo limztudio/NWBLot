@@ -39,7 +39,7 @@ struct FrameGraphTraceGeometryResult{
     Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
     Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
     Core::GpuGraphResourceSetId hardwareTraceAttributeSet;
-    bool softwareTraceResourcesPrepared = false;
+    b8 softwareTraceResourcesPrepared = false;
 
 
 public:

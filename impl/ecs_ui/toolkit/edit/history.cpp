@@ -15,7 +15,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EditModel::undo(){
+b8 EditModel::undo(){
     if(!canUndo())
         return false;
     const HistoryRecord& record = m_history[m_historyCursor - 1u];
@@ -34,7 +34,7 @@ bool EditModel::undo(){
     return true;
 }
 
-bool EditModel::redo(){
+b8 EditModel::redo(){
     if(!canRedo())
         return false;
     const HistoryRecord& record = m_history[m_historyCursor];

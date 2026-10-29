@@ -31,11 +31,11 @@ struct RequiredQueueFamilySelection{
 };
 
 struct PhysicalDeviceFeatureQueryOptions{
-    bool apiSupportsVulkan13 = false;
-    bool descriptorBufferExtensionAvailable = false;
-    bool dynamicRenderingExtensionAvailable = false;
-    bool synchronization2ExtensionAvailable = false;
-    bool maintenance4ExtensionAvailable = false;
+    b8 apiSupportsVulkan13 = false;
+    b8 descriptorBufferExtensionAvailable = false;
+    b8 dynamicRenderingExtensionAvailable = false;
+    b8 synchronization2ExtensionAvailable = false;
+    b8 maintenance4ExtensionAvailable = false;
 };
 
 struct PhysicalDeviceFeatureSupport{
@@ -53,7 +53,7 @@ struct PhysicalDeviceFeatureSupport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline RequiredQueueFamilySelection SelectRequiredQueueFamilies(const VkQueueFamilyProperties* const queueFamilies, const u32 queueFamilyCount, const bool enableAsyncComputeLane, const bool enableDedicatedTransferQueue)noexcept{
+[[nodiscard]] inline RequiredQueueFamilySelection SelectRequiredQueueFamilies(const VkQueueFamilyProperties* const queueFamilies, const u32 queueFamilyCount, const b8 enableAsyncComputeLane, const b8 enableDedicatedTransferQueue)noexcept{
     RequiredQueueFamilySelection result;
     i32 firstGraphicsFamily = s_InvalidQueueFamilyIndex;
     i32 firstComputeFamily = s_InvalidQueueFamilyIndex;
@@ -65,8 +65,8 @@ struct PhysicalDeviceFeatureSupport{
         if(family.queueCount == 0u)
             continue;
 
-        const bool supportsGraphics = (family.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0u;
-        const bool supportsCompute = (family.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0u;
+        const b8 supportsGraphics = (family.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0u;
+        const b8 supportsCompute = (family.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0u;
         if(firstGraphicsFamily == s_InvalidQueueFamilyIndex && supportsGraphics)
             firstGraphicsFamily = static_cast<i32>(familyIndex);
         if(firstComputeFamily == s_InvalidQueueFamilyIndex && supportsCompute)
@@ -93,7 +93,7 @@ struct PhysicalDeviceFeatureSupport{
     return result;
 }
 
-[[nodiscard]] inline bool HasDeviceExtension(const VkExtensionProperties* const extensions, const u32 extensionCount, const AStringView extensionName)noexcept{
+[[nodiscard]] inline b8 HasDeviceExtension(const VkExtensionProperties* const extensions, const u32 extensionCount, const AStringView extensionName)noexcept{
     if(extensionName.size() >= VK_MAX_EXTENSION_NAME_SIZE || extensionName.find('\0') != AStringView::npos)
         return false;
 

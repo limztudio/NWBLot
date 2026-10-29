@@ -52,19 +52,19 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
     const Core::GpuGraphResourceId csgCutters = inputs.csgCutters;
     const Core::GpuGraphResourceId csgClipContextSlots = inputs.csgClipContextSlots;
     const Core::GpuGraphResourceId csgIntervalSampleState = inputs.csgIntervalSampleState;
-    const bool intervalOutputsGraphOwned = inputs.intervalOutputsGraphOwned;
+    const b8 intervalOutputsGraphOwned = inputs.intervalOutputsGraphOwned;
     Core::GpuTaskId accumulationUploadTask = inputs.uploadTask;
-    bool accumulationStreamsUploaded = false;
-    bool accumulationCsgStreamsUploaded = false;
-    bool accumulationRegularComputeEmulationPlanCaptured = false;
+    b8 accumulationStreamsUploaded = false;
+    b8 accumulationCsgStreamsUploaded = false;
+    b8 accumulationRegularComputeEmulationPlanCaptured = false;
     Core::GpuTaskId accumulationReusedGeometryProducer;
-    bool accumulationProducesReusableGeometry = false;
-    bool accumulationCsgComputeEmulationPlanCaptured = false;
-    bool accumulationSharedComputeEmulationPlanCaptured = false;
+    b8 accumulationProducesReusableGeometry = false;
+    b8 accumulationCsgComputeEmulationPlanCaptured = false;
+    b8 accumulationSharedComputeEmulationPlanCaptured = false;
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan accumulationSharedComputeEmulationPlan;
     usize accumulationSharedComputeEmulationInstanceCount = 0u;
     usize accumulationSharedComputeEmulationMaterialTypedByteCount = 0u;
-    bool accumulationMaterialSampledTexturesCollected = false;
+    b8 accumulationMaterialSampledTexturesCollected = false;
     Core::GpuGraphResourceSetId accumulationMaterialGeometrySet;
     Core::GpuGraphResourceSetId accumulationMaterialSampledTextureSet;
     {
@@ -104,7 +104,7 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
             return MakeUnexpected(Failure{});
         }
 
-        const bool accumulationHasCsgDrawItems = accumulationUploadResult->hasCsgDrawItems;
+        const b8 accumulationHasCsgDrawItems = accumulationUploadResult->hasCsgDrawItems;
         if(accumulationHasCsgDrawItems && !intervalOutputsGraphOwned){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: clipped AVBOIT accumulation draws require prepared interval outputs"));
             return MakeUnexpected(Failure{});

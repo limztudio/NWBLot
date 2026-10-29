@@ -124,14 +124,14 @@ public:
 
 
 protected:
-    [[nodiscard]] bool shapeView(){
+    [[nodiscard]] b8 shapeView(){
         if(!m_view.snapshot(m_model))
             return false;
         auto layout = m_layoutBuilder.layout({ m_view.displayText() });
         return layout && m_view.adoptLayout(Move(*layout));
     }
 
-    [[nodiscard]] bool place(const f32 width = 100.0f, const f32 height = 100.0f, const Point previousScroll = {})noexcept{
+    [[nodiscard]] b8 place(const f32 width = 100.0f, const f32 height = 100.0f, const Point previousScroll = {})noexcept{
         const auto placement = m_view.arrange({ 10.0f, 20.0f, width, height }, {}, s_MultilineViewViewport, previousScroll);
         if(!placement)
             return false;
@@ -139,7 +139,7 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool loadFont(){
+    [[nodiscard]] b8 loadFont(){
         Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
         Core::Assets::AssetBytes bytes(m_arena);

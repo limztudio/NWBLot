@@ -78,7 +78,7 @@ UiWidgetGallery::UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena)
     , m_textAreas(arena)
 {}
 
-bool UiWidgetGallery::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+b8 UiWidgetGallery::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
     return m_images.loadAssets(arena, assets, sceneSubsystems);
 }
 
@@ -90,7 +90,7 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
     if(!ui.beginPanel("gallery_selector", { bounds.x, bounds.y, bounds.width, s_SelectorHeight }))
         return;
     ContainerOptions row;
-    bool valid = ui.beginRow("navigation", row);
+    b8 valid = ui.beginRow("navigation", row);
     constexpr f32 s_NavigationButtonWidth = 100.0f;
     WidgetOptions navigation;
     navigation.width = { LayoutSizePolicy::Fixed, s_NavigationButtonWidth };
@@ -145,7 +145,7 @@ void UiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, NWB::Cor
     constexpr f32 s_PanelHeight = 180.0f;
     if(!ui.beginPanel("interactive_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
         return;
-    bool valid = ui.label(s_TitleKey, "Interactive custom UI");
+    b8 valid = ui.label(s_TitleKey, "Interactive custom UI");
     if(ui.checkbox(s_EnabledKey, "Enable counter", m_enabled))
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom UI counter enabled={}"), m_enabled);
     valid = ui.beginRow("actions") && valid;

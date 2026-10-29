@@ -129,7 +129,7 @@ private:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         // Register arrow yaw scrubbing at the front of the input chain.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
@@ -138,7 +138,7 @@ public:
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DirectionalLightIntensity);
         const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_PointLightIntensity, s_PointLightRange);
         // Enable caustics unless NWB_FLICKER_TEST_NO_CAUSTICS is set.
-        static const bool s_DisableCaustics = [](){
+        static const b8 s_DisableCaustics = [](){
             NWB::Core::Alloc::ScratchArena arena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
             const auto value = ReadSmokeEnvironmentText(arena, "NWB_FLICKER_TEST_NO_CAUSTICS");
             return value && (*value)[0] == '1';
@@ -205,7 +205,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FlickerTestSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         // Yaw priority: fixed override, manual scrub, then automatic spin.

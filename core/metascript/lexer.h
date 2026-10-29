@@ -102,7 +102,7 @@ public:
 
 public:
     [[nodiscard]] Token next()noexcept;
-    [[nodiscard]] bool consumeBalancedBracesRaw(MStringView& outInnerCode)noexcept;
+    [[nodiscard]] b8 consumeBalancedBracesRaw(MStringView& outInnerCode)noexcept;
 
 
 private:
@@ -118,7 +118,7 @@ private:
     [[nodiscard]] MChar peekNext()const noexcept;
     [[nodiscard]] MChar peekAt(usize offset)const noexcept;
     MChar advance()noexcept;
-    [[nodiscard]] bool isAtEnd()const noexcept{ return m_current >= m_source.size(); }
+    [[nodiscard]] b8 isAtEnd()const noexcept{ return m_current >= m_source.size(); }
 
 
 private:
@@ -129,7 +129,7 @@ private:
     u32 m_column = 1;
     u32 m_errorLine = 1;
     u32 m_errorColumn = 1;
-    bool m_hasPendingError = false;
+    b8 m_hasPendingError = false;
 };
 
 

@@ -39,7 +39,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SamplerAssetCodecAutoRegistrar, SamplerAssetC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Sampler::validatePayload()const{
+b8 Sampler::validatePayload()const{
     if(!checkVirtualPath(__hidden_sampler_runtime::s_SamplerValidatePayloadContext))
         return false;
     if(!IsValidSamplerDescription(m_description)){
@@ -49,7 +49,7 @@ bool Sampler::validatePayload()const{
     return true;
 }
 
-bool Sampler::loadBinary(const Span<const u8> binary){
+b8 Sampler::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(binary, SamplerBinaryPayload::s_SamplerMagic, SamplerBinaryPayload::s_SamplerLoadBinaryContext, SamplerBinaryPayload::s_SamplerAssetKindLabel, cursor);
     if(!headerResult)

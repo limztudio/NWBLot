@@ -107,7 +107,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return
             entity.valid()
             && handle.valid()

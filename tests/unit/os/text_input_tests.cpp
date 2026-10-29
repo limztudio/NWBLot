@@ -84,7 +84,7 @@ public:
     usize m_endCount = 0u;
     TextInputAdmission::Enum m_startAdmission = TextInputAdmission::Accepted;
     TextInputChangeCause::Enum m_nativeCause = TextInputChangeCause::Other;
-    bool m_supported = true;
+    b8 m_supported = true;
 };
 
 

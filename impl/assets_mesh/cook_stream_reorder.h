@@ -59,13 +59,13 @@ public:
     template<typename StreamVectorT>
     static void PrepareMeshStreamReorder(const StreamVectorT& source, StreamVectorT& outStream, ScratchVector<u32>& outRemap);
     template<typename StreamVectorT>
-    [[nodiscard]] static bool RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, Span<u32> remap, StreamVectorT& reordered, u32& index);
+    [[nodiscard]] static b8 RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, Span<u32> remap, StreamVectorT& reordered, u32& index);
     template<typename CookEntryT>
     static void PrepareCommonMeshStreamReorder(const CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
     template<typename CookEntryT>
-    [[nodiscard]] static bool RemapMeshletAttributeRefs(const TStringView metaKind, CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
+    [[nodiscard]] static b8 RemapMeshletAttributeRefs(const TStringView metaKind, CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
     template<typename CookEntryT, typename SkinRemapperT>
-    [[nodiscard]] static bool RemapMeshletPositionRefs(const TStringView metaKind, SkinRemapperT remapSkin, CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
+    [[nodiscard]] static b8 RemapMeshletPositionRefs(const TStringView metaKind, SkinRemapperT remapSkin, CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
     template<typename CookEntryT>
     static void CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder)noexcept(
         noexcept(entry.positions = Move(reorder.positions))
@@ -74,7 +74,7 @@ public:
         && noexcept(entry.uv0 = Move(reorder.uv0))
         && noexcept(entry.colors = Move(reorder.colors))
     );
-    [[nodiscard]] static bool ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static b8 ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena);
 
 
 public:
@@ -95,7 +95,7 @@ void MeshCookStreamReorder::PrepareMeshStreamReorder(const StreamVectorT& source
 
 
 template<typename StreamVectorT>
-bool MeshCookStreamReorder::RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, const Span<u32> remap, StreamVectorT& reordered, u32& index){
+b8 MeshCookStreamReorder::RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, const Span<u32> remap, StreamVectorT& reordered, u32& index){
     if(index == s_MeshMissingStreamIndex){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is missing"), metaKind, ConvertString(virtualPath.resolvedText()), streamName);
         return false;
@@ -134,7 +134,7 @@ void MeshCookStreamReorder::PrepareCommonMeshStreamReorder(const CookEntryT& ent
 
 
 template<typename CookEntryT>
-bool MeshCookStreamReorder::RemapMeshletAttributeRefs(const TStringView metaKind, CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
+b8 MeshCookStreamReorder::RemapMeshletAttributeRefs(const TStringView metaKind, CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
     for(const MeshletDesc& meshlet : entry.meshlets){
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
             MeshletAttributeStreamRef& ref = entry.meshletAttributeStreamRefs[meshlet.attributeRefOffset + localAttributeIndex];
@@ -154,7 +154,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(const TStringView metaKind
 
 
 template<typename CookEntryT, typename SkinRemapperT>
-bool MeshCookStreamReorder::RemapMeshletPositionRefs(const TStringView metaKind, SkinRemapperT remapSkin, CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
+b8 MeshCookStreamReorder::RemapMeshletPositionRefs(const TStringView metaKind, SkinRemapperT remapSkin, CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
     for(const MeshletDesc& meshlet : entry.meshlets){
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
             MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];

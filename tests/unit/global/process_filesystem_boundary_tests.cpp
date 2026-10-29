@@ -62,7 +62,7 @@ struct OversizedBinarySource{
 public:
     [[nodiscard]] u64 size()const noexcept{ return static_cast<u64>(Limit<StreamSize>::s_Max) + 1u; }
 
-    [[nodiscard]] bool empty()const noexcept{ return false; }
+    [[nodiscard]] b8 empty()const noexcept{ return false; }
 
     [[nodiscard]] const u8* data()const noexcept{ return &s_Byte; }
 };
@@ -105,7 +105,7 @@ TEST(Global, DirectoryRetentionPreservesPredicateErrorAndRetainsUnadmittedEntrie
     ASSERT_TRUE(WriteTextFile(root / "a", "retained"));
     ASSERT_TRUE(WriteTextFile(root / "b", "retained"));
     const ErrorCode expectedError = MakeErrorCode(ErrorCondition::permission_denied);
-    const auto retained = ApplyDirectoryRetention(testArena.arena, root, 1u, [&](const auto&)noexcept->Expected<bool, ErrorCode>{ return MakeUnexpected(expectedError); });
+    const auto retained = ApplyDirectoryRetention(testArena.arena, root, 1u, [&](const auto&)noexcept->Expected<b8, ErrorCode>{ return MakeUnexpected(expectedError); });
     ASSERT_FALSE(retained);
     EXPECT_EQ(retained.error(), expectedError);
     const auto first = FileExists(root / "a");
@@ -335,7 +335,7 @@ public:
 
     [[nodiscard]] usize size()const noexcept{ return byteCount; }
 
-    [[nodiscard]] bool empty()const noexcept{ return byteCount == 0u; }
+    [[nodiscard]] b8 empty()const noexcept{ return byteCount == 0u; }
 
     void append(const char* data, const usize length){
         if(length > bytes.size() - byteCount)

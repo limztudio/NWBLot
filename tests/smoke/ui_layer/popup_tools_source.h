@@ -32,9 +32,9 @@ public:
     virtual u64 rowCount()const noexcept override{ return 5u; }
     virtual u64 key(u64 index)const noexcept override;
     virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
-    virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
+    virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
     virtual StringView text(u64 index)const noexcept override;
-    virtual bool enabled(u64 index)const noexcept override{ return index < rowCount() && key(index) != 3u; }
+    virtual b8 enabled(u64 index)const noexcept override{ return index < rowCount() && key(index) != 3u; }
 
 
 public:
@@ -44,7 +44,7 @@ public:
 
     void beginFrame()noexcept{ m_labelReads = 0u; }
 
-    [[nodiscard]] bool reversed()const noexcept{ return m_reversed; }
+    [[nodiscard]] b8 reversed()const noexcept{ return m_reversed; }
 
     [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
 
@@ -52,7 +52,7 @@ public:
 private:
     u64 m_generation = 1u;
     u64 m_revision = 1u;
-    bool m_reversed = false;
+    b8 m_reversed = false;
     mutable u32 m_labelReads = 0u;
 };
 

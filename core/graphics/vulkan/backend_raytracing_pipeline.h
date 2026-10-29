@@ -48,7 +48,7 @@ class RayTracingPipeline final : public RefCounter<GraphicsResource>, public Pip
 
 
 public:
-    RayTracingPipeline(const VulkanContext& context, Device& device, bool allowClusterAccelerationStructures)noexcept;
+    RayTracingPipeline(const VulkanContext& context, Device& device, b8 allowClusterAccelerationStructures)noexcept;
     ~RayTracingPipeline()noexcept;
 
 
@@ -57,7 +57,7 @@ public:
 
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
 
-    [[nodiscard]] bool allowsClusterAccelerationStructures()const noexcept{ return m_allowClusterAccelerationStructuresAtCreation; }
+    [[nodiscard]] b8 allowsClusterAccelerationStructures()const noexcept{ return m_allowClusterAccelerationStructuresAtCreation; }
     [[nodiscard]] Expected<RayTracingShaderTableHandle> createShaderTable();
     Object getNativeHandle(ObjectType objectType)noexcept;
 
@@ -69,7 +69,7 @@ private:
     Vector<u8, Alloc::GlobalArena> m_shaderGroupHandles;
     GraphicsVector<ShaderTableGroupMetadata> m_shaderGroups;
 
-    const bool m_allowClusterAccelerationStructuresAtCreation;
+    const b8 m_allowClusterAccelerationStructuresAtCreation;
     const VulkanContext& m_context;
     Device& m_device;
 };
@@ -121,7 +121,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool setRayGenerationShader(AStringView exportName);
+    [[nodiscard]] b8 setRayGenerationShader(AStringView exportName);
     [[nodiscard]] Expected<u32> addMissShader(AStringView exportName);
     [[nodiscard]] Expected<u32> addHitGroup(AStringView exportName);
     [[nodiscard]] Expected<u32> addCallableShader(AStringView exportName);

@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result){
+b8 Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result){
     InputRouter& input = m_context.input();
     ContextMenuState& state = *frame.state;
     input.fencePopup(frame.popupToken);
@@ -49,16 +49,16 @@ bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& res
     return applyContextMenuInput(frame, result);
 }
 
-bool Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result){
+b8 Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result){
     InputRouter& input = m_context.input();
     const auto thumbResult = MakeWidgetId(frame.rows.id, WidgetPartKey::s_Scrollbar);
     if(!thumbResult)
         return false;
     const WidgetId thumb = *thumbResult;
     auto gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
-    bool haveGesture = gesture && gesture->popup == frame.popupToken && gesture->control == frame.listToken;
+    b8 haveGesture = gesture && gesture->popup == frame.popupToken && gesture->control == frame.listToken;
     auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
-    bool haveAction = action && action->popup == frame.popupToken;
+    b8 haveAction = action && action->popup == frame.popupToken;
     ListOptions options;
     options.wheelRows = frame.options.wheelRows;
     options.selectOnNavigate = false;
@@ -99,7 +99,7 @@ void Builder::snapshotContextMenu(ContextMenuFrame& frame)noexcept{
         m_scope->m_lists[frame.list].token = frame.listToken;
 }
 
-bool Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const noexcept{
+b8 Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const noexcept{
     return
         popupAncestorsVisible() && frame.state && frame.state->revision() == frame.revision && frame.state->isOpen() == frame.open && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration
         && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->m_owner == frame.widget.id
@@ -107,7 +107,7 @@ bool Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const noexce
     ;
 }
 
-bool Builder::contextMenuMatches(const ContextMenuFrame& frame)const{
+b8 Builder::contextMenuMatches(const ContextMenuFrame& frame)const{
     return
         frame.source && contextMenuStateMatches(frame)
         && frame.listToken.contentGeneration != 0u && frame.listToken.contentRevision != 0u && frame.source->instanceGeneration() == frame.listToken.contentGeneration && contextMenuStateMatches(frame)

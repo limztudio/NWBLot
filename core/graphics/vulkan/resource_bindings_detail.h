@@ -24,17 +24,17 @@ namespace VulkanDetail{
 
 
 struct DescriptorBufferStartupPrerequisites{
-    bool descriptorBufferExtensionEnabled = false;
-    bool bufferDeviceAddressFeatureEnabled = false;
-    bool getBufferDeviceAddressAvailable = false;
-    bool getDescriptorAvailable = false;
-    bool getDescriptorSetLayoutSizeAvailable = false;
-    bool getDescriptorSetLayoutBindingOffsetAvailable = false;
-    bool cmdBindDescriptorBuffersAvailable = false;
-    bool cmdSetDescriptorBufferOffsetsAvailable = false;
+    b8 descriptorBufferExtensionEnabled = false;
+    b8 bufferDeviceAddressFeatureEnabled = false;
+    b8 getBufferDeviceAddressAvailable = false;
+    b8 getDescriptorAvailable = false;
+    b8 getDescriptorSetLayoutSizeAvailable = false;
+    b8 getDescriptorSetLayoutBindingOffsetAvailable = false;
+    b8 cmdBindDescriptorBuffersAvailable = false;
+    b8 cmdSetDescriptorBufferOffsetsAvailable = false;
 };
 
-[[nodiscard]] inline constexpr bool HasDescriptorBufferStartupPrerequisites(const DescriptorBufferStartupPrerequisites& prerequisites)noexcept{
+[[nodiscard]] inline constexpr b8 HasDescriptorBufferStartupPrerequisites(const DescriptorBufferStartupPrerequisites& prerequisites)noexcept{
     return
         prerequisites.descriptorBufferExtensionEnabled
         && prerequisites.bufferDeviceAddressFeatureEnabled
@@ -60,8 +60,8 @@ struct DescriptorBufferStartupPrerequisites{
     };
 }
 
-[[nodiscard]] bool IsDescriptorBufferBackendReady(const VulkanContext& context)noexcept;
-[[nodiscard]] inline constexpr bool IsSupportedDescriptorBindingType(const ResourceType::Enum type)noexcept{
+[[nodiscard]] b8 IsDescriptorBufferBackendReady(const VulkanContext& context)noexcept;
+[[nodiscard]] inline constexpr b8 IsSupportedDescriptorBindingType(const ResourceType::Enum type)noexcept{
     switch(type){
     case ResourceType::Texture_SRV:
     case ResourceType::Texture_UAV:
@@ -103,7 +103,7 @@ inline u64 g_NextDescriptorBufferStorageIdentity = 1u;
     return identity;
 }
 
-[[nodiscard]] inline constexpr bool UsesDescriptorBufferInfo(const ResourceType::Enum type)noexcept{
+[[nodiscard]] inline constexpr b8 UsesDescriptorBufferInfo(const ResourceType::Enum type)noexcept{
     switch(type){
     case ResourceType::ConstantBuffer:
     case ResourceType::StructuredBuffer_SRV:
@@ -116,7 +116,7 @@ inline u64 g_NextDescriptorBufferStorageIdentity = 1u;
     }
 }
 
-[[nodiscard]] inline u32 GetDescriptorSize(const VulkanContext& context, const bool enabled, const VkDescriptorType descriptorType)noexcept{
+[[nodiscard]] inline u32 GetDescriptorSize(const VulkanContext& context, const b8 enabled, const VkDescriptorType descriptorType)noexcept{
     if(!enabled)
         return 0u;
 

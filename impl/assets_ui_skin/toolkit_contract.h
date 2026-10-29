@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 
 
 // The stock widget styles use this fixed region contract. Generic UiSkin assets may contain fewer regions.
-[[nodiscard]] bool ValidateUiSkinToolkitContract(const UiSkin& skin);
+[[nodiscard]] b8 ValidateUiSkinToolkitContract(const UiSkin& skin);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

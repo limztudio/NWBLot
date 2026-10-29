@@ -117,7 +117,7 @@ constexpr StringView s_Literal = "{NARROW_LITERAL}";
 const char g_NamedA[] = "NWB_NAMED_IMMUTABLE_OBJECT_IDENTITY";
 char g_MutableA[] = "NWB_MUTABLE_OBJECT_IDENTITY";
 StringView g_EscapedView;
-bool g_EarlyValid = false;
+b8 g_EarlyValid = false;
 
 static_assert(s_Literal.size() == {len(NARROW_LITERAL)} && s_Literal.front() == 'N');
 

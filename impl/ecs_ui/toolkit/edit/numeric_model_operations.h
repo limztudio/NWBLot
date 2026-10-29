@@ -32,14 +32,14 @@ template<typename Value, typename Bounds, typename Canonicalize, typename Change
     AString<Core::Alloc::GlobalArena>& acceptedDraft,
     const Expected<Value, NumericParseStatus::Enum>& parsed,
     const Bounds& bounds,
-    const bool canonical,
+    const b8 canonical,
     const AStringView draft,
     Canonicalize canonicalize,
     Changed changed
 ){
-    const bool outside = parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum);
-    const bool clamped = outside && bounds.policy == NumericBoundsPolicy::Clamp;
-    const bool rejected = !parsed || (outside && !clamped);
+    const b8 outside = parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum);
+    const b8 clamped = outside && bounds.policy == NumericBoundsPolicy::Clamp;
+    const b8 rejected = !parsed || (outside && !clamped);
     NumericEditResult result;
     if(rejected){
         if(canonical){
@@ -71,7 +71,7 @@ template<typename Value, typename Bounds, typename Canonicalize, typename Change
 
 
 template<typename Canonicalize>
-[[nodiscard]] NumericEditResult RestoreDraft(Canonicalize canonicalize, const bool cancelled)noexcept(
+[[nodiscard]] NumericEditResult RestoreDraft(Canonicalize canonicalize, const b8 cancelled)noexcept(
     []()constexpr noexcept{
         using Returned = decltype(DeclVal<Canonicalize&>()());
         using Result = Decay_T<Returned>;
@@ -80,8 +80,8 @@ template<typename Canonicalize>
             && IsNothrowDestructible_V<Canonicalize>
             && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Result>)
             && IsNothrowDestructible_V<Result>
-            && noexcept(static_cast<bool>(!DeclVal<const Result&>()))
-            && noexcept(DeclVal<bool&>() = *DeclVal<const Result&>())
+            && noexcept(static_cast<b8>(!DeclVal<const Result&>()))
+            && noexcept(DeclVal<b8&>() = *DeclVal<const Result&>())
         ;
     }()
 ){
@@ -101,10 +101,10 @@ inline void AdvanceRevision(u64& inOutRevision)noexcept{
     ++inOutRevision;
 }
 
-[[nodiscard]] inline Expected<bool, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
+[[nodiscard]] inline Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
     if(!formatted)
         return MakeUnexpected(formatted.error());
-    const bool changed = *formatted != inOutDraft.text();
+    const b8 changed = *formatted != inOutDraft.text();
     if(!inOutDraft.setText(*formatted))
         return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
     outAcceptedDraft.assign(formatted->data(), formatted->size());
@@ -118,11 +118,11 @@ template<typename Value, typename Bounds>
     return parsed ? NumericParseStatus::Complete : parsed.error();
 }
 
-[[nodiscard]] inline bool DraftDirty(const EditModel& draft, const AStringView acceptedDraft)noexcept{
+[[nodiscard]] inline b8 DraftDirty(const EditModel& draft, const AStringView acceptedDraft)noexcept{
     return draft.text() != acceptedDraft;
 }
 
-[[nodiscard]] inline bool SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
+[[nodiscard]] inline b8 SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
     if(!inOutDraft.setText(text))
         return false;
     AdvanceRevision(inOutRevision);
@@ -130,7 +130,7 @@ template<typename Value, typename Bounds>
 }
 
 template<typename Canonicalize>
-[[nodiscard]] inline NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const bool cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
+[[nodiscard]] inline NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const b8 cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
     NumericEditResult result = RestoreDraft(Move(canonicalize), cancelled);
     if(result.valid)
         AdvanceRevision(inOutRevision);

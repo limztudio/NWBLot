@@ -58,7 +58,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool empty()const noexcept{ return valueCount == 0u; }
+    [[nodiscard]] b8 empty()const noexcept{ return valueCount == 0u; }
 
     [[nodiscard]] usize size()const noexcept{ return valueCount; }
 
@@ -237,7 +237,7 @@ TEST(SIMDMemory, AdjacentRangesInOneLiveByteArrayAreAcceptedWithoutClobberingGua
     u8 expected[s_BufferBytes]{};
     const usize lengths[]{ 16u, 32u, 48u, 64u, 128u, 256u, 4096u };
     for(const usize count : lengths){
-        for(const bool destinationFirst : { false, true }){
+        for(const b8 destinationFirst : { false, true }){
             for(usize index = 0u; index < s_BufferBytes; ++index)
                 bytes[index] = expected[index] = PatternByte(index);
             const usize destinationStart = s_GuardBytes + (destinationFirst ? 0u : count);
@@ -265,8 +265,8 @@ TEST(SIMDMemory, ProtectedPageEdgesRejectOverreadsUnderreadsAndOutOfRangeStores)
 
     for(usize lengthIndex = 1u; lengthIndex <= LengthOf(s_Lengths); ++lengthIndex){
         const usize count = lengthIndex == LengthOf(s_Lengths) ? source.accessibleBytes : s_Lengths[lengthIndex];
-        for(const bool sourceAtEnd : { false, true }){
-            for(const bool destinationAtEnd : { false, true }){
+        for(const b8 sourceAtEnd : { false, true }){
+            for(const b8 destinationAtEnd : { false, true }){
                 NWB_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
                 // Nonmultiple tails leave less than one vector of poison before the upper guard to keep both starts aligned.
                 const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~(s_SIMDMemoryCopyAlignment - 1u) : 0u;

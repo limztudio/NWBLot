@@ -19,7 +19,7 @@ namespace __hidden_native_mask_tests{
 
 
 // This preserved mask formula qualifies discarded-lane flags in the same compiler and optimization context as the candidate.
-NWB_NOINLINE bool BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
+NWB_NOINLINE b8 BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble comparison = VectorDoubleEqual(left, right);
 #if defined(NWB_HAS_NEON64)
@@ -32,8 +32,8 @@ NWB_NOINLINE bool BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble
     return (mask & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ;
 }
 
-template<bool Integer, u32 Dimension>
-NWB_NOINLINE bool CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
+template<b8 Integer, u32 Dimension>
+NWB_NOINLINE b8 CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Integer){
         if constexpr(Dimension == 3u)
@@ -49,8 +49,8 @@ NWB_NOINLINE bool CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)no
     }
 }
 
-template<bool Integer>
-NWB_NOINLINE bool CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noexcept{
+template<b8 Integer>
+NWB_NOINLINE b8 CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Integer)
         return Vector4EqualInt(left, right);
@@ -126,14 +126,14 @@ TEST(MathNativeMask, PartialAndFullComparisonsPreserveSignalingLaneExceptions){
             EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0) << roundingMode << ':' << poisonLane;
 
             ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const bool baselinePartial = BaselineCompareDouble3(value, referenceDouble);
+            const b8 baselinePartial = BaselineCompareDouble3(value, referenceDouble);
             const i32 baselinePartialFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
             EXPECT_EQ(baselinePartial, poisonLane == 3u) << roundingMode << ':' << poisonLane;
             if(poisonLane != 3u)
                 EXPECT_EQ(baselinePartialFlags, FE_INVALID) << roundingMode << ':' << poisonLane;
 
             ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const bool actualPartial = CompareDouble<false, 3u>(value, referenceDouble);
+            const b8 actualPartial = CompareDouble<false, 3u>(value, referenceDouble);
             const i32 actualPartialFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
             EXPECT_EQ(actualPartial, baselinePartial) << roundingMode << ':' << poisonLane;
             EXPECT_EQ(actualPartialFlags, baselinePartialFlags) << roundingMode << ':' << poisonLane;

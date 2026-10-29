@@ -78,7 +78,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
     output << "{\"index\":" << queue.index << ",\"device_generation\":" << queue.deviceGeneration << '}';
 }
 
-[[nodiscard]] bool ValidateSnapshot(const Core::Telemetry::FrameGraphPayload& payload, const u64 sourceFrame)noexcept{
+[[nodiscard]] b8 ValidateSnapshot(const Core::Telemetry::FrameGraphPayload& payload, const u64 sourceFrame)noexcept{
     if(payload.frameIndex != sourceFrame || payload.nodes.empty() || payload.edges.empty() || !payload.packetSubmissionStatisticsPresent || payload.packetSubmissionStatistics.empty() || payload.physicalQueueRuntimeStatistics.empty()){
         usize runtimeOwners = 0u;
         usize compiledTasks = 0u;
@@ -149,7 +149,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
     return true;
 }
 
-[[nodiscard]] bool WriteSnapshot(OutputFileStream& output, const Core::Telemetry::FrameGraphPayload& payload, const u64 graphicsFrame, const u64 completedFrames){
+[[nodiscard]] b8 WriteSnapshot(OutputFileStream& output, const Core::Telemetry::FrameGraphPayload& payload, const u64 graphicsFrame, const u64 completedFrames){
     output.precision(17);
     output << "{\n\"type\":\"stress_frame_graph_snapshot\",\"source_frame\":" << payload.frameIndex
         << ",\"graphics_frame_at_capture\":" << graphicsFrame << ",\"completed_frames\":" << completedFrames
@@ -259,7 +259,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStringView outputPath, const u64 completedFrames){
+b8 CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStringView outputPath, const u64 completedFrames){
     const u64 graphicsFrame = context.graphics.getFrameIndex();
     if(outputPath.empty() || completedFrames == 0u || graphicsFrame == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: no completed frame or output path"));
@@ -316,7 +316,7 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));
         return false;
     }
-    const bool snapshotWritten = __hidden_stress_frame_graph_snapshot::WriteSnapshot(output, *payload, graphicsFrame, completedFrames);
+    const b8 snapshotWritten = __hidden_stress_frame_graph_snapshot::WriteSnapshot(output, *payload, graphicsFrame, completedFrames);
     output.close();
     if(!snapshotWritten || !output.good()){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));

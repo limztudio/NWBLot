@@ -81,7 +81,7 @@ public:
 
 
 public:
-    virtual bool readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override{
+    virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override{
         ++m_readCount;
         outBinary.clear();
         if(!m_available || virtualPath != m_path)
@@ -95,13 +95,13 @@ public:
     AssetBytes m_binary;
     Name m_path = Name(s_TexturePath);
     mutable usize m_readCount = 0u;
-    bool m_available = true;
+    b8 m_available = true;
 };
 
 // Codec doubles that return mismatched asset types or virtual paths.
 class MisdirectedImageCodec final : public IAssetCodec{
 public:
-    explicit MisdirectedImageCodec(const bool wrongType)noexcept
+    explicit MisdirectedImageCodec(const b8 wrongType)noexcept
         : IAssetCodec(Texture::AssetTypeName())
         , m_wrongType(wrongType)
     {}
@@ -118,7 +118,7 @@ public:
 
 
 private:
-    bool m_wrongType = false;
+    b8 m_wrongType = false;
 };
 
 

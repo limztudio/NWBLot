@@ -36,12 +36,12 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer, u32 rayCapacity, u64 sourceFrame, bool csg);
+void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer, u32 rayCapacity, u64 sourceFrame, b8 csg);
 
 // Synchronized probe for reflection CSG captures and packet receipts.
 class ReflectionCsgContextProbe final{
 private:
-    [[nodiscard]] static bool ShouldCapture(void* owner, u64 sourceFrame)noexcept;
+    [[nodiscard]] static b8 ShouldCapture(void* owner, u64 sourceFrame)noexcept;
 
 
 public:
@@ -50,12 +50,12 @@ public:
 
 
 public:
-    [[nodiscard]] bool create(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics);
+    [[nodiscard]] b8 create(Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics);
 
 
 private:
-    [[nodiscard]] bool beginPhase();
+    [[nodiscard]] b8 beginPhase();
 
 
 private:
@@ -73,7 +73,7 @@ private:
     const u32 m_rayCapacity;
     u32 m_phase = 0u;
     u32 m_completed = 0u;
-    bool m_done = false;
+    b8 m_done = false;
 };
 
 

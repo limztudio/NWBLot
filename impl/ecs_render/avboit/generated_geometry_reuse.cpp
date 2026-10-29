@@ -25,7 +25,7 @@ namespace __hidden_generated_geometry_reuse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool EligibleGroup(const MaterialPassDrawItemPartitionsView& draws, const Span<const InstanceGpuData> instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const MaterialPipelinePass::Enum pass, Core::Alloc::ScratchArena& arena){
+[[nodiscard]] b8 EligibleGroup(const MaterialPassDrawItemPartitionsView& draws, const Span<const InstanceGpuData> instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const MaterialPipelinePass::Enum pass, Core::Alloc::ScratchArena& arena){
     if(
         !MaterialPipelinePassUsesRendererAvboit(pass)
         || draws.regular.computeDrawItems.empty() || !draws.regular.meshDrawItems.empty()
@@ -50,7 +50,7 @@ namespace __hidden_generated_geometry_reuse{
     return true;
 }
 
-[[nodiscard]] bool SourceBuffersMatch(const RuntimeMeshBuffers& left, const RuntimeMeshBuffers& right)noexcept{
+[[nodiscard]] b8 SourceBuffersMatch(const RuntimeMeshBuffers& left, const RuntimeMeshBuffers& right)noexcept{
     return
         left.positionBuffer == right.positionBuffer && left.normalBuffer == right.normalBuffer
         && left.tangentBuffer == right.tangentBuffer && left.uv0Buffer == right.uv0Buffer
@@ -63,7 +63,7 @@ namespace __hidden_generated_geometry_reuse{
     ;
 }
 
-[[nodiscard]] bool DrawInputsMatch(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
+[[nodiscard]] b8 DrawInputsMatch(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
     const MaterialPassMeshResourceSnapshot& leftMesh = left.meshResources;
     const MaterialPassMeshResourceSnapshot& rightMesh = right.meshResources;
     if(
@@ -93,7 +93,7 @@ namespace __hidden_generated_geometry_reuse{
     return true;
 }
 
-[[nodiscard]] bool FrameBindingsMatch(const ECSRenderDetail::MeshFrameBindingSnapshot& left, const ECSRenderDetail::MeshFrameBindingSnapshot& right)noexcept{
+[[nodiscard]] b8 FrameBindingsMatch(const ECSRenderDetail::MeshFrameBindingSnapshot& left, const ECSRenderDetail::MeshFrameBindingSnapshot& right)noexcept{
     return
         left.instanceBuffer == right.instanceBuffer && left.materialTypedBuffer == right.materialTypedBuffer
         && left.meshView.buffer == right.meshView.buffer && left.meshView.heapHandle == right.meshView.heapHandle
@@ -127,7 +127,7 @@ void AvboitGeneratedGeometryReuse::reset()noexcept{
     m_captured = false;
 }
 
-bool AvboitGeneratedGeometryReuse::capture(
+b8 AvboitGeneratedGeometryReuse::capture(
     const MaterialPassDrawItemPartitionsView& draws,
     const Span<const InstanceGpuData> instances,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
@@ -149,7 +149,7 @@ bool AvboitGeneratedGeometryReuse::capture(
     return true;
 }
 
-bool AvboitGeneratedGeometryReuse::matches(
+b8 AvboitGeneratedGeometryReuse::matches(
     const MaterialPassDrawItemPartitionsView& draws,
     const Span<const InstanceGpuData> instances,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
@@ -176,7 +176,7 @@ bool AvboitGeneratedGeometryReuse::matches(
     return true;
 }
 
-bool AvboitGeneratedGeometryReuse::publishProducer(const Core::GpuTaskId task)noexcept{
+b8 AvboitGeneratedGeometryReuse::publishProducer(const Core::GpuTaskId task)noexcept{
     if(!m_captured || !task.valid()){
         reset();
         return false;

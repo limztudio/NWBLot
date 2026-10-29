@@ -20,19 +20,19 @@ NWB_IMPL_UI_BEGIN
 
 struct RadioGroupOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    bool enabled = true;
+    b8 enabled = true;
 };
 
 struct RadioGroupResult{
-    bool valid = false;
-    bool selectionChanged = false;
-    bool activated = false;
-    bool focused = false;
+    b8 valid = false;
+    b8 selectionChanged = false;
+    b8 activated = false;
+    b8 focused = false;
 };
 
 struct RadioGroupChoice{
     u64 key = 0u;
-    bool enabled = false;
+    b8 enabled = false;
 };
 
 struct RadioGroupChoices{
@@ -53,7 +53,7 @@ struct RadioGroupSnapshot{
 
 
 public:
-    [[nodiscard]] bool operator==(const RadioGroupSnapshot&)const noexcept = default;
+    [[nodiscard]] b8 operator==(const RadioGroupSnapshot&)const noexcept = default;
 };
 
 
@@ -88,7 +88,7 @@ public:
 
     [[nodiscard]] const RadioGroupPlacement& placement()const noexcept{ return m_placement; }
     [[nodiscard]] RadioGroupSnapshot snapshot()const noexcept;
-    [[nodiscard]] bool matches(const RadioGroupSnapshot& value)const noexcept;
+    [[nodiscard]] b8 matches(const RadioGroupSnapshot& value)const noexcept;
     void select(u64 key)noexcept;
     void reset()noexcept;
 
@@ -106,8 +106,8 @@ private:
     u64 m_sourceGeneration = 0u;
     u64 m_sourceRevision = 0u;
     RadioGroupPlacement m_placement;
-    bool m_reconciling = false;
-    bool m_reentryObserved = false;
+    b8 m_reconciling = false;
+    b8 m_reentryObserved = false;
 };
 
 // An optional guard is borrowed only during reconciliation to stop source calls when its declaration context fails.
@@ -117,7 +117,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool current()const = 0;
+    [[nodiscard]] virtual b8 current()const = 0;
 };
 
 class RadioGroupBehavior final{
@@ -125,7 +125,7 @@ public:
     // Copy the complete bounded source before atomically committing reconciliation; callbacks cannot reenter this state.
     [[nodiscard]] static Expected<RadioGroupChoices> Reconcile(RadioGroupState& state, RadioGroupResult& result, const IListDataSource& source, const IRadioGroupReconcileGuard* guard = nullptr);
     // Navigation consumes copied choices and never calls the source; accepted internal intents preserve the input token.
-    [[nodiscard]] static bool Apply(RadioGroupState& state, RadioGroupResult& result, const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action)noexcept;
+    [[nodiscard]] static b8 Apply(RadioGroupState& state, RadioGroupResult& result, const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action)noexcept;
 };
 
 

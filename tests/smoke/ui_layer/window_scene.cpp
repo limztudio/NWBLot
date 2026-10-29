@@ -68,7 +68,7 @@ static constexpr f32 s_Gap = 4.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     ObserveSmokeDisplay(NWB_TEXT("UiWindowSmoke"), context.display, m_lastDisplay, m_displayChanged);
     Builder& ui = context.ui;
@@ -79,7 +79,7 @@ bool UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
     options.minimumSize = { 180.0f, 110.0f };
     options.movable = !m_locked;
     options.resizable = !m_locked;
-    const bool contentVisible = ui.beginWindow("window", "Window", m_window, options);
+    const b8 contentVisible = ui.beginWindow("window", "Window", m_window, options);
     const WindowMetrics metrics = ui.windowMetrics();
     if(contentVisible){
         const WidgetOptions label{ {}, { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_LabelHeight } };
@@ -165,7 +165,7 @@ void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl:
     context.paint.fillRect({ VectorGetX(anchors), VectorGetY(anchors), 10.0f, 10.0f }, __hidden_ui_window_smoke::s_TitleAnchor);
     if(!m_window.collapsed)
         context.paint.fillRect({ VectorGetX(anchors), VectorGetZ(anchors), 10.0f, 10.0f }, __hidden_ui_window_smoke::s_ContentAnchor);
-    const bool popped = context.paint.popClip();
+    const b8 popped = context.paint.popClip();
     NWB_FATAL_ASSERT(popped);
 }
 
@@ -173,11 +173,11 @@ void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerWindowSmokeEnabled(){
+b8 IsUiLayerWindowSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_WINDOW");
 }
 
-bool IsUiLayerWindowSkinSmokeEnabled(){
+b8 IsUiLayerWindowSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_WINDOW_SKIN");
 }
 

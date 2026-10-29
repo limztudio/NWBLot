@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
+b8 Builder::paintTextArea(const Item& item, const LayoutBox& box){
     if(item.textArea >= m_scope->m_textAreas.size())
         return false;
     const TextAreaFrame& frame = m_scope->m_textAreas[item.textArea];
@@ -65,7 +65,7 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
     target.gestureMaximumX = state.scrollbars().horizontal.maximum;
     if(!m_context.addTarget(item.state, target) || !paintTextAreaScrollbars(item, state.scrollbars(), clip, token))
         return false;
-    const bool published = !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);
+    const b8 published = !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);
     if(!published || !textAreaMatches(frame))
         return false;
     return true;

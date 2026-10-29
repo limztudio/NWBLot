@@ -103,7 +103,7 @@ constexpr AStringView s_CasePrism = "prism";
 
 class GalleryBuilder final{
 public:
-    GalleryBuilder(Core::ECS::World& world, const bool preview)noexcept
+    GalleryBuilder(Core::ECS::World& world, const b8 preview)noexcept
         : m_world(world)
         , m_preview(preview)
     {}
@@ -114,7 +114,7 @@ public:
         const SmokeMeshRef& mesh,
         const Float4& position,
         const Float4& scale,
-        const bool second = false,
+        const b8 second = false,
         const f32 coverage = 0.0f,
         const f32 yaw = 0.0f,
         const f32 roll = 0.0f,
@@ -143,7 +143,7 @@ public:
         const f32 x,
         const f32 z,
         const f32 radius,
-        const bool second = false,
+        const b8 second = false,
         const f32 coverage = 0.0f,
         const Name opticalGroup = s_NameNone,
         const i32 opticalPriority = 0,
@@ -165,8 +165,8 @@ public:
     }
 
     Expected<Core::ECS::EntityID> csgSlab(const AStringView caseName, const Float4& tint, const SmokeMaterialRef& material, const NameText<char> surfaceInterface){
-        const bool reference = caseName == s_CaseCsgReference;
-        const bool middle = caseName == s_CaseCsgMiddle;
+        const b8 reference = caseName == s_CaseCsgReference;
+        const b8 middle = caseName == s_CaseCsgMiddle;
         const auto entity = CreateTintedStaticMeshEntity(
             m_world, s_Cube,
             m_preview ? s_Preview : material, m_preview ? NameText<char>{s_Interface} : surfaceInterface, tint,
@@ -194,7 +194,7 @@ public:
         return entity;
     }
 
-    bool identitySlab(const AStringView caseName){
+    b8 identitySlab(const AStringView caseName){
         if(caseName != s_CaseIdentityReference){
             // Raster clips this distinct entry, while its ray distance stays inside the primary hardware association band.
             constexpr f32 s_ForeignExit = 0.25f;
@@ -229,7 +229,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool farPlaneReceiver(const Core::ECS::EntityID entity, const Name group){
+    [[nodiscard]] b8 farPlaneReceiver(const Core::ECS::EntityID entity, const Name group){
         AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
         auto cutterEntity = m_world.createEntity();
         if(!cutterEntity.id().valid())
@@ -244,7 +244,7 @@ public:
         return true;
     }
 
-    bool crossingOverflow(){
+    b8 crossingOverflow(){
         const auto entity = CreateTintedStaticMeshEntity(
             m_world, SmokeMeshRef("project/meshes/refraction_crossing_overflow"),
             m_preview ? s_Preview : s_Glass, s_Interface, Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f),
@@ -258,7 +258,7 @@ public:
         return true;
     }
 
-    bool nearAirSlab(const bool csg){
+    b8 nearAirSlab(const b8 csg){
         const auto entity = CreateTintedStaticMeshEntity(
             m_world, s_Cube,
             m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
@@ -305,7 +305,7 @@ public:
 
 private:
     Core::ECS::World& m_world;
-    bool m_preview;
+    b8 m_preview;
 };
 
 
@@ -318,7 +318,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CreateRefractionGalleryScene(Core::ECS::World& world, const AStringView caseName, const bool geometryPreview){
+b8 CreateRefractionGalleryScene(Core::ECS::World& world, const AStringView caseName, const b8 geometryPreview){
     using namespace __hidden_refraction_gallery_scene;
 
     const auto camera = CreateSmokeCamera(world, s_GalleryCenterHeight, s_GalleryCameraDistance, 0.0f);
@@ -368,15 +368,15 @@ bool CreateRefractionGalleryScene(Core::ECS::World& world, const AStringView cas
         scene.sphere(0.2f, 0.15f, 0.62f, true);
     }
     else if(caseName == s_CaseDuplicateSingleCool || caseName == s_CaseDuplicateSingleWarm || caseName == s_CaseDuplicateSingleCoolTinted || caseName == s_CaseDuplicateSingleWarmTinted){
-        const bool warm = caseName == s_CaseDuplicateSingleWarm || caseName == s_CaseDuplicateSingleWarmTinted;
-        const bool tinted = caseName == s_CaseDuplicateSingleCoolTinted || caseName == s_CaseDuplicateSingleWarmTinted;
+        const b8 warm = caseName == s_CaseDuplicateSingleWarm || caseName == s_CaseDuplicateSingleWarmTinted;
+        const b8 tinted = caseName == s_CaseDuplicateSingleCoolTinted || caseName == s_CaseDuplicateSingleWarmTinted;
         const f32 coverage = tinted ? s_TintedCoverage : 0.0f;
         scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, warm, coverage);
     }
     else if(caseName == s_CaseCoincident || caseName == s_CaseCoincidentTinted || caseName == s_CaseCoincidentReversed || caseName == s_CaseCoincidentTintedReversed || caseName == s_CaseCoincidentPrioritySwap || caseName == s_CaseCoincidentTintedPrioritySwap){
-        const bool tinted = caseName == s_CaseCoincidentTinted || caseName == s_CaseCoincidentTintedReversed || caseName == s_CaseCoincidentTintedPrioritySwap;
-        const bool reversed = caseName == s_CaseCoincidentReversed || caseName == s_CaseCoincidentTintedReversed;
-        const bool warmWins = caseName == s_CaseCoincidentPrioritySwap || caseName == s_CaseCoincidentTintedPrioritySwap;
+        const b8 tinted = caseName == s_CaseCoincidentTinted || caseName == s_CaseCoincidentTintedReversed || caseName == s_CaseCoincidentTintedPrioritySwap;
+        const b8 reversed = caseName == s_CaseCoincidentReversed || caseName == s_CaseCoincidentTintedReversed;
+        const b8 warmWins = caseName == s_CaseCoincidentPrioritySwap || caseName == s_CaseCoincidentTintedPrioritySwap;
         const f32 coverage = tinted ? s_TintedCoverage : 0.0f;
         const i32 coolPriority = warmWins ? 0 : s_WinningOpticalPriority;
         const i32 warmPriority = warmWins ? s_WinningOpticalPriority : 0;

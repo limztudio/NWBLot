@@ -39,7 +39,7 @@ inline constexpr usize s_TextureByteCount = 96u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool CaptureTwoUploads(Graphics::GpuCommandIrCapture& capture, const BinaryByteView bufferBytes, const BinaryByteView textureBytes){
+[[nodiscard]] b8 CaptureTwoUploads(Graphics::GpuCommandIrCapture& capture, const BinaryByteView bufferBytes, const BinaryByteView textureBytes){
     Graphics::TextureSlice slice;
     slice.setOrigin(0u, 0u, 0u).setSize(4u, 3u, 2u).setMipLevel(1u).setArraySlice(2u);
     return

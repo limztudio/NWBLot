@@ -32,7 +32,7 @@ void UiSearchComboGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = s_GalleryFontSize;
-    bool valid = ui.label(s_TitleKey, "Searchable fruit selection");
+    b8 valid = ui.label(s_TitleKey, "Searchable fruit selection");
     SearchComboOptions options;
     options.combo.popupHeight = s_PopupHeight;
     const SearchComboResult result = ui.searchComboBox(s_ChoiceKey, m_source, m_state, options);

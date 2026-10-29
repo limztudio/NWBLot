@@ -66,7 +66,7 @@ struct ConnectionInfo{
     usize size = 0u;
     usize capacity = 0u;
     ConnectionUploadKind::Enum uploadKind = ConnectionUploadKind::LogMessage;
-    bool crashUploadOwned = false;
+    b8 crashUploadOwned = false;
     Path crashUploadPath;
     OutputFileStream crashUploadStream;
 
@@ -93,7 +93,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool append(const BinaryByteView uploadData){
+    [[nodiscard]] b8 append(const BinaryByteView uploadData){
         const usize appendSize = uploadData.size();
         if(appendSize == 0u)
             return true;
@@ -113,7 +113,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool appendCrashUpload(const BinaryByteView uploadData){
+    [[nodiscard]] b8 appendCrashUpload(const BinaryByteView uploadData){
         if(!crashUploadStream.is_open())
             return false;
 
@@ -125,7 +125,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool closeCrashUploadStream()noexcept{
+    [[nodiscard]] b8 closeCrashUploadStream()noexcept{
         if(crashUploadStream.is_open())
             crashUploadStream.close();
 
@@ -145,7 +145,7 @@ public:
         crashUploadOwned = false;
     }
 
-    [[nodiscard]] bool reserve(const usize requiredSize)noexcept{
+    [[nodiscard]] b8 reserve(const usize requiredSize)noexcept{
         if(requiredSize <= capacity)
             return true;
 
@@ -354,8 +354,8 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
     if(urlView == __hidden_logger_server::s_UnsupportedNameSymbolUploadPath)
         return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_NOT_FOUND);
 
-    const bool isCrashUpload = urlView == Core::Crash::PackageNames::s_CrashUploadEndpoint;
-    const bool isTelemetryUpload = urlView == s_TelemetryUploadEndpoint;
+    const b8 isCrashUpload = urlView == Core::Crash::PackageNames::s_CrashUploadEndpoint;
+    const b8 isTelemetryUpload = urlView == s_TelemetryUploadEndpoint;
     const auto uploadKind = isCrashUpload ? __hidden_logger_server::ConnectionUploadKind::Crash : isTelemetryUpload ? __hidden_logger_server::ConnectionUploadKind::Telemetry : __hidden_logger_server::ConnectionUploadKind::LogMessage;
 
     if(!connectionContext){
@@ -488,14 +488,14 @@ Server::~Server()noexcept{
     m_processedMessageFile.close();
 }
 
-bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStringView crashSymbolStoreDirectory, CrashRetentionConfig crashRetentionConfig, AStringView crashUploadToken){
+b8 Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStringView crashSymbolStoreDirectory, CrashRetentionConfig crashRetentionConfig, AStringView crashUploadToken){
     m_crashIngestConfig.symbolication.symbolStoreDirectory.clear();
     if(!crashSymbolStoreDirectory.empty())
         m_crashIngestConfig.symbolication.symbolStoreDirectory = crashSymbolStoreDirectory;
     m_crashIngestConfig.retention = crashRetentionConfig;
     m_crashUploadToken.assign(crashUploadToken.data(), crashUploadToken.size());
     const auto nameSymbolLoad = Core::Common::NameSymbols::LoadDefaultFile();
-    bool loadedNameSymbols = false;
+    b8 loadedNameSymbols = false;
     if(nameSymbolLoad)
         loadedNameSymbols = *nameSymbolLoad;
     else{
@@ -546,7 +546,7 @@ void Server::internalDestroy(){
     stopCrashIngestWorker();
 }
 
-bool Server::internalUpdate(){
+b8 Server::internalUpdate(){
     MessageType msg = MakeMessageType(BaseType::arena());
     while(tryDequeue(msg)){
         const auto type = Get<1>(msg);
@@ -566,7 +566,7 @@ bool Server::internalUpdate(){
     return true;
 }
 
-bool Server::enqueueCrashUpload(const Path& path, Core::Alloc::ScratchArena& scratchArena){
+b8 Server::enqueueCrashUpload(const Path& path, Core::Alloc::ScratchArena& scratchArena){
     PendingCrashUpload upload;
     const AString<Core::Alloc::ScratchArena> pathText = PathToString<char>(scratchArena, path);
     if(pathText.size() >= sizeof(upload.path)){
@@ -581,14 +581,14 @@ bool Server::enqueueCrashUpload(const Path& path, Core::Alloc::ScratchArena& scr
 }
 
 void Server::stopCrashIngestWorker(){
-    const bool alreadyStopping = m_crashIngestExit.exchange(true, MemoryOrder::acq_rel);
+    const b8 alreadyStopping = m_crashIngestExit.exchange(true, MemoryOrder::acq_rel);
     if(!alreadyStopping)
         m_crashIngestSemaphore.release();
     if(m_crashIngestThread.joinable())
         m_crashIngestThread.join();
 }
 
-bool Server::crashUploadAuthorized(MHD_Connection& connection)const noexcept{
+b8 Server::crashUploadAuthorized(MHD_Connection& connection)const noexcept{
     const char* authorizationHeader = MHD_lookup_connection_value(&connection, MHD_HEADER_KIND, "Authorization");
     return CrashUploadAuthorizationMatches(AStringView(m_crashUploadToken.data(), m_crashUploadToken.size()), authorizationHeader ? AStringView(authorizationHeader) : AStringView{});
 }

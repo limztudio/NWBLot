@@ -29,7 +29,7 @@ public:
         typename AttributeSkinVectorT,
         typename LocalVertexRefVectorT
     >
-    [[nodiscard]] static bool BuildZippedMeshletRefs(
+    [[nodiscard]] static b8 BuildZippedMeshletRefs(
         const Path& nwbFilePath,
         const TStringView metaKind,
         const CookEntryT& entry,
@@ -81,7 +81,7 @@ template<
     typename AttributeSkinVectorT,
     typename LocalVertexRefVectorT
 >
-[[nodiscard]] bool MeshletZippedRefBuilder::BuildZippedMeshletRefs(
+[[nodiscard]] b8 MeshletZippedRefBuilder::BuildZippedMeshletRefs(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const CookEntryT& entry,

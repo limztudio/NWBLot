@@ -31,7 +31,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, ModelBinaryPayload::s_ModelSerializeContext))
         return false;
 
@@ -77,7 +77,7 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     }
 
     usize reserveBytes = sizeof(ModelBinaryPayload::ModelHeaderBinary);
-    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, skeletonObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, staticMeshObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, skinnedMeshObjectBinaries);
+    const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, skeletonObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, staticMeshObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, skinnedMeshObjectBinaries);
 
     outBinary.clear();
     if(canReserve)
@@ -124,11 +124,11 @@ static constexpr AStringView s_ModelMetaDiagnosticPrefix = "Model meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateModelAssetFields(const Path& nwbFilePath, const Value& asset){
+[[nodiscard]] b8 ValidateModelAssetFields(const Path& nwbFilePath, const Value& asset){
     return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix, { s_SkeletonsField, s_StaticMeshesField, s_SkinnedMeshesField });
 }
 
-[[nodiscard]] bool ValidateModelObjectFields(const Path& nwbFilePath, const Value& object, const AStringView objectKind, const InitializerList<AStringView> allowedFields){
+[[nodiscard]] b8 ValidateModelObjectFields(const Path& nwbFilePath, const Value& object, const AStringView objectKind, const InitializerList<AStringView> allowedFields){
     return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, object, objectKind, allowedFields);
 }
 

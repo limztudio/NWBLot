@@ -52,11 +52,11 @@ struct MStringEqual{
 
 
 public:
-    [[nodiscard]] bool operator()(const MString& a, const MString& b)const noexcept{ return MStringView(a) == MStringView(b); }
+    [[nodiscard]] b8 operator()(const MString& a, const MString& b)const noexcept{ return MStringView(a) == MStringView(b); }
 
-    [[nodiscard]] bool operator()(const MString& a, MStringView b)const noexcept{ return MStringView(a) == b; }
+    [[nodiscard]] b8 operator()(const MString& a, MStringView b)const noexcept{ return MStringView(a) == b; }
 
-    [[nodiscard]] bool operator()(MStringView a, const MString& b)const noexcept{ return a == MStringView(b); }
+    [[nodiscard]] b8 operator()(MStringView a, const MString& b)const noexcept{ return a == MStringView(b); }
 };
 
 template<usize N>

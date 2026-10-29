@@ -46,7 +46,7 @@ struct EditCompositionView{
     usize caret = 0u;
     usize replacementStart = 0u;
     usize replacementEnd = 0u;
-    bool active = false;
+    b8 active = false;
 };
 
 // UTF8 byte selections always lie on Unicode 17 extended grapheme boundaries; preedit stays separate from committed text.
@@ -94,7 +94,7 @@ public:
 
     [[nodiscard]] usize selectionEnd()const noexcept{ return Max(m_anchor, m_caret); }
 
-    [[nodiscard]] bool hasSelection()const noexcept{ return m_anchor != m_caret; }
+    [[nodiscard]] b8 hasSelection()const noexcept{ return m_anchor != m_caret; }
 
     [[nodiscard]] AStringView selectedText()const noexcept{ return text().substr(selectionStart(), selectionEnd() - selectionStart()); }
 
@@ -103,41 +103,41 @@ public:
     [[nodiscard]] const EditLimits& limits()const noexcept{ return m_limits; }
 
     [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_textMode; }
-    [[nodiscard]] bool setText(AStringView value);
-    [[nodiscard]] bool setSelection(usize anchor, usize caret)noexcept;
-    [[nodiscard]] bool selectAll()noexcept;
+    [[nodiscard]] b8 setText(AStringView value);
+    [[nodiscard]] b8 setSelection(usize anchor, usize caret)noexcept;
+    [[nodiscard]] b8 selectAll()noexcept;
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
-    [[nodiscard]] bool move(EditMove::Enum movement, bool extend = false)noexcept;
+    [[nodiscard]] b8 move(EditMove::Enum movement, b8 extend = false)noexcept;
     // Returns the complete run containing a grapheme boundary; document end selects the preceding run.
     [[nodiscard]] Expected<EditWordRange> wordRangeAt(usize position)const noexcept;
-    [[nodiscard]] bool replaceSelection(AStringView value);
-    [[nodiscard]] bool backspace();
-    [[nodiscard]] bool eraseForward();
+    [[nodiscard]] b8 replaceSelection(AStringView value);
+    [[nodiscard]] b8 backspace();
+    [[nodiscard]] b8 eraseForward();
     // Native surrounding deletion uses byte distances from the caret and preserves the original selection in undo.
-    [[nodiscard]] bool eraseSurrounding(usize beforeBytes, usize afterBytes);
+    [[nodiscard]] b8 eraseSurrounding(usize beforeBytes, usize afterBytes);
     // Native selection surrounding deletion retains selected bytes and direction, rejecting merged endpoint seams.
-    [[nodiscard]] bool eraseAroundSelection(usize beforeBytes, usize afterBytes);
-    [[nodiscard]] bool undo();
-    [[nodiscard]] bool redo();
-    [[nodiscard]] bool canUndo()const noexcept{ return m_historyCursor != 0u; }
+    [[nodiscard]] b8 eraseAroundSelection(usize beforeBytes, usize afterBytes);
+    [[nodiscard]] b8 undo();
+    [[nodiscard]] b8 redo();
+    [[nodiscard]] b8 canUndo()const noexcept{ return m_historyCursor != 0u; }
 
-    [[nodiscard]] bool canRedo()const noexcept{ return m_historyCursor < m_history.size(); }
-    [[nodiscard]] bool beginComposition()noexcept;
+    [[nodiscard]] b8 canRedo()const noexcept{ return m_historyCursor < m_history.size(); }
+    [[nodiscard]] b8 beginComposition()noexcept;
     // Preedit positions are validated UTF8 scalar boundaries, because native IMEs may select part of a grapheme.
-    [[nodiscard]] bool updateComposition(AStringView value, usize anchor, usize caret);
-    [[nodiscard]] bool commitComposition(AStringView value);
+    [[nodiscard]] b8 updateComposition(AStringView value, usize anchor, usize caret);
+    [[nodiscard]] b8 commitComposition(AStringView value);
     void cancelComposition()noexcept;
     [[nodiscard]] EditCompositionView composition()const noexcept;
 
 
 private:
-    [[nodiscard]] bool isBoundary(usize position)const noexcept;
+    [[nodiscard]] b8 isBoundary(usize position)const noexcept;
     [[nodiscard]] usize previousBoundary(usize position)const noexcept;
     [[nodiscard]] usize nextBoundary(usize position)const noexcept;
-    [[nodiscard]] usize wordBoundary(usize position, bool forward)const noexcept;
-    [[nodiscard]] bool replaceRange(usize begin, usize end, AStringView replacement);
-    [[nodiscard]] bool validateText(AStringView value)const noexcept;
+    [[nodiscard]] usize wordBoundary(usize position, b8 forward)const noexcept;
+    [[nodiscard]] b8 replaceRange(usize begin, usize end, AStringView replacement);
+    [[nodiscard]] b8 validateText(AStringView value)const noexcept;
     [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(AStringView value)const;
     void recordHistory(AStringView before, usize beforeAnchor, usize beforeCaret, AStringView after, usize afterAnchor, usize afterCaret);
     void clearHistory()noexcept;
@@ -167,7 +167,7 @@ private:
     u64 m_compositionGeneration = 1u;
     u64 m_selectionGeneration = 1u;
     const EditTextMode::Enum m_textMode;
-    bool m_compositionActive = false;
+    b8 m_compositionActive = false;
 };
 
 

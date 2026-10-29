@@ -16,7 +16,7 @@ namespace __hidden_adhd_compiler_options{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool TryConsumeOptionValue(
+[[nodiscard]] b8 TryConsumeOptionValue(
     const NWB::Core::Metascript::MStringView arg,
     const NWB::Core::Metascript::MStringView shortFlag,
     const NWB::Core::Metascript::MStringView longFlag,
@@ -25,7 +25,7 @@ namespace __hidden_adhd_compiler_options{
     char** argv,
     NWB::Core::Metascript::MetaArena& arena,
     NWB::Core::Metascript::MString& outValue,
-    bool& outMatched
+    b8& outMatched
 ){
     using namespace NWB::Core::Metascript;
 
@@ -59,7 +59,7 @@ namespace __hidden_adhd_compiler_options{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseAdhdCompilerOptions(
+b8 ParseAdhdCompilerOptions(
     const int argc,
     char** argv,
     NWB::Core::Metascript::MetaArena& arena,
@@ -75,7 +75,7 @@ bool ParseAdhdCompilerOptions(
             return true;
         }
 
-        bool matched = false;
+        b8 matched = false;
         MString value(arena);
 
         if(!TryConsumeOptionValue(arg, "-o", "--output-dir", i, argc, argv, arena, outOptions.outputDirectory, matched))

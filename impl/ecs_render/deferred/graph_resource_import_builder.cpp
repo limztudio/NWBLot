@@ -40,9 +40,9 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
     const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources = inputs.rayTracingResources;
     const DeferredLaggedLightingHistoryResources* const history = inputs.history;
     const DeferredLaggedLightingHistoryResources* const captureHistory = inputs.captureHistory;
-    const bool clearAvboitTargets = inputs.clearAvboitTargets;
-    const bool capturesLaggedLightingHistory = inputs.capturesLaggedLightingHistory;
-    const bool hasCsgFrameWork = inputs.hasCsgFrameWork;
+    const b8 clearAvboitTargets = inputs.clearAvboitTargets;
+    const b8 capturesLaggedLightingHistory = inputs.capturesLaggedLightingHistory;
+    const b8 hasCsgFrameWork = inputs.hasCsgFrameWork;
 
     constexpr AStringView s_CausticIrradianceLabel = "Caustic Irradiance";
     constexpr AStringView s_SurfelIrradianceLabel = "Surfel Irradiance";

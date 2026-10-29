@@ -39,7 +39,7 @@ Expected<CausticResolveActivityLayout> ResolveCausticActivityLayout(const u32 ha
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CausticResolveActivitySnapshot::valid()const noexcept{
+b8 CausticResolveActivitySnapshot::valid()const noexcept{
     if(halfWidth == 0u || halfHeight == 0u)
         return false;
     for(u32 index = 0u; index < LengthOf(buffers); ++index){
@@ -49,7 +49,7 @@ bool CausticResolveActivitySnapshot::valid()const noexcept{
     return true;
 }
 
-bool CausticResolveActivitySnapshot::matches(const CausticResolveActivitySnapshot& other)const noexcept{
+b8 CausticResolveActivitySnapshot::matches(const CausticResolveActivitySnapshot& other)const noexcept{
     if(halfWidth != other.halfWidth || halfHeight != other.halfHeight)
         return false;
     for(u32 index = 0u; index < LengthOf(buffers); ++index){
@@ -70,7 +70,7 @@ CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivityS
     return activity;
 }
 
-bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth, const u32 halfHeight){
+b8 RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth, const u32 halfHeight){
     const auto& current = m_rayTracingState.m_causticResolve.m_activity;
     if(current.valid() && current.halfWidth == halfWidth && current.halfHeight == halfHeight)
         return true;

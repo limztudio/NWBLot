@@ -41,7 +41,7 @@ static Expected<Skeleton> BuildSkeletonCookedAsset(SkeletonCookEntry& entry, Cor
     return BuildSkeletonAsset(entry, arena, scratchArena);
 }
 
-static bool RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(registry, SkeletonBinaryPayload::s_SkeletonAssetKindLabel, &ParseSkeletonDocument, &ParseSkeletonValue, &BuildSkeletonCookedAsset);
 }
 

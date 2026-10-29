@@ -26,7 +26,7 @@ struct DiagnosticEventRecord{
     StringView file = {};
     u64 instructionPointer = 0u;
     u32 line = 0u;
-    bool terminatesProcess = false;
+    b8 terminatesProcess = false;
 };
 
 using DiagnosticEventCallback = void (*)(const DiagnosticEventRecord& record)noexcept;
@@ -127,7 +127,7 @@ inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCurs
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool TryAppendEscapedBrace(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> text, usize& inoutIndex)noexcept(std::is_arithmetic_v<CharT>){
+[[nodiscard]] inline b8 TryAppendEscapedBrace(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> text, usize& inoutIndex)noexcept(std::is_arithmetic_v<CharT>){
     const CharT ch = text[inoutIndex];
     if(ch == static_cast<CharT>('{') && inoutIndex + 1u < text.size() && text[inoutIndex + 1u] == static_cast<CharT>('{')){
         AppendEventChar(outText, outCursor, '{');
@@ -178,7 +178,7 @@ inline void AppendEventPointer(char (&outText)[s_MaxEventTextBytes], usize& outC
 template<typename T>
 inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const T& value)noexcept{
     using RawT = std::remove_cvref_t<T>;
-    if constexpr(std::is_same_v<RawT, bool>){
+    if constexpr(std::is_same_v<RawT, b8>){
         AppendEventText(outText, outCursor, value ? AStringView(s_TrueText) : AStringView(s_FalseText));
     }
     else if constexpr(std::is_same_v<RawT, char>){
@@ -425,7 +425,7 @@ inline void SetDiagnosticEventCallback(const DiagnosticEventCallback callback)no
 
 inline void ClearDiagnosticEventCallback(const DiagnosticEventCallback callback)noexcept{
     DiagnosticEventCallback expected = callback;
-    const bool clearedCallback = DiagnosticDetail::g_EventCallback.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel);
+    const b8 clearedCallback = DiagnosticDetail::g_EventCallback.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel);
     if(clearedCallback)
         return;
 }

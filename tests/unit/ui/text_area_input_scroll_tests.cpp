@@ -32,8 +32,8 @@ struct ScrollModelRecord{
     u64 composition;
     usize anchor;
     usize caret;
-    bool undo;
-    bool redo;
+    b8 undo;
+    b8 redo;
 
 
 public:
@@ -89,15 +89,15 @@ public:
 
 
 protected:
-    [[nodiscard]] bool prepareDocument(const Point scroll = {}){
+    [[nodiscard]] b8 prepareDocument(const Point scroll = {}){
         return m_model.setText(m_document) && m_model.setSelection(1u, 1u) && m_model.replaceSelection("b") && m_model.setSelection(0u, 0u) && m_state.scrollTo(scroll);
     }
 
-    [[nodiscard]] bool prepareScroll(const TextAreaOptions& options = ScrollOptions(), const Point scroll = {}){
+    [[nodiscard]] b8 prepareScroll(const TextAreaOptions& options = ScrollOptions(), const Point scroll = {}){
         return prepareDocument(scroll) && frameArea(1u, options);
     }
 
-    [[nodiscard]] bool wheel(const f64 x, const f64 y, const Point position){
+    [[nodiscard]] b8 wheel(const f64 x, const f64 y, const Point position){
         InputEvent event;
         event.type = InputEventType::PointerWheel;
         event.position = position;
@@ -106,13 +106,13 @@ protected:
         return send(event).pointerConsumed;
     }
 
-    [[nodiscard]] bool wheel(const f64 x, const f64 y){ return wheel(x, y, Center(m_state.placement().content)); }
+    [[nodiscard]] b8 wheel(const f64 x, const f64 y){ return wheel(x, y, Center(m_state.placement().content)); }
 
     [[nodiscard]] WidgetId area()const{ return id(s_TextAreaKey, s_TextAreaPanelKey); }
 
     [[nodiscard]] WidgetId part(const AStringView key)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(area(), key)); }
 
-    [[nodiscard]] bool framePopup(const u64 generation, PopupState& popup){
+    [[nodiscard]] b8 framePopup(const u64 generation, PopupState& popup){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 40.0f, 20.0f };
         options.size = { 300.0f, 180.0f };

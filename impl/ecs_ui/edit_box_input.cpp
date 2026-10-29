@@ -54,10 +54,10 @@ void UiEditBoxHost::collectNative(){
     }
 }
 
-void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previousCapture, const bool submit){
+void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previousCapture, const b8 submit){
     if(rejectBorrowedMutation())
         return;
-    const bool selectionRelease = input.type == Ui::InputEventType::PrimaryUp && input.source == m_selectionSource;
+    const b8 selectionRelease = input.type == Ui::InputEventType::PrimaryUp && input.source == m_selectionSource;
     ScopeExit finishSelection([this, selectionRelease]()noexcept{
         if(selectionRelease){
             m_activeSelectionSequence = 0u;
@@ -92,7 +92,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
     if(input.type == Ui::InputEventType::CommandDown || input.type == Ui::InputEventType::CommandUp){
         m_clickTracker.cancel();
         Entry* entry = find(m_context.input().focus());
-        const bool released = input.type == Ui::InputEventType::CommandUp;
+        const b8 released = input.type == Ui::InputEventType::CommandUp;
         if(!input.edit || !entry || !hasTextFocus() || (released ? !submit : !m_context.input().canEditCommand(input)))
             return;
         Event event(m_arena);
@@ -178,7 +178,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
     synchronizeFocus();
 }
 
-bool UiEditBoxHost::character(const u32 unicode){
+b8 UiEditBoxHost::character(const u32 unicode){
     if(rejectBorrowedMutation())
         return false;
     synchronizeFocus();
@@ -204,7 +204,7 @@ bool UiEditBoxHost::character(const u32 unicode){
     return true;
 }
 
-bool UiEditBoxHost::pastePrimary(const Ui::Point position){
+b8 UiEditBoxHost::pastePrimary(const Ui::Point position){
     if(rejectBorrowedMutation())
         return false;
     synchronizeFocus();
@@ -220,7 +220,7 @@ bool UiEditBoxHost::pastePrimary(const Ui::Point position){
     return append(Move(event));
 }
 
-bool UiEditBoxHost::append(Event&& event){
+b8 UiEditBoxHost::append(Event&& event){
     if(m_events.size() == Ui::s_InputMaxEvents || event.native.text.size() > Core::s_TextInputMaxQueuedTextBytes - m_queuedTextBytes){
         reset();
         return false;

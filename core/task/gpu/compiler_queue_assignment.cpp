@@ -28,12 +28,12 @@ void GpuTaskGraphQueueAssignments::reset()noexcept{
     m_valid = false;
 }
 
-bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
+b8 GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
     NWB_ASSERT(!m_valid || (m_assignments.size() == m_taskCount && m_assignmentIndicesByTask.size() == m_taskCount));
     return m_valid && m_generation == graph.generation() && m_declarationRevision == graph.declarationRevision() && m_taskCount == graph.taskCount();
 }
 
-bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph::DeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept{
+b8 GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph::DeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept{
     return validFor(graph) && compiledPlan.validFor(graph) && m_compiledPlanGeneration != 0u && m_compiledPlanGeneration == compiledPlan.planGeneration();
 }
 
@@ -47,7 +47,7 @@ const GpuTaskQueueAssignment* GpuTaskGraphQueueAssignments::find(const GpuTaskId
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraphCompiler::assignQueues(
+b8 GpuTaskGraphCompiler::assignQueues(
     GpuTaskGraphQueueAssignments& outAssignments,
     Alloc::ScratchArena& scratchArena,
     const GpuTaskGraph::DeclarationReadView& graph,
@@ -95,7 +95,7 @@ bool GpuTaskGraphCompiler::assignQueues(
         outAssignments.m_diagnostic = placementGroups.error();
         return false;
     }
-    bool needsSchedulingReachability = false;
+    b8 needsSchedulingReachability = false;
     if(topology.queueCount > 1u && graph.taskCount() > 1u && groups.size() > 1u){
         for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
             const GpuTaskSchedulingHint& scheduling = graph.taskAt(taskIndex).scheduling;
@@ -162,8 +162,8 @@ bool GpuTaskGraphCompiler::assignQueues(
         const GpuTaskQueuePlacementGroup& group = groups[groupIndex];
         const GpuPhysicalQueueInfo* selectedQueue = nullptr;
         GpuQueueAssignmentScore selectedScore;
-        bool allTasksTiny = true;
-        bool conservative = false;
+        b8 allTasksTiny = true;
+        b8 conservative = false;
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
             const GpuTaskGraphTaskView task = graph.taskAt(analysis.topologicalOrder()[group.assignmentOffset + taskOffset].index);
             allTasksTiny = allTasksTiny && task.scheduling.cost == GpuTaskCostHint::Tiny;
@@ -187,7 +187,7 @@ bool GpuTaskGraphCompiler::assignQueues(
         // A single legal class needs no choice score; final per-task diagnostics are still computed below.
         if(candidateCount > 1u){
             selectedQueue = nullptr;
-            bool hasIndependentOverlap = false;
+            b8 hasIndependentOverlap = false;
             for(Candidate& candidate : candidates){
                 if(!candidate.queue)
                     continue;
@@ -200,11 +200,11 @@ bool GpuTaskGraphCompiler::assignQueues(
             }
             // Finite crossing costs permit useful async overlap.
             // Without independent work, keep serial chains on one queue instead of scattering them by graph load.
-            const bool compareTotalScore = !conservative && hasIndependentOverlap;
+            const b8 compareTotalScore = !conservative && hasIndependentOverlap;
             for(const Candidate& candidate : candidates){
                 if(!candidate.queue)
                     continue;
-                bool better = IsBetterAutomaticQueueAssignmentCandidate(candidate.score, *candidate.queue, selectedScore, selectedQueue, compareTotalScore);
+                b8 better = IsBetterAutomaticQueueAssignmentCandidate(candidate.score, *candidate.queue, selectedScore, selectedQueue, compareTotalScore);
                 if(conservative && selectedQueue){
                     const i64 candidateCrossings = static_cast<i64>(candidate.score.incomingCrossings) + candidate.score.outgoingCrossings;
                     const i64 selectedCrossings = static_cast<i64>(selectedScore.incomingCrossings) + selectedScore.outgoingCrossings;
@@ -239,7 +239,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     }
 
     // Optional physical balancing applies to independent singleton placements. It cannot separate an explicit merge chain.
-    bool needsSameClassBalancing = false;
+    b8 needsSameClassBalancing = false;
     for(const GpuTaskQueuePlacementGroup& group : groups){
         if(group.assignmentCount != 1u || group.initialOwnershipQueue.valid())
             continue;

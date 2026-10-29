@@ -14,7 +14,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload){
+b8 ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload){
     Core::Assets::AssetArena& arena = payload.positioningTables.get_allocator().arena();
     Core::Assets::AssetBytes source(arena);
     source.assign(font.m_bytes.begin(), font.m_bytes.end());

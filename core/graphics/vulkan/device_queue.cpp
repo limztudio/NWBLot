@@ -59,7 +59,7 @@ public:
 
 private:
     QueueSubmissionPreSubmitHook m_hook;
-    bool m_armed = false;
+    b8 m_armed = false;
 };
 
 
@@ -109,7 +109,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandLists(CommandList* const*
     return executeCommandListsInternal(commandLists, numCommandLists, executionQueue, submitDesc, false);
 }
 
-void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, const usize numCommandLists, const bool graphSubmissionAuthorized){
+void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, const usize numCommandLists, const b8 graphSubmissionAuthorized){
     auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
     auto& submittedOwners = queue.m_executeSubmittedOwners;
     expectedCommandLists.clear();
@@ -141,7 +141,7 @@ void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandLi
 
 }
 
-void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* commandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const u64 submittedID, const bool submissionAccepted){
+void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* commandLists, const usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const u64 submittedID, const b8 submissionAccepted){
     const auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
     if(expectedCommandLists.empty())
         return;
@@ -153,7 +153,7 @@ void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandL
         return;
     }
 
-    const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected)noexcept -> bool {
+    const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected)noexcept -> b8 {
         if(!expected.owner || expected.nativeRecordingID == 0u || !commandLists)
             return false;
         for(usize i = 0u; i < numCommandLists; ++i){
@@ -193,7 +193,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     const usize numCommandLists,
     const GpuPhysicalQueueId& executionQueue,
     const QueueSubmissionDesc& submitDesc,
-    const bool graphSubmissionAuthorized,
+    const b8 graphSubmissionAuthorized,
     const DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy
 ){
     SubmissionOperationLease submissionOperation(*this);
@@ -274,7 +274,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
             if(token.matchesPhysicalQueue(executionQueue.index, executionQueue.deviceGeneration))
                 continue;
 
-            bool merged = false;
+            b8 merged = false;
             for(Queue::SubmissionWait& wait : localWaits){
                 if(wait.semaphore != producerQueue->m_trackingSemaphore)
                     continue;
@@ -324,7 +324,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         localSignalCount,
         submitDesc.forceNativeSubmission
     );
-    const bool submissionAccepted = submission && submission->accepted;
+    const b8 submissionAccepted = submission && submission->accepted;
     const u64 submittedID = submission ? submission->submittedID : submission.error().lastSubmittedID;
     const VkResult nativeSubmissionResult = submission ? VK_SUCCESS : submission.error().nativeResult;
     const QueueSubmissionToken submissionToken = submissionAccepted
@@ -345,7 +345,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     return QueueSubmissionReceipt{ submissionToken, submission->timelineWaitCount };
 }
 
-bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept{
+b8 Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept{
     if(!token.valid() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration))
         return false;
 
@@ -357,7 +357,7 @@ bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const
     return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE && token.value <= producerQueue->m_lastSubmittedID;
 }
 
-bool Device::waitForSubmissionToken(const QueueSubmissionToken& token){
+b8 Device::waitForSubmissionToken(const QueueSubmissionToken& token){
     return waitForSubmissionTokenInternal(token, DeviceLossDiagnosticPolicy::Capture);
 }
 
@@ -370,7 +370,7 @@ u32 Device::getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept{
     return info ? info->familyIndex : VK_QUEUE_FAMILY_IGNORED;
 }
 
-bool Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, const DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy){
+b8 Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, const DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy){
     if(!token.valid() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration))
         return false;
 
@@ -406,7 +406,7 @@ bool Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, c
     return result == VK_SUCCESS;
 }
 
-bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue){
+b8 Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue){
     const u32 queueClassIndex = static_cast<u32>(desc.queueClass);
     const u8 requiredCapabilities = static_cast<u8>(VulkanDetail::DeviceMinimumQueueCapabilities(desc.queueClass));
     const u8 providedCapabilities = static_cast<u8>(desc.capabilities);
@@ -414,7 +414,7 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQu
     const u8 graphicsOrComputeCapabilities = static_cast<u8>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute));
     constexpr u32 s_MinTimestampValidBits = 36u;
     constexpr u32 s_MaxTimestampValidBits = 64u;
-    const bool missingRequiredTransferCapability = (providedCapabilities & graphicsOrComputeCapabilities) != 0u && (providedCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u;
+    const b8 missingRequiredTransferCapability = (providedCapabilities & graphicsOrComputeCapabilities) != 0u && (providedCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u;
     if(
         nativeQueue.queue == VK_NULL_HANDLE
         || nativeQueue.familyIndex == Limit<u32>::s_Max

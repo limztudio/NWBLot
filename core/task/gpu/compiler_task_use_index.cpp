@@ -31,7 +31,7 @@ TaskResourceUseIndex::TaskResourceUseIndex(const usize resourceCount, const u64 
     m_touchedResources.reserve(resourceCount < useCapacity ? resourceCount : useCapacity);
 }
 
-bool TaskResourceUseIndex::build(const GpuTaskGraphTaskView& task){
+b8 TaskResourceUseIndex::build(const GpuTaskGraphTaskView& task){
     m_valid = false;
     if(!task.id.valid() || task.id.generation != m_graphGeneration || task.resourceUseCount > m_useCapacity || (task.resourceUseCount != 0u && !task.resourceUses))
         return false;
@@ -58,7 +58,7 @@ bool TaskResourceUseIndex::build(const GpuTaskGraphTaskView& task){
     return true;
 }
 
-bool TaskResourceUseIndex::validFor(const GpuTaskGraphTaskView& task)const noexcept{
+b8 TaskResourceUseIndex::validFor(const GpuTaskGraphTaskView& task)const noexcept{
     if(!m_valid || task.id != m_task)
         return false;
     return task.resourceUses == m_uses && task.resourceUseCount == m_nextUses.size();

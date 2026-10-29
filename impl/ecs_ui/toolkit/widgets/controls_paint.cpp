@@ -37,13 +37,13 @@ inline constexpr f32 s_CheckmarkInsetSides = 2.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::paintPanel(){
+b8 Builder::paintPanel(){
     const LayoutBox* panel = m_scope->m_layout.box(0u);
     if(!panel)
         return false;
     m_paint.pushClip(StoreRectangle(loadVisibleClip(LoadRectangle(panel->clip))));
-    const bool painted = m_paint.drawRegion(m_scope->m_panelStyle.panel, panel->rectangle);
-    const bool popped = m_paint.popClip();
+    const b8 painted = m_paint.drawRegion(m_scope->m_panelStyle.panel, panel->rectangle);
+    const b8 popped = m_paint.popClip();
     HitTarget barrier;
     barrier.rectangle = panel->rectangle;
     barrier.clip = StoreRectangle(loadVisibleClip(LoadRectangle(panel->clip)));
@@ -52,7 +52,7 @@ bool Builder::paintPanel(){
     return paintItems();
 }
 
-bool Builder::paintItems(){
+b8 Builder::paintItems(){
     for(const auto& item : m_scope->m_items){
         const LayoutBox* box = m_scope->m_layout.box(item.node);
         if(!popupAncestorsVisible() || !box || !paintItem(item, *box))
@@ -61,7 +61,7 @@ bool Builder::paintItems(){
     return true;
 }
 
-bool Builder::paintItem(const Item& item, const LayoutBox& box){
+b8 Builder::paintItem(const Item& item, const LayoutBox& box){
     if(item.state.kind == WidgetKind::ComboBox || item.state.kind == WidgetKind::SearchComboBox)
         return paintCombo(item, box);
     if(item.state.kind == WidgetKind::TextArea)
@@ -81,18 +81,18 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     if(item.state.kind == WidgetKind::Image)
         return paintImage(item, box);
     const InputRouter& input = m_context.input();
-    const bool hover = input.hover() == item.state.id;
-    const bool pressed = input.pressed(item.state.id);
-    const bool focused = input.focus() == item.state.id;
-    const bool interactive = item.state.kind == WidgetKind::Button || item.state.kind == WidgetKind::Checkbox;
+    const b8 hover = input.hover() == item.state.id;
+    const b8 pressed = input.pressed(item.state.id);
+    const b8 focused = input.focus() == item.state.id;
+    const b8 interactive = item.state.kind == WidgetKind::Button || item.state.kind == WidgetKind::Checkbox;
     m_paint.pushClip(StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))));
-    bool painted = true;
+    b8 painted = true;
     Point origin{ box.rectangle.x, box.rectangle.y };
     Rect textClip = box.rectangle;
     const Point measured{ item.textBounds.width, item.textBounds.height };
     if(item.state.kind == WidgetKind::Separator){
         painted = m_paint.drawRegion(item.style.separator, box.rectangle);
-        const bool popped = m_paint.popClip();
+        const b8 popped = m_paint.popClip();
         return painted && popped;
     }
     if(item.state.kind == WidgetKind::Button){
@@ -134,8 +134,8 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     m_paint.pushClip(textClip);
     if(painted)
         painted = m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);
-    const bool textPopped = m_paint.popClip();
-    const bool popped = m_paint.popClip();
+    const b8 textPopped = m_paint.popClip();
+    const b8 popped = m_paint.popClip();
     if(!painted || !textPopped || !popped)
         return false;
     if(interactive || item.annotated){
@@ -152,8 +152,8 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     return true;
 }
 
-bool Builder::finishClipPaint(const Item& item, const Rect& bounds, const Rect& clip, bool painted){
-    const bool popped = m_paint.popClip();
+b8 Builder::finishClipPaint(const Item& item, const Rect& bounds, const Rect& clip, b8 painted){
+    const b8 popped = m_paint.popClip();
     if(!painted || !popped)
         return false;
     if(!item.annotated)

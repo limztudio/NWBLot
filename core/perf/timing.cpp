@@ -22,7 +22,7 @@ void TimingAccumulator::clear()noexcept{
     m_lastStats = TimingStats{};
 }
 
-void TimingAccumulator::setEnabled(const bool enabled)noexcept{
+void TimingAccumulator::setEnabled(const b8 enabled)noexcept{
     m_enabled = enabled;
     if(!m_enabled)
         clear();
@@ -61,7 +61,7 @@ void TimingAccumulator::publish(const u64 publishFrameIndex)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void TimingRecorder::setEnabled(const bool enabled)noexcept{
+void TimingRecorder::setEnabled(const b8 enabled)noexcept{
     m_enabled = enabled;
     for(ScopeRecordPtr& scope : m_scopes)
         scope->accumulator.setEnabled(enabled);

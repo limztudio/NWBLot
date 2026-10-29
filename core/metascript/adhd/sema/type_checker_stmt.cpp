@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TypeChecker::statementsContainReturnOrNative(const MVector<Stmt*>& stmts)noexcept{
+b8 TypeChecker::statementsContainReturnOrNative(const MVector<Stmt*>& stmts)noexcept{
     for(const Stmt* stmt : stmts){
         if(!stmt)
             continue;
@@ -30,11 +30,11 @@ bool TypeChecker::statementsContainReturnOrNative(const MVector<Stmt*>& stmts)no
     return false;
 }
 
-bool TypeChecker::checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVector<ParseError>& errors){
+b8 TypeChecker::checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVector<ParseError>& errors){
     if(!method.hasBody)
         return true;
 
-    bool ok = true;
+    b8 ok = true;
     MVector<ScopedVarInfo> scope(m_arena);
     for(const ParamDecl& param : method.params){
         if(!param.name.empty() && findScopedVar(scope, param.name)){
@@ -61,7 +61,7 @@ bool TypeChecker::checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVe
     return ok;
 }
 
-bool TypeChecker::checkStatementList(
+b8 TypeChecker::checkStatementList(
     ClassDecl* ownerClass,
     MethodDecl& method,
     MVector<Stmt*>& statements,
@@ -69,7 +69,7 @@ bool TypeChecker::checkStatementList(
     MVector<ParseError>& errors
 ){
     const usize savedScopeSize = scope.size();
-    bool ok = true;
+    b8 ok = true;
 
     for(Stmt* stmt : statements){
         if(!stmt)
@@ -85,14 +85,14 @@ bool TypeChecker::checkStatementList(
     return ok;
 }
 
-bool TypeChecker::checkVarDeclStatement(
+b8 TypeChecker::checkVarDeclStatement(
     ClassDecl* ownerClass,
     MethodDecl& method,
     Stmt& stmt,
     MVector<ScopedVarInfo>& scope,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
     if(!stmt.name.empty() && findScopedVar(scope, stmt.name)){
         reportError(errors, stmt.span, "duplicate variable or parameter name in scope");
         ok = false;
@@ -142,7 +142,7 @@ bool TypeChecker::checkVarDeclStatement(
     }
 
     if(stmt.expr){
-        const bool isMutRefBinding = (varRefMode == ParamPassingMode::Mut);
+        const b8 isMutRefBinding = (varRefMode == ParamPassingMode::Mut);
         if(!checkExpr(ownerClass, method, *stmt.expr, scope, isMutRefBinding, errors))
             ok = false;
         if(stmt.varType && stmt.varType->isAuto && !stmt.expr->resolvedSimdType.empty()){
@@ -223,14 +223,14 @@ bool TypeChecker::checkVarDeclStatement(
     return ok;
 }
 
-bool TypeChecker::checkReturnStatement(
+b8 TypeChecker::checkReturnStatement(
     ClassDecl* ownerClass,
     MethodDecl& method,
     Stmt& stmt,
     const MVector<ScopedVarInfo>& scope,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
     if(m_parallelDepth > 0u && !m_inLambda){
         reportError(errors, stmt.span, "'return' cannot be used inside a 'parallel' or 'parallel_for' construct");
         ok = false;
@@ -238,7 +238,7 @@ bool TypeChecker::checkReturnStatement(
     const TypeRef* activeRetType = m_inLambda ? m_activeLambdaReturnType : method.returnType;
     const TypeRef* unwrappedRetType = m_symbols.unwrapTypeAlias(activeRetType);
     const ParamPassingMode::Enum retRefMode = m_symbols.resolveRefMode(activeRetType);
-    const bool isVoidLike = (!m_inLambda && (method.isConstructor || method.isDestructor)) || IsVoidTypeRef(unwrappedRetType);
+    const b8 isVoidLike = (!m_inLambda && (method.isConstructor || method.isDestructor)) || IsVoidTypeRef(unwrappedRetType);
     if(isVoidLike && stmt.expr){
         reportError(errors, stmt.span, "cannot return a value from a 'void' function, constructor, or destructor");
         ok = false;
@@ -279,14 +279,14 @@ bool TypeChecker::checkReturnStatement(
     return ok;
 }
 
-bool TypeChecker::checkStatement(
+b8 TypeChecker::checkStatement(
     ClassDecl* ownerClass,
     MethodDecl& method,
     Stmt& stmt,
     MVector<ScopedVarInfo>& scope,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
 
     switch(stmt.kind){
     case StmtKind::Block:{
@@ -378,7 +378,7 @@ bool TypeChecker::checkStatement(
                 stmt.lowerSwitchToIfChain = true;
             }
             else if(const ClassDecl* switchCls = m_symbols.findClass(subjectType)){
-                bool hasEq = false;
+                b8 hasEq = false;
                 for(const MethodDecl* m : switchCls->methods){
                     if(m && m->isOperator && m->name == "=="){
                         hasEq = true;
@@ -408,7 +408,7 @@ bool TypeChecker::checkStatement(
     }
     case StmtKind::ForRange:
     case StmtKind::ParallelForRange:{
-        const bool isPar = (stmt.kind == StmtKind::ParallelForRange);
+        const b8 isPar = (stmt.kind == StmtKind::ParallelForRange);
         if(isPar)
             method.usesTaskScope = true;
         if(!stmt.name.empty() && findScopedVar(scope, stmt.name)){
@@ -472,7 +472,7 @@ bool TypeChecker::checkStatement(
     }
     case StmtKind::ForIndex:
     case StmtKind::ParallelForIndex:{
-        const bool isPar = (stmt.kind == StmtKind::ParallelForIndex);
+        const b8 isPar = (stmt.kind == StmtKind::ParallelForIndex);
         if(isPar)
             method.usesTaskScope = true;
         const usize saved = scope.size();
@@ -540,7 +540,7 @@ bool TypeChecker::checkStatement(
                 continue;
             if(!checkExpr(ownerClass, method, *arg, scope, false, errors))
                 ok = false;
-            const bool isAfterCond = (stmt.diagnosticKind != DiagnosticKind::Assert) || (i >= 1u);
+            const b8 isAfterCond = (stmt.diagnosticKind != DiagnosticKind::Assert) || (i >= 1u);
             if(isAfterCond)
                 markStringToPathAdaptation(ownerClass, method, *arg, scope);
         }

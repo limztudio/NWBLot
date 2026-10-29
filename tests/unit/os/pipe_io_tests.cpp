@@ -39,7 +39,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool open()noexcept{
+    [[nodiscard]] b8 open()noexcept{
         const auto pipe = OpenClipboardPipe();
         if(!pipe)
             return false;
@@ -64,7 +64,7 @@ TEST(ClipboardPipe, PartialUnicodeStaysPendingUntilValidEof){
     OwnedPipe pipe;
     ASSERT_TRUE(pipe.open());
     ClipboardTextAccumulator received(arena.arena);
-    Expected<bool, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
+    Expected<b8, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
     ASSERT_EQ(write(pipe.m_writeFd, "\xED", 1u), 1);
     ASSERT_TRUE((finished = ReadClipboardPipe(pipe.m_readFd, received)));
     EXPECT_FALSE(*finished);
@@ -85,7 +85,7 @@ TEST(ClipboardPipe, TruncatedUnicodeIsRejectedAtEof){
     ClipboardTextAccumulator received(arena.arena);
     ASSERT_EQ(write(pipe.m_writeFd, "\xF0\x9F", 2u), 2);
     CloseClipboardPipe(pipe.m_writeFd);
-    Expected<bool, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
+    Expected<b8, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
     finished = ReadClipboardPipe(pipe.m_readFd, received);
     ASSERT_FALSE(finished);
     EXPECT_EQ(finished.error().status, ClipboardStatus::InvalidText);
@@ -112,7 +112,7 @@ TEST(ClipboardPipe, WriterOwnsLargeInputAndResumesAfterFullPipe){
     ASSERT_EQ(poll(&writable, 1u, 0), 0);
 
     ClipboardTextAccumulator received(arena.arena);
-    Expected<bool, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
+    Expected<b8, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
     for(usize attempt = 0u; attempt < 4096u && !finished.value_or(false); ++attempt){
         ASSERT_TRUE((finished = ReadClipboardPipe(pipe.m_readFd, received)));
         ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
@@ -142,7 +142,7 @@ TEST(ClipboardPipe, WriterCanBeReusedForEmptyAndShorterTransfers){
     NWB::Tests::TestArena arena;
     ClipboardPipeWriter writer(arena.arena);
     ClipboardTextAccumulator received(arena.arena);
-    Expected<bool, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
+    Expected<b8, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
     OwnedPipe first;
     ASSERT_TRUE(first.open());
     ASSERT_TRUE(writer.begin(first.releaseWrite(), "old long contents"));

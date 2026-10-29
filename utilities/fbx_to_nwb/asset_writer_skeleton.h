@@ -41,13 +41,13 @@ struct PositionAlignedSkinnedMesh{
 
 [[nodiscard]] Expected<SIMDMatrix> InvertJointMatrix(const SIMDMatrix& matrix)noexcept;
 [[nodiscard]] Expected<SIMDMatrix> BuildLocalBindPoseMatrix(const SIMDMatrix& globalBindPose, const SIMDMatrix* parentGlobalBindPose)noexcept;
-[[nodiscard]] bool ValidateSplitSkinSource(const SourceMeshStreams& mesh, Span<ufbx_node* const> skeletonJoints, Span<const JointMatrix> skeletonBindPoseMatrices, Span<const JointMatrix> inverseBindMatrices);
+[[nodiscard]] b8 ValidateSplitSkinSource(const SourceMeshStreams& mesh, Span<ufbx_node* const> skeletonJoints, Span<const JointMatrix> skeletonBindPoseMatrices, Span<const JointMatrix> inverseBindMatrices);
 [[nodiscard]] Expected<SkeletonOutputData> BuildSkeletonOutputData(Span<ufbx_node* const> joints, Span<const JointMatrix> bindPoseMatrices, Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool RemapSkinInfluences(Span<MeshSkinInfluence> inOutInfluences, Span<const u16> oldToNewJointIndices);
+[[nodiscard]] b8 RemapSkinInfluences(Span<MeshSkinInfluence> inOutInfluences, Span<const u16> oldToNewJointIndices);
 [[nodiscard]] Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh);
-[[nodiscard]] bool ValidateStreamIndex(const u32 index, const usize count, const AStringView fieldName, const AStringView context);
-[[nodiscard]] bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context);
+[[nodiscard]] b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh);
+[[nodiscard]] b8 ValidateStreamIndex(const u32 index, const usize count, const AStringView fieldName, const AStringView context);
+[[nodiscard]] b8 ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context);
 [[nodiscard]] ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena);
 
 

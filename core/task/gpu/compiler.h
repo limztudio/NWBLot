@@ -100,7 +100,7 @@ struct GpuTaskQueueAssignment{
     GpuQueueAssignmentScore score;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuTaskQueueAssignmentReason::Enum reason = GpuTaskQueueAssignmentReason::Unknown;
-    bool dedicated = false;
+    b8 dedicated = false;
     GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;
 };
 
@@ -144,7 +144,7 @@ struct GpuTaskGraphPacketTimingEnvelopeOptions{
 
 
 public:
-    [[nodiscard]] bool enabled()const noexcept{ return firstTask.valid() && lastTask.valid(); }
+    [[nodiscard]] b8 enabled()const noexcept{ return firstTask.valid() && lastTask.valid(); }
 };
 
 struct GpuTaskGraphCompileOptions{
@@ -153,7 +153,7 @@ struct GpuTaskGraphCompileOptions{
     f64 declarationSeconds = 0.0;
     // Caller declare/build wall time (finite nonneg kept, else zero). Recording needs payload + thunk; only metadata tooling opts out.
     GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
-    bool allowMetadataOnlyTasks = false;
+    b8 allowMetadataOnlyTasks = false;
 };
 
 
@@ -173,7 +173,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool empty()const noexcept{ return taskCount == 0u; }
+    [[nodiscard]] b8 empty()const noexcept{ return taskCount == 0u; }
 
 };
 
@@ -201,8 +201,8 @@ public:
 public:
     void reset()noexcept;
 
-    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
-    [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
+    [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
+    [[nodiscard]] b8 validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
     [[nodiscard]] const GpuTaskGraphAnalysisDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
     // Raw pairs keep direct declarations and hazard reasons for diagnostics, transitively redundant edges included.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& edges()const noexcept{ return m_edges; }
@@ -224,8 +224,8 @@ public:
     [[nodiscard]] const GraphicsVector<GpuTaskId>& cyclePath()const noexcept{ return m_cyclePath; }
 
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& cycleEdges()const noexcept{ return m_cycleEdges; }
-    [[nodiscard]] bool hasExplicitEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept;
-    [[nodiscard]] bool hasInferredEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept;
+    [[nodiscard]] b8 hasExplicitEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept;
+    [[nodiscard]] b8 hasInferredEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept;
     [[nodiscard]] usize explicitEdgeCount()const noexcept{ return m_explicitEdgeCount; }
 
     [[nodiscard]] usize inferredEdgeCount()const noexcept{ return m_inferredEdgeCount; }
@@ -259,7 +259,7 @@ private:
     usize m_explicitEdgeCount = 0u;
     usize m_inferredEdgeCount = 0u;
     usize m_resourceVersionEdgeCount = 0u;
-    bool m_valid = false;
+    b8 m_valid = false;
 };
 
 // Queue assignment is a separate immutable compile result. Graph core never creates a command list or submits work.
@@ -277,9 +277,9 @@ public:
 public:
     void reset()noexcept;
 
-    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
-    [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
-    [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept;
+    [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
+    [[nodiscard]] b8 validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
+    [[nodiscard]] b8 validFor(const GpuTaskGraph::DeclarationReadView& graph, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept;
     [[nodiscard]] const GpuTaskQueueAssignmentDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
     [[nodiscard]] const GpuTaskQueueAssignment* find(const GpuTaskId& task)const noexcept;
 
@@ -293,7 +293,7 @@ private:
     u64 m_declarationRevision = 0u;
     u64 m_compiledPlanGeneration = 0u;
     usize m_taskCount = 0u;
-    bool m_valid = false;
+    b8 m_valid = false;
 };
 
 

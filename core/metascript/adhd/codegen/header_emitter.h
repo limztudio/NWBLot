@@ -40,7 +40,7 @@ private:
     void emitFreeFunctionDecl(MString& out, const MethodDecl& fn)const;
     void emitClassDecl(MString& out, const ClassDecl& decl)const;
     void emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const;
-    void emitClassMethodsCpp(MString& out, const ClassDecl& decl, const MVector<FieldDecl*>& orderedFields, bool forceInlineBody)const;
+    void emitClassMethodsCpp(MString& out, const ClassDecl& decl, const MVector<FieldDecl*>& orderedFields, b8 forceInlineBody)const;
     void emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& orderedFields)const;
 
 

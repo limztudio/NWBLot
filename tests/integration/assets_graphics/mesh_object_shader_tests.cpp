@@ -47,7 +47,7 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
     struct MetadataCase{
         AStringView shaderAssetType;
         AStringView fields;
-        bool accepted;
+        b8 accepted;
     };
     constexpr MetadataCase s_Cases[] = {
         { "mesh_shader", "", true },

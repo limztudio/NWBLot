@@ -108,7 +108,7 @@ static Expected<LinuxBackendOrder> BuildBackendOrder(Alloc::ScratchArena& scratc
         NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read session environment: {}"), ConvertString(sessionIsWayland.error().message()));
         return MakeUnexpected(Failure{});
     }
-    bool preferWayland = *sessionIsWayland;
+    b8 preferWayland = *sessionIsWayland;
     if(!preferWayland){
         const auto hasWaylandDisplay = HasEnvironmentValue(scratchArena, s_WaylandDisplayEnvName);
         if(!hasWaylandDisplay){
@@ -131,7 +131,7 @@ static Expected<LinuxBackendOrder> BuildBackendOrder(Alloc::ScratchArena& scratc
     return order;
 }
 
-static bool TryInitBackend(Frame& frame, Common::LinuxFrameBackend::Enum backend){
+static b8 TryInitBackend(Frame& frame, Common::LinuxFrameBackend::Enum backend){
     switch(backend){
     case Common::LinuxFrameBackend::Enum::X11:
         return InitX11Frame(frame);
@@ -145,7 +145,7 @@ static bool TryInitBackend(Frame& frame, Common::LinuxFrameBackend::Enum backend
     }
 }
 
-static bool ShowBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend){
+static b8 ShowBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend){
     switch(backend){
     case Common::LinuxFrameBackend::Enum::X11:
         ShowX11Frame(frame);
@@ -161,7 +161,7 @@ static bool ShowBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backe
     }
 }
 
-static bool RunBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend){
+static b8 RunBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend){
     switch(backend){
     case Common::LinuxFrameBackend::Enum::X11:
         return RunX11Frame(frame);
@@ -202,7 +202,7 @@ static void CleanupBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum ba
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Frame::init(){
+b8 Frame::init(){
     auto& frameData = data<Common::LinuxFrame>();
 
     Alloc::ScratchArena scratchArena(FrameArenaScope::s_LinuxEnvironmentArena);
@@ -229,11 +229,11 @@ bool Frame::init(){
     return false;
 }
 
-bool Frame::showFrame(){
+b8 Frame::showFrame(){
     return FrameDetail::ShowBackendFrame(*this, data<Common::LinuxFrame>().backend());
 }
 
-bool Frame::mainLoop(){
+b8 Frame::mainLoop(){
     return FrameDetail::RunBackendFrame(*this, data<Common::LinuxFrame>().backend());
 }
 

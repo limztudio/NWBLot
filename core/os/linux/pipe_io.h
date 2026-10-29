@@ -26,13 +26,13 @@ struct ClipboardPipe{
 
 struct ClipboardPipeReadFailure{
     ClipboardStatus::Enum status = ClipboardStatus::NativeFailure;
-    bool finished = false;
+    b8 finished = false;
 };
 
 [[nodiscard]] Expected<ClipboardPipe> OpenClipboardPipe()noexcept;
-[[nodiscard]] bool ConfigureClipboardPipe(int fd)noexcept;
+[[nodiscard]] b8 ConfigureClipboardPipe(int fd)noexcept;
 void CloseClipboardPipe(int& fd)noexcept;
-[[nodiscard]] Expected<bool, ClipboardPipeReadFailure> ReadClipboardPipe(int fd, ClipboardTextAccumulator& text);
+[[nodiscard]] Expected<b8, ClipboardPipeReadFailure> ReadClipboardPipe(int fd, ClipboardTextAccumulator& text);
 
 
 class ClipboardPipeWriter final : private NoCopy{
@@ -42,9 +42,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool begin(int fd, AStringView text);
+    [[nodiscard]] b8 begin(int fd, AStringView text);
     [[nodiscard]] ClipboardStatus::Enum advance()noexcept;
-    [[nodiscard]] bool finished()const noexcept{ return m_fd < 0; }
+    [[nodiscard]] b8 finished()const noexcept{ return m_fd < 0; }
 
 
 private:

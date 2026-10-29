@@ -33,7 +33,7 @@ RayTracingOpticalSceneGather::RayTracingOpticalSceneGather(Core::Alloc::ScratchA
     instances.reserve(capacity);
 }
 
-void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, const RendererComponent& renderer, const bool transparent, const SIMDVectorSingle boundsMin, const SIMDVectorSingle boundsMax, const bool boundsValid){
+void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, const RendererComponent& renderer, const b8 transparent, const SIMDVectorSingle boundsMin, const SIMDVectorSingle boundsMax, const b8 boundsValid){
     RayTracingOpticalInstanceGpu instance;
     instance.entityId = entity.id;
     instance.mediumPriority = renderer.opticalMediumPriority;
@@ -43,7 +43,7 @@ void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, cons
             unspecifiedBoundariesOnly = false;
         instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT;
         ++header.transparentCount;
-        const bool finiteBounds = boundsValid && Vector3IsFinite(boundsMin) && Vector3IsFinite(boundsMax) && Vector3LessOrEqual(boundsMin, boundsMax);
+        const b8 finiteBounds = boundsValid && Vector3IsFinite(boundsMin) && Vector3IsFinite(boundsMax) && Vector3LessOrEqual(boundsMin, boundsMax);
         if(finiteBounds){
             instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID;
             if(!hasBounds){
@@ -63,7 +63,7 @@ void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, cons
 }
 
 void RayTracingOpticalSceneGather::appendRuntime(const Core::ECS::EntityID entity, const RendererComponent& renderer, const Core::BufferHandle& boundsBuffer, const Core::GpuDescriptorHandle boundsDescriptor, const Float34& objectToWorld){
-    const bool staticComplete = boundsCompleteExceptRuntime;
+    const b8 staticComplete = boundsCompleteExceptRuntime;
     const u32 instanceIndex = static_cast<u32>(instances.size());
     append(entity, renderer, true, VectorZero(), VectorZero(), false);
     // The CPU upload stays deliberately incomplete. Only the GPU finalizer can validate this contributor.

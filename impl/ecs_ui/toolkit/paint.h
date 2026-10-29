@@ -120,21 +120,21 @@ public:
     void begin(const DisplayMetrics& metrics, u64 generation, u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin);
     void reserve(usize quadCount, usize clipDepth = s_PaintDefaultClipDepth);
     void pushClip(const Rect& clip);
-    [[nodiscard]] bool popClip()noexcept;
+    [[nodiscard]] b8 popClip()noexcept;
     // Each bounded overlay escapes parent clipping and restores that clip and layer at its balanced end.
-    [[nodiscard]] bool beginOverlay(u32 layer);
-    [[nodiscard]] bool endOverlay()noexcept;
+    [[nodiscard]] b8 beginOverlay(u32 layer);
+    [[nodiscard]] b8 endOverlay()noexcept;
     void fillRect(const Rect& rectangle, const Color& color = {});
-    [[nodiscard]] bool drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {});
+    [[nodiscard]] b8 drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {});
     // Admit all pages before emitting a label. Failure preserves existing bindings and geometry.
-    [[nodiscard]] bool prepareGlyphPages(const SharedGlyphPage* pages, usize count);
-    [[nodiscard]] bool drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {});
-    [[nodiscard]] bool prepareSdfPages(const SharedSdfAtlasPage* pages, usize count);
-    [[nodiscard]] bool prepareImages(const SharedGlyphPage* glyphPages, usize glyphCount, const SharedSdfAtlasPage* sdfPages, usize sdfCount, const SharedImageSource* textureImages = nullptr, usize textureCount = 0u);
-    [[nodiscard]] bool drawSdfGlyph(const SharedSdfAtlasPage& page, u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {});
-    [[nodiscard]] bool prepareTextureImages(const SharedImageSource* images, usize count);
+    [[nodiscard]] b8 prepareGlyphPages(const SharedGlyphPage* pages, usize count);
+    [[nodiscard]] b8 drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {});
+    [[nodiscard]] b8 prepareSdfPages(const SharedSdfAtlasPage* pages, usize count);
+    [[nodiscard]] b8 prepareImages(const SharedGlyphPage* glyphPages, usize glyphCount, const SharedSdfAtlasPage* sdfPages, usize sdfCount, const SharedImageSource* textureImages = nullptr, usize textureCount = 0u);
+    [[nodiscard]] b8 drawSdfGlyph(const SharedSdfAtlasPage& page, u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {});
+    [[nodiscard]] b8 prepareTextureImages(const SharedImageSource* images, usize count);
     // Invisible valid images consume no binding slot; invalid arguments leave bindings and geometry unchanged.
-    [[nodiscard]] bool drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f }, const Color& tint = {});
+    [[nodiscard]] b8 drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f }, const Color& tint = {});
     [[nodiscard]] DrawSnapshot freeze();
     [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_snapshot.displayMetrics(); }
     [[nodiscard]] Rect currentClip()const noexcept;
@@ -152,8 +152,8 @@ private:
     OverlayFrame m_overlays[s_PaintMaxOverlayDepth];
     usize m_overlayDepth = 0u;
     u32 m_layer = 0u;
-    bool m_commandsOrdered = true;
-    bool m_recording = false;
+    b8 m_commandsOrdered = true;
+    b8 m_recording = false;
 };
 
 

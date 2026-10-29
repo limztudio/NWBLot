@@ -111,8 +111,8 @@ TEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMu
 }
 
 TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtCompletion){
-    const bool variants[] = {false, true};
-    for(const bool csgHardwareEnabled : variants){
+    const b8 variants[] = {false, true};
+    for(const b8 csgHardwareEnabled : variants){
         StatisticsContext context;
         ASSERT_TRUE(context.control);
         ReflectionStatistics metadata = Metadata();

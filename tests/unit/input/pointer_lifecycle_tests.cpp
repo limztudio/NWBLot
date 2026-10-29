@@ -26,7 +26,7 @@ public:
 
 
 public:
-    virtual void windowFocusUpdate(bool)noexcept override{ ++m_focusChanges; }
+    virtual void windowFocusUpdate(b8)noexcept override{ ++m_focusChanges; }
 
     virtual void pointerLeave()override{
         ++m_leaves;
@@ -44,7 +44,7 @@ public:
         }
     }
 
-    virtual bool keyboardUpdate(i32, i32, const i32 action, i32)noexcept override{
+    virtual b8 keyboardUpdate(i32, i32, const i32 action, i32)noexcept override{
         if(action == InputAction::Release)
             ++m_keyReleases;
         else

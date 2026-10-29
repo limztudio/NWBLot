@@ -59,13 +59,13 @@ struct MeshViewSetupGraphTask{
         Core::GraphicsRuntime& graphics;
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming;
         Core::GpuTimingSubmissionTicket*& timingTicket;
-        const bool& asyncPrefixTimingSpansOnePacket;
+        const b8& asyncPrefixTimingSpansOnePacket;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 
@@ -77,13 +77,13 @@ struct MeshViewUploadCommitGraphTask{
     struct Payload{
         RendererMeshSystem& meshSystem;
         ECSRenderDetail::MeshViewGpuData viewState;
-        bool uploadRequired = false;
-        bool& ready;
+        b8 uploadRequired = false;
+        b8& ready;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
     static void Discarded(Payload& payload)noexcept;
 };

@@ -32,11 +32,11 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool HasSkeletonPose(const SkeletonPoseComponent* pose)noexcept{
+[[nodiscard]] NWB_INLINE b8 HasSkeletonPose(const SkeletonPoseComponent* pose)noexcept{
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
 }
 
-[[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkinningJointMatrix(const SIMDMatrix& poseJoint, const bool hasInverseBind, const SIMDMatrix& inverseBind, const f32 inverseBindDeterminantEpsilon)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkinningJointMatrix(const SIMDMatrix& poseJoint, const b8 hasInverseBind, const SIMDMatrix& inverseBind, const f32 inverseBindDeterminantEpsilon)noexcept{
     SIMDMatrix matrix = poseJoint;
     if(!MatrixIsInvertibleAffine(matrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
         return MakeUnexpected(Failure{});

@@ -127,10 +127,10 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font);
+[[nodiscard]] b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font);
 [[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Font& font, u32 sourceGlyphCount, Core::Assets::AssetArena& arena);
-[[nodiscard]] bool ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, u32 glyphCount);
+[[nodiscard]] b8 ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, u32 glyphCount);
 [[nodiscard]] Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayload& payload, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontAtlasPayload> DeserializeFontAtlasPayload(Span<const u8> binary, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 

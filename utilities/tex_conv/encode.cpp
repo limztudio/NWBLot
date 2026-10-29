@@ -57,7 +57,7 @@ inline constexpr f32 s_SrgbLinearThreshold = 0.04045f;
     return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(rgb, VectorReplicate(s_SrgbLinearThreshold)));
 }
 
-[[nodiscard]] static bool PrepareLinearPlane(basisu::imagef& plane, const basisu::imagef& alphaMask, const AlphaSource& alphaSource, const bool hdr, const bool srgb){
+[[nodiscard]] static b8 PrepareLinearPlane(basisu::imagef& plane, const basisu::imagef& alphaMask, const AlphaSource& alphaSource, const b8 hdr, const b8 srgb){
     const SIMDVectorSingle maximumRgb = VectorReplicate(hdr ? s_UastcHdrMaximum : 1.0f);
     for(u32 y = 0u; y < plane.get_height(); ++y){
         for(u32 x = 0u; x < plane.get_width(); ++x){
@@ -101,7 +101,7 @@ inline constexpr f32 s_SrgbLinearThreshold = 0.04045f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPaths, const TextureDimension::Enum dimension, const bool srgb, const AlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena){
+Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPaths, const TextureDimension::Enum dimension, const b8 srgb, const AlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena){
     if(inputPaths.empty() || inputPaths.size() > Limit<u32>::s_Max)
         return MakeUnexpected(Failure{});
     if(!IsValidTextureDimension(dimension) || (dimension == TextureDimension::Texture2D && inputPaths.size() != 1u) || (dimension == TextureDimension::TextureCube && inputPaths.size() != TextureFormat::s_TextureCubeFaceCount)){
@@ -113,7 +113,7 @@ Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPath
         return MakeUnexpected(Failure{});
     }
 
-    const bool hdr = IsHdrInputPath(inputPaths.front());
+    const b8 hdr = IsHdrInputPath(inputPaths.front());
     for(const ScratchPath& path : inputPaths){
         if(IsHdrInputPath(path) != hdr){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: an individual texture conversion cannot mix HDR and LDR source images."));

@@ -38,8 +38,8 @@ public:
 
 
 public:
-    bool loadBinary(Span<const u8> binary);
-    [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
+    b8 loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
 
 public:
     template<typename... GeometryPayloadArgT>

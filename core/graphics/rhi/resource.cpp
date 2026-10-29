@@ -79,7 +79,7 @@ TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, Te
     return ret;
 }
 
-bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const noexcept{
+b8 TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const noexcept{
     const TextureSubresourceSet resolved = resolve(desc, TextureSubresourceMipResolve::Range);
 
     if(resolved.baseMipLevel > 0u || resolved.numMipLevels < desc.mipLevels)

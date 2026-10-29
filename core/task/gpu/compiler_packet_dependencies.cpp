@@ -26,7 +26,7 @@ namespace GpuTaskGraphCompilerDetail{
     return compiledPlan.prologueStateSeeds.data() + task.prologueStateSeedOffset;
 }
 
-[[nodiscard]] bool PlanPacketDependencies(
+[[nodiscard]] b8 PlanPacketDependencies(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const Span<const GpuTaskExternalDependencyEdge> initialOwnershipDependencies,
@@ -36,7 +36,7 @@ namespace GpuTaskGraphCompilerDetail{
     GpuTaskGraphCompiledPlanStorage& compiledPlan
 ){
     const usize packetCount = compiledPlan.packets.size();
-    const bool plansResourceStateDependencies = !resourceStateDependencies.empty();
+    const b8 plansResourceStateDependencies = !resourceStateDependencies.empty();
     if(packetCount > static_cast<usize>(Limit<u32>::s_Max) || compiledPlan.packetDependencies.size() > static_cast<usize>(Limit<u32>::s_Max) || compiledPlan.packetExternalDependencies.size() > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
@@ -194,8 +194,8 @@ namespace GpuTaskGraphCompilerDetail{
         if(!plansResourceStateDependencies)
             continue;
 
-        bool consumerDependsOnNonRoot = false;
-        const bool hasResourceStateConsumerGroup = resourceStateDependencyIndex < resourceStateDependencies.size() && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID;
+        b8 consumerDependsOnNonRoot = false;
+        const b8 hasResourceStateConsumerGroup = resourceStateDependencyIndex < resourceStateDependencies.size() && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID;
         if(packetReachabilityWordsPerPacket != 0u || hasResourceStateConsumerGroup){
             for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.dependencyCount; ++dependencyIndex){
                 const GpuPacketDependency& dependency = compiledPlan.packetDependencies[consumerPacket.dependencyOffset + dependencyIndex];

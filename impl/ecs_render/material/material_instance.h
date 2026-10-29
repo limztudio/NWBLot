@@ -94,7 +94,7 @@ public:
     }
 };
 
-[[nodiscard]] inline bool ValidateMaterialInstanceInterface(const MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText){
+[[nodiscard]] inline b8 ValidateMaterialInstanceInterface(const MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText){
     if(!materialInterface){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a material interface"), ConvertString(parameterNameText));
         return false;
@@ -114,7 +114,7 @@ public:
     return false;
 }
 
-[[nodiscard]] inline bool StoreMaterialMutableParameter(MaterialInstanceComponent& component, MaterialInstanceParameter parameter, const AStringView parameterNameText){
+[[nodiscard]] inline b8 StoreMaterialMutableParameter(MaterialInstanceComponent& component, MaterialInstanceParameter parameter, const AStringView parameterNameText){
     for(MaterialInstanceParameter& existingParameter : component.overrides){
         if(existingParameter.parameterName != parameter.parameterName)
             continue;
@@ -143,7 +143,7 @@ public:
     return nullptr;
 }
 
-[[nodiscard]] inline bool SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
+[[nodiscard]] inline b8 SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
     if(!IsMaterialLayoutNumericFieldType(fieldType)){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type"), ConvertString(parameterNameText));
         return false;
@@ -164,7 +164,7 @@ public:
     return StoreMaterialMutableParameter(component, parameter, parameterNameText);
 }
 
-[[nodiscard]] inline bool SetMaterialMutableParameter(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
+[[nodiscard]] inline b8 SetMaterialMutableParameter(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
     MaterialInstanceComponent* component = ResolveMaterialInstanceComponentForSet(world, entity);
     if(!component)
         return false;
@@ -173,11 +173,11 @@ public:
 }
 
 template<typename TValue>
-[[nodiscard]] inline bool SetMaterialMutableValue(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const TValue& value){
+[[nodiscard]] inline b8 SetMaterialMutableValue(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const TValue& value){
     return SetMaterialMutableParameter(world, entity, materialInterface, parameterName, MaterialInstanceValueTraits<TValue>::s_FieldType, MaterialInstanceValueTraits<TValue>::Pack(value));
 }
 
-[[nodiscard]] inline bool SetMaterialMutableHalf4(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const Float4& value){
+[[nodiscard]] inline b8 SetMaterialMutableHalf4(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const Float4& value){
     const Half4U packedValue = MakeHalf4U(value.x, value.y, value.z, value.w);
     return SetMaterialMutableValue(world, entity, materialInterface, parameterName, packedValue);
 }

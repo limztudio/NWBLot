@@ -20,7 +20,7 @@ TESTBED_BEGIN
 UiTextAreaGallery::UiTextAreaGallery(NWB::Core::Alloc::GlobalArena& arena)
     : m_document(arena, {}, NWB::Impl::Ui::EditTextMode::Multiline)
 {
-    const bool initialized = m_document.setText("Custom multiline editor\nUp / Down retain the preferred column.\nShift selects; Ctrl+Enter submits.\nClipboard and IME belong to the OS.\n\nLong lines scroll horizontally; longer documents scroll vertically.");
+    const b8 initialized = m_document.setText("Custom multiline editor\nUp / Down retain the preferred column.\nShift selects; Ctrl+Enter submits.\nClipboard and IME belong to the OS.\n\nLong lines scroll horizontally; longer documents scroll vertically.");
     NWB_FATAL_ASSERT(initialized);
 }
 
@@ -31,7 +31,7 @@ void UiTextAreaGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, c
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = s_GalleryFontSize;
-    bool valid = ui.label(s_TitleKey, "Multiline text area");
+    b8 valid = ui.label(s_TitleKey, "Multiline text area");
     if(ui.checkbox(s_ReadOnlyKey, "Read only", m_readOnly))
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: text area read only={}"), m_readOnly);
     TextAreaOptions options;

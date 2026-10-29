@@ -78,7 +78,7 @@ namespace __hidden_renderer_frame_pipeline_graph_packet_metrics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool PreparePacketEnvelopeMetrics(
+[[nodiscard]] b8 PreparePacketEnvelopeMetrics(
     const Core::GpuTaskGraph::DeclarationReadView& graph,
     const Core::GpuCompiledGraph::ReadView& compiledGraph,
     Core::GpuTimingRecorder& timingRecorder,
@@ -104,7 +104,7 @@ namespace __hidden_renderer_frame_pipeline_graph_packet_metrics{
             return false;
         packetScopes.push_back(Core::GpuPacketEnvelopeMetricScope{ .scopeName = *packetScopeName, .physicalQueue = packetView.plan->queue, });
 
-        bool hasQueueOutput = false;
+        b8 hasQueueOutput = false;
         for(const Core::GpuPacketEnvelopeMetricQueueOutput& output : queueOutputs)
             hasQueueOutput = hasQueueOutput || output.physicalQueue == packetView.plan->queue;
         if(hasQueueOutput)
@@ -136,7 +136,7 @@ namespace __hidden_renderer_frame_pipeline_graph_packet_metrics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(const Core::GpuTaskGraph::DeclarationReadView& graph, const Core::GpuCompiledGraph::ReadView& compiledGraph, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] b8 RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(const Core::GpuTaskGraph::DeclarationReadView& graph, const Core::GpuCompiledGraph::ReadView& compiledGraph, Core::Alloc::ScratchArena& scratchArena){
     return __hidden_renderer_frame_pipeline_graph_packet_metrics::PreparePacketEnvelopeMetrics(graph, compiledGraph, m_graphics.gpuTiming(), m_graphics.getFrameIndex(), scratchArena);
 }
 

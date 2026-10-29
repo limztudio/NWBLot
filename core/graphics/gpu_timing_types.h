@@ -34,7 +34,7 @@ struct GpuTimingScope{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return scopeName != s_NameNone && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return scopeName != s_NameNone && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
 };
 
 static_assert(IsTriviallyCopyable_V<GpuTimingScope>, "GPU timing publication must remain allocation-free after native recording begins");
@@ -71,7 +71,7 @@ public:
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return identity && !markerLabel.empty(); }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return identity && !markerLabel.empty(); }
 };
 
 
@@ -82,7 +82,7 @@ public:
 // The default-invalid value keeps ordinary timing scopes out of the optional completed-sample listener path.
 class GpuTimingSampleAttribution final{
     friend class GpuTimingRecorder;
-    friend constexpr bool operator==(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept;
+    friend constexpr b8 operator==(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept;
 
 
 public:
@@ -94,18 +94,18 @@ private:
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return m_identity != 0u; }
 
 
 private:
     u64 m_identity = 0u;
 };
 
-inline constexpr bool operator==(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept{
+inline constexpr b8 operator==(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept{
     return lhs.m_identity == rhs.m_identity;
 }
 
-inline constexpr bool operator!=(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept{
+inline constexpr b8 operator!=(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -125,7 +125,7 @@ struct GpuTimingSample{
     GpuPhysicalQueueId physicalQueue;
     // False retires an attributed query whose value became unavailable (e.g. capture epoch change).
     // durationSeconds is meaningful only when true.
-    bool published = false;
+    b8 published = false;
     // Valid only for a published result with absolute comparable timestamps.
     // Unpublished retirements keep physicalQueue but leave this range invalid even when raw query data existed.
 };
@@ -139,13 +139,13 @@ struct GpuTimingSampleListener{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return invoke != nullptr; }
 };
 
 // Subscription identities are process-unique and never reused, so delayed snapshots cannot resolve a removed subscription to a replacement context.
 class GpuTimingSampleSubscription final{
     friend class GpuTimingRecorder;
-    friend constexpr bool operator==(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept;
+    friend constexpr b8 operator==(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept;
 
 
 public:
@@ -157,18 +157,18 @@ private:
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return m_identity != 0u; }
 
 
 private:
     u64 m_identity = 0u;
 };
 
-inline constexpr bool operator==(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept{
+inline constexpr b8 operator==(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept{
     return lhs.m_identity == rhs.m_identity;
 }
 
-inline constexpr bool operator!=(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept{
+inline constexpr b8 operator!=(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -203,15 +203,15 @@ struct GpuTimingRecorderStatistics{
     u64 sampleListenerFailureCount = 0u;
     u64 skippedScopeCountByReason[GpuTimingScopeSkipReason::Count]{};
     u16 deviceGeneration = 0u;
-    bool queryCollectionEnabled = false;
-    bool timingSinkEnabled = false;
-    bool feedbackCollectionEnabled = false;
-    bool collectionActive = false;
-    bool comparableTimestampsSupported = false;
+    b8 queryCollectionEnabled = false;
+    b8 timingSinkEnabled = false;
+    b8 feedbackCollectionEnabled = false;
+    b8 collectionActive = false;
+    b8 comparableTimestampsSupported = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return deviceGeneration != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return deviceGeneration != 0u; }
 };
 
 

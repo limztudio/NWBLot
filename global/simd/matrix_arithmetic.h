@@ -169,35 +169,35 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL MatrixDoubleRowMultiply(SIMDVectorDoub
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE bool NWB_SIMD_CALL MatrixIsNaN(const SIMDMatrix& matrix)noexcept{
+NWB_INLINE b8 NWB_SIMD_CALL MatrixIsNaN(const SIMDMatrix& matrix)noexcept{
     SIMDVectorSingle mask = VectorOrInt(VectorIsNaN(matrix.v[0]), VectorIsNaN(matrix.v[1]));
     mask = VectorOrInt(mask, VectorIsNaN(matrix.v[2]));
     mask = VectorOrInt(mask, VectorIsNaN(matrix.v[3]));
     return VectorMoveMask(mask) != 0;
 }
 
-NWB_INLINE bool NWB_SIMD_CALL MatrixDoubleIsNaN(const SIMDMatrixDouble& matrix)noexcept{
+NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsNaN(const SIMDMatrixDouble& matrix)noexcept{
     SIMDVectorDouble mask = VectorDoubleOrInt(VectorDoubleIsNaN(matrix.v[0]), VectorDoubleIsNaN(matrix.v[1]));
     mask = VectorDoubleOrInt(mask, VectorDoubleIsNaN(matrix.v[2]));
     mask = VectorDoubleOrInt(mask, VectorDoubleIsNaN(matrix.v[3]));
     return VectorDoubleMoveMask(mask) != 0;
 }
 
-NWB_INLINE bool NWB_SIMD_CALL MatrixIsInfinite(const SIMDMatrix& matrix)noexcept{
+NWB_INLINE b8 NWB_SIMD_CALL MatrixIsInfinite(const SIMDMatrix& matrix)noexcept{
     SIMDVectorSingle mask = VectorOrInt(VectorIsInfinite(matrix.v[0]), VectorIsInfinite(matrix.v[1]));
     mask = VectorOrInt(mask, VectorIsInfinite(matrix.v[2]));
     mask = VectorOrInt(mask, VectorIsInfinite(matrix.v[3]));
     return VectorMoveMask(mask) != 0;
 }
 
-NWB_INLINE bool NWB_SIMD_CALL MatrixDoubleIsInfinite(const SIMDMatrixDouble& matrix)noexcept{
+NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsInfinite(const SIMDMatrixDouble& matrix)noexcept{
     SIMDVectorDouble mask = VectorDoubleOrInt(VectorDoubleIsInfinite(matrix.v[0]), VectorDoubleIsInfinite(matrix.v[1]));
     mask = VectorDoubleOrInt(mask, VectorDoubleIsInfinite(matrix.v[2]));
     mask = VectorDoubleOrInt(mask, VectorDoubleIsInfinite(matrix.v[3]));
     return VectorDoubleMoveMask(mask) != 0;
 }
 
-NWB_INLINE bool NWB_SIMD_CALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
+NWB_INLINE b8 NWB_SIMD_CALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
     SIMDVectorSingle mask0 = VectorEqual(matrix.v[0], s_SIMDIdentityR0);
     SIMDVectorSingle mask1 = VectorEqual(matrix.v[1], s_SIMDIdentityR1);
     SIMDVectorSingle mask2 = VectorEqual(matrix.v[2], s_SIMDIdentityR2);
@@ -207,7 +207,7 @@ NWB_INLINE bool NWB_SIMD_CALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept
     return VectorMoveMask(VectorAndInt(mask0, mask2)) == VectorComponentMask::s_XYZW;
 }
 
-NWB_INLINE bool NWB_SIMD_CALL MatrixDoubleIsIdentity(const SIMDMatrixDouble& matrix)noexcept{
+NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsIdentity(const SIMDMatrixDouble& matrix)noexcept{
     SIMDVectorDouble mask0 = VectorDoubleEqual(matrix.v[0], s_DoubleSIMDIdentityR0);
     SIMDVectorDouble mask1 = VectorDoubleEqual(matrix.v[1], s_DoubleSIMDIdentityR1);
     SIMDVectorDouble mask2 = VectorDoubleEqual(matrix.v[2], s_DoubleSIMDIdentityR2);

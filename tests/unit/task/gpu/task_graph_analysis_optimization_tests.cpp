@@ -38,7 +38,7 @@ using TaskGraphTestUtils::TestArena;
     return DeriveName(prefix, FormatDecimal(index, text));
 }
 
-static void BuildVersionChain(Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceVersionOrigin::Enum origin, const usize taskCount, const bool disjointClobber, const bool overlappingClobber){
+static void BuildVersionChain(Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceVersionOrigin::Enum origin, const usize taskCount, const b8 disjointClobber, const b8 overlappingClobber){
     ASSERT_GE(taskCount, overlappingClobber ? 3u : 2u);
     const auto bufferResult = AddBufferMetadata(graph, Name("tests/analysis_optimization/version_buffer"), "Analysis Version Buffer");
     ASSERT_TRUE(bufferResult);
@@ -49,13 +49,13 @@ static void BuildVersionChain(Graphics::GpuTaskGraph& graph, const Graphics::Gpu
     ASSERT_TRUE(versionResult);
     const Graphics::GpuGraphResourceVersionId version = *versionResult;
     ASSERT_TRUE(version.valid());
-    const bool produced = origin == Graphics::GpuGraphResourceVersionOrigin::TaskProduced;
+    const b8 produced = origin == Graphics::GpuGraphResourceVersionOrigin::TaskProduced;
     Graphics::GpuTaskId previous;
     for(usize index = 0u; index < taskCount; ++index){
         Graphics::GpuTaskResourceUse physicalUse;
         Graphics::GpuTaskResourceVersionUse versionUse;
-        const bool usesVersion = index == 0u || (produced && index == 1u);
-        const bool writesVersion = produced && index == 0u;
+        const b8 usesVersion = index == 0u || (produced && index == 1u);
+        const b8 writesVersion = produced && index == 0u;
         if(usesVersion){
             physicalUse.resource = buffer;
             physicalUse.range = versionRange;
@@ -115,8 +115,8 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionsWithoutOverlappingClobbersPreserveSta
 TEST(GpuTaskGraphAnalysis, VersionLifetimeConstraintsDoNotInventProducedVersionOrder){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
-    const bool reversedDeclarations[] = { false, true };
-    for(const bool reversed : reversedDeclarations){
+    const b8 reversedDeclarations[] = { false, true };
+    for(const b8 reversed : reversedDeclarations){
         SCOPED_TRACE(reversed);
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
@@ -134,7 +134,7 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeConstraintsDoNotInventProducedVersionO
         }
         Graphics::GpuTaskId tasks[4u];
         for(usize index = 0u; index < LengthOf(tasks); ++index){
-            const bool producer = index < LengthOf(versions);
+            const b8 producer = index < LengthOf(versions);
             const Graphics::GpuTaskResourceUse physicalUse{
                 .resource = buffer,
                 .range = range,
@@ -156,8 +156,8 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeConstraintsDoNotInventProducedVersionO
         EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
         usize lifetimeEdges = 0u;
-        bool protectsFirst = false;
-        bool protectsSecond = false;
+        b8 protectsFirst = false;
+        b8 protectsSecond = false;
         for(const Graphics::GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
             if(edge.hazard != Graphics::GpuTaskHazardType::VersionLifetime)
                 continue;
@@ -205,7 +205,7 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionPreBirthReachabilityHandlesFrozenSeman
         Graphics::GpuTaskResourceVersionUse versionUse;
         usize physicalUseCount = 0u;
         if(index != 1u){
-            const bool consumer = index == 4u;
+            const b8 consumer = index == 4u;
             const usize resourceIndex = index == 2u ? 1u : 0u;
             physicalUses[0u] = Graphics::GpuTaskResourceUse{
                 .resource = buffers[resourceIndex],
@@ -258,8 +258,8 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionPreBirthReachabilityHandlesFrozenSeman
 TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrder){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
-    const bool reversedDeclarations[] = { false, true };
-    for(const bool reversed : reversedDeclarations){
+    const b8 reversedDeclarations[] = { false, true };
+    for(const b8 reversed : reversedDeclarations){
         SCOPED_TRACE(reversed);
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
@@ -283,7 +283,7 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrd
         }
         Graphics::GpuTaskId tasks[3u];
         for(usize index = 0u; index < LengthOf(tasks); ++index){
-            const bool writer = index != 1u;
+            const b8 writer = index != 1u;
             const Graphics::ResourceStates::Mask state = writer ? Graphics::ResourceStates::UnorderedAccess : Graphics::ResourceStates::ShaderResource;
             const Graphics::GpuTaskResourceAccess::Enum access = writer ? Graphics::GpuTaskResourceAccess::Write : Graphics::GpuTaskResourceAccess::Read;
             const Graphics::GpuTaskResourceUse physicalUses[] = {

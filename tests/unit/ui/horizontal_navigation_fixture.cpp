@@ -85,7 +85,7 @@ InputRoutingResult HorizontalNavigationFixture::send(const InputEvent& event){
     return m_router.process();
 }
 
-InputRoutingResult HorizontalNavigationFixture::keyDown(const Core::Key::Enum key, const bool repeat){
+InputRoutingResult HorizontalNavigationFixture::keyDown(const Core::Key::Enum key, const b8 repeat){
     return send({ .key = key, .type = InputEventType::KeyDown, .repeat = repeat  });
 }
 
@@ -107,7 +107,7 @@ void HorizontalNavigationFixture::focusTarget(const usize index){
     EXPECT_EQ(m_router.focus(), m_targets[index].id);
 }
 
-bool HorizontalNavigationFixture::publish(const usize count, const PopupScope* popups, const usize popupCount){
+b8 HorizontalNavigationFixture::publish(const usize count, const PopupScope* popups, const usize popupCount){
     const u64 generation = m_generation + 1u;
     if(!m_router.commitTargets(m_targets.data(), count, generation, popups, popupCount))
         return false;

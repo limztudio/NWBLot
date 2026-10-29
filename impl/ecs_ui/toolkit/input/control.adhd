@@ -14,19 +14,19 @@ class ControlToken{
     public u64 contentGeneration = 0u;
     public u64 contentRevision = 0u;
 
-    public bool valid()const{
+    public b8 valid()const{
         return this.instanceGeneration != 0u && this.contentGeneration != 0u && this.contentRevision != 0u;
     }
 
-    public bool empty()const{
+    public b8 empty()const{
         return this.instanceGeneration == 0u && this.contentGeneration == 0u && this.contentRevision == 0u;
     }
 
-    public bool operator==(in ControlToken rhs)const{
+    public b8 operator==(in ControlToken rhs)const{
         return this.instanceGeneration == rhs.instanceGeneration && this.contentGeneration == rhs.contentGeneration && this.contentRevision == rhs.contentRevision;
     }
 
-    public bool operator!=(in ControlToken rhs)const{
+    public b8 operator!=(in ControlToken rhs)const{
         return this.instanceGeneration != rhs.instanceGeneration || this.contentGeneration != rhs.contentGeneration || this.contentRevision != rhs.contentRevision;
     }
 }

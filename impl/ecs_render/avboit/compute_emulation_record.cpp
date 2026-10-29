@@ -23,20 +23,20 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
+[[nodiscard]] b8 RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
     if(!trait.framebuffer || (!inputs.plan.captured && !inputs.csgPlan.captured) || inputs.plan.captured == inputs.csgPlan.captured)
         return false;
 
     Core::GraphicsRuntime& graphics = inputs.graphics;
     RendererMaterialSystem& materialSystem = inputs.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(inputs.timingTicket);
-    const bool csgComputeEmulation = inputs.csgPlan.captured;
+    const b8 csgComputeEmulation = inputs.csgPlan.captured;
     if(!(csgComputeEmulation ? inputs.csgPlan.matches() : inputs.plan.matches()) || !inputs.materialDrawBuffersUploaded || !inputs.frameBindings.frameReady(inputs.instanceCount, inputs.materialTypedByteCount))
         return false;
 
     const Span<const MaterialPassDrawItem> computeDrawItems = csgComputeEmulation ? Span<const MaterialPassDrawItem>(inputs.csgPlan.drawItems) : Span<const MaterialPassDrawItem>(inputs.plan.drawItems);
     // Reject late losses so the packet is discarded and the next frame re-preflights.
-    const bool drawResourcesReady = csgComputeEmulation ? materialSystem.materialPassDrawResourcesReady(inputs.csgPlan.drawItemsView(), inputs.frameBindings) : materialSystem.computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings);
+    const b8 drawResourcesReady = csgComputeEmulation ? materialSystem.materialPassDrawResourcesReady(inputs.csgPlan.drawItemsView(), inputs.frameBindings) : materialSystem.computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings);
     if(!drawResourcesReady)
         return false;
     if(csgComputeEmulation){
@@ -75,8 +75,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait){
-    const bool generatePhase = inputs.phase == AvboitSharedComputeEmulationPhase::Generate;
+[[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait){
+    const b8 generatePhase = inputs.phase == AvboitSharedComputeEmulationPhase::Generate;
     if(!trait.framebuffer || !(inputs.targets.avboit.*(trait.framebuffer)) || !inputs.plan.captured || inputs.drawIndex >= inputs.plan.drawCount)
         return false;
 

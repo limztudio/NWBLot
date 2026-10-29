@@ -81,7 +81,7 @@ public:
         return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
     }
 
-    [[nodiscard]] bool complete(const ClipboardRequestToken token, const AStringView text){
+    [[nodiscard]] b8 complete(const ClipboardRequestToken token, const AStringView text){
         return completeNativeRequest(token, ClipboardStatus::Success, text);
     }
 
@@ -158,7 +158,7 @@ protected:
         return DeclaredEdit{ retained, result };
     }
 
-    [[nodiscard]] bool beginPreparedFrame(){
+    [[nodiscard]] b8 beginPreparedFrame(){
         ++m_generation;
         if(!m_context.beginFrame(m_generation))
             return false;
@@ -166,7 +166,7 @@ protected:
         return m_context.beginRoot({ 17u, 1u });
     }
 
-    [[nodiscard]] bool beginBaseFrame(){
+    [[nodiscard]] b8 beginBaseFrame(){
         if(!beginPreparedFrame())
             return false;
         const auto baseEdit = declareEdit("base", m_baseModel, { 10.0f, 20.0f, 180.0f, 30.0f });
@@ -177,14 +177,14 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool endPreparedFrame(){
+    [[nodiscard]] b8 endPreparedFrame(){
         if(!m_context.endRoot() || !m_context.finishFrame())
             return false;
         m_host.finishFrame();
         return true;
     }
 
-    [[nodiscard]] bool prepare(){
+    [[nodiscard]] b8 prepare(){
         if(!beginBaseFrame())
             return false;
         const auto popup = m_context.declare(s_PopupKey, Ui::WidgetKind::Popup);
@@ -220,7 +220,7 @@ protected:
         return endPreparedFrame();
     }
 
-    [[nodiscard]] bool prepareDeferred(){
+    [[nodiscard]] b8 prepareDeferred(){
         if(!beginPreparedFrame())
             return false;
         auto declared = m_context.declare(s_PopupKey, Ui::WidgetKind::Popup);
@@ -267,7 +267,7 @@ protected:
         return endPreparedFrame();
     }
 
-    [[nodiscard]] bool prepareNested(){
+    [[nodiscard]] b8 prepareNested(){
         if(!beginBaseFrame())
             return false;
         auto declared = m_context.declare(s_PopupKey, Ui::WidgetKind::Popup);
@@ -333,16 +333,16 @@ protected:
         return endPreparedFrame();
     }
 
-    [[nodiscard]] bool nestedFrame(){ return prepareNested() && commit(); }
+    [[nodiscard]] b8 nestedFrame(){ return prepareNested() && commit(); }
 
-    [[nodiscard]] bool commit(){
+    [[nodiscard]] b8 commit(){
         if(!m_context.commitFrame(m_generation))
             return false;
         m_host.commitFrame(m_generation);
         return true;
     }
 
-    [[nodiscard]] bool frame(){ return prepare() && commit(); }
+    [[nodiscard]] b8 frame(){ return prepare() && commit(); }
 
     [[nodiscard]] Ui::InputRoutingResult dispatch(const Ui::InputEvent& event){
         m_host.collectNative();
@@ -351,13 +351,13 @@ protected:
         EXPECT_TRUE(normalized);
         if(!normalized)
             return {};
-        const bool submit = m_host.prepareSubmit(*normalized);
+        const b8 submit = m_host.prepareSubmit(*normalized);
         const Ui::InputRoutingResult result = m_context.input().process();
         m_host.input(*normalized, previousCapture, submit);
         return result;
     }
 
-    void key(const Core::Key::Enum value, const bool control = false){
+    void key(const Core::Key::Enum value, const b8 control = false){
         EXPECT_TRUE(dispatch({ .position = {}, .key = value, .type = Ui::InputEventType::KeyDown, .control = control }).commandConsumed);
         EXPECT_TRUE(dispatch({ .position = {}, .key = value, .type = Ui::InputEventType::KeyUp, .control = control }).commandConsumed);
     }

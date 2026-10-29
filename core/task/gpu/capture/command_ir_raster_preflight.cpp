@@ -22,11 +22,11 @@ namespace __hidden_gpu_command_ir_raster_preflight{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool HasResourceUse(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access)noexcept{
+[[nodiscard]] static b8 HasResourceUse(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access)noexcept{
     return GpuCommandIrDetail::FindTaskResourceUse(task, resource, state, access) != nullptr;
 }
 
-[[nodiscard]] static bool ViewportIsValid(const Viewport& viewport)noexcept{
+[[nodiscard]] static b8 ViewportIsValid(const Viewport& viewport)noexcept{
     return
         IsFinite(viewport.minX)
         && IsFinite(viewport.maxX)
@@ -43,7 +43,7 @@ namespace __hidden_gpu_command_ir_raster_preflight{
     ;
 }
 
-[[nodiscard]] static bool ImplicitScissorIsValid(const Viewport& viewport)noexcept{
+[[nodiscard]] static b8 ImplicitScissorIsValid(const Viewport& viewport)noexcept{
     return viewport.minX >= 0.0f && viewport.minY >= 0.0f && viewport.maxX <= static_cast<f32>(Limit<i32>::s_Max) && viewport.maxY <= static_cast<f32>(Limit<i32>::s_Max);
 }
 

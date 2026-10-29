@@ -22,11 +22,11 @@ namespace __hidden_text_area_scroll_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SameRect(const Rect& first, const Rect& second)noexcept{
+[[nodiscard]] static b8 SameRect(const Rect& first, const Rect& second)noexcept{
     return first.x == second.x && first.y == second.y && first.width == second.width && first.height == second.height;
 }
 
-[[nodiscard]] static bool SameBar(const ScrollbarPlacement& first, const ScrollbarPlacement& second)noexcept{
+[[nodiscard]] static b8 SameBar(const ScrollbarPlacement& first, const ScrollbarPlacement& second)noexcept{
     // Offset and thumb position change during an ordinary drag without changing its accepted press geometry.
     return
         SameRect(first.track, second.track) && first.thumb.width == second.thumb.width && first.thumb.height == second.thumb.height
@@ -47,7 +47,7 @@ namespace __hidden_text_area_scroll_state{
 
 ControlToken TextAreaScrollState::prepare(
     const WidgetState& widget, const PopupToken& popup,
-    const u64 stateGeneration, const u64 stateRevision, const EditModel& model, const bool enabled, const bool readOnly,
+    const u64 stateGeneration, const u64 stateRevision, const EditModel& model, const b8 enabled, const b8 readOnly,
     const ScrollViewportPlacement& placement,
     const Point step
 )noexcept{
@@ -76,7 +76,7 @@ ControlToken TextAreaScrollState::prepare(
     return { stateGeneration, next.modelGeneration, m_revision };
 }
 
-bool TextAreaScrollState::updateOffsets(const Point scroll)noexcept{
+b8 TextAreaScrollState::updateOffsets(const Point scroll)noexcept{
     return ScrollbarLayout::UpdateOffsets(scroll, m_placement);
 }
 

@@ -33,7 +33,7 @@ namespace __hidden_csg_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ReserveCsgStructuredBuffer(Core::GraphicsRuntime& graphics, const usize requiredCount, const usize elementByteSize, const Name& debugName, Core::BufferHandle& buffer, usize& inOutCapacity){
+[[nodiscard]] static b8 ReserveCsgStructuredBuffer(Core::GraphicsRuntime& graphics, const usize requiredCount, const usize elementByteSize, const Name& debugName, Core::BufferHandle& buffer, usize& inOutCapacity){
     if(requiredCount == 0u)
         return true;
     if(buffer && inOutCapacity >= requiredCount)
@@ -83,7 +83,7 @@ namespace __hidden_csg_resources{
     return *acquired;
 }
 
-[[nodiscard]] static bool ReplaceCsgStorageBufferHeapHandle(Core::Device& device, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
+[[nodiscard]] static b8 ReplaceCsgStorageBufferHeapHandle(Core::Device& device, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
     const auto acquired = AcquireCsgBufferHeapHandle(device, buffer, Core::GpuDescriptorClass::StorageBuffer);
     if(!acquired){
         // The buffer was replaced; drop the stale handle for a later retry.
@@ -101,7 +101,7 @@ namespace __hidden_csg_resources{
     return true;
 }
 
-[[nodiscard]] static bool EnsureCsgBufferHeapHandle(Core::Device& device, const Core::GpuDescriptorClass::Enum descriptorClass, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
+[[nodiscard]] static b8 EnsureCsgBufferHeapHandle(Core::Device& device, const Core::GpuDescriptorClass::Enum descriptorClass, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
     if(inOutHandle.valid())
         return inOutHandle.descriptorClass() == descriptorClass;
     const auto acquired = AcquireCsgBufferHeapHandle(device, buffer, descriptorClass);
@@ -121,7 +121,7 @@ namespace __hidden_csg_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererCsgSystem::createCsgClipResources(){
+b8 RendererCsgSystem::createCsgClipResources(){
     auto& device = m_graphics.getDevice();
     if(!m_csgState.m_clipBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
@@ -164,7 +164,7 @@ bool RendererCsgSystem::createCsgClipResources(){
     return true;
 }
 
-bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
+b8 RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
     const usize oldCapacity = m_csgState.m_receiverRangeBufferCapacity;
     if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(m_graphics, rangeCount, sizeof(CsgReceiverRangeGpuData), ECSRenderDetail::s_CsgReceiverRangeBufferName, m_csgState.m_receiverRangeBuffer, m_csgState.m_receiverRangeBufferCapacity)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver range buffer"));
@@ -178,7 +178,7 @@ bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeC
     return true;
 }
 
-bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
+b8 RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     const usize oldCapacity = m_csgState.m_cutterBufferCapacity;
     if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(m_graphics, cutterCount, sizeof(CsgCutterGpuData), ECSRenderDetail::s_CsgCutterBufferName, m_csgState.m_cutterBuffer, m_csgState.m_cutterBufferCapacity)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cutter buffer"));
@@ -192,7 +192,7 @@ bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     return true;
 }
 
-bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount, const usize cutterCount){
+b8 RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount, const usize cutterCount){
     if(receiverRangeCount == 0u || cutterCount == 0u)
         return true;
     NWB_ASSERT(receiverRangeCount <= static_cast<usize>(Limit<u32>::s_Max));
@@ -221,7 +221,7 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
     return true;
 }
 
-ECSRenderDetail::CsgGraphResourceSnapshot RendererCsgSystem::csgGraphResourceSnapshot(const bool retainRefractionCapPipeline)const noexcept{
+ECSRenderDetail::CsgGraphResourceSnapshot RendererCsgSystem::csgGraphResourceSnapshot(const b8 retainRefractionCapPipeline)const noexcept{
     return {
         .receiverRanges = m_csgState.m_receiverRangeBuffer,
         .cutters = m_csgState.m_cutterBuffer,

@@ -56,7 +56,7 @@ struct FrameGraphAvboitAccumulationUploadInputs{
     Core::GpuGraphResourceId csgClipContextSlots;
     Core::GpuGraphResourceId csgIntervalSampleState;
     Core::GpuTaskId uploadTask;
-    bool intervalOutputsGraphOwned = false;
+    b8 intervalOutputsGraphOwned = false;
 };
 
 using FrameGraphAvboitAccumulationUploadResult = FrameGraphAvboitMaterialUploadResult;

@@ -76,7 +76,7 @@ X11CheckedOperation::~X11CheckedOperation()noexcept{
     __hidden_x11_checked::g_Operation = nullptr;
 }
 
-bool X11CheckedOperation::succeeded(){
+b8 X11CheckedOperation::succeeded(){
     XSync(&m_display, False);
     return m_error == 0u;
 }
@@ -85,7 +85,7 @@ bool X11CheckedOperation::succeeded(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, const Window window, const Atom property, const bool remove, const usize maxBytes){
+Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, const Window window, const Atom property, const b8 remove, const usize maxBytes){
     X11Property result;
     X11CheckedOperation operation(display);
     const int status = XGetWindowProperty(&display, window, property, 0, static_cast<long>((maxBytes + (s_X11WireUnitBytes - 1u)) / s_X11WireUnitBytes), remove ? True : False, AnyPropertyType, &result.type, &result.format, &result.count, &result.remaining, &result.bytes);

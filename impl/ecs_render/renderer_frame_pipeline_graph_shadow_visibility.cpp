@@ -29,13 +29,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
+b8 RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan,
     const RayTracingSceneGraphReads& hardwareSceneReads,
-    const bool hardwareShadowSupported,
+    const b8 hardwareShadowSupported,
     const Core::GpuGraphResourceId worldPosition,
     const Core::GpuGraphResourceId normal,
     const Core::GpuGraphResourceId depth,
@@ -56,15 +56,15 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
     Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
     Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
-    bool& opaqueProduced,
-    bool& transparentTraceProduced,
+    b8& opaqueProduced,
+    b8& transparentTraceProduced,
     u32& opaqueFrameIndex
 ){
     using namespace RendererTaskGraphDetail;
 
-    const bool hardwareTransparentTrace = rayTracingPlan.hardwareTransparentTrace;
-    const bool csgShadow = rayTracingPlan.lightSpace.ready && (rayTracingPlan.lightSpace.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
-    const bool hardwareCsgShadow = hardwareShadowSupported && csgShadow;
+    const b8 hardwareTransparentTrace = rayTracingPlan.hardwareTransparentTrace;
+    const b8 csgShadow = rayTracingPlan.lightSpace.ready && (rayTracingPlan.lightSpace.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
+    const b8 hardwareCsgShadow = hardwareShadowSupported && csgShadow;
 
     m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
@@ -114,7 +114,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     transparentTraceProduced = false;
     opaqueFrameIndex = 0u;
     // Only the prepared route exposes this boundary; other paths keep the monolithic Shadow Visibility callback.
-    const bool preparedSoftTransparentFoldCandidate =
+    const b8 preparedSoftTransparentFoldCandidate =
         rayTracingPlan.softTransparentFoldReady
         && deferredTargets.shadowCoarseTransmittance
         && deferredTargets.shadowSoftHalfA
@@ -133,10 +133,10 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         && materialContextSlots.valid()
         && !traceGeometryResources.empty()
     ;
-    const bool splitSoftTransparentFold = preparedSoftTransparentFoldCandidate;
-    const bool combinedSoftUpsample = splitSoftTransparentFold && rayTracingPlan.combinedSoftUpsample;
+    const b8 splitSoftTransparentFold = preparedSoftTransparentFoldCandidate;
+    const b8 combinedSoftUpsample = splitSoftTransparentFold && rayTracingPlan.combinedSoftUpsample;
     m_deferredShadowCombinedUpsample = combinedSoftUpsample;
-    const bool combinedSoftWavelet = CanCombineSoftShadowWavelets(
+    const b8 combinedSoftWavelet = CanCombineSoftShadowWavelets(
         combinedSoftUpsample,
         rayTracingPlan.combinedSoftWaveletReady,
         rayTracingPlan.opaqueTemporalMergeReady,
@@ -145,17 +145,17 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT
     );
     m_deferredShadowCombinedWavelet = combinedSoftWavelet;
-    const bool combinedSoftTemporal = combinedSoftWavelet && rayTracingPlan.combinedSoftTemporalReady;
+    const b8 combinedSoftTemporal = combinedSoftWavelet && rayTracingPlan.combinedSoftTemporalReady;
     m_deferredShadowCombinedTemporal = combinedSoftTemporal;
     // Adaptive fallback stays in the monolithic callback, but its primitives and diagnostic lifecycle are fixed by this route.
     // A frame with no clear/copy work still owns its tick through the semantic task's accepted hook without gaining empty graph nodes.
-    const bool graphOwnedAdaptiveCandidate = !splitSoftTransparentFold && rayTracingPlan.adaptivePlan.enabled;
+    const b8 graphOwnedAdaptiveCandidate = !splitSoftTransparentFold && rayTracingPlan.adaptivePlan.enabled;
     GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = graphOwnedAdaptiveCandidate ? rayTracingPlan.adaptivePlan : GraphOwnedAdaptiveShadowPlan{};
     // Merge pipeline may be ready before history has an accepted frame. Bootstrap publishes the pair, but only usable history samples prior geometry.
-    const bool softShadowHistoryReadable = rayTracingPlan.softShadowHistoryReadable;
+    const b8 softShadowHistoryReadable = rayTracingPlan.softShadowHistoryReadable;
     // Opaque merge runs before the transparent tail and shares its selector. Freeze its pair while the packet owns the temporal route.
-    const bool graphOwnsOpaqueTemporalMergeEntryStates = splitSoftTransparentFold && rayTracingPlan.opaqueTemporalMergeReady;
-    const bool opaqueHistoryFrontIsA = rayTracingPlan.historyFrontIsA;
+    const b8 graphOwnsOpaqueTemporalMergeEntryStates = splitSoftTransparentFold && rayTracingPlan.opaqueTemporalMergeReady;
+    const b8 opaqueHistoryFrontIsA = rayTracingPlan.historyFrontIsA;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
@@ -171,7 +171,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const Core::GpuGraphResourceId sceneGeometryDomain = *sceneGeometryDomainResult;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    const bool traceGeometryStatesGraphOwned = traceGeometrySet.valid();
+    const b8 traceGeometryStatesGraphOwned = traceGeometrySet.valid();
     constexpr usize s_ShadowVisibilityResourceUseCapacity = 40u;
     resourceUses.reserve(s_ShadowVisibilityResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
     resourceUses.push_back(ReadUse(worldPosition));
@@ -193,7 +193,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         resourceUses.push_back(WriteUse(resource, Core::ResourceStates::UnorderedAccess));
         return true;
     };
-    const auto appendOptionalOpaqueTemporalHistoryTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label, const bool isInput){
+    const auto appendOptionalOpaqueTemporalHistoryTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label, const b8 isInput){
         if(!texture)
             return true;
         const auto resourceResult = importTexture(texture, identity, label);
@@ -227,7 +227,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
         return true;
     };
-    const auto appendOptionalTransparentTemporalHistoryTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label, const bool isInput){
+    const auto appendOptionalTransparentTemporalHistoryTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label, const b8 isInput){
         if(!texture)
             return true;
         const auto resourceResult = importTexture(texture, identity, label);
@@ -254,7 +254,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         resourceUses.push_back(ReadWriteUse(resource, state));
         return true;
     };
-    bool optionalResourcesImported =
+    b8 optionalResourcesImported =
         (
             // The monolith picks adaptive fallback after runtime slot checks. Declare coarse across that route; split callbacks omit it.
             splitSoftTransparentFold
@@ -418,7 +418,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         };
         SoftShadowSplitTasks splitTasks;
         SoftShadowSplitTaskChainBuilder taskChainBuilder(m_deferredLightingTaskGraph, m_graphics, m_arena, m_raytracingSystem);
-        const bool declared = taskChainBuilder.declare(taskChainInputs, scratchArena, splitResourceUses, splitTasks);
+        const b8 declared = taskChainBuilder.declare(taskChainInputs, scratchArena, splitResourceUses, splitTasks);
         m_deferredShadowVisibilityOpaqueTask = splitTasks.opaque;
         m_deferredShadowVisibilityOpaqueFirstWaveletTask = splitTasks.opaqueFirstWavelet;
         m_deferredShadowVisibilityOpaqueResolveTask = splitTasks.opaqueResolve;
@@ -431,7 +431,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     }
 
     Core::GpuTaskId shadowVisibilityDependency = prefixTask;
-    bool adaptivePrimitivePrecedesVisibility = false;
+    b8 adaptivePrimitivePrecedesVisibility = false;
     if(graphOwnedAdaptivePlan.enabled){
         // The append counter is private adaptive scratch.
         // The compiler owns its CopyDest->UAV handoff before the Shadow Visibility callback, which still gates the adaptive producer.

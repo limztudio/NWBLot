@@ -21,7 +21,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Device::waitForIdle(){
+b8 Device::waitForIdle(){
     const VkResult res = waitForNativeIdle();
     if(res == VK_ERROR_DEVICE_LOST){
         markDeviceLost();
@@ -111,7 +111,7 @@ void Device::prepareForDestructionAfterIdleOrLoss(){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device teardown is discarding {} command buffers that still reference GpuDescriptorHeap."), heapUseCount);
     }
 
-    bool descriptorLifecycleTransitioning = false;
+    b8 descriptorLifecycleTransitioning = false;
     {
         ScopedLock descriptorLifecycleLock(m_descriptorBufferManager.m_lifecycleMutex);
         descriptorLifecycleTransitioning = m_descriptorBufferManager.m_lifecycleTransitioning;

@@ -107,9 +107,9 @@ struct EncodedMip{
     return mipLevels;
 }
 
-[[nodiscard]] static bool InitializeEncoder(){
+[[nodiscard]] static b8 InitializeEncoder(){
     // All mip encoders in this process share the initialized Basis tables.
-    static const bool s_Initialized = basisu::basisu_encoder_init(false);
+    static const b8 s_Initialized = basisu::basisu_encoder_init(false);
     if(!s_Initialized)
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to initialize Basis Universal."));
     return s_Initialized;
@@ -172,9 +172,9 @@ struct EncodedMip{
 
 [[nodiscard]] static Expected<AlphaTransport> DeriveAlpha(const FloatMipChain& mips, const TexturePayloadFormat::Enum format){
     AlphaTransport transport;
-    bool found = false;
-    bool constant = true;
-    bool opaque = true;
+    b8 found = false;
+    b8 constant = true;
+    b8 opaque = true;
     u8 firstAlpha = TextureFormat::s_OpaqueAlphaUnorm8;
     for(const FloatPlanes& planes : mips){
         for(const basisu::imagef& plane : planes){
@@ -213,7 +213,7 @@ struct EncodedMip{
     return transport;
 }
 
-[[nodiscard]] static bool AppendEncodedMip(const basisu::basisu_backend_output& output, const EncodedMip& mip, const basist::basis_tex_format format, Core::Alloc::ScratchArena& scratchArena, Vector<u8>& bytes){
+[[nodiscard]] static b8 AppendEncodedMip(const basisu::basisu_backend_output& output, const EncodedMip& mip, const basist::basis_tex_format format, Core::Alloc::ScratchArena& scratchArena, Vector<u8>& bytes){
     if(output.m_tex_format != format || output.m_slice_desc.size() != mip.sliceCount || output.m_slice_desc.size() != output.m_slice_image_data.size())
         return false;
 
@@ -238,10 +238,10 @@ struct EncodedMip{
     return true;
 }
 
-[[nodiscard]] static bool EncodeMip(const FloatPlanes& planes, const TextureDimension::Enum dimension, const TexturePayloadFormat::Enum format, const bool alphaOnly, const EncodedMip& mip, Core::Alloc::ScratchArena& scratchArena, Vector<u8>& bytes){
+[[nodiscard]] static b8 EncodeMip(const FloatPlanes& planes, const TextureDimension::Enum dimension, const TexturePayloadFormat::Enum format, const b8 alphaOnly, const EncodedMip& mip, Core::Alloc::ScratchArena& scratchArena, Vector<u8>& bytes){
     basisu::job_pool jobs(s_EncoderWorkerCount);
     basisu::basis_compressor_params params;
-    const bool hdr = !alphaOnly && IsHdrTexturePayloadFormat(format);
+    const b8 hdr = !alphaOnly && IsHdrTexturePayloadFormat(format);
     const basist::basis_tex_format basisFormat = hdr ? basist::basis_tex_format::cUASTC_HDR_4x4 : basist::basis_tex_format::cUASTC_LDR_4x4;
     params.set_format_mode(basisFormat);
     params.set_srgb_options(false);
@@ -333,7 +333,7 @@ Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::
     if(!alpha || !InitializeEncoder())
         return MakeUnexpected(Failure{});
 
-    const bool separateAlpha = alpha->mode == TextureAlphaMode::SeparateUastcLdr4x4;
+    const b8 separateAlpha = alpha->mode == TextureAlphaMode::SeparateUastcLdr4x4;
     if(primaryByteCount > Limit<usize>::s_Max / (separateAlpha ? s_SeparateAlphaPayloadMultiplier : 1u))
         return MakeUnexpected(Failure{});
     const usize payloadByteCount = static_cast<usize>(primaryByteCount) * (separateAlpha ? s_SeparateAlphaPayloadMultiplier : 1u);

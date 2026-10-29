@@ -61,26 +61,26 @@ struct OpaqueCsgReceiverComputeEmulationGraphTask{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;
         Core::GpuTimingSubmissionTicket*& timingTicket;
-        const bool& meshViewSetupReady;
-        const bool& sceneShadingSetupReady;
+        const b8& meshViewSetupReady;
+        const b8& sceneShadingSetupReady;
         MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         OpaqueCsgReceiverComputeEmulationGraphPlan plan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool materialDrawBuffersUploaded = false;
-        bool csgFrameBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 csgFrameBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
 
 
     public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket*& timingTicketIn, const bool& meshViewSetupReadyIn, const bool& sceneShadingSetupReadyIn)noexcept;
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket*& timingTicketIn, const b8& meshViewSetupReadyIn, const b8& sceneShadingSetupReadyIn)noexcept;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 
@@ -94,18 +94,18 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;
         Core::GpuTimingSubmissionTicket*& timingTicket;
-        const bool& meshViewSetupReady;
-        const bool& sceneShadingSetupReady;
+        const b8& meshViewSetupReady;
+        const b8& sceneShadingSetupReady;
         Optional<Core::GpuTimingMeasure>& opaqueCsgTiming;
         MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         OpaqueCsgIntervalSampleComputeEmulationGraphPlan plan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool materialDrawBuffersUploaded = false;
-        bool csgFrameBuffersUploaded = false;
-        bool materialFrameStatesGraphOwned = false;
-        bool materialGeometryStatesGraphOwned = false;
+        b8 materialDrawBuffersUploaded = false;
+        b8 csgFrameBuffersUploaded = false;
+        b8 materialFrameStatesGraphOwned = false;
+        b8 materialGeometryStatesGraphOwned = false;
 
 
     public:
@@ -115,15 +115,15 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
             RendererMaterialSystem& materialSystemIn,
             DeferredFrameTargets& targetsIn,
             Core::GpuTimingSubmissionTicket*& timingTicketIn,
-            const bool& meshViewSetupReadyIn,
-            const bool& sceneShadingSetupReadyIn,
+            const b8& meshViewSetupReadyIn,
+            const b8& sceneShadingSetupReadyIn,
             Optional<Core::GpuTimingMeasure>& opaqueCsgTimingIn
         )noexcept;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
     static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(&payload.opaqueCsgTiming);

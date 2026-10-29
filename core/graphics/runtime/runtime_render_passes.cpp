@@ -45,7 +45,7 @@ void GraphicsRuntime::addRenderPassToBack(IRenderPass& pass){
 }
 
 void GraphicsRuntime::removeRenderPass(IRenderPass& pass){
-    const bool deviceIdle = waitForIdle();
+    const b8 deviceIdle = waitForIdle();
     GraphicsBackend::Device* const device = m_backend->getDevice();
     NWB_FATAL_ASSERT_MSG(deviceIdle || (device && device->isDeviceLost()), NWB_TEXT("Render-pass removal requires either a completed device join or terminal device loss"));
 
@@ -62,8 +62,8 @@ void GraphicsRuntime::invalidateRenderPassResources(){
         renderPass->invalidateResources();
 }
 
-bool GraphicsRuntime::validateRenderPassResources(){
-    bool valid = true;
+b8 GraphicsRuntime::validateRenderPassResources(){
+    b8 valid = true;
     for(const auto renderPass : m_renderPasses){
         valid = renderPass->validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount) && valid;
     }

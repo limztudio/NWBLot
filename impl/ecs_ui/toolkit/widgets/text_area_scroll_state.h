@@ -48,14 +48,14 @@ private:
         u64 compositionGeneration = 0u;
         usize anchor = 0u;
         usize caret = 0u;
-        bool enabled = false;
-        bool readOnly = false;
+        b8 enabled = false;
+        b8 readOnly = false;
     };
 
 
 private:
-    [[nodiscard]] ControlToken prepare(const WidgetState& widget, const PopupToken& popup, u64 stateGeneration, u64 stateRevision, const EditModel& model, bool enabled, bool readOnly, const ScrollViewportPlacement& placement, Point step)noexcept;
-    [[nodiscard]] bool updateOffsets(Point scroll)noexcept;
+    [[nodiscard]] ControlToken prepare(const WidgetState& widget, const PopupToken& popup, u64 stateGeneration, u64 stateRevision, const EditModel& model, b8 enabled, b8 readOnly, const ScrollViewportPlacement& placement, Point step)noexcept;
+    [[nodiscard]] b8 updateOffsets(Point scroll)noexcept;
     void retire()noexcept;
 
 
@@ -69,7 +69,7 @@ private:
     ScrollViewportPlacement m_placement;
     Point m_step;
     u64 m_revision = 1u;
-    bool m_prepared = false;
+    b8 m_prepared = false;
 };
 
 

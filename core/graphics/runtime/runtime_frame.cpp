@@ -119,11 +119,11 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GraphicsRuntime::runFrame(){
+b8 GraphicsRuntime::runFrame(){
     // This deliberately spans the complete logical graphics frame: normal presentation, headless no-window work, and submission-suspended maintenance.
     // Detailed phase scopes sit within this aggregate, so consumers must not sum them with it.
     // Record only a successful call so a failed frame can never be published with a later one.
-    const bool recordFrameTiming = m_cpuTiming && m_cpuTiming->enabled() && m_frameTimingScope.valid();
+    const b8 recordFrameTiming = m_cpuTiming && m_cpuTiming->enabled() && m_frameTimingScope.valid();
     Timer frameTimingBegin;
     const u64 sampleFrameIndex = m_frameIndex;
     if(recordFrameTiming){
@@ -135,7 +135,7 @@ bool GraphicsRuntime::runFrame(){
             return animateRenderPresent();
 
         CpuTimingPhaseBatch phaseTiming;
-        const bool rendered = animateRenderPresentInternal(&phaseTiming);
+        const b8 rendered = animateRenderPresentInternal(&phaseTiming);
         if(rendered){
             m_cpuTiming->recordSample(m_frameTimingScope, DurationInSeconds<f64>(TimerNow(), frameTimingBegin), sampleFrameIndex);
             phaseTiming.flush(*m_cpuTiming, sampleFrameIndex);
@@ -165,7 +165,7 @@ void GraphicsRuntime::animate(f64 elapsedTime){
         renderPass->animate(static_cast<f32>(elapsedTime));
 }
 
-bool GraphicsRuntime::prepareFramePreamble(){
+b8 GraphicsRuntime::prepareFramePreamble(){
     auto& device = getDevice();
     if(device.requiresRecreation()){
         requestDeviceRecreation();
@@ -225,7 +225,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
             Timer prepareBegin;
             if(phaseTiming)
                 prepareBegin = TimerNow();
-            const bool resourcesPrepared = renderPass->prepareResources(framebuffer);
+            const b8 resourcesPrepared = renderPass->prepareResources(framebuffer);
             if(phaseTiming)
                 phaseTiming->stage(resourcesPrepared ? m_prepareResourcesTimingScope : m_prepareResourcesFailedTimingScope, prepareBegin);
             if(!resourcesPrepared){
@@ -255,7 +255,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
     return {};
 }
 
-bool GraphicsRuntime::shouldRenderUnfocused()const{
+b8 GraphicsRuntime::shouldRenderUnfocused()const{
     for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
         if((*it)->shouldRenderUnfocused())
             return true;
@@ -263,11 +263,11 @@ bool GraphicsRuntime::shouldRenderUnfocused()const{
     return false;
 }
 
-bool GraphicsRuntime::animateRenderPresent(){
+b8 GraphicsRuntime::animateRenderPresent(){
     return animateRenderPresentInternal(nullptr);
 }
 
-bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTiming){
+b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTiming){
     m_acquiredPresentationFrame = {};
     if(m_deviceRecreationRequested)
         return false;
@@ -280,7 +280,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
 
     Timer now = TimerNow();
     const f64 elapsedTime = DurationInSeconds<f64>(now, m_previousFrameTimestamp);
-    const bool shouldBootstrapWindowPresentation = !m_hasPresentedFrame;
+    const b8 shouldBootstrapWindowPresentation = !m_hasPresentedFrame;
 
     if(m_windowVisible && (m_windowIsInFocus || shouldRenderUnfocused() || shouldBootstrapWindowPresentation)){
         if(m_prevDpiScaleFactorX != m_dpiScaleFactorX || m_prevDpiScaleFactorY != m_dpiScaleFactorY){
@@ -344,7 +344,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             Timer framePreambleBegin;
             if(phaseTiming)
                 framePreambleBegin = TimerNow();
-            const bool preamblePrepared = prepareFramePreamble();
+            const b8 preamblePrepared = prepareFramePreamble();
             if(phaseTiming)
                 phaseTiming->stage(m_framePreambleTimingScope, framePreambleBegin);
             if(!preamblePrepared){
@@ -381,7 +381,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             if(phaseTiming)
                 presentBegin = TimerNow();
             const auto presented = m_backend->present();
-            const bool presentationAccepted = presented ? *presented : presented.error().presentationAccepted;
+            const b8 presentationAccepted = presented ? *presented : presented.error().presentationAccepted;
             m_lastPresentationReceipt.record(m_acquiredPresentationFrame.backBuffer, presentationAccepted);
             if(presentationAccepted)
                 ++m_successfulPresentationCount;
@@ -424,7 +424,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
     return true;
 }
 
-bool GraphicsRuntime::registerCpuTimingScopes(){
+b8 GraphicsRuntime::registerCpuTimingScopes(){
     if(!m_cpuTiming)
         return true;
 

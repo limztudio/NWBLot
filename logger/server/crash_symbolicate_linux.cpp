@@ -65,7 +65,7 @@ public:
 struct LinuxSymbolFileCacheEntry{
     AString<Core::Alloc::ScratchArena> modulePath;
     AString<Core::Alloc::ScratchArena> symbolPath;
-    bool found = false;
+    b8 found = false;
 
 
 public:
@@ -105,7 +105,7 @@ public:
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-[[nodiscard]] static bool IsUnknownSymbolLine(const AStringView line)noexcept{
+[[nodiscard]] static b8 IsUnknownSymbolLine(const AStringView line)noexcept{
     const AStringView trimmed = TrimView(line);
     return trimmed.empty() || trimmed == s_LinuxUnknownSymbolText || StartsWith(trimmed, s_LinuxUnknownLocationPrefix);
 }
@@ -118,14 +118,14 @@ public:
     while(const auto function = NextTrimmedTextLine(outputText, cursor)){
         const auto location = NextTrimmedTextLine(outputText, cursor);
 
-        const bool hasFunction = !IsUnknownSymbolLine(*function);
-        const bool hasLocation = location && !IsUnknownSymbolLine(*location);
+        const b8 hasFunction = !IsUnknownSymbolLine(*function);
+        const b8 hasLocation = location && !IsUnknownSymbolLine(*location);
         if(!hasFunction && !hasLocation)
             continue;
 
         if(!outSymbol.empty())
             outSymbol += s_LinuxSymbolFrameSeparator;
-        bool wroteFrame = false;
+        b8 wroteFrame = false;
         if(hasFunction){
             outSymbol.append(function->data(), function->size());
             wroteFrame = true;
@@ -314,7 +314,7 @@ void AppendLinuxArtifactSummary(Core::Alloc::ScratchArena& scratchArena, const C
     const CrashScratchPath& scratchDirectory = packageDirectory;
     AString<Core::Alloc::ScratchArena> clientCallstack(scratchArena);
     const auto clientCallstackRead = ReadTextFile(scratchDirectory / CrashNames::s_CallstackFileName, clientCallstack);
-    const bool clientCallstackPresent = clientCallstackRead && !clientCallstack.empty();
+    const b8 clientCallstackPresent = clientCallstackRead && !clientCallstack.empty();
 
     outReport += clientCallstackPresent ? "status=callstack_captured\nresolver=linux_client_callstack\n" : "status=not_decoded\nresolver=elf_dwarf_core\n";
     if(!clientCallstackRead && clientCallstackRead.error() != ErrorCondition::no_such_file_or_directory)
@@ -333,8 +333,8 @@ void AppendLinuxArtifactSummary(Core::Alloc::ScratchArena& scratchArena, const C
     AString<Core::Alloc::ScratchArena> procMaps(scratchArena);
     const auto cpuContextRead = ReadTextFile(scratchDirectory / CrashNames::s_CpuContextFileName, cpuContext);
     const auto procMapsRead = ReadTextFile(scratchDirectory / CrashNames::s_ProcMapsFileName, procMaps);
-    const bool cpuContextPresent = cpuContextRead && !cpuContext.empty();
-    const bool procMapsPresent = procMapsRead && !procMaps.empty();
+    const b8 cpuContextPresent = cpuContextRead && !cpuContext.empty();
+    const b8 procMapsPresent = procMapsRead && !procMaps.empty();
     outReport += procMapsPresent ? "proc_maps=present\n" : "proc_maps=missing\n";
     if(!cpuContextRead && cpuContextRead.error() != ErrorCondition::no_such_file_or_directory)
         AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = "read_linux_cpu_context", .code = cpuContextRead.error(), });

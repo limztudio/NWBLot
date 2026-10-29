@@ -46,7 +46,7 @@ inline void InternalSwap(T& t1, T& t2)noexcept(noexcept(Swap(t1, t2))){
     Swap(t1, t2);
 }
 
-template<typename T1, typename T2, bool IsSame, bool FirstEmpty, bool SecondEmpty>
+template<typename T1, typename T2, b8 IsSame, b8 FirstEmpty, b8 SecondEmpty>
 struct Switch;
 
 template<typename T1, typename T2>

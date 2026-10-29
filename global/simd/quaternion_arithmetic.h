@@ -53,25 +53,25 @@ inline constexpr f64 s_DoubleQuaternionInterpolationEpsilon = 1.0e-12;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE bool NWB_SIMD_CALL QuaternionEqual(SIMDVectorSingle q0, SIMDVectorSingle q1)noexcept{ return Vector4Equal(q0, q1); }
+NWB_INLINE b8 NWB_SIMD_CALL QuaternionEqual(SIMDVectorSingle q0, SIMDVectorSingle q1)noexcept{ return Vector4Equal(q0, q1); }
 
-NWB_INLINE bool NWB_SIMD_CALL QuaternionDoubleEqual(SIMDVectorDouble q0, SIMDVectorDouble q1)noexcept{ return VectorDouble4Equal(q0, q1); }
+NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleEqual(SIMDVectorDouble q0, SIMDVectorDouble q1)noexcept{ return VectorDouble4Equal(q0, q1); }
 
-NWB_INLINE bool NWB_SIMD_CALL QuaternionNotEqual(SIMDVectorSingle q0, SIMDVectorSingle q1)noexcept{ return Vector4NotEqual(q0, q1); }
+NWB_INLINE b8 NWB_SIMD_CALL QuaternionNotEqual(SIMDVectorSingle q0, SIMDVectorSingle q1)noexcept{ return Vector4NotEqual(q0, q1); }
 
-NWB_INLINE bool NWB_SIMD_CALL QuaternionDoubleNotEqual(SIMDVectorDouble q0, SIMDVectorDouble q1)noexcept{ return VectorDouble4NotEqual(q0, q1); }
+NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleNotEqual(SIMDVectorDouble q0, SIMDVectorDouble q1)noexcept{ return VectorDouble4NotEqual(q0, q1); }
 
-NWB_INLINE bool NWB_SIMD_CALL QuaternionIsNaN(SIMDVectorSingle q)noexcept{ return Vector4IsNaN(q); }
+NWB_INLINE b8 NWB_SIMD_CALL QuaternionIsNaN(SIMDVectorSingle q)noexcept{ return Vector4IsNaN(q); }
 
-NWB_INLINE bool NWB_SIMD_CALL QuaternionDoubleIsNaN(SIMDVectorDouble q)noexcept{ return VectorDouble4IsNaN(q); }
+NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleIsNaN(SIMDVectorDouble q)noexcept{ return VectorDouble4IsNaN(q); }
 
-NWB_INLINE bool NWB_SIMD_CALL QuaternionIsInfinite(SIMDVectorSingle q)noexcept{ return Vector4IsInfinite(q); }
+NWB_INLINE b8 NWB_SIMD_CALL QuaternionIsInfinite(SIMDVectorSingle q)noexcept{ return Vector4IsInfinite(q); }
 
-NWB_INLINE bool NWB_SIMD_CALL QuaternionDoubleIsInfinite(SIMDVectorDouble q)noexcept{ return VectorDouble4IsInfinite(q); }
+NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleIsInfinite(SIMDVectorDouble q)noexcept{ return VectorDouble4IsInfinite(q); }
 
-NWB_INLINE bool NWB_SIMD_CALL QuaternionIsIdentity(SIMDVectorSingle q)noexcept{ return Vector4Equal(q, s_SIMDIdentityR3); }
+NWB_INLINE b8 NWB_SIMD_CALL QuaternionIsIdentity(SIMDVectorSingle q)noexcept{ return Vector4Equal(q, s_SIMDIdentityR3); }
 
-NWB_INLINE bool NWB_SIMD_CALL QuaternionDoubleIsIdentity(SIMDVectorDouble q)noexcept{ return VectorDouble4Equal(q, s_DoubleSIMDIdentityR3); }
+NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleIsIdentity(SIMDVectorDouble q)noexcept{ return VectorDouble4Equal(q, s_DoubleSIMDIdentityR3); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

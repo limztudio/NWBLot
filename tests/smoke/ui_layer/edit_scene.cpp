@@ -66,7 +66,7 @@ UiEditSmokeScene::~UiEditSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiEditSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiEditSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     ObserveSmokeDisplay(__hidden_ui_edit_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     Builder& ui = context.ui;
@@ -105,7 +105,7 @@ bool UiEditSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+b8 UiEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
@@ -122,7 +122,7 @@ bool UiEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i
 }
 
 void UiEditSmokeScene::resetModels(){
-    const bool reset = m_primary.setText(__hidden_ui_edit_smoke::s_Primary) && m_secondary.setText(__hidden_ui_edit_smoke::s_Secondary);
+    const b8 reset = m_primary.setText(__hidden_ui_edit_smoke::s_Primary) && m_secondary.setText(__hidden_ui_edit_smoke::s_Secondary);
     NWB_FATAL_ASSERT_MSG(reset, NWB_TEXT("UI edit smoke documents must be valid UTF8"));
 }
 
@@ -167,7 +167,7 @@ void UiEditSmokeScene::observeState(Impl::Ui::TextService& text){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerEditSmokeEnabled(){
+b8 IsUiLayerEditSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_EDIT");
 }
 

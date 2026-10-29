@@ -83,10 +83,10 @@ struct UpdateCallbackContext{
 struct LoaderOptions{
     AString<NWB::Core::Alloc::ScratchArena> logAddress;
     AString<NWB::Core::Alloc::ScratchArena> crashUploadToken;
-    bool enableGpuDebug = false;
-    bool forceSdrOutput = false;
-    bool disableHardwareRayTracing = false;
-    bool useStandaloneLogger = false;
+    b8 enableGpuDebug = false;
+    b8 forceSdrOutput = false;
+    b8 disableHardwareRayTracing = false;
+    b8 useStandaloneLogger = false;
 
 
 public:
@@ -96,7 +96,7 @@ public:
     {}
 };
 
-bool ProjectTickCallback(void* userData, f32 delta){
+b8 ProjectTickCallback(void* userData, f32 delta){
     NWB_FATAL_ASSERT_MSG(userData, NWB_TEXT("ProjectTickCallback received null user data"));
     auto& updateContext = *MakeNotNull(static_cast<UpdateCallbackContext*>(userData));
     return updateContext.callbacks.onUpdate(delta);
@@ -138,7 +138,7 @@ public:
 
 
 public:
-    virtual bool readAssetBinary(const Name& virtualPath, NWB::Core::Assets::AssetBytes& outBinary)const override{
+    virtual b8 readAssetBinary(const Name& virtualPath, NWB::Core::Assets::AssetBytes& outBinary)const override{
         return m_filesystem.readFile(virtualPath, outBinary);
     }
 
@@ -161,7 +161,7 @@ void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
 }
 #endif
 
-bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOptions& options){
+b8 ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOptions& options){
     if(options.disableHardwareRayTracing){
         if(!graphics.setHardwareRayTracingPolicy(NWB::Core::HardwareRayTracingPolicy::Disabled)){
             NWB_LOGGER_FATAL(NWB_TEXT("Loader: hardware ray tracing policy must be selected before graphics initialization"));
@@ -189,7 +189,7 @@ bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOpti
     return true;
 }
 
-bool InstallCrashCapture(CrashArena& crashArena){
+b8 InstallCrashCapture(CrashArena& crashArena){
     auto executableDirectory = GetExecutableDirectory(crashArena);
     if(!executableDirectory)
         executableDirectory = ::Path<CrashArena>(crashArena, s_FallbackExecutableDirectory);
@@ -232,7 +232,7 @@ void ConfigureCrashReporting(const LoaderOptions& options)noexcept(!NWB_OCCUR_WA
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
 }
 
-bool UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
+b8 UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
     auto* logger = static_cast<NWB::Log::Client*>(userData);
     return logger && logger->enqueueTelemetry(bytes, byteCount);
 }
@@ -337,7 +337,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
             context.telemetryCapture = [&frame](const NWB::Core::Telemetry::CaptureOptions& options){
                 frame.setTelemetryCapture(options);
             };
-            context.telemetryUploadFlush = [&frame](const bool clearAfterUpload){
+            context.telemetryUploadFlush = [&frame](const b8 clearAfterUpload){
                 return frame.flushTelemetryUpload(clearAfterUpload);
             };
             context.perfCapture = [&frame](const NWB::Core::Perf::CaptureOptions& options){
@@ -382,7 +382,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
     return __hidden_loader::s_LoaderExitSuccess;
 }
 
-static int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidden_loader::LoaderOptions& options, void* inst, const bool crashReportingInstalled){
+static int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidden_loader::LoaderOptions& options, void* inst, const b8 crashReportingInstalled){
     if(options.useStandaloneLogger){
         NWB::Log::ClientStandalone logger;
         if(!logger.init())
@@ -419,7 +419,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     // Capture early startup failures; configure uploads after CLI and logger setup.
     const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
     __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
-    const bool crashReportingInstalled = __hidden_loader::InstallCrashCapture(crashArena);
+    const b8 crashReportingInstalled = __hidden_loader::InstallCrashCapture(crashArena);
     ScopeExit crashCaptureGuard([crashReportingInstalled]()noexcept{
         if(crashReportingInstalled){
             NWB::Core::RegisterGpuCrashSink(nullptr, nullptr);

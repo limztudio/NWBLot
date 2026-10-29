@@ -36,19 +36,19 @@ struct PreparedShadowVisibilityTasks{
     Core::GpuTaskId transparentTemporalMerge;
     Core::GpuTaskId transparentFirstWavelet;
     Core::GpuTaskId diagnostics;
-    bool combinedUpsample = false;
-    bool combinedWavelet = false;
-    bool combinedTemporal = false;
+    b8 combinedUpsample = false;
+    b8 combinedWavelet = false;
+    b8 combinedTemporal = false;
 };
 
-[[nodiscard]] bool PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::ReadView& compiledPlan, const PreparedShadowVisibilityTasks& tasks)noexcept;
+[[nodiscard]] b8 PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::ReadView& compiledPlan, const PreparedShadowVisibilityTasks& tasks)noexcept;
 
 
 // Shadow-visibility merge validation owns packet-merge checks for visibility tasks.
 struct ShadowVisibilityMergeValidationResult{
-    bool preparedTasksMerged = false;
-    bool allLitClearMerged = false;
-    bool adaptivePrimitivesMerged = false;
+    b8 preparedTasksMerged = false;
+    b8 allLitClearMerged = false;
+    b8 adaptivePrimitivesMerged = false;
 };
 
 

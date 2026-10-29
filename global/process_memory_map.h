@@ -44,7 +44,7 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
         ++cursor;
 }
 
-[[nodiscard]] inline bool SkipProcMapField(const AStringView line, usize& cursor)noexcept{
+[[nodiscard]] inline b8 SkipProcMapField(const AStringView line, usize& cursor)noexcept{
     const usize begin = cursor;
     while(cursor < line.size() && line[cursor] != ' ' && line[cursor] != '\t')
         ++cursor;

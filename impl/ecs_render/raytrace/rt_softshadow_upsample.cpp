@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureSoftCombinedUpsamplePipeline(){
+b8 RendererRayTracingSystem::ensureSoftCombinedUpsamplePipeline(){
     auto& resolve = m_rayTracingState.m_softShadowResolve;
     if(resolve.m_combinedUpsample.m_pipeline)
         return true;
@@ -40,7 +40,7 @@ bool RendererRayTracingSystem::ensureSoftCombinedUpsamplePipeline(){
     return !resolve.m_combinedUpsampleFailed;
 }
 
-bool RendererRayTracingSystem::renderSoftShadowTerminalUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, const bool transparentReady){
+b8 RendererRayTracingSystem::renderSoftShadowTerminalUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, const b8 transparentReady){
     const auto& resolve = m_rayTracingState.m_softShadowResolve;
     const Core::ComputePipelineHandle& pipeline = transparentReady ? resolve.m_combinedUpsample.m_pipeline : resolve.m_scalar.m_upsample.m_pipeline;
     if(

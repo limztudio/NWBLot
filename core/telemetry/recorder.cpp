@@ -104,12 +104,12 @@ CaptureOptions Recorder::captureOptions()const noexcept{
     return m_capture;
 }
 
-bool Recorder::enabled()const noexcept{
+b8 Recorder::enabled()const noexcept{
     NothrowScopedLock lock(m_mutex);
     return enabledUnlocked();
 }
 
-bool Recorder::enabled(const EventKind::Enum kind)const noexcept{
+b8 Recorder::enabled(const EventKind::Enum kind)const noexcept{
     NothrowScopedLock lock(m_mutex);
     return enabledUnlocked(kind);
 }
@@ -119,7 +119,7 @@ usize Recorder::eventCount()const noexcept{
     return m_events.size();
 }
 
-bool Recorder::recordBinary(const EventKind::Enum kind, const u64 frameIndex, const void* payload, const usize payloadBytes, const u32 streamId){
+b8 Recorder::recordBinary(const EventKind::Enum kind, const u64 frameIndex, const void* payload, const usize payloadBytes, const u32 streamId){
     EventSlotLease lease(*this);
     if(!enabledUnlocked(kind))
         return false;
@@ -127,7 +127,7 @@ bool Recorder::recordBinary(const EventKind::Enum kind, const u64 frameIndex, co
     return appendUnlocked(lease, __hidden_telemetry_recorder::MakeEventHeader(kind, frameIndex, payloadBytes, streamId), payload, payloadBytes);
 }
 
-bool Recorder::recordPayload(const EventKind::Enum kind, const u64 frameIndex, TelemetryBytes&& payload, const u32 streamId){
+b8 Recorder::recordPayload(const EventKind::Enum kind, const u64 frameIndex, TelemetryBytes&& payload, const u32 streamId){
     EventSlotLease lease(*this);
     if(!enabledUnlocked(kind))
         return false;
@@ -135,17 +135,17 @@ bool Recorder::recordPayload(const EventKind::Enum kind, const u64 frameIndex, T
     return appendPayloadUnlocked(lease, __hidden_telemetry_recorder::MakeEventHeader(kind, frameIndex, payload.size(), streamId), Move(payload));
 }
 
-bool Recorder::append(const EventHeader& header, const void* payload, const usize payloadBytes){
+b8 Recorder::append(const EventHeader& header, const void* payload, const usize payloadBytes){
     EventSlotLease lease(*this);
     return appendUnlocked(lease, header, payload, payloadBytes);
 }
 
-bool Recorder::append(const EventHeader& header, TelemetryBytes&& payload){
+b8 Recorder::append(const EventHeader& header, TelemetryBytes&& payload){
     EventSlotLease lease(*this);
     return appendPayloadUnlocked(lease, header, Move(payload));
 }
 
-bool Recorder::appendUnlocked(EventSlotLease& lease, const EventHeader& header, const void* payload, const usize payloadBytes){
+b8 Recorder::appendUnlocked(EventSlotLease& lease, const EventHeader& header, const void* payload, const usize payloadBytes){
     if(!header.valid())
         return false;
     if(header.payloadBytes != payloadBytes)
@@ -167,7 +167,7 @@ bool Recorder::appendUnlocked(EventSlotLease& lease, const EventHeader& header, 
     return true;
 }
 
-bool Recorder::appendPayloadUnlocked(EventSlotLease& lease, const EventHeader& header, TelemetryBytes&& payload){
+b8 Recorder::appendPayloadUnlocked(EventSlotLease& lease, const EventHeader& header, TelemetryBytes&& payload){
     if(!header.valid())
         return false;
     if(header.payloadBytes != payload.size())

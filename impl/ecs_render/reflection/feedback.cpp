@@ -16,8 +16,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(const ReflectionFeedbackPlan& plan, const bool hardwareReady)noexcept{
-    const bool hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
+ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(const ReflectionFeedbackPlan& plan, const b8 hardwareReady)noexcept{
+    const b8 hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
     ReflectionFeedbackOutcome result;
     result.epoch = plan.epoch + (hardwareChanged ? 1u : 0u);
     result.startGraphicsFrame = hardwareChanged ? plan.graphicsFrameIndex : plan.startGraphicsFrame;
@@ -55,7 +55,7 @@ void ReflectionFeedbackState::reset(const u16 deviceGeneration)noexcept{
     m_quarantined = false;
 }
 
-ReflectionFeedbackPlan ReflectionFeedbackState::plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const bool enabled, const u64 graphicsFrameIndex)noexcept{
+ReflectionFeedbackPlan ReflectionFeedbackState::plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const b8 enabled, const u64 graphicsFrameIndex)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     ReflectionFeedbackPlan result;
@@ -94,7 +94,7 @@ ReflectionFeedbackPlan ReflectionFeedbackState::plan(const ReflectionSceneConten
     return result;
 }
 
-bool ReflectionFeedbackState::reserve(const ReflectionFeedbackPlan& plan)noexcept{
+b8 ReflectionFeedbackState::reserve(const ReflectionFeedbackPlan& plan)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(m_quarantined || m_deviceGeneration == 0u || m_reservedSequence != 0u || plan.generation != m_generation || plan.sequence <= m_acceptedSequence || plan.acceptedSequence != m_acceptedSequence)
@@ -110,7 +110,7 @@ void ReflectionFeedbackState::discard(const ReflectionFeedbackPlan& plan)noexcep
         m_reservedSequence = 0u;
 }
 
-bool ReflectionFeedbackState::accept(const ReflectionFeedbackPlan& plan, const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
+b8 ReflectionFeedbackState::accept(const ReflectionFeedbackPlan& plan, const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(plan.generation != m_generation || plan.sequence != m_reservedSequence)
@@ -187,7 +187,7 @@ ReflectionFeedbackReservation& ReflectionFeedbackReservation::operator=(Reflecti
     return *this;
 }
 
-void ReflectionFeedbackReservation::accept(const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
+void ReflectionFeedbackReservation::accept(const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
     if(m_reserved && !m_control->accept(m_plan, token, hardwareReady))
         m_control->discard(m_plan);
     m_reserved = false;

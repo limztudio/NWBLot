@@ -60,7 +60,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool prepareQueries(){
+    [[nodiscard]] b8 prepareQueries(){
         auto& graphics = getGraphics();
         for(const StringView scope : RendererGatherBenchmarkProbe::s_GpuNames){
             // Hardware-only reflection has no depth pyramid, temporal pass or spatial filter.
@@ -75,7 +75,7 @@ public:
         return true;
     }
 
-    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
 
 
@@ -97,7 +97,7 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
         auto requestedWorkload = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_WORKLOAD");
         if(!requestedWorkload)
@@ -155,7 +155,7 @@ public:
                     return false;
                 continue;
             }
-            const bool opaque = workload == s_OpaqueWorkload || (workload == s_HybridWorkload && index % 2u == 0u);
+            const b8 opaque = workload == s_OpaqueWorkload || (workload == s_HybridWorkload && index % 2u == 0u);
             SmokeMeshRef mesh = s_Mesh;
             SmokeMaterialRef material = opaque ? s_Opaque : s_Glass;
             if(workload == s_UniqueWorkload){
@@ -224,7 +224,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: shutdown successful frames {}"), m_probe.successfulFrames());
     }
 
-    virtual bool onUpdate(const f32)override{
+    virtual b8 onUpdate(const f32)override{
         if(!m_probe.poll(m_context.perfSession.report(), m_memoryEnabled)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: incomplete or mismatched successful CPU frame"));
             return false;
@@ -248,7 +248,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool createBackdrop(){
+    [[nodiscard]] b8 createBackdrop(){
         const auto backdrop = CreateTintedStaticMeshEntity(*m_world, s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.f), Float4(0.f, 2.6f, 2.f, 0.f), Float4(5.f, 1.f, 3.5f, 0.f));
         if(!backdrop.valid())
             return false;
@@ -264,7 +264,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool createRuntime(const u32 index, const Float4& position){
+    [[nodiscard]] b8 createRuntime(const u32 index, const Float4& position){
         const auto modelResult = CreateTintedModelEntity(*m_world, s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.f), position, Float4(0.22f, 0.22f, 0.22f, 0.f));
         const auto owner = modelResult.entity;
         if(!owner.valid() || !modelResult.tintApplied)
@@ -283,7 +283,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool readActualCounts(){
+    [[nodiscard]] b8 readActualCounts(){
         NWB::Impl::MeshSystem& meshes = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSystem>());
         m_renderers = 0u;
         m_runtimeRenderers = 0u;
@@ -335,11 +335,11 @@ private:
     u32 m_runtimeRenderers = 0u;
     u32 m_runtimeOwners = 0u;
     u32 m_transparentRenderers = 0u;
-    bool m_runtime = false;
-    bool m_memoryEnabled = false;
-    bool m_worldReady = false;
-    bool m_timingRegistered = false;
-    bool m_actualCountsRead = false;
+    b8 m_runtime = false;
+    b8 m_memoryEnabled = false;
+    b8 m_worldReady = false;
+    b8 m_timingRegistered = false;
+    b8 m_actualCountsRead = false;
 };
 
 

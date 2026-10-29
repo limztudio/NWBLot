@@ -48,7 +48,7 @@ using PermanentTextureStateIndexMap = FixedIndexMap<Texture*, Alloc::ScratchAren
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, const usize branchCount, Alloc::ScratchArena& scratchArena){
+b8 CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, const usize branchCount, Alloc::ScratchArena& scratchArena){
     if(this == &base)
         return false;
 
@@ -177,7 +177,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
             usize bufferIndex = 0u;
             usize branchIndex = 0u;
             u64 offset = 0u;
-            bool beginning = false;
+            b8 beginning = false;
         };
 
         BufferStateIndexMap bufferIndices(scratchArena, bufferStateCapacity);

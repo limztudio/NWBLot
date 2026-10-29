@@ -41,7 +41,7 @@ namespace __hidden_assets_graphics_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool RegisterGraphicsSubsystemCookEntries(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterGraphicsSubsystemCookEntries(Core::Assets::CookEntryRegistry& registry){
     return
         AssetsSubsystemCook::RegisterSubsystemCookEntry<RendererSubsystem>(registry)
         && AssetsSubsystemCook::RegisterSubsystemCookEntry<MeshSubsystem>(registry)
@@ -57,7 +57,7 @@ static bool RegisterGraphicsSubsystemCookEntries(Core::Assets::CookEntryRegistry
     ;
 }
 
-static bool RegisterGraphicsSubsystemCookDependencies(Core::Assets::CookDependencyRegistry& registry){
+static b8 RegisterGraphicsSubsystemCookDependencies(Core::Assets::CookDependencyRegistry& registry){
     return
         AssetsSubsystemCook::RegisterSubsystemCookDependency<RendererSubsystem>(registry)
         && AssetsSubsystemCook::RegisterSubsystemCookDependency<MeshSubsystem>(registry)

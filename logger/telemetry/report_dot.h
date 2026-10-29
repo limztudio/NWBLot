@@ -63,7 +63,7 @@ struct GraphTimingKey{
     Name scopeName = s_NameNone;
 };
 
-inline bool operator==(const GraphTimingKey& lhs, const GraphTimingKey& rhs)noexcept{
+inline b8 operator==(const GraphTimingKey& lhs, const GraphTimingKey& rhs)noexcept{
     return lhs.frameIndex == rhs.frameIndex && lhs.scopeName == rhs.scopeName;
 }
 

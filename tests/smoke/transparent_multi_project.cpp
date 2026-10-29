@@ -115,7 +115,7 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
 // Toggle frame-lagged lighting on F1 to test teardown and re-bootstrap.
 class FrameLaggedAsyncLightingToggleInputHandler final : public NWB::Core::IInputEventHandler{
 public:
-    virtual bool keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept override{
+    virtual b8 keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept override{
         static_cast<void>(scancode);
         static_cast<void>(mods);
         if(key != NWB::Core::Key::F1)
@@ -125,15 +125,15 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool consumeToggleRequest()noexcept{
-        const bool requested = m_toggleRequested;
+    [[nodiscard]] b8 consumeToggleRequest()noexcept{
+        const b8 requested = m_toggleRequested;
         m_toggleRequested = false;
         return requested;
     }
 
 
 private:
-    bool m_toggleRequested = false;
+    b8 m_toggleRequested = false;
 };
 
 // Opt into unfocused rendering so smoke runs continue when Windows denies foreground focus.
@@ -145,12 +145,12 @@ public:
 
 
 public:
-    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
 #endif
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-[[nodiscard]] static bool CreateCausticRefractionBackdrop(NWB::Core::ECS::World& world){
+[[nodiscard]] static b8 CreateCausticRefractionBackdrop(NWB::Core::ECS::World& world){
     constexpr TransparentMaterialRef s_BackdropMaterial{"project/smoke/refraction/materials/opaque"};
     // Place unlit colored stripes behind the sphere for screen-space refraction.
     for(u32 stripe = 0u; stripe < 24u; ++stripe){
@@ -304,7 +304,7 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, s_TransparentProjectName);
 
-        const bool rayQueryHardwareAvailable = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+        const b8 rayQueryHardwareAvailable = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
         if(rayQueryHardwareAvailable){
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware"));
         }else{
@@ -319,9 +319,9 @@ private:
         NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
         auto& rendererSystem = AddSmokeRenderSystems(*world, context);
         const auto refractionSetting = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED");
-        const bool refractionEnabled = !refractionSetting || *refractionSetting != 0.0f;
+        const b8 refractionEnabled = !refractionSetting || *refractionSetting != 0.0f;
         const auto hardwareSetting = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE");
-        const bool hardwareEnabled = !hardwareSetting || *hardwareSetting != 0.0f;
+        const b8 hardwareEnabled = !hardwareSetting || *hardwareSetting != 0.0f;
         rendererSystem.setRefractionEnabled(refractionEnabled);
         rendererSystem.setRefractionHardwareTracingEnabled(hardwareEnabled);
         NWB::Impl::ReflectionSettings reflectionSettings;
@@ -410,7 +410,7 @@ private:
     }
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-    [[nodiscard]] bool configureFramebufferCapture(){
+    [[nodiscard]] b8 configureFramebufferCapture(){
         constexpr u32 s_DefaultCaptureFrameCount = 360u;
         auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, s_CausticProjectName, s_DefaultCaptureFrameCount);
         if(!capture)
@@ -450,11 +450,11 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         // Enable both the timing sink and graphics recorder for per-pass observations.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
-        bool causticTiming = false;
+        b8 causticTiming = false;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         causticTiming = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CausticTimingEnvironment);
 #endif
@@ -501,7 +501,7 @@ public:
         const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         const auto causticSetting = ReadSmokeEnvironmentF32("NWB_CAUSTIC_SMOKE_ENABLED");
-        const bool causticsEnabled = !causticSetting || *causticSetting != 0.f;
+        const b8 causticsEnabled = !causticSetting || *causticSetting != 0.f;
         m_world->entity(lightEntity).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = causticsEnabled;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: caustics {}"), causticsEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
 #else
@@ -521,7 +521,7 @@ public:
             Float4(s_CausticSphereScale, s_CausticSphereScale, s_CausticSphereScale)
         );
         m_centerShape = centerShapeEntity;
-        const bool shapesValid = centerShapeEntity.valid();
+        const b8 shapesValid = centerShapeEntity.valid();
         if(shapesValid)
             m_world->entity(centerShapeEntity).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
 #else
@@ -576,7 +576,7 @@ public:
         m_opaqueLeftShape = opaqueLeftEntity;
         m_opaqueRightShape = opaqueRightEntity;
 
-        const bool shapesValid = shapeEntity.valid() && centerShapeEntity.valid() && rightShapeEntity.valid() && opaqueLeftEntity.valid() && opaqueRightEntity.valid();
+        const b8 shapesValid = shapeEntity.valid() && centerShapeEntity.valid() && rightShapeEntity.valid() && opaqueLeftEntity.valid() && opaqueRightEntity.valid();
 #endif
 
         // The ground receives tinted shadows and, in caustic builds, additive photon irradiance.
@@ -598,11 +598,11 @@ public:
 #endif
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
         const auto cutterEntity = CreateTransparentCsgPlaneCutter(*m_world);
-        const bool csgEntitiesValid = cutterEntity.valid();
+        const b8 csgEntitiesValid = cutterEntity.valid();
         m_csgReceiver = centerShapeEntity;
         m_csgCutter = cutterEntity;
 #else
-        const bool csgEntitiesValid = true;
+        const b8 csgEntitiesValid = true;
 #endif
         updateTransparentSceneTransforms();
         NWB_FATAL_ASSERT_MSG(activeCamera.valid() && lightEntity.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid, NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities"));
@@ -630,7 +630,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         if(m_framebufferCapture)
             m_framebufferCapture->update();
@@ -720,10 +720,10 @@ private:
     NWB::Core::ECS::EntityID m_csgReceiver = {};
     NWB::Core::ECS::EntityID m_csgCutter = {};
 #endif
-    bool m_rendererBaselineCapturePaused = false;
+    b8 m_rendererBaselineCapturePaused = false;
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-    bool m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
-    bool m_frameLaggedAsyncLightingEnabled = true;
+    b8 m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
+    b8 m_frameLaggedAsyncLightingEnabled = true;
 #endif
 };
 

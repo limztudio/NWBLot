@@ -85,12 +85,12 @@ GpuCommandArenaWorkerStatistics Device::getCommandArenaWorkerStatistics(const Gp
     return physicalQueue->commandArenaWorkerStatistics(recordingWorkerDomain, recordingWorkerIndex);
 }
 
-bool Device::matchesPhysicalQueueIdentity(const CommandQueue::Enum queue, const u16 physicalQueueIndex, const u16 deviceGeneration)const noexcept{
+b8 Device::matchesPhysicalQueueIdentity(const CommandQueue::Enum queue, const u16 physicalQueueIndex, const u16 deviceGeneration)const noexcept{
     const GpuPhysicalQueueInfo* const info = getPhysicalQueueInfo(GpuPhysicalQueueId{ .index = physicalQueueIndex, .deviceGeneration = deviceGeneration });
     return info && info->queueClass == queue;
 }
 
-bool Device::matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept{
+b8 Device::matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept{
     return getPhysicalQueueInfo(queue) != nullptr;
 }
 

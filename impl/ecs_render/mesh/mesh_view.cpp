@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMeshSystem::createMeshViewBuffer(){
+b8 RendererMeshSystem::createMeshViewBuffer(){
     if(m_meshState.m_meshViewBuffer)
         return true;
 

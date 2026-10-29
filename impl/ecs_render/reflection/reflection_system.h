@@ -95,7 +95,7 @@ struct ReflectionDepthPyramidSnapshot{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return texture && pipeline && mipCount > 0u && mipCount <= s_MaxMipCount;
     }
 };
@@ -121,9 +121,9 @@ struct ReflectionFrameSnapshot{
 
 
 public:
-    [[nodiscard]] bool hasHardwareWork()const noexcept{ return parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u; }
+    [[nodiscard]] b8 hasHardwareWork()const noexcept{ return parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u; }
 
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return parameters.width > 0u && parameters.height > 0u && opaqueRadiance && glassRadiance && queue && counters && indirectArgs && frameParameters && classifyPipeline && buildArgsPipeline && depthPyramid.valid();
     }
 };
@@ -153,7 +153,7 @@ public:
 public:
     // Caller joins submitted work and discards snapshots before teardown.
     void invalidateResources();
-    [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, bool prepareCsgHardware, const ReflectionSettings& settings);
+    [[nodiscard]] b8 prepareResources(u32 width, u32 height, b8 prepareHardware, b8 prepareCsgHardware, const ReflectionSettings& settings);
     [[nodiscard]] Expected<ReflectionCsgDispatchHandle> acquireCsgDispatchState(const ReflectionFrameSnapshot& resources)noexcept;
     void pollStatistics();
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
@@ -169,10 +169,10 @@ public:
 
 private:
     void releaseTargets();
-    [[nodiscard]] bool prepareCsgDispatchResources();
-    [[nodiscard]] bool prepareQueue(u32 capacity);
-    [[nodiscard]] bool prepareArguments(u32 capacity, bool sliced);
-    [[nodiscard]] bool preparePipelines(bool prepareHardware, bool prepareCsgHardware);
+    [[nodiscard]] b8 prepareCsgDispatchResources();
+    [[nodiscard]] b8 prepareQueue(u32 capacity);
+    [[nodiscard]] b8 prepareArguments(u32 capacity, b8 sliced);
+    [[nodiscard]] b8 preparePipelines(b8 prepareHardware, b8 prepareCsgHardware);
 
 
 private:

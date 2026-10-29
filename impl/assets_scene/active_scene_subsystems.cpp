@@ -36,14 +36,14 @@ using NameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ActiveSceneSubsystems::loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project){
+b8 ActiveSceneSubsystems::loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project){
     auto projectAsset = assetManager.loadTypedSync<ProjectAsset>(project.name(), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
     if(!projectAsset)
         return false;
     return loadScene(assetManager, (*projectAsset)->startScene());
 }
 
-bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene){
+b8 ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene){
     auto sceneAssetResult = assetManager.loadTypedSync<SceneAsset>(scene.name(), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
     if(!sceneAssetResult)
         return false;
@@ -163,7 +163,7 @@ bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, 
     return true;
 }
 
-bool ActiveSceneSubsystems::instantiateEntities(Core::ECS::World& world)const{
+b8 ActiveSceneSubsystems::instantiateEntities(Core::ECS::World& world)const{
     if(!valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot instantiate entities before loading a valid scene"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
         return false;

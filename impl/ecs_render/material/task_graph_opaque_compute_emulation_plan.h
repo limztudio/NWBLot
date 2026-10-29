@@ -34,7 +34,7 @@ public:
     DrawItemVector indexedDrawItems;
     DrawItemVector drawItems;
     BufferVector outputBuffers;
-    bool captured = false;
+    b8 captured = false;
 
 
 public:
@@ -55,7 +55,7 @@ public:
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItemsView& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(sourceDrawItems.computeDrawItems.empty())
             return false;
@@ -90,7 +90,7 @@ public:
         return captured;
     }
 
-    [[nodiscard]] bool matches(const Span<const MaterialPassDrawItem> currentDrawItems)const noexcept{
+    [[nodiscard]] b8 matches(const Span<const MaterialPassDrawItem> currentDrawItems)const noexcept{
         if(!captured || currentDrawItems.size() != drawItems.size() || outputBuffers.size() != drawItems.size())
             return false;
 

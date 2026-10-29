@@ -35,7 +35,7 @@ static constexpr u32 s_SerialHalfRange = 0x80000000u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CanApplyWaylandTextInputDeletion(
+b8 CanApplyWaylandTextInputDeletion(
     const WaylandTextInputProvenance& provenance,
     const u64 currentRevision,
     const WaylandTextInputSurroundingState& wire,

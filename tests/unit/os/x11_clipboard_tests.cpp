@@ -64,7 +64,7 @@ protected:
         }
     }
 
-    [[nodiscard]] bool pumpAll(){
+    [[nodiscard]] b8 pumpAll(){
         for(usize index = 0u; index < m_displays.size(); ++index){
             if(!m_services[index]->pump())
                 return false;
@@ -85,7 +85,7 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool awaitCompletion(IClipboardService& service, const ClipboardRequestToken token, ClipboardCompletion& completion){
+    [[nodiscard]] b8 awaitCompletion(IClipboardService& service, const ClipboardRequestToken token, ClipboardCompletion& completion){
         const Timer deadline = TimerAddMS(TimerNow(), __hidden_x11_clipboard_tests::s_ClipboardCompletionTimeoutMS);
         while(TimerNow() < deadline){
             if(!pumpAll())
@@ -100,7 +100,7 @@ protected:
         return false;
     }
 
-    [[nodiscard]] bool writeText(const usize index, const ClipboardChannel::Enum channel, const AStringView text){
+    [[nodiscard]] b8 writeText(const usize index, const ClipboardChannel::Enum channel, const AStringView text){
         ClipboardCompletion completion(m_arena.arena);
         const auto request = m_services[index]->requestWriteText(channel, text);
         return request && request->valid() && awaitCompletion(*m_services[index], *request, completion) && completion.status == ClipboardStatus::Success;
@@ -111,7 +111,7 @@ protected:
     NWB::Tests::TestArena<> m_arena;
     Array<Display*, 2u> m_displays{};
     Array<GlobalUniquePtr<IClipboardService>, 2u> m_services;
-    bool m_sawSelectionRequest = false;
+    b8 m_sawSelectionRequest = false;
 };
 
 
@@ -220,7 +220,7 @@ TEST_F(X11ClipboardFixture, QueuedOwnershipLossCannotClearNewlyReacquiredText){
 
     // Retain the genuine loss event until the new ownership is established.
     XEvent ownershipLoss{};
-    bool queuedLoss = false;
+    b8 queuedLoss = false;
     const Timer lossDeadline = TimerAddMS(TimerNow(), __hidden_x11_clipboard_tests::s_SelectionChangeTimeoutMS);
     while(!queuedLoss && TimerNow() < lossDeadline){
         queuedLoss = XCheckTypedEvent(m_displays[0], SelectionClear, &ownershipLoss) != False;

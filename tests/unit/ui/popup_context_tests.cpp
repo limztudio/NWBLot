@@ -52,11 +52,11 @@ public:
 
 
 protected:
-    [[nodiscard]] bool begin(const u64 generation){
+    [[nodiscard]] b8 begin(const u64 generation){
         return m_context.beginFrame(generation) && m_context.beginRoot({ 401u, 1u });
     }
 
-    [[nodiscard]] bool finish(){
+    [[nodiscard]] b8 finish(){
         return m_context.endRoot() && m_context.finishFrame();
     }
 
@@ -68,7 +68,7 @@ protected:
         return **state;
     }
 
-    [[nodiscard]] Expected<WidgetState> button(const AStringView key, const Rect& bounds, const bool publish = true){
+    [[nodiscard]] Expected<WidgetState> button(const AStringView key, const Rect& bounds, const b8 publish = true){
         const auto stateResult = declare(key, WidgetKind::Button);
         EXPECT_TRUE(stateResult);
         if(!stateResult)
@@ -104,7 +104,7 @@ protected:
         EXPECT_TRUE(m_context.addTarget(owner, target));
     }
 
-    [[nodiscard]] Expected<PopupFrame> prepare(const u64 generation, const bool open = false, const Rect& bounds = { 100.0f, 40.0f, 160.0f, 100.0f }, const bool keepClosedChild = false, const bool autofocus = true){
+    [[nodiscard]] Expected<PopupFrame> prepare(const u64 generation, const b8 open = false, const Rect& bounds = { 100.0f, 40.0f, 160.0f, 100.0f }, const b8 keepClosedChild = false, const b8 autofocus = true){
         PopupFrame frame;
         EXPECT_TRUE(begin(generation));
         const auto frameBaseResult = button(s_BaseKey, { 10.0f, 10.0f, 60.0f, 24.0f });
@@ -204,7 +204,7 @@ protected:
         if(!frameResult)
             return MakeUnexpected(frameResult.error());
         const PopupFrame frame = *frameResult;
-        const bool committed = m_context.commitFrame(1u);
+        const b8 committed = m_context.commitFrame(1u);
         EXPECT_TRUE(committed);
         if(!committed)
             return MakeUnexpected(Failure{});

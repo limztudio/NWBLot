@@ -90,7 +90,7 @@ public:
     void invalidateResources()noexcept;
     template<typename TShader, typename SubsystemT>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
-    [[nodiscard]] bool loadShader(Core::ShaderHandle& outShader, const Core::Assets::AssetRef<TShader> SubsystemT::* member, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
+    [[nodiscard]] b8 loadShader(Core::ShaderHandle& outShader, const Core::Assets::AssetRef<TShader> SubsystemT::* member, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
         const Name resolvedShaderName = resolveSubsystemAsset<SubsystemT>(member);
         if(!resolvedShaderName)
@@ -99,13 +99,13 @@ public:
     }
     template<typename TShader>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
-    [[nodiscard]] bool loadShader(Core::ShaderHandle& outShader, const Name& shaderAssetName, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
+    [[nodiscard]] b8 loadShader(Core::ShaderHandle& outShader, const Name& shaderAssetName, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
         return ShaderAssetLoader::Load<TShader>(outShader, shaderAssetName, variantName, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
     }
 
-    [[nodiscard]] bool hasShaderArchiveStage(const Name& shaderAssetName, AStringView variantName, const Name& stageName)const;
-    [[nodiscard]] bool loadDeferredCompositeVertexShader();
+    [[nodiscard]] b8 hasShaderArchiveStage(const Name& shaderAssetName, AStringView variantName, const Name& stageName)const;
+    [[nodiscard]] b8 loadDeferredCompositeVertexShader();
     [[nodiscard]] const Core::ShaderHandle& deferredCompositeVertexShader()const noexcept{ return m_deferredCompositeVertexShader; }
 
 

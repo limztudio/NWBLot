@@ -48,14 +48,14 @@ struct SoftShadowSplitTaskChainInputs{
     const DeferredLightingGraphResources& deferredLightingResources;
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
     const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan;
-    const bool& shadowPrepared;
+    const b8& shadowPrepared;
     Core::GpuTimingSubmissionTicket& timingTicket;
     Optional<Core::GpuTimingMeasure>& asyncTiming;
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming;
     Optional<Core::GpuTimingMeasure>& opaqueResolveTiming;
     Optional<Core::GpuTimingMeasure>& transparentResolveTiming;
-    bool& opaqueProduced;
-    bool& transparentTraceProduced;
+    b8& opaqueProduced;
+    b8& transparentTraceProduced;
     u32& opaqueFrameIndex;
     SoftShadowSplitRoute route;
     Span<const Core::GpuGraphResourceId> traceGeometryResources{};
@@ -105,7 +105,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(const SoftShadowSplitTaskChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, SoftShadowSplitResourceUses& uses, SoftShadowSplitTasks& tasks);
+    [[nodiscard]] b8 declare(const SoftShadowSplitTaskChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, SoftShadowSplitResourceUses& uses, SoftShadowSplitTasks& tasks);
 
 
 private:
@@ -115,14 +115,14 @@ private:
         Core::Alloc::ScratchArena& scratchArena,
         SoftShadowSplitResourceUses& uses
     );
-    [[nodiscard]] bool declareOpaqueTasks(
+    [[nodiscard]] b8 declareOpaqueTasks(
         const SoftShadowSplitTaskChainInputs& inputs,
         const SoftShadowSplitResourceUses& uses,
         const Core::GpuTaskId& shadowTraceDependency,
         const Core::GpuTaskSchedulingHint& tailScheduling,
         SoftShadowSplitTasks& tasks
     );
-    [[nodiscard]] bool declareTransparentTasks(
+    [[nodiscard]] b8 declareTransparentTasks(
         const SoftShadowSplitTaskChainInputs& inputs,
         const SoftShadowSplitResourceUses& uses,
         const Core::GpuTaskSchedulingHint& tailScheduling,

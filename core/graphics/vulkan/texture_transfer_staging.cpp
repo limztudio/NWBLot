@@ -51,7 +51,7 @@ static constexpr TStringView s_SliceCopyContractReason = NWB_TEXT("source and de
     return region;
 }
 
-[[nodiscard]] inline bool IsWholeImageSubresourceCopy(const TextureDesc& imageDesc, const VkBufferImageCopy& region)noexcept{
+[[nodiscard]] inline b8 IsWholeImageSubresourceCopy(const TextureDesc& imageDesc, const VkBufferImageCopy& region)noexcept{
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(imageDesc, region.imageSubresource.mipLevel);
     return region.imageOffset.x == 0 && region.imageOffset.y == 0 && region.imageOffset.z == 0 && region.imageExtent.width == mipExtent.width && region.imageExtent.height == mipExtent.height && region.imageExtent.depth == mipExtent.depth;
 }
@@ -78,7 +78,7 @@ void CommandList::copyTexture(StagingTexture& dest, const TextureSlice& destSlic
         rejectCommandRecording(s_OperationName, __hidden_texture_transfer_staging::s_SliceCopyContractReason);
         return;
     }
-    const bool depthStencilCopy = (src.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
+    const b8 depthStencilCopy = (src.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
     if(depthStencilCopy){
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
@@ -114,7 +114,7 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Stag
         rejectCommandRecording(s_OperationName, __hidden_texture_transfer_staging::s_SliceCopyContractReason);
         return;
     }
-    const bool depthStencilCopy = (dest.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
+    const b8 depthStencilCopy = (dest.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
     if(depthStencilCopy){
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
@@ -141,7 +141,7 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Stag
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::validateStagingTextureCopyResources(StagingTexture& stagingTexture, Texture& texture, const CpuAccessMode::Enum requiredCpuAccess, const VkImageUsageFlags requiredImageUsage, const TStringView operationName){
+b8 CommandList::validateStagingTextureCopyResources(StagingTexture& stagingTexture, Texture& texture, const CpuAccessMode::Enum requiredCpuAccess, const VkImageUsageFlags requiredImageUsage, const TStringView operationName){
     if(!validateCommandRecordingScope(operationName))
         return false;
 
@@ -199,7 +199,7 @@ bool CommandList::validateStagingTextureCopyResources(StagingTexture& stagingTex
         )
     );
 
-    bool familyAdmitted = false;
+    b8 familyAdmitted = false;
     for(const u32 familyIndex : stagingTexture.m_admittedQueueFamilies){
         if(familyIndex == exactQueue->familyIndex){
             familyAdmitted = true;

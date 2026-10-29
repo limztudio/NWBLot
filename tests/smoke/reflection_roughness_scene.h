@@ -37,15 +37,15 @@ public:
 
 
 public:
-    [[nodiscard]] bool create(AStringView caseName, bool finalState);
-    [[nodiscard]] bool mutationCase()const noexcept{ return m_case >= ReflectionRoughnessCase::Camera && m_case <= ReflectionRoughnessCase::Deform; }
+    [[nodiscard]] b8 create(AStringView caseName, b8 finalState);
+    [[nodiscard]] b8 mutationCase()const noexcept{ return m_case >= ReflectionRoughnessCase::Camera && m_case <= ReflectionRoughnessCase::Deform; }
 
-    [[nodiscard]] bool deforming()const noexcept{ return m_case == ReflectionRoughnessCase::Deform || m_case == ReflectionRoughnessCase::StaticDeform; }
-    [[nodiscard]] bool applyMutation();
+    [[nodiscard]] b8 deforming()const noexcept{ return m_case == ReflectionRoughnessCase::Deform || m_case == ReflectionRoughnessCase::StaticDeform; }
+    [[nodiscard]] b8 applyMutation();
 
 private:
     [[nodiscard]] Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, f32 roughness = 0.f);
-    [[nodiscard]] bool createDeformingSource();
+    [[nodiscard]] b8 createDeformingSource();
 
 
 private:
@@ -58,7 +58,7 @@ private:
     Core::ECS::EntityID m_skeleton;
     f32 m_roughness;
     ReflectionRoughnessCase::Enum m_case = ReflectionRoughnessCase::Static;
-    bool m_finalState = false;
+    b8 m_finalState = false;
 };
 
 

@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LayoutTree::IsValidDescription(const LayoutNodeDesc& description)noexcept{
+b8 LayoutTree::IsValidDescription(const LayoutNodeDesc& description)noexcept{
     const auto validSize = [](const LayoutSize& size)noexcept{
         return size.policy <= LayoutSizePolicy::Stretch && IsFinite(size.value) && size.value >= 0.0f && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f);
     };
@@ -35,7 +35,7 @@ bool LayoutTree::IsValidDescription(const LayoutNodeDesc& description)noexcept{
     ;
 }
 
-bool LayoutTree::IsValidRectangle(const Rect& rectangle)noexcept{
+b8 LayoutTree::IsValidRectangle(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width >= 0.0f && rectangle.height >= 0.0f
         && VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)

@@ -25,7 +25,7 @@ AssetRegistry::AssetRegistry(AssetArena& arena)
 {}
 
 
-bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool replaceExisting){
+b8 AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const b8 replaceExisting){
     if(!codec){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: rejected null codec registration"));
         return false;
@@ -57,7 +57,7 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
     return true;
 }
 
-bool AssetRegistry::unregisterCodec(const Name& assetType)noexcept{
+b8 AssetRegistry::unregisterCodec(const Name& assetType)noexcept{
     if(!assetType)
         return false;
 

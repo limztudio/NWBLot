@@ -17,8 +17,8 @@ struct AdhdCompilerOptions{
     NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString> macroDefinitions;
     NWB::Core::Metascript::MString outputDirectory;
     NWB::Core::Metascript::MString customNamespace;
-    bool validateOnly = false;
-    bool showHelp = false;
+    b8 validateOnly = false;
+    b8 showHelp = false;
 
 
 public:
@@ -35,7 +35,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseAdhdCompilerOptions(
+[[nodiscard]] b8 ParseAdhdCompilerOptions(
     int argc,
     char** argv,
     NWB::Core::Metascript::MetaArena& arena,

@@ -451,7 +451,7 @@ const Value* Value::findField(MStringView name)const noexcept{
 
 void Value::append(Value&& val){
     Value selfCopy(m_arena);
-    const bool valIsSelf = &val == this;
+    const b8 valIsSelf = &val == this;
     if(valIsSelf)
         selfCopy.copyFrom(val);
 

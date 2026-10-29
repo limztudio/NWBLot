@@ -21,7 +21,7 @@ namespace __hidden_avboit_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool CreateHeapComputePipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& bindingLayout, Core::ComputePipelineHandle& pipeline){
+static b8 CreateHeapComputePipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& bindingLayout, Core::ComputePipelineHandle& pipeline){
     if(pipeline)
         return true;
 
@@ -36,7 +36,7 @@ static bool CreateHeapComputePipeline(Core::Device& device, const Core::ShaderHa
         pipeline = Move(*pipelineResult);
     else
         pipeline.reset();
-    return static_cast<bool>(pipelineResult);
+    return static_cast<b8>(pipelineResult);
 }
 
 
@@ -49,7 +49,7 @@ static bool CreateHeapComputePipeline(Core::Device& device, const Core::ShaderHa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererAvboitSystem::createAvboitSampler(){
+b8 RendererAvboitSystem::createAvboitSampler(){
     auto& device = m_graphics.getDevice();
 
     if(!ECSRenderDetail::CreateClampSampler(device, true, m_avboitState.m_linearSampler)){
@@ -60,11 +60,11 @@ bool RendererAvboitSystem::createAvboitSampler(){
     return true;
 }
 
-bool RendererAvboitSystem::createAvboitResources(){
+b8 RendererAvboitSystem::createAvboitResources(){
     if(!createAvboitSampler())
         return false;
 
-    auto loadAvboitComputeShader = [&](Core::ShaderHandle& outShader, const Core::Assets::AssetRef<ComputeShader> TransparentSubsystem::* member, const Name& debugName) -> bool{
+    auto loadAvboitComputeShader = [&](Core::ShaderHandle& outShader, const Core::Assets::AssetRef<ComputeShader> TransparentSubsystem::* member, const Name& debugName) -> b8{
         return m_shaderSystem.loadShader<ComputeShader>(outShader, member, Core::ShaderArchive::s_DefaultVariant, debugName);
     };
 
@@ -77,7 +77,7 @@ bool RendererAvboitSystem::createAvboitResources(){
     return true;
 }
 
-bool RendererAvboitSystem::createAvboitPipelines(){
+b8 RendererAvboitSystem::createAvboitPipelines(){
     if(!createAvboitResources())
         return false;
 

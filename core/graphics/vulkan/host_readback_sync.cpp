@@ -20,7 +20,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool HasBufferDeviceWriteState(const ResourceStates::Mask states)noexcept{
+b8 HasBufferDeviceWriteState(const ResourceStates::Mask states)noexcept{
     constexpr ResourceStates::Mask s_BufferDeviceWriteStates = ResourceStates::UnorderedAccess
         | ResourceStates::StreamOut
         | ResourceStates::CopyDest
@@ -59,7 +59,7 @@ void CollectUniquePhysicalQueueFamilyIndices(const GpuPhysicalQueueTopology& top
         if(familyIndex == VK_QUEUE_FAMILY_IGNORED)
             continue;
 
-        bool duplicate = false;
+        b8 duplicate = false;
         for(const u32 existingFamilyIndex : familyIndices){
             if(existingFamilyIndex == familyIndex){
                 duplicate = true;
@@ -146,7 +146,7 @@ Expected<AmdBreadcrumbReservation> TryBuildNextAmdBreadcrumbReservation(const u6
     return reservation;
 }
 
-bool MatchesAmdBreadcrumbObservation(const u32 observedMarker, const u32 reservedMarker)noexcept{
+b8 MatchesAmdBreadcrumbObservation(const u32 observedMarker, const u32 reservedMarker)noexcept{
     return observedMarker != 0u && reservedMarker != 0u && observedMarker == reservedMarker;
 }
 
@@ -158,7 +158,7 @@ HostReadbackBarrierTracker::HostReadbackBarrierTracker(Alloc::GlobalArena& arena
     : m_buffers(arena)
 {}
 
-bool HostReadbackBarrierTracker::registerBuffer(const VkBuffer buffer){
+b8 HostReadbackBarrierTracker::registerBuffer(const VkBuffer buffer){
     if(buffer == VK_NULL_HANDLE)
         return false;
 

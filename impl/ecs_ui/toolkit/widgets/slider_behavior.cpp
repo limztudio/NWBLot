@@ -36,15 +36,15 @@ inline constexpr u32 s_PageStepCount = 10u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidRange(const f64 minimum, const f64 maximum)noexcept{
+[[nodiscard]] static b8 ValidRange(const f64 minimum, const f64 maximum)noexcept{
     return IsFinite(minimum) && IsFinite(maximum) && minimum <= maximum;
 }
 
-[[nodiscard]] static bool SameRect(const Rect& lhs, const Rect& rhs)noexcept{
+[[nodiscard]] static b8 SameRect(const Rect& lhs, const Rect& rhs)noexcept{
     return BitCast<u32>(lhs.x) == BitCast<u32>(rhs.x) && BitCast<u32>(lhs.y) == BitCast<u32>(rhs.y) && BitCast<u32>(lhs.width) == BitCast<u32>(rhs.width) && BitCast<u32>(lhs.height) == BitCast<u32>(rhs.height);
 }
 
-[[nodiscard]] static bool ValidPlacement(const SliderPlacement& placement)noexcept{
+[[nodiscard]] static b8 ValidPlacement(const SliderPlacement& placement)noexcept{
     return
         IsPreciseUiRect(placement.bounds) && IsPreciseUiRect(placement.clip) && IsPreciseUiRect(placement.travelBounds)
         && IsPreciseUiRect(placement.track) && IsPreciseUiRect(placement.centerTravel) && IsPreciseUiRect(placement.thumb)
@@ -57,7 +57,7 @@ inline constexpr u32 s_PageStepCount = 10u;
     ;
 }
 
-[[nodiscard]] static bool SamePlacement(const SliderPlacement& lhs, const SliderPlacement& rhs)noexcept{
+[[nodiscard]] static b8 SamePlacement(const SliderPlacement& lhs, const SliderPlacement& rhs)noexcept{
     return
         SameRect(lhs.bounds, rhs.bounds) && SameRect(lhs.clip, rhs.clip) && SameRect(lhs.travelBounds, rhs.travelBounds)
         && SameRect(lhs.track, rhs.track) && SameRect(lhs.centerTravel, rhs.centerTravel)
@@ -66,7 +66,7 @@ inline constexpr u32 s_PageStepCount = 10u;
     ;
 }
 
-[[nodiscard]] static bool ValidGesture(const PointerGesture& gesture)noexcept{
+[[nodiscard]] static b8 ValidGesture(const PointerGesture& gesture)noexcept{
     return
         gesture.id.valid() && gesture.updateSequence != 0u && gesture.state <= PointerGestureState::Completed
         && IsFinite(gesture.origin.x) && IsFinite(gesture.origin.y)
@@ -86,7 +86,7 @@ inline constexpr u32 s_PageStepCount = 10u;
     return VectorDoubleSubtract(VectorDoubleDivide(maximum, VectorDoubleReplicate(s_DefaultKeyStepDivisor)), VectorDoubleDivide(minimum, VectorDoubleReplicate(s_DefaultKeyStepDivisor)));
 }
 
-[[nodiscard]] static SIMDVectorDouble StepValue(const SIMDVectorDouble value, const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorDouble step, const bool increasing)noexcept{
+[[nodiscard]] static SIMDVectorDouble StepValue(const SIMDVectorDouble value, const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorDouble step, const b8 increasing)noexcept{
     const SIMDVectorDouble current = VectorDoubleClampOrdered(value, minimum, maximum);
     if(increasing){
         const SIMDVectorDouble distance = VectorDoubleSubtract(maximum, current);
@@ -110,7 +110,7 @@ inline constexpr u32 s_PageStepCount = 10u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SliderBehavior::Validate(const SliderOptions& options)noexcept{
+b8 SliderBehavior::Validate(const SliderOptions& options)noexcept{
     return
         __hidden_ui_slider_behavior::ValidRange(options.minimum, options.maximum)
         && IsFinite(options.keyStep) && options.keyStep >= 0.0
@@ -170,11 +170,11 @@ Expected<f64> SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, 
     return result;
 }
 
-bool SliderBehavior::Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept{
+b8 SliderBehavior::Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(!Validate(options) || !ValidPlacement(placement))
         return false;
-    const bool changed = !state.m_admitted || BitCast<u64>(state.m_minimum) != BitCast<u64>(options.minimum)
+    const b8 changed = !state.m_admitted || BitCast<u64>(state.m_minimum) != BitCast<u64>(options.minimum)
         || BitCast<u64>(state.m_maximum) != BitCast<u64>(options.maximum)
         || BitCast<u64>(state.m_keyStep) != BitCast<u64>(options.keyStep) || state.m_enabled != options.enabled
         || !SamePlacement(state.m_admission, placement);
@@ -193,7 +193,7 @@ bool SliderBehavior::Admit(SliderState& state, const SliderOptions& options, con
     return true;
 }
 
-bool SliderBehavior::Apply(SliderState& state, SliderResult& result, const SliderOptions& options, const ControlAction& action)noexcept{
+b8 SliderBehavior::Apply(SliderState& state, SliderResult& result, const SliderOptions& options, const ControlAction& action)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(
         !Validate(options) || !state.m_admitted || !action.id.valid() || action.control != state.controlToken()
@@ -251,7 +251,7 @@ bool SliderBehavior::Apply(SliderState& state, SliderResult& result, const Slide
     return true;
 }
 
-bool SliderBehavior::Seek(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept{
+b8 SliderBehavior::Seek(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(
         !Validate(options) || !state.m_admitted || !ValidGesture(gesture) || gesture.control != state.controlToken()
@@ -283,7 +283,7 @@ bool SliderBehavior::Seek(SliderState& state, SliderResult& result, const Slider
     return true;
 }
 
-bool SliderBehavior::Drag(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept{
+b8 SliderBehavior::Drag(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept{
     using namespace __hidden_ui_slider_behavior;
     const f64 baseline = BitCast<f64>(gesture.value);
     if(
@@ -306,7 +306,7 @@ bool SliderBehavior::Drag(SliderState& state, SliderResult& result, const Slider
         return true;
     }
     const f64 delta = VectorDoubleGetY(travelDelta);
-    bool moved = state.m_press == gesture.id && state.m_pressMoved;
+    b8 moved = state.m_press == gesture.id && state.m_pressMoved;
     f64 value = state.m_value;
     if(delta == 0.0){
         if(moved)

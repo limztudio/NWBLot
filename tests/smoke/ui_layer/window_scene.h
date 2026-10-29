@@ -28,7 +28,7 @@ namespace Tests::Smoke{
 
 class UiWindowSmokeScene : NoCopy{
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
 
 
 private:
@@ -45,15 +45,15 @@ private:
     u32 m_lastCount = 0u;
     u32 m_actions = 0u;
     u32 m_sequence = 0u;
-    bool m_locked = false;
-    bool m_lastLocked = false;
-    bool m_displayChanged = false;
+    b8 m_locked = false;
+    b8 m_lastLocked = false;
+    b8 m_displayChanged = false;
 };
 
 using SharedUiWindowSmokeScene = RefCountPtr< RefCounter<UiWindowSmokeScene>, ArenaRefDeleter<RefCounter<UiWindowSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerWindowSmokeEnabled();
-[[nodiscard]] bool IsUiLayerWindowSkinSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerWindowSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerWindowSkinSmokeEnabled();
 [[nodiscard]] SharedUiWindowSmokeScene CreateUiWindowSmokeScene(Core::Alloc::GlobalArena& arena);
 
 

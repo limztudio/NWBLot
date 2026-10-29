@@ -19,9 +19,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PreparedSceneTlasBuild::capture(
+b8 PreparedSceneTlasBuild::capture(
     const RendererRayTracingState& state,
-    const bool staticScene,
+    const b8 staticScene,
     const u64 staticSceneHash,
     const Span<const Core::RayTracingInstanceDesc> instances,
     const Span<const Core::RayTracingAccelStructHandle> instanceBlases
@@ -59,7 +59,7 @@ bool PreparedSceneTlasBuild::capture(
     return true;
 }
 
-bool PreparedSceneTlasBuild::record(RendererRayTracingState& state, Core::CommandList& commandList){
+b8 PreparedSceneTlasBuild::record(RendererRayTracingState& state, Core::CommandList& commandList){
     if(
         !m_ready
         || m_instances.empty()
@@ -91,7 +91,7 @@ void PreparedSceneTlasBuild::confirm(RendererRayTracingState& state)noexcept{
     if(!m_ready)
         return;
 
-    const bool preparedTlasMatchesCurrent = state.m_tlas.get() == m_tlas.get() && state.m_tlas && state.m_tlas->getBackingBufferHandle().get() == m_backingBuffer.get() && state.m_tlasMaxInstances == m_maxInstances && state.m_tlasHeapHandle == m_heapHandle;
+    const b8 preparedTlasMatchesCurrent = state.m_tlas.get() == m_tlas.get() && state.m_tlas && state.m_tlas->getBackingBufferHandle().get() == m_backingBuffer.get() && state.m_tlasMaxInstances == m_maxInstances && state.m_tlasHeapHandle == m_heapHandle;
     if(preparedTlasMatchesCurrent && m_static){
         state.m_tlasStaticSceneHash = m_staticSceneHash;
         state.m_tlasStaticSceneHashValid = true;

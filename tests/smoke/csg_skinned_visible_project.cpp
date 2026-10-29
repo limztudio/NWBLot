@@ -164,7 +164,7 @@ private:
         return entity;
     }
 
-    [[nodiscard]] bool installCsgReceiverOnSpawnedModelObject(){
+    [[nodiscard]] b8 installCsgReceiverOnSpawnedModelObject(){
         m_receiverObject = FindSpawnedModelObject(*m_world, m_receiver, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh);
         if(!m_receiverObject.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to find spawned receiver model object"));
@@ -281,7 +281,7 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         auto activeCameraEntity = m_world->createEntity();
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
         activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f));
@@ -294,7 +294,7 @@ public:
 
         createReceiver();
         SyncSmokeModelRuntimes(*m_world);
-        const bool receiverReady = installCsgReceiverOnSpawnedModelObject();
+        const b8 receiverReady = installCsgReceiverOnSpawnedModelObject();
         const SIMDVectorSingle cutterLocalCenter = loadCutterAnchorLocalCenter();
         StoreFloat(cutterLocalCenter, m_cutterLocalCenter);
         createCutter(cutterLocalCenter);
@@ -326,7 +326,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
@@ -367,7 +367,7 @@ private:
     Float4 m_cutterLocalCenter = Float4(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgSkinnedVisibleFpsLabel() };
     u32 m_rendererBaselineRenderedFrameCount = 0u;
-    bool m_rendererBaselineCapturePaused = false;
+    b8 m_rendererBaselineCapturePaused = false;
 };
 
 

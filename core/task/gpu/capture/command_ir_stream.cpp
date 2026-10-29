@@ -51,7 +51,7 @@ namespace __hidden_gpu_command_ir_stream{
     return IntColor(color.r, color.g, color.b, color.a);
 }
 
-[[nodiscard]] static bool ValidateClearTextureRecord(const GpuCommandIrClearTextureRecord& record)noexcept{
+[[nodiscard]] static b8 ValidateClearTextureRecord(const GpuCommandIrClearTextureRecord& record)noexcept{
     constexpr u8 s_AllowedFlags = static_cast<u8>(GpuCommandIrClearTextureFlag::ClearDepth | GpuCommandIrClearTextureFlag::ClearStencil);
     const u8 clearFlags = static_cast<u8>(record.clearFlags);
     if(
@@ -66,7 +66,7 @@ namespace __hidden_gpu_command_ir_stream{
     return record.clearTextureValueType == GpuClearTextureTaskValueType::DepthStencil ? clearFlags != GpuCommandIrClearTextureFlag::None : clearFlags == GpuCommandIrClearTextureFlag::None;
 }
 
-[[nodiscard]] static bool ValidateClearTextureRectUIntRecord(const GpuCommandIrClearTextureRectUIntRecord& record)noexcept{
+[[nodiscard]] static b8 ValidateClearTextureRectUIntRecord(const GpuCommandIrClearTextureRectUIntRecord& record)noexcept{
     return record.destinationSubresources.numMipLevels != 0u && record.destinationSubresources.numArraySlices != 0u && record.clearRect.maxX > record.clearRect.minX && record.clearRect.maxY > record.clearRect.minY;
 }
 
@@ -221,7 +221,7 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     }
 
     GpuCommandIrBuiltinTaskRecord decoded;
-    bool decodedRecord = false;
+    b8 decodedRecord = false;
     usize nextBlobOffset = m_nextBlobOffset;
     using namespace __hidden_gpu_command_ir_stream;
     switch(header.opcode){

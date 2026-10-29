@@ -107,7 +107,7 @@ Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(con
     return shaderKeys;
 }
 
-Expected<bool, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry){
+Expected<b8, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry){
     const auto shaderName = ToName(shaderEntry.name);
     const auto stageName = ToName(shaderEntry.archiveStage);
     if(!shaderName)
@@ -118,7 +118,7 @@ Expected<bool, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet&
     return shaderKeys.find(shaderKey) != shaderKeys.end();
 }
 
-bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, const u64 sourceVariantCount, u64& inOutVariantCount){
+b8 AddClipVariantCount(const ShaderCook::ShaderEntry& entry, const u64 sourceVariantCount, u64& inOutVariantCount){
     if(sourceVariantCount <= Limit<u64>::s_Max - inOutVariantCount){
         inOutVariantCount += sourceVariantCount;
         return true;

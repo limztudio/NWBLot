@@ -67,7 +67,7 @@ struct Box{
     return CreateTintedStaticMeshEntity(world, s_CubeMesh, material, s_MaterialInterface, tint, center, extent);
 }
 
-[[nodiscard]] static bool CreateReferencePieces(Core::ECS::World& world, const Box& box, const Box& cutter, const SmokeMaterialRef& material, const Float4& tint){
+[[nodiscard]] static b8 CreateReferencePieces(Core::ECS::World& world, const Box& box, const Box& cutter, const SmokeMaterialRef& material, const Float4& tint){
     Float3U lower;
     Float3U upper;
     StoreFloat(VectorMax(LoadFloat(box.minimum), LoadFloat(cutter.minimum)), lower);
@@ -90,7 +90,7 @@ struct Box{
     return true;
 }
 
-[[nodiscard]] static bool CreateSubtraction(Core::ECS::World& world, const Box& box, const Box& cutter, const u32 slot, const AStringView arm){
+[[nodiscard]] static b8 CreateSubtraction(Core::ECS::World& world, const Box& box, const Box& cutter, const u32 slot, const AStringView arm){
     const auto& material = slot == 0u ? s_DiffuseMaterial : s_CapMaterial;
     const Float4& tint = slot == 0u ? s_Black : s_White;
     if(arm == s_ReferenceArm)
@@ -126,7 +126,7 @@ struct Box{
     return true;
 }
 
-[[nodiscard]] static bool CreateMixedSubtraction(Core::ECS::World& world, const AStringView arm){
+[[nodiscard]] static b8 CreateMixedSubtraction(Core::ECS::World& world, const AStringView arm){
     const Box box{ Float3U(-0.5f, -0.8f, -0.8f), Float3U(0.5f, 0.2f, 0.8f) };
     const Box cutter{ Float3U(-0.25f, -1.0f, -1.2f), Float3U(0.25f, 0.2f, 1.0f) };
     if(arm == s_ReferenceArm){
@@ -167,7 +167,7 @@ struct Box{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CsgGiScene::ShouldCapture(void* context, const u64)noexcept{
+b8 CsgGiScene::ShouldCapture(void* context, const u64)noexcept{
     const auto& scene = *MakeNotNull(static_cast<CsgGiScene*>(context));
     return scene.m_liveWarmupComplete && scene.m_context.graphics.getSuccessfulPresentationCount() >= scene.m_requiredPresentations;
 }
@@ -181,7 +181,7 @@ CsgGiScene::CsgGiScene(ProjectRuntimeContext& context, Core::ECS::World& world)n
     , m_world(world)
 {}
 
-Expected<bool> CsgGiScene::start(){
+Expected<b8> CsgGiScene::start(){
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
     const auto configuredArm = ReadSmokeEnvironmentText(scratchArena, "NWB_GI_CSG_ARM");
     if(!configuredArm)

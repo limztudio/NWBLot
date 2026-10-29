@@ -60,7 +60,7 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialS
         result.ready = true;
         return result;
     }
-    const bool csgReady = !result.hasCsgDrawItems || (
+    const b8 csgReady = !result.hasCsgDrawItems || (
         csgFrameData.hasWork()
         && inputs.csgReceiverRanges.valid()
         && inputs.csgCutters.valid()

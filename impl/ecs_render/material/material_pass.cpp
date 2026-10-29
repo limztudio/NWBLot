@@ -40,7 +40,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool MeshletConeCullScaleSafe(const SIMDVectorSingle scale)noexcept{
+[[nodiscard]] static b8 MeshletConeCullScaleSafe(const SIMDVectorSingle scale)noexcept{
     if(!VectorIsFinite(scale, VectorComponentMask::s_XYZ) || !Vector3Greater(scale, VectorZero()))
         return false;
 
@@ -87,11 +87,11 @@ struct MaterialInstanceAppend{
 struct MaterialTypedByteRangeCache{
     ECSRenderDetail::MaterialTypedByteRange constantRange;
     ECSRenderDetail::MaterialTypedByteRange defaultMutableRange;
-    bool constantRangeCached = false;
-    bool defaultMutableRangeCached = false;
+    b8 constantRangeCached = false;
+    b8 defaultMutableRangeCached = false;
 };
 
-[[nodiscard]] static bool CsgFrameHasReceiverPassWork(const CsgFrameState& csgFrameState, const CsgReceiverPass::Enum receiverPass)noexcept{
+[[nodiscard]] static b8 CsgFrameHasReceiverPassWork(const CsgFrameState& csgFrameState, const CsgReceiverPass::Enum receiverPass)noexcept{
     switch(receiverPass){
     case CsgReceiverPass::Opaque: return csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
     case CsgReceiverPass::Transparent: return csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
@@ -135,11 +135,11 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
-    const bool materialFrameStatesGraphOwned,
-    const bool materialGeometryStatesGraphOwned,
-    const bool emulationOutputEntryStateGraphOwned,
-    const bool csgEmulationOutputEntryStateGraphOwned,
-    const bool emulationOutputReused,
+    const b8 materialFrameStatesGraphOwned,
+    const b8 materialGeometryStatesGraphOwned,
+    const b8 emulationOutputEntryStateGraphOwned,
+    const b8 csgEmulationOutputEntryStateGraphOwned,
+    const b8 emulationOutputReused,
     Optional<Core::GpuTimingMeasure>* const emulationOutputTiming
 ){
     const auto discardEmulationOutputTiming = [emulationOutputTiming](){
@@ -152,7 +152,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         discardEmulationOutputTiming();
         return;
     }
-    const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
+    const b8 usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
     if(usesAvboit && (!avboitTargets || !avboitTargets->valid())){
         discardEmulationOutputTiming();
         return;
@@ -161,10 +161,10 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     commandList.endRenderPass();
 
     // Fresh producers open split timing. Reused regular output has a separate, already-validated graph producer.
-    const bool emulationOutputStatesGraphOwned = emulationOutputEntryStateGraphOwned || csgEmulationOutputEntryStateGraphOwned;
+    const b8 emulationOutputStatesGraphOwned = emulationOutputEntryStateGraphOwned || csgEmulationOutputEntryStateGraphOwned;
     if(emulationOutputReused && (!emulationOutputEntryStateGraphOwned || csgEmulationOutputEntryStateGraphOwned))
         return;
-    const bool splitEmulationTiming = emulationOutputStatesGraphOwned && !emulationOutputReused;
+    const b8 splitEmulationTiming = emulationOutputStatesGraphOwned && !emulationOutputReused;
     if(splitEmulationTiming && (!emulationOutputTiming || !emulationOutputTiming->has_value()))
         return;
 
@@ -173,14 +173,14 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         discardEmulationOutputTiming();
         return;
     }
-    const bool regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular, frameBindings);
+    const b8 regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular, frameBindings);
     // Active handoff covers every regular draw; reject on late resource disagreement.
     if(emulationOutputEntryStateGraphOwned && !regularDrawResourcesReady){
         discardEmulationOutputTiming();
         return;
     }
-    const bool csgResourcesReady = csgResources.frameReady(csgFrameData);
-    const bool csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg, frameBindings));
+    const b8 csgResourcesReady = csgResources.frameReady(csgFrameData);
+    const b8 csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg, frameBindings));
     if(csgEmulationOutputEntryStateGraphOwned && !csgDrawResourcesReady){
         discardEmulationOutputTiming();
         return;
@@ -209,18 +209,18 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     }
 }
 
-bool RendererMaterialSystem::prepareMaterialPassResources(
+b8 RendererMaterialSystem::prepareMaterialPassResources(
     Core::Alloc::ScratchArena& scratchArena,
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
-    const bool transparent,
+    const b8 transparent,
     const CsgFrameState& csgFrameState,
     const AvboitFrameTargets* avboitTargets
 ){
     if(!framebuffer)
         return false;
 
-    const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
+    const b8 usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
     if(usesAvboit && (!avboitTargets || !avboitTargets->valid()))
         return false;
 
@@ -250,10 +250,10 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
     if(drawItems.empty())
         return true;
 
-    const bool drawBuffersReady = prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
-    const bool regularDrawResourcesReady = prepareMaterialPassResourceBindings(drawItems.regular);
-    const bool csgDrawResourcesReady = drawItems.csg.empty() || prepareMaterialPassResourceBindings(drawItems.csg);
-    const bool csgReceiverSurfaceDrawResourcesReady = drawItems.csgReceiverSurface.empty() || prepareMaterialPassResourceBindings(drawItems.csgReceiverSurface);
+    const b8 drawBuffersReady = prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
+    const b8 regularDrawResourcesReady = prepareMaterialPassResourceBindings(drawItems.regular);
+    const b8 csgDrawResourcesReady = drawItems.csg.empty() || prepareMaterialPassResourceBindings(drawItems.csg);
+    const b8 csgReceiverSurfaceDrawResourcesReady = drawItems.csgReceiverSurface.empty() || prepareMaterialPassResourceBindings(drawItems.csgReceiverSurface);
 
     return drawBuffersReady && regularDrawResourcesReady && csgDrawResourcesReady && csgReceiverSurfaceDrawResourcesReady;
 }
@@ -261,7 +261,7 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
 void RendererMaterialSystem::gatherMaterialPassDrawItems(
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
-    const bool transparent,
+    const b8 transparent,
     const CsgFrameState& csgFrameState,
     const RendererResourceLookupMode::Enum lookupMode,
     const ECSRenderDetail::MeshViewGpuData* const csgWorkRegionMeshViewState,
@@ -302,7 +302,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
     const Core::FramebufferInfoEx& framebufferInfo = framebuffer->getFramebufferInfo();
     const CsgReceiverPass::Enum csgReceiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
-    const bool csgPassActive = MaterialPipelinePassUsesRendererCsgClip(pass, transparent) && __hidden_material_pass::CsgFrameHasReceiverPassWork(csgFrameState, csgReceiverPass);
+    const b8 csgPassActive = MaterialPipelinePassUsesRendererCsgClip(pass, transparent) && __hidden_material_pass::CsgFrameHasReceiverPassWork(csgFrameState, csgReceiverPass);
     Optional<CsgFrameReceiverLookup> csgReceiverLookup;
     const CsgFrameReceiverLookup* csgReceiverLookupPtr = nullptr;
     if(csgPassActive){
@@ -363,7 +363,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         return ECSRenderDetail::FindOrAppendMaterialTypedByteRange(*mutableTypedBytes, materialTypedBytes, mutableMaterialTypedRanges);
     };
 
-    auto appendDrawForMesh = [&](const Core::ECS::EntityID entity, const NotNull<MaterialSurfaceInfo*> materialInfo, MeshResources& mesh, const CsgReceiverDrawState& csgReceiverState) -> bool{
+    auto appendDrawForMesh = [&](const Core::ECS::EntityID entity, const NotNull<MaterialSurfaceInfo*> materialInfo, MeshResources& mesh, const CsgReceiverDrawState& csgReceiverState) -> b8{
         NWB_ASSERT(mesh.valid());
         // Mesh creation establishes source-stream descriptors before draw gathering.
         NWB_ASSERT(m_meshSystem.meshGeometryHeapHandlesReady(mesh));
@@ -376,7 +376,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         pipelineKey.framebufferInfo = framebufferInfo;
         pipelineKey.pass = pass;
         pipelineKey.twoSided = materialInfo->twoSided;
-        const bool csgClipRequested = csgReceiverLookupPtr && csgReceiverState.active && MaterialPipelinePassUsesRendererCsgClip(pass, transparent);
+        const b8 csgClipRequested = csgReceiverLookupPtr && csgReceiverState.active && MaterialPipelinePassUsesRendererCsgClip(pass, transparent);
         if(csgClipRequested && !materialInfo->csgCapSurfaceDispatchAvailable){
             if(!materialInfo->csgCapSurfaceDispatchUnavailableLogged){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG receiver material '{}' has no cook-generated surface hook; clipping is disabled because cap fill requires the declared typed surface contract")
@@ -385,9 +385,9 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 materialInfo->csgCapSurfaceDispatchUnavailableLogged = true;
             }
         }
-        const bool csgClipCandidate = csgClipRequested && materialInfo->csgCapSurfaceDispatchAvailable;
+        const b8 csgClipCandidate = csgClipRequested && materialInfo->csgCapSurfaceDispatchAvailable;
         const auto csgClipInfo = csgClipCandidate ? m_csgSystem.resolveCsgReceiverClipDrawInfo(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, transform) : Expected<CsgReceiverClipDrawInfo>(MakeUnexpected(Failure{}));
-        const bool csgClipActive = csgClipInfo && csgClipInfo->cutterCount > 0u;
+        const b8 csgClipActive = csgClipInfo && csgClipInfo->cutterCount > 0u;
         if(csgClipActive){
             pipelineKey.csgMode = MaterialPipelineCsgMode::ClipOnly;
             pipelineKey.csgEvaluatorVariant = csgClipInfo->evaluatorVariant;
@@ -458,8 +458,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         // Freeze primary handles first; sibling cache creation may invalidate this pointer.
         const MaterialPassPipelineResourceSnapshot pipelineResourceSnapshot = __hidden_material_pass::CapturePipelineResourceSnapshot(*pipelineResources);
 
-        const bool passDrawItemActive = pass != MaterialPipelinePass::CsgReceiverSurface;
-        const bool csgReceiverSurfaceActive = csgClipActive && (pass == MaterialPipelinePass::Opaque || pass == MaterialPipelinePass::CsgReceiverSurface);
+        const b8 passDrawItemActive = pass != MaterialPipelinePass::CsgReceiverSurface;
+        const b8 csgReceiverSurfaceActive = csgClipActive && (pass == MaterialPipelinePass::Opaque || pass == MaterialPipelinePass::CsgReceiverSurface);
         MaterialPipelineKey csgReceiverSurfacePipelineKey = pipelineKey;
         MaterialPipelineResources* csgReceiverSurfacePipelineResources = nullptr;
         RenderPath::Enum csgReceiverSurfaceRenderPath = RenderPath::MeshShader;

@@ -75,7 +75,7 @@ TEST(AllocationOwners, OwnerIdentitySurvivesRetirementAndLaterOwnerPublication){
     EXPECT_GE(retired.stats.allocationCount, 1u);
     EXPECT_GE(retired.stats.deallocationCount, 1u);
 
-    bool foundLater = false;
+    b8 foundLater = false;
     const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
     while(record){
         ArenaMemoryOwnerIdentity current;
@@ -315,7 +315,7 @@ TEST(AllocationOwners, ConcurrentSharedOwnerChurnPreservesTotals){
     constexpr u32 s_AllocationCount = 8192u;
     const ArenaMemoryStats before = OwnerStats(s_Owner);
     Latch startGate(s_ThreadCount + 1u);
-    Atomic<bool> failed{ false };
+    Atomic<b8> failed{ false };
     Thread workers[s_ThreadCount];
     for(Thread& worker : workers){
         worker = Thread([&startGate, &failed, &s_Owner](){

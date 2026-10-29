@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, const RendererMaterialResourceState& resources, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector){
+b8 AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, const RendererMaterialResourceState& resources, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector){
     if(!materialInfo.resourceReferencesResolved)
         return false;
     for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
@@ -74,7 +74,7 @@ Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedM
     return textures;
 }
 
-bool MergePreparedShadowMaterialSampledTextures(const Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector){
+b8 MergePreparedShadowMaterialSampledTextures(const Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector){
     for(const Core::TextureHandle& texture : sampledTextures){
         if(!texture || !texture->getCreationDescription().name)
             return false;

@@ -30,7 +30,7 @@ void GraphicsPrefixTimingResolver::resolve(
     usize ticketCount,
     Core::GpuTimingSubmissionTicket** timingTickets,
     Core::GpuTaskId* timingTasks,
-    bool& asyncSpansOnePacket,
+    b8& asyncSpansOnePacket,
     GraphicsPrefixTimingResolutionResult& outResult
 )const noexcept{
     RendererFramePipeline& pipeline = *m_pipeline;
@@ -57,7 +57,7 @@ void GraphicsPrefixTimingResolver::resolve(
             outResult.bindingsValid = false;
             break;
         }
-        bool sharesPacketWithEarlierTask = false;
+        b8 sharesPacketWithEarlierTask = false;
         for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
             if(!compiledPlan.tasksSharePacket(task, timingTasks[earlierTaskIndex]))
                 continue;

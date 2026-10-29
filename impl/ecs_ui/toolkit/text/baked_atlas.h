@@ -32,7 +32,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_ready; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_ready; }
 
     [[nodiscard]] u32 unitsPerEm()const noexcept{ return m_unitsPerEm; }
 
@@ -47,7 +47,7 @@ private:
     Vector<SharedSdfAtlasPage, Core::Alloc::GlobalArena> m_pages;
     u32 m_unitsPerEm = 0u;
     u32 m_bakePpem = 0u;
-    bool m_ready = false;
+    b8 m_ready = false;
 };
 
 using SharedBakedFontAtlas = RefCountPtr<RefCounter<BakedFontAtlas>, ArenaRefDeleter<RefCounter<BakedFontAtlas>, Core::Alloc::GlobalArena>>;

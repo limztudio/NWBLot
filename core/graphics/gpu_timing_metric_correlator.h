@@ -53,8 +53,8 @@ private:
         u64 frameIndex = 0u;
         GpuComparableTimestampRange first;
         GpuComparableTimestampRange second;
-        bool hasFirst = false;
-        bool hasSecond = false;
+        b8 hasFirst = false;
+        b8 hasSecond = false;
     };
 
     struct OverlapRecord{
@@ -75,7 +75,7 @@ private:
         GpuComparableTimestampRange range;
         Name scopeName = s_NameNone;
         GpuPhysicalQueueId physicalQueue;
-        bool received = false;
+        b8 received = false;
     };
 
     struct PacketEnvelopeMetricQueueOutputRecord{
@@ -87,7 +87,7 @@ private:
     struct PacketEnvelopeMetricOutputRoleRecord{
         Name scopeName = s_NameNone;
         GpuPhysicalQueueId physicalQueue;
-        bool queueInternalIdle = false;
+        b8 queueInternalIdle = false;
     };
 
 
@@ -121,8 +121,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope);
-    [[nodiscard]] bool preparePacketEnvelopeMetrics(
+    [[nodiscard]] b8 prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope);
+    [[nodiscard]] b8 preparePacketEnvelopeMetrics(
         u64 sourceFrameIndex,
         NotNull<const GpuPacketEnvelopeMetricScope*> scopeInputs,
         usize scopeCount,
@@ -132,13 +132,13 @@ public:
     );
     // Stages completed derived samples without invoking the timing sink. The caller owns the observer-publication boundary.
     void recordTimestampRange(const Name& scopeName, u64 frameIndex, const GpuComparableTimestampRange& range, Alloc::ScratchArena& scratchArena, GpuTimingSinkSampleVector& performanceSamples);
-    [[nodiscard]] bool hasOutputRole(const Name& scopeName)const noexcept;
+    [[nodiscard]] b8 hasOutputRole(const Name& scopeName)const noexcept;
     void discardPendingRanges()noexcept;
     void reset()noexcept;
 
 
 private:
-    void rememberMetricOutput(const Name& name, const GpuPhysicalQueueId& queue, bool internalIdle);
+    void rememberMetricOutput(const Name& name, const GpuPhysicalQueueId& queue, b8 internalIdle);
 
 
 private:

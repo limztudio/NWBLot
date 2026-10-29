@@ -21,7 +21,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRecordedGraph::PacketRecordingScratch::ensureValid(GraphicsArena& arena){
+b8 GpuRecordedGraph::PacketRecordingScratch::ensureValid(GraphicsArena& arena){
     if(!stateFanInScratchArena){
         stateFanInScratchArena = MakeGlobalUnique<Alloc::ScratchArena>(arena, GpuPacketRuntimeDetail::s_PacketStateFanInScratchArena);
     }
@@ -154,7 +154,7 @@ GpuRecordedGraph::~GpuRecordedGraph()noexcept{
 }
 
 
-bool GpuRecordedGraph::tryReset(const GpuCompiledGraph& compiledGraph){
+b8 GpuRecordedGraph::tryReset(const GpuCompiledGraph& compiledGraph){
     if(ArtifactOperation::ActiveFor(*this))
         return false;
 
@@ -187,7 +187,7 @@ void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph::reset requires a valid matching plan and a resolved recording attempt");
 }
 
-bool GpuRecordedGraph::releaseCommandListCache()noexcept{
+b8 GpuRecordedGraph::releaseCommandListCache()noexcept{
     if(ArtifactOperation::ActiveFor(*this))
         return false;
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
@@ -216,7 +216,7 @@ void GpuRecordedGraph::revokeCommandListPublicationsWithoutCallbacks(ArtifactSto
     }
 }
 
-bool GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess){
+b8 GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess){
     if(!planAccess.validFor(compiledGraph) || !m_candidateStorage)
         return false;
 
@@ -257,7 +257,7 @@ bool GpuRecordedGraph::prepareStorageCandidateLayout(const GpuCompiledGraph& com
     return true;
 }
 
-bool GpuRecordedGraph::prepareResetStorageCandidate(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess){
+b8 GpuRecordedGraph::prepareResetStorageCandidate(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess){
     if(!prepareStorageCandidateLayout(compiledGraph, planAccess))
         return false;
 
@@ -270,12 +270,12 @@ bool GpuRecordedGraph::prepareResetStorageCandidate(const GpuCompiledGraph& comp
     return true;
 }
 
-bool GpuRecordedGraph::prepareRecordingStorageCandidate(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTimingRecorder* const timingRecorder){
+b8 GpuRecordedGraph::prepareRecordingStorageCandidate(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTimingRecorder* const timingRecorder){
     if(!prepareStorageCandidateLayout(compiledGraph, planAccess))
         return false;
 
     ArtifactStorage& candidate = *m_candidateStorage;
-    bool recordsTiming = false;
+    b8 recordsTiming = false;
     for(usize packetIndex = 0u; packetIndex < candidate.packetCount; ++packetIndex){
         const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
         const GpuCompiledPacketView packetView = planAccess.packet(packetID);
@@ -312,7 +312,7 @@ bool GpuRecordedGraph::prepareRecordingStorageCandidate(const GpuCompiledGraph& 
 }
 
 void GpuRecordedGraph::publishStorageCandidate(const GpuTaskGraph* const graphIdentity, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const u64 recordingAttemptGeneration, const ArtifactOperation& artifactAccess)noexcept{
-    const bool candidateValid = planAccess.validFor(compiledGraph)
+    const b8 candidateValid = planAccess.validFor(compiledGraph)
         && ArtifactOperation::ActiveExclusiveFor(*this)
         && artifactAccess.exclusiveFor(*this)
         && m_activeStorage
@@ -333,7 +333,7 @@ void GpuRecordedGraph::publishStorageCandidate(const GpuTaskGraph* const graphId
     RetireStorageWithoutCallbacks(*m_candidateStorage);
 }
 
-bool GpuRecordedGraph::validForWithinArtifactOperation(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const ArtifactOperation& artifactAccess)const noexcept{
+b8 GpuRecordedGraph::validForWithinArtifactOperation(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const ArtifactOperation& artifactAccess)const noexcept{
     const ArtifactStorage* const storage = m_activeStorage.get();
     return
         planAccess.validFor(compiledGraph)
@@ -353,7 +353,7 @@ bool GpuRecordedGraph::validForWithinArtifactOperation(const GpuCompiledGraph& c
     ;
 }
 
-bool GpuRecordedGraph::validForWithinArtifactOperation(
+b8 GpuRecordedGraph::validForWithinArtifactOperation(
     const GpuTaskGraph& graph,
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph& compiledGraph,
@@ -372,7 +372,7 @@ bool GpuRecordedGraph::validForWithinArtifactOperation(
     ;
 }
 
-bool GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
+b8 GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
     if(!planAccess.validFor(compiledGraph))
         return false;
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
@@ -381,7 +381,7 @@ bool GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph, const Gpu
     return validForWithinArtifactOperation(compiledGraph, planAccess, artifactOperation);
 }
 
-bool GpuRecordedGraph::validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
+b8 GpuRecordedGraph::validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
     if(!declarationAccess.validFor(graph) || !planAccess.validFor(declarationAccess))
         return false;
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
@@ -406,7 +406,7 @@ Optional<GpuRecordedPacket> GpuRecordedGraph::packetSnapshot(const GpuSubmission
     return recordedPacket ? Optional<GpuRecordedPacket>(*recordedPacket) : Optional<GpuRecordedPacket>();
 }
 
-bool GpuRecordedGraph::hasTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId task)const noexcept{
+b8 GpuRecordedGraph::hasTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId task)const noexcept{
     if(!planAccess.validFor(compiledGraph))
         return false;
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
@@ -420,7 +420,7 @@ bool GpuRecordedGraph::hasTaskFinalStateSeed(const GpuCompiledGraph& compiledGra
     return findWithinArtifactOperation(packet, artifactOperation) && stateSeed && stateSeed->validForDeviceGeneration(m_activeStorage->deviceGeneration);
 }
 
-bool GpuRecordedGraph::copyTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId task, CommandListResourceStateHandoff& outStateSeed)const{
+b8 GpuRecordedGraph::copyTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId task, CommandListResourceStateHandoff& outStateSeed)const{
     if(!planAccess.validFor(compiledGraph))
         return false;
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
@@ -496,7 +496,7 @@ GpuRecordedPacket* GpuRecordedGraph::packetStorage(const GpuSubmissionPacketId& 
 void GpuRecordedGraph::clearPacketPublicationWithoutCallbacks(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept{
     GpuRecordedPacket* const recordedPacket = packetStorage(packet, artifactAccess);
     CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet, artifactAccess);
-    const bool publicationValid = recordedPacket && stateSeed && artifactAccess.exclusiveFor(*this);
+    const b8 publicationValid = recordedPacket && stateSeed && artifactAccess.exclusiveFor(*this);
     NWB_FATAL_ASSERT_MSG(publicationValid, "recorded packet rollback requires its exact artifact writer");
 
     for(usize commandListIndex = 0u; commandListIndex < GpuRecordedPacket::s_MaxCommandLists; ++commandListIndex){

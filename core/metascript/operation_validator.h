@@ -26,12 +26,12 @@ public:
 
 
 public:
-    bool validateBinaryOperation(TokenType::Enum op, const Value& lhs, const Value& rhs, u32 line, u32 column);
-    bool validateAssignment(TokenType::Enum op, const Value& target, const Value& rhs, u32 line, u32 column);
+    b8 validateBinaryOperation(TokenType::Enum op, const Value& lhs, const Value& rhs, u32 line, u32 column);
+    b8 validateAssignment(TokenType::Enum op, const Value& target, const Value& rhs, u32 line, u32 column);
 
 
 private:
-    bool validateNumericOperands(TokenType::Enum op, const Value& lhs, const Value& rhs, u32 line, u32 column, AStringView operandError, bool rejectZeroDivisor = false);
+    b8 validateNumericOperands(TokenType::Enum op, const Value& lhs, const Value& rhs, u32 line, u32 column, AStringView operandError, b8 rejectZeroDivisor = false);
 
 
 private:

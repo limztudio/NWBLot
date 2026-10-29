@@ -44,7 +44,7 @@ private:
     Core::ShaderHandle m_integrateComputeShader;
     Core::ComputePipelineHandle m_depthWarpPipeline;
     Core::ComputePipelineHandle m_integratePipeline;
-    bool m_targetsNeedClear = true;
+    b8 m_targetsNeedClear = true;
 };
 
 

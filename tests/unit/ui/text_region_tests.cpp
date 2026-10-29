@@ -193,7 +193,7 @@ protected:
         m_builder.setSkin(m_skin);
     }
 
-    void checkIntrinsicRowCoverage(IntrinsicRowSource& source, ListState& list, ComboState& combo, const bool popup, const f32 fontSize, const DisplayMetrics& display, const u64 generation){
+    void checkIntrinsicRowCoverage(IntrinsicRowSource& source, ListState& list, ComboState& combo, const b8 popup, const f32 fontSize, const DisplayMetrics& display, const u64 generation){
         SCOPED_TRACE(testing::Message() << "popup=" << popup << ", fontSize=" << fontSize << ", scale=" << display.pixelScaleX << "/" << display.pixelScaleY);
         m_builder.style().fontSize = fontSize;
         const auto rowMetrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
@@ -275,7 +275,7 @@ protected:
         EXPECT_NEAR(*actualCoverage, *expectedCoverage, VectorDoubleGetX(VectorDoubleMax(VectorDoubleReplicate(0.00001), VectorDoubleMultiply(VectorDoubleReplicate(*expectedCoverage), VectorDoubleReplicate(0.000002)))));
     }
 
-    void checkContentButtonRow(const StringView firstText, const StringView secondText, const f32 fontSize, const f32 scale, const u64 generation, const bool fixedHeight = false){
+    void checkContentButtonRow(const StringView firstText, const StringView secondText, const f32 fontSize, const f32 scale, const u64 generation, const b8 fixedHeight = false){
         SCOPED_TRACE(testing::Message() << "fontSize=" << fontSize << ", scale=" << scale << ", fixedHeight=" << fixedHeight);
         m_builder.style().fontSize = fontSize;
         const DisplayMetrics display{ 800.0f, 600.0f, scale, scale };
@@ -453,7 +453,7 @@ TEST_F(UiTextRegionTests, EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFo
     options.width.value = 10.0f;
     EXPECT_FALSE(m_builder.selectable("selectable", "MMMM", false, options));
     options.width.value = 20.0f;
-    bool checked = false;
+    b8 checked = false;
     EXPECT_FALSE(m_builder.checkbox("checkbox", "MMMM", checked, options));
     options.width.value = 50.0f;
     options.height.value = 32.0f;
@@ -475,7 +475,7 @@ TEST_F(UiTextRegionTests, CheckboxGlyphOverhangCannotEnterIndicatorReservationOr
     WidgetOptions options;
     options.width = { LayoutSizePolicy::Fixed, 120.0f };
     options.height = { LayoutSizePolicy::Fixed, 36.0f };
-    bool checked = false;
+    b8 checked = false;
     EXPECT_FALSE(m_builder.checkbox("checkbox", "jjjjjjjjjjjjjjjj", checked, options));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
@@ -560,7 +560,7 @@ TEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInstea
 TEST_F(UiTextRegionTests, WindowTitleInkKeepsPaddingAndCollapseReservationWhenViewportShrinks){
     m_builder.style().fontSize = 24.0f;
     u64 generation = 1u;
-    for(const bool collapsible : { false, true }){
+    for(const b8 collapsible : { false, true }){
         WindowState state;
         WindowOptions options;
         options.initialBounds = { 10.0f, 15.0f, 75.0f, 100.0f };
@@ -619,8 +619,8 @@ TEST_F(UiTextRegionTests, ContentRowsPreserveDescendersStackedAccentsMultilineAn
     };
     auto mixed = m_text.layout({ .text = samples[3u] });
     ASSERT_TRUE(mixed);
-    bool sawLatin = false;
-    bool sawKorean = false;
+    b8 sawLatin = false;
+    b8 sawKorean = false;
     for(const PlacedGlyph& glyph : mixed->glyphs()){
         sawLatin = sawLatin || glyph.face->identity().name() == Name(s_TestLatinFontPath);
         sawKorean = sawKorean || glyph.face->identity().name() == Name(s_TestKoreanFontPath);
@@ -691,7 +691,7 @@ TEST_F(UiTextRegionTests, IntrinsicListAndComboRowsPreserveActualMarksFallbackAn
     ListState list;
     ComboState combo;
     u64 generation = 1u;
-    for(const bool popup : { false, true }){
+    for(const b8 popup : { false, true }){
         for(const f32 fontSize : { 12.0f, 16.0f, 22.0f }){
             for(const Point scale : { Point{ 1.0f, 1.0f }, Point{ 1.25f, 1.25f }, Point{ 1.5f, 1.5f }, Point{ 2.0f, 2.0f }, Point{ 1.25f, 1.5f } })
                 ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, fontSize, { 800.0f, 600.0f, scale.x, scale.y }, generation++));
@@ -707,7 +707,7 @@ TEST_F(UiTextRegionTests, IntrinsicRowsShrinkAfterSourceFontSizeAndResolvedStyle
     ComboState combo;
     const DisplayMetrics display{ 800.0f, 600.0f, 1.0f, 1.0f };
     u64 generation = 1u;
-    for(const bool popup : { false, true }){
+    for(const b8 popup : { false, true }){
         source.specialText = s_MultilineAccentText;
         ++source.contentRevision;
         m_builder.listStyle().row.padding = { 8.0f, 16.0f, 8.0f, 18.0f };

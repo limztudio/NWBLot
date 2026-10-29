@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, const bool rendererActive)noexcept{
+RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, const b8 rendererActive)noexcept{
     RendererTaskTimingFeedbackPolicyTransition transition{ .previousPolicy = currentPolicy, .requestedPolicy = requestedPolicy, };
     if(!rendererActive || currentPolicy.enabled == requestedPolicy.enabled){
         currentPolicy = requestedPolicy;
@@ -33,7 +33,7 @@ RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPoli
     return transition;
 }
 
-void ResolveRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const RendererTaskTimingFeedbackPolicyTransition& transition, const bool collectionUpdated)noexcept{
+void ResolveRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const RendererTaskTimingFeedbackPolicyTransition& transition, const b8 collectionUpdated)noexcept{
     if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
         return;
 
@@ -45,13 +45,13 @@ void ResolveRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedba
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererTaskTimingFeedbackState::trackSample(
+b8 RendererTaskTimingFeedbackState::trackSample(
     const Core::GpuTimingSampleAttribution attribution,
     const Name& scopeName,
     const Core::GpuTaskTimingKey& key,
     const Core::GpuPhysicalQueueId& expectedQueue,
     const u64 sourceFrameIndex,
-    const bool recordsNonCommittingTimingSample
+    const b8 recordsNonCommittingTimingSample
 ){
     if(!attribution.valid() || !scopeName || !key.valid() || !expectedQueue.valid())
         return false;
@@ -62,7 +62,7 @@ bool RendererTaskTimingFeedbackState::trackSample(
     return true;
 }
 
-void RendererTaskTimingFeedbackState::acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, const bool feedbackActive)noexcept{
+void RendererTaskTimingFeedbackState::acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, const b8 feedbackActive)noexcept{
     const usize pendingIndex = findPendingSample(attribution);
     if(pendingIndex == m_pendingSamples.size())
         return;
@@ -89,7 +89,7 @@ void RendererTaskTimingFeedbackState::discardRecording(const Core::GpuTimingSamp
     pending.accepted = false;
 }
 
-void RendererTaskTimingFeedbackState::completeSample(const Core::GpuTimingSample& sample, const bool feedbackActive)noexcept{
+void RendererTaskTimingFeedbackState::completeSample(const Core::GpuTimingSample& sample, const b8 feedbackActive)noexcept{
     const usize pendingIndex = findPendingSample(sample.attribution);
     if(pendingIndex == m_pendingSamples.size())
         return;
@@ -206,7 +206,7 @@ RendererTaskTimingFeedback::~RendererTaskTimingFeedback()noexcept{
 void RendererTaskTimingFeedback::activate(){
     ScopedLock lifecycleLock(m_lifecycleMutex);
 
-    bool feedbackCollectionEnabled = false;
+    b8 feedbackCollectionEnabled = false;
     {
         ScopedLock lock(m_mutex);
         if(m_active)
@@ -254,7 +254,7 @@ void RendererTaskTimingFeedback::deactivate()noexcept{
     reset();
 }
 
-bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
+b8 RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
     if(!policy.valid())
         return false;
 
@@ -271,7 +271,7 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
         subscription = m_subscription;
     }
 
-    bool collectionUpdated = false;
+    b8 collectionUpdated = false;
     ScopeExit resolvePolicy([&]()noexcept{
         ScopedLock lock(m_mutex);
         ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, collectionUpdated);
@@ -285,7 +285,7 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
     return collectionUpdated;
 }
 
-Expected<Core::GpuTimingSampleAttribution> RendererTaskTimingFeedback::beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, const bool recordsNonCommittingTimingSample){
+Expected<Core::GpuTimingSampleAttribution> RendererTaskTimingFeedback::beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, const b8 recordsNonCommittingTimingSample){
     if(!scopeName || !collectsScope(scopeName) || !key.valid() || !expectedQueue.valid())
         return Core::s_NoGpuTimingSampleAttribution;
 
@@ -351,7 +351,7 @@ void RendererTaskTimingFeedback::reset()noexcept{
 }
 
 
-bool RendererTaskTimingFeedback::collectsScope(const Name& scopeName)const noexcept{
+b8 RendererTaskTimingFeedback::collectsScope(const Name& scopeName)const noexcept{
     for(const Name& feedbackCollectionScope : m_feedbackCollectionScopes){
         if(feedbackCollectionScope == scopeName)
             return true;
@@ -389,7 +389,7 @@ namespace ECSRenderDetail{
     );
 }
 
-bool RecordFloatTextureClear(Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, const Core::GpuGraphResourceId destination, Core::Texture& nativeDestination, const Core::GpuClearTextureTaskDesc& clearDesc){
+b8 RecordFloatTextureClear(Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, const Core::GpuGraphResourceId destination, Core::Texture& nativeDestination, const Core::GpuClearTextureTaskDesc& clearDesc){
     if(context.commandIrCapture && !context.commandIrCapture->captureClearTexture(context.task, context.packet, context.queue, destination, clearDesc))
         return false;
     commandList.clearTextureFloat(nativeDestination, clearDesc.subresources, clearDesc.floatValue);

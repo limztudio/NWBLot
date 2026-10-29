@@ -51,8 +51,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
-    bool loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
+    b8 loadBinary(Span<const u8> binary);
 
     void setComponents(ComponentRefVector&& components)noexcept{ m_components = Move(components); }
     [[nodiscard]] const ComponentRefVector& components()const noexcept{ return m_components; }
@@ -109,8 +109,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool validatePayload()const;
-    bool loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload()const;
+    b8 loadBinary(Span<const u8> binary);
 
     void setStartScene(const SceneRef& startScene)noexcept{ m_startScene = startScene; }
     [[nodiscard]] const SceneRef& startScene()const noexcept{ return m_startScene; }
@@ -159,8 +159,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
-    bool loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
+    b8 loadBinary(Span<const u8> binary);
 
     void setContents(SubsystemRefVector&& subsystems, AssetMap&& assets, EntityRefVector&& entities)noexcept;
 
@@ -221,11 +221,11 @@ public:
 
 
 public:
-    [[nodiscard]] bool loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project = ProjectAssetDefaults::s_DefaultProjectRef);
-    [[nodiscard]] bool loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene);
-    [[nodiscard]] bool instantiateEntities(Core::ECS::World& world)const;
+    [[nodiscard]] b8 loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project = ProjectAssetDefaults::s_DefaultProjectRef);
+    [[nodiscard]] b8 loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene);
+    [[nodiscard]] b8 instantiateEntities(Core::ECS::World& world)const;
 
-    [[nodiscard]] bool valid()const noexcept{ return m_scene.valid() && !m_loadedSubsystems.empty(); }
+    [[nodiscard]] b8 valid()const noexcept{ return m_scene.valid() && !m_loadedSubsystems.empty(); }
     [[nodiscard]] const SceneRef& scene()const noexcept{ return m_scene; }
     [[nodiscard]] const LoadedSubsystemVector& subsystems()const noexcept{ return m_loadedSubsystems; }
     [[nodiscard]] usize subsystemCount()const noexcept{ return m_loadedSubsystems.size(); }
@@ -241,7 +241,7 @@ public:
     }
 
     template<typename SubsystemT>
-    [[nodiscard]] bool hasSubsystem()const noexcept{
+    [[nodiscard]] b8 hasSubsystem()const noexcept{
         return findSubsystem<SubsystemT>() != nullptr;
     }
 

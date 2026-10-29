@@ -20,7 +20,7 @@ namespace __hidden_ui_input_bindings{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ValidBinding(const InputKeyBinding& binding)noexcept{
+static b8 ValidBinding(const InputKeyBinding& binding)noexcept{
     return
         InputBindings::ValidKey(binding.key) && binding.command != InputCommand::None && binding.command <= InputCommand::ContextMenu
         && binding.selection <= InputSelectionPolicy::Shift
@@ -29,7 +29,7 @@ static bool ValidBinding(const InputKeyBinding& binding)noexcept{
     ;
 }
 
-static bool Overlaps(const InputKeyBinding& first, const InputKeyBinding& second)noexcept{
+static b8 Overlaps(const InputKeyBinding& first, const InputKeyBinding& second)noexcept{
     const i32 common = s_InputBindingModifierMask & ~(first.ignoredModifiers | second.ignoredModifiers);
     return first.key == second.key && ((first.modifiers ^ second.modifiers) & common) == 0;
 }
@@ -44,7 +44,7 @@ static bool Overlaps(const InputKeyBinding& first, const InputKeyBinding& second
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputBindings::ValidKey(const i32 key)noexcept{
+b8 InputBindings::ValidKey(const i32 key)noexcept{
     return
         key == Core::Key::Space || key == Core::Key::Apostrophe || (key >= Core::Key::Comma && key <= Core::Key::Number9)
         || key == Core::Key::Semicolon || key == Core::Key::Equal || (key >= Core::Key::A && key <= Core::Key::RightBracket)
@@ -66,7 +66,7 @@ InputBindings::InputBindings(Core::Alloc::GlobalArena& arena)
     restoreDefaults();
 }
 
-bool InputBindings::set(const InputKeyBinding* bindings, const usize count){
+b8 InputBindings::set(const InputKeyBinding* bindings, const usize count){
     if(count > s_InputMaxBindings || (count != 0u && bindings == nullptr))
         return false;
     for(usize index = 0u; index < count; ++index){

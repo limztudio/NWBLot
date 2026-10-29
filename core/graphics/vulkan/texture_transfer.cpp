@@ -27,7 +27,7 @@ static constexpr TStringView s_TexturesNotOwnedReason = NWB_TEXT("source and des
 static constexpr TStringView s_NativeImageNullReason = NWB_TEXT("source and destination native image handles must be non-null");
 static constexpr TStringView s_NativeImageNotDistinctReason = NWB_TEXT("source and destination must be distinct native images");
 
-[[nodiscard]] inline bool TextureTransferImagesWithinFormatLimits(const VulkanContext& context, const VkImageCreateInfo& source, const VkImageCreateInfo& destination){
+[[nodiscard]] inline b8 TextureTransferImagesWithinFormatLimits(const VulkanContext& context, const VkImageCreateInfo& source, const VkImageCreateInfo& destination){
     VkImageFormatProperties sourceProperties{};
     const VkResult sourceResult = context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(context.physicalDevice, source.format, source.imageType, source.tiling, source.usage, source.flags, &sourceProperties);
     if(sourceResult != VK_SUCCESS)
@@ -39,7 +39,7 @@ static constexpr TStringView s_NativeImageNotDistinctReason = NWB_TEXT("source a
     return VulkanTextureDetail::IsTextureImageWithinFormatLimits(source, sourceProperties) && VulkanTextureDetail::IsTextureImageWithinFormatLimits(destination, destinationProperties);
 }
 
-[[nodiscard]] inline bool ResolveMipExtentsMatch(const TextureDesc& destinationDesc, const TextureSubresourceSet& destinationSubresources, const TextureDesc& sourceDesc, const TextureSubresourceSet& sourceSubresources)noexcept{
+[[nodiscard]] inline b8 ResolveMipExtentsMatch(const TextureDesc& destinationDesc, const TextureSubresourceSet& destinationSubresources, const TextureDesc& sourceDesc, const TextureSubresourceSet& sourceSubresources)noexcept{
     for(MipLevel mipOffset = 0u; mipOffset < sourceSubresources.numMipLevels; ++mipOffset){
         const VkExtent3D sourceExtent = VulkanDetail::GetTextureMipExtent(sourceDesc, sourceSubresources.baseMipLevel + mipOffset);
         const VkExtent3D destinationExtent = VulkanDetail::GetTextureMipExtent(destinationDesc, destinationSubresources.baseMipLevel + mipOffset);
@@ -176,7 +176,7 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
     retainResource(&dest);
 }
 
-bool CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch, TextureUploadAspect::Enum aspect){
+b8 CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch, TextureUploadAspect::Enum aspect){
     constexpr TStringView s_OperationName = NWB_TEXT("write texture");
     if(!data){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source data is null"));
@@ -226,7 +226,7 @@ bool CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, c
         rejectCommandRecording(s_OperationName, NWB_TEXT("upload buffer offset alignment overflows"));
         return false;
     }
-    const bool depthStencilCopy = copyAspectMask != VK_IMAGE_ASPECT_COLOR_BIT;
+    const b8 depthStencilCopy = copyAspectMask != VK_IMAGE_ASPECT_COLOR_BIT;
     const GpuQueueCapability::Mask requiredCapabilities = depthStencilCopy ? GpuQueueCapability::Graphics : GpuQueueCapability::Transfer;
     if(!recordAndValidateCommandCapability(requiredCapabilities, s_OperationName))
         return false;
@@ -362,7 +362,7 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::validateTextureTransferResources(Texture& dest, const ResourceStates::Mask destState, Texture& src, const ResourceStates::Mask srcState, const TStringView operationName){
+b8 CommandList::validateTextureTransferResources(Texture& dest, const ResourceStates::Mask destState, Texture& src, const ResourceStates::Mask srcState, const TStringView operationName){
     if(&src.m_context != &m_context || &dest.m_context != &m_context){
         rejectCommandRecording(operationName, __hidden_texture_transfer::s_TexturesNotOwnedReason);
         return false;

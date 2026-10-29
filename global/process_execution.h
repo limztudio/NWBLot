@@ -99,7 +99,7 @@ namespace ProcessExecutionDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool AreProcessArgumentsValid(const Span<const AStringView> arguments)noexcept{
+[[nodiscard]] inline b8 AreProcessArgumentsValid(const Span<const AStringView> arguments)noexcept{
     if(arguments.empty() || arguments.front().empty())
         return false;
     for(const AStringView argument : arguments){
@@ -133,7 +133,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool build(const Span<const AStringView> arguments){
+    [[nodiscard]] b8 build(const Span<const AStringView> arguments){
         if(!AreProcessArgumentsValid(arguments))
             return false;
 
@@ -163,7 +163,7 @@ inline void AppendWindowsCommandLineArgument(StringT& inOutCommand, const AStrin
     if(!inOutCommand.empty())
         inOutCommand += ' ';
 
-    bool needsQuotes = value.empty();
+    b8 needsQuotes = value.empty();
     for(const char ch : value){
         if(ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '"'){
             needsQuotes = true;
@@ -264,7 +264,7 @@ inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
 
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> ExecutableAvailableInPath(ArenaT& arena, const AStringView searchPath, const AStringView executableName){
+[[nodiscard]] inline Expected<b8, ErrorCode> ExecutableAvailableInPath(ArenaT& arena, const AStringView searchPath, const AStringView executableName){
     const char separator =
 #if defined(NWB_PLATFORM_WINDOWS)
         ';'
@@ -368,7 +368,7 @@ template<typename ArenaT>
 
     const DWORD waitResult = WaitForSingleObject(processInfo.hProcess, INFINITE);
     DWORD exitCode = 1u;
-    const bool queriedExitCode = waitResult == WAIT_OBJECT_0 && GetExitCodeProcess(processInfo.hProcess, &exitCode);
+    const b8 queriedExitCode = waitResult == WAIT_OBJECT_0 && GetExitCodeProcess(processInfo.hProcess, &exitCode);
     const BOOL threadClosed = CloseHandle(processInfo.hThread);
     const BOOL processClosed = CloseHandle(processInfo.hProcess);
     if(!queriedExitCode)

@@ -92,7 +92,7 @@ namespace ResourceQueueSharing{
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 
-    [[nodiscard]] inline constexpr bool IsValid(const Mask sharing)noexcept{
+    [[nodiscard]] inline constexpr b8 IsValid(const Mask sharing)noexcept{
         return (static_cast<u8>(sharing) & ~static_cast<u8>(GraphicsAsyncComputeAndTransfer)) == 0u;
     }
 };
@@ -102,11 +102,11 @@ struct ResourceQueueAdmissionSnapshot{
     const u32* queueFamilyIndices = nullptr;
     u32 queueFamilyIndexCount = 0u;
     ResourceQueueSharing::Mask admittedQueueClasses = ResourceQueueSharing::Exclusive;
-    bool usesConcurrentSharing = false;
+    b8 usesConcurrentSharing = false;
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return
             ResourceQueueSharing::IsValid(admittedQueueClasses)
             && ((!usesConcurrentSharing && queueFamilyIndexCount == 0u && !queueFamilyIndices) || (usesConcurrentSharing && admittedQueueClasses != ResourceQueueSharing::Exclusive && queueFamilyIndexCount >= 2u && queueFamilyIndices))
@@ -152,7 +152,7 @@ namespace ResourceStates{
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 
-    [[nodiscard]] constexpr bool HasUnorderedAccess(const Mask states)noexcept{
+    [[nodiscard]] constexpr b8 HasUnorderedAccess(const Mask states)noexcept{
         return (states & UnorderedAccess) != Unknown;
     }
 };
@@ -174,19 +174,19 @@ struct TextureDesc{
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     Format::Enum format = Format::UNKNOWN;
     TextureDimension::Enum dimension = TextureDimension::Enum::Texture2D;
-    bool isShaderResource = true;
-    bool isRenderTarget = false;
-    bool isUAV = false;
-    bool isTypeless = false;
-    bool isShadingRateSurface = false;
+    b8 isShaderResource = true;
+    b8 isRenderTarget = false;
+    b8 isUAV = false;
+    b8 isTypeless = false;
+    b8 isShadingRateSurface = false;
 
     // Indicates that the texture is created with no backing memory, and memory is bound to the texture later using bindTextureMemory.
-    bool isVirtual = false;
+    b8 isVirtual = false;
 
-    bool useClearValue = false;
+    b8 useClearValue = false;
 
     // keepInitialState restores each used subresource to initialState before close. Known only after submit; earlier consumers import the handoff.
-    bool keepInitialState = false;
+    b8 keepInitialState = false;
 
 
 public:
@@ -208,19 +208,19 @@ public:
 
     constexpr TextureDesc& setName(const Name& v)noexcept{ name = v; return *this; }
 
-    constexpr TextureDesc& setIsRenderTarget(bool v)noexcept{ isRenderTarget = v; return *this; }
+    constexpr TextureDesc& setIsRenderTarget(b8 v)noexcept{ isRenderTarget = v; return *this; }
 
-    constexpr TextureDesc& setIsUAV(bool v)noexcept{ isUAV = v; return *this; }
+    constexpr TextureDesc& setIsUAV(b8 v)noexcept{ isUAV = v; return *this; }
 
-    constexpr TextureDesc& setIsTypeless(bool v)noexcept{ isTypeless = v; return *this; }
+    constexpr TextureDesc& setIsTypeless(b8 v)noexcept{ isTypeless = v; return *this; }
 
     constexpr TextureDesc& setClearValue(const Color& v)noexcept{ clearValue = v; useClearValue = true; return *this; }
 
-    constexpr TextureDesc& setUseClearValue(bool v)noexcept{ useClearValue = v; return *this; }
+    constexpr TextureDesc& setUseClearValue(b8 v)noexcept{ useClearValue = v; return *this; }
 
     constexpr TextureDesc& setInitialState(ResourceStates::Mask v)noexcept{ initialState = v; return *this; }
 
-    constexpr TextureDesc& setKeepInitialState(bool v)noexcept{ keepInitialState = v; return *this; }
+    constexpr TextureDesc& setKeepInitialState(b8 v)noexcept{ keepInitialState = v; return *this; }
 
     constexpr TextureDesc& setQueueSharing(ResourceQueueSharing::Mask v)noexcept{ queueSharing = v; return *this; }
 };
@@ -299,7 +299,7 @@ public:
 
 public:
     [[nodiscard]] TextureSubresourceSet resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const noexcept;
-    [[nodiscard]] bool isEntireTexture(const TextureDesc& desc)const noexcept;
+    [[nodiscard]] b8 isEntireTexture(const TextureDesc& desc)const noexcept;
 
     constexpr TextureSubresourceSet& setBaseMipLevel(MipLevel value)noexcept{ baseMipLevel = value; return *this; }
 
@@ -313,7 +313,7 @@ public:
 
     constexpr TextureSubresourceSet& setArraySlices(ArraySlice base, ArraySlice num)noexcept{ baseArraySlice = base; numArraySlices = num; return *this; }
 
-    [[nodiscard]] constexpr bool hasExtent()const noexcept{
+    [[nodiscard]] constexpr b8 hasExtent()const noexcept{
         return numMipLevels != 0u && numArraySlices != 0u;
     }
 
@@ -325,19 +325,19 @@ public:
         return RangeEnd(baseArraySlice, numArraySlices, s_AllArraySlices);
     }
 
-    [[nodiscard]] constexpr bool contains(const TextureSubresourceSet& inner)const noexcept{
+    [[nodiscard]] constexpr b8 contains(const TextureSubresourceSet& inner)const noexcept{
         return baseMipLevel <= inner.baseMipLevel && mipEnd() >= inner.mipEnd() && baseArraySlice <= inner.baseArraySlice && arrayEnd() >= inner.arrayEnd();
     }
 
-    [[nodiscard]] constexpr bool overlaps(const TextureSubresourceSet& other)const noexcept{
+    [[nodiscard]] constexpr b8 overlaps(const TextureSubresourceSet& other)const noexcept{
         return baseMipLevel < other.mipEnd() && other.baseMipLevel < mipEnd() && baseArraySlice < other.arrayEnd() && other.baseArraySlice < arrayEnd();
     }
 };
-inline bool operator==(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
+inline b8 operator==(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
     return lhs.baseMipLevel == rhs.baseMipLevel && lhs.numMipLevels == rhs.numMipLevels && lhs.baseArraySlice == rhs.baseArraySlice && lhs.numArraySlices == rhs.numArraySlices;
 }
 
-inline bool operator!=(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{ return !(lhs == rhs); }
 
 inline constexpr auto s_AllSubresources = TextureSubresourceSet(0, TextureSubresourceSet::s_AllMipLevels, 0, TextureSubresourceSet::s_AllArraySlices);
 
@@ -356,7 +356,7 @@ struct VertexAttributeDesc{
     u32 offset = 0;
     u32 elementStride = 0;
     Format::Enum format = Format::UNKNOWN;
-    bool isInstanced = false;
+    b8 isInstanced = false;
 
 
 public:
@@ -372,7 +372,7 @@ public:
 
     constexpr VertexAttributeDesc& setName(const Name& value)noexcept{ name = value; return *this; }
 
-    constexpr VertexAttributeDesc& setIsInstanced(bool value)noexcept{ isInstanced = value; return *this; }
+    constexpr VertexAttributeDesc& setIsInstanced(b8 value)noexcept{ isInstanced = value; return *this; }
 };
 
 typedef GraphicsBackend::Handle<InputLayout> InputLayoutHandle;
@@ -390,25 +390,25 @@ struct BufferDesc{
     Format::Enum format = Format::UNKNOWN; // for typed buffer views
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     CpuAccessMode::Enum cpuAccess = CpuAccessMode::None;
-    bool canHaveUAVs = false;
-    bool canHaveTypedViews = false;
-    bool canHaveRawViews = false;
-    bool isVertexBuffer = false;
-    bool isIndexBuffer = false;
-    bool isConstantBuffer = false;
-    bool isDrawIndirectArgs = false;
-    bool isAccelStructBuildInput = false;
-    bool isAccelStructStorage = false;
-    bool isShaderBindingTable = false;
+    b8 canHaveUAVs = false;
+    b8 canHaveTypedViews = false;
+    b8 canHaveRawViews = false;
+    b8 isVertexBuffer = false;
+    b8 isIndexBuffer = false;
+    b8 isConstantBuffer = false;
+    b8 isDrawIndirectArgs = false;
+    b8 isAccelStructBuildInput = false;
+    b8 isAccelStructStorage = false;
+    b8 isShaderBindingTable = false;
 
     // Dynamic/upload buffer whose contents live only in the current command list.
-    bool isVolatile = false;
+    b8 isVolatile = false;
 
     // Indicates that the buffer is created with no backing memory, and memory is bound to the buffer later using bindBufferMemory.
-    bool isVirtual = false;
+    b8 isVirtual = false;
 
     // see TextureDesc::keepInitialState
-    bool keepInitialState = false;
+    b8 keepInitialState = false;
 
 
 public:
@@ -422,33 +422,33 @@ public:
 
     constexpr BufferDesc& setDebugName(const Name& value)noexcept{ debugName = value; return *this; }
 
-    constexpr BufferDesc& setCanHaveUAVs(bool value)noexcept{ canHaveUAVs = value; return *this; }
+    constexpr BufferDesc& setCanHaveUAVs(b8 value)noexcept{ canHaveUAVs = value; return *this; }
 
-    constexpr BufferDesc& setCanHaveTypedViews(bool value)noexcept{ canHaveTypedViews = value; return *this; }
+    constexpr BufferDesc& setCanHaveTypedViews(b8 value)noexcept{ canHaveTypedViews = value; return *this; }
 
-    constexpr BufferDesc& setCanHaveRawViews(bool value)noexcept{ canHaveRawViews = value; return *this; }
+    constexpr BufferDesc& setCanHaveRawViews(b8 value)noexcept{ canHaveRawViews = value; return *this; }
 
-    constexpr BufferDesc& setIsVertexBuffer(bool value)noexcept{ isVertexBuffer = value; return *this; }
+    constexpr BufferDesc& setIsVertexBuffer(b8 value)noexcept{ isVertexBuffer = value; return *this; }
 
-    constexpr BufferDesc& setIsIndexBuffer(bool value)noexcept{ isIndexBuffer = value; return *this; }
+    constexpr BufferDesc& setIsIndexBuffer(b8 value)noexcept{ isIndexBuffer = value; return *this; }
 
-    constexpr BufferDesc& setIsConstantBuffer(bool value)noexcept{ isConstantBuffer = value; return *this; }
+    constexpr BufferDesc& setIsConstantBuffer(b8 value)noexcept{ isConstantBuffer = value; return *this; }
 
-    constexpr BufferDesc& setIsDrawIndirectArgs(bool value)noexcept{ isDrawIndirectArgs = value; return *this; }
+    constexpr BufferDesc& setIsDrawIndirectArgs(b8 value)noexcept{ isDrawIndirectArgs = value; return *this; }
 
-    constexpr BufferDesc& setIsAccelStructBuildInput(bool value)noexcept{ isAccelStructBuildInput = value; return *this; }
+    constexpr BufferDesc& setIsAccelStructBuildInput(b8 value)noexcept{ isAccelStructBuildInput = value; return *this; }
 
-    constexpr BufferDesc& setIsAccelStructStorage(bool value)noexcept{ isAccelStructStorage = value; return *this; }
+    constexpr BufferDesc& setIsAccelStructStorage(b8 value)noexcept{ isAccelStructStorage = value; return *this; }
 
-    constexpr BufferDesc& setIsShaderBindingTable(bool value)noexcept{ isShaderBindingTable = value; return *this; }
+    constexpr BufferDesc& setIsShaderBindingTable(b8 value)noexcept{ isShaderBindingTable = value; return *this; }
 
-    constexpr BufferDesc& setIsVolatile(bool value)noexcept{ isVolatile = value; return *this; }
+    constexpr BufferDesc& setIsVolatile(b8 value)noexcept{ isVolatile = value; return *this; }
 
-    constexpr BufferDesc& setIsVirtual(bool value)noexcept{ isVirtual = value; return *this; }
+    constexpr BufferDesc& setIsVirtual(b8 value)noexcept{ isVirtual = value; return *this; }
 
     constexpr BufferDesc& setInitialState(ResourceStates::Mask value)noexcept{ initialState = value; return *this; }
 
-    constexpr BufferDesc& setKeepInitialState(bool value)noexcept{ keepInitialState = value; return *this; }
+    constexpr BufferDesc& setKeepInitialState(b8 value)noexcept{ keepInitialState = value; return *this; }
 
     constexpr BufferDesc& setQueueSharing(ResourceQueueSharing::Mask value)noexcept{ queueSharing = value; return *this; }
 
@@ -480,26 +480,26 @@ public:
 
 
 public:
-    constexpr bool operator==(const BufferRange& other)const noexcept{ return byteOffset == other.byteOffset && byteSize == other.byteSize; }
+    constexpr b8 operator==(const BufferRange& other)const noexcept{ return byteOffset == other.byteOffset && byteSize == other.byteSize; }
 
 
 public:
     [[nodiscard]] BufferRange resolve(const BufferDesc& desc)const noexcept;
-    [[nodiscard]] constexpr bool hasExtent()const noexcept{
+    [[nodiscard]] constexpr b8 hasExtent()const noexcept{
         return byteSize != 0u && byteOffset < s_AllBytes && (byteSize == s_AllBytes || byteSize <= s_AllBytes - byteOffset);
     }
 
     [[nodiscard]] constexpr u64 end()const noexcept{ return byteSize == s_AllBytes ? s_AllBytes : byteOffset + byteSize; }
 
-    [[nodiscard]] constexpr bool overlaps(const BufferRange& other)const noexcept{
+    [[nodiscard]] constexpr b8 overlaps(const BufferRange& other)const noexcept{
         return hasExtent() && other.hasExtent() && byteOffset < other.end() && other.byteOffset < end();
     }
 
-    [[nodiscard]] constexpr bool contains(const BufferRange& other)const noexcept{
+    [[nodiscard]] constexpr b8 contains(const BufferRange& other)const noexcept{
         return hasExtent() && other.hasExtent() && byteOffset <= other.byteOffset && end() >= other.end();
     }
     [[nodiscard]] BufferRange intersect(const BufferRange& other)const noexcept;
-    [[nodiscard]] constexpr bool isEntireBuffer(const BufferDesc& desc)const noexcept{ return (!byteOffset) && (byteSize == s_AllBytes || byteSize == desc.byteSize); }
+    [[nodiscard]] constexpr b8 isEntireBuffer(const BufferDesc& desc)const noexcept{ return (!byteOffset) && (byteSize == s_AllBytes || byteSize == desc.byteSize); }
 
 
     constexpr BufferRange& setByteOffset(u64 value)noexcept{ byteOffset = value; return *this; }

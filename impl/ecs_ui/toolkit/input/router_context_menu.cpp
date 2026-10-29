@@ -31,7 +31,7 @@ Expected<ContextMenuAction> InputRouter::consumeContextMenu(const WidgetId id, c
     return MakeUnexpected(Failure{});
 }
 
-bool InputRouter::currentContextMenuOwner(const TargetOwner& owner)const noexcept{
+b8 InputRouter::currentContextMenuOwner(const TargetOwner& owner)const noexcept{
     const HitTarget* target = findTarget(owner.target, owner.declarationGeneration);
     return m_windowFocused && owner.declarationGeneration != 0u && target != nullptr && target->contextMenu && isInteractive(*target) && target->popup == owner.popup && target->control == owner.control;
 }
@@ -68,8 +68,8 @@ void InputRouter::appendContextMenu(const HitTarget& target, const Point& positi
     ++m_nextActionSequence;
 }
 
-bool InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, const bool alreadyPressed, CommandSource& source)noexcept{
-    const bool trigger = event.command == InputCommand::ContextMenu;
+b8 InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, const b8 alreadyPressed, CommandSource& source)noexcept{
+    const b8 trigger = event.command == InputCommand::ContextMenu;
     if(!trigger || focused == nullptr || !focused->contextMenu || !m_windowFocused || !isInteractive(*focused))
         return false;
     if(!alreadyPressed && !event.repeat){
@@ -102,7 +102,7 @@ void InputRouter::routeSecondary(const InputEvent& event, const HitTarget* hit, 
     if(!m_secondarySequenceConsumed)
         return;
     if(hasPopup() && hit == nullptr){
-        const bool dismissed = dismissPopup(PopupDismissReason::OutsideClick);
+        const b8 dismissed = dismissPopup(PopupDismissReason::OutsideClick);
         if(dismissed)
             updateHover();
         return;

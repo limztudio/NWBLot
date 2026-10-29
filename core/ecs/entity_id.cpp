@@ -75,7 +75,7 @@ void EntityManager::destroy(EntityID entityId){
 }
 
 
-bool EntityManager::alive(EntityID entityId)const noexcept{
+b8 EntityManager::alive(EntityID entityId)const noexcept{
     const u32 index = entityId.index();
     if(index >= static_cast<u32>(m_generations.size()))
         return false;

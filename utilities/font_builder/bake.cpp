@@ -19,7 +19,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateOptions(const BakeOptions& options){
+b8 ValidateOptions(const BakeOptions& options){
     constexpr u32 s_MinExtent = 32u;
     if(
         options.ppem < Impl::s_FontAtlasMinBakePpem

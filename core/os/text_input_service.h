@@ -27,15 +27,15 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool isOwnerThread()const noexcept override final{ return QueryCurrentThreadId() == m_ownerThread; }
+    [[nodiscard]] virtual b8 isOwnerThread()const noexcept override final{ return QueryCurrentThreadId() == m_ownerThread; }
     [[nodiscard]] virtual TextInputSessionToken activeSession()const noexcept override final;
     [[nodiscard]] virtual u64 surroundingRevision(TextInputSessionToken token)const noexcept override final;
     [[nodiscard]] virtual Expected<TextInputSessionToken, TextInputAdmission::Enum> begin(const TextInputSessionDesc& desc)override final;
-    [[nodiscard]] virtual bool end(TextInputSessionToken token)override final;
+    [[nodiscard]] virtual b8 end(TextInputSessionToken token)override final;
     [[nodiscard]] virtual TextInputAdmission::Enum updateCaret(TextInputSessionToken token, TextInputRect caret)override final;
     [[nodiscard]] virtual TextInputAdmission::Enum updateSurrounding(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, TextInputChangeCause::Enum cause = TextInputChangeCause::Other)override final;
     [[nodiscard]] virtual TextInputPollResult::Enum poll(TextInputSessionToken token, TextInputEvent& event)override final;
-    [[nodiscard]] virtual bool setFocused(bool focused)override final;
+    [[nodiscard]] virtual b8 setFocused(b8 focused)override final;
 
 
 protected:
@@ -47,9 +47,9 @@ protected:
 
 protected:
     [[nodiscard]] TextInputAdmission::Enum emitCommit(TextInputSessionToken token, AStringView text);
-    [[nodiscard]] TextInputAdmission::Enum emitPreedit(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, bool caretVisible = true);
+    [[nodiscard]] TextInputAdmission::Enum emitPreedit(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, b8 caretVisible = true);
     [[nodiscard]] TextInputAdmission::Enum emitDeleteSurrounding(TextInputSessionToken token, usize beforeBytes, usize afterBytes, u64 revision, TextInputDeletionBasis::Enum basis);
-    [[nodiscard]] bool cancelSession(TextInputSessionToken token, TextInputCancelReason::Enum reason);
+    [[nodiscard]] b8 cancelSession(TextInputSessionToken token, TextInputCancelReason::Enum reason);
     [[nodiscard]] Alloc::GlobalArena& arena()const noexcept{ return m_arena; }
 
     [[nodiscard]] AStringView surroundingText()const noexcept{ return m_surrounding; }
@@ -62,13 +62,13 @@ protected:
 
     [[nodiscard]] TextInputRect caretRect()const noexcept{ return m_caret; }
 
-    [[nodiscard]] bool focused()const noexcept{ return m_focused; }
+    [[nodiscard]] b8 focused()const noexcept{ return m_focused; }
 
 
 private:
     [[nodiscard]] TextInputAdmission::Enum admitEvent(
         TextInputSessionToken token, TextInputEventKind::Enum kind, AStringView text,
-        usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes, bool caretVisible,
+        usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes, b8 caretVisible,
         TextInputDeletionBasis::Enum basis = TextInputDeletionBasis::Caret
     );
     void clearEvents()noexcept;
@@ -90,8 +90,8 @@ private:
     u64 m_nextGeneration = 1u;
     u64 m_nextSequence = 1u;
     const ThreadId m_ownerThread;
-    bool m_focused = false;
-    bool m_transitioning = false;
+    b8 m_focused = false;
+    b8 m_transitioning = false;
 };
 
 

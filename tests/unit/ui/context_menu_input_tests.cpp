@@ -43,7 +43,7 @@ using namespace NWB::Impl::Ui;
     return event;
 }
 
-[[nodiscard]] static InputEvent Key(const Core::Key::Enum key, const bool shift = false, const bool control = false, const bool alt = false, const bool repeat = false)noexcept{
+[[nodiscard]] static InputEvent Key(const Core::Key::Enum key, const b8 shift = false, const b8 control = false, const b8 alt = false, const b8 repeat = false)noexcept{
     InputEvent event;
     event.type = InputEventType::KeyDown;
     event.key = key;
@@ -267,7 +267,7 @@ TEST_F(UiContextMenuInputTests, MenuAndShiftF10UseTheAcceptedKeyboardAnchorOnceP
     focus();
     EXPECT_FALSE(m_router.pointerKnown());
     for(const Core::Key::Enum key : { Core::Key::Menu, Core::Key::F10 }){
-        const bool shift = key == Core::Key::F10;
+        const b8 shift = key == Core::Key::F10;
         EXPECT_TRUE(send(Key(key, shift)).commandConsumed);
         EXPECT_TRUE(m_router.ownsKey(key));
         EXPECT_FALSE(take());

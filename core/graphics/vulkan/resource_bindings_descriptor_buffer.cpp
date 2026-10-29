@@ -103,7 +103,7 @@ void DescriptorBufferManager::shutdownForDeviceTeardown()noexcept{
     m_lifecycleTransitioning = false;
 }
 
-bool DescriptorBufferManager::initialize(){
+b8 DescriptorBufferManager::initialize(){
     UniqueLock<Futex> operationLock(m_lifecycleOperationMutex);
 
     const auto idleResult = shutdownForLifecycleOperation();
@@ -197,7 +197,7 @@ bool DescriptorBufferManager::initialize(){
     return true;
 }
 
-bool DescriptorBufferManager::shutdown(){
+b8 DescriptorBufferManager::shutdown(){
     UniqueLock<Futex> operationLock(m_lifecycleOperationMutex);
 
     const auto result = shutdownForLifecycleOperation();
@@ -207,7 +207,7 @@ bool DescriptorBufferManager::shutdown(){
     return result.has_value();
 }
 
-bool DescriptorBufferManager::isEnabled()const noexcept{
+b8 DescriptorBufferManager::isEnabled()const noexcept{
     ScopedLock lifecycleLock(m_lifecycleMutex);
 
     return m_enabled && !m_lifecycleTransitioning && m_bindingGeneration != 0u;
@@ -243,7 +243,7 @@ Expected<DescriptorBufferSegment> DescriptorBufferManager::allocate(const Descri
     return allocateForBindingGeneration(kind, sizeBytes, alignmentBytes, 0u);
 }
 
-bool DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32 resourceBytes, const u32 samplerBytes, const u64 requiredGeneration){
+b8 DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32 resourceBytes, const u32 samplerBytes, const u64 requiredGeneration){
     ScopedLock lifecycleLock(m_lifecycleMutex);
     if(!m_enabled || m_lifecycleTransitioning || requiredGeneration == 0u || requiredGeneration != m_bindingGeneration)
         return false;
@@ -453,7 +453,7 @@ void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSeg
 
     storage.freeRanges.insert(storage.freeRanges.begin() + insertIndex, freedRange);
 
-    const auto mergeAdjacentAt = [&](const usize leftIndex)noexcept -> bool{
+    const auto mergeAdjacentAt = [&](const usize leftIndex)noexcept -> b8{
         if(leftIndex + 1u >= storage.freeRanges.size())
             return false;
 
@@ -514,7 +514,7 @@ Expected<DescriptorBufferManager::BindingSnapshot> DescriptorBufferManager::capt
     return snapshot;
 }
 
-bool DescriptorBufferManager::isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, const DescriptorBufferSegmentKind::Enum expectedKind)const noexcept{
+b8 DescriptorBufferManager::isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, const DescriptorBufferSegmentKind::Enum expectedKind)const noexcept{
     NWB_ASSERT(storage.storageIdentity);
     if(
         !segment.valid()
@@ -543,7 +543,7 @@ bool DescriptorBufferManager::isLiveSegmentLocked(const SegmentStorage& storage,
     return liveSegment.kind == segment.kind && liveSegment.offsetBytes == segment.offsetBytes && liveSegment.sizeBytes == segment.sizeBytes && liveSegment.storageIdentity == segment.storageIdentity && liveSegment.allocationSerial == segment.allocationSerial;
 }
 
-bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const AStringView debugName, const u32 capacityBytes){
+b8 DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const AStringView debugName, const u32 capacityBytes){
     shutdownSegment(segment);
 
     VkBufferCreateInfo bufferInfo{};

@@ -28,11 +28,11 @@ NWB_BEGIN
 namespace Tests::Smoke{
 
 template<typename Source>
-[[nodiscard]] Expected<u64> FindAdjacentEnabledRow(const Source& source, const u64 start, const bool reverse)noexcept(
-    noexcept(static_cast<bool>(start >= source.rowCount()))
-    && noexcept(static_cast<bool>(start + 1u >= source.rowCount()))
-    && noexcept(static_cast<bool>(source.enabled(start)))
-    && noexcept(static_cast<bool>(source.enabled(DeclVal<u64&>())))
+[[nodiscard]] Expected<u64> FindAdjacentEnabledRow(const Source& source, const u64 start, const b8 reverse)noexcept(
+    noexcept(static_cast<b8>(start >= source.rowCount()))
+    && noexcept(static_cast<b8>(start + 1u >= source.rowCount()))
+    && noexcept(static_cast<b8>(source.enabled(start)))
+    && noexcept(static_cast<b8>(source.enabled(DeclVal<u64&>())))
 ){
     u64 index = 0u;
     if(start >= source.rowCount())
@@ -77,7 +77,7 @@ template<typename Source>
     return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) };
 }
 
-[[nodiscard]] inline bool SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right)noexcept{
+[[nodiscard]] inline b8 SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right)noexcept{
     return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
 }
 
@@ -108,7 +108,7 @@ inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStrin
     return hash;
 }
 
-inline void ObserveSmokeDisplay(const TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, bool& inOutDisplayChanged){
+inline void ObserveSmokeDisplay(const TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, b8& inOutDisplayChanged){
     if(inOutLastDisplay.logicalWidth == display.logicalWidth && inOutLastDisplay.logicalHeight == display.logicalHeight && inOutLastDisplay.pixelScaleX == display.pixelScaleX && inOutLastDisplay.pixelScaleY == display.pixelScaleY)
         return;
     inOutLastDisplay = display;
@@ -164,7 +164,7 @@ inline void PaintSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT&
     return static_cast<u32>(HashSmokeText(text));
 }
 
-[[nodiscard]] inline bool SameSmokePlacement(const Impl::Ui::EditBoxPlacement& left, const Impl::Ui::EditBoxPlacement& right)noexcept{
+[[nodiscard]] inline b8 SameSmokePlacement(const Impl::Ui::EditBoxPlacement& left, const Impl::Ui::EditBoxPlacement& right)noexcept{
     return SameSmokeRect(left.bounds, right.bounds) && SameSmokeRect(left.content, right.content) && SameSmokeRect(left.caret, right.caret) && left.scroll == right.scroll;
 }
 

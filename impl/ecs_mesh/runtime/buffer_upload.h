@@ -29,11 +29,11 @@ namespace RuntimeMeshBufferUpload{
 
 
 struct BufferFlags{
-    bool canHaveUAVs = false;
-    bool canHaveRawViews = false;
-    bool accelStructBuildInput = false;
+    b8 canHaveUAVs = false;
+    b8 canHaveRawViews = false;
+    b8 accelStructBuildInput = false;
     Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive;
-    bool isIndexBuffer = false;
+    b8 isIndexBuffer = false;
 };
 
 namespace BufferSetupFailure{

@@ -51,8 +51,8 @@ namespace ECSRenderDetail{
     struct MeshBlasGraphState{
         Name meshName = s_NameNone;
         Core::RayTracingAccelStructHandle blas;
-        bool backingFresh = false;
-        bool nativeBuildsBlas = false;
+        b8 backingFresh = false;
+        b8 nativeBuildsBlas = false;
     };
     // Cross-domain view of accel resources; only RendererMeshSystem publishes changes.
     struct MeshRayTracingResourceSnapshot{
@@ -84,13 +84,13 @@ namespace ECSRenderDetail{
         u32 meshletPrimitiveIndexCount = 0u;
         u32 blasRefitsSinceRebuild = 0u;
         u32 swBvhRefitsSinceRebuild = 0u;
-        bool runtimeMesh = false;
-        bool blasBuildPending = false;
-        bool blasBackingFresh = false;
-        bool swBvhBuildPending = false;
-        bool swBvhTopologyBuilt = false;
-        bool blasBuildAccepted = false;
-        bool swBvhBuildAccepted = false;
+        b8 runtimeMesh = false;
+        b8 blasBuildPending = false;
+        b8 blasBackingFresh = false;
+        b8 swBvhBuildPending = false;
+        b8 swBvhTopologyBuilt = false;
+        b8 blasBuildAccepted = false;
+        b8 swBvhBuildAccepted = false;
     };
     using MeshSoftwareBvhParentBuildStateVector = Vector<MeshSoftwareBvhParentBuildState, Core::Alloc::ScratchArena>;
     using MeshRetainedAccelerationStateBufferVector = Vector<Core::BufferHandle, Core::Alloc::ScratchArena>;
@@ -161,8 +161,8 @@ public:
     }
 
     template<typename BufferHandler>
-    static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler)noexcept(noexcept(handler(DeclVal<const u32&>(), MeshSourceBuffer(mesh, s_MeshPositionBindingSlot), DeclVal<const bool&>()))){
-        ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView)noexcept(noexcept(handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView))){
+    static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler)noexcept(noexcept(handler(DeclVal<const u32&>(), MeshSourceBuffer(mesh, s_MeshPositionBindingSlot), DeclVal<const b8&>()))){
+        ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8 rawView)noexcept(noexcept(handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView))){
             handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView);
         });
     }
@@ -180,29 +180,29 @@ public:
     [[nodiscard]] Expected<NotNull<MeshResources*>> findMeshResources(const Name& meshKey)noexcept;
     [[nodiscard]] Expected<NotNull<MeshResources*>> createRuntimeMeshResources(const RuntimeMeshDesc& desc);
     [[nodiscard]] Expected<NotNull<MeshResources*>> findRuntimeMeshResources(const RuntimeMeshDesc& desc)noexcept;
-    [[nodiscard]] bool prepareComputeEmulationResources(MeshResources& mesh);
-    [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
-    [[nodiscard]] bool confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, bool runtimeMesh)noexcept;
+    [[nodiscard]] b8 prepareComputeEmulationResources(MeshResources& mesh);
+    [[nodiscard]] b8 prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
+    [[nodiscard]] b8 confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, b8 runtimeMesh)noexcept;
     void pruneRuntimeMeshResources(Core::Alloc::ScratchArena& scratchArena);
     void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;
     [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(const Name& meshName)const noexcept;
     [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& desc)const noexcept;
-    [[nodiscard]] bool commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired);
+    [[nodiscard]] b8 commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired);
     [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> ensureRayTracingInputHeapHandles(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected);
     void discardRayTracingBuildState()noexcept;
     [[nodiscard]] Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> collectSoftwareBvhParentBuildStates(Core::Alloc::ScratchArena& arena)const;
     void collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const;
     void collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphStateVector& outStates)const;
-    [[nodiscard]] bool createMeshViewBuffer();
+    [[nodiscard]] b8 createMeshViewBuffer();
     [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const noexcept;
     [[nodiscard]] Expected<Float44> snapshotAcceptedMeshViewWorldToClip()const noexcept;
     // Resolve the per-frame view payload; confirm the CPU mirror after packet accepts.
     [[nodiscard]] ECSRenderDetail::MeshViewBufferUpload prepareMeshViewBufferUpload(f32 fallbackAspectRatio)const noexcept;
     void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState)noexcept;
     void invalidateMeshViewBufferUploadMirror()noexcept;
-    [[nodiscard]] bool prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers);
+    [[nodiscard]] b8 prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers);
     [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot meshFrameBindingSnapshot()const noexcept;
-    [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const noexcept;
+    [[nodiscard]] b8 meshGeometryHeapHandlesReady(const MeshResources& mesh)const noexcept;
     void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const noexcept;
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
 
@@ -210,10 +210,10 @@ public:
 private:
     void releaseMeshFrameHeapHandles();
     // Mesh descriptors are established at creation; draw paths only consume ready handles.
-    [[nodiscard]] bool createMeshRenderBindings(MeshResources& mesh);
-    [[nodiscard]] bool meshRenderBindingsReady(const MeshResources& mesh)const noexcept;
-    [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
-    [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
+    [[nodiscard]] b8 createMeshRenderBindings(MeshResources& mesh);
+    [[nodiscard]] b8 meshRenderBindingsReady(const MeshResources& mesh)const noexcept;
+    [[nodiscard]] b8 createMeshGeometryHeapHandles(MeshResources& mesh);
+    [[nodiscard]] b8 ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
     void releaseAllMeshGeometryHeapHandles();
 
 

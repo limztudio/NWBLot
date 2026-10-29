@@ -96,7 +96,7 @@ inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo()noexcept{
     return BuildMappedHostAllocationInfo(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
 }
 
-inline bool BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memoryProperties, const u32 memoryTypeIndex)noexcept{
+inline b8 BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memoryProperties, const u32 memoryTypeIndex)noexcept{
     if(memoryTypeIndex >= memoryProperties.memoryTypeCount)
         return true;
 
@@ -188,7 +188,7 @@ inline void UnmapAllocation(const VulkanAllocatorHandle allocator, const VulkanA
     vmaUnmapMemory(ToVmaAllocator(allocator), ToVmaAllocation(allocation));
 }
 
-inline void UnmapTransientAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation, const bool persistentlyMapped, void*& mappedMemory){
+inline void UnmapTransientAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation, const b8 persistentlyMapped, void*& mappedMemory){
     if(mappedMemory && !persistentlyMapped){
         UnmapAllocation(allocator, allocation);
         mappedMemory = nullptr;
@@ -209,7 +209,7 @@ inline void UnmapTransientAllocation(const VulkanAllocatorHandle allocator, cons
     return result;
 }
 
-inline void DestroyBufferAllocation(const VulkanAllocatorHandle allocator, const bool persistentlyMapped, VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory){
+inline void DestroyBufferAllocation(const VulkanAllocatorHandle allocator, const b8 persistentlyMapped, VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory){
     if(allocation){
         UnmapTransientAllocation(allocator, allocation, persistentlyMapped, mappedMemory);
         vmaDestroyBuffer(ToVmaAllocator(allocator), buffer, ToVmaAllocation(allocation));
@@ -246,7 +246,7 @@ VulkanAllocator::~VulkanAllocator()noexcept{
     }
 }
 
-bool VulkanAllocator::initialize(){
+b8 VulkanAllocator::initialize(){
     if(m_allocator)
         return true;
 
@@ -452,7 +452,7 @@ void VulkanAllocator::destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocation
     __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, true, buffer, allocation, mappedMemory);
 }
 
-bool VulkanAllocator::tryRegisterBufferNativeIdentity(Buffer& buffer){
+b8 VulkanAllocator::tryRegisterBufferNativeIdentity(Buffer& buffer){
     if(buffer.m_buffer == VK_NULL_HANDLE)
         return false;
 
@@ -472,7 +472,7 @@ void VulkanAllocator::unregisterBufferNativeIdentity(const VkBuffer nativeBuffer
         m_bufferNativeIdentities.erase(found);
 }
 
-bool VulkanAllocator::isBufferNativeIdentityRegistered(const Buffer& buffer)const noexcept{
+b8 VulkanAllocator::isBufferNativeIdentityRegistered(const Buffer& buffer)const noexcept{
     if(buffer.m_buffer == VK_NULL_HANDLE)
         return false;
 
@@ -482,7 +482,7 @@ bool VulkanAllocator::isBufferNativeIdentityRegistered(const Buffer& buffer)cons
     return found != m_bufferNativeIdentities.end() && found.value().get() == &buffer;
 }
 
-bool VulkanAllocator::tryRegisterTextureNativeIdentity(Texture& texture){
+b8 VulkanAllocator::tryRegisterTextureNativeIdentity(Texture& texture){
     if(texture.m_image == VK_NULL_HANDLE)
         return false;
 
@@ -500,7 +500,7 @@ void VulkanAllocator::unregisterTextureNativeIdentity(const VkImage nativeImage,
         m_textureNativeIdentities.erase(found);
 }
 
-bool VulkanAllocator::isTextureNativeIdentityRegistered(const VkImage nativeImage, const Texture& texture)const noexcept{
+b8 VulkanAllocator::isTextureNativeIdentityRegistered(const VkImage nativeImage, const Texture& texture)const noexcept{
     if(nativeImage == VK_NULL_HANDLE)
         return false;
 

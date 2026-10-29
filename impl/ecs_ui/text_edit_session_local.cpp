@@ -39,7 +39,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::adoptLocal(const UiTextEditOwn
     return Core::TextInputAdmission::Accepted;
 }
 
-bool UiTextEditSession::cancel(){
+b8 UiTextEditSession::cancel(){
     return release();
 }
 

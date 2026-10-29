@@ -59,7 +59,7 @@ public:
         return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 backwards)const noexcept override{
         ++searchCalls;
         return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index)noexcept{ return rawKey(index); });
     }
@@ -69,7 +69,7 @@ public:
         return index % 2u == 0u ? "First" : "Second";
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         ++enabledCalls;
         return index < count && rawKey(index) != disabled;
     }
@@ -95,7 +95,7 @@ public:
     u64 contentRevision = 1u;
     u64 removed = 0u;
     u64 disabled = 0u;
-    bool reverse = false;
+    b8 reverse = false;
     mutable u64 keyCalls = 0u;
     mutable u64 lookupCalls = 0u;
     mutable u64 searchCalls = 0u;
@@ -118,22 +118,22 @@ public:
 
 class ComboFixture : public WidgetFixture{
 protected:
-    [[nodiscard]] bool declareCombo(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+    [[nodiscard]] b8 declareCombo(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         return declareSource(generation, m_source, m_state, options, bounds);
     }
 
-    [[nodiscard]] bool declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+    [[nodiscard]] b8 declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, bounds))
             return false;
         m_result = m_builder.comboBox(s_ComboKey, source, state, options);
         return m_result.valid;
     }
 
-    [[nodiscard]] bool prepare(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+    [[nodiscard]] b8 prepare(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         return declareCombo(generation, options, bounds) && finishPanel();
     }
 
-    [[nodiscard]] bool accept(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+    [[nodiscard]] b8 accept(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         return prepare(generation, options, bounds) && m_context.commitFrame(generation);
     }
 
@@ -149,7 +149,7 @@ protected:
 
     using WidgetFixture::press;
 
-    [[nodiscard]] bool openByPointer(const u64 generation){
+    [[nodiscard]] b8 openByPointer(const u64 generation){
         const HitTarget* field = target(host());
         if(!field)
             return false;

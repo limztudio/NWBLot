@@ -42,7 +42,7 @@ struct LightSpaceShadowGraphInputs{
     Core::GraphicsRuntime& graphics;
     Core::Alloc::GlobalArena& arena;
     Core::Alloc::ScratchArena& scratchArena;
-    const bool& shadowPrepared;
+    const b8& shadowPrepared;
     const LightSpaceShadowSnapshot& snapshot;
     Core::GpuTaskId dependency;
     Span<const Core::GpuTaskResourceUse> sceneReads{};
@@ -69,7 +69,7 @@ struct LightSpaceShadowGraph{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return counts.valid() && events.valid() && views.valid() && depth.valid() && ready.valid();
     }
 };

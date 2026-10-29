@@ -90,7 +90,7 @@ struct TangentFrameAccumulator{
     return VectorSelect(tangent, handedness, s_SIMDMaskW);
 }
 
-[[nodiscard]] inline bool ValidInputVertex(const SIMDVectorSingle position, const SIMDVectorSingle uv0)noexcept{
+[[nodiscard]] inline b8 ValidInputVertex(const SIMDVectorSingle position, const SIMDVectorSingle uv0)noexcept{
     return Vector3IsFinite(position) && VectorIsFinite(uv0, s_UvComponentMask);
 }
 

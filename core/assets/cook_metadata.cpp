@@ -70,7 +70,7 @@ struct AutoMetadataParser{
     return doc;
 }
 
-[[nodiscard]] static bool ParseDeclaredAssetItem(
+[[nodiscard]] static b8 ParseDeclaredAssetItem(
     CookArena& cookArena,
     const DiscoveredNwbFile& discoveredNwbFile,
     const Name assetType,
@@ -92,7 +92,7 @@ struct AutoMetadataParser{
     return outMetadata.entryRegistry.parseValue(assetType, virtualPath, discoveredNwbFile.filePath, asset, parseContext);
 }
 
-[[nodiscard]] static bool ParseSingleAssetDocument(
+[[nodiscard]] static b8 ParseSingleAssetDocument(
     CookArena& cookArena,
     const DiscoveredNwbFile& discoveredNwbFile,
     const Core::Metascript::Document& doc,
@@ -174,7 +174,7 @@ void RegisterCompositeRootAssetType(const Name& assetType){
     );
 }
 
-bool IsCompositeRootAssetType(const Name& assetType){
+b8 IsCompositeRootAssetType(const Name& assetType){
     if(!assetType)
         return false;
 
@@ -248,7 +248,7 @@ Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookAren
     return files;
 }
 
-bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCount){
+b8 AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCount){
     if(inOutPlannedFileCount > Limit<u64>::s_Max - additionalFileCount){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: planned file count overflow"));
         return false;
@@ -306,12 +306,12 @@ Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoColl
     return MakeUnexpected(AssetBunchExpandFailure::Unsupported);
 }
 
-bool ParseAssetMetadata(CookArena& cookArena, const Span<const DiscoveredNwbFile> nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata){
+b8 ParseAssetMetadata(CookArena& cookArena, const Span<const DiscoveredNwbFile> nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata){
     CookEntryPathHashSet seenPropertyAssetPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
 
     seenPropertyAssetPathHashes.reserve(nwbFiles.size());
 
-    bool parsedAnyMetadata = false;
+    b8 parsedAnyMetadata = false;
     for(const DiscoveredNwbFile& discoveredNwbFile : nwbFiles){
         const auto parsedDoc = __hidden_cook_metadata::ParseMetascriptDocument(cookArena, discoveredNwbFile.filePath, scratchArena);
         if(!parsedDoc)

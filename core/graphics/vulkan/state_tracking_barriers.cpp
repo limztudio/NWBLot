@@ -27,10 +27,10 @@ namespace VulkanStateTrackingDetail{
 
 void NormalizeBarrierScopeForQueueCapabilities(const GpuQueueCapability::Mask capabilities, VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask)noexcept{
     const u8 capabilityBits = static_cast<u8>(capabilities);
-    const bool graphicsCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
-    const bool computeCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
-    const bool transferCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u;
-    const bool hadAccess = accessMask != 0u;
+    const b8 graphicsCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
+    const b8 computeCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
+    const b8 transferCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u;
+    const b8 hadAccess = accessMask != 0u;
     if(!graphicsCapable && !computeCapable && !transferCapable){
         stageMask = VK_PIPELINE_STAGE_2_NONE;
         accessMask = 0u;
@@ -117,9 +117,9 @@ void NormalizeBarrierScopeForQueueCapabilities(const GpuQueueCapability::Mask ca
     ;
     constexpr VkPipelineStageFlags2 s_TransferReadAccessStageMask = (s_TransferStageMask & ~(VK_PIPELINE_STAGE_2_CLEAR_BIT | VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR)) | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
     constexpr VkPipelineStageFlags2 s_TransferWriteAccessStageMask = (s_TransferStageMask & ~VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR) | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
-    const bool allCommands = (stageMask & VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) != 0u;
-    const bool allGraphics = graphicsCapable && (stageMask & VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT) != 0u;
-    const auto stripUnless = [&](const VkAccessFlags2 affectedAccess, const bool supported)noexcept{
+    const b8 allCommands = (stageMask & VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) != 0u;
+    const b8 allGraphics = graphicsCapable && (stageMask & VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT) != 0u;
+    const auto stripUnless = [&](const VkAccessFlags2 affectedAccess, const b8 supported)noexcept{
         if(!supported)
             accessMask &= ~affectedAccess;
     };
@@ -178,7 +178,7 @@ VkImageMemoryBarrier2 BuildTextureStateBarrier(
     const TextureSubresourceSet& subresources,
     const ResourceStates::Mask oldState,
     const ResourceStates::Mask stateBits,
-    const bool rayTracingStageAvailable
+    const b8 rayTracingStageAvailable
 )noexcept{
     auto barrier = VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
     barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common, rayTracingStageAvailable);
@@ -198,11 +198,11 @@ VkImageMemoryBarrier2 BuildTextureStateBarrier(
 }
 
 
-bool NeedsResourceStateBarrier(const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const bool uavBarrierEnabled, const bool forceMemoryDependency)noexcept{
+b8 NeedsResourceStateBarrier(const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const b8 uavBarrierEnabled, const b8 forceMemoryDependency)noexcept{
     return oldState != stateBits || forceMemoryDependency || (oldState == stateBits && uavBarrierEnabled);
 }
 
-bool ImageBarrierOverlapsTextureSubresources(const VkImageMemoryBarrier2& barrier, const VkImage image, const VkImageAspectFlags aspectMask, const TextureSubresourceSet& subresources)noexcept{
+b8 ImageBarrierOverlapsTextureSubresources(const VkImageMemoryBarrier2& barrier, const VkImage image, const VkImageAspectFlags aspectMask, const TextureSubresourceSet& subresources)noexcept{
     if(barrier.image != image || (barrier.subresourceRange.aspectMask & aspectMask) == 0u)
         return false;
     if(barrier.subresourceRange.levelCount == 0u || barrier.subresourceRange.layerCount == 0u || subresources.numMipLevels == 0u || subresources.numArraySlices == 0u)
@@ -226,7 +226,7 @@ void AppendTextureStateBarrier(
     const MipLevel mipLevel,
     const ResourceStates::Mask oldState,
     const ResourceStates::Mask stateBits,
-    const bool rayTracingStageAvailable
+    const b8 rayTracingStageAvailable
 ){
     barriers.push_back(BuildTextureStateBarrier(image, aspectMask, TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), oldState, stateBits, rayTracingStageAvailable));
 }
@@ -241,7 +241,7 @@ void AppendTextureStateBarriersBefore(
     const MipLevel currentMipLevel,
     const ResourceStates::Mask oldState,
     const ResourceStates::Mask stateBits,
-    const bool rayTracingStageAvailable
+    const b8 rayTracingStageAvailable
 ){
     for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice <= currentArraySlice; ++arraySlice){
         const MipLevel previousMipEnd = arraySlice == currentArraySlice ? currentMipLevel : mipEnd;
@@ -273,7 +273,7 @@ void CommandList::commitBarriers(){
     m_pendingBufferBarriers.clear();
 }
 
-void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, const bool forceMemoryDependency){
+void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, const b8 forceMemoryDependency){
     if(!textureResource)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("set texture state");
@@ -292,10 +292,10 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(&texture);
 
     ResourceStates::Mask oldState = ResourceStates::Unknown;
-    bool firstSubresource = true;
-    bool needsBarrier = false;
-    bool usePerSubresourceBarriers = false;
-    const bool uavBarrierEnabled = ResourceStates::HasUnorderedAccess(stateBits) && m_stateTracker.isUavBarrierEnabledForTexture(texture);
+    b8 firstSubresource = true;
+    b8 needsBarrier = false;
+    b8 usePerSubresourceBarriers = false;
+    const b8 uavBarrierEnabled = ResourceStates::HasUnorderedAccess(stateBits) && m_stateTracker.isUavBarrierEnabledForTexture(texture);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
@@ -318,7 +318,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
                 }
             }
 
-            const bool subresourceNeedsBarrier = VulkanStateTrackingDetail::NeedsResourceStateBarrier(subresourceOldState, stateBits, uavBarrierEnabled, forceMemoryDependency);
+            const b8 subresourceNeedsBarrier = VulkanStateTrackingDetail::NeedsResourceStateBarrier(subresourceOldState, stateBits, uavBarrierEnabled, forceMemoryDependency);
             if(subresourceNeedsBarrier){
                 needsBarrier = true;
                 if(usePerSubresourceBarriers){
@@ -361,7 +361,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
     m_pendingImageBarriers.resize(firstBarrierIndex);
 }
 
-void CommandList::setAccelStructState(RayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits, const bool forceMemoryDependency){
+void CommandList::setAccelStructState(RayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits, const b8 forceMemoryDependency){
     if(!accelStructResource)
         return;
 
@@ -400,7 +400,7 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
         };
 
         const FramebufferDesc& framebufferDesc = resumeFramebuffer->m_desc;
-        bool attachmentTransitioned = attachmentOverlapsBarrier(framebufferDesc.depthAttachment) || attachmentOverlapsBarrier(framebufferDesc.shadingRateAttachment);
+        b8 attachmentTransitioned = attachmentOverlapsBarrier(framebufferDesc.depthAttachment) || attachmentOverlapsBarrier(framebufferDesc.shadingRateAttachment);
         for(const FramebufferAttachment& attachment : framebufferDesc.colorAttachments)
             attachmentTransitioned = attachmentTransitioned || attachmentOverlapsBarrier(attachment);
         if(attachmentTransitioned)
@@ -415,9 +415,9 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
     const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const GpuQueueCapability::Mask exactQueueCapabilities = exactQueueInfo ? exactQueueInfo->capabilities : GpuQueueCapability::None;
     const u8 exactCapabilityBits = static_cast<u8>(exactQueueCapabilities);
-    const bool graphicsCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
-    const bool computeCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
-    const bool universalGraphicsCompute = graphicsCapable && computeCapable;
+    const b8 graphicsCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
+    const b8 computeCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
+    const b8 universalGraphicsCompute = graphicsCapable && computeCapable;
     if(!universalGraphicsCompute){
         const auto normalizeBarrierScopes = [&](const auto barriers)noexcept{
             for(auto& barrier : barriers){

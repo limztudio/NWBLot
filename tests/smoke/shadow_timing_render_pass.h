@@ -30,13 +30,13 @@ public:
 
 
 public:
-    [[nodiscard]] bool start();
+    [[nodiscard]] b8 start();
     void stop();
-    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 
 
 private:
-    bool m_registered = false;
+    b8 m_registered = false;
 };
 
 

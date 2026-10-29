@@ -55,12 +55,12 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 }
 
 
-[[nodiscard]] bool MeshRuntimeValidation::ValidDirectionVector(const SIMDVectorSingle direction)noexcept{
+[[nodiscard]] b8 MeshRuntimeValidation::ValidDirectionVector(const SIMDVectorSingle direction)noexcept{
     return VectorIsFinite(direction, VectorComponentMask::s_XYZ) && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_runtime_validation::s_DirectionLengthTolerance));
 }
 
 
-[[nodiscard]] bool MeshRuntimeValidation::ValidTangentVector(const SIMDVectorSingle tangent)noexcept{
+[[nodiscard]] b8 MeshRuntimeValidation::ValidTangentVector(const SIMDVectorSingle tangent)noexcept{
     const SIMDVectorSingle direction = VectorSetW(tangent, 0.0f);
     return
         VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
@@ -70,7 +70,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 }
 
 
-[[nodiscard]] bool MeshRuntimeValidation::ValidateMeshStreams(
+[[nodiscard]] b8 MeshRuntimeValidation::ValidateMeshStreams(
     const Span<const Float3U> positions,
     const Span<const Half4U> normals,
     const Span<const Half4U> tangents,
@@ -124,7 +124,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 }
 
 
-[[nodiscard]] bool MeshRuntimeValidation::ValidateMeshletAttributeSkinSharing(
+[[nodiscard]] b8 MeshRuntimeValidation::ValidateMeshletAttributeSkinSharing(
     Core::Alloc::ScratchArena& scratchArena,
     const Span<const u8> positionRefDeltas,
     const Span<const MeshletLocalVertexRef> localVertexRefs,
@@ -165,7 +165,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 }
 
 
-[[nodiscard]] bool MeshRuntimeValidation::ValidateMeshletPayload(
+[[nodiscard]] b8 MeshRuntimeValidation::ValidateMeshletPayload(
     Core::Alloc::ScratchArena& scratchArena,
     const Span<const u8> positionRefDeltas,
     const Span<const u8> attributeRefDeltas,
@@ -179,7 +179,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
     const usize tangentCount,
     const usize uv0Count,
     const usize colorCount,
-    const bool skinRequired,
+    const b8 skinRequired,
     const TStringView contextText,
     const TStringView meshPathText
 ){
@@ -311,7 +311,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 }
 
 
-[[nodiscard]] bool MeshRuntimeValidation::ValidateSharedMeshPayload(
+[[nodiscard]] b8 MeshRuntimeValidation::ValidateSharedMeshPayload(
     Core::Alloc::ScratchArena& scratchArena,
     const Span<const Float3U> positions,
     const Span<const Half4U> normals,
@@ -325,7 +325,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
     const Span<const MeshletBounds> meshletBounds,
     const Span<const u8> meshletPrimitiveIndices,
     const usize skinCount,
-    const bool skinRequired,
+    const b8 skinRequired,
     const TStringView contextText,
     const TStringView meshPathText
 ){

@@ -122,7 +122,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 
 // Cycle the five-color palette across each material row.
-[[nodiscard]] static Float4 CharacterTint(const u32 classIndex, const bool transparent)noexcept{
+[[nodiscard]] static Float4 CharacterTint(const u32 classIndex, const b8 transparent)noexcept{
     static const Float4 s_TransparentTints[s_CharacterTintCount] = {
         Float4(0.72f, 0.86f, 1.00f, 0.42f),
         Float4(0.60f, 1.00f, 0.85f, 0.42f),
@@ -163,9 +163,9 @@ private:
     }
 
     // The benchmark compares hardware transparent shadows against an opaque-only scene.
-    [[nodiscard]] static bool HardwareShadowOpaqueBaseline(){
+    [[nodiscard]] static b8 HardwareShadowOpaqueBaseline(){
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-        static const bool s_Enabled = ReadSmokeEnvironmentFlag("NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE");
+        static const b8 s_Enabled = ReadSmokeEnvironmentFlag("NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE");
         return s_Enabled;
 #else
         return false;
@@ -220,10 +220,10 @@ private:
 
     [[nodiscard]] NWB::Core::ECS::EntityID createCharacter(const u32 index){
         // Comparison mode uses the zigzag layout instead of staggered material rows.
-        const bool transparentMaterialClass = (index % 2u) == 0u;
-        const bool transparent = !HardwareShadowOpaqueBaseline() && transparentMaterialClass;
+        const b8 transparentMaterialClass = (index % 2u) == 0u;
+        const b8 transparent = !HardwareShadowOpaqueBaseline() && transparentMaterialClass;
         const u32 classIndex = index / 2u;
-        const bool comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
+        const b8 comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
         const f32 slot = static_cast<f32>(comparison ? index : classIndex);
         const f32 lastSlot = static_cast<f32>(comparison ? m_charactersPerClass * 2u - 1u : m_charactersPerClass - 1u);
         const SIMDVectorSingle spacing = VectorReplicate(s_CharacterSpacingX);
@@ -327,7 +327,7 @@ private:
         );
     }
 
-    bool samplePresentationFps(){
+    b8 samplePresentationFps(){
         const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
         const Timer observationTime = TimerNow();
         m_pacingRing.record(successfulPresentations, observationTime);
@@ -388,13 +388,13 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
 #if defined(NWB_SMOKE_DISABLE_ASYNC_COMPUTE)
-        constexpr bool s_AsyncRequested = false;
+        constexpr b8 s_AsyncRequested = false;
 #else
-        constexpr bool s_AsyncRequested = true;
+        constexpr b8 s_AsyncRequested = true;
 #endif
         const auto& device = m_context.graphics.getDevice();
         const auto graphicsQueue = device.getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
@@ -403,9 +403,9 @@ public:
         const auto* const computeInfo = device.getPhysicalQueueInfo(computeQueue);
         const auto topology = device.getPhysicalQueueTopology();
         const u16 deviceGeneration = device.getDeviceGeneration();
-        bool graphicsRegistered = false;
-        bool computeRegistered = false;
-        bool topologyValid = topology.queues && topology.queueCount != 0u;
+        b8 graphicsRegistered = false;
+        b8 computeRegistered = false;
+        b8 topologyValid = topology.queues && topology.queueCount != 0u;
         if(topologyValid){
             for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
                 const auto& queue = topology.queues[queueIndex];
@@ -422,10 +422,10 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: M4 selected queue topology is invalid"));
             return false;
         }
-        const bool computeDedicated = computeInfo && computeInfo->dedicated;
-        const bool computeSupported = computeInfo && (computeInfo->capabilities & NWB::Core::GpuQueueCapability::Compute) != NWB::Core::GpuQueueCapability::None;
-        const bool computeGraphics = computeInfo && (computeInfo->capabilities & NWB::Core::GpuQueueCapability::Graphics) != NWB::Core::GpuQueueCapability::None;
-        const bool asyncEffective = s_AsyncRequested && computeQueue != graphicsQueue && computeDedicated && computeSupported && !computeGraphics;
+        const b8 computeDedicated = computeInfo && computeInfo->dedicated;
+        const b8 computeSupported = computeInfo && (computeInfo->capabilities & NWB::Core::GpuQueueCapability::Compute) != NWB::Core::GpuQueueCapability::None;
+        const b8 computeGraphics = computeInfo && (computeInfo->capabilities & NWB::Core::GpuQueueCapability::Graphics) != NWB::Core::GpuQueueCapability::None;
+        const b8 asyncEffective = s_AsyncRequested && computeQueue != graphicsQueue && computeDedicated && computeSupported && !computeGraphics;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: M4 async compute requested={} effective={} graphicsQueue={}:{} computeQueue={}:{} computeDedicated={} computeSupported={} computeGraphics={}")
             , s_AsyncRequested ? 1u : 0u
             , asyncEffective ? 1u : 0u
@@ -473,9 +473,9 @@ public:
             return false;
         }
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK) || defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-        constexpr bool s_ContinuousBenchmarkRendering = true;
+        constexpr b8 s_ContinuousBenchmarkRendering = true;
 #else
-        constexpr bool s_ContinuousBenchmarkRendering = false;
+        constexpr b8 s_ContinuousBenchmarkRendering = false;
 #endif
         if((m_timingEnabled || s_ContinuousBenchmarkRendering) && !m_timingRenderPass.start(true))
             return false;
@@ -495,7 +495,7 @@ public:
         // Register arrow yaw scrubbing at the front of the input chain.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
-        const bool comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
+        const b8 comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
         const f32 cameraHeight = comparison ? s_ComparisonCameraHeight : s_CameraHeight;
         const f32 cameraDistance = comparison ? s_ComparisonCameraDistance : s_CameraDistance;
         const f32 cameraPitch = comparison ? s_ComparisonCameraPitch : s_CameraPitch;
@@ -551,7 +551,7 @@ public:
         if(!m_csgScene.initialize(*m_world, scratchArena, m_characterOwners.data(), m_characterOwners.size(), HardwareShadowOpaqueBaseline()))
             return false;
 
-        bool allCharactersValid = m_characterOwners.size() == characterCount;
+        b8 allCharactersValid = m_characterOwners.size() == characterCount;
         for(const NWB::Core::ECS::EntityID owner : m_characterOwners)
             allCharactersValid = allCharactersValid && owner.valid();
 
@@ -562,7 +562,7 @@ public:
         );
 
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-        const bool rayQueryCapable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+        const b8 rayQueryCapable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
         if(!rayQueryCapable){
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable"));
         }else{
@@ -616,7 +616,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         const u32 m4CaptureFreezeFrame = M4PixelCaptureFreezeFrame();
         if(m4CaptureFreezeFrame != 0u && m_m4RenderedFrameCount >= m4CaptureFreezeFrame){
             if(!m_m4PixelCapturePaused){
@@ -678,9 +678,9 @@ private:
     NWB::Core::ECS::EntityID m_wallPosZ = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_ceiling = NWB::Core::ECS::s_InvalidEntityId;
     u32 m_charactersPerClass = s_DefaultCharactersPerClass;
-    const bool m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
-    const bool m_cpuDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_CPU_DIAGNOSTICS");
-    const bool m_reflectionDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_REFLECTION_DIAGNOSTICS");
+    const b8 m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
+    const b8 m_cpuDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_CPU_DIAGNOSTICS");
+    const b8 m_reflectionDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_REFLECTION_DIAGNOSTICS");
     u64 m_reflectionStatisticsSequence = 0u;
     u64 m_reflectionStatisticsGeneration = 0u;
     NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
@@ -691,9 +691,9 @@ private:
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
     u32 m_m4RenderedFrameCount = 0u;
-    bool m_timingComplete = false;
-    bool m_m4PixelCapturePaused = false;
-    bool m_rendererBaselineCapturePaused = false;
+    b8 m_timingComplete = false;
+    b8 m_m4PixelCapturePaused = false;
+    b8 m_rendererBaselineCapturePaused = false;
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
     NWB::Tests::Smoke::SmokeEnvironmentString m_frameGraphSnapshotPath{ m_context.objectArena };
 #endif

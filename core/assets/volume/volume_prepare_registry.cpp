@@ -62,7 +62,7 @@ AssetVolumePrepareAutoRegistrar::AssetVolumePrepareAutoRegistrar(const AssetVolu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context){
+b8 RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context){
     Vector<NotNull<AssetVolumePrepareFunction>, Core::Alloc::ScratchArena> functions{context.scratchArena};
     return RunAutoCollectedFunctions(
         __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue(), context, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: collected null volume prepare function")); },

@@ -69,7 +69,7 @@ private:
     PaintVector<WidgetState> m_entries;
     mutable StateIndex m_index;
     u64 m_nextDeclarationGeneration = 1u;
-    mutable bool m_indexDirty = false;
+    mutable b8 m_indexDirty = false;
 };
 
 

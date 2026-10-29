@@ -38,7 +38,7 @@ using namespace NWB::Impl;
     return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = 0u, .deviceGeneration = 1u, .queue = Core::CommandQueue::Graphics, };
 }
 
-void Accept(ReflectionHistoryState& state, const ReflectionHistoryPlan& plan, const bool hardwareReady = true){
+void Accept(ReflectionHistoryState& state, const ReflectionHistoryPlan& plan, const b8 hardwareReady = true){
     ASSERT_TRUE(state.reserve(plan));
     state.accept(plan, Token(plan.sequence), hardwareReady);
 }

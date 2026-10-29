@@ -173,7 +173,7 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
     config.buildId = AStringView("handle-inheritance-test");
     config.spoolDirectory = SpoolDirectory(arena, s_Group);
 
-    const bool installed = NWB::Core::Crash::InstallCrashHandler(config);
+    const b8 installed = NWB::Core::Crash::InstallCrashHandler(config);
     EXPECT_TRUE(installed);
     EXPECT_TRUE(CloseHandle(sentinelHandle));
     EXPECT_TRUE(DeleteFileW(sentinelPath.c_str()));
@@ -204,7 +204,7 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
         NWB::Core::Crash::CrashDetail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
     }
 
-    const bool installed = NWB::Core::Crash::InstallCrashHandler(config);
+    const b8 installed = NWB::Core::Crash::InstallCrashHandler(config);
     ASSERT_TRUE(installed);
 
     NWB::Core::Crash::CrashDetail::CrashDumpRequestOptions options;
@@ -257,7 +257,7 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
         NWB::Core::Crash::CrashDetail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
     }
 
-    const bool installed = NWB::Core::Crash::InstallCrashHandler(config);
+    const b8 installed = NWB::Core::Crash::InstallCrashHandler(config);
     ASSERT_TRUE(installed);
 
     NWB::Core::Crash::CrashDetail::CrashDumpRequestOptions options;

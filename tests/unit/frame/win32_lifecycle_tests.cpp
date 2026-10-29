@@ -101,7 +101,7 @@ public:
 
 
 public:
-    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
 
 struct LoopCallbackState{
@@ -118,7 +118,7 @@ static void DrainQuitMessages()noexcept{
     while(PeekMessage(&message, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE)){}
 }
 
-static bool RequestQuitOnUpdate(void* userData, f32 delta){
+static b8 RequestQuitOnUpdate(void* userData, f32 delta){
     static_cast<void>(delta);
     auto& state = *MakeNotNull(static_cast<LoopCallbackState*>(userData));
     ++state.callbacks;
@@ -126,7 +126,7 @@ static bool RequestQuitOnUpdate(void* userData, f32 delta){
     return true;
 }
 
-static void CheckInactiveLoop(const bool renderUnfocused){
+static void CheckInactiveLoop(const b8 renderUnfocused){
     DrainQuitMessages();
     ScopeExit drainQuit([]()noexcept{ DrainQuitMessages(); });
     const i32 screenWidth = GetSystemMetrics(SM_CXSCREEN);
@@ -177,7 +177,7 @@ static void CheckInactiveLoop(const bool renderUnfocused){
     LoopCallbackState callback{ frame };
     frame.setProjectUpdateCallback(&RequestQuitOnUpdate, &callback);
     const DWORD mainThread = GetCurrentThreadId();
-    Atomic<bool> watchdogFired{ false };
+    Atomic<b8> watchdogFired{ false };
     Atomic<DWORD> watchdogPostError{ ERROR_SUCCESS };
     // The bounded quit keeps the old blocking loop a normal assertion failure.
     JoiningThread watchdog([&](const StopToken& stop)noexcept{
@@ -193,7 +193,7 @@ static void CheckInactiveLoop(const bool renderUnfocused){
                 TerminateInvariant();
         }
     });
-    const bool loopSucceeded = frame.mainLoop();
+    const b8 loopSucceeded = frame.mainLoop();
     watchdog.request_stop();
     watchdog.join();
     EXPECT_TRUE(loopSucceeded);
@@ -236,7 +236,7 @@ TEST(FrameWin32Lifecycle, ThrowingClampObserverReleasesNativeClassBeforeLaterIni
     for(u32 attempt = 0u; attempt < s_InitializationAttempts; ++attempt){
         WNDCLASSEX before{};
         before.cbSize = sizeof(before);
-        const bool existed = GetClassInfoEx(instance, s_FrameClassName.data(), &before) != FALSE;
+        const b8 existed = GetClassInfoEx(instance, s_FrameClassName.data(), &before) != FALSE;
         const DWORD beforeError = existed ? ERROR_SUCCESS : GetLastError();
         ASSERT_FALSE(existed);
         ASSERT_EQ(beforeError, static_cast<DWORD>(ERROR_CLASS_DOES_NOT_EXIST));
@@ -251,7 +251,7 @@ TEST(FrameWin32Lifecycle, ThrowingClampObserverReleasesNativeClassBeforeLaterIni
 
         WNDCLASSEX after{};
         after.cbSize = sizeof(after);
-        const bool retained = GetClassInfoEx(instance, s_FrameClassName.data(), &after) != FALSE;
+        const b8 retained = GetClassInfoEx(instance, s_FrameClassName.data(), &after) != FALSE;
         const DWORD afterError = retained ? ERROR_SUCCESS : GetLastError();
         EXPECT_FALSE(retained);
         EXPECT_EQ(afterError, static_cast<DWORD>(ERROR_CLASS_DOES_NOT_EXIST));

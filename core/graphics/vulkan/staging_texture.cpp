@@ -116,7 +116,7 @@ inline Expected<StagingTextureQueueFamilies> BuildStagingTextureQueueFamilies(Al
         if(queue.familyIndex == VK_QUEUE_FAMILY_IGNORED || !ResourceQueueSharing::IncludesQueueClass(sharing, queue.queueClass))
             continue;
 
-        bool alreadyAdmitted = false;
+        b8 alreadyAdmitted = false;
         for(const u32 familyIndex : result.families){
             if(familyIndex == queue.familyIndex){
                 alreadyAdmitted = true;
@@ -186,7 +186,7 @@ Expected<StagingTextureRange> BuildStagingTextureRange(
     const u64 arrayByteSize,
     const u64 totalByteSize,
     const u32 requiredOffsetAlignment,
-    const bool requireHostPointerRange
+    const b8 requireHostPointerRange
 )noexcept{
     if(
         resolvedSlice.width == 0u
@@ -402,7 +402,7 @@ Expected<StagingTextureMapping> Device::mapStagingTexture(StagingTexture& stagin
         return MakeUnexpected(Failure{});
     }
 
-    const bool needsInvalidate = requestedAccess == CpuAccessMode::Read && staging.m_requiresInvalidate;
+    const b8 needsInvalidate = requestedAccess == CpuAccessMode::Read && staging.m_requiresInvalidate;
     if(needsInvalidate){
         const VkResult res = m_allocator.invalidateStagingTextureMemory(staging, range->byteOffset, range->byteSize);
         if(res != VK_SUCCESS){

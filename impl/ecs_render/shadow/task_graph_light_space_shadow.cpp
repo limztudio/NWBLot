@@ -42,7 +42,7 @@ inline constexpr usize s_FixedResourceUseCount = 5u;
 
 
 // Capture needs one simultaneous SRV/index state for each canonical buffer. Separate set uses would describe successive states.
-[[nodiscard]] bool GatherCaptureReads(const Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs, Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses){
+[[nodiscard]] b8 GatherCaptureReads(const Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs, Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses){
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     if(!declarations.valid())
         return false;
@@ -91,13 +91,13 @@ struct ViewTask{
 
     struct Payload{
         Core::GraphicsRuntime& graphics;
-        const bool& shadowPrepared;
+        const b8& shadowPrepared;
         LightSpaceShadowSnapshot snapshot;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)
             return false;
         if(!payload.shadowPrepared)
@@ -117,7 +117,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)
             return false;
         if(!payload.shadowPrepared)
@@ -136,7 +136,7 @@ struct DiagnosticTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
 
     struct Payload{
-        const bool& shadowPrepared;
+        const b8& shadowPrepared;
         Core::BufferHandle context;
         Core::BufferHandle readback;
         LightSpaceShadowDiagnostics* diagnostics;
@@ -145,7 +145,7 @@ struct DiagnosticTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)
             return false;
         if(!payload.shadowPrepared)
@@ -169,7 +169,7 @@ public:
 
 struct CasterPayload{
     Core::GraphicsRuntime& graphics;
-    const bool& shadowPrepared;
+    const b8& shadowPrepared;
     LightSpaceShadowSnapshot snapshot;
     Vector<LightSpaceShadowCaster, Core::Alloc::GlobalArena> casters;
 
@@ -203,7 +203,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)
             return false;
         if(!payload.shadowPrepared)
@@ -218,11 +218,11 @@ struct CaptureTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics };
 
     struct Payload : CasterPayload{
-        bool transparent;
+        b8 transparent;
 
 
     public:
-        Payload(const LightSpaceShadowGraphInputs& inputs, const bool transparent)
+        Payload(const LightSpaceShadowGraphInputs& inputs, const b8 transparent)
             : CasterPayload(inputs)
             , transparent(transparent)
         {}
@@ -230,7 +230,7 @@ struct CaptureTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)
             return false;
         if(!payload.shadowPrepared)
@@ -333,7 +333,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     result.events = *eventsResult;
     result.views = *viewsResult;
     result.depth = *depthResult;
-    const bool csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
+    const b8 csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
     if(csg){
         const auto csgContextResult = importBuffer(snapshot.csgContext, Name("render.light_space_shadow.csg_context"), "CSG Shadow Context");
         const auto csgOpaqueDepthResult = importBuffer(snapshot.csgOpaqueDepth, Name("render.light_space_shadow.csg_depth"), "CSG Shadow Depth");
@@ -378,7 +378,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     if(csg){
         if(!snapshot.diagnostics || snapshot.csgContextBytes.size() < NWB_CSG_RAY_CONTEXT_BYTES)
             return MakeUnexpected(Failure{});
-        const bool initialize = !snapshot.diagnostics->contextInitialized.valid();
+        const b8 initialize = !snapshot.diagnostics->contextInitialized.valid();
         const usize prefixBytes = initialize ? snapshot.csgContextBytes.size() : NWB_CSG_SHADOW_RAY_FAILURE_OFFSET;
         const auto csgBytesResult = graph.copyUploadData(snapshot.csgContextBytes.data(), prefixBytes, alignof(u32));
         if(!csgBytesResult)

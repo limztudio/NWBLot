@@ -29,7 +29,7 @@ public:
 
 public:
     // False rejects the borrowed transaction; an invalid draft may still accept an action without committing a value.
-    [[nodiscard]] virtual bool apply(EditModel& draft, EditAction::Enum action, bool readOnly) = 0;
+    [[nodiscard]] virtual b8 apply(EditModel& draft, EditAction::Enum action, b8 readOnly) = 0;
 };
 
 

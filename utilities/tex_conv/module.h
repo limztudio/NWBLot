@@ -81,12 +81,12 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsSupportedInputPath(const ScratchPath& path);
-[[nodiscard]] bool IsHdrInputPath(const ScratchPath& path);
+[[nodiscard]] b8 IsSupportedInputPath(const ScratchPath& path);
+[[nodiscard]] b8 IsHdrInputPath(const ScratchPath& path);
 [[nodiscard]] Expected<OutputPaths> ResolveOutputPaths(const ScratchPath& inputPath, AStringView outputArgument, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool ValidateOutputPaths(const OutputPaths& outputPaths, bool force, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<PreparedTexture> PrepareTexture(Span<const ScratchPath> inputPaths, TextureDimension::Enum dimension, bool srgb, const AlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, bool force, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 ValidateOutputPaths(const OutputPaths& outputPaths, b8 force, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<PreparedTexture> PrepareTexture(Span<const ScratchPath> inputPaths, TextureDimension::Enum dimension, b8 srgb, const AlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, b8 force, Core::Alloc::ScratchArena& scratchArena);
 
 int Run(int argc, char** argv);
 

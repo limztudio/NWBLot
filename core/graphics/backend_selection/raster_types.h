@@ -26,8 +26,8 @@ namespace GraphicsBackend{
 struct VertexInputBinding{
     u32 slot = 0u;
     u32 stride = 0u;
-    bool instanceRate = false;
-    bool valid = false;
+    b8 instanceRate = false;
+    b8 valid = false;
 };
 
 

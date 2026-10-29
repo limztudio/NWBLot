@@ -35,7 +35,7 @@ namespace MeshClass{
 struct MeshClassInfo{
     AStringView text;
     u32 meshClass = MeshClass::Invalid;
-    bool usesSkinning = false;
+    b8 usesSkinning = false;
 };
 
 inline constexpr MeshClassInfo s_MeshClassInfos[] = {
@@ -67,7 +67,7 @@ inline constexpr MeshClassInfo s_MeshClassInfos[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool MeshClassUsesSkinning(const u32 meshClass)noexcept{
+[[nodiscard]] inline b8 MeshClassUsesSkinning(const u32 meshClass)noexcept{
     const MeshClassInfo* info = FindMeshClassInfo(meshClass);
     return info && info->usesSkinning;
 }

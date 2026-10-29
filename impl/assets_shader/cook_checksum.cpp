@@ -76,7 +76,7 @@ static ScratchPath NormalizeDependencyRootAliasPath(const ScratchPath& source){
     return path;
 }
 
-static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependency, const Span<const NormalizedDependencyRootAlias> normalizedRootAliases, Core::Alloc::ScratchArena& scratchArena, const bool allowUnaliasedPath){
+static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependency, const Span<const NormalizedDependencyRootAlias> normalizedRootAliases, Core::Alloc::ScratchArena& scratchArena, const b8 allowUnaliasedPath){
     const auto normalizedDependencyResult = AbsolutePath(ScratchPath(scratchArena, dependency));
     if(!normalizedDependencyResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), ConvertString(normalizedDependencyResult.error().message()));

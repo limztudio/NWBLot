@@ -58,7 +58,7 @@ Expected<u64> RadioSource::indexOf(const u64 value)const noexcept{
     return MakeUnexpected(Failure{});
 }
 
-Expected<u64> RadioSource::findEnabled(const u64 start, const bool reverse)const noexcept{
+Expected<u64> RadioSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
     u64 index = 0u;
     callback(RadioCallbackSite::None);
     const u64 count = rawCount();
@@ -87,7 +87,7 @@ StringView RadioSource::text(const u64 index)const{
     return { m_label.data(), m_label.size() };
 }
 
-bool RadioSource::enabled(const u64 index)const{
+b8 RadioSource::enabled(const u64 index)const{
     callback(RadioCallbackSite::Enabled);
     return index < rawCount() && !m_allDisabled && rawKey(index) != m_disabled;
 }
@@ -101,19 +101,19 @@ void RadioSource::resetCounters()const noexcept{
     m_endAccepted = false;
 }
 
-void RadioSource::armSelection(RadioGroupState& state, const RadioCallbackSite::Enum site, const u64 keyValue, const bool awayAndBack)noexcept{
+void RadioSource::armSelection(RadioGroupState& state, const RadioCallbackSite::Enum site, const u64 keyValue, const b8 awayAndBack)noexcept{
     m_state = &state;
     m_selected = keyValue;
     m_site = site;
     m_mutation = awayAndBack ? RadioMutation::SelectAwayBack : RadioMutation::Select;
 }
 
-void RadioSource::armSource(const RadioCallbackSite::Enum site, const bool replacement)noexcept{
+void RadioSource::armSource(const RadioCallbackSite::Enum site, const b8 replacement)noexcept{
     m_site = site;
     m_mutation = replacement ? RadioMutation::Replacement : RadioMutation::Revision;
 }
 
-void RadioSource::armReentry(Builder& builder, const RadioCallbackSite::Enum site, const bool panel)noexcept{
+void RadioSource::armReentry(Builder& builder, const RadioCallbackSite::Enum site, const b8 panel)noexcept{
     m_builder = &builder;
     m_site = site;
     m_mutation = panel ? RadioMutation::PanelBuilder : RadioMutation::ResetBuilder;
@@ -190,7 +190,7 @@ void RadioGroupFixture::SetUp(){
     m_state.select(10u);
 }
 
-void RadioGroupFixture::configureRadioSkin(const bool fallbackOnly){
+void RadioGroupFixture::configureRadioSkin(const b8 fallbackOnly){
     configureSkin();
     UiSkin::RegionVector regions(m_arena);
     regions.assign(m_skin.regions().begin(), m_skin.regions().end());
@@ -212,22 +212,22 @@ void RadioGroupFixture::configureRadioSkin(const bool fallbackOnly){
     m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 144u, 16u, 1.0f, Move(regions));
 }
 
-bool RadioGroupFixture::declare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+b8 RadioGroupFixture::declare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
     return declareSource(generation, m_source, m_state, options, bounds);
 }
 
-bool RadioGroupFixture::declareSource(const u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options, const Rect& bounds){
+b8 RadioGroupFixture::declareSource(const u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options, const Rect& bounds){
     if(!begin(generation) || !m_builder.beginPanel(s_RadioPanelKey, bounds))
         return false;
     m_result = m_builder.radioGroup(s_RadioGroupKey, source, state, options);
     return m_result.valid;
 }
 
-bool RadioGroupFixture::prepare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+b8 RadioGroupFixture::prepare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
     return declare(generation, options, bounds) && finishPanel();
 }
 
-bool RadioGroupFixture::accept(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+b8 RadioGroupFixture::accept(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
     return prepare(generation, options, bounds) && m_context.commitFrame(generation);
 }
 
@@ -261,7 +261,7 @@ RadioAcceptedFrame RadioGroupFixture::accepted()const noexcept{
     return saved;
 }
 
-void RadioGroupFixture::expectAccepted(const RadioAcceptedFrame& saved, const bool focus, const bool popupScopes)const{
+void RadioGroupFixture::expectAccepted(const RadioAcceptedFrame& saved, const b8 focus, const b8 popupScopes)const{
     EXPECT_EQ(m_context.input().layoutGeneration(), saved.generation);
     if(popupScopes)
         EXPECT_EQ(m_context.input().popupCount(), saved.popupCount);

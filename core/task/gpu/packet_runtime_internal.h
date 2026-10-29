@@ -38,7 +38,7 @@ struct GpuRecordedGraph::ArtifactStorage final : NoCopy{
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
     u16 deviceGeneration = 0u;
-    bool valid = false;
+    b8 valid = false;
 
 
 public:
@@ -76,7 +76,7 @@ private:
 private:
     // Records one compiler-derived non-empty contiguous range.
     // Earlier producer packets needed by the range must already be recorded, keeping deliberate late tails separate from the ordinary graph prefix.
-    [[nodiscard]] bool recordPacketRangeInCompileOrder(
+    [[nodiscard]] b8 recordPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
@@ -86,7 +86,7 @@ private:
         GpuCommandIrCapture* outCommandIrCapture = nullptr
     )const;
     // Task endpoints resolve after compilation, keeping record spans independent of packet splitting while preserving intentional late tails.
-    [[nodiscard]] bool recordTaskRangeInCompileOrder(
+    [[nodiscard]] b8 recordTaskRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId firstTask,
@@ -97,7 +97,7 @@ private:
         GpuCommandIrCapture* outCommandIrCapture = nullptr
     )const;
     // Records ready frontiers via cpuScheduler; parallel only on unanimous opt-in, else serial. Synchronous.
-    [[nodiscard]] bool recordPacketRangeInReadyFrontiers(
+    [[nodiscard]] b8 recordPacketRangeInReadyFrontiers(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
@@ -111,7 +111,7 @@ private:
 
 private:
     // Caller must own artifactAccess and complete prepareRecordingAttempt().
-    [[nodiscard]] bool recordPreparedPacketRangeInCompileOrder(
+    [[nodiscard]] b8 recordPreparedPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -123,7 +123,7 @@ private:
         GpuCommandIrCapture* outCommandIrCapture,
         GpuSubmissionPacketId* outFailedPacket
     )const;
-    [[nodiscard]] bool recordPacket(
+    [[nodiscard]] b8 recordPacket(
         GpuRecordedGraph& outRecordedGraph,
         GpuRecordedGraph::PacketRecordingScratch& scratch,
         GpuCommandIrCapture* commandIrCapture,
@@ -137,7 +137,7 @@ private:
         u64 recordingWorkerDomain = 0u,
         u32 recordingWorkerIndex = 0u
     )const;
-    [[nodiscard]] bool prepareRecordingAttempt(
+    [[nodiscard]] b8 prepareRecordingAttempt(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
@@ -147,7 +147,7 @@ private:
         Alloc::ScratchArena& scratchArena,
         GpuRecordedGraph& outRecordedGraph
     )const;
-    [[nodiscard]] bool preflightPacketResources(
+    [[nodiscard]] b8 preflightPacketResources(
         const GpuTaskGraph& graph,
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph& compiledGraph,
@@ -185,11 +185,11 @@ struct PacketWaitStatistics{
 [[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(GpuPhysicalQueueId queue, const QueueSubmissionToken* waitTokens, usize waitTokenCount, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] u64 AllocateAcceptanceRevision()noexcept;
 
-[[nodiscard]] bool ValidateInitialOwnershipCompletionToken(const GpuTaskGraphInitialOwnerHandoffSourceView& source, const GpuCompiledBarrier& barrier, const GpuPhysicalQueueInfo& sourceQueue, const QueueSubmissionToken& token, u16 deviceGeneration)noexcept;
-[[nodiscard]] bool ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)noexcept;
+[[nodiscard]] b8 ValidateInitialOwnershipCompletionToken(const GpuTaskGraphInitialOwnerHandoffSourceView& source, const GpuCompiledBarrier& barrier, const GpuPhysicalQueueInfo& sourceQueue, const QueueSubmissionToken& token, u16 deviceGeneration)noexcept;
+[[nodiscard]] b8 ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)noexcept;
 
 // Reject missing declaration tokens across the entire range before any native packet can be accepted.
-[[nodiscard]] bool ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept;
+[[nodiscard]] b8 ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept;
 [[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(const GpuTaskGraphResourceView& resource, const GpuCompiledBarrier& barrier)noexcept;
 
 

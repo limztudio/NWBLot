@@ -48,7 +48,7 @@ struct SwitchCase{
     Expr* matchExpr = nullptr;
     MVector<Stmt*> statements;
     SourceSpan span;
-    bool isDefault = false;
+    b8 isDefault = false;
 
 
 public:
@@ -97,13 +97,13 @@ struct Stmt{
     ParallelPriorityKind::Enum parallelPriority = ParallelPriorityKind::Normal;
     DiagnosticKind::Enum diagnosticKind = DiagnosticKind::Assert;
 
-    bool isConst = false;
-    bool isCtorInit = false;
-    bool isEssential = false;
-    bool lowerSwitchToIfChain = false;
-    bool usesScratchArena = false;
-    bool wrapReturnNotNull = false;
-    bool isImported = false;
+    b8 isConst = false;
+    b8 isCtorInit = false;
+    b8 isEssential = false;
+    b8 lowerSwitchToIfChain = false;
+    b8 usesScratchArena = false;
+    b8 wrapReturnNotNull = false;
+    b8 isImported = false;
 
 
 public:

@@ -77,7 +77,7 @@ struct ShaderVariantDefineAssignment{
     if(defineAssignmentCount > s_MaxCsgClipShaderVariantDefineAssignments)
         return MakeUnexpected(Failure{});
     if(baseVariant == Core::ShaderArchive::s_DefaultVariant){
-        bool insertedDefines[s_MaxCsgClipShaderVariantDefineAssignments] = {};
+        b8 insertedDefines[s_MaxCsgClipShaderVariantDefineAssignments] = {};
         for(usize outputIndex = 0u; outputIndex < defineAssignmentCount; ++outputIndex){
             usize selectedIndex = defineAssignmentCount;
             for(usize i = 0u; i < defineAssignmentCount; ++i){
@@ -102,7 +102,7 @@ struct ShaderVariantDefineAssignment{
         reserveSize += 1u + defineAssignments[i].assignment.size();
     variant.reserve(reserveSize);
 
-    bool insertedDefines[s_MaxCsgClipShaderVariantDefineAssignments] = {};
+    b8 insertedDefines[s_MaxCsgClipShaderVariantDefineAssignments] = {};
     usize begin = 0u;
     while(begin < baseVariant.size()){
         usize segmentEnd = baseVariant.find(';', begin);

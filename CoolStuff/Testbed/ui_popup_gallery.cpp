@@ -55,7 +55,7 @@ void UiPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, cons
     ui.style().fontSize = s_GalleryFontSize;
     const WidgetOptions row{ { LayoutSizePolicy::Stretch, 1.0f }, {} };
     const StringView caption = m_choice == 0u ? "Popup menu" : m_choice == s_FirstChoice ? "First choice selected" : "Second choice selected";
-    bool valid = ui.label(s_TitleKey, caption);
+    b8 valid = ui.label(s_TitleKey, caption);
     if(ui.button("first", "First choice", row)){
         m_choice = s_FirstChoice;
         if(!m_keepOpen)

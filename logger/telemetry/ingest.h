@@ -38,10 +38,10 @@ struct TelemetryIngestResult{
     Path perfCsvPath;
     Path graphPath;
     Core::Common::LogType::Enum type = Core::Common::LogType::Info;
-    bool storedRaw = false;
-    bool wroteJson = false;
-    bool wrotePerfCsv = false;
-    bool wroteGraph = false;
+    b8 storedRaw = false;
+    b8 wroteJson = false;
+    b8 wrotePerfCsv = false;
+    b8 wroteGraph = false;
     Telemetry::DecodeResult decode;
     TelemetryReportSummary summary;
 
@@ -57,7 +57,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool ok()const noexcept{
+    [[nodiscard]] b8 ok()const noexcept{
         return storedRaw && decode.ok() && wroteJson && wrotePerfCsv && summary.parseFailureCount == 0u;
     }
 };

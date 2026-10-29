@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RefractionStatisticsState::accept(const RefractionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
+void RefractionStatisticsState::accept(const RefractionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = matchingSlot(key);
@@ -63,7 +63,7 @@ Expected<RefractionStatisticsControlHandle> CreateRefractionStatisticsControl(Co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RefractionStatisticsReservation::accept(const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
+void RefractionStatisticsReservation::accept(const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
     if(m_control && m_key.valid())
         m_control->accept(m_key, token, hardwareReady);
     m_key = {};
@@ -93,7 +93,7 @@ void RefractionStatisticsReadback::invalidateResources()noexcept{
         buffer = nullptr;
 }
 
-bool RefractionStatisticsReadback::prepareResources(){
+b8 RefractionStatisticsReadback::prepareResources(){
     if(m_counters && m_counterDescriptor.valid() && m_buffers[0])
         return true;
     const u16 deviceGeneration = m_graphics.getDevice().getDeviceGeneration();

@@ -33,7 +33,7 @@ inline Core::RenderState BuildMeshRenderState()noexcept{
     return renderState;
 }
 
-inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass, const bool twoSided)noexcept{
+inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass, const b8 twoSided)noexcept{
     auto applyTwoSided = [&](Core::RenderState renderState)noexcept{
         if(twoSided)
             renderState.rasterState.setCullNone();

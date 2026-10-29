@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FrameTimingBeginGraphTask::Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+b8 FrameTimingBeginGraphTask::Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
     static_cast<void>(context);
     return payload.frameTimingTransaction.begin(payload.scopeDefinition, payload.device, commandList);
 }

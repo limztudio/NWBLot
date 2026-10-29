@@ -55,7 +55,7 @@ UiComboSmokeScene::~UiComboSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiComboSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiComboSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     ObserveSmokeDisplay(__hidden_ui_combo_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     m_source.beginFrame();
@@ -103,7 +103,7 @@ bool UiComboSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
+b8 UiComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key < Core::Key::F4 || key > Core::Key::F12)
@@ -207,11 +207,11 @@ void UiComboSmokeScene::observeState(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerComboSmokeEnabled(){
+b8 IsUiLayerComboSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_COMBO");
 }
 
-bool IsUiLayerComboSkinSmokeEnabled(){
+b8 IsUiLayerComboSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_COMBO_SKIN");
 }
 

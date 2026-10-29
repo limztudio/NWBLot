@@ -72,7 +72,7 @@ MStringView TypeChecker::inferExprTypeName(
         if(const TypeRef* unaryTypeRef = inferExprTypeRef(ownerClass, method, expr, scope))
             return m_symbols.resolveBaseTypeName(unaryTypeRef->name);
         if(expr.op == TokenType::Bang)
-            return "bool";
+            return "b8";
         return inferExprTypeName(ownerClass, method, *expr.lhs, scope);
     }
     else if(expr.kind == ExprKind::Binary){
@@ -83,7 +83,7 @@ MStringView TypeChecker::inferExprTypeName(
             || expr.op == TokenType::Greater || expr.op == TokenType::GreaterEqual
             || expr.op == TokenType::AmpersandAmpersand || expr.op == TokenType::PipePipe)
         {
-            return "bool";
+            return "b8";
         }
         const MStringView lhsT = expr.lhs ? inferExprTypeName(ownerClass, method, *expr.lhs, scope) : MStringView{};
         const MStringView rhsT = expr.rhs ? inferExprTypeName(ownerClass, method, *expr.rhs, scope) : MStringView{};
@@ -110,7 +110,7 @@ MStringView TypeChecker::inferExprTypeName(
             if(!expr.arguments.empty() && expr.arguments[0]){
                 const MStringView fnName = expr.lhs->text;
                 if(fnName == "isFinite")
-                    return "bool";
+                    return "b8";
                 if(fnName == "dot" || fnName == "length" || fnName == "lengthSq"){
                     const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
                     u32 simdLanes = 0u;
@@ -160,7 +160,7 @@ MStringView TypeChecker::inferExprTypeName(
         return "StringView";
     }
     else if(expr.kind == ExprKind::BoolLiteral){
-        return "bool";
+        return "b8";
     }
     else if(expr.kind == ExprKind::FloatLiteral){
         return "f32";
@@ -170,8 +170,8 @@ MStringView TypeChecker::inferExprTypeName(
     }
     else if(expr.kind == ExprKind::IntegerLiteral){
         const MStringView t = expr.text;
-        bool hasU = false;
-        bool hasL = false;
+        b8 hasU = false;
+        b8 hasL = false;
         for(usize i = t.size(); i > 0u; --i){
             const MChar c = t[i - 1u];
             if(c == 'u' || c == 'U')
@@ -239,7 +239,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
             ? m_symbols.resolveBaseTypeName(containerType->name)
             : inferExprTypeName(ownerClass, method, *expr.lhs, scope);
         const usize oneArg = 1u;
-        const bool recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
+        const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
         if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
             if(const MethodDecl* opIdx = findClassOperator(*cls, "[]", &oneArg, recvIsConst, ownerClass != cls)){
                 if(!opIdx->returnType)
@@ -271,7 +271,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                 ? m_symbols.resolveBaseTypeName(lhsTypeRef->name)
                 : inferExprTypeName(ownerClass, method, *expr.lhs, scope);
             const usize opArity = (expr.kind == ExprKind::Unary) ? 0u : 1u;
-            const bool recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
+            const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
                 if(const MethodDecl* opMethod = findClassOperator(*cls, opSym, &opArity, recvIsConst, ownerClass != cls)){
                     if(!opMethod->returnType)
@@ -363,7 +363,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                     return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
             }
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
-                const bool recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs->lhs, scope) : false;
+                const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs->lhs, scope) : false;
                 if(const MethodDecl* m = findClassMethod(*cls, mName, &callArgCount, recvIsConst, ownerClass != cls)){
                     if(!m->returnType)
                         return nullptr;
@@ -422,9 +422,9 @@ namespace __hidden_adhd_type_checker_infer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool StmtReferencesIdentifier(const Stmt* stmt, MStringView varName)noexcept;
+[[nodiscard]] b8 StmtReferencesIdentifier(const Stmt* stmt, MStringView varName)noexcept;
 
-[[nodiscard]] bool ExprReferencesIdentifier(const Expr* expr, const MStringView varName)noexcept{
+[[nodiscard]] b8 ExprReferencesIdentifier(const Expr* expr, const MStringView varName)noexcept{
     if(!expr)
         return false;
     if(expr->kind == ExprKind::Identifier && expr->text == varName)
@@ -448,7 +448,7 @@ namespace __hidden_adhd_type_checker_infer{
     return false;
 }
 
-[[nodiscard]] bool StmtReferencesIdentifier(const Stmt* stmt, const MStringView varName)noexcept{
+[[nodiscard]] b8 StmtReferencesIdentifier(const Stmt* stmt, const MStringView varName)noexcept{
     if(!stmt)
         return false;
     if(stmt->initStmt && StmtReferencesIdentifier(stmt->initStmt, varName))
@@ -518,7 +518,7 @@ void TypeChecker::analyzeBlockMoveAtLastUse(
         if(SymbolTable::isSimdType(resolvedLocalType))
             continue;
 
-        bool capturedByMutLambda = false;
+        b8 capturedByMutLambda = false;
         for(usize j = savedScopeSize; j < scope.size(); ++j){
             if(const Expr* lam = scope[j].lambdaExpr){
                 for(const LambdaCapture& cap : lam->lambdaCaptures){
@@ -535,7 +535,7 @@ void TypeChecker::analyzeBlockMoveAtLastUse(
             continue;
 
         Stmt* lastStmt = statements[lastUseIndex];
-        const bool isDirectCallStmt = (lastStmt->kind == StmtKind::ExprStmt && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call)
+        const b8 isDirectCallStmt = (lastStmt->kind == StmtKind::ExprStmt && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call)
             || (lastStmt->kind == StmtKind::VarDecl && lastStmt->name != local.name && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call);
         if(!isDirectCallStmt || __hidden_adhd_type_checker_infer::ExprReferencesIdentifier(lastStmt->expr->lhs, local.name))
             continue;

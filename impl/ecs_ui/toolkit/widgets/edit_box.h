@@ -57,12 +57,12 @@ struct EditBoxStyle{
 };
 
 struct EditBoxPaintFlags{
-    bool enabled = true;
-    bool hovered = false;
-    bool focused = false;
-    bool readOnly = false;
-    bool caretVisible = true;
-    bool preeditCaretVisible = true;
+    b8 enabled = true;
+    b8 hovered = false;
+    b8 focused = false;
+    b8 readOnly = false;
+    b8 caretVisible = true;
+    b8 preeditCaretVisible = true;
 };
 
 
@@ -85,21 +85,21 @@ public:
 
 
 public:
-    [[nodiscard]] bool snapshot(const EditModel& model);
+    [[nodiscard]] b8 snapshot(const EditModel& model);
 
     // request.text is supplied by the owned snapshot. Font size remains logical; TextService applies paint DPI.
     [[nodiscard]] TextLayoutStatus::Enum shape(TextService& text, ShapeRequest request = {});
 
     // Admits matching source bytes and mode-appropriate hard lines with LTR edges. Failure preserves prior geometry.
-    [[nodiscard]] bool adoptLayout(TextLayout&& layout);
+    [[nodiscard]] b8 adoptLayout(TextLayout&& layout);
     // Shape at display scale before arranging; measurement keeps line, caret, hit-test, composition coords.
-    [[nodiscard]] bool measure(TextService& text, const DisplayMetrics& display);
-    [[nodiscard]] Expected<EditBoxPlacement> arrange(const Rect& bounds, const Insets& padding, const Rect& clip, Point previousScroll, f32 caretWidth = 1.0f, bool revealCaret = true)const noexcept;
+    [[nodiscard]] b8 measure(TextService& text, const DisplayMetrics& display);
+    [[nodiscard]] Expected<EditBoxPlacement> arrange(const Rect& bounds, const Insets& padding, const Rect& clip, Point previousScroll, f32 caretWidth = 1.0f, b8 revealCaret = true)const noexcept;
     // Uses a caller-reserved content viewport, such as a two-axis scrollbar layout.
-    [[nodiscard]] Expected<EditBoxPlacement> arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip, Point previousScroll, f32 caretWidth = 1.0f, bool revealCaret = true)const noexcept;
+    [[nodiscard]] Expected<EditBoxPlacement> arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip, Point previousScroll, f32 caretWidth = 1.0f, b8 revealCaret = true)const noexcept;
     [[nodiscard]] Expected<usize> hitTest(Point point, const EditBoxPlacement& placement)const noexcept;
 
-    [[nodiscard]] bool paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style = {}, const EditBoxPaintFlags& flags = {})const;
+    [[nodiscard]] b8 paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style = {}, const EditBoxPaintFlags& flags = {})const;
 
     [[nodiscard]] StringView displayText()const noexcept{ return { m_display.data(), m_display.size() }; }
 
@@ -125,9 +125,9 @@ public:
 
     [[nodiscard]] EditBoxRange replacementRange()const noexcept{ return m_replacement; }
 
-    [[nodiscard]] bool composing()const noexcept{ return m_composing; }
+    [[nodiscard]] b8 composing()const noexcept{ return m_composing; }
 
-    [[nodiscard]] bool ready()const noexcept{ return m_ready; }
+    [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
 
 
 private:
@@ -143,8 +143,8 @@ private:
     usize m_committedBytes = 0u;
     u64 m_revision = 0u;
     EditTextMode::Enum m_textMode = EditTextMode::SingleLine;
-    bool m_composing = false;
-    bool m_ready = false;
+    b8 m_composing = false;
+    b8 m_ready = false;
 };
 
 

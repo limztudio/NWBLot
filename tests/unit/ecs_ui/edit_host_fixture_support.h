@@ -48,7 +48,7 @@ private:
 };
 
 
-[[nodiscard]] inline bool PrepareEditView(Ui::EditBoxView& view, const Ui::EditModel& model, Ui::TextLayoutBuilder& layoutBuilder){
+[[nodiscard]] inline b8 PrepareEditView(Ui::EditBoxView& view, const Ui::EditModel& model, Ui::TextLayoutBuilder& layoutBuilder){
     if(!view.snapshot(model))
         return false;
     auto layout = layoutBuilder.layout({ view.displayText() });

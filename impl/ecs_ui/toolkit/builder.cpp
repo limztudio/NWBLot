@@ -35,7 +35,7 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
         m_popupFrames.push_back(Core::MakeGlobalUnique<BuilderScopeFrame>(m_arena, m_arena));
 }
 
-bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
+b8 Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
     if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || (direction != LayoutDirection::Row && direction != LayoutDirection::Column)){
         m_context.fail();
         return false;
@@ -68,18 +68,18 @@ bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const 
     return true;
 }
 
-bool Builder::endPanel(){
+b8 Builder::endPanel(){
     if(declarationBlocked() || !m_scope->m_panelActive || m_scope->m_windowActive || m_scope->m_popupState || m_scope->m_stack.size() != 1u || m_context.failed() || !m_scope->m_layout.arrange(m_scope->m_bounds)){
         m_context.fail();
         return false;
     }
     m_finalizing = true;
     ScopeExit finish([this]()noexcept{ m_finalizing = false; });
-    const bool painted = paintPanel();
-    const bool popped = m_context.popScope();
+    const b8 painted = paintPanel();
+    const b8 popped = m_context.popScope();
     m_scope->m_panelActive = false;
     m_scope->m_stack.clear();
-    const bool combosPainted = painted && popped && paintDeferred();
+    const b8 combosPainted = painted && popped && paintDeferred();
     publishSliderResults(combosPainted);
     releaseDeferredLoans();
     if(!combosPainted)
@@ -87,15 +87,15 @@ bool Builder::endPanel(){
     return combosPainted;
 }
 
-bool Builder::beginRow(const AStringView stableKey, const ContainerOptions& options){
+b8 Builder::beginRow(const AStringView stableKey, const ContainerOptions& options){
     return beginContainer(stableKey, LayoutDirection::Row, options);
 }
 
-bool Builder::beginColumn(const AStringView stableKey, const ContainerOptions& options){
+b8 Builder::beginColumn(const AStringView stableKey, const ContainerOptions& options){
     return beginContainer(stableKey, LayoutDirection::Column, options);
 }
 
-bool Builder::endContainer()noexcept{
+b8 Builder::endContainer()noexcept{
     if(declarationBlocked() || !m_scope->m_panelActive || m_scope->m_stack.size() <= 1u){
         m_context.fail();
         return false;
@@ -104,20 +104,20 @@ bool Builder::endContainer()noexcept{
     return m_context.popScope();
 }
 
-bool Builder::label(const AStringView stableKey, const StringView text, const WidgetOptions& options){
+b8 Builder::label(const AStringView stableKey, const StringView text, const WidgetOptions& options){
     return addItem(stableKey, text, WidgetKind::Label, options).has_value();
 }
 
-bool Builder::button(const AStringView stableKey, const StringView text, const WidgetOptions& options){
+b8 Builder::button(const AStringView stableKey, const StringView text, const WidgetOptions& options){
     const auto item = addItem(stableKey, text, WidgetKind::Button, options);
     return item && m_context.takeActivation((*item)->state, (*item)->enabled);
 }
 
-bool Builder::checkbox(const AStringView stableKey, const StringView text, bool& checked, const WidgetOptions& options){
+b8 Builder::checkbox(const AStringView stableKey, const StringView text, b8& checked, const WidgetOptions& options){
     const auto item = addItem(stableKey, text, WidgetKind::Checkbox, options);
     if(!item)
         return false;
-    const bool changed = m_context.takeActivation((*item)->state, (*item)->enabled);
+    const b8 changed = m_context.takeActivation((*item)->state, (*item)->enabled);
     if(changed)
         checked = !checked;
     (*item)->checked = checked;
@@ -138,7 +138,7 @@ void Builder::reset()noexcept{
     m_popupFrameCount = 0u;
 }
 
-bool Builder::setTextShaping(const u32 scriptTag, const StringView language){
+b8 Builder::setTextShaping(const u32 scriptTag, const StringView language){
     if(!balanced() || m_context.failed()){
         m_context.fail();
         return false;
@@ -225,7 +225,7 @@ void Builder::setDeltaSeconds(const f32 delta)noexcept{
         m_deltaSeconds = delta;
 }
 
-void Builder::setPointerBusy(const bool busy)noexcept{
+void Builder::setPointerBusy(const b8 busy)noexcept{
     if(declarationBlocked())
         m_context.fail();
     else
@@ -236,7 +236,7 @@ ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize
     return { text, StringView(m_textLanguage.data(), m_textLanguage.size()), fontSize, m_textScriptTag, TextDirection::LeftToRight };
 }
 
-bool Builder::beginContainer(const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){
+b8 Builder::beginContainer(const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){
     if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_stack.size() >= s_ContextMaxScopeDepth || !m_context.declare(stableKey, WidgetKind::Container)){
         m_context.fail();
         return false;

@@ -56,7 +56,7 @@ public:
 
 struct AvboitOccupancyRecordResult{
     Core::GpuTaskId occupancyTask;
-    bool declared = false;
+    b8 declared = false;
 };
 
 

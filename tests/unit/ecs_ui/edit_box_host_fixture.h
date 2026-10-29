@@ -43,7 +43,7 @@ public:
 
     [[nodiscard]] TextInputAdmission::Enum commitFor(TextInputSessionToken token, AStringView text){ return emitCommit(token, text); }
 
-    [[nodiscard]] TextInputAdmission::Enum preedit(AStringView text, usize anchor, usize caret, bool visible = true){
+    [[nodiscard]] TextInputAdmission::Enum preedit(AStringView text, usize anchor, usize caret, b8 visible = true){
         return emitPreedit(activeSession(), text, anchor, caret, visible);
     }
 
@@ -69,7 +69,7 @@ public:
         return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
     }
 
-    [[nodiscard]] bool deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
+    [[nodiscard]] b8 deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
         if(!completeNativeRequest(token, status, text))
             return false;
         if(status == ClipboardStatus::Success && startedOperation == ClipboardOperation::WriteText && token == startedToken)
@@ -93,7 +93,7 @@ public:
     AString<Alloc::GlobalArena> startedText;
     ClipboardRequestToken startedToken;
     ClipboardOperation::Enum startedOperation = ClipboardOperation::ReadText;
-    bool delayed = false;
+    b8 delayed = false;
 };
 
 class UiEditBoxHostTests : public testing::Test{
@@ -113,7 +113,7 @@ public:
 protected:
     virtual void SetUp()override{ ASSERT_TRUE(m_textInput.setFocused(true)); }
 
-    [[nodiscard]] bool beginEditFrame(){
+    [[nodiscard]] b8 beginEditFrame(){
         ++m_generation;
         if(!m_context.beginFrame(m_generation))
             return false;
@@ -127,7 +127,7 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool prepare(Ui::EditModel& model, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 30.0f }, Ui::IEditActionSink* actions = nullptr){
+    [[nodiscard]] b8 prepare(Ui::EditModel& model, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 30.0f }, Ui::IEditActionSink* actions = nullptr){
         if(!beginEditFrame())
             return false;
         m_result = actions ? m_host.editActions(m_widget, model, options, {}, *actions) : m_host.edit(m_widget, model, options);
@@ -154,7 +154,7 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool publishEdit(Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::Rect& bounds, const Ui::Point previousScroll = {}){
+    [[nodiscard]] b8 publishEdit(Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::Rect& bounds, const Ui::Point previousScroll = {}){
         Ui::EditBoxView view(m_arena);
         if(!UiEditHostFixtureSupport::PrepareEditView(view, model, m_layoutBuilder))
             return false;
@@ -174,14 +174,14 @@ protected:
         return m_context.addTarget(m_widget, target);
     }
 
-    [[nodiscard]] bool commit(){
+    [[nodiscard]] b8 commit(){
         if(!m_context.commitFrame(m_generation))
             return false;
         m_host.commitFrame(m_generation);
         return true;
     }
 
-    [[nodiscard]] bool frame(Ui::EditModel& model, const Ui::EditBoxOptions& options = {}){
+    [[nodiscard]] b8 frame(Ui::EditModel& model, const Ui::EditBoxOptions& options = {}){
         return prepare(model, options) && commit();
     }
 
@@ -190,19 +190,19 @@ protected:
         return { VectorGetX(x), VectorGetX(VectorAdd(VectorReplicate(m_placement.textOrigin.y), VectorReplicate(5.0f))) };
     }
 
-    [[nodiscard]] bool dispatch(const Ui::InputEvent& event){
+    [[nodiscard]] b8 dispatch(const Ui::InputEvent& event){
         m_host.collectNative();
         const Ui::WidgetId previousCapture = m_context.input().capture();
         const auto normalized = m_context.input().queue(UiTestSupport::NativeInput(event));
         if(!normalized)
             return false;
-        const bool submit = m_host.prepareSubmit(*normalized);
+        const b8 submit = m_host.prepareSubmit(*normalized);
         const Ui::InputRoutingResult result = m_context.input().process();
         m_host.input(*normalized, previousCapture, submit);
         return !result.activationOverflow && !result.gestureOverflow;
     }
 
-    [[nodiscard]] bool dispatchPointer(const Ui::PointerInput& input){
+    [[nodiscard]] b8 dispatchPointer(const Ui::PointerInput& input){
         m_host.collectNative();
         const Ui::WidgetId previousCapture = m_context.input().capture();
         const auto normalized = m_context.input().queuePointer(input);
@@ -214,15 +214,15 @@ protected:
         return !result.activationOverflow && !result.gestureOverflow;
     }
 
-    [[nodiscard]] bool key(Core::Key::Enum value, bool shift = false, bool control = false){
+    [[nodiscard]] b8 key(Core::Key::Enum value, b8 shift = false, b8 control = false){
         return dispatch({ .key = value, .type = Ui::InputEventType::KeyDown, .shift = shift, .control = control  }) && dispatch({ .key = value, .type = Ui::InputEventType::KeyUp, .shift = shift, .control = control  });
     }
 
-    [[nodiscard]] bool activate(){
+    [[nodiscard]] b8 activate(){
         return frame(m_model) && key(Core::Key::Tab) && frame(m_model) && m_textInput.activeSession().valid();
     }
 
-    [[nodiscard]] bool emptyFrame(){
+    [[nodiscard]] b8 emptyFrame(){
         ++m_generation;
         if(!m_context.beginFrame(m_generation))
             return false;
@@ -248,7 +248,7 @@ protected:
     Ui::WidgetState m_otherWidget;
     u64 m_generation = 0u;
     Ui::EditBoxResult m_result;
-    bool m_includeButton = false;
+    b8 m_includeButton = false;
 };
 
 

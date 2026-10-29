@@ -27,7 +27,7 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
         }
         return;
     }
-    const bool alreadyPressed = source != nullptr;
+    const b8 alreadyPressed = source != nullptr;
     if(!source){
         if(m_commandSources.size() == s_InputMaxSources){
             result.activationOverflow = true;
@@ -45,7 +45,7 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
     result.commandConsumed |= source->consumed;
     if(!m_windowFocused || (!alreadyPressed && event.repeat))
         return;
-    bool consumed = source->consumed;
+    b8 consumed = source->consumed;
     if(alreadyPressed && !consumed)
         return;
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
@@ -60,7 +60,7 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
             cancelPointerPress();
         }
         if(hasPopup() && !(focused && focused->textEditable)){
-            const bool dismissed = !event.repeat && !alreadyPressed && dismissPopup(PopupDismissReason::Cancel);
+            const b8 dismissed = !event.repeat && !alreadyPressed && dismissPopup(PopupDismissReason::Cancel);
             if(dismissed)
                 updateHover();
             consumed = true;
@@ -71,13 +71,13 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
     }
     else{
         consumed |= hasPopup() || focused != nullptr;
-        const bool delegatedCommand = event.command == InputCommand::Up || event.command == InputCommand::Down
+        const b8 delegatedCommand = event.command == InputCommand::Up || event.command == InputCommand::Down
             || event.command == InputCommand::PageUp || event.command == InputCommand::PageDown
             || event.command == InputCommand::Accept || event.command == InputCommand::Submit;
         const HitTarget* commandOwner = focused != nullptr && delegatedCommand ? commandHost(*focused) : nullptr;
         const HitTarget* control = commandOwner != nullptr ? commandOwner : focused;
-        const bool submitCommand = event.command == InputCommand::Accept || event.command == InputCommand::Submit || event.command == InputCommand::Activate;
-        bool controlHandled = false;
+        const b8 submitCommand = event.command == InputCommand::Accept || event.command == InputCommand::Submit || event.command == InputCommand::Activate;
+        b8 controlHandled = false;
         if(control != nullptr && focused != nullptr && control->navigable){
             if(submitCommand){
                 controlHandled = true;
@@ -97,7 +97,7 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
     }
 }
 
-bool InputRouter::moveFocus(const bool reverse)noexcept{
+b8 InputRouter::moveFocus(const b8 reverse)noexcept{
     if(m_targets.empty())
         return false;
     usize current = m_targets.size();
@@ -126,7 +126,7 @@ bool InputRouter::moveFocus(const bool reverse)noexcept{
     return false;
 }
 
-bool InputRouter::moveFocusForTraversal(const bool reverse){
+b8 InputRouter::moveFocusForTraversal(const b8 reverse){
     if(m_popups.empty() || !m_popups.back().scope.dismissFocusTraversal)
         return moveFocus(reverse);
     const PopupRecord& top = m_popups.back();

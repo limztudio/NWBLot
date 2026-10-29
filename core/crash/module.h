@@ -55,10 +55,10 @@ inline constexpr usize s_DefaultMaxFailedCrashPackages = 64u;
 inline constexpr usize s_DefaultMaxUploadingCrashPackages = 64u;
 
 struct CrashCapturePolicy{
-    bool captureAssertions = true;
-    bool captureFatalAssertions = true;
-    bool captureLoggerErrors = true;
-    bool captureLoggerFatals = true;
+    b8 captureAssertions = true;
+    b8 captureFatalAssertions = true;
+    b8 captureLoggerErrors = true;
+    b8 captureLoggerFatals = true;
     u32 maxDiagnosticDumpsPerProcess = s_DefaultMaxDiagnosticDumpsPerProcess;
     u32 maxDiagnosticDumpsPerSite = s_DefaultMaxDiagnosticDumpsPerSite;
 };
@@ -75,11 +75,11 @@ struct CrashDumpResult{
 
 
 public:
-    [[nodiscard]] bool requestAccepted()const noexcept{
+    [[nodiscard]] b8 requestAccepted()const noexcept{
         return status != CrashDumpStatus::NotInstalled && status != CrashDumpStatus::RequestFailed;
     }
 
-    [[nodiscard]] bool packageWritten()const noexcept{
+    [[nodiscard]] b8 packageWritten()const noexcept{
         return status == CrashDumpStatus::PackageWritten;
     }
 };
@@ -109,16 +109,16 @@ using CrashConfig = CrashConfigT<Alloc::PersistentArena>;
 
 
 template<typename ArenaT>
-[[nodiscard]] bool InstallCrashHandler(const CrashConfigT<ArenaT>& config);
+[[nodiscard]] b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config);
 // Hook registration/removal belongs to quiescent process startup/shutdown; native terminate/filter APIs provide no compare-exchange.
 // Windows preserves detached upload completion after its bounded shutdown wait.
 // POSIX alternate-stack restoration requires the installing thread; failed native restorations remain retriable.
 void UninstallCrashHandler()noexcept;
 
-[[nodiscard]] bool SetCrashMetadata(AStringView key, AStringView value)noexcept;
+[[nodiscard]] b8 SetCrashMetadata(AStringView key, AStringView value)noexcept;
 // Updates the crash-upload destination on an already-installed handler.
 // This lets capture be armed first (before the CLI is parsed) and the upload destination supplied later, once it is known.
-[[nodiscard]] bool SetCrashUploadDestination(AStringView logServerUrl, AStringView crashUploadToken)noexcept;
+[[nodiscard]] b8 SetCrashUploadDestination(AStringView logServerUrl, AStringView crashUploadToken)noexcept;
 void AddCrashBreadcrumb(AStringView category, AStringView message)noexcept;
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
 [[nodiscard]] CrashDumpResult CaptureGpuCrashDump(AStringView message, AStringView binaryDump = AStringView(), GpuCrashDumpKind::Enum dumpKind = GpuCrashDumpKind::Aftermath);

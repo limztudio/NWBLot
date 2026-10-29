@@ -24,7 +24,7 @@ namespace __hidden_ui_input_router{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidRectangle(const Rect& rectangle)noexcept{
+b8 ValidRectangle(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width >= 0.0f && rectangle.height >= 0.0f
@@ -32,7 +32,7 @@ bool ValidRectangle(const Rect& rectangle)noexcept{
     ;
 }
 
-bool Contains(const Rect& rectangle, const Point& position)noexcept{
+b8 Contains(const Rect& rectangle, const Point& position)noexcept{
     return
         position.x >= rectangle.x && position.y >= rectangle.y
         && position.x < VectorGetX(VectorAdd(VectorReplicate(rectangle.x), VectorReplicate(rectangle.width)))
@@ -130,7 +130,7 @@ InputRoutingResult InputRouter::process(){
     return result;
 }
 
-bool InputRouter::commitTargets(const HitTarget* targets, const usize count, const u64 layoutGeneration, const PopupScope* popups, const usize popupCount, const u64 expectedFocusLossGeneration){
+b8 InputRouter::commitTargets(const HitTarget* targets, const usize count, const u64 layoutGeneration, const PopupScope* popups, const usize popupCount, const u64 expectedFocusLossGeneration){
     if(count > s_InputMaxTargets || (count != 0u && targets == nullptr) || layoutGeneration <= m_layoutGeneration)
         return false;
     if(!stagePopups(popups, popupCount))
@@ -243,7 +243,7 @@ void InputRouter::reset()noexcept{
     cancelInteraction();
 }
 
-bool InputRouter::consumeActivation(const WidgetId id)noexcept{
+b8 InputRouter::consumeActivation(const WidgetId id)noexcept{
     const HitTarget* target = findTarget(id);
     if(target == nullptr || !isInteractive(*target) || !target->activatable)
         return false;
@@ -262,7 +262,7 @@ WidgetId InputRouter::hitTest(const Point& position)const noexcept{
     return target == nullptr ? WidgetId{} : target->id;
 }
 
-bool InputRouter::wouldConsumePointer(const Point& position)const noexcept{
+b8 InputRouter::wouldConsumePointer(const Point& position)const noexcept{
     if(m_primaryDown)
         return m_pointerSequenceConsumed;
     if(m_secondaryDown)
@@ -299,7 +299,7 @@ const HitTarget* InputRouter::findHitTarget(const Point& position)const noexcept
     return found;
 }
 
-bool InputRouter::isInteractive(const HitTarget& target)const noexcept{
+b8 InputRouter::isInteractive(const HitTarget& target)const noexcept{
     const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height));
     const f32 left = VectorGetX(visibleBounds);
     const f32 top = VectorGetY(visibleBounds);
@@ -319,13 +319,13 @@ void InputRouter::rebuildLookup(){
 
 void InputRouter::reconcileTargets()noexcept{
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
-    const bool focusedText = focused != nullptr && focused->textEditable && !focused->owner.valid();
+    const b8 focusedText = focused != nullptr && focused->textEditable && !focused->owner.valid();
     if(focused == nullptr || !isInteractive(*focused) || !focused->focusable || (!focusedText && focused->control != m_focusControl))
         clearFocus();
     else
         m_focusControl = focused->control;
     const HitTarget* captured = findTarget(m_capture, m_captureDeclaration);
-    const bool capturedText = captured != nullptr && captured->textEditable && !captured->owner.valid();
+    const b8 capturedText = captured != nullptr && captured->textEditable && !captured->owner.valid();
     if(captured == nullptr || !isInteractive(*captured) || captured->popup != m_capturePopup || (!capturedText && captured->control != m_captureControl)){
         m_capture = {};
         m_capturePopup = {};

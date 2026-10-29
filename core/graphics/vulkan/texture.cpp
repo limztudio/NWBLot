@@ -25,7 +25,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsSupportedSampleCount(u32 sampleCount)noexcept{
+b8 IsSupportedSampleCount(u32 sampleCount)noexcept{
     switch(sampleCount){
     case VK_SAMPLE_COUNT_1_BIT:
     case VK_SAMPLE_COUNT_2_BIT:
@@ -40,7 +40,7 @@ bool IsSupportedSampleCount(u32 sampleCount)noexcept{
     }
 }
 
-bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName){
+b8 ValidateTextureShape(const TextureDesc& desc, TStringView operationName){
     if(desc.width == 0 || desc.height == 0 || desc.depth == 0 || desc.mipLevels == 0 || desc.arraySize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: dimensions, mip count, and array size must be nonzero"), operationName);
         return false;
@@ -126,7 +126,7 @@ Expected<u32> TryComputeUploadSuballocationAlignment(const u32 requiredAlignment
     return CommonAlignmentChecked<u32>(s_DefaultUploadSuballocationAlignment, requiredAlignment);
 }
 
-bool IsBufferImageCopyAspectMaskSupported(const VkImageAspectFlags aspectMask)noexcept{
+b8 IsBufferImageCopyAspectMaskSupported(const VkImageAspectFlags aspectMask)noexcept{
     return (aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) == 0 || (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) == 0;
 }
 
@@ -239,9 +239,9 @@ VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& 
     return range;
 }
 
-Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const TextureDimension::Enum dimension, const Format::Enum format, TStringView operationName, const bool assertFailure){
+Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const TextureDimension::Enum dimension, const Format::Enum format, TStringView operationName, const b8 assertFailure){
     VkImageViewCreateInfo outViewInfo{};
-    const bool usesTextureFormat = format == texture.m_creationDesc.format;
+    const b8 usesTextureFormat = format == texture.m_creationDesc.format;
     const VkFormat vkFormat = usesTextureFormat ? texture.m_imageInfo.format : ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
@@ -318,7 +318,7 @@ using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc, const VkImageCreateInfo& imageInfo, const bool initialStateKnown)
+Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc, const VkImageCreateInfo& imageInfo, const b8 initialStateKnown)
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(creationDesc)
     , m_creationDesc(creationDesc)
@@ -331,7 +331,7 @@ Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator, const
     , m_allocator(allocator)
 {
     const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels) * static_cast<usize>(m_creationDesc.arraySize);
-    const bool retainedInitialStateKnown = m_creationDesc.keepInitialState && initialStateKnown;
+    const b8 retainedInitialStateKnown = m_creationDesc.keepInitialState && initialStateKnown;
     m_retainedSubresourceStates.assign(subresourceCount, retainedInitialStateKnown ? 1u : 0u);
 }
 
@@ -373,7 +373,7 @@ Texture::~Texture()noexcept{
     m_allocator.unregisterTextureNativeIdentity(registeredNativeImage, *this);
 }
 
-bool Texture::descriptionMatchesCreation()const noexcept{
+b8 Texture::descriptionMatchesCreation()const noexcept{
     return VulkanTextureDetail::TextureDescriptionsEqual(m_desc, m_creationDesc);
 }
 
@@ -387,8 +387,8 @@ ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const noexcept
 
     ScopedLock lock(m_retainedSubresourceStatesMutex);
     NWB_ASSERT(subresourceCount == m_retainedSubresourceStates.size());
-    bool hasKnownState = false;
-    bool hasUnknownState = false;
+    b8 hasKnownState = false;
+    b8 hasUnknownState = false;
     for(usize subresourceIndex = 0u; subresourceIndex < subresourceCount; ++subresourceIndex){
         if(m_retainedSubresourceStates[subresourceIndex] != 0u)
             hasKnownState = true;
@@ -406,7 +406,7 @@ Object Texture::getNativeHandle(ObjectType objectType)noexcept{
     return Object(nullptr);
 }
 
-Expected<Object> Texture::getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool){
+Expected<Object> Texture::getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, b8){
     if(objectType == ObjectTypes::s_ImageView){
         const auto view = getView(subresources, dimension, format);
         if(!view)
@@ -462,7 +462,7 @@ Expected<VkImageView> Texture::getView(const TextureSubresourceSet& subresources
     return view;
 }
 
-bool Texture::canRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
+b8 Texture::canRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
     if(expectedNativeImage == VK_NULL_HANDLE)
         return false;
 
@@ -473,7 +473,7 @@ bool Texture::canRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)no
     return true;
 }
 
-bool Texture::prepareRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
+b8 Texture::prepareRevokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
     if(expectedNativeImage == VK_NULL_HANDLE)
         return false;
 
@@ -504,14 +504,14 @@ void Texture::commitRevokeUnmanagedNativeImage(const VkImage expectedNativeImage
 
 void Texture::releasePreparedRevokeUnmanagedNativeImageIdentity(const VkImage expectedNativeImage)noexcept{
     NothrowScopedLock bindingLock(m_memoryBindingMutex);
-    const bool identityMatches = expectedNativeImage != VK_NULL_HANDLE && !m_managed && m_image == VK_NULL_HANDLE && m_preparedRevokedNativeImage == expectedNativeImage;
+    const b8 identityMatches = expectedNativeImage != VK_NULL_HANDLE && !m_managed && m_image == VK_NULL_HANDLE && m_preparedRevokedNativeImage == expectedNativeImage;
     NWB_FATAL_ASSERT_MSG(identityMatches, "prepared swapchain Texture identity must outlive its native VkImage");
 
     m_allocator.unregisterTextureNativeIdentity(expectedNativeImage, *this);
     m_preparedRevokedNativeImage = VK_NULL_HANDLE;
 }
 
-bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel)noexcept{
+b8 Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel)noexcept{
     if(!m_creationDesc.keepInitialState || arraySlice >= m_creationDesc.arraySize || mipLevel >= m_creationDesc.mipLevels)
         return false;
 
@@ -521,7 +521,7 @@ bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const
     return m_retainedSubresourceStates[index] != 0u;
 }
 
-void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel, const bool known)noexcept{
+void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel, const b8 known)noexcept{
     if(!m_creationDesc.keepInitialState || arraySlice >= m_creationDesc.arraySize || mipLevel >= m_creationDesc.mipLevels)
         return;
 

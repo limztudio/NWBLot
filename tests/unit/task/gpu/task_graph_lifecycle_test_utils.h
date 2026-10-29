@@ -78,8 +78,8 @@ struct ReentrantCompileDuringDeclarationTask{
         const Graphics::GpuTaskGraph* graph = nullptr;
         Graphics::GpuTaskGraphAnalysis* analysis = nullptr;
         Core::Alloc::ScratchArena* scratchArena = nullptr;
-        bool* compileAttempted = nullptr;
-        bool* compileSucceeded = nullptr;
+        b8* compileAttempted = nullptr;
+        b8* compileSucceeded = nullptr;
 
 
     public:
@@ -104,7 +104,7 @@ struct ReentrantCompileDuringDeclarationTask{
                 *compileAttempted = true;
             const Graphics::GpuTaskGraphCompiler compiler;
             const Graphics::GpuTaskGraph::DeclarationReadView declarations = Graphics::GpuTaskGraph::DeclarationReadView::TryAcquire(*graph);
-            bool succeeded = false;
+            b8 succeeded = false;
             if(declarations.valid())
                 succeeded = compiler.analyze(declarations, *scratchArena, *analysis);
             if(compileSucceeded)
@@ -122,12 +122,12 @@ struct ReentrantTelemetryDuringDeclarationState{
     Graphics::GpuTaskGraphQueueAssignmentTelemetryTracker* tracker = nullptr;
     Telemetry::FrameGraphBuilder* builder = nullptr;
     Core::Alloc::ScratchArena* scratchArena = nullptr;
-    bool trackerValidationAttempted = false;
-    bool trackerValidationSucceeded = true;
-    bool trackerUpdateAttempted = false;
-    bool trackerUpdateSucceeded = true;
-    bool appendAttempted = false;
-    bool appendSucceeded = true;
+    b8 trackerValidationAttempted = false;
+    b8 trackerValidationSucceeded = true;
+    b8 trackerUpdateAttempted = false;
+    b8 trackerUpdateSucceeded = true;
+    b8 appendAttempted = false;
+    b8 appendSucceeded = true;
 };
 
 struct ReentrantTelemetryDuringDeclarationTask{
@@ -171,7 +171,7 @@ public:
 
 
 public:
-    static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&)noexcept{
+    static b8 Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&)noexcept{
         if(payload.recordCount)
             ++*payload.recordCount;
         return true;
@@ -187,14 +187,14 @@ struct MalformedLifecycleTask{
 
 
 public:
-    static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&, const u32 lookalike = 0u)noexcept{
+    static b8 Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&, const u32 lookalike = 0u)noexcept{
         static_cast<void>(lookalike);
         if(payload.recordCount)
             ++*payload.recordCount;
         return true;
     }
 
-    static bool Accepted(Payload& payload, const Graphics::QueueSubmissionToken&)noexcept{
+    static b8 Accepted(Payload& payload, const Graphics::QueueSubmissionToken&)noexcept{
         if(payload.acceptedCount)
             ++*payload.acceptedCount;
         return true;

@@ -43,7 +43,7 @@ struct MeshViewGpuData{
 
 struct MeshViewBufferUpload{
     MeshViewGpuData viewState;
-    bool uploadRequired = false;
+    b8 uploadRequired = false;
 };
 
 static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT, "MeshViewGpuData layout must match the mesh shaders");

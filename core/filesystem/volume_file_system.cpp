@@ -32,7 +32,7 @@ VolumeFileSystem::VolumeFileSystem(Alloc::GlobalArena& arena)
     , m_files(0, Hasher<Name>(), EqualTo<Name>(), m_arena)
 {}
 
-bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
+b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
     Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_LoadMetadataScratch);
 
     ScopedLock lock(m_mutex);
@@ -143,7 +143,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
                 return false;
             }
 
-            const bool isLastSegment = segmentIndex + 1u == segmentPathCount;
+            const b8 isLastSegment = segmentIndex + 1u == segmentPathCount;
             if(!isLastSegment && segmentFileSize != m_segmentSize){
                 NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}"), ConvertString(m_volumeName), ConvertString(segmentPath.native()), segmentFileSize, m_segmentSize);
                 unmountLocked();
@@ -196,7 +196,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     return true;
 }
 
-bool VolumeFileSystem::unmount(){
+b8 VolumeFileSystem::unmount(){
     ScopedLock lock(m_mutex);
     if(m_mounted && m_writable){
         Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
@@ -207,12 +207,12 @@ bool VolumeFileSystem::unmount(){
     return true;
 }
 
-bool VolumeFileSystem::mounted()const noexcept{
+b8 VolumeFileSystem::mounted()const noexcept{
     NothrowScopedLock lock(m_mutex);
     return m_mounted;
 }
 
-bool VolumeFileSystem::writable()const noexcept{
+b8 VolumeFileSystem::writable()const noexcept{
     NothrowScopedLock lock(m_mutex);
     return m_mounted && m_writable;
 }
@@ -283,17 +283,17 @@ Expected<u64> VolumeFileSystem::wastedBytes()const noexcept{
 }
 
 
-bool VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, const usize bytes){
+b8 VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, const usize bytes){
     ScopedLock lock(m_mutex);
     return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Immediate);
 }
 
-bool VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const void* data, const usize bytes){
+b8 VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const void* data, const usize bytes){
     ScopedLock lock(m_mutex);
     return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Deferred);
 }
 
-bool VolumeFileSystem::flush(){
+b8 VolumeFileSystem::flush(){
     return compact(true);
 }
 
@@ -319,7 +319,7 @@ Expected<usize> VolumeFileSystem::readFile(const Name& virtualPath, const u64 of
     return static_cast<usize>(readSize);
 }
 
-bool VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const FileSeekOrigin::Enum origin)const noexcept(!NWB_OCCUR_WARNING){
+b8 VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const FileSeekOrigin::Enum origin)const noexcept(!NWB_OCCUR_WARNING){
     NothrowScopedLock lock(m_mutex);
     if(cursor.filesystem != this)
         return false;
@@ -354,7 +354,7 @@ bool VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const File
     return true;
 }
 
-bool VolumeFileSystem::removeFile(const Name& virtualPath){
+b8 VolumeFileSystem::removeFile(const Name& virtualPath){
     ScopedLock lock(m_mutex);
     if(!m_mounted || !m_writable){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpRemoveFile, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
@@ -379,7 +379,7 @@ bool VolumeFileSystem::removeFile(const Name& virtualPath){
     return false;
 }
 
-bool VolumeFileSystem::fileExists(const Name& virtualPath)const noexcept{
+b8 VolumeFileSystem::fileExists(const Name& virtualPath)const noexcept{
     NothrowScopedLock lock(m_mutex);
     if(!m_mounted)
         return false;
@@ -421,7 +421,7 @@ Vector<Name, VolumeArena> VolumeFileSystem::listFiles()const{
 }
 
 
-bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, const usize bytes, const MetadataFlushMode::Enum flushMode){
+b8 VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, const usize bytes, const MetadataFlushMode::Enum flushMode){
     if(!m_mounted || !m_writable){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteFile, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
         return false;
@@ -436,7 +436,7 @@ bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data
     }
 
     const auto itrFind = m_files.find(virtualPath);
-    const bool existed = itrFind != m_files.end();
+    const b8 existed = itrFind != m_files.end();
 
     u64 fileCountAfterWrite = static_cast<u64>(m_files.size());
     if(!existed){
@@ -495,7 +495,7 @@ bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data
     return false;
 }
 
-bool VolumeFileSystem::scanSegmentsLocked(){
+b8 VolumeFileSystem::scanSegmentsLocked(){
 
     m_segmentPaths.clear();
 

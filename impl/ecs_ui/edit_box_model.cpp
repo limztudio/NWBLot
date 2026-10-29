@@ -54,7 +54,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
     result.focused = options.enabled && m_context.input().focus() == widget.id;
     const UiTextEditOwner owner{ widget.id, widget.declarationGeneration, model.instanceGeneration() };
     Entry* entry = find(widget.id);
-    bool abandon = false;
+    b8 abandon = false;
     if(!entry){
         if(m_entries.size() == s_UiEditBoxMaxEntries){
             result.valid = false;
@@ -69,8 +69,8 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
     }
     else{
         const u64 navigationInstance = navigation ? navigation->state.instanceGeneration() : 0u;
-        const bool rebound = entry->owner != owner || entry->popup != popup || entry->actionCapable != (actions != nullptr) || entry->navigationInstanceGeneration != navigationInstance;
-        const bool policyChanged = entry->enabled != options.enabled || entry->readOnly != options.readOnly;
+        const b8 rebound = entry->owner != owner || entry->popup != popup || entry->actionCapable != (actions != nullptr) || entry->navigationInstanceGeneration != navigationInstance;
+        const b8 policyChanged = entry->enabled != options.enabled || entry->readOnly != options.readOnly;
         abandon = actions && (rebound || policyChanged);
         if(rebound || policyChanged || !entry->expected.matches(model)){
             m_context.input().cancelSubmitCommands(widget.id);
@@ -123,7 +123,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
             cancelTransfers();
         model.cancelComposition();
     }
-    bool inputMethod = false;
+    b8 inputMethod = false;
     for(usize index = 0u; index < m_events.size();){
         if(m_events[index].owner != owner){
             ++index;
@@ -153,7 +153,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
         }
         else{
             const auto action = m_clipboard.action();
-            const bool mutates = action == Ui::EditClipboardAction::Cut || action == Ui::EditClipboardAction::Paste;
+            const b8 mutates = action == Ui::EditClipboardAction::Cut || action == Ui::EditClipboardAction::Paste;
             if(mutates){
                 if(m_session.owner() == owner && !m_session.cancel())
                     TerminateInvariant();
@@ -180,7 +180,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
     return result;
 }
 
-void UiEditBoxHost::synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, const bool inputMethod){
+void UiEditBoxHost::synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, const b8 inputMethod){
     if(!options.enabled || options.readOnly || m_context.input().focus() != entry.widget.id){
         if(m_session.owner() == entry.owner && !m_session.cancel())
             TerminateInvariant();

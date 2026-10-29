@@ -17,7 +17,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr bool IsIntegerScalarType(const MStringView typeName)noexcept{
+[[nodiscard]] constexpr b8 IsIntegerScalarType(const MStringView typeName)noexcept{
     return typeName == "i8" || typeName == "u8"
         || typeName == "i16" || typeName == "u16"
         || typeName == "i32" || typeName == "u32"
@@ -25,7 +25,7 @@ NWB_ADHD_BEGIN
         || typeName == "isize" || typeName == "usize";
 }
 
-[[nodiscard]] constexpr bool IsFloatScalarType(const MStringView typeName)noexcept{
+[[nodiscard]] constexpr b8 IsFloatScalarType(const MStringView typeName)noexcept{
     return typeName == "f32" || typeName == "f64";
 }
 
@@ -65,27 +65,27 @@ NWB_ADHD_BEGIN
     }
 }
 
-[[nodiscard]] bool IsNonThreadSafeContainer(MStringView typeName)noexcept;
-[[nodiscard]] bool IsSingleTypeParamBuiltinGeneric(MStringView name)noexcept;
-[[nodiscard]] bool IsTwoTypeParamBuiltinGeneric(MStringView name)noexcept;
-[[nodiscard]] bool IsTypeAndCountBuiltinGeneric(MStringView name)noexcept;
-[[nodiscard]] bool CheckSwizzlePattern(MStringView text, u32 maxLanes, bool& outIsPattern, bool& outValidLanes)noexcept;
+[[nodiscard]] b8 IsNonThreadSafeContainer(MStringView typeName)noexcept;
+[[nodiscard]] b8 IsSingleTypeParamBuiltinGeneric(MStringView name)noexcept;
+[[nodiscard]] b8 IsTwoTypeParamBuiltinGeneric(MStringView name)noexcept;
+[[nodiscard]] b8 IsTypeAndCountBuiltinGeneric(MStringView name)noexcept;
+[[nodiscard]] b8 CheckSwizzlePattern(MStringView text, u32 maxLanes, b8& outIsPattern, b8& outValidLanes)noexcept;
 
-[[nodiscard]] bool IsVoidTypeRef(const TypeRef* ref)noexcept;
-[[nodiscard]] bool AreTypeRefsEquivalentWithSubst(
+[[nodiscard]] b8 IsVoidTypeRef(const TypeRef* ref)noexcept;
+[[nodiscard]] b8 AreTypeRefsEquivalentWithSubst(
     const TypeRef* actual,
     const TypeRef* pattern,
     const MVector<TemplateParamDecl>* ifaceParams,
     const MVector<TypeArg>* ifaceArgs,
     const SymbolTable& symbols
 )noexcept;
-[[nodiscard]] bool AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b, const SymbolTable& symbols)noexcept;
-[[nodiscard]] bool AreTemplateArgListsEqual(const MVector<TypeArg>& a, const MVector<TypeArg>& b, const SymbolTable& symbols)noexcept;
-[[nodiscard]] bool DoParamListsMatch(const MVector<ParamDecl>& a, const MVector<ParamDecl>& b, const SymbolTable& symbols)noexcept;
+[[nodiscard]] b8 AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b, const SymbolTable& symbols)noexcept;
+[[nodiscard]] b8 AreTemplateArgListsEqual(const MVector<TypeArg>& a, const MVector<TypeArg>& b, const SymbolTable& symbols)noexcept;
+[[nodiscard]] b8 DoParamListsMatch(const MVector<ParamDecl>& a, const MVector<ParamDecl>& b, const SymbolTable& symbols)noexcept;
 
 [[nodiscard]] TypeRef* ExtractUnderlyingFuncType(TypeRef* type, const SymbolTable& symbols)noexcept;
-[[nodiscard]] bool HasConstValueTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, MStringView name)noexcept;
-[[nodiscard]] bool NormalizeConstantTemplateArg(
+[[nodiscard]] b8 HasConstValueTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, MStringView name)noexcept;
+[[nodiscard]] b8 NormalizeConstantTemplateArg(
     TypeArg& arg,
     const ClassDecl* enclosingClass,
     const MethodDecl* enclosingMethod,
@@ -93,14 +93,14 @@ NWB_ADHD_BEGIN
 )noexcept;
 
 [[nodiscard]] usize ParseUnsignedConstant(MStringView text, const SymbolTable& symbols)noexcept;
-[[nodiscard]] bool IsKnownConcreteTypeName(MStringView name, const SymbolTable& symbols)noexcept;
-[[nodiscard]] bool IsConcreteTypeRef(const TypeRef& type, const SymbolTable& symbols)noexcept;
-[[nodiscard]] bool IsConcreteTemplateArgList(
+[[nodiscard]] b8 IsKnownConcreteTypeName(MStringView name, const SymbolTable& symbols)noexcept;
+[[nodiscard]] b8 IsConcreteTypeRef(const TypeRef& type, const SymbolTable& symbols)noexcept;
+[[nodiscard]] b8 IsConcreteTemplateArgList(
     const MVector<TemplateParamDecl>& params,
     const MVector<TypeArg>& args,
     const SymbolTable& symbols
 )noexcept;
-[[nodiscard]] bool TypeContainsArenaBackedContainer(const TypeRef& type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
+[[nodiscard]] b8 TypeContainsArenaBackedContainer(const TypeRef& type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -89,7 +89,7 @@ static constexpr NWB::Core::Color s_SRGBClearEdgeColors[]{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u8 ExpectedSRGBClearByte(const f32 value, const bool srgb)noexcept{
+[[nodiscard]] static u8 ExpectedSRGBClearByte(const f32 value, const b8 srgb)noexcept{
     const f32 clamped = Clamp(value, 0.0f, 1.0f);
     f32 encoded = clamped;
     if(srgb){
@@ -114,7 +114,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, NWB::Core::CommandList& commands, const NWB::Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, NWB::Core::CommandList& commands, const NWB::Core::GpuTaskRecordContext& context){
         if(!payload.destination || context.commandIrCapture)
             return false;
         for(u32 index = 0u; index < LengthOf(s_SRGBClearEdgeColors); ++index)
@@ -135,7 +135,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, NWB::Core::CommandList& commands, const NWB::Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, NWB::Core::CommandList& commands, const NWB::Core::GpuTaskRecordContext& context){
         if(!payload.source || !payload.destination || context.commandIrCapture)
             return false;
         commands.copyTexture(*payload.destination, NWB::Core::TextureSlice{}, *payload.source, NWB::Core::TextureSlice{});
@@ -185,7 +185,7 @@ struct SRGBClearEdgeInputs{
     );
 }
 
-[[nodiscard]] static bool VerifySRGBClearEdges(NWB::Core::GraphicsRuntime& graphics){
+[[nodiscard]] static b8 VerifySRGBClearEdges(NWB::Core::GraphicsRuntime& graphics){
     using namespace NWB::Core;
     auto& device = graphics.getDevice();
     for(const Format::Enum format : { Format::RGBA8_UNORM_SRGB, Format::BGRA8_UNORM_SRGB }){
@@ -246,7 +246,7 @@ struct SRGBClearEdgeInputs{
 
 class TextureSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    bool configureFramebufferCapture(){
+    b8 configureFramebufferCapture(){
         auto capture = ConfigureSmokeFramebufferCapture(m_context, s_ProjectName, s_FramebufferCaptureDefaultFrameCount);
         if(!capture)
             return false;
@@ -268,7 +268,7 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         if(!m_captureConfigurationValid)
             return false;
         if(!VerifySRGBClearEdges(m_context.graphics))
@@ -301,7 +301,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TextureSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         if(m_framebufferCapture)
             m_framebufferCapture->update();
         const auto updated = m_world->tick(delta);
@@ -319,7 +319,7 @@ private:
     UniquePtr<FramebufferCapture> m_framebufferCapture;
     NWB::Core::ECS::EntityID m_whiteGround = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_texturedSphere = NWB::Core::ECS::s_InvalidEntityId;
-    bool m_captureConfigurationValid = true;
+    b8 m_captureConfigurationValid = true;
 };
 
 

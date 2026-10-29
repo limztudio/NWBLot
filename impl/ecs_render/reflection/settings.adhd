@@ -53,14 +53,14 @@ class ReflectionSettings{
     public f32x3u environmentBottom = s_ReflectionDefaultEnvironmentBottom;
     public ReflectionTraceMode traceMode = ReflectionTraceMode::Enum::Hybrid;
     public ReflectionDebugView debugView = ReflectionDebugView::Enum::None;
-    public bool diagnosticsEnabled = false;
+    public b8 diagnosticsEnabled = false;
     // Lets stable smooth Hybrid tiles bypass proven screen misses. Off until measured.
-    public bool screenFeedbackEnabled = false;
-    public bool temporalEnabled = true;
-    public bool spatialFilterEnabled = true;
+    public b8 screenFeedbackEnabled = false;
+    public b8 temporalEnabled = true;
+    public b8 spatialFilterEnabled = true;
 }
 
-bool SameReflectionTraceSettings(in ReflectionSettings first, in ReflectionSettings second){
+b8 SameReflectionTraceSettings(in ReflectionSettings first, in ReflectionSettings second){
     return
         first.traceMode == second.traceMode && first.samplingSeed == second.samplingSeed
         && first.maxHardwareRaysPerFrame == second.maxHardwareRaysPerFrame && first.maxOpticalQueries == second.maxOpticalQueries
@@ -74,7 +74,7 @@ bool SameReflectionTraceSettings(in ReflectionSettings first, in ReflectionSetti
 }
 
 // Settings are an external boundary; reject invalid values early.
-bool ValidateReflectionSettings(in ReflectionSettings settings){
+b8 ValidateReflectionSettings(in ReflectionSettings settings){
     const u32 s_MaxTemporalSamples = 256u;
     const u32 s_MaxSpatialRadius = 3u;
     if(settings.temporalMaxSamples == 0u || settings.temporalMaxSamples > s_MaxTemporalSamples || settings.spatialRadius > s_MaxSpatialRadius){

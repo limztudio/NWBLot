@@ -54,7 +54,7 @@ private:
     GpuTimingAccumulator& m_accumulator;
     GpuTimingScope& m_scope;
     usize m_publicationIndex = Limit<usize>::s_Max;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 
@@ -81,14 +81,14 @@ public:
 private:
     GpuTimingRecorder& m_recorder;
     GpuTimingScope& m_scope;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, Device& device, CommandList& commandList, const GpuTimingSampleAttribution attribution, const bool requiresComparableTimestamps){
+Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, Device& device, CommandList& commandList, const GpuTimingSampleAttribution attribution, const b8 requiresComparableTimestamps){
     GpuTimingScope scope;
     GpuTimingSubmissionTicket* ticket = nullptr;
     QueueSubmissionToken resetSubmission;
@@ -164,7 +164,7 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, De
 
     if(scope.valid() && resetSubmission.valid()){
         PrerequisiteTrackingUnwindScope prerequisiteUnwind(*this, scope);
-        const bool prerequisiteTracked = ticket->trackSubmissionPrerequisite(resetSubmission);
+        const b8 prerequisiteTracked = ticket->trackSubmissionPrerequisite(resetSubmission);
         prerequisiteUnwind.release();
         if(!prerequisiteTracked){
             abandonScopeWithoutCallbacks(scope);

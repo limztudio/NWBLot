@@ -120,7 +120,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
     Vector<usize, Assets::ScratchArena> fileQueue(selection->order, scratchArena);
     KnownVirtualPathTextMap knownVirtualPathTexts(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
 
-    const auto enqueueDependency = [&](const Name& depVirtualPath, const Name& expectedAssetType) -> bool{
+    const auto enqueueDependency = [&](const Name& depVirtualPath, const Name& expectedAssetType) -> b8{
         if(!depVirtualPath)
             return false;
         const AStringView hint = LookupVirtualPathTextHint(depVirtualPath, knownVirtualPathTexts);
@@ -138,22 +138,22 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
 
     class DependencyCollector final : public Assets::ICookDependencyCollector{
     public:
-        explicit DependencyCollector(const Function<bool(const Name&, const Name&)>& enqueue)noexcept
+        explicit DependencyCollector(const Function<b8(const Name&, const Name&)>& enqueue)noexcept
             : m_enqueue(enqueue)
         {}
 
 
     public:
-        [[nodiscard]] virtual bool addAssetDependency(const Name& virtualPath, const Name& expectedAssetType = s_NameNone)override{
+        [[nodiscard]] virtual b8 addAssetDependency(const Name& virtualPath, const Name& expectedAssetType = s_NameNone)override{
             return m_enqueue(virtualPath, expectedAssetType);
         }
 
 
     private:
-        const Function<bool(const Name&, const Name&)>& m_enqueue;
+        const Function<b8(const Name&, const Name&)>& m_enqueue;
     };
 
-    const Function<bool(const Name&, const Name&)> enqueueCallback(enqueueDependency);
+    const Function<b8(const Name&, const Name&)> enqueueCallback(enqueueDependency);
     DependencyCollector collector(enqueueCallback);
 
     const auto processAssetItem = [&](
@@ -162,7 +162,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
         const Name& virtualPath,
         const Core::Metascript::Value& assetValue,
         const Core::Metascript::Document* documentOrNull
-    ) -> bool{
+    ) -> b8{
         const auto& file = files[fileIndex];
         const Assets::CookDependencyItemContext itemContext{
             .assetRoot = file.assetRoot,
@@ -192,7 +192,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
         const auto hasBunch = Assets::AssetsBunchCook::HasAssetBunchDeclaration(*document);
         if(!hasBunch)
             return MakeUnexpected(Failure{});
-        const auto hasComposite = *hasBunch ? Expected<bool, NameTextError::Enum>(false) : Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);
+        const auto hasComposite = *hasBunch ? Expected<b8, NameTextError::Enum>(false) : Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);
         if(!hasComposite)
             return MakeUnexpected(Failure{});
         if(*hasBunch || *hasComposite){

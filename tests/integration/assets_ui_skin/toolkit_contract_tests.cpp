@@ -55,7 +55,7 @@ static constexpr Name s_ScratchArena("tests/integration/assets_ui_skin/toolkit_c
 
 struct AuthoredSkin{
     UiSkin skin;
-    bool complete;
+    b8 complete;
 };
 
 [[nodiscard]] static Expected<AuthoredSkin> LoadAuthoredSkin(ToolkitSkinArena& testArena, const Path& assetRoot, const Path& atlasPath, const AStringView virtualRoot){

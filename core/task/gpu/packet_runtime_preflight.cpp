@@ -51,19 +51,19 @@ namespace __hidden_gpu_packet_runtime_preflight{
     }
 }
 
-[[nodiscard]] static bool IsOwnershipRelease(const GpuCompiledBarrierType::Enum type)noexcept{
+[[nodiscard]] static b8 IsOwnershipRelease(const GpuCompiledBarrierType::Enum type)noexcept{
     return type == GpuCompiledBarrierType::TextureOwnershipRelease || type == GpuCompiledBarrierType::BufferOwnershipRelease || type == GpuCompiledBarrierType::AccelStructOwnershipRelease;
 }
 
-[[nodiscard]] static bool IsTransition(const GpuCompiledBarrierType::Enum type)noexcept{
+[[nodiscard]] static b8 IsTransition(const GpuCompiledBarrierType::Enum type)noexcept{
     return type == GpuCompiledBarrierType::TextureTransition || type == GpuCompiledBarrierType::BufferTransition || type == GpuCompiledBarrierType::AccelStructTransition;
 }
 
-[[nodiscard]] static bool IsUavDependency(const GpuCompiledBarrierType::Enum type)noexcept{
+[[nodiscard]] static b8 IsUavDependency(const GpuCompiledBarrierType::Enum type)noexcept{
     return type == GpuCompiledBarrierType::TextureUav || type == GpuCompiledBarrierType::BufferUav || type == GpuCompiledBarrierType::AccelStructUav;
 }
 
-[[nodiscard]] static bool IsOwnershipAcquire(const GpuCompiledBarrierType::Enum type)noexcept{
+[[nodiscard]] static b8 IsOwnershipAcquire(const GpuCompiledBarrierType::Enum type)noexcept{
     return type == GpuCompiledBarrierType::TextureOwnershipAcquire || type == GpuCompiledBarrierType::BufferOwnershipAcquire || type == GpuCompiledBarrierType::AccelStructOwnershipAcquire;
 }
 
@@ -77,7 +77,7 @@ namespace __hidden_gpu_packet_runtime_preflight{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuNativePacketRecorder::preflightPacketResources(
+b8 GpuNativePacketRecorder::preflightPacketResources(
     const GpuTaskGraph& graph,
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph& compiledGraph,
@@ -99,7 +99,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
     if(packet.taskCount == 0u || !packetQueueInfo || !m_device.matchesPhysicalQueueIdentity(packet.queue) || (initialStates && !initialStates->validForDeviceGeneration(planAccess.deviceGeneration())))
         return false;
 
-    const auto validateOwnership = [&](const ResourceQueueSharing::Mask sharing, const ResourceQueueSharing::Mask resourceSharing, const bool usesConcurrentSharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue)noexcept{
+    const auto validateOwnership = [&](const ResourceQueueSharing::Mask sharing, const ResourceQueueSharing::Mask resourceSharing, const b8 usesConcurrentSharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue)noexcept{
         if(sharing != resourceSharing)
             return false;
         if(usesConcurrentSharing)
@@ -302,7 +302,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             const TextureSubresourceSet range = barrier.range.textureSubresources.resolve(texture->getCreationDescription(), TextureSubresourceMipResolve::Range);
             for(ArraySlice arraySlice = range.baseArraySlice; arraySlice < range.baseArraySlice + range.numArraySlices; ++arraySlice){
                 for(MipLevel mipLevel = range.baseMipLevel; mipLevel < range.baseMipLevel + range.numMipLevels; ++mipLevel){
-                    bool found = false;
+                    b8 found = false;
                     for(const CommandListResourceStateHandoff::TextureState& state : initialStates->m_textureStates){
                         if(state.texture == texture && state.arraySlice == arraySlice && state.mipLevel == mipLevel && state.state != ResourceStates::Unknown){
                             found = true;
@@ -353,10 +353,10 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 || (barrierResource.type == GpuGraphResourceType::Buffer && !validateBufferRange(declarationAccess.bufferForResource(barrier.resource), barrier.range.bufferRange))
             )
                 return false;
-            const bool ownershipRelease = __hidden_gpu_packet_runtime_preflight::IsOwnershipRelease(barrier.type);
-            const bool ownershipAcquire = __hidden_gpu_packet_runtime_preflight::IsOwnershipAcquire(barrier.type);
-            const bool transition = __hidden_gpu_packet_runtime_preflight::IsTransition(barrier.type);
-            const bool uavDependency = __hidden_gpu_packet_runtime_preflight::IsUavDependency(barrier.type);
+            const b8 ownershipRelease = __hidden_gpu_packet_runtime_preflight::IsOwnershipRelease(barrier.type);
+            const b8 ownershipAcquire = __hidden_gpu_packet_runtime_preflight::IsOwnershipAcquire(barrier.type);
+            const b8 transition = __hidden_gpu_packet_runtime_preflight::IsTransition(barrier.type);
+            const b8 uavDependency = __hidden_gpu_packet_runtime_preflight::IsUavDependency(barrier.type);
             if(
                 (
                     barrier.forceMemoryDependency

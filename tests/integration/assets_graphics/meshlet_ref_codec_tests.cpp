@@ -53,11 +53,11 @@ struct ThrowingMeshletAppend : NoThrowMeshletBytes{
 };
 
 struct NoThrowMeshletFailure{
-    [[nodiscard]] bool operator()(usize, TStringView)const noexcept;
+    [[nodiscard]] b8 operator()(usize, TStringView)const noexcept;
 };
 
 struct ThrowingMeshletFailureBool{
-    operator bool()const;
+    operator b8()const;
 };
 
 struct ThrowingMeshletFailureConversion{
@@ -132,7 +132,7 @@ TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
 
     auto positionRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
     auto attributeRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
-    const bool encoded = AssetsGraphicsFixture::EncodeTestMeshletRefs(positionRefs, attributeRefs, true, meshlets, positionRefDeltas, attributeRefDeltas);
+    const b8 encoded = AssetsGraphicsFixture::EncodeTestMeshletRefs(positionRefs, attributeRefs, true, meshlets, positionRefDeltas, attributeRefDeltas);
     EXPECT_TRUE(encoded);
     if(!encoded)
         return;

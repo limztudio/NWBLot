@@ -163,7 +163,7 @@ Expected<u32> MaterialTypedValueParser::ParseMaterialParameterToken(const AStrin
     }
 }
 
-bool MaterialTypedValueParser::StoreMaterialTypedValueBytes(MaterialTypedValueData& outParameter, const usize byteOffset, const NotNull<const void*> bytes, const usize byteSize)noexcept{
+b8 MaterialTypedValueParser::StoreMaterialTypedValueBytes(MaterialTypedValueData& outParameter, const usize byteOffset, const NotNull<const void*> bytes, const usize byteSize)noexcept{
     if(byteOffset > sizeof(outParameter.data) || byteSize > sizeof(outParameter.data) - byteOffset)
         return false;
 
@@ -173,13 +173,13 @@ bool MaterialTypedValueParser::StoreMaterialTypedValueBytes(MaterialTypedValueDa
 }
 
 template<typename ValueType>
-bool MaterialTypedValueParser::StoreMaterialTypedValueScalar(MaterialTypedValueData& outParameter, const u32 componentIndex, const u32 value)noexcept(IsArithmetic_V<ValueType>){
+b8 MaterialTypedValueParser::StoreMaterialTypedValueScalar(MaterialTypedValueData& outParameter, const u32 componentIndex, const u32 value)noexcept(IsArithmetic_V<ValueType>){
     const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(ValueType);
     const ValueType typedValue = static_cast<ValueType>(value);
     return StoreMaterialTypedValueBytes(outParameter, byteOffset, NotNull<const void*>(&typedValue), sizeof(typedValue));
 }
 
-bool MaterialTypedValueParser::StoreMaterialTypedValueComponent(MaterialTypedValueData& outParameter, const MaterialParameterValueType::Enum valueType, const u32 componentIndex, const u32 value)noexcept{
+b8 MaterialTypedValueParser::StoreMaterialTypedValueComponent(MaterialTypedValueData& outParameter, const MaterialParameterValueType::Enum valueType, const u32 componentIndex, const u32 value)noexcept{
     if(componentIndex >= NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT)
         return false;
 

@@ -255,7 +255,7 @@ public:
 
     pointer operator->()const noexcept(noexcept(DeclVal<void(*)(pointer)noexcept>()(m_pair.first()))){ return m_pair.first(); }
 
-    explicit operator bool()const noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((m_pair.first() != pointer())))){ return (m_pair.first() != pointer()); }
+    explicit operator b8()const noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()((m_pair.first() != pointer())))){ return (m_pair.first() != pointer()); }
 
 
 public:

@@ -56,7 +56,7 @@ Expected<u64> UiNestedPopupSmokeSource::View::indexOf(const u64 keyValue)const n
     return MakeUnexpected(Failure{});
 }
 
-Expected<u64> UiNestedPopupSmokeSource::View::findEnabled(const u64 start, const bool reverse)const noexcept{
+Expected<u64> UiNestedPopupSmokeSource::View::findEnabled(const u64 start, const b8 reverse)const noexcept{
     u64 index = 0u;
     if(start >= rowCount())
         return MakeUnexpected(Failure{});
@@ -75,7 +75,7 @@ StringView UiNestedPopupSmokeSource::View::text(const u64 index)const noexcept{
     return index < rowCount() ? m_source.text(m_source.m_indices[index]) : StringView{};
 }
 
-bool UiNestedPopupSmokeSource::View::enabled(const u64 index)const noexcept{
+b8 UiNestedPopupSmokeSource::View::enabled(const u64 index)const noexcept{
     return index < rowCount() && m_source.enabled(m_source.m_indices[index]);
 }
 
@@ -87,7 +87,7 @@ UiNestedPopupSmokeSource::UiNestedPopupSmokeSource(Core::Alloc::GlobalArena& are
     : m_query(arena)
     , m_view(*this)
 {
-    const bool initialized = filter({});
+    const b8 initialized = filter({});
     NWB_FATAL_ASSERT(initialized);
 }
 
@@ -99,7 +99,7 @@ Expected<u64> UiNestedPopupSmokeSource::indexOf(const u64 keyValue)const noexcep
     return index;
 }
 
-Expected<u64> UiNestedPopupSmokeSource::findEnabled(const u64 start, const bool reverse)const noexcept{
+Expected<u64> UiNestedPopupSmokeSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
     return FindAdjacentEnabledRow(*this, start, reverse);
 }
 
@@ -108,7 +108,7 @@ StringView UiNestedPopupSmokeSource::text(const u64 index)const noexcept{
     return index < rowCount() ? __hidden_ui_nested_popup_source::s_Labels[index] : StringView{};
 }
 
-bool UiNestedPopupSmokeSource::filter(const AStringView query){
+b8 UiNestedPopupSmokeSource::filter(const AStringView query){
     if(m_viewRevision != 0u && query == AStringView(m_query.data(), m_query.size()))
         return true;
     if(query.empty())

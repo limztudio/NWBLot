@@ -51,14 +51,14 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const CsgFrameState& csgFrameState,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const bool hasOpaqueCsgFrameWork,
+    const b8 hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
     const ECSRenderDetail::MeshViewGpuData& meshViewState,
-    const bool meshViewUploadRequired,
+    const b8 meshViewUploadRequired,
     const DeferredGraphResourceImportResult& resources,
     const Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
     const Core::GpuGraphResourceSetId shadowTraceGeometrySet,
-    const bool& asyncPrefixTimingSpansOnePacket,
+    const b8& asyncPrefixTimingSpansOnePacket,
     Core::Alloc::ScratchArena& scratchArena,
     DeferredFrameTargets& deferredTargets,
     ObjectGeometryCacheGraph& objectGeometry,
@@ -83,7 +83,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
 
-    const bool shadowTraceGeometryStatesGraphOwned = shadowTraceGeometrySet.valid();
+    const b8 shadowTraceGeometryStatesGraphOwned = shadowTraceGeometrySet.valid();
     const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
 
     if(
@@ -224,7 +224,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.frameBindings = frameBindings;
     gbufferPayload.csgResources = csgResources;
 
-    const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
+    const b8 hasOpaqueDrawItems = !opaqueDrawItems.empty();
     // G-buffer and the opaque CSG follow-up declare the shared material entry batch. The source-geometry batch is retained below.
     gbufferPayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
     OpaqueUploadChainBuilder opaqueUploadChainBuilder(m_deferredLightingTaskGraph, m_materialSystem, m_csgSystem);
@@ -254,7 +254,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         return MakeUnexpected(Failure{});
     }
     const Core::GpuTaskId csgFrameUploadTask = opaqueUploadChainResult->csgUploadTask;
-    const bool hasCsgFrameGpuWork = opaqueUploadChainResult->hasCsgFrameGpuWork;
+    const b8 hasCsgFrameGpuWork = opaqueUploadChainResult->hasCsgFrameGpuWork;
     gbufferPayload.materialDrawBuffersUploaded = opaqueUploadChainResult->materialDrawBuffersUploaded;
     gbufferPayload.csgFrameBuffersUploaded = opaqueUploadChainResult->csgFrameBuffersUploaded;
 
@@ -322,7 +322,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Core::GpuGraphResourceId opaqueSharedComputeEmulationOutput;
     Core::GpuGraphResourceSetId opaqueCsgReceiverComputeEmulationOutputSet;
     const MaterialPassDrawItemsView gbufferMaterialGeometryDrawSets[] = { opaqueDrawItems.regular, opaqueDrawItems.csgReceiverSurface, };
-    const bool gbufferUsesMaterialGeometry = !opaqueDrawItems.regular.empty() || !opaqueDrawItems.csgReceiverSurface.empty();
+    const b8 gbufferUsesMaterialGeometry = !opaqueDrawItems.regular.empty() || !opaqueDrawItems.csgReceiverSurface.empty();
     gbufferPayload.materialGeometryStatesGraphOwned = false;
     if(gbufferUsesMaterialGeometry){
         const auto gbufferMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(
@@ -341,7 +341,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         // Frozen heap slots require a complete graph declaration before this material callback can record.
         return MakeUnexpected(Failure{});
     }
-    bool gbufferMaterialSampledTexturesCollected = false;
+    b8 gbufferMaterialSampledTexturesCollected = false;
     if(gbufferUsesMaterialGeometry){
         const auto gbufferMaterialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
             m_materialSystem,
@@ -371,12 +371,12 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         m_graphicsPrefixSceneShadingSetupReady,
     };
     opaqueComputeEmulationPayload.frameBindings = frameBindings;
-    const bool opaqueComputeEmulationPlanCaptured = gbufferPayload.materialFrameStatesGraphOwned
+    const b8 opaqueComputeEmulationPlanCaptured = gbufferPayload.materialFrameStatesGraphOwned
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
         && opaqueComputeEmulationPayload.plan.capture(opaqueDrawItems.regular, scratchArena)
     ;
-    bool opaqueComputeEmulationOutputStatesGraphOwned = false;
+    b8 opaqueComputeEmulationOutputStatesGraphOwned = false;
     if(opaqueComputeEmulationPlanCaptured){
         const auto opaqueComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
             m_deferredLightingTaskGraph,
@@ -398,7 +398,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     // Handle the small alias classes explicitly: two through five regular opaque compute items sharing one frozen output and heap slot.
     // Opaque CSG remains out of scope so no CSG producer/raster phase can observe this alternation.
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan opaqueSharedComputeEmulationPlan;
-    const bool opaqueSharedComputeEmulationPlanCaptured =
+    const b8 opaqueSharedComputeEmulationPlanCaptured =
         !hasOpaqueCsgFrameWork
         && !opaqueComputeEmulationOutputStatesGraphOwned
         && gbufferPayload.materialFrameStatesGraphOwned
@@ -406,7 +406,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         && gbufferMaterialSampledTexturesCollected
         && opaqueSharedComputeEmulationPlan.capture(opaqueDrawItems.regular, ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount)
     ;
-    bool opaqueSharedComputeEmulationOutputStatesGraphOwned = false;
+    b8 opaqueSharedComputeEmulationOutputStatesGraphOwned = false;
     if(opaqueSharedComputeEmulationPlanCaptured){
         const auto opaqueSharedComputeEmulationOutputResult = GatherRegularSharedComputeEmulationResource(m_deferredLightingTaskGraph, opaqueSharedComputeEmulationPlan, "Opaque Shared Compute Emulation Output");
         opaqueSharedComputeEmulationOutputStatesGraphOwned = opaqueSharedComputeEmulationOutputResult.has_value();
@@ -428,14 +428,14 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         m_graphicsPrefixSceneShadingSetupReady,
     };
     opaqueCsgReceiverComputeEmulationPayload.frameBindings = frameBindings;
-    const bool opaqueCsgReceiverComputeEmulationPlanCaptured = hasOpaqueCsgFrameWork
+    const b8 opaqueCsgReceiverComputeEmulationPlanCaptured = hasOpaqueCsgFrameWork
         && hasCsgFrameGpuWork
         && gbufferPayload.materialFrameStatesGraphOwned
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
         && opaqueCsgReceiverComputeEmulationPayload.plan.capture(opaqueDrawItems.csgReceiverSurface, opaqueDrawItems.regular, csgFrameData, scratchArena)
     ;
-    bool opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned = false;
+    b8 opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned = false;
     if(opaqueCsgReceiverComputeEmulationPlanCaptured){
         const auto opaqueCsgReceiverComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
             m_deferredLightingTaskGraph,
@@ -601,9 +601,9 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         .setResourceSetUses(gbufferMaterialResourceSetUseCount != 0u ? gbufferMaterialResourceSetUses : nullptr, gbufferMaterialResourceSetUseCount)
     ;
     // Successors declare after G-buffer moves its payload. Keep frozen readiness/state bits by value, not from the moved payload.
-    const bool opaqueSharedMaterialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
-    const bool opaqueSharedMaterialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned;
-    const bool opaqueSharedMaterialGeometryStatesGraphOwned = gbufferPayload.materialGeometryStatesGraphOwned;
+    const b8 opaqueSharedMaterialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
+    const b8 opaqueSharedMaterialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned;
+    const b8 opaqueSharedMaterialGeometryStatesGraphOwned = gbufferPayload.materialGeometryStatesGraphOwned;
     const auto graphicsPrefixGbufferTaskResult = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(gbufferDesc, Move(gbufferPayload));
     if(!graphicsPrefixGbufferTaskResult){
         m_graphicsPrefixGbufferTask = {};

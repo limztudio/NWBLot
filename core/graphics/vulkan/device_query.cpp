@@ -61,7 +61,7 @@ namespace __hidden_device_query{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Device::queryFeatureSupport(Feature::Enum feature)const noexcept{
+b8 Device::queryFeatureSupport(Feature::Enum feature)const noexcept{
     const VulkanDetail::RayTracingCapabilityInputs rayTracingCapabilities = __hidden_device_query::CollectRayTracingCapabilityInputs(m_context);
 
     switch(feature){
@@ -162,7 +162,7 @@ void Device::probeCompressedTextureFormats(){
         }
         m_compressedFormatSupport[formatValue] = support;
 
-        const bool readable = (support & s_RequiredReadableSupport) == s_RequiredReadableSupport;
+        const b8 readable = (support & s_RequiredReadableSupport) == s_RequiredReadableSupport;
         if(Format::IsASTCCompressedFormat(format)){
             if(Format::IsASTCHdrFormat(format)){
                 ++astcHdrFormatCount;
@@ -235,7 +235,7 @@ FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format
     return support;
 }
 
-bool Device::canCreateSampledTextureFormat(const Format::Enum format)const{
+b8 Device::canCreateSampledTextureFormat(const Format::Enum format)const{
     const VkFormat vkFormat = ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED)
         return false;

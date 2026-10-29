@@ -109,7 +109,7 @@ void PrepareFixture(StatisticsFixture& fixture, const u32 packetCount, const u32
     }
 }
 
-[[nodiscard]] bool AppendFixtureStatistics(NWB::Core::Alloc::ScratchArena& scratchArena, const u32 packetCount, const u32 ownerCount, StatisticsFixture& fixture){
+[[nodiscard]] b8 AppendFixtureStatistics(NWB::Core::Alloc::ScratchArena& scratchArena, const u32 packetCount, const u32 ownerCount, StatisticsFixture& fixture){
     Telemetry::FrameGraphBuilder builder(scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     const u32 packetsPerOwner = packetCount / ownerCount;
     for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){

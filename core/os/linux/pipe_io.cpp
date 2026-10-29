@@ -43,7 +43,7 @@ static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes)noexcep
     sigset_t pending;
     if(sigemptyset(&blocked) != 0 || sigaddset(&blocked, SIGPIPE) != 0 || pthread_sigmask(SIG_BLOCK, &blocked, &previous) != 0 || sigpending(&pending) != 0)
         TerminateInvariant();
-    const bool alreadyPending = sigismember(&pending, SIGPIPE) == 1;
+    const b8 alreadyPending = sigismember(&pending, SIGPIPE) == 1;
     const ssize_t count = write(fd, bytes.data(), bytes.size());
     const int writeError = errno;
     if(count < 0 && writeError == EPIPE && !alreadyPending){
@@ -85,7 +85,7 @@ Expected<ClipboardPipe> OpenClipboardPipe()noexcept{
     return MakeUnexpected(Failure{});
 }
 
-bool ConfigureClipboardPipe(const int fd)noexcept{
+b8 ConfigureClipboardPipe(const int fd)noexcept{
     const int flags = fcntl(fd, F_GETFL);
     const int descriptorFlags = fcntl(fd, F_GETFD);
     return flags >= 0 && descriptorFlags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0 && fcntl(fd, F_SETFD, descriptorFlags | FD_CLOEXEC) == 0;
@@ -100,7 +100,7 @@ void CloseClipboardPipe(int& fd)noexcept{
         TerminateInvariant();
 }
 
-Expected<bool, ClipboardPipeReadFailure> ReadClipboardPipe(const int fd, ClipboardTextAccumulator& text){
+Expected<b8, ClipboardPipeReadFailure> ReadClipboardPipe(const int fd, ClipboardTextAccumulator& text){
     Array<char, __hidden_pipe_io::s_ReadChunkBytes> bytes;
     usize consumed = 0u;
     usize calls = 0u;
@@ -139,7 +139,7 @@ ClipboardPipeWriter::~ClipboardPipeWriter()noexcept{
     CloseClipboardPipe(m_fd);
 }
 
-bool ClipboardPipeWriter::begin(const int fd, const AStringView text){
+b8 ClipboardPipeWriter::begin(const int fd, const AStringView text){
     NWB_FATAL_ASSERT(m_fd < 0);
     m_text.clear();
     m_offset = 0u;

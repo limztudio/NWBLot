@@ -43,9 +43,9 @@ struct ReflectionGraphInputs{
     Span<const Core::GpuTaskResourceUse> surfaceReads{};
     Span<const Core::GpuTaskResourceUse> hardwareReads{};
     Span<const Core::GpuTaskResourceSetUse> hardwareSetReads{};
-    const bool* hardwarePreparationReady = nullptr;
-    bool* hardwareDispatchLogged = nullptr;
-    bool* fallbackDispatchLogged = nullptr;
+    const b8* hardwarePreparationReady = nullptr;
+    b8* hardwareDispatchLogged = nullptr;
+    b8* fallbackDispatchLogged = nullptr;
 };
 
 struct ReflectionGraphResult{
@@ -57,7 +57,7 @@ struct ReflectionGraphResult{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return completion.valid(); }
+    [[nodiscard]] b8 valid()const noexcept{ return completion.valid(); }
 };
 
 // Inputs copy at declaration; outcomes and latches are frame-owned past packet lifetime.

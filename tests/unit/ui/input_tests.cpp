@@ -35,7 +35,7 @@ InputEvent PointerEvent(const InputEventType::Enum type, const Point& position =
     return { .position = position , .type = type };
 }
 
-InputEvent KeyEvent(const InputEventType::Enum type, const Core::Key::Enum key, const bool shift = false, const bool repeat = false)noexcept{
+InputEvent KeyEvent(const InputEventType::Enum type, const Core::Key::Enum key, const b8 shift = false, const b8 repeat = false)noexcept{
     return { .position = {}, .key = key, .type = type, .shift = shift, .repeat = repeat };
 }
 
@@ -62,7 +62,7 @@ protected:
         EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, position)).pointerConsumed);
     }
 
-    void tab(const bool reverse = false){
+    void tab(const b8 reverse = false){
         EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Tab, reverse)).commandConsumed);
         EXPECT_TRUE(send(KeyEvent(InputEventType::KeyUp, Core::Key::Tab, reverse)).commandConsumed);
     }

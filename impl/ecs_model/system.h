@@ -93,7 +93,7 @@ struct ModelObjectRendererHooks{
 struct ModelAttachmentJointQuery{
     Core::ECS::EntityID parentEntity;
     u32 parentJointIndex = s_SkeletonInvalidJointIndex;
-    bool resolved = false;
+    b8 resolved = false;
     SkeletonJointMatrix jointMatrix{};
 };
 
@@ -117,10 +117,10 @@ private:
     void clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchArena);
     void ensureModelRuntime(Core::ECS::EntityID entity, const ModelComponent& component, Core::Alloc::ScratchArena& scratchArena);
     void clearModelRuntime(Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool expandModel(Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime);
-    [[nodiscard]] bool spawnSkeletonObject(Core::ECS::EntityID owner, const ModelSkeletonObject& object);
-    [[nodiscard]] bool spawnStaticMeshObject(Core::ECS::EntityID owner, const ModelStaticMeshObject& object);
-    [[nodiscard]] bool spawnSkinnedMeshObject(Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object);
+    [[nodiscard]] b8 expandModel(Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime);
+    [[nodiscard]] b8 spawnSkeletonObject(Core::ECS::EntityID owner, const ModelSkeletonObject& object);
+    [[nodiscard]] b8 spawnStaticMeshObject(Core::ECS::EntityID owner, const ModelStaticMeshObject& object);
+    [[nodiscard]] b8 spawnSkinnedMeshObject(Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object);
     [[nodiscard]] Expected<void, Core::CpuTaskAdmissionError::Enum> updateModelObjectTransforms();
     void updateStaticMeshAttachments();
     [[nodiscard]] Core::ECS::EntityID findSpawnedObject(Core::ECS::EntityID owner, Name objectName)const noexcept;

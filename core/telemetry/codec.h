@@ -69,7 +69,7 @@ struct DecodeResult{
 
 
 public:
-    [[nodiscard]] bool ok()const noexcept{ return status == DecodeStatus::Ok; }
+    [[nodiscard]] b8 ok()const noexcept{ return status == DecodeStatus::Ok; }
 };
 
 struct DecodedEvent{
@@ -81,9 +81,9 @@ struct DecodedEvent{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool EncodeEvent(const EventRecord& event, TelemetryBytes& outBytes);
-[[nodiscard]] bool EncodeEvent(const EventHeader& header, const void* payload, usize payloadBytes, TelemetryBytes& outBytes);
-[[nodiscard]] bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes);
+[[nodiscard]] b8 EncodeEvent(const EventRecord& event, TelemetryBytes& outBytes);
+[[nodiscard]] b8 EncodeEvent(const EventHeader& header, const void* payload, usize payloadBytes, TelemetryBytes& outBytes);
+[[nodiscard]] b8 EncodeEventStream(const EventView& events, TelemetryBytes& outBytes);
 [[nodiscard]] Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const void* bytes, usize byteCount);
 [[nodiscard]] Expected<usize, DecodeResult> DecodeEventStream(TelemetryArena& arena, const void* bytes, usize byteCount, Recorder& inOutRecorder);
 

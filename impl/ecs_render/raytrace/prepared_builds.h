@@ -40,11 +40,11 @@ struct PreparedMeshBlasBuild{
     u32 indexCount = 0u;
     u32 refitsBeforeBuild = 0u;
     u32 refitsAfterBuild = 0u;
-    bool runtimeMesh = false;
-    bool buildPending = false;
-    bool firstBuild = false;
-    bool backingFresh = false;
-    bool performRefit = false;
+    b8 runtimeMesh = false;
+    b8 buildPending = false;
+    b8 firstBuild = false;
+    b8 backingFresh = false;
+    b8 performRefit = false;
 };
 
 using PreparedMeshBlasBuildVector = Vector< PreparedMeshBlasBuild, Core::Alloc::GlobalArena >;
@@ -83,10 +83,10 @@ struct PreparedMeshSwBvhBuild{
     u32 primitiveCount = 0u;
     u32 refitsBeforeBuild = 0u;
     u32 refitsAfterBuild = 0u;
-    bool runtimeMesh = false;
-    bool buildPending = false;
-    bool firstBuild = false;
-    bool performRefit = false;
+    b8 runtimeMesh = false;
+    b8 buildPending = false;
+    b8 firstBuild = false;
+    b8 performRefit = false;
 };
 
 using PreparedMeshSwBvhBuildVector = Vector< PreparedMeshSwBvhBuild, Core::Alloc::GlobalArena >;
@@ -110,7 +110,7 @@ struct PreparedSceneSwBvhMesh{
     usize triangleIndexByteSize = 0u;
     usize attributeByteSize = 0u;
     u32 primitiveCount = 0u;
-    bool runtimeMesh = false;
+    b8 runtimeMesh = false;
 };
 
 using PreparedSceneSwBvhMeshVector = Vector< PreparedSceneSwBvhMesh, Core::Alloc::GlobalArena >;

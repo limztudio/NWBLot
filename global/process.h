@@ -58,7 +58,7 @@ enum Enum : i32{
 #endif
 }
 
-[[nodiscard]] inline bool SetSignalHandler(ProcessSignal::Enum signalValue, SignalHandler handler)noexcept{
+[[nodiscard]] inline b8 SetSignalHandler(ProcessSignal::Enum signalValue, SignalHandler handler)noexcept{
     return std::signal(signalValue, handler) != SIG_ERR;
 }
 

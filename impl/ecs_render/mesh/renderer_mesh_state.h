@@ -43,7 +43,7 @@ private:
     Core::BufferHandle m_meshViewBuffer;
     ECSRenderDetail::MeshFrameBindingSnapshot m_frameBindings;
     u8 m_meshViewGpuData[sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT] = {};
-    bool m_meshViewGpuDataValid = false;
+    b8 m_meshViewGpuDataValid = false;
 };
 
 

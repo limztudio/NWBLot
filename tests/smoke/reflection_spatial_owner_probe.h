@@ -46,15 +46,15 @@ public:
 
 
 public:
-    [[nodiscard]] bool configure(AStringView selection, Impl::ReflectionSettings& settings);
-    [[nodiscard]] bool update(const Impl::ReflectionStatistics& statistics, const Core::Perf::TimingView& timing, Impl::ReflectionSettings& settings);
-    [[nodiscard]] bool shouldCapture(u64 graphicsFrame)const noexcept{ return m_finalReset && graphicsFrame == m_finalSource; }
-    [[nodiscard]] bool canFinish(const Impl::ReflectionStatistics& statistics, u64 capturedSource)const noexcept;
+    [[nodiscard]] b8 configure(AStringView selection, Impl::ReflectionSettings& settings);
+    [[nodiscard]] b8 update(const Impl::ReflectionStatistics& statistics, const Core::Perf::TimingView& timing, Impl::ReflectionSettings& settings);
+    [[nodiscard]] b8 shouldCapture(u64 graphicsFrame)const noexcept{ return m_finalReset && graphicsFrame == m_finalSource; }
+    [[nodiscard]] b8 canFinish(const Impl::ReflectionStatistics& statistics, u64 capturedSource)const noexcept;
 
 
 private:
-    [[nodiscard]] bool observeTiming(const Core::Perf::TimingView& timing);
-    [[nodiscard]] bool beginPhase(Impl::ReflectionSettings& settings);
+    [[nodiscard]] b8 observeTiming(const Core::Perf::TimingView& timing);
+    [[nodiscard]] b8 beginPhase(Impl::ReflectionSettings& settings);
 
 
 private:
@@ -68,9 +68,9 @@ private:
     u32 m_radii[4] = { 1u, 3u, 2u, 1u };
     u32 m_phase = 0u;
     u32 m_lastPhase = 0u;
-    bool m_started = false;
-    bool m_finalReset = false;
-    bool m_hasPublication = false;
+    b8 m_started = false;
+    b8 m_finalReset = false;
+    b8 m_hasPublication = false;
 };
 
 

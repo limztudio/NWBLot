@@ -30,12 +30,12 @@ class RendererFramePipeline;
 
 // Opaque compute-emulation merge validation owns packet-merge checks for prefix tasks.
 struct OpaqueEmulationMergeValidationResult{
-    bool packetsAreGraphics = false;
-    bool opaqueComputeEmulationMerged = false;
-    bool opaqueSharedComputeEmulationMerged = false;
-    bool opaqueCsgReceiverComputeEmulationMerged = false;
-    bool opaqueCsgIntervalSampleComputeEmulationMerged = false;
-    bool csgIntervalClearBundleMerged = false;
+    b8 packetsAreGraphics = false;
+    b8 opaqueComputeEmulationMerged = false;
+    b8 opaqueSharedComputeEmulationMerged = false;
+    b8 opaqueCsgReceiverComputeEmulationMerged = false;
+    b8 opaqueCsgIntervalSampleComputeEmulationMerged = false;
+    b8 csgIntervalClearBundleMerged = false;
 };
 
 
@@ -48,7 +48,7 @@ public:
 
 
 public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Span<const Core::GpuTaskId> timingTasks, bool timingBindingsValid, bool hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept;
+    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Span<const Core::GpuTaskId> timingTasks, b8 timingBindingsValid, b8 hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept;
 
 
 private:

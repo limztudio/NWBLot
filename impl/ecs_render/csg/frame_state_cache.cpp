@@ -47,7 +47,7 @@ namespace CsgFrameCacheDetail{
     });
 
     auto receiverView = world.view<StaticCsgMeshComponent>();
-    bool cacheable = true;
+    b8 cacheable = true;
     receiverView.each([&](const Core::ECS::EntityID entity, StaticCsgMeshComponent& typedReceiver){
         const CsgReceiverComponent receiver = typedReceiver.asReceiver();
         Fnv64AppendValue(contentHash, entity.id);

@@ -17,18 +17,18 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiEditBoxHost::apply(const Ui::EditBoxOptions& options, Event& event, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
+b8 UiEditBoxHost::apply(const Ui::EditBoxOptions& options, Event& event, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
     const u64 revision = model.revision();
     const u64 externalRevision = model.externalRevision();
     const u64 selectionGeneration = model.selectionGeneration();
     const u64 compositionGeneration = model.compositionGeneration();
-    const bool clipboard = m_clipboard.cancel();
-    const bool primary = m_primary.cancel();
+    const b8 clipboard = m_clipboard.cancel();
+    const b8 primary = m_primary.cancel();
     if(!clipboard || !primary)
         TerminateInvariant();
     if(m_borrowRejected)
         return false;
-    const bool composing = model.composition().active;
+    const b8 composing = model.composition().active;
     if(event.kind == UiEditBoxEventKind::Command){
         if(event.navigation)
             return navigation ? applyNavigation(event, event.navigationDirection, model, *navigation) : true;
@@ -40,7 +40,7 @@ bool UiEditBoxHost::apply(const Ui::EditBoxOptions& options, Event& event, Entry
                 return false;
         }
         if(command.cancelled){
-            const bool cancelFocus = !actions || (entry.focused && entry.focusGeneration == event.focusGeneration && m_context.input().focus() == entry.widget.id);
+            const b8 cancelFocus = !actions || (entry.focused && entry.focusGeneration == event.focusGeneration && m_context.input().focus() == entry.widget.id);
             if(actions){
                 entry.retiredFocusGeneration = Max(entry.retiredFocusGeneration, event.focusGeneration);
                 if(entry.focusGeneration == event.focusGeneration)
@@ -75,7 +75,7 @@ bool UiEditBoxHost::apply(const Ui::EditBoxOptions& options, Event& event, Entry
             return true;
         if(event.native.kind == Core::TextInputEventKind::Commit && event.native.text.size() == 1u && !IsTextInputCodePoint(static_cast<u8>(event.native.text.front())))
             return true;
-        const bool matching = model.revision() == event.surroundingModelRevision
+        const b8 matching = model.revision() == event.surroundingModelRevision
             && model.externalRevision() == event.geometryExternalRevision
             && model.selectionGeneration() == event.surroundingSelectionGeneration
             && model.anchor() == event.surroundingAnchor && model.caret() == event.surroundingCaret
@@ -154,7 +154,7 @@ bool UiEditBoxHost::apply(const Ui::EditBoxOptions& options, Event& event, Entry
     return true;
 }
 
-bool UiEditBoxHost::applyAction(const Ui::EditBoxOptions& options, const Ui::EditAction::Enum action, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation){
+b8 UiEditBoxHost::applyAction(const Ui::EditBoxOptions& options, const Ui::EditAction::Enum action, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation){
     const u64 revision = model.revision();
     const u64 selectionGeneration = model.selectionGeneration();
     const u64 compositionGeneration = model.compositionGeneration();
@@ -187,7 +187,7 @@ bool UiEditBoxHost::applyAction(const Ui::EditBoxOptions& options, const Ui::Edi
     return !m_borrowRejected;
 }
 
-bool UiEditBoxHost::rejectBorrowedMutation()noexcept{
+b8 UiEditBoxHost::rejectBorrowedMutation()noexcept{
     if(!m_borrowed)
         return false;
     m_borrowRejected = true;

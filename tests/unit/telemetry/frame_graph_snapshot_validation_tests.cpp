@@ -53,7 +53,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return NWB::Tests::Smoke::ValidateNormalFrameSnapshotCompletion(payload, runtime); }
+    [[nodiscard]] b8 valid()const noexcept{ return NWB::Tests::Smoke::ValidateNormalFrameSnapshotCompletion(payload, runtime); }
 };
 
 

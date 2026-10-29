@@ -55,7 +55,7 @@ public:
 
 public:
     void reset()noexcept;
-    [[nodiscard]] bool update(
+    [[nodiscard]] b8 update(
         const GpuTaskGraph::DeclarationReadView& declarations,
         const GpuTaskGraphQueueAssignments& assignments,
         const GpuCompiledGraph::ReadView& compiledPlan,
@@ -63,7 +63,7 @@ public:
         Alloc::ScratchArena& scratchArena
     );
 
-    [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept;
+    [[nodiscard]] b8 validFor(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept;
     [[nodiscard]] const GpuTaskQueueAssignmentTelemetry* find(GpuTaskId task)const noexcept;
 
 
@@ -76,7 +76,7 @@ private:
     u64 m_recordingAttemptGeneration = 0u;
     u64 m_acceptanceRevision = 0u;
     u16 m_deviceGeneration = 0u;
-    bool m_valid = false;
+    b8 m_valid = false;
 };
 
 

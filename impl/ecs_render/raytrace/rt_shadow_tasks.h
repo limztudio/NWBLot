@@ -76,20 +76,20 @@ struct ShadowVisibilityOpaqueGraphTask{
         Core::GraphicsRuntime& graphics;
         DeferredFrameTargets& targets;
         DeferredLightingGraphResources deferredLightingResources;
-        bool hardwareShadowSupported = false;
-        bool graphOwnsOpaqueTemporalMergeEntryStates = false;
+        b8 hardwareShadowSupported = false;
+        b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
         LightSpaceShadowSnapshot lightSpace;
         Core::GpuTimingSubmissionTicket& timingTicket;
         Optional<Core::GpuTimingMeasure>& asyncTiming;
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming;
-        const bool& prepared;
-        bool& opaqueProduced;
+        const b8& prepared;
+        b8& opaqueProduced;
         u32& opaqueFrameIndex;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.deferredLightingResources.valid())
             return false;
 
@@ -115,7 +115,7 @@ public:
         }
         payload.shadowVisibilityTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, payload.graphics.getDevice(), commandList);
 
-        bool opaqueRecorded = false;
+        b8 opaqueRecorded = false;
         if(payload.prepared){
             const auto opaqueFrame = payload.hardwareShadowSupported
                 ? payload.raytracingSystem.renderShadowVisibilityOpaque(commandList, payload.targets, payload.deferredLightingResources, payload.graphOwnsOpaqueTemporalMergeEntryStates, &payload.lightSpace)
@@ -142,8 +142,8 @@ public:
 
         payload.opaqueProduced = true;
         // Both timestamp ranges end in the terminal fold callback, but their debug markers must close before this graph task's marker closes.
-        const bool visibilityMarkerFinished = Core::FinishSplitGpuTimingMarker(&payload.shadowVisibilityTiming);
-        bool asyncMarkerFinished = true;
+        const b8 visibilityMarkerFinished = Core::FinishSplitGpuTimingMarker(&payload.shadowVisibilityTiming);
+        b8 asyncMarkerFinished = true;
         if(payload.asyncTiming.has_value())
             asyncMarkerFinished = Core::FinishSplitGpuTimingMarker(&payload.asyncTiming);
         if(!asyncMarkerFinished || !visibilityMarkerFinished){
@@ -178,17 +178,17 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
         Optional<Core::GpuTimingMeasure>& asyncTiming;
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming;
         Optional<Core::GpuTimingMeasure>& opaqueResolveTiming;
-        bool& opaqueProduced;
+        b8& opaqueProduced;
         const u32& opaqueFrameIndex;
-        bool hardwareShadowSupported = false;
-        bool graphOwnsOpaqueTemporalMergeEntryStates = false;
-        bool deferUpsample = false;
-        bool deferWavelet = false;
+        b8 hardwareShadowSupported = false;
+        b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
+        b8 deferUpsample = false;
+        b8 deferWavelet = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.deferredLightingResources.valid())
             return false;
@@ -241,14 +241,14 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
         Optional<Core::GpuTimingMeasure>& asyncTiming;
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming;
         Optional<Core::GpuTimingMeasure>& opaqueResolveTiming;
-        bool& opaqueProduced;
+        b8& opaqueProduced;
         const u32& opaqueFrameIndex;
-        bool hardwareShadowSupported = false;
+        b8 hardwareShadowSupported = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.deferredLightingResources.valid())
             return false;
@@ -287,14 +287,14 @@ struct ShadowTransparentSoftTraceGraphTask{
         DeferredLightingGraphResources deferredLightingResources;
         LightSpaceShadowSnapshot lightSpace;
         Core::GpuTimingSubmissionTicket& timingTicket;
-        const bool& opaqueProduced;
+        const b8& opaqueProduced;
         const u32& opaqueFrameIndex;
-        bool& transparentTraceProduced;
+        b8& transparentTraceProduced;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.deferredLightingResources.valid())
             return false;
@@ -330,17 +330,17 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket& timingTicket;
         Optional<Core::GpuTimingMeasure>& transparentResolveTiming;
-        const bool& opaqueProduced;
-        bool& transparentTraceProduced;
+        const b8& opaqueProduced;
+        b8& transparentTraceProduced;
         const u32& opaqueFrameIndex;
-        bool graphOwnsTransparentTemporalMergeEntryStates = false;
-        bool combinedTemporal = false;
-        bool hardwareShadowSupported = false;
+        b8 graphOwnsTransparentTemporalMergeEntryStates = false;
+        b8 combinedTemporal = false;
+        b8 hardwareShadowSupported = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.deferredLightingResources.valid())
             return false;
@@ -360,7 +360,7 @@ public:
             payload.transparentResolveTiming.reset();
         }
         payload.transparentResolveTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentResolve, payload.graphics.getDevice(), commandList);
-        const bool merged = payload.combinedTemporal
+        const b8 merged = payload.combinedTemporal
             ? payload.raytracingSystem.renderSoftShadowCombinedTemporalMerge(commandList, payload.targets)
             : payload.raytracingSystem.renderSoftTransparentShadowTemporalMerge(commandList, payload.targets, payload.deferredLightingResources, payload.opaqueFrameIndex, payload.graphOwnsTransparentTemporalMergeEntryStates)
         ;
@@ -393,17 +393,17 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket& timingTicket;
         Optional<Core::GpuTimingMeasure>& transparentResolveTiming;
-        const bool& opaqueProduced;
-        bool& transparentTraceProduced;
+        const b8& opaqueProduced;
+        b8& transparentTraceProduced;
         const u32& opaqueFrameIndex;
-        bool graphOwnsTransparentWaveletInputBoundary = false;
-        bool startsTransparentResolveTiming = true;
-        bool combinedWavelet = false;
+        b8 graphOwnsTransparentWaveletInputBoundary = false;
+        b8 startsTransparentResolveTiming = true;
+        b8 combinedWavelet = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         if(!payload.deferredLightingResources.valid())
             return false;
@@ -470,15 +470,15 @@ struct ShadowTransparentSoftFoldGraphTask{
         Optional<Core::GpuTimingMeasure>& asyncTiming;
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming;
         Optional<Core::GpuTimingMeasure>& transparentResolveTiming;
-        const bool& opaqueProduced;
-        bool& transparentTraceProduced;
+        const b8& opaqueProduced;
+        b8& transparentTraceProduced;
         const u32& opaqueFrameIndex;
-        bool combinedUpsample = false;
+        b8 combinedUpsample = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.deferredLightingResources.valid())
             return false;
 
@@ -494,7 +494,7 @@ public:
         if(payload.transparentTraceProduced){
             if(!payload.transparentResolveTiming.has_value())
                 return false;
-            const bool resolved = payload.combinedUpsample
+            const b8 resolved = payload.combinedUpsample
                 ? payload.raytracingSystem.renderSoftShadowTerminalUpsample(commandList, payload.targets, payload.deferredLightingResources, true)
                 : payload.raytracingSystem.renderSoftTransparentShadowFold(commandList, payload.targets, payload.deferredLightingResources, payload.opaqueFrameIndex)
             ;
@@ -553,14 +553,14 @@ struct ShadowVisibilityGraphTask{
         DeferredFrameTargets& targets;
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket& timingTicket;
-        const bool& prepared;
+        const b8& prepared;
         GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan;
-        bool hardwareShadowSupported = false;
+        b8 hardwareShadowSupported = false;
     };
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.deferredLightingResources.valid())
             return false;
 
@@ -577,7 +577,7 @@ public:
             asyncTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncShadow, payload.graphics.getDevice(), commandList);
         }
 
-        bool shadowVisibilityWritten = false;
+        b8 shadowVisibilityWritten = false;
         if(payload.prepared && payload.hardwareShadowSupported){
             shadowVisibilityWritten = payload.raytracingSystem.renderShadowVisibility(commandList, payload.targets, payload.deferredLightingResources).has_value();
             if(!shadowVisibilityWritten)

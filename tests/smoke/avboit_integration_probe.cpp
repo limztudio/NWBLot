@@ -61,7 +61,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
         payload.stage = NWB_TEXT("recording entry");
         if(context.commandIrCapture)
             return false;
@@ -169,7 +169,7 @@ static void PreparePhase(ProbeTask::Payload& payload, const u32 phase)noexcept{
     }
 }
 
-[[nodiscard]] static bool CompareVolume(Core::Device& device, const ProbeTask::Payload& payload, const u32 phase){
+[[nodiscard]] static b8 CompareVolume(Core::Device& device, const ProbeTask::Payload& payload, const u32 phase){
     Array<u32, s_PixelCount> extinctionFixed{};
     for(u32 slice = 0u; slice < s_SliceCount; ++slice){
         const auto mapping = device.mapStagingTexture(*payload.readback, Core::TextureSlice{}.setOrigin(0u, 0u, slice).setSize(s_Width, s_Height, 1u), Core::CpuAccessMode::Read);
@@ -211,7 +211,7 @@ static void PreparePhase(ProbeTask::Payload& payload, const u32 phase)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+b8 RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
     using namespace NWB;
     using namespace __hidden_avboit_integration_probe;
     auto& graphics = context.graphics;
@@ -235,7 +235,7 @@ bool RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context, const NWB::I
     const auto pipeline = device.createComputePipeline(pipelineDesc);
     if(!pipeline)
         return false;
-    const auto createBuffer = [&graphics](const Name name, const u32 byteSize, const bool constant){
+    const auto createBuffer = [&graphics](const Name name, const u32 byteSize, const b8 constant){
         Core::BufferDesc desc;
         desc.setDebugName(name).setByteSize(byteSize).setStructStride(sizeof(u32)).setCanHaveUAVs(!constant).setIsConstantBuffer(constant).enableAutomaticStateTracking(constant ? Core::ResourceStates::ConstantBuffer : Core::ResourceStates::CopyDest);
         return graphics.createBuffer(desc);

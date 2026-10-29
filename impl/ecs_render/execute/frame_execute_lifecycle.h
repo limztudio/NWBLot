@@ -33,9 +33,9 @@ public:
         NotNull<Core::GpuPersistentResourceStateCache::Candidate*> stateCandidate;
         const Core::BufferHandle* buffers = nullptr;
         usize bufferCount = 0u;
-        bool stateCandidateRequired = false;
-        bool statePrepared = false;
-        bool stateReady = true;
+        b8 stateCandidateRequired = false;
+        b8 statePrepared = false;
+        b8 stateReady = true;
     };
     struct ShadowVisibilityStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
@@ -46,13 +46,13 @@ public:
         const Core::TextureHandle* returnTextures = nullptr;
         const Core::TextureHandle* scratchTextures = nullptr;
         const Core::BufferHandle* scratchBuffers = nullptr;
-        const bool* lightSpacePrepared = nullptr;
+        const b8* lightSpacePrepared = nullptr;
         LightSpaceCaptureTicket lightSpaceCaptureTicket;
         usize returnTextureCount = 0u;
         usize scratchTextureCount = 0u;
         usize scratchBufferCount = 0u;
-        bool statePrepared = false;
-        bool stateReady = false;
+        b8 statePrepared = false;
+        b8 stateReady = false;
     };
     struct SoftwareCausticsStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
@@ -63,8 +63,8 @@ public:
         const Core::TextureHandle* scratchTextures = nullptr;
         usize irradianceTextureCount = 0u;
         usize scratchTextureCount = 0u;
-        bool statePrepared = false;
-        bool stateReady = false;
+        b8 statePrepared = false;
+        b8 stateReady = false;
     };
     struct SurfelGiStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
@@ -80,8 +80,8 @@ public:
         usize counterBufferCount = 0u;
         usize computeTextureCount = 0u;
         usize computeBufferCount = 0u;
-        bool statePrepared = false;
-        bool stateReady = false;
+        b8 statePrepared = false;
+        b8 stateReady = false;
     };
     struct HardwareCausticsStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
@@ -89,8 +89,8 @@ public:
         NotNull<Core::GpuPersistentResourceStateCache::Candidate*> accumulatorStateCandidate;
         const Core::TextureHandle* accumulatorTextures = nullptr;
         usize accumulatorTextureCount = 0u;
-        bool statePrepared = false;
-        bool stateReady = false;
+        b8 statePrepared = false;
+        b8 stateReady = false;
     };
     struct DeferredLightingStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
@@ -105,25 +105,25 @@ public:
         usize shadowReturnTextureCount = 0u;
         usize causticReturnTextureCount = 0u;
         usize surfelReturnTextureCount = 0u;
-        bool usesLaggedHistory = false;
-        bool statePrepared = false;
-        bool stateReady = false;
+        b8 usesLaggedHistory = false;
+        b8 statePrepared = false;
+        b8 stateReady = false;
     };
 
 
 public:
-    [[nodiscard]] static bool PrepareShadowPrepareTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static bool AcceptShadowPrepareTask( void* const rawContext, const Core::QueueSubmissionToken& token );
-    [[nodiscard]] static bool PrepareShadowVisibilityTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static bool AcceptShadowVisibilityTask( void* const rawContext, const Core::QueueSubmissionToken& token );
-    [[nodiscard]] static bool PrepareSoftwareCausticsTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static bool AcceptSoftwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
-    [[nodiscard]] static bool PrepareSurfelGiTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static bool AcceptSurfelGiTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
-    [[nodiscard]] static bool PrepareHardwareCausticsTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static bool AcceptHardwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
-    [[nodiscard]] static bool PrepareDeferredLightingTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static bool AcceptDeferredLightingTask( void* const rawContext, const Core::QueueSubmissionToken& token );
+    [[nodiscard]] static b8 PrepareShadowPrepareTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
+    [[nodiscard]] static b8 AcceptShadowPrepareTask( void* const rawContext, const Core::QueueSubmissionToken& token );
+    [[nodiscard]] static b8 PrepareShadowVisibilityTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
+    [[nodiscard]] static b8 AcceptShadowVisibilityTask( void* const rawContext, const Core::QueueSubmissionToken& token );
+    [[nodiscard]] static b8 PrepareSoftwareCausticsTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
+    [[nodiscard]] static b8 AcceptSoftwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
+    [[nodiscard]] static b8 PrepareSurfelGiTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
+    [[nodiscard]] static b8 AcceptSurfelGiTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
+    [[nodiscard]] static b8 PrepareHardwareCausticsTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
+    [[nodiscard]] static b8 AcceptHardwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
+    [[nodiscard]] static b8 PrepareDeferredLightingTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
+    [[nodiscard]] static b8 AcceptDeferredLightingTask( void* const rawContext, const Core::QueueSubmissionToken& token );
 
 
 public:

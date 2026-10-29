@@ -84,20 +84,20 @@ public:
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources,
         const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
-        bool hardwareShadowSupported,
-        bool usesLaggedHistory
+        b8 hardwareShadowSupported,
+        b8 usesLaggedHistory
     );
 
 
 public:
-    [[nodiscard]] bool selectedCausticsStateReady(const bool hardwareShadowSupported)const noexcept{
+    [[nodiscard]] b8 selectedCausticsStateReady(const b8 hardwareShadowSupported)const noexcept{
         return hardwareShadowSupported ? hardwareCausticsStateLifecycle.stateReady : softwareCausticsStateLifecycle.stateReady;
     }
 
 
 private:
     void collectShadowPrepareStateBuffers(RendererFramePipeline& renderer, const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources, const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources);
-    void bindCallbacks(const RendererFramePipeline& renderer, bool hardwareShadowSupported)noexcept;
+    void bindCallbacks(const RendererFramePipeline& renderer, b8 hardwareShadowSupported)noexcept;
 };
 
 

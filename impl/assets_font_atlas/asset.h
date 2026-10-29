@@ -33,8 +33,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool loadBinary(Span<const u8> binary);
-    [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] b8 loadBinary(Span<const u8> binary);
+    [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
     void setPayload(FontAtlasPayload&& payload)noexcept{ m_payload = Move(payload); }
 
     [[nodiscard]] const FontAtlasPayload& payload()const noexcept{ return m_payload; }

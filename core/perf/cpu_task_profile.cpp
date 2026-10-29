@@ -67,7 +67,7 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
     usize remaining = scheduler.statistics().profilePendingEvents;
     if(remaining == 0u)
         return;
-    const bool enabled = timing.enabled();
+    const b8 enabled = timing.enabled();
     CpuTaskProfileEvent events[__hidden_cpu_task_profile::s_ReadBatchSize];
     while(remaining != 0u){
         const usize count = scheduler.readProfileEvents(events, Min(remaining, __hidden_cpu_task_profile::s_ReadBatchSize));

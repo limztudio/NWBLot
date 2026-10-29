@@ -148,9 +148,9 @@ NWB_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const AvboitFrameTargets& targets,
     const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags,
-    const bool hdr10OutputActive,
+    const b8 hdr10OutputActive,
     const u32 csgContextHeapSlot = 0u,
-    const bool refractionCapture = false
+    const b8 refractionCapture = false
 )noexcept{
     TransparentDrawPushConstants pushConstants;
     pushConstants.mesh = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, frameHeapSlots, dispatchFlags);
@@ -183,9 +183,9 @@ NWB_INLINE void SetTransparentDrawPushConstants(
     const AvboitFrameTargets& targets,
     const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags,
-    const bool hdr10OutputActive,
+    const b8 hdr10OutputActive,
     const u32 csgContextHeapSlot = 0u,
-    const bool refractionCapture = false
+    const b8 refractionCapture = false
 ){
     const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, targets, frameHeapSlots, dispatchFlags, hdr10OutputActive, csgContextHeapSlot, refractionCapture);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));

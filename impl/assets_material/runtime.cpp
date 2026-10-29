@@ -30,7 +30,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MaterialAssetCodecAutoRegistrar, MaterialAsse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ValidateMaterialTypedLayout(const u64 layoutHash, const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const u8> blockBytes, const TStringView failureContext){
+static b8 ValidateMaterialTypedLayout(const u64 layoutHash, const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const u8> blockBytes, const TStringView failureContext){
     if(blocks.empty() && fields.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout is empty"), failureContext);
         return false;
@@ -294,7 +294,7 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Material::loadBinary(const Span<const u8> binary){
+b8 Material::loadBinary(const Span<const u8> binary){
     if(!checkVirtualPath(MaterialBinaryPayload::s_MaterialLoadBinaryContext))
         return false;
 
@@ -505,7 +505,7 @@ void Material::setResourceReferences(const Span<const MaterialResourceReference>
     m_resourceReferences.assign(resourceReferences.begin(), resourceReferences.end());
 }
 
-bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept{
+b8 Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept{
     if(!IsSupportedMaterialShaderStage(shaderType) || !shaderAsset.valid())
         return false;
 

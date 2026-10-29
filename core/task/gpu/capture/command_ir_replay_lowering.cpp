@@ -137,7 +137,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         }
         const auto& decoded = *decodedResult;
 
-        const bool raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
+        const b8 raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
         const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
         if(recordPacket == packet){
             // Preflight rejected every raster record without the owned sidecar.
@@ -246,7 +246,7 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
         }
         const auto& decoded = *decodedResult;
 
-        const bool raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
+        const b8 raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
         const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
         if(recordPacket != packet){
             ++recordIndex;

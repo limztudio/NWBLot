@@ -15,7 +15,7 @@
 NWB_VULKAN_BEGIN
 
 
-TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& context, const VkCommandPool commandPool, const bool ownsCommandPool, Futex* const sharedCommandPoolMutex)noexcept
+TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& context, const VkCommandPool commandPool, const b8 ownsCommandPool, Futex* const sharedCommandPoolMutex)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_cmdPool(commandPool)
     , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
@@ -112,7 +112,7 @@ TrackedCommandBuffer::TimerQueryRecordingClaim* TrackedCommandBuffer::findTimerQ
     return nullptr;
 }
 
-bool TrackedCommandBuffer::recordsTimerQueryBegin(const TimerQuery& query, const u64 generation)const noexcept{
+b8 TrackedCommandBuffer::recordsTimerQueryBegin(const TimerQuery& query, const u64 generation)const noexcept{
     for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
         if(claim.query.get() == &query && claim.generation == generation && claim.recordingID == m_recordingID && claim.recordsBegin)
             return true;
@@ -132,7 +132,7 @@ TrackedCommandBuffer::TimerQueryClaimOwnerMatches TrackedCommandBuffer::resolveT
     };
 }
 
-bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
+b8 TrackedCommandBuffer::validateTimerQueryRecordingClaims(
     const Queue& submissionQueue,
     const QueueSubmissionWait* const localWaits,
     const usize localWaitCount,
@@ -146,7 +146,7 @@ bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
 
         NothrowScopedLock queryLock(query.m_mutex);
         const QueueSubmissionToken currentPrerequisite = query.prerequisiteSubmissionWithinLock();
-        const bool prerequisiteMatches = currentPrerequisite == claim.prerequisiteSubmission;
+        const b8 prerequisiteMatches = currentPrerequisite == claim.prerequisiteSubmission;
         if((claim.recordsReset || claim.recordsBegin) && (!prerequisiteMatches || !submissionQueue.coversTimerQueryPrerequisite(claim.prerequisiteSubmission, claim.prerequisiteObservedComplete, localWaits, localWaitCount)))
             return false;
         const TimerQueryClaimOwnerMatches ownerMatches = resolveTimerQueryClaimOwnerMatches(query, claim);
@@ -175,7 +175,7 @@ bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
             if(query.m_beginAccepted || claim.recordsBegin)
                 continue;
 
-            bool orderedAfterBatchBegin = false;
+            b8 orderedAfterBatchBegin = false;
             for(usize precedingIndex = 0u; precedingIndex < precedingCommandBufferCount; ++precedingIndex){
                 TrackedCommandBuffer& preceding = *precedingCommandBuffers[precedingIndex];
                 if(&preceding == query.m_beginRecordingOwner.commandBuffer && preceding.m_recordingID == query.m_beginRecordingOwner.recordingID && preceding.recordsTimerQueryBegin(query, claim.generation)){
@@ -320,7 +320,7 @@ void TrackedCommandBuffer::discardRetainedTextureStateCommits()noexcept{
     m_retainedTextureStateCommits.clear();
 }
 
-bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
+b8 TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     AccelStruct& accelStruct,
     const VkAccelerationStructureTypeKHR accelStructType,
     const VkBuildAccelerationStructureFlagsKHR buildFlags,
@@ -390,7 +390,7 @@ Expected<NotNull<const AccelStructBuildSignatureRole*>> TrackedCommandBuffer::ge
     return MakeUnexpected(Failure{});
 }
 
-bool TrackedCommandBuffer::validatePendingAccelStructBuildCommits()const noexcept{
+b8 TrackedCommandBuffer::validatePendingAccelStructBuildCommits()const noexcept{
     for(const PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
         if(!commit.preparedRole || commit.displacedRole)
             return false;
@@ -488,7 +488,7 @@ void TrackedCommandBuffer::appendPendingOpacityMicromapBuildCommit(OpacityMicrom
     m_pendingOpacityMicromapBuildCommits.push_back(PendingOpacityMicromapBuildCommit{ .opacityMicromap = MakeNotNull(&opacityMicromap), });
 }
 
-bool TrackedCommandBuffer::hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept{
+b8 TrackedCommandBuffer::hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept{
     for(usize commitIndex = m_pendingOpacityMicromapBuildCommits.size(); commitIndex > 0u; --commitIndex){
         if(m_pendingOpacityMicromapBuildCommits[commitIndex - 1u].opacityMicromap.get() == &opacityMicromap)
             return true;

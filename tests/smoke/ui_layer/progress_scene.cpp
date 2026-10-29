@@ -54,7 +54,7 @@ UiProgressSmokeScene::~UiProgressSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiProgressSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiProgressSmokeScene::paint(Impl::UiPaintContext& context){
     auto& ui = context.ui;
     ui.style().fontSize = 14.0f;
     ui.style().gap = 8.0f;
@@ -73,13 +73,13 @@ bool UiProgressSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiProgressSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
+b8 UiProgressSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     return HandlePassiveSmokeKeyboard(key, action, m_phase, m_parent, m_child);
 }
 
-bool UiProgressSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
+b8 UiProgressSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     if(!ui.beginPanel("progress_main", bounds))
         return false;
@@ -102,7 +102,7 @@ bool UiProgressSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect
     return ui.endPanel();
 }
 
-bool UiProgressSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
+b8 UiProgressSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     if(!ui.beginPanel("progress_frozen", bounds))
         return false;
@@ -122,12 +122,12 @@ bool UiProgressSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Re
     options.width = { LayoutSizePolicy::Fixed, 70.0f };
     ui.progressStyle().padding = { 20.0f, 20.0f, 20.0f, 20.0f };
     ui.progressStyle().fillTint = { 0.0f, 0.0f, 0.0f, 1.0f };
-    const bool painted = ui.endPanel();
+    const b8 painted = ui.endPanel();
     ui.progressStyle() = original;
     return painted;
 }
 
-bool UiProgressSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl::Ui::Rect& bounds){
+b8 UiProgressSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     auto& ui = context.ui;
     const SIMDVectorSingle content = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 32.0f));
@@ -136,12 +136,12 @@ bool UiProgressSmokeScene::paintExternal(Impl::UiPaintContext& context, const Im
     m_declared.rectangles[10u] = clip;
     context.paint.fillRect(bounds, { 0.07f, 0.13f, 0.2f, 1.0f });
     context.paint.pushClip(clip);
-    const bool painted = ui.beginPanel("progress_external", bounds) && ui.progress("external", 0.75) && ui.endPanel();
-    const bool popped = context.paint.popClip();
+    const b8 painted = ui.beginPanel("progress_external", bounds) && ui.progress("external", 0.75) && ui.endPanel();
+    const b8 popped = context.paint.popClip();
     return painted && popped;
 }
 
-bool UiProgressSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
+b8 UiProgressSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
     using namespace Impl::Ui;
     PopupOptions parent;
     parent.anchor = { right, 330.0f, 8.0f, 24.0f };
@@ -181,11 +181,11 @@ bool UiProgressSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerProgressSmokeEnabled(){
+b8 IsUiLayerProgressSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_PROGRESS");
 }
 
-bool IsUiLayerProgressSkinSmokeEnabled(){
+b8 IsUiLayerProgressSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_PROGRESS_SKIN");
 }
 

@@ -36,7 +36,7 @@ UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& conte
 
 UiEditBoxHost::~UiEditBoxHost()noexcept{ cancelTransfers(); }
 
-bool UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options){
+b8 UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options){
     if(rejectBorrowedMutation())
         return false;
     Entry* entry = find(widget.id);
@@ -103,7 +103,7 @@ void UiEditBoxHost::commitFrame(const u64 generation){
     synchronizeFocus();
 }
 
-bool UiEditBoxHost::hasTextFocus()const noexcept{
+b8 UiEditBoxHost::hasTextFocus()const noexcept{
     const Entry* entry = find(m_context.input().focus());
     if(!entry || entry->displayed.generation == 0u || !entry->displayed.options.enabled || entry->displayed.modelGeneration != entry->owner.modelGeneration || entry->displayed.popup != entry->popup)
         return false;
@@ -111,17 +111,17 @@ bool UiEditBoxHost::hasTextFocus()const noexcept{
     return target && target->enabled && target->textEditable && target->popup == entry->popup;
 }
 
-bool UiEditBoxHost::wantsTextInput()const noexcept{
+b8 UiEditBoxHost::wantsTextInput()const noexcept{
     if(!m_context.input().windowFocused() || !hasTextFocus())
         return false;
     const Entry* entry = find(m_context.input().focus());
     return entry && !entry->displayed.options.readOnly;
 }
 
-bool UiEditBoxHost::takeClipboardFailure()noexcept{
+b8 UiEditBoxHost::takeClipboardFailure()noexcept{
     if(rejectBorrowedMutation())
         return false;
-    const bool failed = m_clipboardFailure;
+    const b8 failed = m_clipboardFailure;
     m_clipboardFailure = false;
     return failed;
 }
@@ -130,10 +130,10 @@ void UiEditBoxHost::synchronizeFocus(){
     if(rejectBorrowedMutation())
         return;
     const Entry* entry = find(m_context.input().focus());
-    const bool focused = hasTextFocus() && entry;
+    const b8 focused = hasTextFocus() && entry;
     m_clickTracker.retainFocus(focused ? &entry->owner : nullptr);
     for(auto& candidate : m_entries){
-        const bool active = focused && candidate.owner == entry->owner;
+        const b8 active = focused && candidate.owner == entry->owner;
         if(candidate.actionCapable){
             if(active && !candidate.focused){
                 candidate.focused = true;
@@ -207,9 +207,9 @@ void UiEditBoxHost::discard(const UiTextEditOwner& owner)noexcept{
 }
 
 void UiEditBoxHost::cancelTransfers(){
-    const bool text = m_session.cancel();
-    const bool clipboard = m_clipboard.cancel();
-    const bool primary = m_primary.cancel();
+    const b8 text = m_session.cancel();
+    const b8 clipboard = m_clipboard.cancel();
+    const b8 primary = m_primary.cancel();
     if(!text || !clipboard || !primary)
         TerminateInvariant();
 }

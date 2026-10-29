@@ -43,7 +43,7 @@ static constexpr TStringView s_RectNames[]{ NWB_TEXT("integer_bounds"), NWB_TEXT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool Coherent(const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxState& state)noexcept{
+[[nodiscard]] static b8 Coherent(const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxState& state)noexcept{
     return state.modelGeneration == model.instanceGeneration() && state.revision == model.revision() && state.selectionGeneration == model.selectionGeneration() && state.anchor == model.anchor() && state.caret == model.caret();
 }
 
@@ -86,11 +86,11 @@ void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& displ
         current.rectangles[index * 4u + 2u] = placement.caret;
         current.rectangles[index * 4u + 3u] = CaptureEditSelection(m_arena, text, *models[index], placement, 16.0f);
     }
-    bool changed = current.values != m_snapshot.values;
+    b8 changed = current.values != m_snapshot.values;
     for(usize index = 0u; index < current.rectangles.size(); ++index)
         changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
     const auto& previous = m_snapshot.display;
-    const bool displayChanged = display.logicalWidth != previous.logicalWidth || display.logicalHeight != previous.logicalHeight || display.pixelScaleX != previous.pixelScaleX || display.pixelScaleY != previous.pixelScaleY;
+    const b8 displayChanged = display.logicalWidth != previous.logicalWidth || display.logicalHeight != previous.logicalHeight || display.pixelScaleX != previous.pixelScaleX || display.pixelScaleY != previous.pixelScaleY;
     if(m_snapshot.sequence != 0u && !changed && !displayChanged)
         return;
     current.sequence = m_snapshot.sequence + 1u;

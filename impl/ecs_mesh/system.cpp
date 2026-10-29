@@ -72,7 +72,7 @@ Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> MeshSystem::resolve
     return mesh;
 }
 
-bool MeshSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const{
+b8 MeshSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const{
     if(m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
         return true;
     for(const NotNull<IRuntimeMeshProvider*> provider : m_runtimeMeshProviders){

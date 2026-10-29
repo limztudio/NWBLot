@@ -30,14 +30,14 @@ public:
 
 
 public:
-    [[nodiscard]] bool start(bool includeCaustics = false);
+    [[nodiscard]] b8 start(b8 includeCaustics = false);
     void stop();
-    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 
 
 private:
-    bool m_registered = false;
-    bool m_includeCaustics = false;
+    b8 m_registered = false;
+    b8 m_includeCaustics = false;
 };
 
 

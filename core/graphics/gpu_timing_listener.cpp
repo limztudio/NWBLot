@@ -60,7 +60,7 @@ public:
     ~SampleCallbackCompletionScope()noexcept{
         {
             NothrowScopedLock listenerLock(m_recorder.m_sampleListenerMutex);
-            const bool callbackClaimValid = m_record && m_record->activeCallbackCount != 0u;
+            const b8 callbackClaimValid = m_record && m_record->activeCallbackCount != 0u;
             NWB_FATAL_ASSERT_MSG(callbackClaimValid, "GPU timing listener callback claim underflow");
             --m_record->activeCallbackCount;
             m_recorder.eraseSampleListenerLocked(*m_record);
@@ -146,17 +146,17 @@ void GpuTimingRecorder::unsubscribeSampleListener(const GpuTimingSampleSubscript
     }
 }
 
-bool GpuTimingRecorder::setFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const NotNull<const Name*> scopeNames, const usize scopeCount){
+b8 GpuTimingRecorder::setFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const NotNull<const Name*> scopeNames, const usize scopeCount){
     if(scopeCount == 0u)
         return false;
     return replaceFeedbackCollectionScopes(subscription, scopeNames.get(), scopeCount);
 }
 
-bool GpuTimingRecorder::clearFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription){
+b8 GpuTimingRecorder::clearFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription){
     return replaceFeedbackCollectionScopes(subscription, nullptr, 0u);
 }
 
-bool GpuTimingRecorder::replaceFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const Name* const scopeNames, const usize scopeCount){
+b8 GpuTimingRecorder::replaceFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const Name* const scopeNames, const usize scopeCount){
     if(!subscription.valid() || (scopeCount != 0u && !scopeNames))
         return false;
 
@@ -190,7 +190,7 @@ bool GpuTimingRecorder::replaceFeedbackCollectionScopes(const GpuTimingSampleSub
             if(demandIndex == m_feedbackScopeDemands.size())
                 continue;
 
-            bool alreadyOwned = false;
+            b8 alreadyOwned = false;
             for(const Name& ownedScope : record->feedbackScopes)
                 alreadyOwned = alreadyOwned || ownedScope == scopeName;
             if(!alreadyOwned && m_feedbackScopeDemands[demandIndex].ownerCount == Limit<u64>::s_Max)
@@ -222,7 +222,7 @@ usize GpuTimingRecorder::findFeedbackScopeDemandLocked(const Name& scopeName)con
     return m_feedbackScopeDemands.size();
 }
 
-bool GpuTimingRecorder::feedbackScopeDemandedLocked(const Name& scopeName)const noexcept{
+b8 GpuTimingRecorder::feedbackScopeDemandedLocked(const Name& scopeName)const noexcept{
     const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
     return demandIndex != m_feedbackScopeDemands.size() && m_feedbackScopeDemands[demandIndex].ownerCount != 0u;
 }

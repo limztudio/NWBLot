@@ -49,9 +49,9 @@ struct FrameGraphAvboitStageInputs{
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
     const ECSRenderDetail::MeshViewGpuData& meshViewState;
     Core::GpuTaskId prefixTask;
-    bool hasTransparentRenderers = false;
-    bool clearTargets = false;
-    bool refractionCaptureEnabled = false;
+    b8 hasTransparentRenderers = false;
+    b8 clearTargets = false;
+    b8 refractionCaptureEnabled = false;
 };
 
 struct FrameGraphAvboitStageTiming{
@@ -91,21 +91,21 @@ public:
 
 
 private:
-    [[nodiscard]] bool declareExtinction(
+    [[nodiscard]] b8 declareExtinction(
         Core::Alloc::ScratchArena& scratchArena,
         const FrameGraphAvboitStageInputs& inputs,
         const FrameGraphAvboitStageTiming& timing,
         Core::GpuTaskId avboitDepthWarpCompletionTask,
-        bool avboitIntervalOutputsGraphOwned,
+        b8 avboitIntervalOutputsGraphOwned,
         ObjectGeometryCacheGraph& objectGeometry,
         AvboitGeneratedGeometryReuse& generatedGeometry,
         AvboitComputeEffectChainBuilder& avboitComputeEffectChainBuilder
     );
-    [[nodiscard]] bool declareAccumulation(
+    [[nodiscard]] b8 declareAccumulation(
         Core::Alloc::ScratchArena& scratchArena,
         const FrameGraphAvboitStageInputs& inputs,
         const FrameGraphAvboitStageTiming& timing,
-        bool avboitIntervalOutputsGraphOwned,
+        b8 avboitIntervalOutputsGraphOwned,
         ObjectGeometryCacheGraph& objectGeometry,
         AvboitGeneratedGeometryReuse& generatedGeometry
     );

@@ -65,7 +65,7 @@ public:
         return ComboSource::indexOf(value);
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 backwards)const noexcept override{
         observeCallback();
         return ComboSource::findEnabled(start, backwards);
     }
@@ -86,7 +86,7 @@ public:
         return value;
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         observeCallback();
         return ComboSource::enabled(index);
     }
@@ -131,11 +131,11 @@ public:
 
     [[nodiscard]] u64 endAttempts()const noexcept{ return m_endAttempts; }
 
-    [[nodiscard]] bool beginAccepted()const noexcept{ return m_beginAccepted; }
+    [[nodiscard]] b8 beginAccepted()const noexcept{ return m_beginAccepted; }
 
-    [[nodiscard]] bool endAccepted()const noexcept{ return m_endAccepted; }
+    [[nodiscard]] b8 endAccepted()const noexcept{ return m_endAccepted; }
 
-    [[nodiscard]] bool failedAtAttempt()const noexcept{ return m_failedAtAttempt; }
+    [[nodiscard]] b8 failedAtAttempt()const noexcept{ return m_failedAtAttempt; }
 
 
 private:
@@ -174,9 +174,9 @@ private:
     mutable u64 m_beginAttempts = 0u;
     mutable u64 m_endAttempts = 0u;
     ReentryKind::Enum m_kind = ReentryKind::Reset;
-    mutable bool m_beginAccepted = false;
-    mutable bool m_endAccepted = false;
-    mutable bool m_failedAtAttempt = false;
+    mutable b8 m_beginAccepted = false;
+    mutable b8 m_endAccepted = false;
+    mutable b8 m_failedAtAttempt = false;
 };
 
 struct AcceptedFrame{
@@ -219,7 +219,7 @@ protected:
         m_siblingList.select(2u);
     }
 
-    [[nodiscard]] bool acceptBase(){
+    [[nodiscard]] b8 acceptBase(){
         if(!begin(1u) || !m_builder.beginPanel("base", { 0.0f, 0.0f, 180.0f, 100.0f }))
             return false;
         if(m_builder.button("button", "Accepted baseline"))
@@ -227,13 +227,13 @@ protected:
         return finishPanel() && m_context.commitFrame(1u);
     }
 
-    [[nodiscard]] bool beginParent(){ return begin(2u) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()); }
+    [[nodiscard]] b8 beginParent(){ return begin(2u) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()); }
 
-    [[nodiscard]] bool declareChild(){
+    [[nodiscard]] b8 declareChild(){
         return m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()) && m_builder.virtualList(s_ListKey, m_childSource, m_childList, ListOptions()).valid && m_builder.endPopup();
     }
 
-    [[nodiscard]] bool declareSibling(){
+    [[nodiscard]] b8 declareSibling(){
         return m_builder.beginPopup("sibling", m_sibling, ChildOptions()) && m_builder.virtualList(s_ListKey, m_siblingSource, m_siblingList, ListOptions()).valid && m_builder.endPopup();
     }
 

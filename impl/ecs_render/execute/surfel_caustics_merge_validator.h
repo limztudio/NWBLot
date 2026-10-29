@@ -33,25 +33,25 @@ struct SurfelCausticsMergeValidationResult{
     const Core::GpuPhysicalQueueInfo* surfelGiPreparationQueue = nullptr;
     const Core::GpuPhysicalQueueInfo* surfelGiSnapshotCopyQueue = nullptr;
     const Core::GpuPhysicalQueueInfo* surfelGiCounterReadbackQueue = nullptr;
-    bool surfelGiOutputClearMergedIntoGiPacket = false;
-    bool surfelGiPreparedPrefixMergedIntoGiPacket = false;
-    bool surfelGiInitializationLifecycleMergedIntoPreparationPacket = false;
-    bool causticPhotonMergedIntoCausticsPacket = false;
-    bool causticGeometryMergedIntoCausticsPacket = false;
-    bool causticResolvePrepareMergedIntoCausticsPacket = false;
-    bool causticResolveWaveletMergedIntoCausticsPacket = false;
-    bool causticResolveSecondWaveletMergedIntoCausticsPacket = false;
-    bool causticResolveThirdWaveletMergedIntoCausticsPacket = false;
-    bool causticResolveFourthWaveletMergedIntoCausticsPacket = false;
-    bool causticResolveFifthWaveletMergedIntoCausticsPacket = false;
-    bool causticResolveUpsampleMergedIntoCausticsPacket = false;
-    bool causticIrradianceClearMergedIntoCausticsPacket = false;
-    bool causticAccumulatorNonTemporalClearMergedIntoCausticsPacket = false;
-    bool causticAccumulatorBootstrapClearMergedIntoCausticsPacket = false;
-    bool causticAccumulatorDecayMergedIntoCausticsPacket = false;
-    bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct = false;
-    bool surfelCounterReadbackFollowsPresentation = false;
-    bool laggedLightingHistoryFollowsPresentation = false;
+    b8 surfelGiOutputClearMergedIntoGiPacket = false;
+    b8 surfelGiPreparedPrefixMergedIntoGiPacket = false;
+    b8 surfelGiInitializationLifecycleMergedIntoPreparationPacket = false;
+    b8 causticPhotonMergedIntoCausticsPacket = false;
+    b8 causticGeometryMergedIntoCausticsPacket = false;
+    b8 causticResolvePrepareMergedIntoCausticsPacket = false;
+    b8 causticResolveWaveletMergedIntoCausticsPacket = false;
+    b8 causticResolveSecondWaveletMergedIntoCausticsPacket = false;
+    b8 causticResolveThirdWaveletMergedIntoCausticsPacket = false;
+    b8 causticResolveFourthWaveletMergedIntoCausticsPacket = false;
+    b8 causticResolveFifthWaveletMergedIntoCausticsPacket = false;
+    b8 causticResolveUpsampleMergedIntoCausticsPacket = false;
+    b8 causticIrradianceClearMergedIntoCausticsPacket = false;
+    b8 causticAccumulatorNonTemporalClearMergedIntoCausticsPacket = false;
+    b8 causticAccumulatorBootstrapClearMergedIntoCausticsPacket = false;
+    b8 causticAccumulatorDecayMergedIntoCausticsPacket = false;
+    b8 surfelGiSnapshotCopyAndTimingPacketsAreDistinct = false;
+    b8 surfelCounterReadbackFollowsPresentation = false;
+    b8 laggedLightingHistoryFollowsPresentation = false;
 };
 
 
@@ -64,7 +64,7 @@ public:
 
 
 public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Core::GpuTaskId causticsTask, Core::GpuTaskId terminalPresentationTask, bool captureLaggedLightingHistory, SurfelCausticsMergeValidationResult& outResult)const noexcept;
+    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Core::GpuTaskId causticsTask, Core::GpuTaskId terminalPresentationTask, b8 captureLaggedLightingHistory, SurfelCausticsMergeValidationResult& outResult)const noexcept;
 
 
 private:

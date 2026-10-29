@@ -88,7 +88,7 @@ static constexpr u32 s_QueryRetryCount = 4u;
     processGroups.resize(groupCount);
 
     InteropVector<ULONG> defaultSets;
-    bool defaultSetsReady = false;
+    b8 defaultSetsReady = false;
     for(u32 attempt = 0u; attempt < s_QueryRetryCount; ++attempt){
         ULONG requiredCount = 0u;
         if(GetProcessDefaultCpuSets(process, defaultSets.data(), static_cast<ULONG>(defaultSets.size()), &requiredCount)){
@@ -105,7 +105,7 @@ static constexpr u32 s_QueryRetryCount = 4u;
 
     InteropVector<u64> informationStorage;
     ULONG informationBytes = 0u;
-    bool informationReady = false;
+    b8 informationReady = false;
     for(u32 attempt = 0u; attempt < s_QueryRetryCount; ++attempt){
         ULONG requiredBytes = 0u;
         if(GetSystemCpuSetInformation(reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(informationStorage.data()), informationBytes, &requiredBytes, process, 0u)){
@@ -134,12 +134,12 @@ static constexpr u32 s_QueryRetryCount = 4u;
             if(information->Size < sizeof(SYSTEM_CPU_SET_INFORMATION))
                 return MakeUnexpected(Failure{});
             const auto& cpuSet = information->CpuSet;
-            const bool permittedGroup = FindIf(processGroups.begin(), processGroups.end(), [&cpuSet](const USHORT group)noexcept{ return group == cpuSet.Group; }
+            const b8 permittedGroup = FindIf(processGroups.begin(), processGroups.end(), [&cpuSet](const USHORT group)noexcept{ return group == cpuSet.Group; }
             ) != processGroups.end();
-            const bool permittedSet = defaultSets.empty() || FindIf(defaultSets.begin(), defaultSets.end(), [&cpuSet](const ULONG id)noexcept{ return id == cpuSet.Id; }
+            const b8 permittedSet = defaultSets.empty() || FindIf(defaultSets.begin(), defaultSets.end(), [&cpuSet](const ULONG id)noexcept{ return id == cpuSet.Id; }
             ) != defaultSets.end();
-            const bool reservedElsewhere = cpuSet.Allocated && !cpuSet.AllocatedToTargetProcess;
-            bool permittedMask = true;
+            const b8 reservedElsewhere = cpuSet.Allocated && !cpuSet.AllocatedToTargetProcess;
+            b8 permittedMask = true;
             if(processMask != 0u && systemMask != 0u){
                 if(cpuSet.Group == primaryAffinity.Group)
                     permittedMask = (processMask & (static_cast<DWORD_PTR>(1u) << cpuSet.LogicalProcessorIndex)) != 0u;
@@ -220,7 +220,7 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
     if(processorCount <= 0)
         return MakeUnexpected(Failure{});
     placements.reserve(static_cast<usize>(processorCount));
-    bool allCapacitiesKnown = true;
+    b8 allCapacitiesKnown = true;
     for(usize processorIndex = 0u; processorIndex < byteCount * __hidden_cpu_topology::s_BitsPerByte; ++processorIndex){
         if(!CPU_ISSET_S(processorIndex, byteCount, affinity.get()))
             continue;
@@ -271,7 +271,7 @@ Expected<InteropVector<CpuWorkerPlacement>> QueryCpuWorkerPlacements(){
 }
 
 
-bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
+b8 SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
     if(!placement.valid())
         return false;
 #if defined(NWB_PLATFORM_WINDOWS)

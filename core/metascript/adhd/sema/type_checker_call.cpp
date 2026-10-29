@@ -41,7 +41,7 @@ void TypeChecker::propagateFuncCaptureBytes(
     }
 }
 
-bool TypeChecker::isEscapingMutCaptureLambda(const Expr* rhs, const MVector<ScopedVarInfo>& scope)noexcept{
+b8 TypeChecker::isEscapingMutCaptureLambda(const Expr* rhs, const MVector<ScopedVarInfo>& scope)noexcept{
     if(!rhs)
         return false;
     if(rhs->kind == ExprKind::Lambda)
@@ -56,7 +56,7 @@ bool TypeChecker::isEscapingMutCaptureLambda(const Expr* rhs, const MVector<Scop
     return false;
 }
 
-bool TypeChecker::checkCallableArguments(
+b8 TypeChecker::checkCallableArguments(
     ClassDecl* ownerClass,
     MethodDecl& method,
     MVector<Expr*>& arguments,
@@ -70,7 +70,7 @@ bool TypeChecker::checkCallableArguments(
     const MStringView calledMemberName,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
     const SourceSpan errSpan = !arguments.empty() && arguments[0] ? arguments[0]->span : method.span;
     if(targetCallable && targetCallable->params.size() != arguments.size()){
         reportError(errors, errSpan, "wrong number of arguments in call");
@@ -88,7 +88,7 @@ bool TypeChecker::checkCallableArguments(
         Expr* arg = arguments[i];
         if(!arg)
             continue;
-        bool paramIsMut = false;
+        b8 paramIsMut = false;
         TypeRef* expectedParamTypeRef = nullptr;
         MStringView expectedParamType;
         if(targetCallable && i < targetCallable->params.size()){
@@ -193,15 +193,15 @@ bool TypeChecker::checkCallableArguments(
     return ok;
 }
 
-bool TypeChecker::checkCallExpr(
+b8 TypeChecker::checkCallExpr(
     ClassDecl* ownerClass,
     MethodDecl& method,
     Expr& expr,
     const MVector<ScopedVarInfo>& scope,
-    const bool isMutationTarget,
+    const b8 isMutationTarget,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
 
     if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, false, errors))
         ok = false;
@@ -286,7 +286,7 @@ bool TypeChecker::checkCallExpr(
         }
         else if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
             const ScopedVarInfo* lambdaThis = m_inLambda ? findScopedVar(scope, "this") : nullptr;
-            const bool isConstThis = method.isConst || (lambdaThis && lambdaThis->isConst);
+            const b8 isConstThis = method.isConst || (lambdaThis && lambdaThis->isConst);
             targetOwnerCls = ownerClass;
             targetCallable = findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false);
             if(!targetCallable){
@@ -305,8 +305,8 @@ bool TypeChecker::checkCallExpr(
                 : inferExprTypeName(ownerClass, &method, *expr.lhs->lhs, scope);
             const MStringView mName = expr.lhs->text;
             calledMemberName = mName;
-            const bool recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope);
-            const bool isMutatingContainerOp = (mName == "push_back" || mName == "emplace_back" || mName == "pop_back" || mName == "clear" || mName == "insert" || mName == "erase" || mName == "resize");
+            const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope);
+            const b8 isMutatingContainerOp = (mName == "push_back" || mName == "emplace_back" || mName == "pop_back" || mName == "clear" || mName == "insert" || mName == "erase" || mName == "resize");
             if(const ClassDecl* targetCls = m_symbols.findClass(objType)){
                 targetOwnerCls = targetCls;
                 targetCallable = findClassMethod(*targetCls, mName, &callArgCount, recvIsConst, ownerClass != targetCls);
@@ -350,7 +350,7 @@ bool TypeChecker::checkCallExpr(
             }
 
             if((targetCallable && !targetCallable->isConst) || isMutatingContainerOp){
-                const bool savedDeref = expr.lhs->lhs->derefNotNull;
+                const b8 savedDeref = expr.lhs->lhs->derefNotNull;
                 if(!checkExpr(ownerClass, method, *expr.lhs->lhs, scope, true, errors))
                     ok = false;
                 expr.lhs->lhs->derefNotNull = savedDeref;
@@ -425,14 +425,14 @@ bool TypeChecker::checkCallExpr(
     return ok;
 }
 
-bool TypeChecker::checkLambdaExpr(
+b8 TypeChecker::checkLambdaExpr(
     ClassDecl* ownerClass,
     MethodDecl& method,
     Expr& expr,
     const MVector<ScopedVarInfo>& scope,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
 
     if(expr.lambdaReturnType){
         if(!checkTypeRef(*expr.lambdaReturnType, ownerClass, &method, errors, true))
@@ -506,12 +506,12 @@ bool TypeChecker::checkLambdaExpr(
         paramVar.isParam = true;
         lambdaScope.push_back(paramVar);
     }
-    const bool savedInLambda = m_inLambda;
+    const b8 savedInLambda = m_inLambda;
     const TypeRef* savedLambdaRet = m_activeLambdaReturnType;
     const u32 savedLoop = m_loopDepth;
     const u32 savedSwitch = m_switchDepth;
-    const bool savedMethodScratch = method.usesScratchArena;
-    const bool savedMethodTaskScope = method.usesTaskScope;
+    const b8 savedMethodScratch = method.usesScratchArena;
+    const b8 savedMethodTaskScope = method.usesTaskScope;
     m_inLambda = true;
     m_activeLambdaReturnType = expr.lambdaReturnType;
     m_loopDepth = 0u;

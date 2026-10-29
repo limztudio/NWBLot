@@ -54,7 +54,7 @@ UiPopupToolsSmokeScene::UiPopupToolsSmokeScene(Core::Alloc::GlobalArena& arena, 
     : m_input(input)
     , m_sentinel(arena)
 {
-    const bool initialized = m_sentinel.setText("Sentinel");
+    const b8 initialized = m_sentinel.setText("Sentinel");
     NWB_FATAL_ASSERT(initialized);
     m_input.addHandlerToBack(*this);
 }
@@ -63,7 +63,7 @@ UiPopupToolsSmokeScene::~UiPopupToolsSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     ObserveSmokeDisplay(__hidden_ui_popup_tools_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     m_source.beginFrame();
@@ -115,7 +115,7 @@ bool UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiPopupToolsSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
+b8 UiPopupToolsSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F9)
@@ -190,11 +190,11 @@ void UiPopupToolsSmokeScene::observeState(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerPopupToolsSmokeEnabled(){
+b8 IsUiLayerPopupToolsSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_POPUP_TOOLS");
 }
 
-bool IsUiLayerPopupToolsSkinSmokeEnabled(){
+b8 IsUiLayerPopupToolsSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_POPUP_TOOLS_SKIN");
 }
 

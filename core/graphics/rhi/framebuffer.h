@@ -21,7 +21,7 @@ struct FramebufferAttachment{
     Texture* texture = nullptr;
     TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, 1);
     Format::Enum format = Format::UNKNOWN;
-    bool isReadOnly = false;
+    b8 isReadOnly = false;
 
 
 public:
@@ -37,9 +37,9 @@ public:
 
     constexpr FramebufferAttachment& setFormat(Format::Enum f)noexcept{ format = f; return *this; }
 
-    constexpr FramebufferAttachment& setIsReadOnly(bool val)noexcept{ isReadOnly = val; return *this; }
+    constexpr FramebufferAttachment& setIsReadOnly(b8 val)noexcept{ isReadOnly = val; return *this; }
 
-    [[nodiscard]] constexpr bool valid()const noexcept{ return texture != nullptr; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return texture != nullptr; }
 };
 
 struct FramebufferDesc{
@@ -89,7 +89,7 @@ public:
 
     constexpr FramebufferInfo& setSampleQuality(u32 quality)noexcept{ sampleQuality = quality; return *this; }
 };
-inline bool operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept{
+inline b8 operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept{
     if(lhs.sampleQuality != rhs.sampleQuality)
         return false;
     if(lhs.sampleCount != rhs.sampleCount)
@@ -105,7 +105,7 @@ inline bool operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs)no
     return true;
 }
 
-inline bool operator!=(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept{ return !(lhs == rhs); }
 
 struct FramebufferInfoEx : FramebufferInfo{
     u32 width = 0;

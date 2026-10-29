@@ -51,11 +51,11 @@ usize RuntimeMeshRequestSet::KeyHash::operator()(const Lookup& key)const noexcep
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RuntimeMeshRequestSet::KeyEqual::operator()(const Key& lhs, const Key& rhs)const noexcept{
+b8 RuntimeMeshRequestSet::KeyEqual::operator()(const Key& lhs, const Key& rhs)const noexcept{
     return lhs.version == rhs.version && lhs.name == rhs.name;
 }
 
-bool RuntimeMeshRequestSet::KeyEqual::operator()(const Key& lhs, const Lookup& rhs)const noexcept{
+b8 RuntimeMeshRequestSet::KeyEqual::operator()(const Key& lhs, const Lookup& rhs)const noexcept{
     return lhs.version == rhs.version && lhs.name == rhs.name;
 }
 
@@ -107,7 +107,7 @@ void RuntimeMeshRequestSet::markIndexedLive(const Name& meshKey, const u64 versi
     }
 }
 
-bool RuntimeMeshRequestSet::containsIndexedLive(const Name& meshKey, const u64 version)const noexcept{
+b8 RuntimeMeshRequestSet::containsIndexedLive(const Name& meshKey, const u64 version)const noexcept{
     const auto found = m_index->find(Lookup{ meshKey.identityHash(), version });
     return found != m_index->end() && found.value();
 }

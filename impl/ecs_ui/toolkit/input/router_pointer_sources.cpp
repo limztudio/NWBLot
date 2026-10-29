@@ -14,18 +14,18 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::acceptsPointerSource(const InputSource& source)const noexcept{
+b8 InputRouter::acceptsPointerSource(const InputSource& source)const noexcept{
     if(!source.valid() || (m_activePointerSource.valid() && m_activePointerSource != source))
         return false;
     return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{ return held.source == source && held.inert; }) == m_pointerSources.end();
 }
 
-bool InputRouter::ownsPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
+b8 InputRouter::ownsPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
     const PointerSource* held = findPointerSource(source, intent);
     return held != nullptr && held->consumed;
 }
 
-bool InputRouter::wantsPointer()const noexcept{
+b8 InputRouter::wantsPointer()const noexcept{
     if(!m_pointerSources.empty()){
         return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [](const PointerSource& held)noexcept{ return held.consumed; }) != m_pointerSources.end();
     }
@@ -64,11 +64,11 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
         }
         return;
     }
-    const bool press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
-    const bool release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
+    const b8 press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
+    const b8 release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
     // Reuse only within this event; popup dismissal and layout reconciliation still resolve hover against their new state.
     const HitTarget* hit = event.hoverCapable ? findHitTarget(event.position) : nullptr;
-    bool hitResolved = event.hoverCapable;
+    b8 hitResolved = event.hoverCapable;
     const auto resolveHit = [this, &event, &hit, &hitResolved]()noexcept{
         if(!hitResolved){
             hit = findHitTarget(event.position);
@@ -86,8 +86,8 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
         }
         if(m_pointerSources.size() == s_InputMaxSources)
             return;
-        const bool accepted = !event.repeat && acceptsPointerSource(event.source);
-        const bool consumed = !event.repeat && (m_activePointerSource == event.source ? m_primaryDown ? m_pointerSequenceConsumed : m_secondarySequenceConsumed : hasPopup() || resolveHit() != nullptr);
+        const b8 accepted = !event.repeat && acceptsPointerSource(event.source);
+        const b8 consumed = !event.repeat && (m_activePointerSource == event.source ? m_primaryDown ? m_pointerSequenceConsumed : m_secondarySequenceConsumed : hasPopup() || resolveHit() != nullptr);
         m_pointerSources.push_back({ event.source, intent, consumed, !accepted });
         result.pointerConsumed |= consumed;
         if(!accepted)
@@ -109,7 +109,7 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
     else{
         const PointerSource* activation = findPointerSource(event.source, PointerIntent::Activate);
         const PointerSource* context = findPointerSource(event.source, PointerIntent::ContextMenu);
-        const bool blocked = (activation != nullptr && activation->inert) || (context != nullptr && context->inert) || !acceptsPointerSource(event.source);
+        const b8 blocked = (activation != nullptr && activation->inert) || (context != nullptr && context->inert) || !acceptsPointerSource(event.source);
         if(blocked){
             result.pointerConsumed |= (activation != nullptr && activation->consumed) || (context != nullptr && context->consumed);
             return;
@@ -145,8 +145,8 @@ void InputRouter::observePointer(const InputEvent& event, const HitTarget* hit)n
 }
 
 void InputRouter::terminatePointerSource(const InputSource source)noexcept{
-    const bool active = m_activePointerSource == source;
-    const bool unfinished = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
+    const b8 active = m_activePointerSource == source;
+    const b8 unfinished = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
         return held.source == source;
     }
     ) != m_pointerSources.end();

@@ -45,7 +45,7 @@ using ObjectNameMap = HashMap<Name, u8, Core::Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Model::validatePayload")))
         return false;
     if(m_skeletonObjects.empty() && m_staticMeshObjects.empty() && m_skinnedMeshObjects.empty()){
@@ -125,7 +125,7 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
             return false;
         }
         if(object.parentObject){
-            bool parentExists = object.parentObject == object.name;
+            b8 parentExists = object.parentObject == object.name;
             if(objectNames){
                 const auto parent = objectNames->find(object.parentObject);
                 if(parent != objectNames->end() && (parent.value() & __hidden_model_runtime::s_SkeletonObjectName) != 0u)
@@ -174,7 +174,7 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     return true;
 }
 
-bool Model::loadBinary(const Span<const u8> binary){
+b8 Model::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelBinaryPayload::ModelHeaderBinary>(binary, ModelBinaryPayload::s_ModelMagic, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_ModelAssetKindLabel, cursor);

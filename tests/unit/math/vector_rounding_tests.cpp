@@ -137,7 +137,7 @@ TEST(Math, MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes){
         { 0x7FF8ABCDEF012345u, 0xFFF8ABCDEF012345u, 0x7FF0000000000000u, 0xFFF0000000000000u }
     };
     for(usize pair = 0u; pair < LengthOf(singleBits); pair += 2u){
-        for(const bool reverse : { false, true }){
+        for(const b8 reverse : { false, true }){
             const usize firstRow = pair + (reverse ? 1u : 0u);
             const usize secondRow = pair + (reverse ? 0u : 1u);
             const SIMDVectorSingle first = VectorSetInt(singleBits[firstRow][0], singleBits[firstRow][1], singleBits[firstRow][2], singleBits[firstRow][3]);

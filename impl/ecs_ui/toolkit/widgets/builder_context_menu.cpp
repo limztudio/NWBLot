@@ -55,7 +55,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     frame.popupStyle = m_popupStyle;
     frame.options = options;
     frame.options.enabled = options.enabled && anchor->enabled;
-    const bool previouslyOpen = state.isOpen();
+    const b8 previouslyOpen = state.isOpen();
     if(state.m_owner != (*widget)->id || state.m_ownerDeclaration != (*widget)->declarationGeneration || state.m_anchorWidget != anchor->state.id || state.m_anchorDeclaration != anchor->state.declarationGeneration){
         if(state.m_owner.valid())
             state.close();
@@ -65,7 +65,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
         state.m_anchorDeclaration = anchor->state.declarationGeneration;
         state.advanceRevision();
     }
-    const bool boundOpen = state.isOpen();
+    const b8 boundOpen = state.isOpen();
     state.m_popup.bindParent(frame.parentToken);
     if(boundOpen && !state.isOpen())
         state.close();
@@ -77,7 +77,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     if(!rows)
         return result;
     frame.rows = **rows;
-    const bool previouslyListFocused = m_context.input().focus() == frame.rows.id;
+    const b8 previouslyListFocused = m_context.input().focus() == frame.rows.id;
     frame.popupToken = { frame.popup.id, frame.popup.declarationGeneration, state.instanceGeneration(), state.m_popup.openGeneration() };
     frame.revision = state.revision();
     frame.open = state.isOpen();

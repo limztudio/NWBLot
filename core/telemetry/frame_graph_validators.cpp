@@ -29,7 +29,7 @@ namespace __hidden_frame_graph_validators{
     return static_cast<i32>(total);
 }
 
-[[nodiscard]] static bool IsCanonicalQueue(const FrameGraphPhysicalQueueId& queue)noexcept{
+[[nodiscard]] static b8 IsCanonicalQueue(const FrameGraphPhysicalQueueId& queue)noexcept{
     return queue.valid() || (queue.index == Limit<u16>::s_Max && queue.deviceGeneration == 0u);
 }
 
@@ -43,7 +43,7 @@ namespace __hidden_frame_graph_validators{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsValidFrameGraphNodeKind(const FrameGraphNodeKind::Enum kind)noexcept{
+b8 IsValidFrameGraphNodeKind(const FrameGraphNodeKind::Enum kind)noexcept{
     switch(kind){
     case FrameGraphNodeKind::Pass:
     case FrameGraphNodeKind::Resource:
@@ -54,7 +54,7 @@ bool IsValidFrameGraphNodeKind(const FrameGraphNodeKind::Enum kind)noexcept{
     }
 }
 
-bool IsValidFrameGraphEdgeKind(const FrameGraphEdgeKind::Enum kind)noexcept{
+b8 IsValidFrameGraphEdgeKind(const FrameGraphEdgeKind::Enum kind)noexcept{
     switch(kind){
     case FrameGraphEdgeKind::Reads:
     case FrameGraphEdgeKind::Writes:
@@ -65,7 +65,7 @@ bool IsValidFrameGraphEdgeKind(const FrameGraphEdgeKind::Enum kind)noexcept{
     }
 }
 
-bool IsValidFrameGraphQueueClass(const FrameGraphQueueClass::Enum queueClass)noexcept{
+b8 IsValidFrameGraphQueueClass(const FrameGraphQueueClass::Enum queueClass)noexcept{
     switch(queueClass){
     case FrameGraphQueueClass::Graphics:
     case FrameGraphQueueClass::Compute:
@@ -76,7 +76,7 @@ bool IsValidFrameGraphQueueClass(const FrameGraphQueueClass::Enum queueClass)noe
     }
 }
 
-bool IsValidFrameGraphQueueAssignmentReason(const FrameGraphQueueAssignmentReason::Enum reason)noexcept{
+b8 IsValidFrameGraphQueueAssignmentReason(const FrameGraphQueueAssignmentReason::Enum reason)noexcept{
     switch(reason){
     case FrameGraphQueueAssignmentReason::RequiredGraphics:
     case FrameGraphQueueAssignmentReason::Conservative:
@@ -87,7 +87,7 @@ bool IsValidFrameGraphQueueAssignmentReason(const FrameGraphQueueAssignmentReaso
     }
 }
 
-bool IsValidFrameGraphQueueAssignmentAcceptance(const FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept{
+b8 IsValidFrameGraphQueueAssignmentAcceptance(const FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept{
     switch(acceptance){
     case FrameGraphQueueAssignmentAcceptance::NotAccepted:
     case FrameGraphQueueAssignmentAcceptance::First:
@@ -99,7 +99,7 @@ bool IsValidFrameGraphQueueAssignmentAcceptance(const FrameGraphQueueAssignmentA
     }
 }
 
-bool IsValidFrameGraphTaskPacketizationDecision(const FrameGraphTaskPacketizationDecision::Enum decision)noexcept{
+b8 IsValidFrameGraphTaskPacketizationDecision(const FrameGraphTaskPacketizationDecision::Enum decision)noexcept{
     switch(decision){
     case FrameGraphTaskPacketizationDecision::FirstTask:
     case FrameGraphTaskPacketizationDecision::MergeNotRequested:
@@ -118,7 +118,7 @@ bool IsValidFrameGraphTaskPacketizationDecision(const FrameGraphTaskPacketizatio
     }
 }
 
-bool IsValidFrameGraphQueueAssignment(const FrameGraphQueueAssignment& assignment)noexcept{
+b8 IsValidFrameGraphQueueAssignment(const FrameGraphQueueAssignment& assignment)noexcept{
     if(
         !assignment.present
         || !assignment.initialQueue.valid()
@@ -154,7 +154,7 @@ bool IsValidFrameGraphQueueAssignment(const FrameGraphQueueAssignment& assignmen
     }
 }
 
-bool IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)noexcept{
+b8 IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)noexcept{
     return compiledTask.present && compiledTask.planGeneration != 0u && compiledTask.packetIndex != Limit<u32>::s_Max && IsValidFrameGraphTaskPacketizationDecision(compiledTask.packetizationDecision);
 }
 

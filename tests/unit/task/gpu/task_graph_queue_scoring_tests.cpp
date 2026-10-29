@@ -48,7 +48,7 @@ constexpr usize s_TaskCount = 8u;
 
 
 TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAndRebuilds){
-    const bool dependencyCases[] = { false, true };
+    const b8 dependencyCases[] = { false, true };
     const Graphics::GpuTaskCostHint::Enum hints[] = {
         Graphics::GpuTaskCostHint::Tiny, Graphics::GpuTaskCostHint::Small,
         Graphics::GpuTaskCostHint::Medium, Graphics::GpuTaskCostHint::Large,
@@ -60,7 +60,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
     const usize parentCounts[] = { 0u, 1u, 0u, 2u, 1u, 0u, 1u, 3u };
     const usize assignmentOrder[] = { 5u, 0u, 7u, 2u, 6u, 1u, 4u, 3u };
     const usize ignoredRanges[][2u] = { { 0u, 0u }, { 0u, 1u }, { 3u, 1u }, { 1u, 3u }, { 0u, s_TaskCount } };
-    for(const bool hasDependencies : dependencyCases){
+    for(const b8 hasDependencies : dependencyCases){
         SCOPED_TRACE(hasDependencies);
         TestArena testArena;
         Core::Alloc::ScratchArena scratchArena(Name("tests/task/gpu/queue_scoring"));
@@ -106,7 +106,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
         GpuTaskSchedulingReachability reachability(scratchArena);
         ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
         GpuTaskQueueScoringData scoringData(declarations, analysis, reachability, options, scratchArena);
-        bool reachable[s_TaskCount][s_TaskCount] = {};
+        b8 reachable[s_TaskCount][s_TaskCount] = {};
         for(const Graphics::GpuTaskDependencyEdge& edge : analysis.edges())
             reachable[edge.producer.index][edge.consumer.index] = true;
         // Plain Floyd-Warshall closure is independent of the packed scheduling representation.

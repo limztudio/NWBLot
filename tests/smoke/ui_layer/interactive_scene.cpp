@@ -56,7 +56,7 @@ static constexpr Impl::Ui::Color s_On{ 0.02f, 0.70f, 0.12f, 1.0f };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiInteractiveSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiInteractiveSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     observeDisplay(context.display);
     Builder& ui = context.ui;
@@ -107,7 +107,7 @@ void UiInteractiveSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
     const auto positions = BuildSmokeMarkerPositions<8u, 18u, 20u>();
     for(u32 bit = 0u; bit < 8u; ++bit){
-        const bool set = (m_count & (1u << bit)) != 0u;
+        const b8 set = (m_count & (1u << bit)) != 0u;
         const Impl::Ui::Rect marker{ positions[bit], y, 14.0f, 12.0f };
         context.paint.fillRect(marker, set ? __hidden_ui_interactive_smoke::s_On : __hidden_ui_interactive_smoke::s_Off);
     }
@@ -119,7 +119,7 @@ void UiInteractiveSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerInteractionSmokeEnabled(){
+b8 IsUiLayerInteractionSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_INTERACTIVE");
 }
 

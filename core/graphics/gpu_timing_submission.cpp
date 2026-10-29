@@ -52,7 +52,7 @@ public:
 
 private:
     GpuTimingSubmissionTicket& m_ticket;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 
@@ -79,7 +79,7 @@ NWB_INLINE Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submitToQue
         mergedSubmitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
     const auto submission = device.executeCommandLists(commandLists, commandListCount, executionQueue, mergedSubmitDesc);
     const QueueSubmissionToken token = submission ? submission->token : QueueSubmissionToken{};
-    const bool resolved = resolveSubmission(token);
+    const b8 resolved = resolveSubmission(token);
     submissionUnwind.release();
     if(!resolved)
         NWB_LOGGER_ERROR(NWB_TEXT("GPU timing submission accepted with an invalid query ownership transition; affected queries were quarantined"));
@@ -147,7 +147,7 @@ void GpuTimingSubmissionTicket::discard(){
     m_resolved = true;
 }
 
-bool GpuTimingSubmissionTicket::prepareSubmission(CommandList* const* commandLists, const usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
+b8 GpuTimingSubmissionTicket::prepareSubmission(CommandList* const* commandLists, const usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
     const usize initialWaitTokenCount = waitTokens.size();
     if(!prepareSubmissionState(waitTokens))
         return false;
@@ -180,7 +180,7 @@ bool GpuTimingSubmissionTicket::prepareSubmission(CommandList* const* commandLis
     return false;
 }
 
-bool GpuTimingSubmissionTicket::prepareSubmissionAfterCommandListValidation(CommandList* const* commandLists, const usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
+b8 GpuTimingSubmissionTicket::prepareSubmissionAfterCommandListValidation(CommandList* const* commandLists, const usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
     const usize initialWaitTokenCount = waitTokens.size();
     if(!prepareSubmissionState(waitTokens))
         return false;
@@ -197,7 +197,7 @@ bool GpuTimingSubmissionTicket::prepareSubmissionAfterCommandListValidation(Comm
     return false;
 }
 
-bool GpuTimingSubmissionTicket::prepareSubmissionState(Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
+b8 GpuTimingSubmissionTicket::prepareSubmissionState(Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
     ScopedLock lock(m_mutex);
     NWB_ASSERT_MSG(m_recordingScopeCount == 0u, NWB_TEXT("GPU timing submission ticket submitted while command recording is still active"));
     NWB_ASSERT_MSG(m_reservedScopePublicationCount == 0u, NWB_TEXT("GPU timing submission ticket submitted with an unfinished timing scope"));
@@ -247,7 +247,7 @@ GpuTimingSubmissionTicket::ScopeEndpointValidationResult::Enum GpuTimingSubmissi
     return ScopeEndpointValidationResult::Valid;
 }
 
-bool GpuTimingSubmissionTicket::resetForRecordingReuse(GpuTimingRecorder& recorder)noexcept{
+b8 GpuTimingSubmissionTicket::resetForRecordingReuse(GpuTimingRecorder& recorder)noexcept{
     NothrowScopedLock lock(m_mutex);
     if(&recorder != &m_recorder || m_recordingScopeCount != 0u)
         return false;
@@ -311,7 +311,7 @@ void GpuTimingSubmissionTicket::abandonWithoutCallbacks()noexcept{
     m_resolved = true;
 }
 
-bool GpuTimingSubmissionTicket::resolveSubmission(const QueueSubmissionToken& token)noexcept{
+b8 GpuTimingSubmissionTicket::resolveSubmission(const QueueSubmissionToken& token)noexcept{
     if(token.valid())
         return confirm(token);
     abandonWithoutCallbacks();
@@ -329,9 +329,9 @@ Expected<usize> GpuTimingSubmissionTicket::reserveScopePublication(){
     return m_scopePublications.size() - 1u;
 }
 
-bool GpuTimingSubmissionTicket::bindScopePublication(const usize publicationIndex, const GpuTimingScope& scope, const CommandList& commandList)noexcept{
+b8 GpuTimingSubmissionTicket::bindScopePublication(const usize publicationIndex, const GpuTimingScope& scope, const CommandList& commandList)noexcept{
     NothrowScopedLock lock(m_mutex);
-    const bool validPublication = publicationIndex < m_scopePublications.size() && m_scopePublications[publicationIndex].state == ScopePublicationState::Reserved && !m_scopePublications[publicationIndex].scope.valid();
+    const b8 validPublication = publicationIndex < m_scopePublications.size() && m_scopePublications[publicationIndex].state == ScopePublicationState::Reserved && !m_scopePublications[publicationIndex].scope.valid();
     NWB_ASSERT_MSG(validPublication, NWB_TEXT("GPU timing scope bound to an invalid submission publication"));
     if(!validPublication || m_resolved || m_submissionPrepared)
         return false;
@@ -349,7 +349,7 @@ void GpuTimingSubmissionTicket::cancelScopePublication(const usize publicationIn
         return;
 
     NothrowScopedLock lock(m_mutex);
-    const bool validPublication = publicationIndex < m_scopePublications.size() && m_scopePublications[publicationIndex].state == ScopePublicationState::Reserved;
+    const b8 validPublication = publicationIndex < m_scopePublications.size() && m_scopePublications[publicationIndex].state == ScopePublicationState::Reserved;
     if(!validPublication)
         return;
 
@@ -360,7 +360,7 @@ void GpuTimingSubmissionTicket::cancelScopePublication(const usize publicationIn
     --m_reservedScopePublicationCount;
 }
 
-bool GpuTimingSubmissionTicket::publishScope(const GpuTimingScope& scope, const CommandList& commandList)noexcept{
+b8 GpuTimingSubmissionTicket::publishScope(const GpuTimingScope& scope, const CommandList& commandList)noexcept{
     if(!scope.valid() || scope.submissionTicket != this || scope.submissionPublicationIndex == Limit<usize>::s_Max)
         return false;
 
@@ -369,7 +369,7 @@ bool GpuTimingSubmissionTicket::publishScope(const GpuTimingScope& scope, const 
         return false;
 
     ScopePublication& publication = m_scopePublications[scope.submissionPublicationIndex];
-    const bool matchingPublication = publication.state == ScopePublicationState::Reserved
+    const b8 matchingPublication = publication.state == ScopePublicationState::Reserved
         && publication.scope.scopeName == scope.scopeName
         && publication.scope.index == scope.index
         && publication.scope.epoch == scope.epoch
@@ -386,7 +386,7 @@ bool GpuTimingSubmissionTicket::publishScope(const GpuTimingScope& scope, const 
     return true;
 }
 
-bool GpuTimingSubmissionTicket::trackSubmissionPrerequisite(const QueueSubmissionToken& token){
+b8 GpuTimingSubmissionTicket::trackSubmissionPrerequisite(const QueueSubmissionToken& token){
     if(!token.valid() || !token.hasPhysicalQueueIdentity())
         return false;
 
@@ -417,7 +417,7 @@ Expected<GpuTimingSubmissionTicket*, GpuTimingSubmissionTicket::ActivationFailur
         GpuTimingRecorder::s_ActiveSubmissionTicket = nullptr;
         return MakeUnexpected(ActivationFailure{ previousTicket });
     }
-    const bool countAvailable = m_recordingScopeCount != Limit<u32>::s_Max;
+    const b8 countAvailable = m_recordingScopeCount != Limit<u32>::s_Max;
     NWB_FATAL_ASSERT_MSG(countAvailable, "GPU timing submission ticket recording-scope count exhausted");
 
     GpuTimingRecorder::s_ActiveSubmissionTicket = this;
@@ -425,22 +425,22 @@ Expected<GpuTimingSubmissionTicket*, GpuTimingSubmissionTicket::ActivationFailur
     return previousTicket;
 }
 
-void GpuTimingSubmissionTicket::deactivateOnCurrentThread(GpuTimingSubmissionTicket* const previousTicket, const bool activated)noexcept{
+void GpuTimingSubmissionTicket::deactivateOnCurrentThread(GpuTimingSubmissionTicket* const previousTicket, const b8 activated)noexcept{
     GpuTimingSubmissionTicket* const expectedTicket = activated ? this : nullptr;
-    const bool tlsValid = GpuTimingRecorder::s_ActiveSubmissionTicket == expectedTicket;
+    const b8 tlsValid = GpuTimingRecorder::s_ActiveSubmissionTicket == expectedTicket;
     NWB_FATAL_ASSERT_MSG(tlsValid, "GPU timing submission ticket recording scope closed out of order");
     if(!activated){
         GpuTimingRecorder::s_ActiveSubmissionTicket = previousTicket;
         return;
     }
     NothrowScopedLock lock(m_mutex);
-    const bool countValid = m_recordingScopeCount != 0u;
+    const b8 countValid = m_recordingScopeCount != 0u;
     NWB_FATAL_ASSERT_MSG(countValid, "GPU timing submission ticket recording-scope count underflow");
     --m_recordingScopeCount;
     GpuTimingRecorder::s_ActiveSubmissionTicket = previousTicket;
 }
 
-bool GpuTimingSubmissionTicket::confirm(const QueueSubmissionToken& token)noexcept{
+b8 GpuTimingSubmissionTicket::confirm(const QueueSubmissionToken& token)noexcept{
     NothrowScopedLock lock(m_mutex);
     if(m_resolved)
         return false;
@@ -451,7 +451,7 @@ bool GpuTimingSubmissionTicket::confirm(const QueueSubmissionToken& token)noexce
     if(m_recordingScopeCount != 0u || !m_submissionPrepared || m_reservedScopePublicationCount != 0u)
         return false;
 
-    bool confirmed = true;
+    b8 confirmed = true;
     for(ScopePublication& publication : m_scopePublications){
         if(publication.state != ScopePublicationState::Published)
             continue;

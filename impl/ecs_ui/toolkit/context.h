@@ -40,7 +40,7 @@ private:
 
 
     public:
-        [[nodiscard]] bool operator==(const StateClaim&)const noexcept = default;
+        [[nodiscard]] b8 operator==(const StateClaim&)const noexcept = default;
     };
 
     struct StateClaimHash{
@@ -55,7 +55,7 @@ private:
 private:
     static constexpr usize s_SmallStateClaims = 32u;
 
-    [[nodiscard]] static bool ContainsRoot(const WidgetRoot* roots, usize count, const WidgetRoot& root)noexcept;
+    [[nodiscard]] static b8 ContainsRoot(const WidgetRoot* roots, usize count, const WidgetRoot& root)noexcept;
 
 
 public:
@@ -63,31 +63,31 @@ public:
 
 
 public:
-    [[nodiscard]] bool beginFrame(u64 generation)noexcept;
-    [[nodiscard]] bool beginRoot(const WidgetRoot& root);
-    [[nodiscard]] bool endRoot()noexcept;
-    [[nodiscard]] bool pushScope(AStringView stableKey);
-    [[nodiscard]] bool popScope()noexcept;
+    [[nodiscard]] b8 beginFrame(u64 generation)noexcept;
+    [[nodiscard]] b8 beginRoot(const WidgetRoot& root);
+    [[nodiscard]] b8 endRoot()noexcept;
+    [[nodiscard]] b8 pushScope(AStringView stableKey);
+    [[nodiscard]] b8 popScope()noexcept;
     [[nodiscard]] Expected<NotNull<WidgetState*>> declare(AStringView stableKey, WidgetKind::Enum kind);
     // Compound controls declare internal scopes from their owning widget instead of borrowing the current layout scope.
     [[nodiscard]] Expected<NotNull<WidgetState*>> declarePart(const WidgetState& owner, AStringView stableKey, WidgetKind::Enum kind);
     // A state instance may own only one control of a given kind in a frame, even across balanced roots/scopes.
-    [[nodiscard]] bool claimState(const WidgetState& owner, u64 instanceGeneration);
-    [[nodiscard]] bool addTarget(const WidgetState& state, HitTarget target);
-    [[nodiscard]] bool addPartTarget(const WidgetState& owner, WidgetId part, HitTarget target);
-    [[nodiscard]] bool takeActivation(const WidgetState& state, bool enabled);
-    [[nodiscard]] Expected<PointerGesture> takePointerGesture(const WidgetState& state, bool enabled);
-    [[nodiscard]] Expected<ControlAction> takeControlAction(const WidgetState& state, bool enabled, const ControlToken& token);
-    [[nodiscard]] Expected<PointerGesture> takePartPointerGesture(const WidgetState& owner, WidgetId part, bool enabled);
+    [[nodiscard]] b8 claimState(const WidgetState& owner, u64 instanceGeneration);
+    [[nodiscard]] b8 addTarget(const WidgetState& state, HitTarget target);
+    [[nodiscard]] b8 addPartTarget(const WidgetState& owner, WidgetId part, HitTarget target);
+    [[nodiscard]] b8 takeActivation(const WidgetState& state, b8 enabled);
+    [[nodiscard]] Expected<PointerGesture> takePointerGesture(const WidgetState& state, b8 enabled);
+    [[nodiscard]] Expected<ControlAction> takeControlAction(const WidgetState& state, b8 enabled, const ControlToken& token);
+    [[nodiscard]] Expected<PointerGesture> takePartPointerGesture(const WidgetState& owner, WidgetId part, b8 enabled);
     // Registration reserves the declaration-order layer; activation may be repeated during deferred painting.
-    [[nodiscard]] bool registerPopupScope(const WidgetState& state, PopupScope scope);
-    [[nodiscard]] bool activatePopupScope(const PopupToken& token)noexcept;
-    [[nodiscard]] bool updatePopupScope(const PopupToken& token, PopupScope scope)noexcept;
-    [[nodiscard]] bool beginPopupScope(const WidgetState& state, PopupScope scope);
-    [[nodiscard]] bool endPopupScope(bool visible)noexcept;
+    [[nodiscard]] b8 registerPopupScope(const WidgetState& state, PopupScope scope);
+    [[nodiscard]] b8 activatePopupScope(const PopupToken& token)noexcept;
+    [[nodiscard]] b8 updatePopupScope(const PopupToken& token, PopupScope scope)noexcept;
+    [[nodiscard]] b8 beginPopupScope(const WidgetState& state, PopupScope scope);
+    [[nodiscard]] b8 endPopupScope(b8 visible)noexcept;
     // Discard an inactive scope and its descendants without disturbing the current parent activation.
     void discardPopupScope(const PopupToken& token)noexcept;
-    [[nodiscard]] bool hasPopupScope(const PopupToken& token)const noexcept;
+    [[nodiscard]] b8 hasPopupScope(const PopupToken& token)const noexcept;
     [[nodiscard]] WidgetId scopeId()const noexcept{ return m_scopes.empty() ? WidgetId{} : m_scopes.back(); }
 
     [[nodiscard]] PopupToken popupToken()const noexcept{ return m_currentPopup; }
@@ -95,18 +95,18 @@ public:
     [[nodiscard]] u32 popupLayer()const noexcept{ return m_popupLayer; }
     [[nodiscard]] u32 popupLayer(const PopupToken& token)const noexcept;
     [[nodiscard]] PopupToken topPopupToken()const noexcept{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
-    [[nodiscard]] bool finishFrame();
+    [[nodiscard]] b8 finishFrame();
     // Only the host's exact accepted and successfully presented generation may publish its prepared hit layout.
-    [[nodiscard]] bool commitFrame(u64 generation);
+    [[nodiscard]] b8 commitFrame(u64 generation);
     void abandonFrame();
     void resetInput()noexcept;
     // Retire removed/hidden host roots even while a GPU frame is pending.
     void retainRoots(const WidgetRoot* roots, usize count);
     void fail()noexcept{ m_failed = true; }
 
-    [[nodiscard]] bool failed()const noexcept{ return m_failed; }
+    [[nodiscard]] b8 failed()const noexcept{ return m_failed; }
 
-    [[nodiscard]] bool ready()const noexcept{ return m_readyGeneration != 0u; }
+    [[nodiscard]] b8 ready()const noexcept{ return m_readyGeneration != 0u; }
 
     [[nodiscard]] u64 readyGeneration()const noexcept{ return m_readyGeneration; }
 
@@ -119,7 +119,7 @@ public:
 
 private:
     [[nodiscard]] Expected<NotNull<WidgetState*>> declareId(WidgetId id, WidgetKind::Enum kind);
-    [[nodiscard]] bool currentDeclaration(const WidgetState& state)const noexcept;
+    [[nodiscard]] b8 currentDeclaration(const WidgetState& state)const noexcept;
     void retireUnseenStates();
 
 
@@ -144,8 +144,8 @@ private:
     u64 m_lastFrameGeneration = 0u;
     u64 m_readyGeneration = 0u;
     u32 m_popupLayer = 0u;
-    bool m_rootActive = false;
-    bool m_failed = false;
+    b8 m_rootActive = false;
+    b8 m_failed = false;
 };
 
 

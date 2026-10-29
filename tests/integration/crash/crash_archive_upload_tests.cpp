@@ -73,7 +73,7 @@ protected:
 
 
 private:
-    bool m_rootReady = false;
+    b8 m_rootReady = false;
 };
 
 static void ObserveUploadDiagnostic(const DiagnosticEventRecord& record)noexcept{

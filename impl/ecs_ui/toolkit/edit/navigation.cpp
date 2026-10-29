@@ -45,7 +45,7 @@ namespace RunClass{
     enum Enum : u8{ Whitespace, Punctuation, Text, LineBreak };
 };
 
-static bool IsWhitespace(const u32 scalar)noexcept{
+static b8 IsWhitespace(const u32 scalar)noexcept{
     return
         (scalar >= s_UnicodeTab && scalar <= s_UnicodeCarriageReturn) || scalar == s_UnicodeSpace || scalar == s_UnicodeNextLine || scalar == s_UnicodeNoBreakSpace
         || scalar == s_UnicodeOghamSpaceMark || (scalar >= s_UnicodeEnQuad && scalar <= s_UnicodeHairSpace) || scalar == s_UnicodeLineSeparator
@@ -75,7 +75,7 @@ static RunClass::Enum Classify(const AStringView text, const usize offset)noexce
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EditModel::move(const EditMove::Enum movement, const bool extend)noexcept{
+b8 EditModel::move(const EditMove::Enum movement, const b8 extend)noexcept{
     if(movement > EditMove::DocumentEnd)
         return false;
     usize target = m_caret;
@@ -136,7 +136,7 @@ Expected<EditWordRange> EditModel::wordRangeAt(const usize position)const noexce
     return EditWordRange{ *first, *last };
 }
 
-bool EditModel::isBoundary(const usize position)const noexcept{
+b8 EditModel::isBoundary(const usize position)const noexcept{
     const auto found = LowerBound(m_boundaries.begin(), m_boundaries.end(), position);
     return found != m_boundaries.end() && *found == position;
 }
@@ -153,7 +153,7 @@ usize EditModel::nextBoundary(const usize position)const noexcept{
     return found == m_boundaries.end() ? m_text.size() : *found;
 }
 
-usize EditModel::wordBoundary(const usize position, const bool forward)const noexcept{
+usize EditModel::wordBoundary(const usize position, const b8 forward)const noexcept{
     using namespace __hidden_ui_edit_navigation;
     if((forward && position == m_text.size()) || (!forward && position == 0u))
         return position;

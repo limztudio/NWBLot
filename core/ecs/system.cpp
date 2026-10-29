@@ -24,7 +24,7 @@ namespace __hidden_ecs_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool SystemsConflict(const Span<const ComponentAccess> predecessorAccesses, const Span<const ComponentAccess> systemAccesses)noexcept{
+[[nodiscard]] b8 SystemsConflict(const Span<const ComponentAccess> predecessorAccesses, const Span<const ComponentAccess> systemAccesses)noexcept{
     for(const ComponentAccess& predecessor : predecessorAccesses){
         for(const ComponentAccess& access : systemAccesses){
             if(predecessor.typeId == access.typeId && (predecessor.mode == AccessMode::Write || access.mode == AccessMode::Write))

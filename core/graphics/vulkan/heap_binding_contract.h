@@ -41,7 +41,7 @@ struct HeapBindingRange{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<CpuAccessMode::Enum> TryResolveBufferCpuAccess(const CpuAccessMode::Enum declaredAccess, const bool isVolatile)noexcept{
+[[nodiscard]] inline Expected<CpuAccessMode::Enum> TryResolveBufferCpuAccess(const CpuAccessMode::Enum declaredAccess, const b8 isVolatile)noexcept{
     switch(declaredAccess){
     case CpuAccessMode::None:
     case CpuAccessMode::Read:
@@ -58,7 +58,7 @@ struct HeapBindingRange{
     return declaredAccess;
 }
 
-[[nodiscard]] inline bool IsBufferHeapTypeCompatible(const CpuAccessMode::Enum declaredAccess, const bool isVolatile, const HeapType::Enum heapType)noexcept{
+[[nodiscard]] inline b8 IsBufferHeapTypeCompatible(const CpuAccessMode::Enum declaredAccess, const b8 isVolatile, const HeapType::Enum heapType)noexcept{
     const auto effectiveAccess = TryResolveBufferCpuAccess(declaredAccess, isVolatile);
     if(!effectiveAccess)
         return false;
@@ -75,7 +75,7 @@ struct HeapBindingRange{
     }
 }
 
-[[nodiscard]] inline Expected<MemoryRequirements> TryBuildBufferHeapRequirements(const MemoryRequirements& nativeRequirements, const CpuAccessMode::Enum declaredAccess, const bool isVolatile, const u64 nonCoherentAtomSize)noexcept{
+[[nodiscard]] inline Expected<MemoryRequirements> TryBuildBufferHeapRequirements(const MemoryRequirements& nativeRequirements, const CpuAccessMode::Enum declaredAccess, const b8 isVolatile, const u64 nonCoherentAtomSize)noexcept{
     if(nativeRequirements.size == 0u || nativeRequirements.alignment == 0u)
         return MakeUnexpected(Failure{});
     const auto effectiveAccess = TryResolveBufferCpuAccess(declaredAccess, isVolatile);
@@ -109,7 +109,7 @@ struct HeapBindingRange{
     return HeapBindingRange{ localOffset, size, absoluteBegin, absoluteBegin + size };
 }
 
-[[nodiscard]] inline bool HeapBindingRangesConflict(const HeapBindingRange& first, const HeapBindingResourceClass::Enum firstClass, const HeapBindingRange& second, const HeapBindingResourceClass::Enum secondClass, const u64 bufferImageGranularity)noexcept{
+[[nodiscard]] inline b8 HeapBindingRangesConflict(const HeapBindingRange& first, const HeapBindingResourceClass::Enum firstClass, const HeapBindingRange& second, const HeapBindingResourceClass::Enum secondClass, const u64 bufferImageGranularity)noexcept{
     if(first.size == 0u || second.size == 0u)
         return false;
     if(first.absoluteBegin < second.absoluteEnd && second.absoluteBegin < first.absoluteEnd)
@@ -136,7 +136,7 @@ struct HeapBindingRange{
     return memoryTypeBits;
 }
 
-[[nodiscard]] inline bool IsHeapMemoryTypeCompatible(const VkPhysicalDeviceMemoryProperties& memoryProperties, const u32 heapMemoryTypeIndex, const u32 resourceMemoryTypeBits)noexcept{
+[[nodiscard]] inline b8 IsHeapMemoryTypeCompatible(const VkPhysicalDeviceMemoryProperties& memoryProperties, const u32 heapMemoryTypeIndex, const u32 resourceMemoryTypeBits)noexcept{
     if(heapMemoryTypeIndex >= memoryProperties.memoryTypeCount || heapMemoryTypeIndex >= s_VulkanMemoryTypeBitCount || (resourceMemoryTypeBits & (1u << heapMemoryTypeIndex)) == 0u)
         return false;
 
@@ -144,7 +144,7 @@ struct HeapBindingRange{
     return (flags & VK_MEMORY_PROPERTY_PROTECTED_BIT) == 0u;
 }
 
-[[nodiscard]] inline bool AllowsGenericHeapBinding(const VkMemoryDedicatedRequirements& dedicatedRequirements)noexcept{
+[[nodiscard]] inline b8 AllowsGenericHeapBinding(const VkMemoryDedicatedRequirements& dedicatedRequirements)noexcept{
     return dedicatedRequirements.requiresDedicatedAllocation == VK_FALSE;
 }
 

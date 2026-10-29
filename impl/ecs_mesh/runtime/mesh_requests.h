@@ -39,17 +39,17 @@ private:
 
 
     public:
-        [[nodiscard]] bool operator()(const Key& lhs, const Key& rhs)const noexcept;
-        [[nodiscard]] bool operator()(const Key& lhs, const Lookup& rhs)const noexcept;
+        [[nodiscard]] b8 operator()(const Key& lhs, const Key& rhs)const noexcept;
+        [[nodiscard]] b8 operator()(const Key& lhs, const Lookup& rhs)const noexcept;
     };
     struct Entry{
         Key key;
-        bool found;
+        b8 found;
     };
 
 
 private:
-    using Index = HashMap<Key, bool, Core::Alloc::ScratchArena, KeyHash, KeyEqual>;
+    using Index = HashMap<Key, b8, Core::Alloc::ScratchArena, KeyHash, KeyEqual>;
 
 
 private:
@@ -77,7 +77,7 @@ public:
         }
     }
 
-    [[nodiscard]] bool containsLive(const Name& meshKey, u64 version)const noexcept{
+    [[nodiscard]] b8 containsLive(const Name& meshKey, u64 version)const noexcept{
         if(!meshKey)
             return false;
         if(m_index)
@@ -86,7 +86,7 @@ public:
         return index < m_inlineCount && m_inlineEntries[index].found;
     }
 
-    [[nodiscard]] bool complete()const noexcept{ return m_remainingCount == 0u; }
+    [[nodiscard]] b8 complete()const noexcept{ return m_remainingCount == 0u; }
 
 
 private:
@@ -100,7 +100,7 @@ private:
     }
     void promoteIndex();
     void markIndexedLive(const Name& meshKey, u64 version)noexcept;
-    [[nodiscard]] bool containsIndexedLive(const Name& meshKey, u64 version)const noexcept;
+    [[nodiscard]] b8 containsIndexedLive(const Name& meshKey, u64 version)const noexcept;
 
 
 private:

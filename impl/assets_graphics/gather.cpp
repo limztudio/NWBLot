@@ -27,7 +27,7 @@ namespace __hidden_graphics_gather{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
+static b8 ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
     const Expected<Name> expectedPath = Core::ShaderArchive::BuildVirtualPathName(record.shaderName, record.variantName, record.stage);
     if(expectedPath && expectedPath->hash() == record.virtualPathHash)
         return true;
@@ -46,7 +46,7 @@ static bool ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MergeGatheredGraphicsAsset(const Name& virtualPath, const void* incomingPayload, const usize incomingSize, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload){
+b8 MergeGatheredGraphicsAsset(const Name& virtualPath, const void* incomingPayload, const usize incomingSize, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload){
     if(virtualPath != Core::ShaderArchive::IndexVirtualPathName())
         return false;
     if(incomingSize > 0u && incomingPayload == nullptr)

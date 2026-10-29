@@ -22,26 +22,26 @@ struct WaylandTextInputSurrounding{
     usize offsetByte = 0u;
     usize anchorByte = 0u;
     usize caretByte = 0u;
-    bool available = false;
+    b8 available = false;
 };
 
 struct WaylandTextInputProvenance{
     TextInputSessionToken token;
     u64 revision = 0u;
-    bool revisionKnown = false;
+    b8 revisionKnown = false;
 };
 
 class WaylandTextInputSurroundingState;
 
 // v3 deletion excludes the selected range and may address only the exact surrounding slice sent to the compositor.
-[[nodiscard]] bool CanApplyWaylandTextInputDeletion(const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire, usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes)noexcept;
+[[nodiscard]] b8 CanApplyWaylandTextInputDeletion(const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire, usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes)noexcept;
 
 // v3 messages accept at most 4000 UTF-8 bytes and must contain the entire selection.
 [[nodiscard]] WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(AStringView text, usize anchorByte, usize caretByte)noexcept;
 
 // Record only a surrounding snapshot that fits and was sent to the compositor.
 class WaylandTextInputSurroundingState final{
-    friend bool CanApplyWaylandTextInputDeletion(const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire, usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes)noexcept;
+    friend b8 CanApplyWaylandTextInputDeletion(const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire, usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes)noexcept;
 
 
 public:
@@ -76,13 +76,13 @@ public:
         m_cause = cause;
     }
 
-    [[nodiscard]] bool pending()const noexcept{ return m_pending; }
+    [[nodiscard]] b8 pending()const noexcept{ return m_pending; }
 
     [[nodiscard]] TextInputChangeCause::Enum cause()const noexcept{ return m_cause; }
 
 
 private:
-    bool m_pending = false;
+    b8 m_pending = false;
     TextInputChangeCause::Enum m_cause = TextInputChangeCause::InputMethod;
 };
 

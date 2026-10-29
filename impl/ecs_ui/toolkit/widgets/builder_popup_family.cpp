@@ -14,11 +14,11 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::popupFrameVisible(const BuilderScopeFrame& frame)const noexcept{
+b8 Builder::popupFrameVisible(const BuilderScopeFrame& frame)const noexcept{
     return frame.m_popupState && frame.m_popupState->isOpen() && frame.m_popupState->instanceGeneration() == frame.m_popupToken.instanceGeneration && frame.m_popupState->openGeneration() == frame.m_popupToken.openGeneration;
 }
 
-bool Builder::popupAncestorsVisible()const noexcept{
+b8 Builder::popupAncestorsVisible()const noexcept{
     if(m_context.failed())
         return false;
     for(const BuilderScopeFrame* frame = m_scope.get(); frame; frame = frame->m_parent){
@@ -28,7 +28,7 @@ bool Builder::popupAncestorsVisible()const noexcept{
     return true;
 }
 
-bool Builder::finishPopupFamily(){
+b8 Builder::finishPopupFamily(){
     // Visibility is resolved without calling application sources before any deferred subtree paint.
     m_scopeFrame.m_popupVisible = popupFrameVisible(m_scopeFrame);
     if(!m_scopeFrame.m_popupVisible)
@@ -39,8 +39,8 @@ bool Builder::finishPopupFamily(){
         if(!frame.m_popupVisible)
             m_context.discardPopupScope(frame.m_popupToken);
     }
-    const bool painted = paintPopupFamily(m_scopeFrame);
-    const bool valid = painted && validatePopupFamily();
+    const b8 painted = paintPopupFamily(m_scopeFrame);
+    const b8 valid = painted && validatePopupFamily();
     for(usize index = 0u; index <= m_popupFrameCount; ++index){
         BuilderScopeFrame& frame = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
         m_scope = MakeNotNull(&frame);
@@ -50,31 +50,31 @@ bool Builder::finishPopupFamily(){
     return valid;
 }
 
-bool Builder::paintPopupFamily(BuilderScopeFrame& frame){
+b8 Builder::paintPopupFamily(BuilderScopeFrame& frame){
     m_scope = MakeNotNull(&frame);
     if(!frame.m_popupVisible)
         return true;
     if(!popupAncestorsVisible() || !m_context.activatePopupScope(frame.m_popupToken))
         return false;
     if(!m_paint.beginOverlay(m_context.popupLayer())){
-        const bool ended = m_context.endPopupScope(false);
+        const b8 ended = m_context.endPopupScope(false);
         if(!ended)
             m_context.fail();
         return false;
     }
-    bool painted = paintPopup() && paintDeferredContents();
+    b8 painted = paintPopup() && paintDeferredContents();
     for(usize index = 0u; painted && index < m_popupFrameCount; ++index){
         BuilderScopeFrame& child = *m_popupFrames[index];
         if(child.m_parent == &frame)
             painted = paintPopupFamily(child);
     }
     m_scope = MakeNotNull(&frame);
-    const bool overlayEnded = m_paint.endOverlay();
-    const bool scopeEnded = m_context.endPopupScope(painted);
+    const b8 overlayEnded = m_paint.endOverlay();
+    const b8 scopeEnded = m_context.endPopupScope(painted);
     return painted && overlayEnded && scopeEnded;
 }
 
-bool Builder::validatePopupFamily(){
+b8 Builder::validatePopupFamily(){
     // A child callback can change an already painted parent, or a later sibling can change an ended child.
     for(usize index = 0u; index <= m_popupFrameCount; ++index){
         BuilderScopeFrame& frame = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
@@ -108,7 +108,7 @@ void Builder::releasePopupFamily()noexcept{
     m_scope = MakeNotNull(&m_scopeFrame);
 }
 
-bool Builder::reserveCompoundPopup(const WidgetState& widget, const PopupToken& token){
+b8 Builder::reserveCompoundPopup(const WidgetState& widget, const PopupToken& token){
     PopupOptions options;
     options.size = { 1.0f, 1.0f };
     const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());

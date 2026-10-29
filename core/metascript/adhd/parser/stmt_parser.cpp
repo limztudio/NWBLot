@@ -20,7 +20,7 @@ namespace __hidden_adhd_stmt_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool CaseBranchTerminates(const Stmt* stmt)noexcept{
+[[nodiscard]] b8 CaseBranchTerminates(const Stmt* stmt)noexcept{
     if(!stmt)
         return false;
     if(stmt->kind == StmtKind::Break || stmt->kind == StmtKind::Return || stmt->kind == StmtKind::Continue)
@@ -46,7 +46,7 @@ namespace __hidden_adhd_stmt_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool StmtParser::parseBlockStatements(MVector<Stmt*>& outStatements){
+b8 StmtParser::parseBlockStatements(MVector<Stmt*>& outStatements){
     if(!m_cursor.expect(TokenType::LeftBrace, "expected '{' to begin statement block"))
         return false;
 
@@ -227,11 +227,11 @@ Stmt* StmtParser::parseStatement(){
     return stmt;
 }
 
-bool StmtParser::parseRawNativeBlock(MStringView& outCode){
+b8 StmtParser::parseRawNativeBlock(MStringView& outCode){
     return m_cursor.consumeBalancedBracesRaw(outCode);
 }
 
-bool StmtParser::parseScopedBodyStatements(MVector<Stmt*>& outStatements){
+b8 StmtParser::parseScopedBodyStatements(MVector<Stmt*>& outStatements){
     if(m_cursor.check(TokenType::LeftBrace))
         return parseBlockStatements(outStatements);
 
@@ -288,7 +288,7 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
     stmt->expr = subject;
     stmt->span = span;
 
-    bool hasDefault = false;
+    b8 hasDefault = false;
     while(!m_cursor.check(TokenType::RightBrace) && !m_cursor.check(TokenType::EndOfFile)){
         SwitchCase switchCase(m_cursor.arena());
         switchCase.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
@@ -332,7 +332,7 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
             }
         }
 
-        const bool isStackedEmptyLabel = switchCase.statements.empty()
+        const b8 isStackedEmptyLabel = switchCase.statements.empty()
             && (m_cursor.checkIdentifier("case") || m_cursor.checkIdentifier("default"));
         if(!isStackedEmptyLabel){
             if(switchCase.statements.empty()){
@@ -354,7 +354,7 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
     return stmt;
 }
 
-Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const bool isParallel, const MVector<ParsedAttribute>& attributes){
+Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const b8 isParallel, const MVector<ParsedAttribute>& attributes){
     ParallelCoreKind::Enum coreKind = ParallelCoreKind::Any;
     ParallelPriorityKind::Enum priorityKind = ParallelPriorityKind::Normal;
     if(isParallel){

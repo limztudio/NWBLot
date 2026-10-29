@@ -141,11 +141,11 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, const u32 maxLights, Scen
 // True when the light is a caustic-eligible emitter: directional (params.y ~ 0) or spot (params.y ~ 2).
 // Point lights (params.y ~ 1) are excluded because omnidirectional emission would spread the photon budget too thin.
 // params.y carries static_cast<f32>(LightType::Enum) (Directional=0, Point=1, Spot=2; see ResolveSceneLights).
-inline bool CausticLightEligible(const SceneLightGpuData& light)noexcept{
+inline b8 CausticLightEligible(const SceneLightGpuData& light)noexcept{
     return light.params.y < s_LightTypeDirectionalMax || light.params.y > s_LightTypePointMax;
 }
 
-inline bool CausticLightEnabled(const SceneLightGpuData& light)noexcept{
+inline b8 CausticLightEnabled(const SceneLightGpuData& light)noexcept{
     return light.params.w >= s_CausticSlotEnabledThreshold;
 }
 

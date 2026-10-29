@@ -69,11 +69,11 @@ public:
 public:
     void invalidateResources();
     [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena, IMaterialSurfaceLookup& materialSurfaceLookup);
-    [[nodiscard]] bool createCsgClipResources();
-    [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
-    [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets, bool capFillRequired);
-    [[nodiscard]] bool createCsgIntervalSampleResources(DeferredFrameTargets& targets);
-    [[nodiscard]] bool prepareRefractionIntervalCapResources(const DeferredFrameTargets& targets);
+    [[nodiscard]] b8 createCsgClipResources();
+    [[nodiscard]] b8 createCsgPeelTargets(DeferredFrameTargets& targets);
+    [[nodiscard]] b8 createCsgIntervalPeelResources(DeferredFrameTargets& targets, b8 capFillRequired);
+    [[nodiscard]] b8 createCsgIntervalSampleResources(DeferredFrameTargets& targets);
+    [[nodiscard]] b8 prepareRefractionIntervalCapResources(const DeferredFrameTargets& targets);
     void dispatchCsgIntervalPeels(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -85,12 +85,12 @@ public:
     void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
     void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
     void renderRefractionIntervalCaps(Core::CommandList& commandList, const DeferredFrameTargets& targets, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, const Core::Rect& workRect, const Span<const u32> receiverIndices);
-    [[nodiscard]] bool createCsgIntervalSampleStateBuffer();
-    [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
-    [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
+    [[nodiscard]] b8 createCsgIntervalSampleStateBuffer();
+    [[nodiscard]] b8 reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
+    [[nodiscard]] b8 reserveCsgCutterBufferCapacity(usize cutterCount);
     // Preparation owns CSG buffer growth; draw paths consume after prepass.
-    [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
-    [[nodiscard]] ECSRenderDetail::CsgGraphResourceSnapshot csgGraphResourceSnapshot(bool retainRefractionCapPipeline)const noexcept;
+    [[nodiscard]] b8 prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
+    [[nodiscard]] ECSRenderDetail::CsgGraphResourceSnapshot csgGraphResourceSnapshot(b8 retainRefractionCapPipeline)const noexcept;
     // Capture frozen CSG uniform bytes as immutable blobs before native recording.
     [[nodiscard]] Expected<CsgClipContextSlots> prepareCsgClipContextSlotData(
         const DeferredFrameTargets& targets,

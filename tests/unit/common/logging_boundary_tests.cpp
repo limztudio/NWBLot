@@ -34,7 +34,7 @@ TEST(CommonLoggingBoundaries, LoggerMacrosBehaveAsSingleStatements){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard guard(logger);
 
-    bool elseBranchRan = false;
+    b8 elseBranchRan = false;
     if(false)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("unreachable"));
     else
@@ -54,7 +54,7 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
     Atomic<u32> activeWriters{ s_ThreadCount };
     Atomic<u32> observedMessages{ 0u };
     Atomic<u32> observedErrors{ 0u };
-    Atomic<bool> invalidObservation{ false };
+    Atomic<b8> invalidObservation{ false };
     Thread reader([&]()noexcept{
         startGate.arrive_and_wait();
         // Wait for the first writer burst so reads overlap live writes.

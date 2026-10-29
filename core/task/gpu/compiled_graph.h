@@ -47,12 +47,12 @@ struct GpuSubmissionPacket{
     u32 recordingFrontier = 0u;
     GpuPhysicalQueueId queue;
     // Late recovery/finalization packets wait for the latest accepted packet on every other queue.
-    bool joinsAcceptedQueueFrontier = false;
+    b8 joinsAcceptedQueueFrontier = false;
     // True only for recovery of a partially accepted graph, not ordinary late finalization.
-    bool isRecoverySubmission = false;
+    b8 isRecoverySubmission = false;
     // Compiler-selected envelope membership. recordsTiming stays the combined native-ticket requirement.
-    bool recordsPacketEnvelopeTiming = false;
-    bool recordsTiming = false;
+    b8 recordsPacketEnvelopeTiming = false;
+    b8 recordsTiming = false;
 };
 
 struct GpuPacketDependency{
@@ -70,7 +70,7 @@ struct GpuCompiledPacketView{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return id.valid() && plan && (plan->taskCount == 0u || tasks) && (plan->dependencyCount == 0u || dependencies) && (plan->externalDependencyCount == 0u || externalDependencies);
     }
 };
@@ -110,7 +110,7 @@ struct GpuCompiledTask{
     GpuTaskTimingPolicy::Enum timingPolicy = GpuTaskTimingPolicy::None;
     // Calibration observations add route duration history without becoming the committed timing-feedback incumbent.
     // Retain that decision so late query collection preserves policy dwell.
-    bool recordsNonCommittingTimingSample = false;
+    b8 recordsNonCommittingTimingSample = false;
 };
 
 // One checked task lookup and all of its borrowed compiler-owned lowering slices.
@@ -123,7 +123,7 @@ struct GpuCompiledTaskView{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return plan && (plan->prologueStateSeedCount == 0u || prologueStateSeeds) && (plan->prologueBarrierCount == 0u || prologueBarriers) && (plan->epilogueBarrierCount == 0u || epilogueBarriers);
     }
 };
@@ -159,7 +159,7 @@ struct GpuCompiledExternalResourceExportView{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return plan && plan->sourceCount != 0u && sources;
     }
 };
@@ -173,7 +173,7 @@ struct GpuCompiledPresentEndpoint{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return producer.valid() && backBuffer.valid() && packet.valid() && queue.valid();
     }
 };
@@ -205,11 +205,11 @@ struct GpuCompiledOwnershipTransfer{
     ResourceQueueSharing::Mask declaredQueueSharing = ResourceQueueSharing::Exclusive;
     GpuGraphResourceType::Enum resourceType = GpuGraphResourceType::HazardDomain;
     GpuOwnershipTransferRoute::Enum route = GpuOwnershipTransferRoute::Count;
-    bool concurrentSharingCouldAvoid = false;
+    b8 concurrentSharingCouldAvoid = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         if(
             !resource.valid()
             || resourceIdentity == s_NameNone
@@ -335,7 +335,7 @@ struct GpuTaskGraphCompileStatistics{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };
 
 
@@ -363,7 +363,7 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return graphGeneration != 0u && planGeneration != 0u && deviceGeneration != 0u && queue.valid() && queue.deviceGeneration == deviceGeneration && queueClass < CommandQueue::kCount;
     }
 };
@@ -402,13 +402,13 @@ private:
 
 
     public:
-        [[nodiscard]] bool valid()const noexcept{ return m_graph != nullptr; }
+        [[nodiscard]] b8 valid()const noexcept{ return m_graph != nullptr; }
         void publish()noexcept;
 
 
     private:
         GpuCompiledGraph* m_graph = nullptr;
-        bool m_published = false;
+        b8 m_published = false;
     };
 
 
@@ -432,18 +432,18 @@ public:
     public:
         // Pointer- and slice-bearing results borrow immutable plan storage.
         // They require a live lvalue ReadView and deliberately reject calls on a temporary proof.
-        [[nodiscard]] bool valid()const noexcept{ return m_graph != nullptr; }
+        [[nodiscard]] b8 valid()const noexcept{ return m_graph != nullptr; }
 
-        [[nodiscard]] bool validFor(const GpuCompiledGraph& graph)const noexcept{ return m_graph == &graph; }
-        [[nodiscard]] bool validFor(const GpuTaskGraphDeclarationReadView& graph)const noexcept;
+        [[nodiscard]] b8 validFor(const GpuCompiledGraph& graph)const noexcept{ return m_graph == &graph; }
+        [[nodiscard]] b8 validFor(const GpuTaskGraphDeclarationReadView& graph)const noexcept;
         [[nodiscard]] u64 generation()const noexcept;
         [[nodiscard]] u64 planGeneration()const noexcept;
         [[nodiscard]] u16 deviceGeneration()const noexcept;
         [[nodiscard]] u64 objectIdentity()const noexcept{ return m_graph ? m_graph->m_objectIdentity : 0u; }
         [[nodiscard]] usize taskCount()const noexcept;
         [[nodiscard]] usize packetCount()const noexcept;
-        [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packetID)const noexcept;
-        [[nodiscard]] bool validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;
+        [[nodiscard]] b8 validPacket(const GpuSubmissionPacketId& packetID)const noexcept;
+        [[nodiscard]] b8 validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;
         [[nodiscard]] GpuSubmissionPacketId packetIdAt(usize index)const noexcept;
         [[nodiscard]] GpuSubmissionPacketRange packetRange(const GpuSubmissionPacketId& first, const GpuSubmissionPacketId& last)const noexcept;
         [[nodiscard]] GpuSubmissionPacketRange packetRangeForTasks(const GpuTaskId& first, const GpuTaskId& last)const noexcept;
@@ -453,11 +453,11 @@ public:
         GpuCompiledTaskView findTask(const GpuTaskId& task)const && = delete;
         [[nodiscard]] GpuSubmissionPacketId packetForTask(const GpuTaskId& task)const noexcept;
         [[nodiscard]] GpuTaskPacketizationDecision::Enum packetizationDecisionForTask(const GpuTaskId& task)const noexcept;
-        [[nodiscard]] bool tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
-        [[nodiscard]] bool taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
-        [[nodiscard]] bool taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
-        [[nodiscard]] bool tasksFormContiguousPacketSequence(const GpuTaskId* tasks, usize taskCount)const noexcept;
-        [[nodiscard]] bool taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
+        [[nodiscard]] b8 tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+        [[nodiscard]] b8 taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+        [[nodiscard]] b8 taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+        [[nodiscard]] b8 tasksFormContiguousPacketSequence(const GpuTaskId* tasks, usize taskCount)const noexcept;
+        [[nodiscard]] b8 taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
         [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const & noexcept;
         const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const && = delete;
         [[nodiscard]] GpuCompiledPacketView packet(const GpuSubmissionPacketId& packet)const & noexcept;
@@ -490,7 +490,7 @@ public:
     private:
         const GpuCompiledGraph* m_graph = nullptr;
         ReadView* m_previousView = nullptr;
-        bool m_ownsAdmission = false;
+        b8 m_ownsAdmission = false;
     };
 
 
@@ -508,13 +508,13 @@ public:
 public:
     // An active graph attempt leases this exact immutable plan until every transaction packet resolves.
     // Failed reset leaves packet storage, identities, topology, and statistics unchanged so explicit cleanup can continue.
-    [[nodiscard]] bool tryReset()noexcept;
+    [[nodiscard]] b8 tryReset()noexcept;
     void reset()noexcept;
 
 
 private:
     // Compilation writes these helpers while holding CompilationScope; ReadView is the only read-side API surface.
-    [[nodiscard]] bool valid()const noexcept{ return m_valid && m_planGeneration != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_valid && m_planGeneration != 0u; }
 
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
 
@@ -525,8 +525,8 @@ private:
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
 
     [[nodiscard]] usize packetCount()const noexcept{ return m_packets.size(); }
-    [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packetID)const noexcept;
-    [[nodiscard]] bool validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;
+    [[nodiscard]] b8 validPacket(const GpuSubmissionPacketId& packetID)const noexcept;
+    [[nodiscard]] b8 validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;
     [[nodiscard]] GpuSubmissionPacketId packetIdAt(usize index)const noexcept;
     [[nodiscard]] GpuSubmissionPacketRange packetRange(const GpuSubmissionPacketId& first, const GpuSubmissionPacketId& last)const noexcept;
     [[nodiscard]] GpuSubmissionPacketRange packetRangeForTasks(const GpuTaskId& first, const GpuTaskId& last)const noexcept;
@@ -537,11 +537,11 @@ private:
     [[nodiscard]] const GpuCompiledTask* findTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] GpuSubmissionPacketId packetForTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] GpuTaskPacketizationDecision::Enum packetizationDecisionForTask(const GpuTaskId& task)const noexcept;
-    [[nodiscard]] bool tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
-    [[nodiscard]] bool taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
-    [[nodiscard]] bool taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
-    [[nodiscard]] bool tasksFormContiguousPacketSequence(const GpuTaskId* tasks, usize taskCount)const noexcept;
-    [[nodiscard]] bool taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
+    [[nodiscard]] b8 tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+    [[nodiscard]] b8 taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+    [[nodiscard]] b8 taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+    [[nodiscard]] b8 tasksFormContiguousPacketSequence(const GpuTaskId* tasks, usize taskCount)const noexcept;
+    [[nodiscard]] b8 taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const noexcept;
     [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const noexcept;
@@ -554,7 +554,7 @@ private:
 
 
 private:
-    [[nodiscard]] bool beginRecordingAttempt(
+    [[nodiscard]] b8 beginRecordingAttempt(
         const GpuTaskGraph& graph,
         const GpuTaskGraphDeclarationReadView& declarations,
         GpuSubmissionPacketId packet,
@@ -563,15 +563,15 @@ private:
         u64 previousRecordingAttemptGeneration,
         const ReadView& planAccess
     )const noexcept;
-    [[nodiscard]] bool matchesRecordingAttempt(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration)const noexcept;
-    [[nodiscard]] bool resolveRecordingAttempt(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration)const noexcept;
-    [[nodiscard]] bool bindSubmissionTransaction(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
-    [[nodiscard]] bool matchesSubmissionTransaction(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
-    [[nodiscard]] bool resolveSubmissionTransaction(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
+    [[nodiscard]] b8 matchesRecordingAttempt(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration)const noexcept;
+    [[nodiscard]] b8 resolveRecordingAttempt(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration)const noexcept;
+    [[nodiscard]] b8 bindSubmissionTransaction(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
+    [[nodiscard]] b8 matchesSubmissionTransaction(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
+    [[nodiscard]] b8 resolveSubmissionTransaction(const GpuTaskGraph& graph, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
     // Artifact reset already owns ArtifactOperation, then ReadView.
     // Attempt-binding code never acquires either lock in reverse, so this final scalar comparison cannot form an artifact/plan/attempt ABBA cycle.
     // `graphIdentity` is compared only as an opaque address; it is never dereferenced after the graph's lifetime may have ended.
-    [[nodiscard]] bool matchesActiveAttemptIdentity(const GpuTaskGraph* graphIdentity, u64 compiledObjectIdentity, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const ReadView& planAccess)const noexcept;
+    [[nodiscard]] b8 matchesActiveAttemptIdentity(const GpuTaskGraph* graphIdentity, u64 compiledObjectIdentity, u64 expectedPlanGeneration, u64 recordingAttemptGeneration, const ReadView& planAccess)const noexcept;
 
 
 private:
@@ -607,8 +607,8 @@ private:
     mutable Futex m_attemptBindingMutex;
     u16 m_deviceGeneration = 0u;
     mutable AttemptBindingState::Enum m_attemptBindingState = AttemptBindingState::None;
-    bool m_hasPresentEndpoint = false;
-    bool m_valid = false;
+    b8 m_hasPresentEndpoint = false;
+    b8 m_valid = false;
 };
 
 

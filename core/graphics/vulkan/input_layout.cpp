@@ -82,8 +82,8 @@ Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc*
     struct VertexBindingBuildInfo{
         u64 requiredStride = 0;
         u32 explicitStride = 0;
-        bool hasExplicitStride = false;
-        bool isInstanced = false;
+        b8 hasExplicitStride = false;
+        b8 isInstanced = false;
     };
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_InputLayoutArena);

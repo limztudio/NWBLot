@@ -43,7 +43,7 @@ void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(const MeshletTriang
     }
 }
 
-bool MeshCookMeshlets::AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs, MeshletDesc& meshlet, Core::Assets::AssetVector<u8>& primitiveIndices){
+b8 MeshCookMeshlets::AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs, MeshletDesc& meshlet, Core::Assets::AssetVector<u8>& primitiveIndices){
     for(const u32 vertexRefIndex : triangle.vertexRefs){
         const auto found = MeshletCandidateSearch::FindMeshletLocalVertex(localSourceVertexRefs, vertexRefIndex);
         u8 localVertex = found ? *found : 0u;
@@ -61,7 +61,7 @@ bool MeshCookMeshlets::AddMeshletTriangleToBuilder(const Path& nwbFilePath, cons
     return true;
 }
 
-bool MeshCookMeshlets::AddVisitedMeshletTriangle(
+b8 MeshCookMeshlets::AddVisitedMeshletTriangle(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const u32 triangleIndex,
@@ -91,7 +91,7 @@ bool MeshCookMeshlets::AddVisitedMeshletTriangle(
 }
 
 
-bool MeshCookMeshlets::GrowMeshletFromFrontier(
+b8 MeshCookMeshlets::GrowMeshletFromFrontier(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const usize seedSearchOffset,

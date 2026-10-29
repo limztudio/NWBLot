@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool IsValidUtf8TextWithoutNul(const AStringView text)noexcept{
+[[nodiscard]] inline b8 IsValidUtf8TextWithoutNul(const AStringView text)noexcept{
     usize offset = 0u;
     while(offset < text.size()){
         const auto decoded = DecodeUtf8Scalar(text.substr(offset));

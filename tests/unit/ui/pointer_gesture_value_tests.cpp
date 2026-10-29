@@ -30,7 +30,7 @@ public:
 
 protected:
     [[nodiscard]] InputRoutingResult send(const InputEvent& event);
-    [[nodiscard]] bool publish(usize count = 2u);
+    [[nodiscard]] b8 publish(usize count = 2u);
     [[nodiscard]] Expected<PointerGesture> take()noexcept;
     [[nodiscard]] Expected<ControlAction> takeControl()noexcept;
     void focusHost();
@@ -81,7 +81,7 @@ InputRoutingResult UiPointerGestureValueTests::send(const InputEvent& event){
     return m_router.process();
 }
 
-bool UiPointerGestureValueTests::publish(const usize count){
+b8 UiPointerGestureValueTests::publish(const usize count){
     const u64 generation = m_generation + 1u;
     if(!m_router.commitTargets(m_targets.data(), count, generation))
         return false;

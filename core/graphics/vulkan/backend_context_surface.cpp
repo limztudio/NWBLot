@@ -15,7 +15,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::createWindowSurface(){
+b8 BackendContext::createWindowSurface(){
     VkResult res = VK_SUCCESS;
 
 #ifdef NWB_PLATFORM_WINDOWS
@@ -83,7 +83,7 @@ bool BackendContext::createWindowSurface(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
+b8 BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
     VkResult res = VK_SUCCESS;
 
     if(m_swapChain || !m_swapChainImages.empty()){
@@ -97,8 +97,8 @@ bool BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
         return false;
     }
 
-    const bool hdr10ExtensionEnabled = m_hdr10ColorSpaceExtensionEnabled;
-    const bool hdr10Allowed = m_deviceParams.enableHDR10Output && hdr10ExtensionEnabled;
+    const b8 hdr10ExtensionEnabled = m_hdr10ColorSpaceExtensionEnabled;
+    const b8 hdr10Allowed = m_deviceParams.enableHDR10Output && hdr10ExtensionEnabled;
 
     uint32_t surfaceFormatCount = 0u;
     res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceFormatsKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceFormatCount, nullptr);
@@ -140,7 +140,7 @@ bool BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swapchain: surface lacks required color-attachment image usage"));
         return false;
     }
-    const bool swapChainReadbackAvailable = m_deviceParams.enableSwapChainReadback && (surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u;
+    const b8 swapChainReadbackAvailable = m_deviceParams.enableSwapChainReadback && (surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u;
     if(m_deviceParams.enableSwapChainReadback){
         const TStringView status = swapChainReadbackAvailable ? NWB_TEXT("enabled") : NWB_TEXT("unavailable because the surface lacks transfer-source image usage");
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: Swapchain readback {}."), status);
@@ -182,8 +182,8 @@ bool BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
 
     const VkPresentModeKHR requestedPresentMode = m_swapChainState.vsyncEnabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
     VkPresentModeKHR selectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-    bool requestedPresentModeFound = false;
-    bool fifoPresentModeFound = false;
+    b8 requestedPresentModeFound = false;
+    b8 fifoPresentModeFound = false;
     for(const auto& mode : presentModes){
         if(mode == requestedPresentMode){
             selectedPresentMode = requestedPresentMode;
@@ -208,7 +208,7 @@ bool BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
     const VkSurfaceTransformFlagBitsKHR selectedPreTransform = (surfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : surfaceCaps.currentTransform;
 
     VkCompositeAlphaFlagBitsKHR selectedCompositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    bool compositeAlphaFound = false;
+    b8 compositeAlphaFound = false;
     const VkCompositeAlphaFlagBitsKHR compositeAlphaCandidates[] = { VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR, VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR, VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR, VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR };
     for(const auto candidate : compositeAlphaCandidates){
         if(surfaceCaps.supportedCompositeAlpha & candidate){
@@ -239,7 +239,7 @@ bool BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
             appendQueueFamily(queue.familyIndex);
     }
     appendQueueFamily(static_cast<u32>(m_presentQueueFamily));
-    const bool enableSwapChainSharing = queueFamilyIndices.size() > 1u;
+    const b8 enableSwapChainSharing = queueFamilyIndices.size() > 1u;
 
     VkSwapchainCreateInfoKHR desc = {};
     desc.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -379,7 +379,7 @@ bool BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
     return true;
 }
 
-bool BackendContext::prepareSwapChainImageRevocation(){
+b8 BackendContext::prepareSwapChainImageRevocation(){
     for(SwapChainImage& swapChainImage : m_swapChainImages){
         if(swapChainImage.rhiHandle && !swapChainImage.rhiHandle->canRevokeUnmanagedNativeImage(swapChainImage.image)){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain Texture wrapper identity is not revocable."));
@@ -428,7 +428,7 @@ void BackendContext::commitPreparedSwapChainDestruction()noexcept{
 }
 
 
-bool BackendContext::destroySwapChainAfterCreateFailure(){
+b8 BackendContext::destroySwapChainAfterCreateFailure(){
     if(!prepareSwapChainImageRevocation())
         return false;
 

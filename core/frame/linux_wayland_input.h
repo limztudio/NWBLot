@@ -82,7 +82,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool createKeymapContext()noexcept;
+    [[nodiscard]] b8 createKeymapContext()noexcept;
     // Binds the first advertised seat; later seats are ignored while one is bound.
     void bindSeat(wl_registry& registry, u32 name, u32 version);
     void removeSeat(u32 name);
@@ -133,9 +133,9 @@ private:
     u32 m_inputSerial = 0u;
     u32 m_repeatKeycode = 0u;
 
-    bool m_keyboardFocused = false;
-    bool m_repeatPending = false;
-    bool m_scrollPending = false;
+    b8 m_keyboardFocused = false;
+    b8 m_repeatPending = false;
+    b8 m_scrollPending = false;
 };
 
 

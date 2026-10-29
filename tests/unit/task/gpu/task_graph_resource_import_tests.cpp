@@ -37,7 +37,7 @@ TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
         static_cast<Graphics::ResourceQueueSharing::Mask>(static_cast<u8>(Graphics::ResourceQueueSharing::Graphics) | s_UnknownQueueSharingBit),
     };
     constexpr Graphics::GpuGraphResourceType::Enum s_MetadataResourceTypes[] = { Graphics::GpuGraphResourceType::Texture, Graphics::GpuGraphResourceType::Buffer, Graphics::GpuGraphResourceType::AccelStruct, Graphics::GpuGraphResourceType::HazardDomain, };
-    const auto expectRejectedWithoutMutation = [](const Graphics::GpuGraphResourceType::Enum resourceType, const Graphics::ResourceQueueSharing::Mask queueSharing, const bool useHazardDomainWrapper){
+    const auto expectRejectedWithoutMutation = [](const Graphics::GpuGraphResourceType::Enum resourceType, const Graphics::ResourceQueueSharing::Mask queueSharing, const b8 useHazardDomainWrapper){
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
         const Graphics::GpuGraphResourceDesc desc = Graphics::GpuGraphResourceDesc{}

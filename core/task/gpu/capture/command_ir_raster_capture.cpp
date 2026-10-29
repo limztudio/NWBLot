@@ -42,7 +42,7 @@ public:
         }
     }
 
-    [[nodiscard]] bool valid()const noexcept{ return m_lease.valid(); }
+    [[nodiscard]] b8 valid()const noexcept{ return m_lease.valid(); }
 
 
 private:
@@ -153,7 +153,7 @@ GpuCommandIrCapture::~GpuCommandIrCapture()noexcept{
         DestroyArenaObjectNoexcept(m_arena, m_rasterOwners);
 }
 
-bool GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state){
+b8 GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuCommandIrRasterStateDesc& state){
     if(
         !state.pipeline.valid() || state.pipeline.generation != task.generation
         || !state.colorAttachment.valid() || state.colorAttachment.generation != task.generation
@@ -213,7 +213,7 @@ bool GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const Gp
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, BinaryByteView{ reinterpret_cast<const u8*>(wires), static_cast<usize>(record.blobSizeBytes) }, &owner, nullptr);
 }
 
-bool GpuCommandIrCapture::captureBindGraphicsHeap(
+b8 GpuCommandIrCapture::captureBindGraphicsHeap(
     GpuDescriptorHeap& heap,
     GraphicsArena& ownerArena,
     const GpuTaskId task,
@@ -243,7 +243,7 @@ bool GpuCommandIrCapture::captureBindGraphicsHeap(
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, &owner);
 }
 
-bool GpuCommandIrCapture::capturePushConstants(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const BinaryByteView bytes){
+b8 GpuCommandIrCapture::capturePushConstants(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const BinaryByteView bytes){
     if(bytes.empty() || !bytes.data() || bytes.size() > Limit<u32>::s_Max || (bytes.size() & (s_PushConstantSizeAlignment - 1u)) != 0u)
         return false;
     GpuCommandIrSetPushConstantsRecord record;
@@ -253,7 +253,7 @@ bool GpuCommandIrCapture::capturePushConstants(const GpuTaskId task, const GpuSu
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, bytes, nullptr, nullptr);
 }
 
-bool GpuCommandIrCapture::captureDraw(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const DrawArguments& arguments, const bool indexed){
+b8 GpuCommandIrCapture::captureDraw(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const DrawArguments& arguments, const b8 indexed){
     GpuCommandIrDrawRecord record;
     __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, indexed ? GpuCommandIrWireOpcode::DrawIndexed : GpuCommandIrWireOpcode::Draw, task, packet, queue);
     record.vertexCount = arguments.vertexCount;
@@ -264,13 +264,13 @@ bool GpuCommandIrCapture::captureDraw(const GpuTaskId task, const GpuSubmissionP
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, nullptr);
 }
 
-bool GpuCommandIrCapture::captureEndRenderPass(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue){
+b8 GpuCommandIrCapture::captureEndRenderPass(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue){
     GpuCommandIrEndRenderPassRecord record;
     __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, GpuCommandIrWireOpcode::EndRenderPass, task, packet, queue);
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, nullptr);
 }
 
-bool GpuCommandIrCapture::appendRasterBytes(
+b8 GpuCommandIrCapture::appendRasterBytes(
     const GpuTaskId task,
     const GpuSubmissionPacketId packet,
     const GpuPhysicalQueueId queue,

@@ -22,7 +22,7 @@ using namespace UiEditNavigationTestSupport;
 
 class UiEditPointerCaptureTests : public UiEditNavigationHostTests{
 protected:
-    [[nodiscard]] bool publishPart(const bool gesture){
+    [[nodiscard]] b8 publishPart(const b8 gesture){
         const Ui::HitTarget* target = UiTestSupport::FindHitTarget(m_context.input().targets(), m_widget.id);
         if(!target)
             return false;

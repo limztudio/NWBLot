@@ -35,7 +35,7 @@ namespace __hidden_texture_loader{
 static constexpr Core::FormatSupport::Mask s_RequiredTextureFormatSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
 
 static Futex s_BasisTranscoderInitializationMutex;
-static Atomic<bool> s_BasisTranscoderInitialized = false;
+static Atomic<b8> s_BasisTranscoderInitialized = false;
 
 struct CreatedTexture{
     Core::TextureHandle texture;
@@ -58,7 +58,7 @@ static void InitializeBasisTranscoder(){
     s_BasisTranscoderInitialized.store(true, MemoryOrder::release);
 }
 
-[[nodiscard]] static bool SupportsTextureFormat(Core::Device& device, const Core::Format::Enum format)noexcept{
+[[nodiscard]] static b8 SupportsTextureFormat(Core::Device& device, const Core::Format::Enum format)noexcept{
     return (device.queryFormatSupport(format) & s_RequiredTextureFormatSupport) == s_RequiredTextureFormatSupport;
 }
 
@@ -155,7 +155,7 @@ static void InitializeBasisTranscoder(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName){
+b8 TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName){
     const TStringView owner = ownerName;
     NWB_ASSERT(!outResource.valid());
     if(outResource.texture || outResource.sampledImageHeapHandle.valid() || outResource.format != Core::Format::UNKNOWN){
@@ -241,7 +241,7 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
 
     Vector<Core::GraphicsRuntime::TextureUploadRegion, Core::Alloc::ScratchArena> uploadRegions{scratchArena};
     usize uploadRegionReserveCount = 0u;
-    const bool isVolumeTexture = textureAsset.dimension() == TextureDimension::Texture3D;
+    const b8 isVolumeTexture = textureAsset.dimension() == TextureDimension::Texture3D;
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex)
         uploadRegionReserveCount += isVolumeTexture ? 1u : static_cast<usize>(textureAsset.mipLevels()[mipIndex].sliceCount);
     uploadRegions.reserve(uploadRegionReserveCount);
@@ -305,7 +305,7 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
     return true;
 }
 
-bool TextureAssetLoader::Load(TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName){
+b8 TextureAssetLoader::Load(TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName){
     const TStringView owner = ownerName;
     if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner))
         return outResource.valid();

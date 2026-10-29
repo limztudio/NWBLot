@@ -40,7 +40,7 @@ GpuTaskScheduler::DeviceOperation::~DeviceOperation()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskScheduler::attachDevice(Device& device)noexcept{
+b8 GpuTaskScheduler::attachDevice(Device& device)noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
 
     if(m_device)
@@ -49,7 +49,7 @@ bool GpuTaskScheduler::attachDevice(Device& device)noexcept{
     return true;
 }
 
-bool GpuTaskScheduler::detachDevice(Device& device)noexcept{
+b8 GpuTaskScheduler::detachDevice(Device& device)noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
 
     if(m_device != &device || m_activeOperations != 0u)
@@ -58,25 +58,25 @@ bool GpuTaskScheduler::detachDevice(Device& device)noexcept{
     return true;
 }
 
-bool GpuTaskScheduler::isAttachedTo(const Device& device)const noexcept{
+b8 GpuTaskScheduler::isAttachedTo(const Device& device)const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
 
     return m_device == &device;
 }
 
-bool GpuTaskScheduler::isInitialized()const noexcept{
+b8 GpuTaskScheduler::isInitialized()const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
 
     return m_device != nullptr;
 }
 
-bool GpuTaskScheduler::wait()const{
+b8 GpuTaskScheduler::wait()const{
     DeviceOperation operation(*this);
 
     return !operation.m_admitted || device().waitForIdle();
 }
 
-bool GpuTaskScheduler::wait(const QueueSubmissionToken& token)const{
+b8 GpuTaskScheduler::wait(const QueueSubmissionToken& token)const{
     DeviceOperation operation(*this);
 
     return operation.m_admitted && device().waitForSubmissionToken(token);

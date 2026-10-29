@@ -21,7 +21,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Win32TextInputService::handleMessage(const u32 message, const usize wParam, const isize lParam){
+b8 Win32TextInputService::handleMessage(const u32 message, const usize wParam, const isize lParam){
     if(!isOwnerThread())
         return false;
     if(message == WM_SETFOCUS || message == WM_KILLFOCUS){
@@ -109,7 +109,7 @@ TextInputAdmission::Enum Win32TextInputService::acceptUtf16Unit(const TextInputS
         return TextInputAdmission::InvalidText;
     }
     if(IsUtf16HighSurrogate(unit)){
-        const bool interruptedPair = m_pendingHighSurrogate != 0u;
+        const b8 interruptedPair = m_pendingHighSurrogate != 0u;
         m_pendingHighSurrogate = unit;
         return interruptedPair ? TextInputAdmission::InvalidText : TextInputAdmission::Accepted;
     }

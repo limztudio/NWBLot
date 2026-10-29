@@ -33,7 +33,7 @@ static constexpr AStringView s_GiCsgEnabledVariant = "NWB_GI_CSG_ENABLED=1";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
+b8 RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     if(m_rayTracingState.m_surfelSpawnPipeline)
         return true;
     if(m_rayTracingState.m_surfelSpawnPipelineFailed)
@@ -84,7 +84,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
+b8 RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     if(m_rayTracingState.m_surfelAgeFreePipeline)
         return true;
     if(m_rayTracingState.m_surfelAgeFreePipelineFailed)
@@ -135,7 +135,7 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
+b8 RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     if(m_rayTracingState.m_surfelHashBuildPipeline)
         return true;
     if(m_rayTracingState.m_surfelHashBuildPipelineFailed)
@@ -186,8 +186,8 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
-    const bool csg = m_rayTracingState.m_surfelUseCsgTrace;
+b8 RendererRayTracingSystem::ensureSurfelTracePipeline(){
+    const b8 csg = m_rayTracingState.m_surfelUseCsgTrace;
     auto& pipeline = csg ? m_rayTracingState.m_surfelTraceCsgPipeline : m_rayTracingState.m_surfelTracePipeline;
     auto& shader = csg ? m_rayTracingState.m_surfelTraceCsgShader : m_rayTracingState.m_surfelTraceShader;
     auto& failed = csg ? m_rayTracingState.m_surfelTraceCsgPipelineFailed : m_rayTracingState.m_surfelTracePipelineFailed;
@@ -243,8 +243,8 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
 }
 
 // Hardware trace twin; other surfel passes are shared.
-bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
-    const bool csg = m_rayTracingState.m_surfelUseCsgTrace;
+b8 RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
+    const b8 csg = m_rayTracingState.m_surfelUseCsgTrace;
     auto& pipeline = csg ? m_rayTracingState.m_surfelTraceCsgHwPipeline : m_rayTracingState.m_surfelTraceHwPipeline;
     auto& shader = csg ? m_rayTracingState.m_surfelTraceCsgHwShader : m_rayTracingState.m_surfelTraceHwShader;
     auto& failed = csg ? m_rayTracingState.m_surfelTraceCsgHwPipelineFailed : m_rayTracingState.m_surfelTraceHwPipelineFailed;
@@ -306,7 +306,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
+b8 RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     if(m_rayTracingState.m_surfelResolvePipeline)
         return true;
     if(m_rayTracingState.m_surfelResolvePipelineFailed)
@@ -357,7 +357,7 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
+b8 RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     if(m_rayTracingState.m_surfelUpsamplePipeline)
         return true;
     if(m_rayTracingState.m_surfelUpsamplePipelineFailed)
@@ -408,7 +408,7 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
+b8 RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     if(m_rayTracingState.m_surfelTraceBuildArgsPipeline)
         return true;
     if(m_rayTracingState.m_surfelTraceBuildArgsPipelineFailed)

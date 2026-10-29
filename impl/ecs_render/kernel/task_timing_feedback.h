@@ -47,8 +47,8 @@ struct RendererTaskTimingFeedbackPolicyTransition{
     RendererTaskTimingFeedbackCollectionAction::Enum action = RendererTaskTimingFeedbackCollectionAction::None;
 };
 
-[[nodiscard]] RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, bool rendererActive)noexcept;
-void ResolveRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const RendererTaskTimingFeedbackPolicyTransition& transition, bool collectionUpdated)noexcept;
+[[nodiscard]] RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, b8 rendererActive)noexcept;
+void ResolveRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const RendererTaskTimingFeedbackPolicyTransition& transition, b8 collectionUpdated)noexcept;
 
 
 // Drainable ledger for submission resolution and sample completion; callbacks stay allocation-free.
@@ -61,12 +61,12 @@ private:
         Core::GpuPhysicalQueueId expectedQueue;
         u64 sourceFrameIndex = 0u;
         f64 durationSeconds = 0.0;
-        bool recordsNonCommittingTimingSample = false;
-        bool submissionResolved = false;
-        bool accepted = false;
-        bool assignmentRecorded = false;
-        bool sampleResolved = false;
-        bool hasUsableSample = false;
+        b8 recordsNonCommittingTimingSample = false;
+        b8 submissionResolved = false;
+        b8 accepted = false;
+        b8 assignmentRecorded = false;
+        b8 sampleResolved = false;
+        b8 hasUsableSample = false;
     };
 
 
@@ -77,10 +77,10 @@ public:
 
 
 public:
-    [[nodiscard]] bool trackSample(Core::GpuTimingSampleAttribution attribution, const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, u64 sourceFrameIndex, bool recordsNonCommittingTimingSample);
-    void acceptSubmission(Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, bool feedbackActive)noexcept;
+    [[nodiscard]] b8 trackSample(Core::GpuTimingSampleAttribution attribution, const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, u64 sourceFrameIndex, b8 recordsNonCommittingTimingSample);
+    void acceptSubmission(Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, b8 feedbackActive)noexcept;
     void discardRecording(Core::GpuTimingSampleAttribution attribution)noexcept;
-    void completeSample(const Core::GpuTimingSample& sample, bool feedbackActive)noexcept;
+    void completeSample(const Core::GpuTimingSample& sample, b8 feedbackActive)noexcept;
     [[nodiscard]] RendererTaskTimingFeedbackDrainResult drain(Core::GpuTaskTimingHistoryStore& history, u16 deviceGeneration);
     void reset()noexcept{ m_pendingSamples.clear(); }
 
@@ -109,8 +109,8 @@ public:
 public:
     void activate();
     void deactivate()noexcept;
-    [[nodiscard]] bool setPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
-    [[nodiscard]] Expected<Core::GpuTimingSampleAttribution> beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, bool recordsNonCommittingTimingSample);
+    [[nodiscard]] b8 setPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
+    [[nodiscard]] Expected<Core::GpuTimingSampleAttribution> beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, b8 recordsNonCommittingTimingSample);
     void acceptSubmission(Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token)noexcept;
     void discardRecording(Core::GpuTimingSampleAttribution attribution)noexcept;
     void configureCompileOptions(Core::GpuTaskGraphCompileOptions& options, u64 frameIndex);
@@ -118,7 +118,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool collectsScope(const Name& scopeName)const noexcept;
+    [[nodiscard]] b8 collectsScope(const Name& scopeName)const noexcept;
     void onGpuTimingSample(const Core::GpuTimingSample& sample)noexcept;
 
 
@@ -132,7 +132,7 @@ private:
     Futex m_mutex;
     Core::GpuTaskTimingFeedbackPolicy m_policy;
     Core::GpuTimingSampleSubscription m_subscription;
-    bool m_active = false;
+    b8 m_active = false;
 };
 
 namespace ECSRenderDetail{

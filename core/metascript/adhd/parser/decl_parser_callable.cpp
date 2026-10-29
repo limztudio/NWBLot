@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool DeclParser::validateMemberOperatorArity(
+b8 DeclParser::validateMemberOperatorArity(
     const MStringView opName,
     const usize paramCount,
     MStringView& outErrorMsg
@@ -44,10 +44,10 @@ bool DeclParser::validateMemberOperatorArity(
     return true;
 }
 
-bool DeclParser::parseCallableOwnerOrTemplateHeader(
+b8 DeclParser::parseCallableOwnerOrTemplateHeader(
     MVector<MStringView>& outOwnerTemplateParams,
     MVector<TemplateParamDecl>& outTemplateParams,
-    const bool failOnInvalidTemplateParams
+    const b8 failOnInvalidTemplateParams
 ){
     if(!m_cursor.check(TokenType::Less))
         return true;
@@ -225,7 +225,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     return decl;
 }
 
-bool DeclParser::applyCallableAttributes(
+b8 DeclParser::applyCallableAttributes(
     const MVector<ParsedAttribute>& attributes,
     const SourceSpan span,
     MethodDecl& decl
@@ -242,7 +242,7 @@ bool DeclParser::applyCallableAttributes(
     return true;
 }
 
-bool DeclParser::parseOperatorName(MStringView& outOpName){
+b8 DeclParser::parseOperatorName(MStringView& outOpName){
     if(m_cursor.check(TokenType::AmpersandAmpersand) || m_cursor.check(TokenType::PipePipe)){
         m_cursor.error("overloading 'operator&&' and 'operator||' is prohibited in adhd");
         return false;

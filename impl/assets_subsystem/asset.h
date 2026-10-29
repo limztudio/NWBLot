@@ -27,7 +27,7 @@ using SubsystemAssetRefVector = Core::Assets::AssetVector<Core::Assets::AssetRef
 struct SubsystemFieldValueDescriptor{
     AStringView fieldName;
     Name expectedAssetType = s_NameNone;
-    bool isArray = false;
+    b8 isArray = false;
 };
 
 
@@ -61,8 +61,8 @@ protected:
 
 
 public:
-    [[nodiscard]] virtual bool loadBinary(Span<const u8> binary) = 0;
-    [[nodiscard]] virtual bool validatePayload()const = 0;
+    [[nodiscard]] virtual b8 loadBinary(Span<const u8> binary) = 0;
+    [[nodiscard]] virtual b8 validatePayload()const = 0;
     [[nodiscard]] virtual usize fieldCount()const noexcept = 0;
     [[nodiscard]] virtual SubsystemFieldValueDescriptor fieldDescriptor(usize index)const noexcept = 0;
     [[nodiscard]] virtual usize fieldValueCount(usize index)const noexcept = 0;
@@ -79,7 +79,7 @@ template<typename SubsystemT>
 struct SubsystemFieldDescriptor{
     AStringView fieldName;
     Name expectedAssetType = s_NameNone;
-    bool isArray = false;
+    b8 isArray = false;
     usize (*count)(const SubsystemT& subsystem)noexcept = nullptr;
     Name (*get)(const SubsystemT& subsystem, usize elementIndex)noexcept = nullptr;
     void (*clear)(SubsystemT& subsystem)noexcept = nullptr;
@@ -144,8 +144,8 @@ namespace SubsystemAssetRuntime{
 
 
 void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcept;
-[[nodiscard]] bool ValidatePayload(const ISubsystem& subsystem);
-[[nodiscard]] bool LoadBinary(ISubsystem& subsystem, Span<const u8> binary);
+[[nodiscard]] b8 ValidatePayload(const ISubsystem& subsystem);
+[[nodiscard]] b8 LoadBinary(ISubsystem& subsystem, Span<const u8> binary);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,11 +184,11 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool loadBinary(const Span<const u8> binary)override{
+    [[nodiscard]] virtual b8 loadBinary(const Span<const u8> binary)override{
         return SubsystemAssetRuntime::LoadBinary(*this, binary);
     }
 
-    [[nodiscard]] virtual bool validatePayload()const override{
+    [[nodiscard]] virtual b8 validatePayload()const override{
         return SubsystemAssetRuntime::ValidatePayload(*this);
     }
 
@@ -270,14 +270,14 @@ public:
 public:
     [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, Span<const u8> binary)const override;
 #if defined(NWB_COOK)
-    virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
+    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif
 };
 
 
 #if defined(NWB_COOK)
 namespace SubsystemAssetSerialization{
-[[nodiscard]] bool Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary);
+[[nodiscard]] b8 Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary);
 };
 #endif
 
@@ -290,7 +290,7 @@ public:
 
 #if defined(NWB_COOK)
 public:
-    virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
+    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
         if(!this->checkSerializeAssetType(asset, NWB_TEXT("TypedSubsystemAssetCodec::serialize")))
             return false;
 

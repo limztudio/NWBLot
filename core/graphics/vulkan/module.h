@@ -57,8 +57,8 @@ struct VulkanPhysicalQueueDesc{
     u32 timestampValidBits = 0u;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
-    bool dedicated = false;
-    bool primaryForClass = false;
+    b8 dedicated = false;
+    b8 primaryForClass = false;
 };
 
 struct DeviceDesc{
@@ -88,42 +88,42 @@ struct DeviceDesc{
     usize numDeviceExtensions = 0;
 
     // True when VkPhysicalDeviceVulkan12Features::bufferDeviceAddress was enabled at device creation.
-    bool bufferDeviceAddressSupported = false;
+    b8 bufferDeviceAddressSupported = false;
     // Retains the exact VkPhysicalDeviceVulkan12Features::hostQueryReset bit enabled at device creation time.
-    bool hostQueryResetFeatureEnabled = false;
+    b8 hostQueryResetFeatureEnabled = false;
     // Retains the texture-compression features enabled through vkCreateDevice.
-    bool textureCompressionBcFeatureEnabled = false;
-    bool textureCompressionAstcLdrFeatureEnabled = false;
-    bool textureCompressionAstcHdrFeatureEnabled = false;
+    b8 textureCompressionBcFeatureEnabled = false;
+    b8 textureCompressionAstcLdrFeatureEnabled = false;
+    b8 textureCompressionAstcHdrFeatureEnabled = false;
     // Indicates if dynamic rendering was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
-    bool dynamicRenderingSupported = false;
+    b8 dynamicRenderingSupported = false;
     // Indicates if synchronization2 was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
-    bool synchronization2Supported = false;
-    bool independentBlendFeatureEnabled = false;
-    bool fullDrawIndexUint32FeatureEnabled = false;
-    bool multiDrawIndirectFeatureEnabled = false;
-    bool drawIndirectFirstInstanceFeatureEnabled = false;
-    bool meshShaderFeatureEnabled = false;
+    b8 synchronization2Supported = false;
+    b8 independentBlendFeatureEnabled = false;
+    b8 fullDrawIndexUint32FeatureEnabled = false;
+    b8 multiDrawIndirectFeatureEnabled = false;
+    b8 drawIndirectFirstInstanceFeatureEnabled = false;
+    b8 meshShaderFeatureEnabled = false;
     // Enabled feature-chain state for optional ray-tracing capabilities.
     // Distinct from extension-name presence, so queries never advertise an extension whose feature bit stayed off.
-    bool accelerationStructureFeatureEnabled = false;
-    bool rayTracingPipelineFeatureEnabled = false;
-    bool rayQueryFeatureEnabled = false;
-    bool opacityMicromapFeatureEnabled = false;
-    bool clusterAccelerationStructureFeatureEnabled = false;
-    bool rayTracingInvocationReorderFeatureEnabled = false;
-    bool rayTracingInvocationReorderExtFeatureEnabled = false;
+    b8 accelerationStructureFeatureEnabled = false;
+    b8 rayTracingPipelineFeatureEnabled = false;
+    b8 rayQueryFeatureEnabled = false;
+    b8 opacityMicromapFeatureEnabled = false;
+    b8 clusterAccelerationStructureFeatureEnabled = false;
+    b8 rayTracingInvocationReorderFeatureEnabled = false;
+    b8 rayTracingInvocationReorderExtFeatureEnabled = false;
     // Indicates if VK_NV_cooperative_vector feature bits were enabled at device creation time.
-    bool cooperativeVectorFeatureEnabled = false;
-    bool cooperativeVectorTrainingFeatureEnabled = false;
+    b8 cooperativeVectorFeatureEnabled = false;
+    b8 cooperativeVectorTrainingFeatureEnabled = false;
     // True when VK_EXT_mesh_shader taskShader was enabled at device creation.
-    bool meshTaskShaderSupported = false;
+    b8 meshTaskShaderSupported = false;
     // True when VK_NV_ray_tracing_linear_swept_spheres spheres was enabled at device creation.
-    bool rayTracingSpheresSupported = false;
+    b8 rayTracingSpheresSupported = false;
     // True when VK_NV_ray_tracing_linear_swept_spheres linearSweptSpheres was enabled at device creation.
-    bool rayTracingLinearSweptSpheresSupported = false;
-    bool gpuCrashDiagnosticsEnabled = false;
-    bool logBufferLifetime = false;
+    b8 rayTracingLinearSweptSpheresSupported = false;
+    b8 gpuCrashDiagnosticsEnabled = false;
+    b8 logBufferLifetime = false;
 
     GpuDescriptorHeapAbi bindlessHeapAbi;
     // Borrowed for the synchronous CreateDevice call; the backing text must outlive that call.

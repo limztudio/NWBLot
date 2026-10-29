@@ -35,14 +35,14 @@ public:
         NotNull<Core::GpuPersistentResourceStateCache::Candidate*> shadowStateCandidate;
         NotNull<Core::GpuPersistentResourceStateCache::Candidate*> causticStateCandidate;
         NotNull<Core::GpuPersistentResourceStateCache::Candidate*> surfelStateCandidate;
-        bool finalStateReady = false;
-        bool acceptedStateReady = false;
+        b8 finalStateReady = false;
+        b8 acceptedStateReady = false;
     };
 
 
 public:
-    [[nodiscard]] static bool PrepareHistoryCopyFinalState(void* rawContext, const Core::CommandListResourceStateHandoff* finalState);
-    [[nodiscard]] static bool AcceptHistoryCopyFinalState(void* rawContext, const Core::QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] static b8 PrepareHistoryCopyFinalState(void* rawContext, const Core::CommandListResourceStateHandoff* finalState);
+    [[nodiscard]] static b8 AcceptHistoryCopyFinalState(void* rawContext, const Core::QueueSubmissionToken& token)noexcept;
 
 
 public:

@@ -39,7 +39,7 @@ static const SubsystemTypeAutoRegistrar* s_RegisteredSubsystemTypesHead = nullpt
     return nullptr;
 }
 
-[[nodiscard]] static bool IsSubsystemAssetType(const Name& assetType)noexcept{
+[[nodiscard]] static b8 IsSubsystemAssetType(const Name& assetType)noexcept{
     if(!assetType)
         return false;
     for(const SubsystemTypeAutoRegistrar* node = s_RegisteredSubsystemTypesHead; node != nullptr; node = node->next()){
@@ -91,7 +91,7 @@ void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcep
     usize writeIndex = 0u;
     for(usize readIndex = 0u; readIndex < subsystems.size(); ++readIndex){
         const ISubsystem::SubsystemRef& candidate = subsystems[readIndex];
-        bool duplicate = false;
+        b8 duplicate = false;
         for(usize prevIndex = 0u; prevIndex < writeIndex; ++prevIndex){
             if(subsystems[prevIndex].name() == candidate.name()){
                 duplicate = true;
@@ -107,7 +107,7 @@ void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcep
     subsystems.resize(writeIndex);
 }
 
-bool ValidatePayload(const ISubsystem& subsystem){
+b8 ValidatePayload(const ISubsystem& subsystem){
     if(!subsystem.checkVirtualPath(NWB_TEXT("ISubsystem::validatePayload")))
         return false;
 
@@ -185,7 +185,7 @@ bool ValidatePayload(const ISubsystem& subsystem){
     return true;
 }
 
-bool LoadBinary(ISubsystem& subsystem, const Span<const u8> binary){
+b8 LoadBinary(ISubsystem& subsystem, const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(AssetsSubsystemArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemBinaryPayload::SubsystemHeaderBinary>(

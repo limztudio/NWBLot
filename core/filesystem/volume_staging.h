@@ -20,9 +20,9 @@ NWB_FILESYSTEM_BEGIN
 inline constexpr AStringView s_StageDirectoryLabel = "stage directory";
 inline constexpr AStringView s_BackupDirectoryLabel = "backup directory";
 
-bool RemoveStagedDirectoryIfPresent(const Path& directoryPath, AStringView operationName, AStringView label);
+b8 RemoveStagedDirectoryIfPresent(const Path& directoryPath, AStringView operationName, AStringView label);
 void CleanupStagedDirectoryBestEffort(const Path& directoryPath, AStringView operationName, AStringView label);
-bool EnsureEmptyStagedDirectory(const Path& directoryPath, AStringView operationName, AStringView label);
+b8 EnsureEmptyStagedDirectory(const Path& directoryPath, AStringView operationName, AStringView label);
 
 class StagedDirectoryCleanupGuard : NoCopy{
 public:
@@ -39,11 +39,11 @@ private:
     Path m_directoryPath;
     AStringView m_operationName;
     AStringView m_label;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
-bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount, Alloc::ScratchArena& scratchArena);
-bool RemoveVolumeSegments(const Path& outputDirectory, AStringView volumeName, Alloc::ScratchArena& scratchArena);
+b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount, Alloc::ScratchArena& scratchArena);
+b8 RemoveVolumeSegments(const Path& outputDirectory, AStringView volumeName, Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

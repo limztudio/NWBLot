@@ -38,7 +38,7 @@ static Expected<ModelCookEntry> ParseModelValue(const Name virtualPath, const Pa
     return ParseModelCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
 }
 
-static bool ExtractModelDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+static b8 ExtractModelDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto modelEntry = ParseModelCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena);
     if(!modelEntry)
         return false;
@@ -62,11 +62,11 @@ static bool ExtractModelDependencies(const Core::Assets::CookDependencyItemConte
     return true;
 }
 
-static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(registry, ModelBinaryPayload::s_ModelAssetKindLabel, &ParseModelDocument, &ParseModelValue, &BuildModelAsset);
 }
 
-static bool RegisterModelCookDependency(Core::Assets::CookDependencyRegistry& registry){
+static b8 RegisterModelCookDependency(Core::Assets::CookDependencyRegistry& registry){
     return registry.registerType(Model::AssetTypeName(), &ExtractModelDependencies);
 }
 

@@ -42,7 +42,7 @@ static_assert(alignof(MeshSkinInfluence) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<MeshSkinInfluence>);
 
 struct MeshSkinInfluenceEqual{
-    bool operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const noexcept{
+    b8 operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const noexcept{
         for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
             if(lhs.joint[i] != rhs.joint[i] || FloatingHashBits(lhs.weight.raw[i]) != FloatingHashBits(rhs.weight.raw[i]))
                 return false;
@@ -137,8 +137,8 @@ struct MeshBuildResult{
     UtilityVector<ufbx_node*> skeletonJoints;
     UtilityVector<JointMatrix> skeletonBindPoseMatrices;
     UtilityVector<JointMatrix> inverseBindMatrices;
-    bool sawVertexColors = false;
-    bool sawVertexUvs = false;
+    b8 sawVertexColors = false;
+    b8 sawVertexUvs = false;
     SourceTangentReport tangentReport;
 };
 
@@ -186,16 +186,16 @@ struct ImportOptions{
     AString defaultColorText = AString(s_DefaultColorText);
     f64 scale = s_DefaultImportScale;
     f64 triangleAreaLengthSquaredEpsilon = s_DefaultTriangleAreaLengthSquaredEpsilon;
-    bool preserveSpace = false;
-    bool includeHidden = false;
-    bool bakeTransforms = true;
-    bool importColors = true;
-    bool flipWinding = false;
-    bool separateAssets = false;
-    bool refreshNwb = false;
-    bool forceOverwrite = false;
-    bool acceptDefaults = false;
-    bool listMeshes = false;
+    b8 preserveSpace = false;
+    b8 includeHidden = false;
+    b8 bakeTransforms = true;
+    b8 importColors = true;
+    b8 flipWinding = false;
+    b8 separateAssets = false;
+    b8 refreshNwb = false;
+    b8 forceOverwrite = false;
+    b8 acceptDefaults = false;
+    b8 listMeshes = false;
 };
 
 
@@ -234,24 +234,24 @@ public:
 ScratchString OutputAssetTypeOptionsText(Core::Alloc::ScratchArena& scratchArena);
 ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<OutputAssetType::Enum> ParseAssetTypeText(AStringView value)noexcept;
-bool ValidateAssetTypeText(AString& inOutValue);
+b8 ValidateAssetTypeText(AString& inOutValue);
 ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena);
 ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<NormalMode::Enum> ParseNormalModeText(AStringView value)noexcept;
-bool ValidateNormalModeText(AString& inOutValue);
+b8 ValidateNormalModeText(AString& inOutValue);
 AStringView SourceTangentModeText(SourceTangentMode::Enum mode)noexcept;
 Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena& scratchArena);
 ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchArena& scratchArena);
 
 Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena);
-UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, bool includeHidden);
+UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, b8 includeHidden);
 void PrintMeshInstances(Span<const MeshInstance> instances, Core::Alloc::ScratchArena& scratchArena);
 Expected<UtilityVector<usize>> SelectMeshInstances(Span<const MeshInstance> instances, AStringView selector);
 Expected<MeshBuildResult> BuildMesh(
     Span<const MeshInstance> instances,
     Span<const usize> selection,
     const ImportOptions& options,
-    bool wantsSkinning,
+    b8 wantsSkinning,
     const Vec4& defaultColor,
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
@@ -261,19 +261,19 @@ Expected<MeshBuildResult> BuildMesh(
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& inputPath, const ScratchPath& outputPath, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
 
-bool WriteNwbAsset(
+b8 WriteNwbAsset(
     const ScratchPath& outputPath,
     const SourceMeshStreams& mesh,
     const AStringView assetTypeText,
     const AStringView virtualRoot,
-    bool separateAssets,
+    b8 separateAssets,
     Span<ufbx_node* const> skeletonJoints,
     Span<const JointMatrix> skeletonBindPoseMatrices,
     Span<const JointMatrix> inverseBindMatrices,
     Core::Alloc::ScratchArena& scratchArena
 );
 
-int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& prompted);
+int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, b8& prompted);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

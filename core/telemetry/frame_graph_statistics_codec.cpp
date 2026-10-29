@@ -189,7 +189,7 @@ Expected<FrameGraphRuntimeStatistics> DecodeRuntimeStatistics(const EncodedFrame
     return decoded;
 }
 
-bool PhysicalQueueRuntimeStatisticsRecordLess(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& lhs, const FrameGraphPhysicalQueueRuntimeStatisticsRecord& rhs)noexcept{
+b8 PhysicalQueueRuntimeStatisticsRecordLess(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& lhs, const FrameGraphPhysicalQueueRuntimeStatisticsRecord& rhs)noexcept{
     if(lhs.ownerNodeIndex != rhs.ownerNodeIndex)
         return lhs.ownerNodeIndex < rhs.ownerNodeIndex;
     if(lhs.statistics.queue.index != rhs.statistics.queue.index)
@@ -197,7 +197,7 @@ bool PhysicalQueueRuntimeStatisticsRecordLess(const FrameGraphPhysicalQueueRunti
     return lhs.statistics.queue.deviceGeneration < rhs.statistics.queue.deviceGeneration;
 }
 
-bool AccumulatePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics, FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total)noexcept{
+b8 AccumulatePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics, FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total)noexcept{
     const auto barrierCount = FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerStatistics.compile);
     if(!barrierCount)
         return false;
@@ -266,7 +266,7 @@ bool AccumulatePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRunti
     ;
 }
 
-bool ValidatePhysicalQueueRuntimeStatisticsOwner(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record, const usize nodeCount, const FrameGraphNodeKind::Enum ownerKind, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+b8 ValidatePhysicalQueueRuntimeStatisticsOwner(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record, const usize nodeCount, const FrameGraphNodeKind::Enum ownerKind, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
     return static_cast<usize>(record.ownerNodeIndex) < nodeCount && ownerKind == FrameGraphNodeKind::Pass && IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(record.statistics, ownerStatistics);
 }
 

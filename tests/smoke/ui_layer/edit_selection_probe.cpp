@@ -27,12 +27,12 @@ Impl::Ui::Rect CaptureEditSelection(Core::Alloc::GlobalArena& arena, Impl::Ui::T
     using namespace Impl::Ui;
     NWB_FATAL_ASSERT(model.textMode() == EditTextMode::SingleLine);
     EditBoxView view(arena);
-    const bool captured = view.snapshot(model);
+    const b8 captured = view.snapshot(model);
     NWB_FATAL_ASSERT(captured);
     const EditBoxRange range = view.selectionRange();
     if(range.begin == range.end || placement.content.width <= 0.0f || placement.content.height <= 0.0f)
         return {};
-    const bool shaped = view.shape(text, { {}, fontSize }) == TextLayoutStatus::Success;
+    const b8 shaped = view.shape(text, { .fontSize = fontSize }) == TextLayoutStatus::Success;
     NWB_FATAL_ASSERT(shaped);
     auto selection = view.caretGeometry().rangeOnLine(range, 0u, placement.caret.width);
     NWB_FATAL_ASSERT(selection.has_value());

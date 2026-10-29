@@ -27,16 +27,16 @@ NWB_IMPL_BEGIN
 struct AvboitComputeEmulationCaptureInputs{
     MaterialPassDrawItemPartitionsView drawItems{};
     CsgFrameGpuDataView csgFrameData{};
-    bool geometryOwned = false;
-    bool sampledTexturesCollected = false;
-    bool csgStreamsUploaded = false;
-    bool intervalOutputsGraphOwned = false;
+    b8 geometryOwned = false;
+    b8 sampledTexturesCollected = false;
+    b8 csgStreamsUploaded = false;
+    b8 intervalOutputsGraphOwned = false;
 };
 
 struct AvboitComputeEmulationCaptureResult{
-    bool regularCaptured = false;
-    bool csgCaptured = false;
-    bool sharedCaptured = false;
+    b8 regularCaptured = false;
+    b8 csgCaptured = false;
+    b8 sharedCaptured = false;
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan sharedPlan;
     usize sharedInstanceCount = 0u;
     usize sharedMaterialTypedByteCount = 0u;

@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::paintImage(const Item& item, const LayoutBox& box){
+b8 Builder::paintImage(const Item& item, const LayoutBox& box){
     if(item.image >= m_scope->m_images.size())
         return false;
     const ImageFrame& frame = m_scope->m_images[item.image];
@@ -22,7 +22,7 @@ bool Builder::paintImage(const Item& item, const LayoutBox& box){
     if(!placement)
         return false;
     m_paint.pushClip(placement->clip);
-    const bool painted = frame.source ? m_paint.drawImage(frame.source, placement->bounds, { 0.0f, 0.0f, 1.0f, 1.0f }, frame.options.tint) : m_paint.drawRegion(frame.region, placement->bounds, frame.options.tint);
+    const b8 painted = frame.source ? m_paint.drawImage(frame.source, placement->bounds, { 0.0f, 0.0f, 1.0f, 1.0f }, frame.options.tint) : m_paint.drawRegion(frame.region, placement->bounds, frame.options.tint);
     return finishClipPaint(item, placement->bounds, placement->clip, painted);
 }
 

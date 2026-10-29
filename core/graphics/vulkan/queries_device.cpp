@@ -19,11 +19,11 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TimerQuery::hasCompletedCycleWithinLock()const noexcept{
+b8 TimerQuery::hasCompletedCycleWithinLock()const noexcept{
     return !m_resetRecordingOwner.commandBuffer && m_cycleGeneration == 0u && !m_recordingActive && m_completedCycleSubmission.valid() && m_completedCycleGeneration != 0u;
 }
 
-bool TimerQuery::completedCycleMatchesWithinLock(const u64 generation, const QueueSubmissionToken& submission, const GpuPhysicalQueueInfo* const queueInfo)const noexcept{
+b8 TimerQuery::completedCycleMatchesWithinLock(const u64 generation, const QueueSubmissionToken& submission, const GpuPhysicalQueueInfo* const queueInfo)const noexcept{
     return
         !m_resetRecordingOwner.commandBuffer
         && m_cycleGeneration == 0u
@@ -56,7 +56,7 @@ Expected<TimerQueryHandle> Device::createTimerQuery(){
     return TimerQueryHandle(query, TimerQueryHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
-Expected<bool> Device::pollTimerQuery(TimerQuery& query){
+Expected<b8> Device::pollTimerQuery(TimerQuery& query){
     if(query.m_queryPool == VK_NULL_HANDLE || &query.m_context != &m_context)
         return MakeUnexpected(Failure{});
 
@@ -161,7 +161,7 @@ Expected<f32> Device::getTimerQueryTime(TimerQuery& query){
     return static_cast<f32>(result->durationSeconds());
 }
 
-bool Device::resetTimerQuery(TimerQuery& query){
+b8 Device::resetTimerQuery(TimerQuery& query){
     if(query.m_queryPool == VK_NULL_HANDLE || &query.m_context != &m_context || !m_context.hostQueryResetFeatureEnabled || !m_context.deviceDispatch.vkResetQueryPool)
         return false;
 

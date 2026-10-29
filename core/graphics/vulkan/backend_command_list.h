@@ -73,8 +73,8 @@ private:
 
     struct MarkerStackEntry{
         CommandMarkerRecordingToken token;
-        bool usesDebugUtils = false;
-        bool usesGpuMarkers = false;
+        b8 usesDebugUtils = false;
+        b8 usesGpuMarkers = false;
     };
 
 
@@ -99,8 +99,8 @@ private:
 
     private:
         const CommandList& m_commandList;
-        bool m_readable = false;
-        bool m_acquired = false;
+        b8 m_readable = false;
+        b8 m_acquired = false;
     };
 
     class GraphRecordingOwnership final : NoCopy{
@@ -119,7 +119,7 @@ private:
 
     private:
         [[nodiscard]] static Capability*& CurrentCapability()noexcept;
-        [[nodiscard]] static bool HasCapability(const CommandList& commandList, u64 recordingLeaseSerial)noexcept;
+        [[nodiscard]] static b8 HasCapability(const CommandList& commandList, u64 recordingLeaseSerial)noexcept;
 
 
     private:
@@ -128,7 +128,7 @@ private:
 
 
     private:
-        [[nodiscard]] bool finish(bool semanticSuccess, CommandListResourceStateHandoff* finalStates);
+        [[nodiscard]] b8 finish(b8 semanticSuccess, CommandListResourceStateHandoff* finalStates);
         void publish()noexcept;
         void release()noexcept;
         void attachCapability()noexcept;
@@ -139,8 +139,8 @@ private:
         CommandList& m_commandList;
         u64 m_recordingLeaseSerial = 0u;
         Capability m_capability;
-        bool m_acquired = false;
-        bool m_capabilityAttached = false;
+        b8 m_acquired = false;
+        b8 m_capabilityAttached = false;
     };
 
     class GraphSubmissionOwnership final : NoCopy{
@@ -160,7 +160,7 @@ private:
     private:
         CommandList& m_commandList;
         u64 m_recordingLeaseSerial = 0u;
-        bool m_acquired = false;
+        b8 m_acquired = false;
     };
 
 
@@ -175,18 +175,18 @@ public:
     // Final state snapshot follows keepInitialState restoration.
     void close(CommandListResourceStateHandoff* finalStates = nullptr);
     // False when no submit-ready command buffer is owned.
-    [[nodiscard]] bool hasCommandBuffer()const noexcept{
+    [[nodiscard]] b8 hasCommandBuffer()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && hasCommandBufferUnchecked();
     }
     // `hasCommandBuffer` remains true after close so queues can submit it.
     // Tooling that emits commands must use this predicate instead of treating ownership as an active recording scope.
-    [[nodiscard]] bool isRecording()const noexcept{
+    [[nodiscard]] b8 isRecording()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && isRecordingUnchecked();
     }
     // Sticky per attempt: any failed check invalidates the list; close drops its buffer, only open starts fresh.
-    [[nodiscard]] bool commandRecordingFailed()const noexcept{
+    [[nodiscard]] b8 commandRecordingFailed()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && commandRecordingFailedUnchecked();
     }
@@ -196,12 +196,12 @@ public:
         return ownership.m_readable ? recordingLeaseSerialUnchecked() : 0u;
     }
 
-    [[nodiscard]] bool matchesRecordingLease(u64 serial)const noexcept{
+    [[nodiscard]] b8 matchesRecordingLease(u64 serial)const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && matchesRecordingLeaseUnchecked(serial);
     }
 
-    [[nodiscard]] bool isRenderPassActive()const noexcept{
+    [[nodiscard]] b8 isRenderPassActive()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && m_renderPassActive;
     }
@@ -212,9 +212,9 @@ public:
     void setResourceStatesForFramebuffer(Framebuffer& framebuffer);
     void commitBarriers();
 
-    void setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, bool forceMemoryDependency = false);
-    void setBufferState(Buffer* bufferResource, ResourceStates::Mask stateBits, bool forceMemoryDependency = false, BufferRange range = s_EntireBuffer);
-    void setAccelStructState(RayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits, bool forceMemoryDependency = false);
+    void setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits, b8 forceMemoryDependency = false);
+    void setBufferState(Buffer* bufferResource, ResourceStates::Mask stateBits, b8 forceMemoryDependency = false, BufferRange range = s_EntireBuffer);
+    void setAccelStructState(RayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits, b8 forceMemoryDependency = false);
     // Exports an exclusive resource to an ordered physical consumer queue.
     void releaseTextureOwnership(Texture* textureResource, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue);
     void releaseBufferOwnership(Buffer* bufferResource, CommandQueue::Enum destinationQueue, BufferRange range = s_EntireBuffer);
@@ -227,9 +227,9 @@ public:
     void clearTextureFloat(Texture& texture, TextureSubresourceSet subresources, const Color& clearColor);
     void clearTextureRectFloat(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor);
     void clearTextureBoxFloat(Texture& texture, TextureSubresourceSet subresources, const Box& box, const Color& clearColor);
-    void clearDepthStencilTexture(Texture& texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
-    void clearDepthStencilTextureRect(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
-    void clearDepthStencilTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
+    void clearDepthStencilTexture(Texture& texture, TextureSubresourceSet subresources, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil);
+    void clearDepthStencilTextureRect(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil);
+    void clearDepthStencilTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil);
     void clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, u32 clearColor);
     void clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, const UIntColor& clearColor);
     void clearTextureRectUInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor);
@@ -247,11 +247,11 @@ public:
     void copyTexture(StagingTexture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice);
     void copyTexture(Texture& dest, const TextureSlice& destSlice, StagingTexture& src, const TextureSlice& srcSlice);
     // Fallible variants let graph recorders reject a packet instead of claiming a lifecycle when staging or preflight fails.
-    [[nodiscard]] bool tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
+    [[nodiscard]] b8 tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     void writeBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     void clearBufferUInt(Buffer& buffer, u32 clearValue);
     void copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64 srcOffsetBytes, u64 dataSizeBytes);
-    [[nodiscard]] bool tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0, TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic);
+    [[nodiscard]] b8 tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0, TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic);
     void writeTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0, TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic);
     void resolveTexture(Texture& dest, const TextureSubresourceSet& dstSubresources, Texture& src, const TextureSubresourceSet& srcSubresources);
 
@@ -279,13 +279,13 @@ public:
     void executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc);
     void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs);
 
-    [[nodiscard]] bool resetTimerQuery(TimerQuery& query);
-    [[nodiscard]] bool canRecordTimerQueryHere()const noexcept;
-    [[nodiscard]] bool canResetTimerQueryHere()const noexcept;
+    [[nodiscard]] b8 resetTimerQuery(TimerQuery& query);
+    [[nodiscard]] b8 canRecordTimerQueryHere()const noexcept;
+    [[nodiscard]] b8 canResetTimerQueryHere()const noexcept;
     [[nodiscard]] Expected<TimerQueryRecordingToken> beginTimerQuery(TimerQuery& query);
-    [[nodiscard]] bool endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token);
+    [[nodiscard]] b8 endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token);
     // Claim closure consumes only the beginTimerQuery() claim from this same command buffer; no retention, diagnostics, or observers.
-    [[nodiscard]] bool endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQueryRecordingToken& token)noexcept;
+    [[nodiscard]] b8 endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQueryRecordingToken& token)noexcept;
     void beginMarker(const AStringView name);
     void endMarker();
     void abandonMarker()noexcept;
@@ -298,8 +298,8 @@ public:
     void cancelTaskCapabilityTracking()noexcept;
 #endif
 
-    void setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers);
-    void setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarriers);
+    void setEnableUavBarriersForTexture(Texture* texture, b8 enableBarriers);
+    void setEnableUavBarriersForBuffer(Buffer* buffer, b8 enableBarriers);
     void beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
     void beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer);
     void seedBufferState(Buffer* buffer, ResourceStates::Mask stateBits, BufferRange range = s_EntireBuffer);
@@ -307,8 +307,8 @@ public:
     ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer)noexcept;
     [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const noexcept;
     [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const noexcept;
-    [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
-    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const noexcept;
+    [[nodiscard]] b8 hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;
+    [[nodiscard]] b8 hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, b8 requireKnown = false)const noexcept;
 
     Device& getDevice()noexcept{ return m_device; }
 
@@ -317,24 +317,24 @@ public:
     [[nodiscard]] CommandListParameters getResolvedDescription()const noexcept{ return m_creationDesc; }
 
 private:
-    [[nodiscard]] bool publicCommandStateAccessible()const noexcept;
-    [[nodiscard]] bool hasCommandBufferUnchecked()const noexcept{ return matchesNativeLeaseIdentity(); }
+    [[nodiscard]] b8 publicCommandStateAccessible()const noexcept;
+    [[nodiscard]] b8 hasCommandBufferUnchecked()const noexcept{ return matchesNativeLeaseIdentity(); }
 
-    [[nodiscard]] bool isRecordingUnchecked()const noexcept{ return m_isRecording && matchesNativeLeaseIdentity(); }
+    [[nodiscard]] b8 isRecordingUnchecked()const noexcept{ return m_isRecording && matchesNativeLeaseIdentity(); }
 
-    [[nodiscard]] bool commandRecordingFailedUnchecked()const noexcept{ return m_commandRecordingFailed; }
+    [[nodiscard]] b8 commandRecordingFailedUnchecked()const noexcept{ return m_commandRecordingFailed; }
 
     [[nodiscard]] u64 recordingLeaseSerialUnchecked()const noexcept{ return m_recordingLeaseSerial; }
 
-    [[nodiscard]] bool matchesRecordingLeaseUnchecked(u64 serial)const noexcept{
+    [[nodiscard]] b8 matchesRecordingLeaseUnchecked(u64 serial)const noexcept{
         return serial != 0u && serial == m_recordingLeaseSerial && matchesActiveNativeLeaseIdentity();
     }
-    [[nodiscard]] bool canRecordTimerQueryHereUnchecked()const noexcept;
-    [[nodiscard]] bool canResetTimerQueryHereUnchecked()const noexcept;
+    [[nodiscard]] b8 canRecordTimerQueryHereUnchecked()const noexcept;
+    [[nodiscard]] b8 canResetTimerQueryHereUnchecked()const noexcept;
     // False only when graph publication blocks inspection.
     // True reports whether this exact native lease holds the requested cycle's begin and end claims.
     [[nodiscard]] Expected<TimerQueryRecordingEndpoints> inspectExactTimerQueryRecordingEndpoints(const TimerQueryRecordingToken& token, u64 recordingLeaseSerial)const noexcept;
-    [[nodiscard]] bool beginGraphRecordingOwnership(u64 recordingLeaseSerial);
+    [[nodiscard]] b8 beginGraphRecordingOwnership(u64 recordingLeaseSerial);
     void publishGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
     void cancelGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
     // A recorded graph may outlive its strong reference via a task-retained handle.
@@ -348,29 +348,29 @@ private:
     // It never logs, invokes observers, polls a queue, or archives crash-marker strings.
     void abortRecordingAttemptWithoutCallbacks()noexcept;
     void clearStateInternal();
-    [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
-    [[nodiscard]] bool matchesNativeLeaseIdentity()const noexcept;
-    [[nodiscard]] bool matchesActiveNativeLeaseIdentity()const noexcept;
-    [[nodiscard]] bool matchesSubmissionLease(GpuPhysicalQueueId executionQueue, CommandQueue::Enum executionQueueClass, bool graphSubmissionAuthorized)const noexcept;
-    [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, TStringView operationName);
-    [[nodiscard]] bool validateRenderPassBegin(Framebuffer& framebuffer, const RenderPassParameters& params, TStringView operationName);
-    [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, TStringView operationName);
-    [[nodiscard]] bool validateViewportState(const ViewportState& viewportState, TStringView operationName);
-    [[nodiscard]] bool validateTextureForGpuState(Texture* texture, ResourceStates::Mask requiredState, TStringView operationName, VkImageUsageFlags explicitRequiredUsage = 0u);
-    [[nodiscard]] bool validateBufferForGpuState(Buffer* buffer, ResourceStates::Mask requiredState, TStringView operationName, VkBufferUsageFlags explicitRequiredUsage = 0u);
-    [[nodiscard]] bool validateGraphicsState(const GraphicsState& state);
-    [[nodiscard]] bool validateMeshletState(const MeshletState& state);
-    [[nodiscard]] bool validateGraphicsDrawState(TStringView operationName, bool indexed);
-    [[nodiscard]] bool validateGraphicsDrawArguments(const DrawArguments& arguments, bool indexed, TStringView operationName);
+    [[nodiscard]] b8 descriptionMatchesCreation()const noexcept;
+    [[nodiscard]] b8 matchesNativeLeaseIdentity()const noexcept;
+    [[nodiscard]] b8 matchesActiveNativeLeaseIdentity()const noexcept;
+    [[nodiscard]] b8 matchesSubmissionLease(GpuPhysicalQueueId executionQueue, CommandQueue::Enum executionQueueClass, b8 graphSubmissionAuthorized)const noexcept;
+    [[nodiscard]] b8 validateFramebufferForRendering(Framebuffer* framebuffer, TStringView operationName);
+    [[nodiscard]] b8 validateRenderPassBegin(Framebuffer& framebuffer, const RenderPassParameters& params, TStringView operationName);
+    [[nodiscard]] b8 prepareFramebufferForRendering(Framebuffer* framebuffer, TStringView operationName);
+    [[nodiscard]] b8 validateViewportState(const ViewportState& viewportState, TStringView operationName);
+    [[nodiscard]] b8 validateTextureForGpuState(Texture* texture, ResourceStates::Mask requiredState, TStringView operationName, VkImageUsageFlags explicitRequiredUsage = 0u);
+    [[nodiscard]] b8 validateBufferForGpuState(Buffer* buffer, ResourceStates::Mask requiredState, TStringView operationName, VkBufferUsageFlags explicitRequiredUsage = 0u);
+    [[nodiscard]] b8 validateGraphicsState(const GraphicsState& state);
+    [[nodiscard]] b8 validateMeshletState(const MeshletState& state);
+    [[nodiscard]] b8 validateGraphicsDrawState(TStringView operationName, b8 indexed);
+    [[nodiscard]] b8 validateGraphicsDrawArguments(const DrawArguments& arguments, b8 indexed, TStringView operationName);
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
-    [[nodiscard]] bool isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept;
-    [[nodiscard]] bool isTextureReadyForCommandQueue(Texture* texture, VkImageUsageFlags requiredUsage = 0u)const noexcept;
-    [[nodiscard]] bool isBufferAdmittedToCommandQueue(const Buffer& buffer)const noexcept;
-    [[nodiscard]] bool isBufferReadyForCommandQueue(Buffer* buffer, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
-    [[nodiscard]] bool validateTrackedTexturesReadyForClose();
-    [[nodiscard]] bool validateTrackedBuffersReadyForClose();
-    [[nodiscard]] bool validateTrackedResourcesReadyForSubmission()const;
-    [[nodiscard]] bool importResourceStateHandoff(Alloc::ScratchArena& scratchArena, const CommandListResourceStateHandoff& states);
+    [[nodiscard]] b8 isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept;
+    [[nodiscard]] b8 isTextureReadyForCommandQueue(Texture* texture, VkImageUsageFlags requiredUsage = 0u)const noexcept;
+    [[nodiscard]] b8 isBufferAdmittedToCommandQueue(const Buffer& buffer)const noexcept;
+    [[nodiscard]] b8 isBufferReadyForCommandQueue(Buffer* buffer, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
+    [[nodiscard]] b8 validateTrackedTexturesReadyForClose();
+    [[nodiscard]] b8 validateTrackedBuffersReadyForClose();
+    [[nodiscard]] b8 validateTrackedResourcesReadyForSubmission()const;
+    [[nodiscard]] b8 importResourceStateHandoff(Alloc::ScratchArena& scratchArena, const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
     void appendPendingOwnershipReleaseBarriers();
     void collectHostReadbackBuffers();
@@ -390,41 +390,41 @@ private:
     void ensureDescriptorBuffersBound(DescriptorBufferManager& manager, const DescriptorBufferManager::BindingSnapshot& snapshot);
     void setViewportState(const ViewportState& viewportState);
 
-    bool beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params);
+    b8 beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params);
     void endDynamicRendering();
-    bool ensureGraphicsRenderPass(Framebuffer* framebuffer);
+    b8 ensureGraphicsRenderPass(Framebuffer* framebuffer);
     void endActiveRenderPass();
     void executePipelineBarrier(Span<VkMemoryBarrier2> memoryBarriers, Span<VkImageMemoryBarrier2> imageBarriers, Span<VkBufferMemoryBarrier2> bufferBarriers);
-    [[nodiscard]] bool validateCommandRecordingScope(TStringView operationName);
-    [[nodiscard]] bool recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, TStringView operationName);
-    [[nodiscard]] bool recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, TStringView operationName);
+    [[nodiscard]] b8 validateCommandRecordingScope(TStringView operationName);
+    [[nodiscard]] b8 recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, TStringView operationName);
+    [[nodiscard]] b8 recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, TStringView operationName);
     void rejectCommandRecording(TStringView operationName, TStringView reason);
     void invalidateCommandRecording()noexcept;
     void discardInvalidCommandBuffer();
-    [[nodiscard]] bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, TStringView commandName);
+    [[nodiscard]] b8 validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, TStringView commandName);
     [[nodiscard]] Expected<NotNull<Buffer*>> prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, TStringView operationLabel, TStringView commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode);
-    void clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
-    void clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
-    bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue);
-    bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
-    [[nodiscard]] bool validateTextureTransferResources(Texture& dest, ResourceStates::Mask destState, Texture& src, ResourceStates::Mask srcState, TStringView operationName);
-    [[nodiscard]] bool validateStagingTextureCopyResources(StagingTexture& stagingTexture, Texture& texture, CpuAccessMode::Enum requiredCpuAccess, VkImageUsageFlags requiredImageUsage, TStringView operationName);
+    void clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const VkClearColorValue& clearValue, b8 integerValue, b8 signedIntegerValue);
+    void clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, const VkClearColorValue& clearValue, b8 integerValue, b8 signedIntegerValue);
+    b8 clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue);
+    b8 clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil);
+    [[nodiscard]] b8 validateTextureTransferResources(Texture& dest, ResourceStates::Mask destState, Texture& src, ResourceStates::Mask srcState, TStringView operationName);
+    [[nodiscard]] b8 validateStagingTextureCopyResources(StagingTexture& stagingTexture, Texture& texture, CpuAccessMode::Enum requiredCpuAccess, VkImageUsageFlags requiredImageUsage, TStringView operationName);
     Expected<VkBufferImageCopy> prepareStagingTextureCopy(StagingTexture& stagingResource, const TextureSlice& stagingSlice, Texture& textureResource, const TextureSlice& textureSlice)const noexcept;
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(const void* data, usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
     [[nodiscard]] Expected<VkDeviceAddress> suballocateBuildScratchAddress(u64 buildScratchSize, u64 scratchAlignment, TStringView operationName);
     // Returns mapped CPU-written build-input bytes whose device address is aligned. The pool reuses them only after the owning queue completes.
     [[nodiscard]] Expected<BufferSuballocation> suballocateBuildInput(u64 byteCount, u64 deviceAddressAlignment, TStringView operationName);
-    [[nodiscard]] Expected<bool> validateAccelStructBuildSignature(
+    [[nodiscard]] Expected<b8> validateAccelStructBuildSignature(
         AccelStruct& accelStruct,
         VkAccelerationStructureTypeKHR accelStructType,
         VkBuildAccelerationStructureFlagsKHR buildFlags,
         const AccelStructGeometryBuildSignature* geometrySignatures,
         usize geometrySignatureCount,
-        bool performUpdate,
+        b8 performUpdate,
         TStringView operationName
     );
-    bool buildTopLevelAccelStructFromInstanceData(
+    b8 buildTopLevelAccelStructFromInstanceData(
         RayTracingAccelStruct& as,
         VkDeviceAddress instanceDataAddress,
         usize numInstances,
@@ -434,9 +434,9 @@ private:
         const RayTracingInstanceDesc* instances = nullptr
     );
     [[nodiscard]] CommandMarkerRecordingToken beginMarkerLease(const AStringView name);
-    [[nodiscard]] bool endMarkerLease(const CommandMarkerRecordingToken& token);
+    [[nodiscard]] b8 endMarkerLease(const CommandMarkerRecordingToken& token);
     void abandonMarkerLease(const CommandMarkerRecordingToken& token)noexcept;
-    [[nodiscard]] bool markerLeaseMatchesTop(const CommandMarkerRecordingToken& token)const noexcept;
+    [[nodiscard]] b8 markerLeaseMatchesTop(const CommandMarkerRecordingToken& token)const noexcept;
     void closeTopMarkerWithoutCallbacks()noexcept;
     void resetMarkerState();
     void resetMarkerStateWithoutCallbacks()noexcept;
@@ -453,11 +453,11 @@ private:
     u64 m_recordingLeaseSerial = 0u;
     Atomic<u64> m_graphRecordingOwnershipSerial{ 0u };
     mutable Atomic<u8> m_graphPublicationState{ s_GraphPublicationUnowned };
-    bool m_enableAutomaticBarriers = true;
-    bool m_isRecording = false;
-    bool m_commandRecordingFailed = false;
-    bool m_renderPassActive = false;
-    bool m_descriptorBuffersBound = false;
+    b8 m_enableAutomaticBarriers = true;
+    b8 m_isRecording = false;
+    b8 m_commandRecordingFailed = false;
+    b8 m_renderPassActive = false;
+    b8 m_descriptorBuffersBound = false;
     u64 m_nativeRecordingID = 0u;
     u64 m_nextMarkerSerial = 0u;
     GraphicsVector<MarkerStackEntry> m_markerStack;
@@ -465,7 +465,7 @@ private:
 #if defined(NWB_DEBUG)
     GpuQueueCapability::Mask m_taskCapabilitiesUsed = GpuQueueCapability::None;
     GpuQueueCapability::Mask m_taskDeclaredCapabilities = GpuQueueCapability::None;
-    bool m_taskCapabilityTracking = false;
+    b8 m_taskCapabilityTracking = false;
 #endif
 
     GraphicsState m_currentGraphicsState;
@@ -501,7 +501,7 @@ private:
     const VulkanContext& m_context;
     Futex m_mutex;
 
-    bool m_started = false;
+    b8 m_started = false;
 };
 
 
@@ -528,10 +528,10 @@ public:
 
 public:
     // The caller owns this unaccepted recording transaction; its command buffers cannot submit concurrently.
-    [[nodiscard]] bool discardUnacceptedRecording(const TimerQueryRecordingToken& token)noexcept;
+    [[nodiscard]] b8 discardUnacceptedRecording(const TimerQueryRecordingToken& token)noexcept;
     // The caller has made its prior endpoint packet permanently non-submittable.
     // Preserve the accepted begin cycle while relinquishing only the stale end owner so a recovery command buffer can record its replacement endpoint.
-    [[nodiscard]] bool releaseUnacceptedEndForRecovery(const TimerQueryRecordingToken& token)noexcept;
+    [[nodiscard]] b8 releaseUnacceptedEndForRecovery(const TimerQueryRecordingToken& token)noexcept;
 
 
 private:
@@ -539,8 +539,8 @@ private:
     [[nodiscard]] QueueSubmissionToken prerequisiteSubmissionWithinLock()const noexcept{
         return m_completedCycleSubmission.valid() ? m_completedCycleSubmission : m_resetAuthorizationSubmission;
     }
-    [[nodiscard]] bool hasCompletedCycleWithinLock()const noexcept;
-    [[nodiscard]] bool completedCycleMatchesWithinLock(u64 generation, const QueueSubmissionToken& submission, const GpuPhysicalQueueInfo* queueInfo)const noexcept;
+    [[nodiscard]] b8 hasCompletedCycleWithinLock()const noexcept;
+    [[nodiscard]] b8 completedCycleMatchesWithinLock(u64 generation, const QueueSubmissionToken& submission, const GpuPhysicalQueueInfo* queueInfo)const noexcept;
 
 
 private:
@@ -564,11 +564,11 @@ private:
     u32 m_timestampValidBits = 0u;
     u32 m_cycleBaselineValidBits = 0u;
     u32 m_cycleValidBits = 0u;
-    bool m_cycleBaselineActive = false;
-    bool m_beginAccepted = false;
-    bool m_cycleInvalidated = false;
-    bool m_resetAuthorizationAvailable = false;
-    bool m_recordingActive = false;
+    b8 m_cycleBaselineActive = false;
+    b8 m_beginAccepted = false;
+    b8 m_cycleInvalidated = false;
+    b8 m_resetAuthorizationAvailable = false;
+    b8 m_recordingActive = false;
     GpuPhysicalQueueId m_timestampQueue;
     GpuPhysicalQueueId m_cycleBaselineQueue;
     GpuPhysicalQueueId m_cycleQueue;

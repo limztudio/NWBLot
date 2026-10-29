@@ -60,7 +60,7 @@ public:
 
     virtual void enqueue(const Core::Common::LogString& text, Core::Common::LogType::Enum)override{ observe(text); }
 
-    [[nodiscard]] bool sawFaceFailure()const noexcept{ return m_sawFaceFailure; }
+    [[nodiscard]] b8 sawFaceFailure()const noexcept{ return m_sawFaceFailure; }
 
 
 private:
@@ -74,7 +74,7 @@ private:
 
 private:
     Core::Common::LogArena& m_arena;
-    bool m_sawFaceFailure = false;
+    b8 m_sawFaceFailure = false;
 };
 
 

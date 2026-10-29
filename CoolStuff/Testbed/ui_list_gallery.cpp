@@ -24,7 +24,7 @@ Expected<u64> UiListSource::indexOf(const u64 keyValue)const noexcept{
     return keyValue - 1u;
 }
 
-Expected<u64> UiListSource::findEnabled(const u64 start, const bool reverse)const noexcept{
+Expected<u64> UiListSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
     static_cast<void>(reverse);
     if(start >= rowCount())
         return MakeUnexpected(Failure{});
@@ -67,7 +67,7 @@ void UiListGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = s_GalleryFontSize;
-    bool valid = ui.label(s_TitleKey, "100000 virtual rows");
+    b8 valid = ui.label(s_TitleKey, "100000 virtual rows");
     ListOptions options;
     options.height = { LayoutSizePolicy::Fixed, s_ListHeight };
     const ListResult result = ui.virtualList("rows", m_source, m_state, options);

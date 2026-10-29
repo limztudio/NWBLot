@@ -61,7 +61,7 @@ struct CpuTaskProfileLabel{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return value != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return value != 0u; }
 };
 
 struct CpuTaskOptions{
@@ -80,7 +80,7 @@ public:
     usize profileEventCapacity = s_DefaultProfileEventCapacity;
     u32 workerCount = s_AutomaticWorkerCount;
     u32 reservedThreadCount = 1u;
-    bool heterogeneous = true;
+    b8 heterogeneous = true;
 };
 
 struct CpuTaskHandle{
@@ -92,11 +92,11 @@ struct CpuTaskHandle{
 
 
 public:
-    explicit operator bool()const noexcept{ return valid(); }
+    explicit operator b8()const noexcept{ return valid(); }
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return domainIdentity != 0u && index != s_InvalidIndex && generation != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return domainIdentity != 0u && index != s_InvalidIndex && generation != 0u; }
 
 };
 
@@ -116,7 +116,7 @@ struct CpuTaskSchedulerStatistics{
     u64 profileRecordedEvents = 0u;
     u64 profileDroppedEvents = 0u;
     usize profilePendingEvents = 0u;
-    bool profileEnabled = false;
+    b8 profileEnabled = false;
 };
 
 

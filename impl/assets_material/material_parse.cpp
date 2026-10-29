@@ -51,7 +51,7 @@ static Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena, CookVector<MaterialCookEntry>& materialEntries){
+b8 ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena, CookVector<MaterialCookEntry>& materialEntries){
     auto materialBindLookupResult = BuildMaterialBindInterfaceLookup(materialBindEntries, scratchArena);
     if(!materialBindLookupResult)
         return false;

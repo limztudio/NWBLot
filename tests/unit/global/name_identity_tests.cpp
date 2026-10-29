@@ -178,7 +178,7 @@ TEST(Global, DiagnosticNameTextNeverInvokesForeignSymbolCallbacks){
         throw 17u;
     }, &probe
     );
-    SetNameSymbolResolveCallback([](char*, usize, const NameHash&, void* context)->bool{
+    SetNameSymbolResolveCallback([](char*, usize, const NameHash&, void* context)->b8{
         ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->resolveCount;
         throw 29u;
     }, &probe
@@ -324,7 +324,7 @@ TEST(Global, OptionalNameTextPreservesAbsenceAndOwnedContainerErrors){
 TEST(Global, RuntimeNameFactoryPreservesRecursiveRecorderGuard){
     struct RecursiveProbe{
         u32 recordCount = 0u;
-        bool nestedAccepted = false;
+        b8 nestedAccepted = false;
     };
     NameSymbolCallbackProbe restoreCallbacks;
     RecursiveProbe probe;

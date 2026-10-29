@@ -32,11 +32,11 @@ public:
 
 
 protected:
-    [[nodiscard]] bool begin(const u64 generation){
+    [[nodiscard]] b8 begin(const u64 generation){
         return m_context.beginFrame(generation) && m_context.beginRoot({ 17u, 1u });
     }
 
-    [[nodiscard]] bool commit(const u64 generation){
+    [[nodiscard]] b8 commit(const u64 generation){
         return m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 

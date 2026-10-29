@@ -35,9 +35,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool build(const GpuTaskGraphTaskView& task);
-    [[nodiscard]] bool validFor(const GpuTaskGraphTaskView& task)const noexcept;
-    [[nodiscard]] bool validResource(const GpuGraphResourceId resource)const noexcept{
+    [[nodiscard]] b8 build(const GpuTaskGraphTaskView& task);
+    [[nodiscard]] b8 validFor(const GpuTaskGraphTaskView& task)const noexcept;
+    [[nodiscard]] b8 validResource(const GpuGraphResourceId resource)const noexcept{
         return resource.valid() && resource.generation == m_graphGeneration && resource.index < m_firstUses.size();
     }
 
@@ -58,7 +58,7 @@ private:
     const GpuTaskResourceUse* m_uses = nullptr;
     u64 m_graphGeneration = 0u;
     usize m_useCapacity = 0u;
-    bool m_valid = false;
+    b8 m_valid = false;
 };
 
 

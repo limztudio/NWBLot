@@ -46,23 +46,23 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] bool beginParent(const u64 generation){
+    [[nodiscard]] b8 beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()) && m_builder.slider(s_SliderKey, m_state, Options());
     }
 
-    [[nodiscard]] bool beginChild(){
+    [[nodiscard]] b8 beginChild(){
         return m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()) && m_builder.slider(s_SliderKey, m_childState, Options());
     }
 
-    [[nodiscard]] bool declareFamily(const u64 generation){
+    [[nodiscard]] b8 declareFamily(const u64 generation){
         return beginParent(generation) && beginChild() && m_builder.endPopup();
     }
 
-    [[nodiscard]] bool finishParent(){
+    [[nodiscard]] b8 finishParent(){
         return m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] bool acceptFamily(const u64 generation){
+    [[nodiscard]] b8 acceptFamily(const u64 generation){
         return declareFamily(generation) && finishParent() && m_context.commitFrame(generation);
     }
 

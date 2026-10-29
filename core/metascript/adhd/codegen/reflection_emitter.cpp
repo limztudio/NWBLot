@@ -20,7 +20,7 @@ namespace __hidden_adhd_reflection_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr bool IsMethodReflected(const MethodDecl& method)noexcept{
+[[nodiscard]] constexpr b8 IsMethodReflected(const MethodDecl& method)noexcept{
     return !method.isConstructor && !method.isDestructor && (method.access == AccessSpecifier::Public || method.isReflect);
 }
 
@@ -242,7 +242,7 @@ void EmitFieldNameLookupBody(
     MString& out,
     const MVector<FieldDecl*>& fields,
     const SymbolTable& symbols,
-    const bool assetRefOnly,
+    const b8 assetRefOnly,
     const MStringView indent
 ){
     usize currentIdx = 0u;
@@ -318,7 +318,7 @@ void EmitNwbContainerElementDependencyExtract(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsAssetDependencyType(const TypeRef* const type, const SymbolTable& symbols, const u32 depth)noexcept{
+b8 IsAssetDependencyType(const TypeRef* const type, const SymbolTable& symbols, const u32 depth)noexcept{
     if(!type || depth > 8u)
         return false;
     const TypeRef* resolved = symbols.unwrapTypeAlias(type);
@@ -346,7 +346,7 @@ bool IsAssetDependencyType(const TypeRef* const type, const SymbolTable& symbols
     return false;
 }
 
-bool IsAssetDependencyField(const FieldDecl& field, const SymbolTable& symbols, const u32 depth)noexcept{
+b8 IsAssetDependencyField(const FieldDecl& field, const SymbolTable& symbols, const u32 depth)noexcept{
     return IsAssetDependencyType(field.type, symbols, depth);
 }
 
@@ -359,7 +359,7 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
     if(decl.isSerialize){
         EmitSerializedBinarySizeMethod(out, decl.orderedFields, m_symbols);
         out.append("    [[nodiscard]] usize serializeBinary(u8* outBuffer, usize bufferCapacity)const noexcept;\r\n");
-        out.append("    [[nodiscard]] bool deserializeBinary(const u8* inBuffer, usize bufferSize)noexcept;\r\n");
+        out.append("    [[nodiscard]] b8 deserializeBinary(const u8* inBuffer, usize bufferSize)noexcept;\r\n");
     }
 
     if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
@@ -392,7 +392,7 @@ void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl&
         EmitSerializeBinaryBody(out, fields, m_symbols, "        ");
         out.append("    }\r\n");
 
-        out.append("    [[nodiscard]] bool deserializeBinary([[maybe_unused]] const u8* inBuffer, [[maybe_unused]] const usize bufferSize)noexcept{\r\n");
+        out.append("    [[nodiscard]] b8 deserializeBinary([[maybe_unused]] const u8* inBuffer, [[maybe_unused]] const usize bufferSize)noexcept{\r\n");
         EmitDeserializeBinaryBody(out, fields, m_symbols, "        ");
         out.append("    }\r\n");
     }
@@ -433,7 +433,7 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
         EmitSerializeBinaryBody(out, activeFields, m_symbols, "    ");
         out.append("}\r\n\r\n");
 
-        out.append("bool ");
+        out.append("b8 ");
         out.append(decl.name.data(), decl.name.size());
         out.append("::deserializeBinary([[maybe_unused]] const u8* inBuffer, [[maybe_unused]] const usize bufferSize)noexcept{\r\n");
         EmitDeserializeBinaryBody(out, activeFields, m_symbols, "    ");
@@ -538,7 +538,7 @@ void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const MVector<F
     out.append("    }\r\n");
 
     out.append("    template<typename NwbValue, typename DependencyCallback>\r\n");
-    out.append("    [[nodiscard]] static bool extractNwbAssetDependencies(const NwbValue& inMap, [[maybe_unused]] DependencyCallback&& callback)noexcept{\r\n");
+    out.append("    [[nodiscard]] static b8 extractNwbAssetDependencies(const NwbValue& inMap, [[maybe_unused]] DependencyCallback&& callback)noexcept{\r\n");
     out.append("        if(!inMap.isMap())\r\n");
     out.append("            return false;\r\n");
     for(const FieldDecl* field : fields){

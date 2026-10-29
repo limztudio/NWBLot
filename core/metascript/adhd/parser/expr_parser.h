@@ -35,7 +35,7 @@ public:
     void setStmtParser(StmtParser* stmtParser)noexcept{ m_stmtParser = stmtParser; }
 
     [[nodiscard]] Expr* parseExpression();
-    [[nodiscard]] bool parseArgumentList(MVector<Expr*>& outArgs);
+    [[nodiscard]] b8 parseArgumentList(MVector<Expr*>& outArgs);
 
 
 private:

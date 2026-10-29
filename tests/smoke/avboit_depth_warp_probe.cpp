@@ -59,7 +59,7 @@ struct ProbeOracle{
     Array<u32, NWB_AVBOIT_CONTROL_WORD_COUNT> control{};
 };
 
-[[nodiscard]] static bool Occupied(const ProbeCase& probe, const u32 slice)noexcept{
+[[nodiscard]] static b8 Occupied(const ProbeCase& probe, const u32 slice)noexcept{
     return (probe.coverage[slice / 32u] & (1u << (slice % 32u))) != 0u;
 }
 
@@ -137,7 +137,7 @@ static void BuildCases(Vector<ProbeCase, Core::Alloc::GlobalArena>& cases){
                 probe.physicalCount = physicalCount;
                 probe.scenario = pattern;
                 for(u32 slice = 0u; slice < virtualCount; ++slice){
-                    const bool occupied = pattern == 1u
+                    const b8 occupied = pattern == 1u
                         || (pattern == 2u && slice + 1u == virtualCount)
                         || (pattern == 3u && slice >= virtualCount / 2u && slice < virtualCount / 2u + 3u)
                         || (pattern == 4u && slice % 2u == 1u)
@@ -217,7 +217,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
         for(u32 index = 0u; index < payload.caseCount; ++index){
             const ProbeCase& probe = payload.cases[index];
@@ -318,7 +318,7 @@ public:
 
 class DepthWarpProbeProject final : public IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static Expected<Core::BufferHandle> CreateBuffer(Core::GraphicsRuntime& graphics, const Name& name, const u32 words, const bool readback){
+    [[nodiscard]] static Expected<Core::BufferHandle> CreateBuffer(Core::GraphicsRuntime& graphics, const Name& name, const u32 words, const b8 readback){
         Core::BufferDesc desc;
         desc.setDebugName(name).setByteSize(words * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(!readback).setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
         return graphics.createBuffer(desc);
@@ -334,7 +334,7 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         BuildCases(m_cases);
         if(m_cases.size() != s_TotalCaseCount){
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: case manifest count mismatch {}"), m_cases.size());
@@ -441,7 +441,7 @@ public:
         return true;
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         static_cast<void>(delta);
         if(m_completed)
             return true;
@@ -487,7 +487,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool compareBatch(const ProbeBatchTask::Payload& payload){
+    [[nodiscard]] b8 compareBatch(const ProbeBatchTask::Payload& payload){
         auto& device = m_context.graphics.getDevice();
         const Expected<void*> mappedResult = device.mapBuffer(*m_readback, Core::CpuAccessMode::Read);
         if(!mappedResult){
@@ -495,7 +495,7 @@ private:
             return false;
         }
         const auto mapped = MakeNotNull(static_cast<const u32*>(*mappedResult));
-        bool passed = true;
+        b8 passed = true;
         for(u32 index = 0u; passed && index < payload.caseCount; ++index){
             const ProbeCase& probe = payload.cases[index];
             const u32 ordinal = payload.firstCase + index;
@@ -528,7 +528,7 @@ private:
     Core::BufferHandle m_slots;
     Core::BufferHandle m_readback;
     Array<Core::GpuDescriptorHandle, 4u> m_descriptors{};
-    bool m_completed = false;
+    b8 m_completed = false;
 };
 
 

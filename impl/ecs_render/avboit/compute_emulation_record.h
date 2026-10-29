@@ -54,18 +54,18 @@ struct AvboitComputeEmulationRecordInputs{
     const ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
-    bool materialDrawBuffersUploaded = false;
-    bool csgFrameBuffersUploaded = false;
-    bool materialFrameStatesGraphOwned = false;
-    bool materialGeometryStatesGraphOwned = false;
-    bool conservativeGeometryScissor = false;
+    b8 materialDrawBuffersUploaded = false;
+    b8 csgFrameBuffersUploaded = false;
+    b8 materialFrameStatesGraphOwned = false;
+    b8 materialGeometryStatesGraphOwned = false;
+    b8 conservativeGeometryScissor = false;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
+[[nodiscard]] b8 RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,11 +89,11 @@ struct AvboitSharedComputeEmulationRecordInputs{
     usize drawIndex = 0u;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
-    bool materialDrawBuffersUploaded = false;
-    bool materialFrameStatesGraphOwned = false;
-    bool materialGeometryStatesGraphOwned = false;
-    bool beginTiming = false;
-    bool finishTiming = false;
+    b8 materialDrawBuffersUploaded = false;
+    b8 materialFrameStatesGraphOwned = false;
+    b8 materialGeometryStatesGraphOwned = false;
+    b8 beginTiming = false;
+    b8 finishTiming = false;
     AvboitSharedComputeEmulationPhase::Enum phase = AvboitSharedComputeEmulationPhase::Generate;
 };
 
@@ -103,10 +103,10 @@ using AvboitSharedComputeEmulationRecordTrait = AvboitComputeEmulationRecordTrai
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait);
+[[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait);
 
 template<typename PayloadT>
-[[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait, Optional<Core::GpuTimingMeasure>& timing){
+[[nodiscard]] inline b8 RecordAvboitComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait, Optional<Core::GpuTimingMeasure>& timing){
     const AvboitComputeEmulationRecordInputs inputs{
         payload.graphics,
         payload.materialSystem,
@@ -129,13 +129,13 @@ template<typename PayloadT>
 }
 
 template<typename PayloadT, typename DispatchFn>
-[[nodiscard]] inline bool RecordAvboitRasterPassFromPayload(
+[[nodiscard]] inline b8 RecordAvboitRasterPassFromPayload(
     const PayloadT& payload,
     Core::CommandList& commandList,
-    const bool PayloadT::* phasePreparedMember,
+    const b8 PayloadT::* phasePreparedMember,
     const ECSRenderDetail::TransparentMaterialPassGraphSnapshot PayloadT::* snapshotMember,
-    const bool PayloadT::* emuOutputStatesMember,
-    const bool PayloadT::* csgEmuOutputStatesMember,
+    const b8 PayloadT::* emuOutputStatesMember,
+    const b8 PayloadT::* csgEmuOutputStatesMember,
     DispatchFn&& dispatch,
     Optional<Core::GpuTimingMeasure>* timing
 ){
@@ -162,7 +162,7 @@ template<typename PayloadT, typename DispatchFn>
 }
 
 template<typename PayloadT>
-[[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const bool isRasterPhase, const AvboitSharedComputeEmulationRecordTrait& trait, Optional<Core::GpuTimingMeasure>& timing){
+[[nodiscard]] inline b8 RecordAvboitSharedComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const b8 isRasterPhase, const AvboitSharedComputeEmulationRecordTrait& trait, Optional<Core::GpuTimingMeasure>& timing){
     const AvboitSharedComputeEmulationRecordInputs inputs{
         payload.graphics,
         payload.materialSystem,

@@ -70,7 +70,7 @@ private:
         u32 generation = 1u;
         u32 latestCanceledGeneration = 0u;
         u32 next = TaskHandle::s_InvalidIndex;
-        bool canceled = false;
+        b8 canceled = false;
         TaskState::Enum state = TaskState::Free;
 
 
@@ -194,18 +194,18 @@ public:
     // Terminal cleanup: stop admission and skip queued callbacks before joining active work.
     void drain()noexcept;
     void pumpMainThread();
-    [[nodiscard]] bool isComplete(TaskHandle handle)const noexcept;
+    [[nodiscard]] b8 isComplete(TaskHandle handle)const noexcept;
     [[nodiscard]] CpuTaskSchedulerStatistics statistics()const noexcept;
     // Register labels during setup; reuse handles in options and scopes.
     [[nodiscard]] CpuTaskProfileLabel registerProfileLabel(const Name& name);
     // Capture changes discard buffered events; zero capacity disables profiling.
-    void setProfiling(bool enabled, u64 frameIndex = 0u);
+    void setProfiling(b8 enabled, u64 frameIndex = 0u);
     [[nodiscard]] usize readProfileEvents(CpuTaskProfileEvent* output, usize capacity)noexcept;
     [[nodiscard]] u64 domainIdentity()const noexcept{ return m_domainIdentity; }
 
     [[nodiscard]] u32 workerThreadCount()const noexcept{ return m_workerCount; }
 
-    [[nodiscard]] bool isParallelEnabled()const noexcept{ return m_workerCount != 0u; }
+    [[nodiscard]] b8 isParallelEnabled()const noexcept{ return m_workerCount != 0u; }
 
     [[nodiscard]] usize currentWorkerIndex()const noexcept{ return s_Execution && &s_Execution->scheduler == this ? s_Execution->workerIndex : 0u; }
 
@@ -227,26 +227,26 @@ private:
     void releaseReservation(TaskHandle handle)noexcept;
     [[nodiscard]] TaskNode* resolveLocked(TaskHandle handle)noexcept;
     [[nodiscard]] const TaskNode* resolveLocked(TaskHandle handle)const noexcept;
-    [[nodiscard]] bool wasCanceledLocked(TaskHandle handle)const noexcept;
+    [[nodiscard]] b8 wasCanceledLocked(TaskHandle handle)const noexcept;
     void enqueueLocked(u32 index)noexcept;
-    [[nodiscard]] TaskHandle claimLocked(CpuAffinity::Enum affinity, bool mainThread, bool cooperative, ScopeWait* preferredScope = nullptr)noexcept;
-    [[nodiscard]] bool hasReadyLocked(CpuAffinity::Enum affinity, bool mainThread, bool cooperative, ScopeWait* preferredScope = nullptr)noexcept;
+    [[nodiscard]] TaskHandle claimLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
+    [[nodiscard]] b8 hasReadyLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
     [[nodiscard]] u32 findScopeReadyLocked(usize queue, ScopeWait& wait, u32& previous)noexcept;
-    void invalidateScopeSearchLocked(bool publication)noexcept;
-    [[nodiscard]] bool contributesToScopeLocked(u32 index, const ScopeWait& wait)noexcept;
-    [[nodiscard]] bool queueEligible(usize queue, CpuAffinity::Enum affinity, bool mainThread, bool cooperative)const noexcept;
-    void execute(TaskHandle handle, usize workerIndex, CpuAffinity::Enum affinity, bool cooperative);
+    void invalidateScopeSearchLocked(b8 publication)noexcept;
+    [[nodiscard]] b8 contributesToScopeLocked(u32 index, const ScopeWait& wait)noexcept;
+    [[nodiscard]] b8 queueEligible(usize queue, CpuAffinity::Enum affinity, b8 mainThread, b8 cooperative)const noexcept;
+    void execute(TaskHandle handle, usize workerIndex, CpuAffinity::Enum affinity, b8 cooperative);
     void retire(TaskHandle handle, TaskNode& first)noexcept;
     void workerLoop(const StopToken& stop, usize workerIndex);
-    [[nodiscard]] bool executeOne(bool cooperative, ScopeWait* preferredScope = nullptr);
+    [[nodiscard]] b8 executeOne(b8 cooperative, ScopeWait* preferredScope = nullptr);
     void drainTask(TaskHandle handle)noexcept;
     void validateWaitLocked(TaskHandle handle, const CpuTaskScope* scope);
     void waitScope(CpuTaskScope& scope);
-    [[nodiscard]] bool isMainThread()const noexcept;
-    [[nodiscard]] bool isExecuting()const noexcept{ return s_Execution && &s_Execution->scheduler == this; }
+    [[nodiscard]] b8 isMainThread()const noexcept;
+    [[nodiscard]] b8 isExecuting()const noexcept{ return s_Execution && &s_Execution->scheduler == this; }
     [[nodiscard]] u32 workerWakeMaskLocked()const noexcept;
     void notifyWorkers(u32 wakeMask)noexcept;
-    void notifyProgress(u32 wakeMask, bool wakeJoiners)noexcept;
+    void notifyProgress(u32 wakeMask, b8 wakeJoiners)noexcept;
     void notifyProgress()noexcept;
     void profileReadyLocked(u32 index)noexcept;
     [[nodiscard]] ProfileSample prepareProfileLocked(CpuTaskProfileKind::Enum kind, TaskHandle task, CpuTaskProfileLabel label, usize workerIndex, CpuAffinity::Enum affinity)const noexcept;
@@ -302,8 +302,8 @@ private:
     u64 m_profileDroppedEvents = 0u;
     usize m_profileRead = 0u;
     usize m_profileCount = 0u;
-    bool m_aborting = false;
-    Atomic<bool> m_profileEnabled{ false };
+    b8 m_aborting = false;
+    Atomic<b8> m_profileEnabled{ false };
     Vector<JoiningThread, Alloc::GlobalArena> m_workers;
 };
 
@@ -390,8 +390,8 @@ private:
     Atomic<usize> m_pending{ 0u };
     // Assigned under the scheduler mutex; simultaneous joins share contribution proofs.
     u64 m_searchIdentity = 0u;
-    bool m_canceled = false;
-    bool m_allowCallerWork = false;
+    b8 m_canceled = false;
+    b8 m_allowCallerWork = false;
 };
 
 

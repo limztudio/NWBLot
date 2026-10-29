@@ -80,14 +80,14 @@ public:
 
 
 protected:
-    [[nodiscard]] bool shapeView(){
+    [[nodiscard]] b8 shapeView(){
         if(!m_view.snapshot(m_model))
             return false;
         auto layout = m_builder.layout({ m_view.displayText() });
         return layout && m_view.adoptLayout(Move(*layout));
     }
 
-    [[nodiscard]] bool place(f32 width = 100.0f, f32 scroll = 0.0f)noexcept{
+    [[nodiscard]] b8 place(f32 width = 100.0f, f32 scroll = 0.0f)noexcept{
         const auto placement = m_view.arrange({ 10.0f, 20.0f, width, 20.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, { scroll, 0.0f });
         if(!placement)
             return false;
@@ -444,7 +444,7 @@ TEST_F(EditBoxLayoutTests, NegativeZeroScrollClampsToPositiveZero){
     ASSERT_TRUE(m_model.setText("abcdef"));
     ASSERT_TRUE(m_model.move(EditMove::Home));
     ASSERT_TRUE(shapeView());
-    for(const bool revealCaret : { false, true }){
+    for(const b8 revealCaret : { false, true }){
         const auto placement = m_view.arrange({ 10.0f, 20.0f, 26.0f, 20.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, { -0.0f, -0.0f }, 1.0f, revealCaret);
         ASSERT_TRUE(placement);
         EXPECT_FLOAT_EQ(placement->scroll, 0.0f);

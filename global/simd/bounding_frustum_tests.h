@@ -237,7 +237,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::FrustumPlanesIntersectPoints(otherPlanes, thisCorners) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL IntersectsSphere(
+[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsSphere(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle sphereValue
 )noexcept{
@@ -246,7 +246,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::FrustumPlanesIntersectSphere(planes, sphereValue);
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL IntersectsBox(
+[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsBox(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents
 )noexcept{
@@ -255,7 +255,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::FrustumPlanesIntersectAxisAlignedBox(planes, otherBoxCenter, otherBoxExtents);
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL IntersectsOrientedBox(
+[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsOrientedBox(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherBoxCenter, const SIMDVectorSingle otherBoxExtents, const SIMDVectorSingle otherBoxOrientation
 )noexcept{
@@ -264,7 +264,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDetail::FrustumPlanesIntersectOrientedBox(planes, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL IntersectsFrustum(
+[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsFrustum(
     const SIMDVectorSingle frustumOrigin, const SIMDVectorSingle frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue,
     const SIMDVectorSingle otherFrustumOrigin, const SIMDVectorSingle otherFrustumOrientation, const f32 otherRightSlope, const f32 otherLeftSlope, const f32 otherTopSlope, const f32 otherBottomSlope, const f32 otherNearPlane, const f32 otherFarPlane
 )noexcept{
@@ -511,7 +511,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::FrustumPlanesIntersectPoints(otherPlanes, thisCorners) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL IntersectsSphere(
+[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsSphere(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble sphereValue
 )noexcept{
@@ -520,7 +520,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::FrustumPlanesIntersectSphere(planes, sphereValue);
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL IntersectsBox(
+[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsBox(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents
 )noexcept{
@@ -529,7 +529,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::FrustumPlanesIntersectAxisAlignedBox(planes, otherBoxCenter, otherBoxExtents);
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL IntersectsOrientedBox(
+[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsOrientedBox(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherBoxCenter, const SIMDVectorDouble otherBoxExtents, const SIMDVectorDouble otherBoxOrientation
 )noexcept{
@@ -538,7 +538,7 @@ inline void NWB_SIMD_CALL Transform(
     return CollisionDoubleDetail::FrustumPlanesIntersectOrientedBox(planes, otherBoxCenter, otherBoxExtents, otherBoxOrientation);
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL IntersectsFrustum(
+[[nodiscard]] inline b8 NWB_SIMD_CALL IntersectsFrustum(
     const SIMDVectorDouble frustumOrigin, const SIMDVectorDouble frustumOrientation, const f64 rightSlopeValue, const f64 leftSlopeValue, const f64 topSlopeValue, const f64 bottomSlopeValue, const f64 nearPlaneValue, const f64 farPlaneValue,
     const SIMDVectorDouble otherFrustumOrigin, const SIMDVectorDouble otherFrustumOrientation, const f64 otherRightSlope, const f64 otherLeftSlope, const f64 otherTopSlope, const f64 otherBottomSlope, const f64 otherNearPlane, const f64 otherFarPlane
 )noexcept{

@@ -92,10 +92,10 @@ struct CaptureDrawTask{
         Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena> drawItems;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
-        bool csg = false;
+        b8 csg = false;
         RenderPath::Enum renderPath = RenderPath::MeshShader;
-        bool generate = false;
-        bool conservativeGeometryScissor = false;
+        b8 generate = false;
+        b8 conservativeGeometryScissor = false;
 
 
     public:
@@ -110,12 +110,12 @@ struct CaptureDrawTask{
         return { payload.generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         if(!payload.avboitTargets.refractionFramebuffer || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || (payload.csg && !payload.csgResources.bindingValid()))
             return false;
 
         const Span<const MaterialPassDrawItem> drawItems(payload.drawItems);
-        bool resourcesReady = false;
+        b8 resourcesReady = false;
         switch(payload.renderPath){
         case RenderPath::MeshShader:
             resourcesReady = payload.materialSystem.meshMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
@@ -182,7 +182,7 @@ struct CaptureCapTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         if(!payload.csgResources.refractionCapFillPipeline || !payload.csgResources.bindingValid() || !payload.targets.avboit.refractionFramebuffer || !payload.targets.bindless.slotsBufferDescriptor.valid() || payload.receiverIndices.empty())
             return false;
         commandList.endRenderPass();
@@ -199,7 +199,7 @@ struct FinalizeTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload&, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static b8 Record(const Payload&, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         commandList.endRenderPass();
         return true;
     }
@@ -226,7 +226,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::MeshViewGpuData& meshViewState,
     Core::GpuTaskId dependency,
-    const bool enabled,
+    const b8 enabled,
     DeferredFrameTargets& targets,
     ObjectGeometryCacheGraph& objectGeometry,
     AvboitGeneratedGeometryReuse& generatedGeometry
@@ -246,7 +246,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     const Core::GpuGraphResourceId instance = *instanceResult;
     const Core::GpuGraphResourceId specularRoughness = *specularRoughnessResult;
 
-    const auto appendClear = [&](const Name identity, const Core::GpuGraphResourceId destination, const bool isDepth, const Core::Color color = Core::Color(0.f, 0.f, 0.f, 0.f)){
+    const auto appendClear = [&](const Name identity, const Core::GpuGraphResourceId destination, const b8 isDepth, const Core::Color color = Core::Color(0.f, 0.f, 0.f, 0.f)){
         Core::GpuTaskDesc desc = TaskDesc(identity, "Refraction Capture Clear", dependency);
         Core::GpuClearTextureTaskDesc clear;
         clear.destination = destination;
@@ -300,7 +300,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     );
     if(drawItems.empty())
         return finalize();
-    const bool hasCsg = !drawItems.csg.empty();
+    const b8 hasCsg = !drawItems.csg.empty();
     if(
         !frameBindings.frameReady(instances.size(), typedBytes.size())
         || !materialSystem.materialPassDrawResourcesReady(drawItems.regular, frameBindings)
@@ -323,7 +323,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     const usize setUseCount = sampledTextureSet->valid() ? s_GeometryAndTextureSetUseCount : 1u;
 
     materialSystem.prepareMaterialPassInstanceUploadData(csgResources, instances);
-    const bool producesReusableGeometry = generatedGeometry.capture(drawItems, instances, frameBindings, meshViewState, MaterialPipelinePass::AvboitRefractionCapture);
+    const b8 producesReusableGeometry = generatedGeometry.capture(drawItems, instances, frameBindings, meshViewState, MaterialPipelinePass::AvboitRefractionCapture);
     const auto materialInstancesResult = ImportBuffer(graph, frameBindings.instanceBuffer);
     const auto materialTypedResult = ImportBuffer(graph, frameBindings.materialTypedBuffer);
     const auto meshViewResult = ImportBuffer(graph, frameBindings.meshView.buffer);
@@ -412,7 +412,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         return MakeUnexpected(Failure{});
 
     usize drawTaskIndex = 0u;
-    const auto appendDraw = [&](const Span<const MaterialPassDrawItem> items, const bool csg, const RenderPath::Enum renderPath, const bool generate, const Core::GpuGraphResourceId output){
+    const auto appendDraw = [&](const Span<const MaterialPassDrawItem> items, const b8 csg, const RenderPath::Enum renderPath, const b8 generate, const Core::GpuGraphResourceId output){
         if(items.empty())
             return true;
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
@@ -464,7 +464,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     const MaterialPassDrawItemsView orderedSets[] = {drawItems.regular, drawItems.csg};
     for(usize setIndex = 0u; setIndex < LengthOf(orderedSets); ++setIndex){
         const MaterialPassDrawItemsView& items = orderedSets[setIndex];
-        const bool csg = setIndex != 0u;
+        const b8 csg = setIndex != 0u;
         if(!appendDraw(items.meshDrawItems, csg, RenderPath::MeshShader, false, {}))
             return MakeUnexpected(Failure{});
         if(!appendDraw(items.indexedDrawItems, csg, RenderPath::VertexIndexed, false, {}))

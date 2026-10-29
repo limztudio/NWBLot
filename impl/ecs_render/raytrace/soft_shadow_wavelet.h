@@ -39,7 +39,7 @@ struct SoftShadowCombinedWaveletInputs{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept;
+    [[nodiscard]] b8 valid()const noexcept;
 };
 
 // Soft resolve either overwrites visibility or multiplies transparent transmittance.
@@ -75,25 +75,25 @@ struct SoftShadowResolveDispatch{
     u32 sceneShading = 0u;
     // Must be odd so the selected upsample input is the final ping-pong result.
     u32 waveletPassCount = 1u;
-    bool temporalMomentsValid = false;
+    b8 temporalMomentsValid = false;
     // The prepared graph may already lower a transparent trace or temporal-merge output before the first wavelet.
-    bool graphOwnsFirstWaveletInputState = false;
+    b8 graphOwnsFirstWaveletInputState = false;
     // A split transparent temporal merge also publishes the selected moments input for the first wavelet.
-    bool graphOwnsWaveletMomentsEntryState = false;
+    b8 graphOwnsWaveletMomentsEntryState = false;
     // The split opaque first-wavelet callback inherits its output UAV state from the graph.
-    bool graphOwnsFirstWaveletOutputState = false;
+    b8 graphOwnsFirstWaveletOutputState = false;
     // The transparent fold can inherit its geometry read from the graph; opaque geometry still transitions locally after its in-callback downsample.
-    bool graphOwnsWaveletGeometryEntryState = false;
+    b8 graphOwnsWaveletGeometryEntryState = false;
     // Both prepared opaque and transparent resolve callbacks inherit these descriptor-visible upsample reads.
-    bool graphOwnsUpsampleStaticEntryStates = false;
+    b8 graphOwnsUpsampleStaticEntryStates = false;
     // The one-wavelet opaque resolve tail inherits both of these exact states from the preceding callback.
-    bool graphOwnsUpsampleInputColorEntryState = false;
-    bool graphOwnsUpsampleVisibilityOutputState = false;
-    bool firstWaveletWritesHalfA = true;
+    b8 graphOwnsUpsampleInputColorEntryState = false;
+    b8 graphOwnsUpsampleVisibilityOutputState = false;
+    b8 firstWaveletWritesHalfA = true;
     SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
 };
 
-[[nodiscard]] inline bool CanCombineSoftShadowWavelets(const bool combinedUpsample, const bool pipelineReady, const bool opaqueTemporalReady, const bool transparentTemporalReady, const u32 opaquePassCount, const u32 transparentPassCount)noexcept{
+[[nodiscard]] inline b8 CanCombineSoftShadowWavelets(const b8 combinedUpsample, const b8 pipelineReady, const b8 opaqueTemporalReady, const b8 transparentTemporalReady, const u32 opaquePassCount, const u32 transparentPassCount)noexcept{
     return combinedUpsample && pipelineReady && opaqueTemporalReady && transparentTemporalReady && opaquePassCount == 1u && transparentPassCount == 1u;
 }
 

@@ -59,7 +59,7 @@ InputEvent Pointer(const InputEventType::Enum type, const Point& position = { 10
     return event;
 }
 
-InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const bool repeat = false)noexcept{
+InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const b8 repeat = false)noexcept{
     InputEvent event;
     event.type = type;
     event.key = key;

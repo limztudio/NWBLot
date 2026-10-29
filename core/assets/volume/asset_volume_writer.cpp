@@ -85,7 +85,7 @@ static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const
     return config;
 }
 
-static bool PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem, ScratchBytes& objectBytes){
+static b8 PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem, ScratchBytes& objectBytes){
     const auto payload = AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes);
     if(!payload)
         return false;
@@ -101,7 +101,7 @@ static bool PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::
     return false;
 }
 
-static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem, ScratchBytes& objectBytes){
+static b8 PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem, ScratchBytes& objectBytes){
     switch(entry.source){
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::PayloadBytes:
         if(entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
@@ -123,7 +123,7 @@ static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumeP
     return false;
 }
 
-static bool PushManifestToVolume(ScratchArena& scratchArena, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Filesystem::IFilesystem& filesystem){
+static b8 PushManifestToVolume(ScratchArena& scratchArena, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Filesystem::IFilesystem& filesystem){
     ScratchBytes objectBytes(scratchArena);
     for(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry : manifest.entries){
         if(!PushManifestEntryToVolume(entry, filesystem, objectBytes))
@@ -133,7 +133,7 @@ static bool PushManifestToVolume(ScratchArena& scratchArena, const AssetsVolumeC
     return true;
 }
 
-static bool ValidateManifestEntryCount(const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest){
+static b8 ValidateManifestEntryCount(const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest){
     if(static_cast<u64>(manifest.entries.size()) == manifest.plannedFileCount)
         return true;
 

@@ -33,9 +33,9 @@ public:
     virtual u64 rowCount()const noexcept override{ return m_removed == 0u ? 100000u : 99999u; }
     virtual u64 key(u64 index)const noexcept override;
     virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
-    virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
+    virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
     virtual StringView text(u64 index)const noexcept override;
-    virtual bool enabled(u64 index)const noexcept override;
+    virtual b8 enabled(u64 index)const noexcept override;
 
 
 public:
@@ -43,7 +43,7 @@ public:
     void remove(u64 keyValue)noexcept;
     void beginFrame()noexcept{ m_labelReads = 0u; }
 
-    [[nodiscard]] bool reversed()const noexcept{ return m_reversed; }
+    [[nodiscard]] b8 reversed()const noexcept{ return m_reversed; }
 
     [[nodiscard]] u64 removedKey()const noexcept{ return m_removed; }
 
@@ -53,7 +53,7 @@ public:
 private:
     u64 m_revision = 1u;
     u64 m_removed = 0u;
-    bool m_reversed = false;
+    b8 m_reversed = false;
     mutable Array<char, 32u> m_label{};
     mutable u32 m_labelReads = 0u;
 };

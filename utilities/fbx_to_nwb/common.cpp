@@ -61,7 +61,7 @@ static Expected<EnumT> ParseOptionText(const AStringView value, const EnumT (&va
 }
 
 template<typename TextFunction, typename ParseFunction>
-static bool ValidateOptionText(AString& inOutValue, TextFunction textFunction, ParseFunction parseValue){
+static b8 ValidateOptionText(AString& inOutValue, TextFunction textFunction, ParseFunction parseValue){
     const auto parsed = parseValue(AStringView(inOutValue));
     if(parsed){
         inOutValue.assign(textFunction(*parsed));
@@ -136,7 +136,7 @@ Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value)noexc
     return __hidden_common::ParseNormalizedAssetTypeText(value);
 }
 
-bool ValidateAssetTypeText(AString& inOutValue){
+b8 ValidateAssetTypeText(AString& inOutValue){
     return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::OutputAssetTypeText, __hidden_common::ParseNormalizedAssetTypeText);
 }
 
@@ -156,7 +156,7 @@ Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value)noexcept{
     return __hidden_common::ParseNormalizedNormalModeText(value);
 }
 
-bool ValidateNormalModeText(AString& inOutValue){
+b8 ValidateNormalModeText(AString& inOutValue){
     return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::NormalModeText, __hidden_common::ParseNormalizedNormalModeText);
 }
 

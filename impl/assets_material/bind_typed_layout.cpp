@@ -139,7 +139,7 @@ static void PadMaterialTypedLayoutBytesTo(Material::TypedBlockByteVector& outBlo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ReserveMaterialBindTypedLayoutVectors(const MaterialBindEntry& bindEntry, const Name& contextName, const Span<const NotNull<const MaterialBindInstance*>> sortedInstances, MaterialBindTypedLayout& outLayout){
+static b8 ReserveMaterialBindTypedLayoutVectors(const MaterialBindEntry& bindEntry, const Name& contextName, const Span<const NotNull<const MaterialBindInstance*>> sortedInstances, MaterialBindTypedLayout& outLayout){
     usize fieldReserveCount = 0u;
     usize byteReserveCount = 0u;
     for(const NotNull<const MaterialBindInstance*> instance : sortedInstances){
@@ -200,7 +200,7 @@ static Expected<ScratchVector<NotNull<const MaterialBindInstance*>>> BuildSorted
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool BuildMaterialBindTypedLayoutBlockLookup(const AStringView contextLabel, MaterialBindTypedLayout& inOutLayout){
+static b8 BuildMaterialBindTypedLayoutBlockLookup(const AStringView contextLabel, MaterialBindTypedLayout& inOutLayout){
     inOutLayout.blockLookup.clear();
     inOutLayout.blockLookup.reserve(inOutLayout.typedLayoutBlocks.size());
 
@@ -235,7 +235,7 @@ static bool BuildMaterialBindTypedLayoutBlockLookup(const AStringView contextLab
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool BuildMaterialBindTypedLayoutParameterLookup(const AStringView contextLabel, MaterialBindTypedLayout& inOutLayout){
+static b8 BuildMaterialBindTypedLayoutParameterLookup(const AStringView contextLabel, MaterialBindTypedLayout& inOutLayout){
     inOutLayout.parameterLookup.clear();
     inOutLayout.parameterLookup.reserve(inOutLayout.typedLayoutFields.size());
 
@@ -299,7 +299,7 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(const AStringView contex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool WriteMaterialTypedLayoutFieldBytes(Material::TypedBlockByteVector& inOutBlockBytes, const usize byteOffset, const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value)noexcept{
+static b8 WriteMaterialTypedLayoutFieldBytes(Material::TypedBlockByteVector& inOutBlockBytes, const usize byteOffset, const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value)noexcept{
     const auto fieldBytes = GetMaterialTypedLayoutFieldBytes(fieldType, value);
     if(!fieldBytes)
         return false;
@@ -335,7 +335,7 @@ static Expected<UInt4U> ParseMaterialTypedLayoutParameterValue(const Name& mater
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ApplyMaterialBindTypedLayoutParameterValue(
+b8 ApplyMaterialBindTypedLayoutParameterValue(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,
     const ACompactString& parameterName,

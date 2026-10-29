@@ -30,7 +30,7 @@ inline constexpr AStringView s_SkinPath = "tests/performance/ui_input/skin";
 }
 
 template<typename Operation, typename Checksum>
-[[nodiscard]] bool Measure(const AStringView name, const u64 setupChecksum, Operation&& operation, Checksum&& checksum){
+[[nodiscard]] b8 Measure(const AStringView name, const u64 setupChecksum, Operation&& operation, Checksum&& checksum){
     constexpr usize s_Samples = 11u;
     constexpr usize s_MaxIterations = 1u << 24u;
     constexpr f64 s_MinSampleNS = 20000000.0;
@@ -43,7 +43,7 @@ template<typename Operation, typename Checksum>
     if(!behaviorChecksum)
         return false;
     const auto batch = [&](const usize iterations)noexcept(
-        noexcept(static_cast<bool>(!operation()))
+        noexcept(static_cast<b8>(!operation()))
         && noexcept(DeclVal<void(*)(Expected<u64>)noexcept>()(checksum()))
     ) -> Expected<f64>{
         const Timer begin = TimerNow();
@@ -90,9 +90,9 @@ template<typename Operation, typename Checksum>
     return true;
 }
 
-[[nodiscard]] bool RunPointerBenchmarks();
-[[nodiscard]] bool RunPaintBenchmarks();
-[[nodiscard]] bool RunEditBenchmarks();
+[[nodiscard]] b8 RunPointerBenchmarks();
+[[nodiscard]] b8 RunPaintBenchmarks();
+[[nodiscard]] b8 RunEditBenchmarks();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

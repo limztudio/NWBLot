@@ -160,7 +160,7 @@ TEST_F(UiPaintTests, NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios){
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
         m_builder.begin({ 200.0f, 100.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
         ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        const bool drawn = m_builder.drawRegion(Name(s_PanelRegion), { 10.0f, 20.0f, 3.0f, 2.0f });
+        const b8 drawn = m_builder.drawRegion(Name(s_PanelRegion), { 10.0f, 20.0f, 3.0f, 2.0f });
         const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
         EXPECT_EQ(exceptions, 0);
         ASSERT_TRUE(drawn);

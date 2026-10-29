@@ -64,7 +64,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 first, bool)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 first, b8)const noexcept override{
         u64 index = 0u;
         if(first >= count)
             return MakeUnexpected(Failure{});
@@ -74,7 +74,7 @@ public:
 
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "match"; }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return index < count; }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count; }
 
 
 public:
@@ -82,7 +82,7 @@ public:
     u64 revisionValue = 1u;
     u64 start = 0u;
     u64 count = 0u;
-    mutable bool changeQueryOnCount = false;
+    mutable b8 changeQueryOnCount = false;
 
 
 private:
@@ -124,7 +124,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, bool)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, b8)const noexcept override{
         u64 index = 0u;
         if(start >= count)
             return MakeUnexpected(Failure{});
@@ -134,9 +134,9 @@ public:
 
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "full row"; }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return index < count; }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count; }
 
-    [[nodiscard]] virtual bool filter(const AStringView query)override{
+    [[nodiscard]] virtual b8 filter(const AStringView query)override{
         ++filterCalls;
         if(failFilter)
             return false;
@@ -231,13 +231,13 @@ public:
     u64 count = 100000u;
     u64 filterCalls = 0u;
     u64 rebuilds = 0u;
-    bool failFilter = false;
-    bool changeFullGeneration = false;
-    bool changeFullRevision = false;
-    bool changeFullCount = false;
-    bool invalidViewIdentity = false;
-    bool oversizedView = false;
-    mutable bool changeQueryOnGeneration = false;
+    b8 failFilter = false;
+    b8 changeFullGeneration = false;
+    b8 changeFullRevision = false;
+    b8 changeFullCount = false;
+    b8 invalidViewIdentity = false;
+    b8 oversizedView = false;
+    mutable b8 changeQueryOnGeneration = false;
     Mutation::Enum onFilter = Mutation::None;
 
 
@@ -246,7 +246,7 @@ private:
     u64 m_generation = 0u;
     u64 m_revision = 0u;
     u64 m_count = 0u;
-    bool m_valid = false;
+    b8 m_valid = false;
 };
 
 class UiSearchComboBehaviorTests : public testing::Test{

@@ -36,7 +36,7 @@ public:
     void prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData> lights)noexcept;
     void accept()noexcept;
     void discard()noexcept{ m_accepted = false; }
-    [[nodiscard]] bool usable()const noexcept;
+    [[nodiscard]] b8 usable()const noexcept;
 
 
 private:
@@ -44,8 +44,8 @@ private:
     RayTracingSceneContentStamp m_acceptedScene;
     u64 m_lightHash = 0u;
     u64 m_acceptedLightHash = 0u;
-    bool m_lightingPrepared = false;
-    bool m_accepted = false;
+    b8 m_lightingPrepared = false;
+    b8 m_accepted = false;
 };
 
 struct SoftwareTransparentSamplingState{

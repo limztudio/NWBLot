@@ -55,7 +55,7 @@ protected:
         m_builder.setSkin(m_skin);
     }
 
-    void configureSkin(const bool includePanel = true, const bool includeButton = true){
+    void configureSkin(const b8 includePanel = true, const b8 includeButton = true){
         UiSkin::RegionVector regions(m_arena);
         if(includePanel)
             regions.push_back({ Name("panel.normal"), { 0u, 0u, 8u, 8u }, {}, { 4.0f, 6.0f, 8.0f, 10.0f } });
@@ -73,14 +73,14 @@ protected:
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 16u, 1.0f, Move(regions));
     }
 
-    [[nodiscard]] bool begin(const u64 generation, const Rect& bounds = { 0.0f, 0.0f, 300.0f, 200.0f }){
+    [[nodiscard]] b8 begin(const u64 generation, const Rect& bounds = { 0.0f, 0.0f, 300.0f, 200.0f }){
         if(!m_context.beginFrame(generation))
             return false;
         m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation, 1u, Core::Assets::AssetRef<UiSkin>(UiWidgetTests::s_TestSkinPath), m_skin);
         return m_context.beginRoot(m_root) && m_builder.beginPanel(s_PanelKey, bounds);
     }
 
-    [[nodiscard]] bool finish(){
+    [[nodiscard]] b8 finish(){
         return m_builder.endPanel() && m_context.endRoot() && m_context.finishFrame();
     }
 
@@ -167,7 +167,7 @@ TEST_F(UiBuilderTests, LabelTextChangesPreserveStableIdAndDeclarationLifetime){
 }
 
 TEST_F(UiBuilderTests, CheckboxTogglesOncePerAcceptedActionAcrossRepeatedBuilds){
-    bool checked = false;
+    b8 checked = false;
     ASSERT_TRUE(begin(1u));
     EXPECT_FALSE(m_builder.checkbox("enabled", "Enabled", checked));
     ASSERT_TRUE(finish());
@@ -370,7 +370,7 @@ TEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmiss
             EXPECT_TRUE(send({ .key = Core::Key::Tab , .type = InputEventType::KeyUp }).commandConsumed);
         }
         ASSERT_EQ(m_context.input().focus(), id(s_ApplyKey));
-        const bool pointer = key == Core::Key::Unknown;
+        const b8 pointer = key == Core::Key::Unknown;
         const InputEvent down{ .position = point, .key = key , .type = pointer ? InputEventType::PrimaryDown : InputEventType::KeyDown};
         const InputEvent up{ .position = point, .key = key , .type = pointer ? InputEventType::PrimaryUp : InputEventType::KeyUp};
         const InputRoutingResult held = send(down);
@@ -429,7 +429,7 @@ TEST_F(UiBuilderTests, FocusTransferWhileButtonSubmitIsHeldCannotActivateEitherB
 }
 
 TEST_F(UiBuilderTests, FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBuilderReuse){
-    bool checked = true;
+    b8 checked = true;
     AString<Core::Alloc::GlobalArena> caption("A", m_arena);
     ASSERT_TRUE(begin(1u));
     EXPECT_FALSE(m_builder.checkbox("enabled", "Enabled", checked));

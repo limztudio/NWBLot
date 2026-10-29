@@ -60,11 +60,11 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] bool beginParent(const u64 generation){
+    [[nodiscard]] b8 beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions());
     }
 
-    [[nodiscard]] bool prepareButtons(const u64 generation){
+    [[nodiscard]] b8 prepareButtons(const u64 generation){
         if(!beginParent(generation))
             return false;
         m_beforeActivated = m_builder.button(s_BeforeKey, "Before", Control());
@@ -79,7 +79,7 @@ protected:
         return m_builder.endPopup() && finishRoot();
     }
 
-    [[nodiscard]] bool acceptButtons(const u64 generation){
+    [[nodiscard]] b8 acceptButtons(const u64 generation){
         return prepareButtons(generation) && m_context.commitFrame(generation);
     }
 
@@ -87,9 +87,9 @@ protected:
 protected:
     PopupState m_parent;
     PopupState m_child;
-    bool m_beforeActivated = false;
-    bool m_afterActivated = false;
-    bool m_childActivated = false;
+    b8 m_beforeActivated = false;
+    b8 m_afterActivated = false;
+    b8 m_childActivated = false;
 };
 
 
@@ -197,7 +197,7 @@ TEST_F(UiNestedPopupBuilderTests, ChildPaintEscapesParentClipAndLayersRemainOrde
     const Point applyCenter = Center(apply->rectangle);
     EXPECT_EQ(m_context.input().hitTest(applyCenter), apply->id);
     u32 previousLayer = 0u;
-    bool childPainted = false;
+    b8 childPainted = false;
     for(const DrawCommand& command : snapshot.commands()){
         EXPECT_GE(command.layer, previousLayer);
         previousLayer = command.layer;

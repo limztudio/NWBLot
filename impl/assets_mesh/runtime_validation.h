@@ -29,9 +29,9 @@ public:
     [[nodiscard]] static SIMDVectorSingle MakeMeshPositionVector(const SIMDVectorSingle position)noexcept;
     [[nodiscard]] static SIMDVectorSingle MakeMeshNormalVector(const SIMDVectorSingle normal)noexcept;
     [[nodiscard]] static SIMDVectorSingle MakeMeshUvVector(const SIMDVectorSingle uv)noexcept;
-    [[nodiscard]] static bool ValidDirectionVector(const SIMDVectorSingle direction)noexcept;
-    [[nodiscard]] static bool ValidTangentVector(const SIMDVectorSingle tangent)noexcept;
-    [[nodiscard]] static bool ValidateMeshStreams(
+    [[nodiscard]] static b8 ValidDirectionVector(const SIMDVectorSingle direction)noexcept;
+    [[nodiscard]] static b8 ValidTangentVector(const SIMDVectorSingle tangent)noexcept;
+    [[nodiscard]] static b8 ValidateMeshStreams(
         Span<const Float3U> positions,
         Span<const Half4U> normals,
         Span<const Half4U> tangents,
@@ -40,7 +40,7 @@ public:
         const TStringView contextText,
         const TStringView meshPathText
     );
-    [[nodiscard]] static bool ValidateMeshletAttributeSkinSharing(
+    [[nodiscard]] static b8 ValidateMeshletAttributeSkinSharing(
         Core::Alloc::ScratchArena& scratchArena,
         Span<const u8> positionRefDeltas,
         Span<const MeshletLocalVertexRef> localVertexRefs,
@@ -48,7 +48,7 @@ public:
         const TStringView contextText,
         const TStringView meshPathText
     );
-    [[nodiscard]] static bool ValidateMeshletPayload(
+    [[nodiscard]] static b8 ValidateMeshletPayload(
         Core::Alloc::ScratchArena& scratchArena,
         Span<const u8> positionRefDeltas,
         Span<const u8> attributeRefDeltas,
@@ -62,11 +62,11 @@ public:
         const usize tangentCount,
         const usize uv0Count,
         const usize colorCount,
-        const bool skinRequired,
+        const b8 skinRequired,
         const TStringView contextText,
         const TStringView meshPathText
     );
-    [[nodiscard]] static bool ValidateSharedMeshPayload(
+    [[nodiscard]] static b8 ValidateSharedMeshPayload(
         Core::Alloc::ScratchArena& scratchArena,
         Span<const Float3U> positions,
         Span<const Half4U> normals,
@@ -80,12 +80,12 @@ public:
         Span<const MeshletBounds> meshletBounds,
         Span<const u8> meshletPrimitiveIndices,
         const usize skinCount,
-        const bool skinRequired,
+        const b8 skinRequired,
         const TStringView contextText,
         const TStringView meshPathText
     );
     template<typename MeshGeometryPayloadT>
-    [[nodiscard]] static bool ValidateSharedMeshPayload(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayloadT& payload, const usize skinCount, const bool skinRequired, const TStringView contextText, const TStringView meshPathText);
+    [[nodiscard]] static b8 ValidateSharedMeshPayload(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayloadT& payload, const usize skinCount, const b8 skinRequired, const TStringView contextText, const TStringView meshPathText);
 
 
 public:
@@ -97,7 +97,7 @@ public:
 
 
 template<typename MeshGeometryPayloadT>
-[[nodiscard]] bool MeshRuntimeValidation::ValidateSharedMeshPayload(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayloadT& payload, const usize skinCount, const bool skinRequired, const TStringView contextText, const TStringView meshPathText){
+[[nodiscard]] b8 MeshRuntimeValidation::ValidateSharedMeshPayload(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayloadT& payload, const usize skinCount, const b8 skinRequired, const TStringView contextText, const TStringView meshPathText){
     return ValidateSharedMeshPayload(
         scratchArena,
         payload.positionStream(),

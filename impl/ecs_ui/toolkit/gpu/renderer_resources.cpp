@@ -42,7 +42,7 @@ struct TargetReadyTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context)noexcept{
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context)noexcept{
         return context.declarations.textureForResource(payload.color) == payload.target->m_color.get() && !commands.commandRecordingFailed();
     }
 };
@@ -93,7 +93,7 @@ public:
 }
 
 template<typename TShader>
-[[nodiscard]] static bool LoadShader(
+[[nodiscard]] static b8 LoadShader(
     GpuRendererState& state,
     Core::ShaderHandle& shader,
     const Core::Assets::AssetRef<TShader> UiSubsystem::* const member,
@@ -120,7 +120,7 @@ template<typename TShader>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept{
+b8 GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept{
     return
         first.valid() && second.valid()
         && first.backBuffer.texture == second.backBuffer.texture && first.framebuffer == second.framebuffer
@@ -129,7 +129,7 @@ bool GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& fi
     ;
 }
 
-bool GpuRendererState::createResources(){
+b8 GpuRendererState::createResources(){
     if(m_resources)
         return true;
     Core::Device& device = m_graphics.getDevice();
@@ -259,7 +259,7 @@ Expected<GpuVersion<GpuTargetVersion>> GpuRendererState::createTarget(const u32 
     return Move(target);
 }
 
-bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot){
+b8 GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot){
     const usize vertexCount = snapshot.vertices().size();
     const usize indexCount = snapshot.indices().size();
     if(vertexCount == 0u && indexCount == 0u)
@@ -302,7 +302,7 @@ bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& sn
     return true;
 }
 
-bool GpuRendererState::prepareOutputPipeline(const Core::FramebufferInfo& info){
+b8 GpuRendererState::prepareOutputPipeline(const Core::FramebufferInfo& info){
     if(m_resources->m_outputPipeline && m_resources->m_outputPipeline->getFramebufferInfo() == info)
         return true;
     Core::Device& device = m_graphics.getDevice();
@@ -324,10 +324,10 @@ bool GpuRendererState::prepareOutputPipeline(const Core::FramebufferInfo& info){
         m_resources->m_outputPipeline = Move(*outputPipelineResult);
     else
         m_resources->m_outputPipeline.reset();
-    return static_cast<bool>(outputPipelineResult);
+    return static_cast<b8>(outputPipelineResult);
 }
 
-bool GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){
+b8 GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){
     m_readyToDeclare = false;
     if(!m_pending)
         return true;

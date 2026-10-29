@@ -47,16 +47,16 @@ struct TextureClearContract{
     TextureClearQueueRequirement::Enum queueRequirement = TextureClearQueueRequirement::Transfer;
 };
 
-[[nodiscard]] constexpr bool TextureClearStagedEncodingSupportsFormat(const Format::Enum format)noexcept{
+[[nodiscard]] constexpr b8 TextureClearStagedEncodingSupportsFormat(const Format::Enum format)noexcept{
     return format >= Format::BC1_UNORM && format <= Format::BC5_SNORM;
 }
 
-[[nodiscard]] inline bool TextureClearValueMatchesFormat(const TextureDesc& description, const TextureClearValueKind::Enum valueKind, const bool clearDepth, const bool clearStencil)noexcept{
+[[nodiscard]] inline b8 TextureClearValueMatchesFormat(const TextureDesc& description, const TextureClearValueKind::Enum valueKind, const b8 clearDepth, const b8 clearStencil)noexcept{
     if(description.format == Format::UNKNOWN || VulkanDetail::ConvertFormat(description.format) == VK_FORMAT_UNDEFINED)
         return false;
 
     const FormatInfo& formatInfo = GetFormatInfo(description.format);
-    const bool depthStencilFormat = formatInfo.hasDepth || formatInfo.hasStencil;
+    const b8 depthStencilFormat = formatInfo.hasDepth || formatInfo.hasStencil;
     switch(valueKind){
     case TextureClearValueKind::Float:
         return !depthStencilFormat && (formatInfo.kind == FormatKind::Normalized || formatInfo.kind == FormatKind::Float);
@@ -71,12 +71,12 @@ struct TextureClearContract{
     }
 }
 
-[[nodiscard]] inline Expected<TextureClearContract> ResolveTextureClearContract(const TextureDesc& description, const TextureSubresourceSet& subresources, const TextureClearValueKind::Enum valueKind, const bool clearDepth, const bool clearStencil)noexcept{
+[[nodiscard]] inline Expected<TextureClearContract> ResolveTextureClearContract(const TextureDesc& description, const TextureSubresourceSet& subresources, const TextureClearValueKind::Enum valueKind, const b8 clearDepth, const b8 clearStencil)noexcept{
     TextureClearContract contract{};
     if(!IsTextureDescShapeValid(description) || description.sampleQuality != 0u || !VulkanDetail::IsSupportedSampleCount(description.sampleCount) || !TextureClearValueMatchesFormat(description, valueKind, clearDepth, clearStencil))
         return MakeUnexpected(Failure{});
 
-    const bool blockCompressed = Format::IsBlockCompressedFormat(description.format);
+    const b8 blockCompressed = Format::IsBlockCompressedFormat(description.format);
     if(blockCompressed && (description.sampleCount != 1u || !TextureClearStagedEncodingSupportsFormat(description.format)))
         return MakeUnexpected(Failure{});
 
@@ -92,7 +92,7 @@ struct TextureClearContract{
     return contract;
 }
 
-[[nodiscard]] inline bool TextureClearBoxEmpty(const Box& box)noexcept{
+[[nodiscard]] inline b8 TextureClearBoxEmpty(const Box& box)noexcept{
     return box.minX >= box.maxX || box.minY >= box.maxY || box.minZ >= box.maxZ;
 }
 
@@ -118,7 +118,7 @@ struct TextureClearContract{
     return TextureClearQueueRequirement::Transfer;
 }
 
-[[nodiscard]] inline bool TextureClearBoxFullyCoversSubresources(const TextureDesc& description, const TextureSubresourceSet& subresources, const Box& box)noexcept{
+[[nodiscard]] inline b8 TextureClearBoxFullyCoversSubresources(const TextureDesc& description, const TextureSubresourceSet& subresources, const Box& box)noexcept{
     const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
     for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
         const Box resolvedBox = ResolveTextureClearBox(description, mipLevel, box);
@@ -132,7 +132,7 @@ struct TextureClearContract{
     return true;
 }
 
-[[nodiscard]] inline bool TextureClearQueueRequirementSatisfied(const TextureClearQueueRequirement::Enum requirement, const GpuQueueCapability::Mask declaredCapabilities, const GpuQueueCapability::Mask physicalCapabilities)noexcept{
+[[nodiscard]] inline b8 TextureClearQueueRequirementSatisfied(const TextureClearQueueRequirement::Enum requirement, const GpuQueueCapability::Mask declaredCapabilities, const GpuQueueCapability::Mask physicalCapabilities)noexcept{
     const u8 declaredBits = static_cast<u8>(declaredCapabilities);
     const u8 physicalBits = static_cast<u8>(physicalCapabilities);
     switch(requirement){

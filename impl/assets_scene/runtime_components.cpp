@@ -46,7 +46,7 @@ static const ComponentTypeAutoRegistrar* s_RegisteredComponentTypesHead = nullpt
     return nullptr;
 }
 
-[[nodiscard]] static bool IsComponentAssetType(const Name& assetType)noexcept{
+[[nodiscard]] static b8 IsComponentAssetType(const Name& assetType)noexcept{
     if(!assetType)
         return false;
     for(const ComponentTypeAutoRegistrar* node = s_RegisteredComponentTypesHead; node != nullptr; node = node->next()){
@@ -94,7 +94,7 @@ namespace ComponentAssetRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LoadBinary(IComponent& component, const Span<const u8> binary){
+b8 LoadBinary(IComponent& component, const Span<const u8> binary){
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentBinaryPayload::ComponentHeaderBinary>(
         binary,
@@ -172,7 +172,7 @@ Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(Core:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
+b8 TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::TransformComponentPayloadBinary>(
         payload,
         NWB_TEXT("TransformComponentAsset::loadComponentPayload")
@@ -185,7 +185,7 @@ bool TransformComponentAsset::loadComponentPayload(const Span<const u8> payload)
     return true;
 }
 
-bool TransformComponentAsset::validatePayload()const{
+b8 TransformComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("TransformComponentAsset::validatePayload")))
         return false;
 
@@ -215,7 +215,7 @@ bool TransformComponentAsset::validatePayload()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
+b8 CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::CameraComponentPayloadBinary>(
         payload,
         NWB_TEXT("CameraComponentAsset::loadComponentPayload")
@@ -226,7 +226,7 @@ bool CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
     return true;
 }
 
-bool CameraComponentAsset::validatePayload()const{
+b8 CameraComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("CameraComponentAsset::validatePayload")))
         return false;
 
@@ -252,7 +252,7 @@ bool CameraComponentAsset::validatePayload()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
+b8 LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::LightComponentPayloadBinary>(
         payload,
         NWB_TEXT("LightComponentAsset::loadComponentPayload")
@@ -274,7 +274,7 @@ bool LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
     return true;
 }
 
-bool LightComponentAsset::validatePayload()const{
+b8 LightComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("LightComponentAsset::validatePayload")))
         return false;
 

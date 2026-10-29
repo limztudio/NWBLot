@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareCausticResources(const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, const bool hardware){
+b8 RendererRayTracingSystem::prepareCausticResources(const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, const b8 hardware){
     if(!targets.causticAccumulator || !targets.causticIrradiance || !meshView.buffer || !meshView.heapHandle.valid() || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid())
         return true;
     if(meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer){
@@ -32,10 +32,10 @@ bool RendererRayTracingSystem::prepareCausticResources(const ECSRenderDetail::Me
         return false;
     }
 
-    const bool producerReady = ensureRayTraceMaterialContextSlotsHeapHandle() && (hardware ? ensureCausticRtPipeline() : ensureSwCausticPipeline());
+    const b8 producerReady = ensureRayTraceMaterialContextSlotsHeapHandle() && (hardware ? ensureCausticRtPipeline() : ensureSwCausticPipeline());
     // Prepare shared resolve and temporal resources even when the producer is unavailable.
-    const bool resolveReady = ensureCausticGeometryDownsamplePipeline() && ensureCausticResolvePipeline();
-    const bool temporalReady = m_rayTracingState.m_causticTemporalDecay <= 0.f || ensureCausticAccumulatorDecayPipeline();
+    const b8 resolveReady = ensureCausticGeometryDownsamplePipeline() && ensureCausticResolvePipeline();
+    const b8 temporalReady = m_rayTracingState.m_causticTemporalDecay <= 0.f || ensureCausticAccumulatorDecayPipeline();
     return producerReady && resolveReady && temporalReady;
 }
 

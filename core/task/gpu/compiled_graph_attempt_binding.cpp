@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuCompiledGraph::beginRecordingAttempt(
+b8 GpuCompiledGraph::beginRecordingAttempt(
     const GpuTaskGraph& graph,
     const GpuTaskGraphDeclarationReadView& declarations,
     const GpuSubmissionPacketId packet,
@@ -33,7 +33,7 @@ bool GpuCompiledGraph::beginRecordingAttempt(
     if(!planAccess.validFor(*this) || !declarations.validFor(graph) || !planAccess.validFor(declarations) || m_planGeneration != expectedPlanGeneration || !validPacket(packet))
         return false;
 
-    const bool exactAttempt = m_attemptGraph == &graph && m_attemptPlanGeneration == expectedPlanGeneration && m_attemptRecordingGeneration == recordingAttemptGeneration;
+    const b8 exactAttempt = m_attemptGraph == &graph && m_attemptPlanGeneration == expectedPlanGeneration && m_attemptRecordingGeneration == recordingAttemptGeneration;
     if(m_attemptBindingState == AttemptBindingState::Recording || m_attemptBindingState == AttemptBindingState::Submitting){
         if(exactAttempt)
             return true;
@@ -59,7 +59,7 @@ bool GpuCompiledGraph::beginRecordingAttempt(
 }
 
 
-bool GpuCompiledGraph::matchesRecordingAttempt(const GpuTaskGraph& graph, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration)const noexcept{
+b8 GpuCompiledGraph::matchesRecordingAttempt(const GpuTaskGraph& graph, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration)const noexcept{
     if(expectedPlanGeneration == 0u || recordingAttemptGeneration == 0u)
         return false;
 
@@ -74,7 +74,7 @@ bool GpuCompiledGraph::matchesRecordingAttempt(const GpuTaskGraph& graph, const 
 }
 
 
-bool GpuCompiledGraph::resolveRecordingAttempt(const GpuTaskGraph& graph, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration)const noexcept{
+b8 GpuCompiledGraph::resolveRecordingAttempt(const GpuTaskGraph& graph, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration)const noexcept{
     if(expectedPlanGeneration == 0u || recordingAttemptGeneration == 0u)
         return false;
 
@@ -90,7 +90,7 @@ bool GpuCompiledGraph::resolveRecordingAttempt(const GpuTaskGraph& graph, const 
 }
 
 
-bool GpuCompiledGraph::bindSubmissionTransaction(const GpuTaskGraph& graph, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept{
+b8 GpuCompiledGraph::bindSubmissionTransaction(const GpuTaskGraph& graph, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept{
     if(!submissionBinding.valid() || expectedPlanGeneration == 0u || recordingAttemptGeneration == 0u)
         return false;
 
@@ -116,7 +116,7 @@ bool GpuCompiledGraph::bindSubmissionTransaction(const GpuTaskGraph& graph, cons
 }
 
 
-bool GpuCompiledGraph::matchesSubmissionTransaction(const GpuTaskGraph& graph, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept{
+b8 GpuCompiledGraph::matchesSubmissionTransaction(const GpuTaskGraph& graph, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept{
     if(!submissionBinding.valid() || expectedPlanGeneration == 0u || recordingAttemptGeneration == 0u)
         return false;
 
@@ -134,7 +134,7 @@ bool GpuCompiledGraph::matchesSubmissionTransaction(const GpuTaskGraph& graph, c
 }
 
 
-bool GpuCompiledGraph::resolveSubmissionTransaction(const GpuTaskGraph& graph, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept{
+b8 GpuCompiledGraph::resolveSubmissionTransaction(const GpuTaskGraph& graph, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept{
     if(!submissionBinding.valid() || expectedPlanGeneration == 0u || recordingAttemptGeneration == 0u)
         return false;
 
@@ -156,7 +156,7 @@ bool GpuCompiledGraph::resolveSubmissionTransaction(const GpuTaskGraph& graph, c
 }
 
 
-bool GpuCompiledGraph::matchesActiveAttemptIdentity(const GpuTaskGraph* const graphIdentity, const u64 compiledObjectIdentity, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration, const ReadView& planAccess)const noexcept{
+b8 GpuCompiledGraph::matchesActiveAttemptIdentity(const GpuTaskGraph* const graphIdentity, const u64 compiledObjectIdentity, const u64 expectedPlanGeneration, const u64 recordingAttemptGeneration, const ReadView& planAccess)const noexcept{
     if(!graphIdentity || compiledObjectIdentity == 0u || expectedPlanGeneration == 0u || recordingAttemptGeneration == 0u)
         return false;
 

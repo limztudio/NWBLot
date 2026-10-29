@@ -51,7 +51,7 @@ inline constexpr TStringView s_SolidTriangleWordsStreamLabel = NWB_TEXT("solid t
 
 
 template<typename HeaderT>
-[[nodiscard]] bool MeshBaseHeaderComplete(const HeaderT& header)noexcept(
+[[nodiscard]] b8 MeshBaseHeaderComplete(const HeaderT& header)noexcept(
     noexcept(
         header.positionCount != 0u
         && header.normalCount != 0u
@@ -79,7 +79,7 @@ template<typename HeaderT>
         && header.meshletAttributeRefDeltaByteCount != 0u
         && header.meshletLocalVertexRefCount != 0u
         && header.meshletPrimitiveIndexCount != 0u
-    ), bool>
+    ), b8>
 ){
     return
         header.positionCount != 0u
@@ -105,7 +105,7 @@ template<
     typename Uv0Container,
     typename ColorContainer
 >
-[[nodiscard]] bool ReadMeshAttributeStreams(
+[[nodiscard]] b8 ReadMeshAttributeStreams(
     const Span<const u8> binary,
     const HeaderT& header,
     const TStringView failureContext,
@@ -135,7 +135,7 @@ template<
     typename MeshletPrimitiveIndexContainer,
     typename SolidTriangleWordContainer
 >
-[[nodiscard]] bool ReadMeshletStreams(
+[[nodiscard]] b8 ReadMeshletStreams(
     const Span<const u8> binary,
     const HeaderT& header,
     const TStringView failureContext,
@@ -174,7 +174,7 @@ template<
 
 
 template<typename MeshT>
-[[nodiscard]] bool AddMeshBaseReserveBytes(usize& reserveBytes, const MeshT& mesh)noexcept(
+[[nodiscard]] b8 AddMeshBaseReserveBytes(usize& reserveBytes, const MeshT& mesh)noexcept(
     noexcept(
         AddBinaryVectorReserveBytes(reserveBytes, mesh.positionStream())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.normalStream())
@@ -236,7 +236,7 @@ void FillMeshBaseHeader(HeaderT& header, const MeshT& mesh)noexcept(
 }
 
 template<typename MeshT>
-[[nodiscard]] bool AppendMeshAttributeStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
+[[nodiscard]] b8 AppendMeshAttributeStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
     return
         Core::Assets::AppendVectorPayload(outBinary, mesh.positionStream(), failureContext, s_PositionsStreamLabel)
         && Core::Assets::AppendVectorPayload(outBinary, mesh.normalStream(), failureContext, s_NormalsStreamLabel)
@@ -247,7 +247,7 @@ template<typename MeshT>
 }
 
 template<typename MeshT>
-[[nodiscard]] bool AppendMeshletStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
+[[nodiscard]] b8 AppendMeshletStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
     return
         Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, s_MeshletsStreamLabel)
         && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, s_MeshletBoundsStreamLabel)

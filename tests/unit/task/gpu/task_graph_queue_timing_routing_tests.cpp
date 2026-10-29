@@ -37,7 +37,7 @@ using TaskGraphTestUtils::TestArena;
 
 
 TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
-    const auto runCase = [](const bool staticCompute){
+    const auto runCase = [](const b8 staticCompute){
         Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
         TestArena testArena;
@@ -251,7 +251,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
 }
 
 TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
-    const auto runCase = [](const bool allowCrossClassRouting, const bool allowCrossFamilyRouting, const bool requireGraphicsCapability){
+    const auto runCase = [](const b8 allowCrossClassRouting, const b8 allowCrossFamilyRouting, const b8 requireGraphicsCapability){
         Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
         TestArena testArena;

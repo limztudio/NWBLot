@@ -36,7 +36,7 @@ struct UploadBufferPayload{
 };
 
 struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadBufferPayload>{
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         const auto bytes = context.declarations.uploadBlobData(payload.source);
         NWB_ASSERT(payload.destination && bytes && !bytes->empty() && payload.finalState != ResourceStates::Unknown);
 
@@ -75,7 +75,7 @@ struct UploadTexturePayload{
 };
 
 struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadTexturePayload>{
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         const auto bytes = context.declarations.uploadBlobData(payload.source);
         NWB_ASSERT(payload.destination && bytes && payload.requiredBytes != 0u && bytes->size() >= payload.requiredBytes && payload.finalState != ResourceStates::Unknown);
 

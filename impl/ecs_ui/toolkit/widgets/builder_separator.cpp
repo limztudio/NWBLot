@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::separator(const AStringView stableKey, const SeparatorOptions& options){
+b8 Builder::separator(const AStringView stableKey, const SeparatorOptions& options){
     if(
         declarationBlocked() || !m_scope->m_panelActive || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
         || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || options.direction > SeparatorDirection::Vertical
@@ -32,7 +32,7 @@ bool Builder::separator(const AStringView stableKey, const SeparatorOptions& opt
         m_context.fail();
         return false;
     }
-    const bool horizontal = options.direction == SeparatorDirection::Horizontal;
+    const b8 horizontal = options.direction == SeparatorDirection::Horizontal;
     const f32 minimum = horizontal ? skinRegion->minimumHeight : skinRegion->minimumWidth;
     const f32 thickness = options.thickness > 0.0f ? options.thickness : VectorGetX(VectorMax(VectorSplatOne(), VectorReplicate(minimum)));
     Item item(m_arena);

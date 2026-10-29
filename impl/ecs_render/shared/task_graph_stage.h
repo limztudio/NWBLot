@@ -37,7 +37,7 @@ inline constexpr usize s_SharedComputeEmulationMaximumPhaseCount = s_SharedCompu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationDrawCount(const usize drawCount)noexcept{
+[[nodiscard]] inline constexpr b8 IsSupportedSharedComputeEmulationDrawCount(const usize drawCount)noexcept{
     return drawCount >= s_SharedComputeEmulationMinimumDrawCount && drawCount <= s_SharedComputeEmulationMaximumDrawCount;
 }
 
@@ -45,19 +45,19 @@ inline constexpr usize s_SharedComputeEmulationMaximumPhaseCount = s_SharedCompu
     return drawCount * s_SharedComputeEmulationPhasesPerDraw;
 }
 
-[[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationPhaseCount(const usize phaseCount)noexcept{
+[[nodiscard]] inline constexpr b8 IsSupportedSharedComputeEmulationPhaseCount(const usize phaseCount)noexcept{
     return phaseCount >= s_SharedComputeEmulationMinimumPhaseCount && phaseCount <= s_SharedComputeEmulationMaximumPhaseCount && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
 }
 
 // Immutable frame facts for graph declaration; queue assignment stays a compiler result.
 struct RendererFrameGraphFeatures{
-    bool frameLaggedAsyncLightingEnabled = false;
-    bool laggedLightingHistoryReady = false;
-    bool laggedLightingHistoryReadReady = false;
+    b8 frameLaggedAsyncLightingEnabled = false;
+    b8 laggedLightingHistoryReady = false;
+    b8 laggedLightingHistoryReadReady = false;
     // A prior history-copy tail still reads live targets; next writers must wait for it.
-    bool laggedLightingHistoryWriterWaitPending = false;
-    bool hasTransparentRenderers = false;
-    bool hardwareCaustics = false;
+    b8 laggedLightingHistoryWriterWaitPending = false;
+    b8 hasTransparentRenderers = false;
+    b8 hardwareCaustics = false;
 };
 
 
@@ -74,11 +74,11 @@ struct RendererFrameGraphFeatures{
 struct RendererTaskGraphTransparencyStage{
     Core::GpuTaskId firstTask;
     Core::GpuTaskId completionTask;
-    bool hasTransparentTasks = false;
+    b8 hasTransparentTasks = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return firstTask.valid() && completionTask.valid(); }
+    [[nodiscard]] b8 valid()const noexcept{ return firstTask.valid() && completionTask.valid(); }
 };
 
 

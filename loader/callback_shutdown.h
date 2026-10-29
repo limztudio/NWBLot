@@ -62,7 +62,7 @@ public:
 private:
     IProjectEntryCallbacks& m_callbacks;
     Core::CpuTaskScope& m_tasks;
-    bool m_active = false;
+    b8 m_active = false;
 };
 
 

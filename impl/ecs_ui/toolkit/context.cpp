@@ -26,7 +26,7 @@ usize Context::StateClaimHash::operator()(const StateClaim& claim)const noexcept
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Context::ContainsRoot(const WidgetRoot* roots, const usize count, const WidgetRoot& root)noexcept{
+b8 Context::ContainsRoot(const WidgetRoot* roots, const usize count, const WidgetRoot& root)noexcept{
     for(usize index = 0u; index < count; ++index){
         if(roots[index] == root)
             return true;
@@ -51,7 +51,7 @@ Context::Context(Core::Alloc::GlobalArena& arena)
     m_commitPopups.reserve(s_InputMaxPopups);
 }
 
-bool Context::beginFrame(const u64 generation)noexcept{
+b8 Context::beginFrame(const u64 generation)noexcept{
     if(generation <= m_lastFrameGeneration || m_frameGeneration != 0u || ready())
         return false;
     m_lastFrameGeneration = generation;
@@ -68,7 +68,7 @@ bool Context::beginFrame(const u64 generation)noexcept{
     return true;
 }
 
-bool Context::beginRoot(const WidgetRoot& root){
+b8 Context::beginRoot(const WidgetRoot& root){
     if(m_failed || m_frameGeneration == 0u || m_rootActive || root.generation == 0u){
         fail();
         return false;
@@ -85,8 +85,8 @@ bool Context::beginRoot(const WidgetRoot& root){
     return true;
 }
 
-bool Context::endRoot()noexcept{
-    const bool valid = m_rootActive && m_scopes.size() == 1u && m_popupDepth == 0u && !m_currentPopup.valid();
+b8 Context::endRoot()noexcept{
+    const b8 valid = m_rootActive && m_scopes.size() == 1u && m_popupDepth == 0u && !m_currentPopup.valid();
     m_rootActive = false;
     m_scopes.clear();
     if(!valid)
@@ -94,7 +94,7 @@ bool Context::endRoot()noexcept{
     return valid && !m_failed;
 }
 
-bool Context::pushScope(const AStringView stableKey){
+b8 Context::pushScope(const AStringView stableKey){
     if(m_failed || !m_rootActive || m_scopes.size() >= s_ContextMaxScopeDepth){
         fail();
         return false;
@@ -108,7 +108,7 @@ bool Context::pushScope(const AStringView stableKey){
     return true;
 }
 
-bool Context::popScope()noexcept{
+b8 Context::popScope()noexcept{
     if(!m_rootActive || m_scopes.size() <= 1u){
         fail();
         return false;
@@ -141,7 +141,7 @@ Expected<NotNull<WidgetState*>> Context::declarePart(const WidgetState& owner, c
     return declareId(*id, kind);
 }
 
-bool Context::claimState(const WidgetState& owner, const u64 instanceGeneration){
+b8 Context::claimState(const WidgetState& owner, const u64 instanceGeneration){
     if(m_failed || !currentDeclaration(owner) || instanceGeneration == 0u || m_stateClaimCount == s_InputMaxTargets){
         fail();
         return false;
@@ -173,7 +173,7 @@ bool Context::claimState(const WidgetState& owner, const u64 instanceGeneration)
     return true;
 }
 
-bool Context::addTarget(const WidgetState& state, HitTarget target){
+b8 Context::addTarget(const WidgetState& state, HitTarget target){
     if(m_failed || !currentDeclaration(state) || m_targets.size() >= s_InputMaxTargets){
         fail();
         return false;
@@ -187,7 +187,7 @@ bool Context::addTarget(const WidgetState& state, HitTarget target){
     return true;
 }
 
-bool Context::takeActivation(const WidgetState& state, const bool enabled){
+b8 Context::takeActivation(const WidgetState& state, const b8 enabled){
     if(m_failed || !currentDeclaration(state))
         return false;
     if(!enabled){
@@ -200,7 +200,7 @@ bool Context::takeActivation(const WidgetState& state, const bool enabled){
     return !m_failed && m_input.consumeActivation(state.id);
 }
 
-Expected<PointerGesture> Context::takePointerGesture(const WidgetState& state, const bool enabled){
+Expected<PointerGesture> Context::takePointerGesture(const WidgetState& state, const b8 enabled){
     if(m_failed || !currentDeclaration(state))
         return MakeUnexpected(Failure{});
     if(!enabled){
@@ -213,7 +213,7 @@ Expected<PointerGesture> Context::takePointerGesture(const WidgetState& state, c
     return m_input.consumePointerGesture(state.id, state.declarationGeneration);
 }
 
-bool Context::finishFrame(){
+b8 Context::finishFrame(){
     if(m_failed || m_frameGeneration == 0u || m_rootActive || m_popupDepth != 0u || m_currentPopup.valid()){
         fail();
         return false;
@@ -224,7 +224,7 @@ bool Context::finishFrame(){
     return true;
 }
 
-bool Context::commitFrame(const u64 generation){
+b8 Context::commitFrame(const u64 generation){
     if(generation == 0u || generation != m_readyGeneration)
         return false;
     m_commitTargets.clear();
@@ -297,7 +297,7 @@ Expected<NotNull<WidgetState*>> Context::declareId(const WidgetId id, const Widg
     return state;
 }
 
-bool Context::currentDeclaration(const WidgetState& state)const noexcept{
+b8 Context::currentDeclaration(const WidgetState& state)const noexcept{
     if(!m_rootActive || !(state.root == m_root) || state.lastSeenFrame != m_frameGeneration)
         return false;
     const WidgetState* current = m_states.find(state.id);

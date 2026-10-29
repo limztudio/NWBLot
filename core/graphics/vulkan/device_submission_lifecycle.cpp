@@ -31,7 +31,7 @@ Device::SubmissionOperationLease::~SubmissionOperationLease()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Device::beginSubmissionOperation()noexcept{
+b8 Device::beginSubmissionOperation()noexcept{
     u64 state = m_submissionOperationState.load(MemoryOrder::acquire);
     for(;;){
         if((state & s_SubmissionDrainBit) != 0u || requiresRecreation() || (state & s_SubmissionOperationCountMask) == s_SubmissionOperationCountMask)
@@ -54,7 +54,7 @@ void Device::endSubmissionOperation()noexcept{
     }
 }
 
-bool Device::beginLifecycleDrain()noexcept{
+b8 Device::beginLifecycleDrain()noexcept{
     // Submission hooks run while leased; re-entrant teardown must fail before closing the gate.
     if(submissionOperationActiveOnCurrentThread())
         return false;
@@ -77,14 +77,14 @@ bool Device::beginLifecycleDrain()noexcept{
 }
 
 void Device::endLifecycleDrain()noexcept{
-    const bool lifecycleDestructionPrepared = m_lifecycleDestructionPrepared.load(MemoryOrder::acquire);
+    const b8 lifecycleDestructionPrepared = m_lifecycleDestructionPrepared.load(MemoryOrder::acquire);
     const u64 submissionOperationState = m_submissionOperationState.load(MemoryOrder::acquire);
     NWB_FATAL_ASSERT(!lifecycleDestructionPrepared);
     NWB_FATAL_ASSERT(submissionOperationState == s_SubmissionDrainBit);
     m_submissionOperationState.store(0u, MemoryOrder::release);
 }
 
-bool Device::sealLifecycleDrainForDestruction()noexcept{
+b8 Device::sealLifecycleDrainForDestruction()noexcept{
     if(m_submissionOperationState.load(MemoryOrder::acquire) != s_SubmissionDrainBit)
         return false;
     m_lifecycleDestructionPrepared.store(true, MemoryOrder::release);

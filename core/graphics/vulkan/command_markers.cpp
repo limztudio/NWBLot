@@ -41,7 +41,7 @@ public:
 
 private:
     GpuCrashMarkerTracker& m_tracker;
-    bool m_armed = false;
+    b8 m_armed = false;
 };
 
 
@@ -92,10 +92,10 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
 
     ++m_nextMarkerSerial;
     const CommandMarkerRecordingToken token{ .recordingLeaseSerial = m_recordingLeaseSerial, .nativeRecordingID = m_nativeRecordingID, .markerSerial = m_nextMarkerSerial, };
-    const bool useDebugUtils = m_context.extensions.extDebugUtils;
-    const bool useNvCheckpoint = m_device.isGpuCrashDiagnosticsEnabled();
-    const bool useAmdBreadcrumb = m_device.isAmdBreadcrumbEnabled();
-    const bool useGpuMarkers = useNvCheckpoint || useAmdBreadcrumb;
+    const b8 useDebugUtils = m_context.extensions.extDebugUtils;
+    const b8 useNvCheckpoint = m_device.isGpuCrashDiagnosticsEnabled();
+    const b8 useAmdBreadcrumb = m_device.isAmdBreadcrumbEnabled();
+    const b8 useGpuMarkers = useNvCheckpoint || useAmdBreadcrumb;
     if(!useDebugUtils && !useGpuMarkers){
         m_markerStack.push_back(MarkerStackEntry{ .token = token });
         return token;
@@ -133,7 +133,7 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
     return token;
 }
 
-bool CommandList::endMarkerLease(const CommandMarkerRecordingToken& token){
+b8 CommandList::endMarkerLease(const CommandMarkerRecordingToken& token){
     if(!token.valid())
         return true;
     if(!publicCommandStateAccessible())
@@ -160,7 +160,7 @@ void CommandList::abandonMarkerLease(const CommandMarkerRecordingToken& token)no
     closeTopMarkerWithoutCallbacks();
 }
 
-bool CommandList::markerLeaseMatchesTop(const CommandMarkerRecordingToken& token)const noexcept{
+b8 CommandList::markerLeaseMatchesTop(const CommandMarkerRecordingToken& token)const noexcept{
     if(m_markerStack.empty())
         return false;
 

@@ -32,14 +32,14 @@ public:
         NotNull<RendererFramePipeline*> renderer;
         NotNull<Core::GpuPersistentResourceStateCache::Candidate*> candidate;
         Span<const Core::BufferHandle> buffers{};
-        bool finalStateReady = false;
-        bool acceptedStateReady = false;
+        b8 finalStateReady = false;
+        b8 acceptedStateReady = false;
     };
 
 
 public:
-    [[nodiscard]] static bool PrepareReadbackFinalState(void* rawContext, const Core::CommandListResourceStateHandoff* finalState);
-    [[nodiscard]] static bool AcceptReadbackFinalState(void* rawContext, const Core::QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] static b8 PrepareReadbackFinalState(void* rawContext, const Core::CommandListResourceStateHandoff* finalState);
+    [[nodiscard]] static b8 AcceptReadbackFinalState(void* rawContext, const Core::QueueSubmissionToken& token)noexcept;
 
 
 public:

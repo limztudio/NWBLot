@@ -45,7 +45,7 @@ public:
 
 
 protected:
-    bool loadBinaryForStage(Span<const u8> binary, Core::ShaderType::Enum shaderType);
+    b8 loadBinaryForStage(Span<const u8> binary, Core::ShaderType::Enum shaderType);
 
 
 private:
@@ -78,7 +78,7 @@ public:
 
 
 public:
-    bool loadBinary(const Span<const u8> binary){
+    b8 loadBinary(const Span<const u8> binary){
         static_assert(Core::ShaderType::IsValid(ShaderT::s_Stage));
         return loadBinaryForStage(binary, ShaderT::s_Stage);
     }
@@ -274,7 +274,7 @@ namespace ShaderAssetSerialization{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool Serialize(const IShader& shader, Core::Assets::AssetBytes& outBinary);
+[[nodiscard]] b8 Serialize(const IShader& shader, Core::Assets::AssetBytes& outBinary);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -300,7 +300,7 @@ public:
 
 #if defined(NWB_COOK)
 public:
-    virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
+    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
         if(!this->checkSerializeAssetType(asset, NWB_TEXT("ShaderAssetCodec::serialize")))
             return false;
 

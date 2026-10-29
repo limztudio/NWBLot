@@ -29,19 +29,19 @@ namespace __hidden_fbx_command_line{
 
 
 struct OptionPresence{
-    bool output = false;
-    bool assetType = false;
-    bool mesh = false;
-    bool normalMode = false;
-    bool defaultColor = false;
-    bool scale = false;
-    bool preserveSpace = false;
-    bool includeHidden = false;
-    bool local = false;
-    bool ignoreColors = false;
-    bool flipWinding = false;
-    bool separateAssets = false;
-    bool refreshNwb = false;
+    b8 output = false;
+    b8 assetType = false;
+    b8 mesh = false;
+    b8 normalMode = false;
+    b8 defaultColor = false;
+    b8 scale = false;
+    b8 preserveSpace = false;
+    b8 includeHidden = false;
+    b8 local = false;
+    b8 ignoreColors = false;
+    b8 flipWinding = false;
+    b8 separateAssets = false;
+    b8 refreshNwb = false;
 };
 
 inline constexpr int s_FbxToNwbExitSuccess = 0;
@@ -93,7 +93,7 @@ int ExitValidation(const CLI::App& app, const AStringView option, const AStringV
     return ExitParseError(app, CLI::ValidationError(AInteropString(option.data(), option.size()), AInteropString(message.data(), message.size())), scratchArena);
 }
 
-Expected<AString> PromptString(const AStringView label, const AStringView defaultValue, bool& prompted){
+Expected<AString> PromptString(const AStringView label, const AStringView defaultValue, b8& prompted){
     prompted = true;
     NWB_COUT << label;
     if(!defaultValue.empty())
@@ -110,7 +110,7 @@ Expected<AString> PromptString(const AStringView label, const AStringView defaul
     return line;
 }
 
-bool PromptBool(const AStringView label, const bool defaultValue, Core::Alloc::ScratchArena& scratchArena, bool& prompted){
+b8 PromptBool(const AStringView label, const b8 defaultValue, Core::Alloc::ScratchArena& scratchArena, b8& prompted){
     prompted = true;
     ScratchString line(scratchArena);
     for(;;){
@@ -133,7 +133,7 @@ bool PromptBool(const AStringView label, const bool defaultValue, Core::Alloc::S
     }
 }
 
-f64 PromptDouble(const AStringView label, const f64 defaultValue, Core::Alloc::ScratchArena& scratchArena, bool& prompted){
+f64 PromptDouble(const AStringView label, const f64 defaultValue, Core::Alloc::ScratchArena& scratchArena, b8& prompted){
     prompted = true;
     ScratchString line(scratchArena);
     for(;;){
@@ -157,7 +157,7 @@ f64 PromptDouble(const AStringView label, const f64 defaultValue, Core::Alloc::S
     }
 }
 
-bool ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena, bool& prompted){
+b8 ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena, b8& prompted){
     const auto exists = FileExists(outputPath);
     if(!exists){
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), ConvertString(exists.error().message()));
@@ -175,7 +175,7 @@ bool ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions&
     return PromptBool("Output already exists. Overwrite it?", false, scratchArena, prompted);
 }
 
-bool ConfigurePromptsBeforeLoad(const OptionPresence& presence, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, bool& prompted){
+b8 ConfigurePromptsBeforeLoad(const OptionPresence& presence, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, b8& prompted){
     if(options.inputPath.empty()){
         if(options.acceptDefaults){
             NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
@@ -192,14 +192,14 @@ bool ConfigurePromptsBeforeLoad(const OptionPresence& presence, Core::Alloc::Scr
     options.inputPath = UnquoteMatchingAsciiQuotes(Move(options.inputPath));
 
     if(!presence.preserveSpace && !options.acceptDefaults && !options.listMeshes){
-        const bool convertSpace = PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, scratchArena, prompted);
+        const b8 convertSpace = PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, scratchArena, prompted);
         options.preserveSpace = !convertSpace;
     }
 
     return true;
 }
 
-bool ConfigurePromptsAfterLoad(const OptionPresence& presence, const Span<const MeshInstance> visibleInstances, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, bool& prompted){
+b8 ConfigurePromptsAfterLoad(const OptionPresence& presence, const Span<const MeshInstance> visibleInstances, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, b8& prompted){
     if(!presence.assetType && !options.acceptDefaults){
         const ScratchString choices = OutputAssetTypeOptionsText(scratchArena);
         ScratchString prompt("Asset type (", scratchArena);
@@ -265,9 +265,9 @@ bool ConfigurePromptsAfterLoad(const OptionPresence& presence, const Span<const 
     return true;
 }
 
-Expected<bool> SelectedMeshesUseSkinning(const Span<const MeshInstance> instances, const Span<const usize> selection){
-    bool sawStatic = false;
-    bool sawSkinned = false;
+Expected<b8> SelectedMeshesUseSkinning(const Span<const MeshInstance> instances, const Span<const usize> selection){
+    b8 sawStatic = false;
+    b8 sawSkinned = false;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
             NWB_LOGGER_WARNING(NWB_TEXT("Selected mesh index is out of range"));
@@ -275,7 +275,7 @@ Expected<bool> SelectedMeshesUseSkinning(const Span<const MeshInstance> instance
         }
 
         const MeshInstance& instance = instances[instanceIndex];
-        const bool hasSkin = instance.mesh && instance.mesh->skin_deformers.count != 0u;
+        const b8 hasSkin = instance.mesh && instance.mesh->skin_deformers.count != 0u;
         sawSkinned = sawSkinned || hasSkin;
         sawStatic = sawStatic || !hasSkin;
     }
@@ -288,15 +288,15 @@ Expected<bool> SelectedMeshesUseSkinning(const Span<const MeshInstance> instance
     return sawSkinned;
 }
 
-bool AssetTypeRequiresSkinning(const OutputAssetType::Enum assetType)noexcept{
+b8 AssetTypeRequiresSkinning(const OutputAssetType::Enum assetType)noexcept{
     return assetType == OutputAssetType::Skeleton || assetType == OutputAssetType::Skin;
 }
 
-bool AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType)noexcept{
+b8 AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType)noexcept{
     return assetType == OutputAssetType::Bunch || assetType == OutputAssetType::Model || AssetTypeRequiresSkinning(assetType);
 }
 
-bool IsNwbRefreshMode(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena){
+b8 IsNwbRefreshMode(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena){
     if(options.refreshNwb)
         return true;
     const ScratchPath inputPath(scratchArena, options.inputPath);
@@ -319,7 +319,7 @@ void WriteCanonicalizeReport(ScratchStringStream& report, const SourceMeshCanoni
     WriteRefreshCount(report, s_IndicesStreamLabel, canonicalizeReport.before.indices, canonicalizeReport.after.indices);
 }
 
-int RunNwbRefresh(const CLI::App& app, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, bool& prompted){
+int RunNwbRefresh(const CLI::App& app, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, b8& prompted){
     if(options.listMeshes)
         return ExitValidation(app, s_FbxToNwbListMeshesFlag, "Only valid for FBX input.", scratchArena);
 
@@ -363,7 +363,7 @@ int RunNwbRefresh(const CLI::App& app, const OptionPresence& presence, Core::Cpu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& prompted){
+int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, b8& prompted){
     ImportOptions options;
     __hidden_fbx_command_line::OptionPresence presence;
     Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_UtilityScratch);
@@ -379,8 +379,8 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
     AInteropString normalMode(options.normalMode.data(), options.normalMode.size());
     AInteropString defaultColorText(options.defaultColorText.data(), options.defaultColorText.size());
 
-    bool local = false;
-    bool ignoreColors = false;
+    b8 local = false;
+    b8 ignoreColors = false;
 
     app.add_option(__hidden_fbx_command_line::s_FbxToNwbInputOption.data(), inputPath, "Input FBX file path");
     CLI::Option& outputOption = *app.add_option(__hidden_fbx_command_line::s_FbxToNwbOutputOption.data(), outputPathText, "Output NWB asset metadata path");
@@ -495,8 +495,8 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         const OutputAssetType::Enum assetTypeValue = *assetTypeResult;
         if(options.separateAssets && assetTypeValue != OutputAssetType::Bunch)
             return __hidden_fbx_command_line::ExitValidation(app, __hidden_fbx_command_line::s_FbxToNwbSeparateAssetsFlag, "Only valid with asset type 'bunch'.", scratchArena);
-        bool usesSkinning = false;
-        bool wantsSkinning = false;
+        b8 usesSkinning = false;
+        b8 wantsSkinning = false;
         if(__hidden_fbx_command_line::AssetTypeCanUseSkinning(assetTypeValue)){
             const auto selectedUsesSkinning = __hidden_fbx_command_line::SelectedMeshesUseSkinning(instances, selection);
             if(!selectedUsesSkinning)
@@ -519,8 +519,8 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         const UtilityVector<ufbx_node*>& skeletonJoints = built->skeletonJoints;
         const UtilityVector<JointMatrix>& skeletonBindPoseMatrices = built->skeletonBindPoseMatrices;
         const UtilityVector<JointMatrix>& inverseBindMatrices = built->inverseBindMatrices;
-        const bool sawVertexColors = built->sawVertexColors;
-        const bool sawVertexUvs = built->sawVertexUvs;
+        const b8 sawVertexColors = built->sawVertexColors;
+        const b8 sawVertexUvs = built->sawVertexUvs;
         const SourceTangentReport& tangentReport = built->tangentReport;
 
         if(!WriteNwbAsset(outputPath, mesh, options.assetType, options.virtualRoot, options.separateAssets, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices, scratchArena))

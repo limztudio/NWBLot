@@ -37,7 +37,7 @@ public:
         return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
     }
 
-    [[nodiscard]] bool deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
+    [[nodiscard]] b8 deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
         return completeNativeRequest(token, status, text);
     }
 
@@ -145,7 +145,7 @@ TEST(UiClipboardPublications, AnotherThreadCannotRequestDrainOrCancelOwnedPublic
     ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
     UiClipboardPublicationStatus::Enum requested = UiClipboardPublicationStatus::Idle;
     UiClipboardPublicationStatus::Enum drained = UiClipboardPublicationStatus::Idle;
-    bool cancelled = true;
+    b8 cancelled = true;
     Thread other([&]()noexcept{
         requested = publications.request("other");
         drained = publications.drain().status;

@@ -32,7 +32,7 @@ namespace CsgIntervalDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool CreateCsgIntervalBindingLayout(Core::GraphicsArena& arena, Core::Device& device, Core::ShaderType::Mask visibility, Core::BindingLayoutHandle& layout){
+[[nodiscard]] static b8 CreateCsgIntervalBindingLayout(Core::GraphicsArena& arena, Core::Device& device, Core::ShaderType::Mask visibility, Core::BindingLayoutHandle& layout){
     if(layout)
         return true;
 
@@ -46,10 +46,10 @@ namespace CsgIntervalDetail{
         layout = Move(*layoutResult);
     else
         layout.reset();
-    return static_cast<bool>(layoutResult);
+    return static_cast<b8>(layoutResult);
 }
 
-[[nodiscard]] static bool CreateIntervalPeelPipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& intervalBindingLayout, Core::ComputePipelineHandle& pipeline){
+[[nodiscard]] static b8 CreateIntervalPeelPipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& intervalBindingLayout, Core::ComputePipelineHandle& pipeline){
     if(pipeline)
         return true;
 
@@ -64,10 +64,10 @@ namespace CsgIntervalDetail{
         pipeline = Move(*pipelineResult);
     else
         pipeline.reset();
-    return static_cast<bool>(pipelineResult);
+    return static_cast<b8>(pipelineResult);
 }
 
-[[nodiscard]] static bool CreateReceiverSpanBuildPipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& receiverSpanBuildBindingLayout, Core::ComputePipelineHandle& pipeline){
+[[nodiscard]] static b8 CreateReceiverSpanBuildPipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& receiverSpanBuildBindingLayout, Core::ComputePipelineHandle& pipeline){
     if(pipeline)
         return true;
 
@@ -82,10 +82,10 @@ namespace CsgIntervalDetail{
         pipeline = Move(*pipelineResult);
     else
         pipeline.reset();
-    return static_cast<bool>(pipelineResult);
+    return static_cast<b8>(pipelineResult);
 }
 
-[[nodiscard]] static bool CreateIntervalCombinePipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& intervalCombineBindingLayout, Core::ComputePipelineHandle& pipeline){
+[[nodiscard]] static b8 CreateIntervalCombinePipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& intervalCombineBindingLayout, Core::ComputePipelineHandle& pipeline){
     if(pipeline)
         return true;
 
@@ -100,10 +100,10 @@ namespace CsgIntervalDetail{
         pipeline = Move(*pipelineResult);
     else
         pipeline.reset();
-    return static_cast<bool>(pipelineResult);
+    return static_cast<b8>(pipelineResult);
 }
 
-[[nodiscard]] static bool CreateIntervalCapFillPipeline(
+[[nodiscard]] static b8 CreateIntervalCapFillPipeline(
     Core::Device& device,
     const Core::ShaderHandle& vertexShader,
     const Core::ShaderHandle& pixelShader,
@@ -125,7 +125,7 @@ namespace CsgIntervalDetail{
         pipeline = Move(*pipelineResult);
     else
         pipeline.reset();
-    return static_cast<bool>(pipelineResult);
+    return static_cast<b8>(pipelineResult);
 }
 
 
@@ -138,7 +138,7 @@ namespace CsgIntervalDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targets, const bool capFillRequired){
+b8 RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targets, const b8 capFillRequired){
     auto& device = m_graphics.getDevice();
     if(!createCsgClipResources())
         return false;
@@ -247,7 +247,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     return true;
 }
 
-bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets){
+b8 RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets){
     if(!m_meshSystem.meshViewBufferSnapshot().valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires a mesh view buffer"));
         return false;
@@ -272,7 +272,7 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
     return true;
 }
 
-bool RendererCsgSystem::prepareRefractionIntervalCapResources(const DeferredFrameTargets& targets){
+b8 RendererCsgSystem::prepareRefractionIntervalCapResources(const DeferredFrameTargets& targets){
     if(!targets.avboit.refractionFramebuffer || !m_csgState.m_clipBindingLayout)
         return false;
     if(!m_shaderSystem.loadDeferredCompositeVertexShader())
@@ -295,7 +295,7 @@ bool RendererCsgSystem::prepareRefractionIntervalCapResources(const DeferredFram
     return true;
 }
 
-bool RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
+b8 RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
     if(m_csgState.m_intervalSampleStateBuffer)
         return true;
 

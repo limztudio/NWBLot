@@ -100,8 +100,8 @@ TEST(GpuTaskGraph, RejectsReentrantCompilerReadDuringDeclarationMutation){
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
-    bool compileAttempted = false;
-    bool compileSucceeded = true;
+    b8 compileAttempted = false;
+    b8 compileSucceeded = true;
 
     ReentrantCompileDuringDeclarationTask::Payload payload;
     payload.graph = &graph;

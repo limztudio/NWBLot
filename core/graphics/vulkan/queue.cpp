@@ -218,7 +218,7 @@ void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
     UpdateCommandBufferHighWater(m_highWaterCommandBufferCount, currentCount);
 }
 
-bool Queue::validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const{
+b8 Queue::validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const{
     if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot submit a command buffer through a foreign queue or context"));
         return false;
@@ -361,7 +361,7 @@ void Queue::collectCompletedCommandBuffers(){
 
 
 Expected<TrackedCommandBufferPtr, VkResult> Queue::createCommandBuffer(const VkCommandPool commandPool, Futex* const sharedCommandPoolMutex, const u64 recordingWorkerDomain, const u32 recordingWorkerIndex){
-    const bool ownsCommandPool = recordingWorkerIndex == 0u;
+    const b8 ownsCommandPool = recordingWorkerIndex == 0u;
     if(!ownsCommandPool && commandPool == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot create a worker command buffer without a command pool for physical queue {} worker {}"), m_physicalQueue.index, recordingWorkerIndex);
         return MakeUnexpected(VK_ERROR_INITIALIZATION_FAILED);

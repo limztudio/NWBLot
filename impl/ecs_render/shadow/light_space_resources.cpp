@@ -61,11 +61,11 @@ static constexpr usize s_LightSpaceDescriptorCount = 5u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
+b8 RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     auto& state = m_lightSpaceShadow;
     auto& snapshot = state.m_snapshot;
-    const bool csg = state.m_csg.snapshot.hasCsg;
-    const bool hardwareCsg = csg && m_shadowVisibilityHardwareSupported;
+    const b8 csg = state.m_csg.snapshot.hasCsg;
+    const b8 hardwareCsg = csg && m_shadowVisibilityHardwareSupported;
     if(state.m_pipelineFailed)
         return false;
     if(
@@ -190,7 +190,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan& plan){
+b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan& plan){
     auto& snapshot = m_lightSpaceShadow.m_snapshot;
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();

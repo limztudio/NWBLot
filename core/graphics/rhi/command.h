@@ -42,15 +42,15 @@ struct GpuPhysicalQueueId{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return index != Limit<u16>::s_Max && deviceGeneration != 0u;
     }
 };
-inline constexpr bool operator==(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
+inline constexpr b8 operator==(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.deviceGeneration == rhs.deviceGeneration;
 }
 
-inline constexpr bool operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
+inline constexpr b8 operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -63,23 +63,23 @@ struct QueueSubmissionToken{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount) && value != 0u;
     }
 
-    [[nodiscard]] constexpr bool hasPhysicalQueueIdentity()const noexcept{
+    [[nodiscard]] constexpr b8 hasPhysicalQueueIdentity()const noexcept{
         return physicalQueueIndex != Limit<u16>::s_Max && deviceGeneration != 0u;
     }
 
-    [[nodiscard]] constexpr bool matchesPhysicalQueue(const u16 index, const u16 generation)const noexcept{
+    [[nodiscard]] constexpr b8 matchesPhysicalQueue(const u16 index, const u16 generation)const noexcept{
         return hasPhysicalQueueIdentity() && physicalQueueIndex == index && deviceGeneration == generation;
     }
 };
 
-[[nodiscard]] inline constexpr bool operator==(const QueueSubmissionToken& lhs, const QueueSubmissionToken& rhs)noexcept{
+[[nodiscard]] inline constexpr b8 operator==(const QueueSubmissionToken& lhs, const QueueSubmissionToken& rhs)noexcept{
     return lhs.queue == rhs.queue && lhs.value == rhs.value && lhs.physicalQueueIndex == rhs.physicalQueueIndex && lhs.deviceGeneration == rhs.deviceGeneration;
 }
-[[nodiscard]] inline constexpr bool operator!=(const QueueSubmissionToken& lhs, const QueueSubmissionToken& rhs)noexcept{
+[[nodiscard]] inline constexpr b8 operator!=(const QueueSubmissionToken& lhs, const QueueSubmissionToken& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -91,7 +91,7 @@ struct GpuQueueTimelineSnapshot{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return queue.valid() && completedValue <= submittedValue;
     }
 
@@ -120,7 +120,7 @@ struct GpuPhysicalQueueInfo{
     GpuPhysicalQueueId id;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
-    bool dedicated = false;
+    b8 dedicated = false;
 };
 
 // Borrowed immutable topology view; its producer owns the storage. A compiled-graph view becomes invalid at reset/recompile.
@@ -147,7 +147,7 @@ struct GpuCommandArenaStatistics{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
+    [[nodiscard]] b8 valid()const noexcept{ return queue.valid(); }
 };
 
 // Snapshot for one recording worker on one physical queue.
@@ -170,7 +170,7 @@ struct GpuCommandArenaWorkerStatistics{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
+    [[nodiscard]] b8 valid()const noexcept{ return queue.valid(); }
 };
 
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
@@ -178,8 +178,8 @@ typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
 // One begin/end cycle. Query, queue, generation, and reset authorization stop a reused buffer from closing another cycle.
 struct TimerQueryRecordingEndpoints{
-    bool recordsBegin = false;
-    bool recordsEnd = false;
+    b8 recordsBegin = false;
+    b8 recordsEnd = false;
 };
 
 struct TimerQueryRecordingToken{
@@ -191,7 +191,7 @@ struct TimerQueryRecordingToken{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return query != nullptr && physicalQueue.valid() && queryIncarnation != 0u && generation != 0u;
     }
 };
@@ -204,7 +204,7 @@ struct CommandMarkerRecordingToken{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return recordingLeaseSerial != 0u && nativeRecordingID != 0u && markerSerial != 0u;
     }
 };
@@ -218,11 +218,11 @@ struct TimerQueryResult{
     f64 secondsPerTick = 0.0;
     GpuPhysicalQueueId physicalQueue;
     u32 timestampValidBits = 0u;
-    bool comparableAcrossSubmissions = false;
+    b8 comparableAcrossSubmissions = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return timestampValidBits > 0u && timestampValidBits <= s_FullWidthBits && secondsPerTick > 0.0;
     }
 
@@ -248,7 +248,7 @@ public:
         return VectorDoubleGetX(VectorDoubleMultiply(ticks, VectorDoubleReplicate(secondsPerTick)));
     }
 
-    [[nodiscard]] bool hasComparableRange()const noexcept{
+    [[nodiscard]] b8 hasComparableRange()const noexcept{
         return valid() && comparableAcrossSubmissions && timestampValidBits == s_FullWidthBits && physicalQueue.valid() && beginTicks <= endTicks;
     }
 };
@@ -313,42 +313,42 @@ public:
         m_valid = false;
     }
 
-    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
 
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
     // Snapshots keep raw backend pointers. Keep the producer Device identity so stale snapshots reject after recreation.
-    [[nodiscard]] bool validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
+    [[nodiscard]] b8 validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
         return m_valid && deviceGeneration != 0u && m_deviceGeneration == deviceGeneration;
     }
 
     // Fan-in merge of branch-final states over a normalized base (branches opened from base; base < branches < consumer).
     // Final states only: callers keep cross-branch hazards disjoint.
     // False on invalid/incompatible; `this` != inputs.
-    [[nodiscard]] bool buildFanIn(const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, usize branchCount, Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 buildFanIn(const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, usize branchCount, Alloc::ScratchArena& scratchArena);
 
     // Subset handoff of selected resources (cross-queue imports take only what their queue may access).
     // Nulls ignored, `source` may alias `this`; failure-atomic.
-    [[nodiscard]] bool buildResourceSubset(const CommandListResourceStateHandoff& source, Texture* const* textures, usize textureCount, Buffer* const* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 buildResourceSubset(const CommandListResourceStateHandoff& source, Texture* const* textures, usize textureCount, Buffer* const* buffers, usize bufferCount, Alloc::ScratchArena& scratchArena);
     // Reuses one completed selection across multiple filtered snapshots without retaining its scratch storage.
-    [[nodiscard]] bool buildResourceSubset(const CommandListResourceStateHandoff& source, const CommandListResourceSelection& selection);
-    [[nodiscard]] bool buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* texture, Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool buildTextureRangeSubset(const CommandListResourceStateHandoff& source, Texture* texture, TextureSubresourceSet subresources);
+    [[nodiscard]] b8 buildResourceSubset(const CommandListResourceStateHandoff& source, const CommandListResourceSelection& selection);
+    [[nodiscard]] b8 buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* texture, Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 buildTextureRangeSubset(const CommandListResourceStateHandoff& source, Texture* texture, TextureSubresourceSet subresources);
     // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges.
-    [[nodiscard]] bool buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
+    [[nodiscard]] b8 buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
     // Imported exclusive-owner texture handoffs need one concrete state per selected subresource, with source owner and release target checked.
-    [[nodiscard]] bool coversTextureRangeWithOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue)const noexcept;
+    [[nodiscard]] b8 coversTextureRangeWithOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue)const noexcept;
     // Buffer ownership must cover every byte in the requested range; unrelated intervals may have different owners.
-    [[nodiscard]] bool coversBufferWithOwnership(Buffer* buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const noexcept;
+    [[nodiscard]] b8 coversBufferWithOwnership(Buffer* buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const noexcept;
     // Copies a valid state snapshot without exposing backend tracker storage.
     // Packet recording retains graph-owned producer seeds while individual command-list consumers request their own final handoff.
-    [[nodiscard]] bool copyFrom(const CommandListResourceStateHandoff& source);
+    [[nodiscard]] b8 copyFrom(const CommandListResourceStateHandoff& source);
     // Compares immutable snapshot contents rather than the address of a producer-owned snapshot.
     // This is suitable for declaration deduplication across producer-storage retirement and same-address allocator reuse.
-    [[nodiscard]] bool equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept;
+    [[nodiscard]] b8 equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept;
     // Swaps snapshot storage with no alloc. Both snapshots must share one arena.
-    [[nodiscard]] bool exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
-    [[nodiscard]] bool hasPendingBufferReleases()const noexcept;
-    [[nodiscard]] bool empty()const noexcept;
+    [[nodiscard]] b8 exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
+    [[nodiscard]] b8 hasPendingBufferReleases()const noexcept;
+    [[nodiscard]] b8 empty()const noexcept;
 
 
 private:
@@ -357,7 +357,7 @@ private:
     GraphicsVector<PermanentTextureState> m_permanentTextureStates;
     GraphicsVector<BufferState> m_permanentBufferStates;
     u16 m_deviceGeneration = 0u;
-    bool m_valid = false;
+    b8 m_valid = false;
 };
 
 
@@ -408,11 +408,11 @@ public:
 
     constexpr VertexBufferBinding& setOffset(u64 value)noexcept{ offset = value; return *this; }
 };
-inline bool operator==(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{
+inline b8 operator==(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{
     return lhs.buffer == rhs.buffer && lhs.offset == rhs.offset && lhs.slot == rhs.slot;
 }
 
-inline bool operator!=(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
 
 struct IndexBufferBinding{
     Buffer* buffer = nullptr;
@@ -427,11 +427,11 @@ public:
 
     constexpr IndexBufferBinding& setOffset(u32 value)noexcept{ offset = value; return *this; }
 };
-inline bool operator==(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{
+inline b8 operator==(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{
     return lhs.buffer == rhs.buffer && lhs.offset == rhs.offset && lhs.format == rhs.format;
 }
 
-inline bool operator!=(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
 
 struct GraphicsState{
     GraphicsPipeline* pipeline = nullptr;

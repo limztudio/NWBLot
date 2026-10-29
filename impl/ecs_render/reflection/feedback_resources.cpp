@@ -49,7 +49,7 @@ void RendererReflectionFeedback::invalidateResources(){
     m_deviceGeneration = 0u;
 }
 
-bool RendererReflectionFeedback::prepareResources(const u32 width, const u32 height, const ReflectionSettings& settings, const bool enabled){
+b8 RendererReflectionFeedback::prepareResources(const u32 width, const u32 height, const ReflectionSettings& settings, const b8 enabled){
     const Expected<ReflectionFeedbackExtent> extentResult = ComputeReflectionFeedbackExtent(width, height);
     if(!extentResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: invalid extent or feedback address range ({}x{})"), width, height);
@@ -66,8 +66,8 @@ bool RendererReflectionFeedback::prepareResources(const u32 width, const u32 hei
         }
         m_control = Move(*controlResult);
     }
-    const bool changed = width != m_extent.width || height != m_extent.height || deviceGeneration != m_deviceGeneration;
-    const bool active = enabled && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
+    const b8 changed = width != m_extent.width || height != m_extent.height || deviceGeneration != m_deviceGeneration;
+    const b8 active = enabled && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
     if(active && (changed || !m_banks[0].valid() || !m_banks[1].valid())){
         auto firstBank = prepareBank(extent.byteCount, Name("engine/reflection/screen_feedback_0"));
         if(!firstBank)
@@ -93,7 +93,7 @@ bool RendererReflectionFeedback::prepareResources(const u32 width, const u32 hei
     return true;
 }
 
-ReflectionFeedbackSnapshot RendererReflectionFeedback::snapshot(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const bool enabled, const u64 graphicsFrameIndex)const noexcept{
+ReflectionFeedbackSnapshot RendererReflectionFeedback::snapshot(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const b8 enabled, const u64 graphicsFrameIndex)const noexcept{
     ReflectionFeedbackSnapshot result;
     if(!m_control)
         return result;

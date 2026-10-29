@@ -15,7 +15,7 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace __hidden_ui_paint_images{
-[[nodiscard]] static bool SameTextureKey(const ImageSource& first, const ImageSource& second)noexcept{
+[[nodiscard]] static b8 SameTextureKey(const ImageSource& first, const ImageSource& second)noexcept{
     return first.identity() == second.identity() && first.generation() == second.generation();
 }
 };
@@ -24,7 +24,7 @@ namespace __hidden_ui_paint_images{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const usize glyphCount, const SharedSdfAtlasPage* const sdfPages, const usize sdfCount, const SharedImageSource* const textureImages, const usize textureCount){
+b8 PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const usize glyphCount, const SharedSdfAtlasPage* const sdfPages, const usize sdfCount, const SharedImageSource* const textureImages, const usize textureCount){
     NWB_ASSERT(m_recording);
     if(glyphCount > s_PaintMaxImages || sdfCount > s_PaintMaxImages || textureCount > s_PaintMaxImages || (glyphCount != 0u && !glyphPages) || (sdfCount != 0u && !sdfPages) || (textureCount != 0u && !textureImages))
         return false;
@@ -33,7 +33,7 @@ bool PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const 
         if(!glyphPages[candidate])
             return false;
         const GlyphPageBinding& binding = glyphPages[candidate]->binding();
-        bool found = false;
+        b8 found = false;
         for(const SharedGlyphPage& existing : m_snapshot.m_glyphPages){
             if(SameGlyphPageKey(binding, existing->binding())){
                 if(binding.width != existing->binding().width || binding.height != existing->binding().height)
@@ -59,7 +59,7 @@ bool PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const 
         if(!sdfPages[candidate])
             return false;
         const SdfAtlasPageBinding& binding = sdfPages[candidate]->binding();
-        bool found = false;
+        b8 found = false;
         for(const SharedSdfAtlasPage& existing : m_snapshot.m_sdfPages){
             if(SameSdfAtlasPageKey(binding, existing->binding())){
                 if(!(binding == existing->binding()))
@@ -83,7 +83,7 @@ bool PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const 
     for(usize candidate = 0u; candidate < textureCount; ++candidate){
         if(!textureImages[candidate])
             return false;
-        bool found = false;
+        b8 found = false;
         for(const SharedImageSource& existing : m_snapshot.m_textureImages){
             if(__hidden_ui_paint_images::SameTextureKey(*textureImages[candidate], *existing)){
                 found = true;
@@ -120,7 +120,7 @@ bool PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const 
             *existing = glyphPages[candidate];
     }
     for(usize candidate = 0u; candidate < sdfCount; ++candidate){
-        bool found = false;
+        b8 found = false;
         for(const SharedSdfAtlasPage& bound : m_snapshot.m_sdfPages){
             if(SameSdfAtlasPageKey(bound->binding(), sdfPages[candidate]->binding())){
                 found = true;
@@ -131,7 +131,7 @@ bool PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const 
             m_snapshot.m_sdfPages.push_back(sdfPages[candidate]);
     }
     for(usize candidate = 0u; candidate < textureCount; ++candidate){
-        bool found = false;
+        b8 found = false;
         for(const SharedImageSource& bound : m_snapshot.m_textureImages){
             if(__hidden_ui_paint_images::SameTextureKey(*bound, *textureImages[candidate])){
                 found = true;

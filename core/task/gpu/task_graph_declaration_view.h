@@ -55,9 +55,9 @@ struct GpuTaskGraphTaskView{
     usize declaredResourceSetUseCount = 0u;
     usize expandedResourceSetMemberUseCount = 0u;
     GpuTaskTimingMetadata timing;
-    bool hasPayload = false;
-    bool hasRecordPayload = false;
-    bool hasAcceptedPayload = false;
+    b8 hasPayload = false;
+    b8 hasRecordPayload = false;
+    b8 hasAcceptedPayload = false;
 };
 
 // Immutable view of an externally released resource range, copied at declaration so producer storage may retire.
@@ -87,8 +87,8 @@ struct GpuTaskGraphResourceView{
     GpuPhysicalQueueId directConsumerQueue;
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-    bool hasQueueAdmission = false;
-    bool hasBackendResource = false;
+    b8 hasQueueAdmission = false;
+    b8 hasBackendResource = false;
 };
 
 struct GpuTaskGraphResourceVersionView{
@@ -110,7 +110,7 @@ struct GpuTaskGraphPipelineView{
     GpuGraphPipelineId id;
     Name identity = s_NameNone;
     AStringView markerLabel;
-    bool hasBackendPipeline = false;
+    b8 hasBackendPipeline = false;
     GpuGraphPipelineType::Enum type = GpuGraphPipelineType::Count;
 };
 
@@ -118,7 +118,7 @@ struct GpuTaskGraphExternalCompletionView{
     GpuExternalCompletionId id;
     Name identity = s_NameNone;
     AStringView markerLabel;
-    bool hasToken = false;
+    b8 hasToken = false;
     QueueSubmissionToken token;
 };
 
@@ -161,20 +161,20 @@ private:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_graph != nullptr; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_graph != nullptr; }
 
-    [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept{ return m_graph == &graph; }
+    [[nodiscard]] b8 validFor(const GpuTaskGraph& graph)const noexcept{ return m_graph == &graph; }
 
     [[nodiscard]] u64 generation()const noexcept;
     [[nodiscard]] u64 declarationRevision()const noexcept;
-    [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
-    [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
-    [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
-    [[nodiscard]] bool validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept;
-    [[nodiscard]] bool validResourceSet(const GpuGraphResourceSetId& id)const noexcept;
-    [[nodiscard]] bool validUploadBlob(const GpuUploadBlobId& id)const noexcept;
-    [[nodiscard]] bool validPipeline(const GpuGraphPipelineId& id)const noexcept;
-    [[nodiscard]] bool validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
+    [[nodiscard]] b8 validForDeviceGeneration(u16 deviceGeneration)const noexcept;
+    [[nodiscard]] b8 validTask(const GpuTaskId& id)const noexcept;
+    [[nodiscard]] b8 validResource(const GpuGraphResourceId& id)const noexcept;
+    [[nodiscard]] b8 validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept;
+    [[nodiscard]] b8 validResourceSet(const GpuGraphResourceSetId& id)const noexcept;
+    [[nodiscard]] b8 validUploadBlob(const GpuUploadBlobId& id)const noexcept;
+    [[nodiscard]] b8 validPipeline(const GpuGraphPipelineId& id)const noexcept;
+    [[nodiscard]] b8 validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
     [[nodiscard]] usize taskCount()const noexcept;
     [[nodiscard]] usize resourceCount()const noexcept;
     [[nodiscard]] usize resourceVersionCount()const noexcept;
@@ -217,7 +217,7 @@ public:
     [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const & noexcept;
     [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const && = delete;
 
-    [[nodiscard]] bool appendFrameGraphTelemetry(Telemetry::FrameGraphBuilder& builder, const GpuTaskGraphAnalysis& analysis, Alloc::ScratchArena& scratchArena, const GpuTaskGraphTelemetryOptions& options = {})const;
+    [[nodiscard]] b8 appendFrameGraphTelemetry(Telemetry::FrameGraphBuilder& builder, const GpuTaskGraphAnalysis& analysis, Alloc::ScratchArena& scratchArena, const GpuTaskGraphTelemetryOptions& options = {})const;
 
 
 private:

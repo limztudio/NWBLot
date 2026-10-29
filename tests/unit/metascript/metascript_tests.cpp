@@ -59,7 +59,7 @@ static void CheckParseFailsWithMessage(const MStringView source, MStringView exp
     DestinationArena arena;
     Document document(arena.arena);
 
-    const bool parsed = document.parse(source);
+    const b8 parsed = document.parse(source);
     EXPECT_FALSE(parsed);
     ASSERT_TRUE(document.hasErrors());
     ASSERT_FALSE(document.errors().empty());
@@ -211,7 +211,7 @@ TEST(Metascript, AppendsFirstMiddleAndLastElementsAcrossReallocation){
     constexpr usize s_InitialCount = 8u;
     const usize sourceIndices[] = { 0u, 3u, 7u };
     for(const usize sourceIndex : sourceIndices){
-        for(const bool moveSource : { false, true }){
+        for(const b8 moveSource : { false, true }){
             DestinationArena arena;
             Value list(arena.arena);
             list.makeList();

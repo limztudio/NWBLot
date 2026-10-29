@@ -33,7 +33,7 @@ struct TerminalPacketDependencyHasher{
 };
 
 struct TerminalPacketDependencyEqual{
-    bool operator()(const GpuPacketDependency& lhs, const GpuPacketDependency& rhs)const noexcept{
+    b8 operator()(const GpuPacketDependency& lhs, const GpuPacketDependency& rhs)const noexcept{
         return lhs.producer == rhs.producer && lhs.consumer == rhs.consumer;
     }
 };
@@ -54,7 +54,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool PlanExternalResourceExports(GpuTaskGraphResourceStatePlan& plan){
+[[nodiscard]] b8 PlanExternalResourceExports(GpuTaskGraphResourceStatePlan& plan){
     const GpuTaskGraph::DeclarationReadView& graph = plan.graph;
     GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;
     Alloc::ScratchArena& scratchArena = plan.scratchArena;
@@ -94,17 +94,17 @@ namespace GpuTaskGraphCompilerDetail{
         if(resource.externalFinalState == ResourceStates::Unknown)
             continue;
 
-        const bool hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
+        const b8 hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
 
         // Graph storage admits a known external final state only for texture, buffer and acceleration structure resources.
         const GpuCompiledBarrierType::Enum exportType = StateExportBarrierType(resource.type);
         NWB_ASSERT(exportType < GpuCompiledBarrierType::Count);
 
-        bool hasTerminalDeclaredRange = false;
+        b8 hasTerminalDeclaredRange = false;
         GpuTaskId externalExportTask;
         GpuSubmissionPacketId externalExportPacket;
         GpuPhysicalQueueId externalExportSourceQueue;
-        bool externalExportUsesOnePacket = true;
+        b8 externalExportUsesOnePacket = true;
         const u32 externalExportSourceOffset = static_cast<u32>(compiledPlan.externalResourceExportSources.size());
         u32 externalExportSourceCount = 0u;
         const auto appendTerminalState = [&](const TrackedCompiledResourceState& state, const usize terminalStateIndex, const GpuTaskResourceRange& terminalRange){
@@ -114,7 +114,7 @@ namespace GpuTaskGraphCompilerDetail{
             if(!terminalPacket.valid() || terminalPacket.generation != compiledPlan.planGeneration || terminalPacket.index >= compiledPlan.packets.size())
                 return false;
 
-            const bool performsFinalization = state.state != resource.externalFinalState || (hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue);
+            const b8 performsFinalization = state.state != resource.externalFinalState || (hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue);
             if(performsFinalization){
                 // The selected terminal task owns the external transition/release for this exact fragment.
                 // A shadowed earlier terminal user must finish before that op; matching state alone never orders read-only packets.
@@ -193,7 +193,7 @@ namespace GpuTaskGraphCompilerDetail{
         else{
             for(usize stateIndex = resourceHistory.first(resource.id); stateIndex != Limit<usize>::s_Max; stateIndex = resourceHistory.next(stateIndex)){
                 const TrackedCompiledResourceState& state = trackedResourceStates[stateIndex];
-                bool hasLaterOverlappingUse = false;
+                b8 hasLaterOverlappingUse = false;
                 for(usize laterStateIndex = resourceHistory.next(stateIndex); laterStateIndex != Limit<usize>::s_Max; laterStateIndex = resourceHistory.next(laterStateIndex)){
                     const TrackedCompiledResourceState& later = trackedResourceStates[laterStateIndex];
                     if(RangesOverlap(resource, state.range, later.range)){
@@ -229,7 +229,7 @@ namespace GpuTaskGraphCompilerDetail{
     return true;
 }
 
-[[nodiscard]] bool AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
+[[nodiscard]] b8 AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
     // Consumers are visited after their producer, so ownership releases are discovered late.
     // Group them only after planning completes to keep every task's epilogue span contiguous in the immutable compiled graph.
     GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;

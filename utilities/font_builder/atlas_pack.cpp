@@ -41,7 +41,7 @@ struct Shelf{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload){
+b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload){
     Vector<u32, Core::Alloc::ScratchArena> order(scratch);
     order.reserve(glyphs.size());
     for(u32 index = 0u; index < glyphs.size(); ++index){
@@ -66,7 +66,7 @@ bool PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs
         const RasterGlyph& glyph = glyphs[index];
         const u32 width = glyph.record.width + s_GlyphGuardExtent;
         const u32 height = glyph.record.height + s_GlyphGuardExtent;
-        bool placed = false;
+        b8 placed = false;
         for(u32 page = 0u; page < options.maxGroups * Impl::s_FontAtlasMaxChannelCount; ++page){
             auto next = shelves[page];
             if(next.x + width > options.extent){

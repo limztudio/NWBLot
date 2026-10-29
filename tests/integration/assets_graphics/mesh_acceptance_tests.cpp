@@ -68,7 +68,7 @@ template<
     typename NormalStreamT,
     typename LocalRefVectorT
 >
-static bool TestMeshletHasPositionNormalValue(
+static b8 TestMeshletHasPositionNormalValue(
     const MeshT& mesh,
     const NWB::Impl::MeshletDesc& meshlet,
     const PositionStreamT& positions,
@@ -112,7 +112,7 @@ template<typename MeshT>
             && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
             && IsNothrowDestructible_V<Iterator>
             && IsNothrowDestructible_V<Sentinel>
-            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+            && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
             && noexcept(++DeclVal<Iterator&>())
             && noexcept(DeclVal<void(*)(const NWB::Impl::MeshletDesc&)noexcept>()(*DeclVal<Iterator&>()))
         ;
@@ -139,7 +139,7 @@ template<typename MeshT>
             && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
             && IsNothrowDestructible_V<Iterator>
             && IsNothrowDestructible_V<Sentinel>
-            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+            && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
             && noexcept(++DeclVal<Iterator&>())
             && noexcept(DeclVal<void(*)(const NWB::Impl::MeshletDesc&)noexcept>()(*DeclVal<Iterator&>()))
         ;
@@ -154,7 +154,7 @@ template<typename MeshT>
 }
 
 static Expected<UniquePtr<NWB::Core::Assets::IAsset>> CookAndLoadSmokeMesh(TestArena& testArena, AStringView assetFilename, const Name assetName, const AssetsGraphicsFixture::CookCase& cookCase){
-    const bool cooked = AssetsGraphicsFixture::CookSmokeMeshMeta(assetFilename, testArena, cookCase);
+    const b8 cooked = AssetsGraphicsFixture::CookSmokeMeshMeta(assetFilename, testArena, cookCase);
     EXPECT_TRUE(cooked);
     if(!cooked)
         return MakeUnexpected(Failure{});

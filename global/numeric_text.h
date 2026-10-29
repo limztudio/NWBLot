@@ -149,7 +149,7 @@ template<typename NumberT>
 template<typename NumberT, typename ParseT>
 [[nodiscard]] inline Expected<NumericTextPrefix<NumberT>, ErrorCode> ParseNumberPrefix(const char* const begin, ParseT&& parse)noexcept([]()consteval noexcept{
     using ParsedT = decltype(DeclVal<ParseT&>()(DeclVal<const char* const&>(), DeclVal<char**>()));
-    constexpr bool s_ResultIsNothrow =
+    constexpr b8 s_ResultIsNothrow =
         noexcept(DeclVal<ParseT&>()(DeclVal<const char* const&>(), DeclVal<char**>()))
         && IsNothrowDestructible_V<ParsedT>
         && noexcept(Expected<NumericTextPrefix<NumberT>, ErrorCode>(NumericTextPrefix<NumberT>{ .value = static_cast<NumberT>(DeclVal<const ParsedT&>()), .consumed = DeclVal<usize>() }))
@@ -166,7 +166,7 @@ template<typename NumberT, typename ParseT>
     errno = 0;
     char* end = nullptr;
     const ParsedT parsed = parse(begin, &end);
-    bool outOfRange = errno == ERANGE;
+    b8 outOfRange = errno == ERANGE;
     errno = previousErrno;
     // An unsupported base can leave `end` unset.
     if(!end || end == begin)
@@ -308,7 +308,7 @@ template<typename CharT>
 
 template<typename StringT>
 inline void AppendFixedHexImpl(const u64 value, const u32 nibbleCount, StringT& outText)noexcept(
-    noexcept(static_cast<bool>(outText.size() > outText.max_size() || outText.max_size() - outText.size() < nibbleCount))
+    noexcept(static_cast<b8>(outText.size() > outText.max_size() || outText.max_size() - outText.size() < nibbleCount))
     && noexcept(outText.push_back(HexDigit<typename StringT::value_type>(DeclVal<const usize&>())))
 ){
     if(outText.size() > outText.max_size() || outText.max_size() - outText.size() < nibbleCount)

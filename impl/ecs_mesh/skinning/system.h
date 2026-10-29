@@ -150,18 +150,18 @@ private:
         Core::BufferHandle bindlessResourceSlotsBuffer;
         MeshSkinningBindlessResourceSlots bindlessResourceSlots;
         RuntimeBindlessHeapHandles bindlessHeapHandles;
-        bool bindlessResourceSlotsUploaded = false;
+        b8 bindlessResourceSlotsUploaded = false;
 
 
     public:
-        [[nodiscard]] bool hasPersistentHeapDescriptors(const bool hasActiveSkin, const bool hasAttributeBuffer)const noexcept{
+        [[nodiscard]] b8 hasPersistentHeapDescriptors(const b8 hasActiveSkin, const b8 hasAttributeBuffer)const noexcept{
             const auto storageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
                 return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
             };
             const auto uniformHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
                 return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
             };
-            const bool common =
+            const b8 common =
                 bindlessResourceSlotsBuffer != nullptr
                 && uniformHandle(bindlessHeapHandles.resourceSlots)
                 && storageHandle(bindlessHeapHandles.restPosition)
@@ -212,40 +212,40 @@ public:
 public:
     virtual void prepare(Core::ECS::World& world)override;
     [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)noexcept override;
-    virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
-    virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
+    virtual b8 validateResources(u32 width, u32 height, u32 sampleCount)override;
+    virtual b8 prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void render(Core::Framebuffer* framebuffer)override;
     virtual void invalidateResources()override;
 
     virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID entity)override;
-    [[nodiscard]] virtual bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const noexcept override;
+    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(Core::ECS::EntityID entity)const noexcept override;
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)override;
 
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
-    [[nodiscard]] bool isSkinningFeatureEnabled()const noexcept{
+    [[nodiscard]] b8 isSkinningFeatureEnabled()const noexcept{
         return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem<SkinningSubsystem>();
     }
 
 
 private:
-    [[nodiscard]] bool ensureSkinningPipeline();
-    [[nodiscard]] bool ensureBoundsPipeline();
-    [[nodiscard]] bool ensureLocalBoundsPipeline();
-    [[nodiscard]] bool ensureRepackPipeline();
+    [[nodiscard]] b8 ensureSkinningPipeline();
+    [[nodiscard]] b8 ensureBoundsPipeline();
+    [[nodiscard]] b8 ensureLocalBoundsPipeline();
+    [[nodiscard]] b8 ensureRepackPipeline();
     // Consume-only pipeline checks for the per-frame prepare path; creation belongs to validateResources via the ensure* setup above.
-    [[nodiscard]] bool skinningPipelineReady()const noexcept;
-    [[nodiscard]] bool boundsPipelinesReady()const noexcept;
-    [[nodiscard]] bool repackPipelineReady()const noexcept;
+    [[nodiscard]] b8 skinningPipelineReady()const noexcept;
+    [[nodiscard]] b8 boundsPipelinesReady()const noexcept;
+    [[nodiscard]] b8 repackPipelineReady()const noexcept;
     // Declares frame-local skinning as one Graphics packet; accepted task commits dirty state.
-    [[nodiscard]] bool submitFrameSkinningGraph();
-    [[nodiscard]] bool prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-    [[nodiscard]] bool recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] b8 submitFrameSkinningGraph();
+    [[nodiscard]] b8 prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] b8 recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
     void confirmGraphOwnedSkinningDispatch(const MeshSkinningGraphDispatchPlan& plan)noexcept;
     void collectLiveSkinningStateBuffers(Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers, Core::Alloc::ScratchArena& scratchArena)const;
-    [[nodiscard]] bool replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Expected<bool> ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);
+    [[nodiscard]] b8 replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<b8> ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);
     void releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources);
     void pruneRuntimeResources();
     void resolveFrameTaskGraphAttempt(const Core::GpuCompiledGraph::ReadView& planAccess)noexcept;
@@ -263,7 +263,7 @@ private:
     MeshSkinningRuntimeCache m_runtimeMeshCache;
     ActiveSceneSubsystems m_defaultSceneSubsystems;
     const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
-    bool m_runtimeSetupReady = false;
+    b8 m_runtimeSetupReady = false;
 
     HashMap<u64, RuntimeResources, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_runtimeResources;
     // Reused across submitFrameSkinningGraph() calls so per-frame render performs no GlobalArena creation.

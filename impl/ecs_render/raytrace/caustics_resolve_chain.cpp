@@ -39,10 +39,10 @@ namespace __hidden_caustics_resolve_chain{
 
 struct ResolveStageDesc{
     const CausticsResolveStageNaming& naming;
-    bool applyStateSources;
+    b8 applyStateSources;
     CausticsResolveStageUses stageUses;
     Core::GpuTaskId& outTask;
-    Expected<Core::GpuTaskId> (RendererRayTracingSystem::*declareTask)(Core::GpuTaskGraph&, const Core::GpuTaskDesc&, const bool&, DeferredFrameTargets&);
+    Expected<Core::GpuTaskId> (RendererRayTracingSystem::*declareTask)(Core::GpuTaskGraph&, const Core::GpuTaskDesc&, const b8&, DeferredFrameTargets&);
 };
 
 // One activity read of the previous stage and one activity write of this stage.

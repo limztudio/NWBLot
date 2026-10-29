@@ -55,7 +55,7 @@ Expr* ExprParser::parseExpression(){
     return parseAssignment();
 }
 
-bool ExprParser::parseArgumentList(MVector<Expr*>& outArgs){
+b8 ExprParser::parseArgumentList(MVector<Expr*>& outArgs){
     if(!m_cursor.expect(TokenType::LeftParen, "expected '(' before argument list"))
         return false;
 
@@ -447,7 +447,7 @@ Expr* ExprParser::parsePrimary(){
         }
 
         if(tok.text == "cast" || tok.text == "bit_cast"){
-            const bool isBitCast = (tok.text == "bit_cast");
+            const b8 isBitCast = (tok.text == "bit_cast");
             m_cursor.advance();
             if(!m_cursor.expect(TokenType::Less, "expected '<' after cast keyword"))
                 return nullptr;

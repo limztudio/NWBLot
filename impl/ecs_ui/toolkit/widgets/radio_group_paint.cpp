@@ -18,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
+b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     if(item.radioGroup >= m_scope->m_radioGroups.size())
         return false;
     RadioGroupFrame& frame = m_scope->m_radioGroups[item.radioGroup];
@@ -51,10 +51,10 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
             return false;
         const WidgetId part = *partResult;
         const InputRouter& input = m_context.input();
-        const bool enabled = frame.m_options.enabled && row.enabled;
-        const bool checked = frame.m_snapshot.selectedKey == row.key;
-        const bool hover = input.hover() == part;
-        const bool pressed = input.pressed(part) || (frame.m_snapshot.cursorKey == row.key && input.pressed(item.state.id));
+        const b8 enabled = frame.m_options.enabled && row.enabled;
+        const b8 checked = frame.m_snapshot.selectedKey == row.key;
+        const b8 hover = input.hover() == part;
+        const b8 pressed = input.pressed(part) || (frame.m_snapshot.cursorKey == row.key && input.pressed(item.state.id));
         const Name& preferred = checked ? frame.m_style.checked : !enabled ? frame.m_style.disabled : pressed ? frame.m_style.pressed : hover ? frame.m_style.hover : frame.m_style.normal;
         const Name& fallback = checked ? frame.m_style.checkedFallback : frame.m_style.normal;
         const UiSkinRegion* indicator = region(preferred, fallback);
@@ -65,10 +65,10 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const Color tint = !enabled ? frame.m_style.disabledTint : pressed ? frame.m_style.pressedTint : hover ? frame.m_style.hoverTint : Color{};
         const Rect& textBounds = frame.m_labels[index].bounds;
         m_paint.pushClip(row.clip);
-        bool painted = m_paint.drawRegion(indicator->name, row.indicator, tint);
+        b8 painted = m_paint.drawRegion(indicator->name, row.indicator, tint);
         if(painted && checked)
             painted = m_paint.drawRegion(mark->name, row.mark, tint);
-        const bool focused = enabled && input.focus() == item.state.id && frame.m_snapshot.cursorKey == row.key;
+        const b8 focused = enabled && input.focus() == item.state.id && frame.m_snapshot.cursorKey == row.key;
         if(painted && focused && m_skin->findRegion(frame.m_style.focus))
             painted = m_paint.drawRegion(frame.m_style.focus, row.rectangle);
         const TextLayout& label = frame.m_labels[index].text;
@@ -81,8 +81,8 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         m_paint.pushClip(row.textClip);
         if(painted)
             painted = m_text.paint(m_paint, label, origin, enabled ? frame.m_widgetStyle.text : frame.m_widgetStyle.disabledText);
-        const bool textPopped = m_paint.popClip();
-        const bool rowPopped = m_paint.popClip();
+        const b8 textPopped = m_paint.popClip();
+        const b8 rowPopped = m_paint.popClip();
         if(!painted || !textPopped || !rowPopped)
             return false;
         if(item.enabled){

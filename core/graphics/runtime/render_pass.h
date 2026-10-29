@@ -28,13 +28,13 @@ public:
 
 
 public:
-    virtual bool shouldRenderUnfocused(){ return false; }
+    virtual b8 shouldRenderUnfocused(){ return false; }
 
-    virtual bool validateResources(u32, u32, u32){ return true; }
+    virtual b8 validateResources(u32, u32, u32){ return true; }
 
     virtual void invalidateResources(){}
 
-    virtual bool prepareResources(Framebuffer*){ return true; }
+    virtual b8 prepareResources(Framebuffer*){ return true; }
 
     virtual void render(Framebuffer*){}
 

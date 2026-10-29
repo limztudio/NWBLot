@@ -23,8 +23,8 @@ NWB_CORE_BEGIN
 // Borrow the Frame display and client window. Destroy before native window/display teardown.
 [[nodiscard]] Expected<GlobalUniquePtr<ITextInputService>> CreateX11TextInputService(Alloc::GlobalArena& arena, _XDisplay& display, u64 window);
 // Filter every native event before ordinary dispatch; consumed IM events never become duplicate scene characters.
-[[nodiscard]] bool FilterX11TextInputEvent(ITextInputService& service, _XEvent& event);
-[[nodiscard]] bool DispatchX11TextInputKey(ITextInputService& service, XKeyEvent& event);
+[[nodiscard]] b8 FilterX11TextInputEvent(ITextInputService& service, _XEvent& event);
+[[nodiscard]] b8 DispatchX11TextInputKey(ITextInputService& service, XKeyEvent& event);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

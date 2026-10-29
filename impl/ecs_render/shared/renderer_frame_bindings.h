@@ -29,7 +29,7 @@ namespace ECSRenderDetail{
 
 
     public:
-        [[nodiscard]] bool valid()const noexcept{
+        [[nodiscard]] b8 valid()const noexcept{
             return instanceBuffer && materialTypedBuffer;
         }
     };
@@ -40,9 +40,9 @@ namespace ECSRenderDetail{
 
 
     public:
-        [[nodiscard]] bool valid()const noexcept{ return static_cast<bool>(buffer); }
+        [[nodiscard]] b8 valid()const noexcept{ return static_cast<b8>(buffer); }
 
-        [[nodiscard]] bool bindingValid()const noexcept{
+        [[nodiscard]] b8 bindingValid()const noexcept{
             return buffer && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
         }
     };
@@ -59,7 +59,7 @@ namespace ECSRenderDetail{
 
 
     public:
-        [[nodiscard]] bool bindingValid()const noexcept{
+        [[nodiscard]] b8 bindingValid()const noexcept{
             return
                 instanceBuffer
                 && materialTypedBuffer
@@ -71,7 +71,7 @@ namespace ECSRenderDetail{
             ;
         }
 
-        [[nodiscard]] bool matches(const MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer)const noexcept{
+        [[nodiscard]] b8 matches(const MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer)const noexcept{
             return
                 bindingValid()
                 && instanceBuffer == materialBuffers.instanceBuffer
@@ -82,7 +82,7 @@ namespace ECSRenderDetail{
             ;
         }
 
-        [[nodiscard]] bool frameReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
+        [[nodiscard]] b8 frameReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
             if(materialTypedByteCount == 0u || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u)
                 return false;
 
@@ -91,7 +91,7 @@ namespace ECSRenderDetail{
     };
 
     // Shared opaque/gbuffer record prologue: frame setup is ready when both setup flags are set.
-    [[nodiscard]] inline bool FrameSetupReady(const bool& meshViewSetupReady, const bool& sceneShadingSetupReady)noexcept{
+    [[nodiscard]] inline b8 FrameSetupReady(const b8& meshViewSetupReady, const b8& sceneShadingSetupReady)noexcept{
         return meshViewSetupReady && sceneShadingSetupReady;
     }
 };

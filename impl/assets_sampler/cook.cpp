@@ -47,7 +47,7 @@ static constexpr AStringView s_ReductionField = "reduction";
 static constexpr AStringView s_MaxAnisotropyField = "max_anisotropy";
 static constexpr AStringView s_MipBiasField = "mip_bias";
 
-static constexpr ::NamedEnumCase<bool> s_FilterCases[] = {
+static constexpr ::NamedEnumCase<b8> s_FilterCases[] = {
     { "nearest", false },
     { "linear", true },
 };
@@ -56,8 +56,8 @@ static constexpr ::NamedEnumCase<bool> s_FilterCases[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<bool> ParseFilter(const Path& nwbFilePath, const Value& asset, const AStringView fieldName){
-    return Core::Assets::ParseNamedMetadataEnumField<bool>(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, s_FilterCases, "must be 'nearest' or 'linear'");
+[[nodiscard]] static Expected<b8> ParseFilter(const Path& nwbFilePath, const Value& asset, const AStringView fieldName){
+    return Core::Assets::ParseNamedMetadataEnumField<b8>(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, s_FilterCases, "must be 'nearest' or 'linear'");
 }
 
 static constexpr ::NamedEnumCase<Core::SamplerAddressMode::Enum> s_AddressModeCases[] = {
@@ -95,7 +95,7 @@ static constexpr ::NamedEnumCase<Core::SamplerReductionType::Enum> s_ReductionTy
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, NWB_TEXT("SamplerAssetCodec::serialize")))
         return false;
 

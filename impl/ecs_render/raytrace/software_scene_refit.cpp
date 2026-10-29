@@ -147,7 +147,7 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
     return snapshot;
 }
 
-bool SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSystem){
+b8 SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSystem){
     if(m_pipeline)
         return true;
     auto& device = m_graphics.getDevice();
@@ -175,7 +175,7 @@ bool SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSys
         m_pipeline = Move(*pipelineResult);
     else
         m_pipeline.reset();
-    return static_cast<bool>(pipelineResult);
+    return static_cast<b8>(pipelineResult);
 }
 
 

@@ -75,7 +75,7 @@ Expected<void*> Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requ
         return MakeUnexpected(Failure{});
     }
 
-    auto invalidateReadRange = [&]() -> bool{
+    auto invalidateReadRange = [&]() -> b8{
         if(*effectiveAccess != CpuAccessMode::Read)
             return true;
 
@@ -186,7 +186,7 @@ Expected<MemoryRequirements> Device::getBufferMemoryRequirements(Buffer& buffer)
     return *result;
 }
 
-bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
+b8 Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer belongs to another device"));
         return false;
@@ -277,7 +277,7 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
     return true;
 }
 
-bool Device::isBufferReadyForGpuUse(Buffer* bufferResource, const VkBufferUsageFlags requiredUsage)const noexcept{
+b8 Device::isBufferReadyForGpuUse(Buffer* bufferResource, const VkBufferUsageFlags requiredUsage)const noexcept{
     if(!bufferResource)
         return false;
 

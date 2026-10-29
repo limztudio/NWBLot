@@ -56,8 +56,8 @@ struct OpaqueCsgIntervalStageInputs{
     Core::GpuTaskId dependencyTask;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
-    bool hasOpaqueDrawItems = false;
-    bool hasCsgFrameGpuWork = false;
+    b8 hasOpaqueDrawItems = false;
+    b8 hasCsgFrameGpuWork = false;
 };
 
 struct OpaqueCsgIntervalStageTasks{
@@ -85,8 +85,8 @@ public:
         Core::GpuTimingSubmissionTicket*& receiverSpanTimingTicket,
         Core::GpuTimingSubmissionTicket*& intervalCombineTimingTicket,
         Core::GpuTimingSubmissionTicket*& intervalSampleTimingTicket,
-        const bool& meshViewSetupReady,
-        const bool& sceneShadingSetupReady,
+        const b8& meshViewSetupReady,
+        const b8& sceneShadingSetupReady,
         Optional<Core::GpuTimingMeasure>& intervalSampleComputeEmulationTiming
     )noexcept;
 
@@ -100,10 +100,10 @@ public:
         const CsgFrameGpuDataView& csgFrameData,
         usize instanceCount,
         usize materialTypedByteCount,
-        bool materialDrawBuffersUploaded,
-        bool csgFrameBuffersUploaded,
-        bool hasOpaqueDrawItems,
-        bool hasOpaqueCsgFrameWork
+        b8 materialDrawBuffersUploaded,
+        b8 csgFrameBuffersUploaded,
+        b8 hasOpaqueDrawItems,
+        b8 hasOpaqueCsgFrameWork
     );
     [[nodiscard]] Expected<OpaqueCsgIntervalStageTasks> declare(const OpaqueCsgIntervalStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena, ObjectGeometryCacheGraph& objectGeometry);
 

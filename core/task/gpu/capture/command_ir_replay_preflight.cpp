@@ -62,15 +62,15 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     return GpuCommandIrDetail::ReplayFailure(error, streamValidation, recordIndex);
 }
 
-[[nodiscard]] static bool QueueHasTransferCapability(const GpuPhysicalQueueInfo& queue)noexcept{
+[[nodiscard]] static b8 QueueHasTransferCapability(const GpuPhysicalQueueInfo& queue)noexcept{
     return (static_cast<u8>(queue.capabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u;
 }
 
-[[nodiscard]] static bool QueueHasGraphicsCapability(const GpuPhysicalQueueInfo& queue)noexcept{
+[[nodiscard]] static b8 QueueHasGraphicsCapability(const GpuPhysicalQueueInfo& queue)noexcept{
     return (static_cast<u8>(queue.capabilities) & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
 }
 
-[[nodiscard]] static bool BufferRangeContains(const BufferDesc& description, const BufferRange& declaration, const u64 offsetBytes, const u64 sizeBytes)noexcept{
+[[nodiscard]] static b8 BufferRangeContains(const BufferDesc& description, const BufferRange& declaration, const u64 offsetBytes, const u64 sizeBytes)noexcept{
     if(!GraphicsBackend::IsBufferRangeInBounds(description, offsetBytes, sizeBytes) || declaration.byteOffset > description.byteSize)
         return false;
 
@@ -81,13 +81,13 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     return relativeOffset <= declaredSize && sizeBytes <= declaredSize - relativeOffset;
 }
 
-[[nodiscard]] static bool TextureSubresourcesAreCanonical(const TextureDesc& description, const TextureSubresourceSet& subresources)noexcept{
+[[nodiscard]] static b8 TextureSubresourcesAreCanonical(const TextureDesc& description, const TextureSubresourceSet& subresources)noexcept{
     if(subresources.numMipLevels == 0u || subresources.numArraySlices == 0u || subresources.baseMipLevel >= description.mipLevels)
         return false;
     return subresources == subresources.resolve(description, TextureSubresourceMipResolve::Range);
 }
 
-[[nodiscard]] static bool TextureSubresourcesContain(const TextureSubresourceSet& declaration, const TextureDesc& description, const TextureSubresourceSet& requested)noexcept{
+[[nodiscard]] static b8 TextureSubresourcesContain(const TextureSubresourceSet& declaration, const TextureDesc& description, const TextureSubresourceSet& requested)noexcept{
     if(!TextureSubresourcesAreCanonical(description, requested))
         return false;
 
@@ -108,12 +108,12 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     return true;
 }
 
-[[nodiscard]] static bool TextureSliceIsDeclared(const TextureSubresourceSet& declaration, const TextureDesc& description, const TextureSlice& resolvedSlice)noexcept{
+[[nodiscard]] static b8 TextureSliceIsDeclared(const TextureSubresourceSet& declaration, const TextureDesc& description, const TextureSlice& resolvedSlice)noexcept{
     const TextureSubresourceSet requested(resolvedSlice.mipLevel, 1u, resolvedSlice.arraySlice, 1u);
     return TextureSubresourcesContain(declaration, description, requested);
 }
 
-[[nodiscard]] static bool TaskDeclaresTextureSlice(
+[[nodiscard]] static b8 TaskDeclaresTextureSlice(
     const GpuTaskGraphTaskView& task,
     const GpuGraphResourceId resource,
     const ResourceStates::Mask state,
@@ -137,7 +137,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     const GpuCompiledPacketView& packetView,
     const GpuPhysicalQueueInfo& queue,
     u32& inOutPreviousTaskOrder,
-    bool& inOutHasPreviousTask
+    b8& inOutHasPreviousTask
 )noexcept{
     NWB_ASSERT(record.packet == packet);
     if(record.queue != queue.id)
@@ -237,9 +237,9 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
     const u8 taskCapabilities = static_cast<u8>(task.commands.allowedCapabilities());
     const u8 physicalQueueCapabilities = static_cast<u8>(queue.capabilities);
-    const bool taskAndQueueShareComputeOrGraphics = (taskCapabilities & physicalQueueCapabilities & static_cast<u8>(GpuQueueCapability::Compute | GpuQueueCapability::Graphics)) != 0u;
-    const bool taskHasGraphics = (taskCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
-    const bool queueHasGraphics = (physicalQueueCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
+    const b8 taskAndQueueShareComputeOrGraphics = (taskCapabilities & physicalQueueCapabilities & static_cast<u8>(GpuQueueCapability::Compute | GpuQueueCapability::Graphics)) != 0u;
+    const b8 taskHasGraphics = (taskCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
+    const b8 queueHasGraphics = (physicalQueueCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
     if(
         (contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::ComputeOrGraphics && !taskAndQueueShareComputeOrGraphics)
         || (contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::Graphics && (!taskHasGraphics || !queueHasGraphics))
@@ -401,7 +401,7 @@ struct TextureClearDestination{
         return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::PlanGenerationMismatch);
 
     u32 previousTaskOrder = 0u;
-    bool hasPreviousTask = false;
+    b8 hasPreviousTask = false;
     u64 recordIndex = 0u;
     GpuCommandIrDetail::RasterReplayState rasterState;
     for(;;){
@@ -415,7 +415,7 @@ struct TextureClearDestination{
             return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::InvalidStream, reader.validation(), reader.validation().recordIndex);
         const auto& decoded = *decodedResult;
 
-        const bool raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
+        const b8 raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
         if(raster && !ownedStream)
             return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::MissingOwnedSidecar, recordIndex);
         const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;

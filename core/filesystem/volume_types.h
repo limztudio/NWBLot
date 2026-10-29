@@ -38,7 +38,7 @@ struct VolumeMountDesc{
     u64 metadataSize = 0;
     usize maxSegments = 0;
 
-    bool createIfMissing = false;
+    b8 createIfMissing = false;
     VolumeUsage::Enum usage = VolumeUsage::RuntimeReadOnly;
 
 

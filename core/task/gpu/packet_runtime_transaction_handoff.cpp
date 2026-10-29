@@ -23,7 +23,7 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidForCompiledPlan(const GpuTaskGraphExternalResourceHandoff& handoff, const GpuCompiledGraph::ReadView& planAccess)noexcept{
+[[nodiscard]] b8 ValidForCompiledPlan(const GpuTaskGraphExternalResourceHandoff& handoff, const GpuCompiledGraph::ReadView& planAccess)noexcept{
     if(
         !handoff.valid()
         || !planAccess.valid()
@@ -53,7 +53,7 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
         )
             return false;
 
-        bool coveredByWait = false;
+        b8 coveredByWait = false;
         for(usize waitIndex = 0u; waitIndex < handoff.waitTokenCount; ++waitIndex){
             const QueueSubmissionToken& wait = handoff.waitTokens[waitIndex];
             if(!wait.valid() || !wait.hasPhysicalQueueIdentity() || wait.deviceGeneration != planAccess.deviceGeneration())
@@ -66,7 +66,7 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
 
     for(usize rangeIndex = 0u; rangeIndex < handoff.terminalRangeCount; ++rangeIndex){
         const GpuTaskGraphExternalResourceHandoffRange& range = handoff.terminalRanges[rangeIndex];
-        bool matchesProducer = false;
+        b8 matchesProducer = false;
         for(usize producerIndex = 0u; producerIndex < handoff.producerCount; ++producerIndex){
             const GpuTaskGraphExternalResourceHandoffProducer& producer = handoff.producers[producerIndex];
             matchesProducer = matchesProducer || (planAccess.packetForTask(range.producerTask) == planAccess.packetForTask(producer.producerTask) && range.sourceQueue == producer.sourceQueue && range.token == producer.token);
@@ -162,11 +162,11 @@ const GpuTaskGraphExternalResourceHandoff* GpuTaskGraphExternalResourceHandoffSn
     return m_activeStorage && m_activeStorage->handoff.valid() ? &m_activeStorage->handoff : nullptr;
 }
 
-bool GpuTaskGraphExternalResourceHandoffSnapshot::valid()const noexcept{
+b8 GpuTaskGraphExternalResourceHandoffSnapshot::valid()const noexcept{
     return value() != nullptr;
 }
 
-bool GpuTaskGraphExternalResourceHandoffSnapshot::validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
+b8 GpuTaskGraphExternalResourceHandoffSnapshot::validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
     const GpuTaskGraphExternalResourceHandoff* const handoff = value();
     return planAccess.validFor(compiledGraph) && handoff && m_activeStorage->compiledObjectIdentity == planAccess.objectIdentity() && __hidden_gpu_packet_runtime_transaction_handoff::ValidForCompiledPlan(*handoff, planAccess);
 }
@@ -206,7 +206,7 @@ QueueSubmissionToken GpuGraphSubmissionTransaction::taskToken(const GpuCompiledG
     return taskTokenLocked(planAccess, task);
 }
 
-bool GpuGraphSubmissionTransaction::externalResourceHandoff(
+b8 GpuGraphSubmissionTransaction::externalResourceHandoff(
     const GpuTaskGraph& graph,
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph& compiledGraph,
@@ -250,7 +250,7 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
         )
             return false;
 
-        bool foundProducer = false;
+        b8 foundProducer = false;
         for(const GpuTaskGraphExternalResourceHandoffProducer& producer : candidate.producers){
             if(planAccess.packetForTask(producer.producerTask) != packet)
                 continue;
@@ -380,7 +380,7 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
     return true;
 }
 
-bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(const GpuPhysicalQueueId& destinationQueue, Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens)const{
+b8 GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(const GpuPhysicalQueueId& destinationQueue, Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens)const{
     ScopedLock lock(m_mutex);
     if(!m_valid || !destinationQueue.valid() || destinationQueue.deviceGeneration != m_deviceGeneration)
         return false;

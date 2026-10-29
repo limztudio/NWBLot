@@ -22,7 +22,7 @@ namespace GpuTaskGraphBuiltinDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool UploadTextureTaskCanMaterializeRetainedState(const TextureDesc& resourceDesc, const ResourceStates::Mask graphInitialState, const ResourceStates::Mask externalFinalState, const ResourceStates::Mask uploadFinalState)noexcept{
+[[nodiscard]] b8 UploadTextureTaskCanMaterializeRetainedState(const TextureDesc& resourceDesc, const ResourceStates::Mask graphInitialState, const ResourceStates::Mask externalFinalState, const ResourceStates::Mask uploadFinalState)noexcept{
     if(!resourceDesc.keepInitialState)
         return true;
     if(resourceDesc.initialState == ResourceStates::Unknown || uploadFinalState != resourceDesc.initialState || (externalFinalState != ResourceStates::Unknown && externalFinalState != resourceDesc.initialState))

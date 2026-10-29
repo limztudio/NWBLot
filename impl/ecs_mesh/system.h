@@ -63,7 +63,7 @@ public:
     [[nodiscard]] Expected<Core::Assets::AssetRef<Mesh>> resolveMesh(Core::ECS::EntityID entity)const noexcept;
     // Distinguish non-rendering owners from temporarily unavailable meshes.
     [[nodiscard]] Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> resolveRenderableMeshStatus(Core::ECS::EntityID entity)const;
-    [[nodiscard]] bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const;
+    [[nodiscard]] b8 hasRuntimeMeshBinding(Core::ECS::EntityID entity)const;
     void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const;
 
 public:

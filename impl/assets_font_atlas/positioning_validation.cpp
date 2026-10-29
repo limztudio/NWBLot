@@ -174,10 +174,10 @@ public:
 
 
 public:
-    [[nodiscard]] bool kern()noexcept{
+    [[nodiscard]] b8 kern()noexcept{
         if(!range(0u, s_KernHeaderBytes))
             return false;
-        const bool apple = u32At(0u) == s_AppleKernVersion;
+        const b8 apple = u32At(0u) == s_AppleKernVersion;
         if(!apple && u16At(0u) != 0u)
             return false;
         if(apple && !range(0u, s_AppleKernHeaderBytes))
@@ -217,7 +217,7 @@ public:
         return offset == m_bytes.size();
     }
 
-    [[nodiscard]] bool gpos()noexcept{
+    [[nodiscard]] b8 gpos()noexcept{
         if(!range(0u, s_GposHeaderBytes) || u16At(0u) != 1u || u16At(s_OtMinorVersionOffset) > 1u)
             return false;
         const u64 scripts = u16At(s_GposScriptListOffset);
@@ -247,7 +247,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool gdef()noexcept{
+    [[nodiscard]] b8 gdef()noexcept{
         if(!range(0u, s_GdefHeaderBytes) || u16At(0u) != 1u || u16At(s_OtMinorVersionOffset) > s_GdefItemVarStoreMinorVersion || u16At(s_OtMinorVersionOffset) == 1u)
             return false;
         const u32 minor = u16At(s_OtMinorVersionOffset);
@@ -302,11 +302,11 @@ public:
 
 
 private:
-    [[nodiscard]] bool range(u64 offset, u64 count)noexcept{
+    [[nodiscard]] b8 range(u64 offset, u64 count)noexcept{
         return spend(1u) && offset <= m_bytes.size() && count <= m_bytes.size() - offset;
     }
 
-    [[nodiscard]] bool spend(u32 count)noexcept{
+    [[nodiscard]] b8 spend(u32 count)noexcept{
         if(count > m_budget)
             return false;
         m_budget -= count;
@@ -344,7 +344,7 @@ private:
         return glyphCount;
     }
 
-    [[nodiscard]] bool classDef(u64 offset, u32 classCount)noexcept{
+    [[nodiscard]] b8 classDef(u64 offset, u32 classCount)noexcept{
         if(offset == 0u)
             return true;
         if(!range(offset, s_ClassDefRangeHeaderBytes))
@@ -380,7 +380,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool device(u64 parent, u32 offset)noexcept{
+    [[nodiscard]] b8 device(u64 parent, u32 offset)noexcept{
         if(offset == 0u)
             return true;
         const u64 table = parent + offset;
@@ -401,7 +401,7 @@ private:
         return static_cast<u32>(CountSetBits(static_cast<u32>(format & s_ValueFormatFieldMask))) * s_OtU16Bytes;
     }
 
-    [[nodiscard]] bool value(u64 offset, u16 format, u64 parent)noexcept{
+    [[nodiscard]] b8 value(u64 offset, u16 format, u64 parent)noexcept{
         if((format & s_ValueFormatReservedMask) != 0u || !range(offset, valueSize(format)))
             return false;
         u32 field = 0u;
@@ -415,7 +415,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool langSys(u64 offset, u32 featureCount)noexcept{
+    [[nodiscard]] b8 langSys(u64 offset, u32 featureCount)noexcept{
         if(!range(offset, s_LangSysHeaderBytes) || u16At(offset) != 0u)
             return false;
         const u32 required = u16At(offset + s_LangSysRequiredFeatureOffset);
@@ -429,7 +429,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool scriptList(u64 offset, u32 featureCount)noexcept{
+    [[nodiscard]] b8 scriptList(u64 offset, u32 featureCount)noexcept{
         if(!range(offset, s_OtU16Bytes))
             return false;
         const u32 count = u16At(offset);
@@ -453,7 +453,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool featureList(u64 offset, u32 lookupCount)noexcept{
+    [[nodiscard]] b8 featureList(u64 offset, u32 lookupCount)noexcept{
         if(!range(offset, s_OtU16Bytes))
             return false;
         const u32 count = u16At(offset);
@@ -476,7 +476,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool pairPos(u64 offset)noexcept{
+    [[nodiscard]] b8 pairPos(u64 offset)noexcept{
         if(!range(offset, s_PairPosSetHeaderBytes))
             return false;
         const u16 format = u16At(offset);
@@ -531,7 +531,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] bool subtable(u64 offset, u32 type)noexcept{
+    [[nodiscard]] b8 subtable(u64 offset, u32 type)noexcept{
         if(!range(offset, s_PosSubtableHeaderBytes))
             return false;
         if(type == s_GposExtensionLookupType){
@@ -570,7 +570,7 @@ private:
         return (type == s_GposContextLookupType || type == s_GposChainedContextLookupType) && format >= 1u && format <= s_ContextMaxFormat;
     }
 
-    [[nodiscard]] bool lookupList(u64 offset)noexcept{
+    [[nodiscard]] b8 lookupList(u64 offset)noexcept{
         if(!range(offset, s_OtU16Bytes))
             return false;
         const u32 count = u16At(offset);
@@ -608,11 +608,11 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, const u32 glyphCount){
+b8 ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, const u32 glyphCount){
     if(table.bytes.empty() || table.bytes.size() > s_FontAtlasMaxPositioningBytes || glyphCount == 0u || glyphCount > s_FontAtlasMaxGlyphCount)
         return false;
     __hidden_font_atlas_positioning_validation::TableValidator validator(table.bytes, glyphCount);
-    const bool valid = table.tag == s_FontAtlasKernTag ? validator.kern() : table.tag == s_FontAtlasGposTag ? validator.gpos() : table.tag == s_FontAtlasGdefTag ? validator.gdef() : false;
+    const b8 valid = table.tag == s_FontAtlasKernTag ? validator.kern() : table.tag == s_FontAtlasGposTag ? validator.gpos() : table.tag == s_FontAtlasGdefTag ? validator.gdef() : false;
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: invalid or over-budget raw positioning table {}"), table.tag);
     return valid;

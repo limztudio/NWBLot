@@ -230,7 +230,7 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     using namespace __hidden_cpu_task_wait_tests;
     WaitDeadline deadline;
     Atomic<u32> entered{ 0u };
-    Atomic<bool> start{ false };
+    Atomic<b8> start{ false };
     Atomic<u32> visitsA{ 0u };
     Atomic<u32> visitsB{ 0u };
     CpuTaskSchedulerConfig config;
@@ -357,12 +357,12 @@ TEST(CpuTaskWaitTests, NestedJoinCanRetireAnUnrelatedAnchorWithoutNewPublication
 TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecution){
     using namespace __hidden_cpu_task_wait_tests;
     WaitDeadline deadline;
-    Atomic<bool> waiterEntered{ false };
-    Atomic<bool> blockerEntered{ false };
-    Atomic<bool> startWaiter{ false };
-    Atomic<bool> releaseBlocker{ false };
-    Atomic<bool> anchorEntered{ false };
-    Atomic<bool> releaseAnchor{ false };
+    Atomic<b8> waiterEntered{ false };
+    Atomic<b8> blockerEntered{ false };
+    Atomic<b8> startWaiter{ false };
+    Atomic<b8> releaseBlocker{ false };
+    Atomic<b8> anchorEntered{ false };
+    Atomic<b8> releaseAnchor{ false };
     Atomic<u32> joined{ 0u };
     Atomic<u32> unrelated{ 0u };
     CpuTaskSchedulerConfig config;
@@ -436,8 +436,8 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
 TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnchor){
     using namespace __hidden_cpu_task_wait_tests;
     WaitDeadline deadline;
-    Atomic<bool> entered{ false };
-    Atomic<bool> release{ false };
+    Atomic<b8> entered{ false };
+    Atomic<b8> release{ false };
     CpuTaskScheduler scheduler(1u);
     CpuTaskScope scope(scheduler);
     ScopeExit releaseOnFailure([&]()noexcept{ release.store(true, MemoryOrder::release); });

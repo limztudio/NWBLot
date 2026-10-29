@@ -92,7 +92,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
 
 
 // Origin lanes are x, y; caption height is splat across lanes.
-[[nodiscard]] static bool DrawSkinGallery(PaintBuilder& paint, const SIMDVectorSingle origin, const SIMDVectorSingle captionHeight){
+[[nodiscard]] static b8 DrawSkinGallery(PaintBuilder& paint, const SIMDVectorSingle origin, const SIMDVectorSingle captionHeight){
     const SIMDVectorSingle buttonNormal = VectorAdd(origin, VectorSet(s_LeftColumnX, s_ButtonTopY, 0.0f, 0.0f));
     const SIMDVectorSingle buttonHover = VectorAdd(origin, VectorSet(s_RightColumnX, s_ButtonTopY, 0.0f, 0.0f));
     const SIMDVectorSingle buttonPressed = VectorAdd(origin, VectorSet(s_LeftColumnX, s_ButtonBottomY, 0.0f, 0.0f));
@@ -120,7 +120,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
     ;
 }
 
-[[nodiscard]] static bool ConfigureLabel(Label& label, const StringView text, const f32 size = s_LabelFontSize){
+[[nodiscard]] static b8 ConfigureLabel(Label& label, const StringView text, const f32 size = s_LabelFontSize){
     return label.setText(ShapeRequest{ .text = text, .fontSize = size }) == NWB::Impl::Ui::TextLayoutStatus::Success;
 }
 
@@ -145,14 +145,14 @@ UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena)
     , m_widgets(arena)
 {
     using namespace __hidden_ui_skin_preview;
-    const bool configured = ConfigureLabel(m_normal, "Normal") && ConfigureLabel(m_hover, "Hover")
+    const b8 configured = ConfigureLabel(m_normal, "Normal") && ConfigureLabel(m_hover, "Hover")
         && ConfigureLabel(m_pressed, "Pressed") && ConfigureLabel(m_disabled, "Disabled")
         && ConfigureLabel(m_edit, "UTF-8 labels", s_LargeLabelFontSize) && ConfigureLabel(m_caption, "FreeType + HarfBuzz", s_LargeLabelFontSize)
         && m_korean.setText(ShapeRequest{ .text = s_KoreanText, .language = "ko", .fontSize = s_LabelFontSize, .scriptTag = NWB::Impl::Ui::TextScriptTag('H', 'a', 'n', 'g') }) == NWB::Impl::Ui::TextLayoutStatus::Success;
     NWB_FATAL_ASSERT_MSG(configured, NWB_TEXT("Testbed UI labels must have valid constant text"));
 }
 
-bool UiSkinPreview::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+b8 UiSkinPreview::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
     return m_widgets.loadAssets(arena, assets, sceneSubsystems);
 }
 
@@ -208,7 +208,7 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorPermute<1, 7, 2, 3>(buttonTextX, buttonTextY));
     const SIMDVectorSingle editOffset = VectorAdd(VectorSet(s_LeftTextX, s_EditFocusedY, 0.0f, 0.0f), VectorScale(VectorSubtract(VectorSet(0.0f, s_EditFocusedHeight, 0.0f, 0.0f), VectorSet(0.0f, edit->height, 0.0f, 0.0f)), 0.5f));
     const SIMDVectorSingle editOrigin = VectorAdd(origin, editOffset);
-    const bool captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin), s_CaptionWidth, caption->height })
+    const b8 captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin), s_CaptionWidth, caption->height })
         && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin), s_CaptionWidth, korean->height });
     if(!captionPainted){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI caption shaping or rasterization failed"));

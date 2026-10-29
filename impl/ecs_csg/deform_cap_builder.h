@@ -23,7 +23,7 @@ public:
     // SIMD-domain cores: inputs and outputs stay on vector lanes, never touch storage.
     [[nodiscard]] static SIMDVectorSingle AccumulateFanAreaVec(SIMDVectorSingle inAreaVec, SIMDVectorSingle originVec, SIMDVectorSingle firstVec, SIMDVectorSingle secondVec)noexcept;
     static void CollectBoundaryEdges(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges);
-    [[nodiscard]] static bool OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformCutLoopEdge> edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop);
+    [[nodiscard]] static b8 OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformCutLoopEdge> edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop);
     [[nodiscard]] static Expected<SIMDVectorSingleResult> CapNormal(SIMDVectorSingle areaVec)noexcept;
     [[nodiscard]] static Expected<u32> FillCapLoop(
         const SIMDVectorSingle loopNormalVec,

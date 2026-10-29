@@ -44,7 +44,7 @@ public:
     [[nodiscard]] UiSkinSelectionResult::Enum ensure(
         const Core::Assets::AssetRef<UiSkin>& basicSkin,
         TTryBind&& tryBind
-    )noexcept(noexcept(static_cast<bool>(tryBind(m_selected))) && noexcept(static_cast<bool>(tryBind(basicSkin))) && noexcept(static_cast<bool>(true || !tryBind(basicSkin)))){
+    )noexcept(noexcept(static_cast<b8>(tryBind(m_selected))) && noexcept(static_cast<b8>(tryBind(basicSkin))) && noexcept(static_cast<b8>(true || !tryBind(basicSkin)))){
         if(m_selected.valid())
             return tryBind(m_selected) ? UiSkinSelectionResult::Selected : UiSkinSelectionResult::Failed;
         if(!basicSkin.valid())
@@ -75,12 +75,12 @@ public:
 
     template<typename TTryBind>
     [[nodiscard]] UiSkinChangeResult::Enum applyChangeIfReady(
-        const bool resourcesReady,
-        const bool gpuFramePending,
-        const bool layoutPending,
+        const b8 resourcesReady,
+        const b8 gpuFramePending,
+        const b8 layoutPending,
         const Core::Assets::AssetRef<UiSkin>& basicSkin,
         TTryBind&& tryBind
-    )noexcept(noexcept(static_cast<bool>(!tryBind(basicSkin, DeclVal<const u64&>())))){
+    )noexcept(noexcept(static_cast<b8>(!tryBind(basicSkin, DeclVal<const u64&>())))){
         if(!m_changePending || !resourcesReady || gpuFramePending || layoutPending)
             return UiSkinChangeResult::Deferred;
         m_changePending = false;
@@ -108,9 +108,9 @@ public:
 
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
 
-    [[nodiscard]] bool changePending()const noexcept{ return m_changePending; }
+    [[nodiscard]] b8 changePending()const noexcept{ return m_changePending; }
 
-    [[nodiscard]] bool changeFailed()const noexcept{ return m_changeFailed; }
+    [[nodiscard]] b8 changeFailed()const noexcept{ return m_changeFailed; }
 
 
 private:
@@ -118,8 +118,8 @@ private:
     Core::Assets::AssetRef<UiSkin> m_selected;
     Core::Assets::AssetRef<UiSkin> m_requestedChange;
     u64 m_generation = 1u;
-    bool m_changePending = false;
-    bool m_changeFailed = false;
+    b8 m_changePending = false;
+    b8 m_changeFailed = false;
 };
 
 

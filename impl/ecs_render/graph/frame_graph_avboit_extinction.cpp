@@ -52,19 +52,19 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
     const Core::GpuGraphResourceId csgCutters = inputs.csgCutters;
     const Core::GpuGraphResourceId csgClipContextSlots = inputs.csgClipContextSlots;
     const Core::GpuGraphResourceId csgIntervalSampleState = inputs.csgIntervalSampleState;
-    const bool intervalOutputsGraphOwned = inputs.intervalOutputsGraphOwned;
+    const b8 intervalOutputsGraphOwned = inputs.intervalOutputsGraphOwned;
     Core::GpuTaskId extinctionUploadTask = inputs.uploadTask;
-    bool extinctionStreamsUploaded = false;
-    bool extinctionCsgStreamsUploaded = false;
-    bool extinctionRegularComputeEmulationPlanCaptured = false;
+    b8 extinctionStreamsUploaded = false;
+    b8 extinctionCsgStreamsUploaded = false;
+    b8 extinctionRegularComputeEmulationPlanCaptured = false;
     Core::GpuTaskId extinctionReusedGeometryProducer;
-    bool extinctionProducesReusableGeometry = false;
-    bool extinctionCsgComputeEmulationPlanCaptured = false;
-    bool extinctionSharedComputeEmulationPlanCaptured = false;
+    b8 extinctionProducesReusableGeometry = false;
+    b8 extinctionCsgComputeEmulationPlanCaptured = false;
+    b8 extinctionSharedComputeEmulationPlanCaptured = false;
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan extinctionSharedComputeEmulationPlan;
     usize extinctionSharedComputeEmulationInstanceCount = 0u;
     usize extinctionSharedComputeEmulationMaterialTypedByteCount = 0u;
-    bool extinctionMaterialSampledTexturesCollected = false;
+    b8 extinctionMaterialSampledTexturesCollected = false;
     Core::GpuGraphResourceSetId extinctionMaterialGeometrySet;
     Core::GpuGraphResourceSetId extinctionMaterialSampledTextureSet;
     result.uploadTask = extinctionUploadTask;
@@ -105,7 +105,7 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
             return MakeUnexpected(Failure{});
         }
 
-        const bool extinctionHasCsgDrawItems = extinctionUploadResult->hasCsgDrawItems;
+        const b8 extinctionHasCsgDrawItems = extinctionUploadResult->hasCsgDrawItems;
         if(extinctionHasCsgDrawItems && !intervalOutputsGraphOwned){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: clipped AVBOIT extinction draws require prepared interval outputs"));
             return MakeUnexpected(Failure{});

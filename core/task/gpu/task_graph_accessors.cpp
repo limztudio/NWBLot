@@ -17,31 +17,31 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::validTask(const GpuTaskId& id)const noexcept{
+b8 GpuTaskGraph::validTask(const GpuTaskId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_tasks.size();
 }
 
-bool GpuTaskGraph::validResource(const GpuGraphResourceId& id)const noexcept{
+b8 GpuTaskGraph::validResource(const GpuGraphResourceId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_resources.size();
 }
 
-bool GpuTaskGraph::validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept{
+b8 GpuTaskGraph::validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_resourceVersions.size();
 }
 
-bool GpuTaskGraph::validResourceSet(const GpuGraphResourceSetId& id)const noexcept{
+b8 GpuTaskGraph::validResourceSet(const GpuGraphResourceSetId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_resourceSets.size();
 }
 
-bool GpuTaskGraph::validUploadBlob(const GpuUploadBlobId& id)const noexcept{
+b8 GpuTaskGraph::validUploadBlob(const GpuUploadBlobId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_uploadBlobs.size() && !m_uploadBlobs[id.index].bytes.empty();
 }
 
-bool GpuTaskGraph::validPipeline(const GpuGraphPipelineId& id)const noexcept{
+b8 GpuTaskGraph::validPipeline(const GpuGraphPipelineId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_pipelines.size();
 }
 
-bool GpuTaskGraph::validExternalCompletion(const GpuExternalCompletionId& id)const noexcept{
+b8 GpuTaskGraph::validExternalCompletion(const GpuExternalCompletionId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_externalCompletions.size();
 }
 

@@ -34,7 +34,7 @@ usize MaterialPipelineKeyHasher::operator()(const MaterialPipelineKey& key)const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept{
+b8 MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept{
     return
         lhs.material == rhs.material
         && lhs.pass == rhs.pass

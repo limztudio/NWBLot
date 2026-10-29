@@ -26,7 +26,7 @@ namespace HardwareRayTracingPolicy{
     };
 };
 
-[[nodiscard]] constexpr bool IsValidHardwareRayTracingPolicy(const HardwareRayTracingPolicy::Enum policy)noexcept{
+[[nodiscard]] constexpr b8 IsValidHardwareRayTracingPolicy(const HardwareRayTracingPolicy::Enum policy)noexcept{
     return policy == HardwareRayTracingPolicy::Disabled || policy == HardwareRayTracingPolicy::Automatic;
 }
 

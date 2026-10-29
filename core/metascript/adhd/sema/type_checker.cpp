@@ -20,7 +20,7 @@ namespace __hidden_adhd_type_checker{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool TypeRefReferencesAlias(
+[[nodiscard]] b8 TypeRefReferencesAlias(
     const TypeRef* type,
     const MStringView targetAliasName,
     const SymbolTable& symbols,
@@ -50,7 +50,7 @@ namespace __hidden_adhd_type_checker{
     return false;
 }
 
-[[nodiscard]] bool ExprUsesOutOfLineConstruct(const Expr* expr)noexcept{
+[[nodiscard]] b8 ExprUsesOutOfLineConstruct(const Expr* expr)noexcept{
     if(!expr)
         return false;
     if(!expr->resolvedSimdType.empty() || expr->kind == ExprKind::Lambda)
@@ -69,7 +69,7 @@ namespace __hidden_adhd_type_checker{
     return false;
 }
 
-[[nodiscard]] bool StmtListIsAutoInlineable(const MVector<Stmt*>& stmts, u32& inOutCount)noexcept{
+[[nodiscard]] b8 StmtListIsAutoInlineable(const MVector<Stmt*>& stmts, u32& inOutCount)noexcept{
     for(const Stmt* s : stmts){
         if(!s)
             continue;
@@ -112,7 +112,7 @@ namespace __hidden_adhd_type_checker{
     return true;
 }
 
-[[nodiscard]] bool ShouldAutoInlineCallable(const MethodDecl& fn)noexcept{
+[[nodiscard]] b8 ShouldAutoInlineCallable(const MethodDecl& fn)noexcept{
     if(!fn.hasBody || fn.isOutOfLine || fn.usesScratchArena || fn.usesTaskScope)
         return false;
     if(!fn.templateParams.empty())
@@ -124,10 +124,10 @@ namespace __hidden_adhd_type_checker{
 [[nodiscard]] const MethodDecl* FindScoredClassCallable(
     const ClassDecl& classDecl,
     const MStringView name,
-    const bool isOperator,
+    const b8 isOperator,
     const usize* preferredArgCount,
-    const bool preferConst,
-    const bool requirePublic
+    const b8 preferConst,
+    const b8 requirePublic
 )noexcept{
     const MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
@@ -159,8 +159,8 @@ namespace __hidden_adhd_type_checker{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
-    bool ok = true;
+b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
+    b8 ok = true;
 
     if(!m_symbols.build(unit, errors))
         ok = false;
@@ -282,8 +282,8 @@ bool TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError
     return ok;
 }
 
-bool TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>& errors){
-    bool ok = true;
+b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>& errors){
+    b8 ok = true;
 
     for(MethodDecl* ool : unit.outOfLineMethods){
         ClassDecl* cls = m_symbols.findClass(ool->ownerClassName);
@@ -298,7 +298,7 @@ bool TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError
             ok = false;
             continue;
         }
-        bool ownerTemplateNamesMatch = true;
+        b8 ownerTemplateNamesMatch = true;
         for(usize tIdx = 0u; tIdx < cls->templateParams.size(); ++tIdx){
             if(cls->templateParams[tIdx].name != ool->ownerTemplateParams[tIdx]){
                 reportError(errors, ool->span, "out-of-line method owner class template parameter name does not match class declaration");
@@ -359,7 +359,7 @@ bool TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError
             }
         }
 
-        bool paramsMatch = true;
+        b8 paramsMatch = true;
         for(usize pIdx = 0u; pIdx < matched->params.size(); ++pIdx){
             const ParamDecl& declP = matched->params[pIdx];
             const ParamDecl& oolP = ool->params[pIdx];
@@ -457,8 +457,8 @@ const MethodDecl* TypeChecker::findClassMethod(
     const ClassDecl& classDecl,
     const MStringView name,
     const usize* preferredArgCount,
-    const bool preferConst,
-    const bool requirePublic
+    const b8 preferConst,
+    const b8 requirePublic
 )noexcept{
     return __hidden_adhd_type_checker::FindScoredClassCallable(classDecl, name, false, preferredArgCount, preferConst, requirePublic);
 }
@@ -467,8 +467,8 @@ const MethodDecl* TypeChecker::findClassOperator(
     const ClassDecl& classDecl,
     const MStringView opName,
     const usize* preferredArgCount,
-    const bool preferConst,
-    const bool requirePublic
+    const b8 preferConst,
+    const b8 requirePublic
 )noexcept{
     return __hidden_adhd_type_checker::FindScoredClassCallable(classDecl, opName, true, preferredArgCount, preferConst, requirePublic);
 }
@@ -476,7 +476,7 @@ const MethodDecl* TypeChecker::findClassOperator(
 const MethodDecl* TypeChecker::findClassConstructor(
     const ClassDecl& classDecl,
     const usize argCount,
-    const bool requirePublic
+    const b8 requirePublic
 )noexcept{
     const MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;

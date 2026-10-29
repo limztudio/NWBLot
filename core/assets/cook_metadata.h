@@ -184,13 +184,13 @@ public:
 
 
 void RegisterCompositeRootAssetType(const Name& assetType);
-[[nodiscard]] bool IsCompositeRootAssetType(const Name& assetType);
+[[nodiscard]] b8 IsCompositeRootAssetType(const Name& assetType);
 [[nodiscard]] Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookArena, Span<const ResolvedAssetRoot> assetRoots, AStringView expectedExtension, ScratchArena& scratchArena);
-[[nodiscard]] bool AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
+[[nodiscard]] b8 AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
 [[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context);
-[[nodiscard]] bool ParseAssetMetadata(CookArena& cookArena, Span<const DiscoveredNwbFile> nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata);
+[[nodiscard]] b8 ParseAssetMetadata(CookArena& cookArena, Span<const DiscoveredNwbFile> nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

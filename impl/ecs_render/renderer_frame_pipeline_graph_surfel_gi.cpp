@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererFramePipeline::declareDeferredSurfelGiTask(
+b8 RendererFramePipeline::declareDeferredSurfelGiTask(
     const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
@@ -43,7 +43,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     const Core::GpuGraphResourceSetId traceGeometrySet,
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
     const Core::GpuTaskId effectsTask,
-    const bool useLaggedLightingHistory,
+    const b8 useLaggedLightingHistory,
     const Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
     Core::Alloc::ScratchArena& scratchArena,
     DeferredFrameTargets& deferredTargets,
@@ -80,9 +80,9 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     )
         return false;
 
-    const bool useHwTrace = rayTracingResources.surfelUsesHardwareTrace;
-    const bool hasSurfelWork = m_raytracingSystem.hasSurfelWork();
-    const bool traceGeometryStatesGraphOwned = traceGeometrySet.valid();
+    const b8 useHwTrace = rayTracingResources.surfelUsesHardwareTrace;
+    const b8 hasSurfelWork = m_raytracingSystem.hasSurfelWork();
+    const b8 traceGeometryStatesGraphOwned = traceGeometrySet.valid();
     const RendererFramePipelineDetail::TraceResourceSetUses traceResourceSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet);
     constexpr usize s_TraceResourceSetUseCapacity = 2u;
     Core::GpuTaskResourceSetUse traceResourceSetUses[s_TraceResourceSetUseCapacity] = {};
@@ -98,7 +98,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         Core::GpuTaskExternalStateSource values[s_StateSourceCapacity] = {};
         usize count = 0u;
     };
-    const auto makeSurfelGiTaskStateSources = [&](const bool includeCompute, const bool includeCounter, const bool includeIrradianceReturn)noexcept{
+    const auto makeSurfelGiTaskStateSources = [&](const b8 includeCompute, const b8 includeCounter, const b8 includeIrradianceReturn)noexcept{
         SurfelGiTaskStateSourceSet result;
         if(includeCompute && surfelGiComputeStateSource.states){
             result.values[result.count] = surfelGiComputeStateSource;
@@ -139,7 +139,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     constexpr usize s_SurfelTraceResourceUseCapacity = 17u;
     // The CSG trace context and the surfel counter it updates.
     constexpr usize s_SurfelCsgTraceContextUseCapacity = 2u;
-    const bool hasCsgTraceContext = rayTracingResources.csgTraceContextBuffer.get() != nullptr;
+    const b8 hasCsgTraceContext = rayTracingResources.csgTraceContextBuffer.get() != nullptr;
     resourceUses.reserve(s_SurfelResourceUseCapacity + (hasCsgTraceContext ? 1u : 0u) + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
     traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (hasCsgTraceContext ? s_SurfelCsgTraceContextUseCapacity : 0u) + rayTracingResources.csgTraceBoundsBuffers.size() + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
     resourceUses.push_back(ReadUse(worldPosition));
@@ -242,7 +242,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         surfelCellHeadSnapshot = *surfelCellHeadSnapshotResult;
         return {};
     };
-    bool optionalResourcesImported = importOptionalResources().has_value();
+    b8 optionalResourcesImported = importOptionalResources().has_value();
     if(optionalResourcesImported && rayTracingResources.csgTraceContextBuffer){
         {
             const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
@@ -293,7 +293,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     }
 
 
-    const bool graphOwnsSurfelGiResolve =
+    const b8 graphOwnsSurfelGiResolve =
         hasSurfelWork
         && shadowInstanceMaterials.valid()
         && shadowMaterialTyped.valid()

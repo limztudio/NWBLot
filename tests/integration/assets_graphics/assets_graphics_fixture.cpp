@@ -91,13 +91,13 @@ AssetsGraphicsFixture::AString AssetsGraphicsFixture::BuildMeshTriangleMeta(cons
 
 
 #endif
-bool AssetsGraphicsFixture::PrepareCleanDirectory(const AssetsGraphicsFixture::Path& directory){
+b8 AssetsGraphicsFixture::PrepareCleanDirectory(const AssetsGraphicsFixture::Path& directory){
     if(!RemoveAllIfExists(directory))
         return false;
     return EnsureDirectories(directory).has_value();
 }
 
-bool AssetsGraphicsFixture::WriteTextFile(const AssetsGraphicsFixture::Path& filePath, const AStringView text){
+b8 AssetsGraphicsFixture::WriteTextFile(const AssetsGraphicsFixture::Path& filePath, const AStringView text){
     if(!EnsureDirectories(filePath.parentPath()))
         return false;
 
@@ -166,7 +166,7 @@ Expected<AssetsGraphicsFixture::CookCase> AssetsGraphicsFixture::PrepareAssetsGr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
+b8 AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
     AssetsGraphicsFixture::TestArena& testArena,
     const AssetsGraphicsFixture::Path& root,
     const AssetsGraphicsFixture::Path& outputDirectory,
@@ -198,7 +198,7 @@ bool AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(
+b8 AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(
     AssetsGraphicsFixture::TestArena& testArena,
     const AssetsGraphicsFixture::Path& root,
     const AssetsGraphicsFixture::Path& outputDirectory,
@@ -217,7 +217,7 @@ bool AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(
     return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions);
 }
 
-bool AssetsGraphicsFixture::CookSingleGraphicsMeta(const AStringView metaText, AStringView assetDirectory, AStringView assetFilename, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
+b8 AssetsGraphicsFixture::CookSingleGraphicsMeta(const AStringView metaText, AStringView assetDirectory, AStringView assetFilename, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
     const Path assetRoot = cookCase.root / __hidden_assets_graphics_fixture::s_AssetsDirectory;
     const Path metaPath = assetRoot / assetDirectory / assetFilename;
     if(!WriteTextFile(metaPath, metaText))
@@ -230,7 +230,7 @@ bool AssetsGraphicsFixture::CookSingleGraphicsMeta(const AStringView metaText, A
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::CookSingleMinimalAssetMeta(const AStringView metaText, const AssetsGraphicsFixture::MinimalAssetCookInfo& cookInfo, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
+b8 AssetsGraphicsFixture::CookSingleMinimalAssetMeta(const AStringView metaText, const AssetsGraphicsFixture::MinimalAssetCookInfo& cookInfo, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
     return CookSingleGraphicsMeta(metaText, cookInfo.assetDirectory, cookInfo.assetFilename, testArena, cookCase);
 }
 
@@ -238,7 +238,7 @@ bool AssetsGraphicsFixture::CookSingleMinimalAssetMeta(const AStringView metaTex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::CookSingleMeshMeta(const AStringView metaText, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
+b8 AssetsGraphicsFixture::CookSingleMeshMeta(const AStringView metaText, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
     static constexpr MinimalAssetCookInfo s_CookInfo{ "meshes", "minimal_mesh.nwb" };
     return CookSingleMinimalAssetMeta(metaText, s_CookInfo, testArena, cookCase);
 }
@@ -258,7 +258,7 @@ Expected<AssetsGraphicsFixture::AString> AssetsGraphicsFixture::ReadSmokeAssetMe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::CookSmokeAssetMeta(AStringView assetDirectory, AStringView assetFilename, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
+b8 AssetsGraphicsFixture::CookSmokeAssetMeta(AStringView assetDirectory, AStringView assetFilename, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
     const auto metaText = ReadSmokeAssetMeta(testArena, assetDirectory, assetFilename);
     if(!metaText)
         return false;
@@ -270,7 +270,7 @@ bool AssetsGraphicsFixture::CookSmokeAssetMeta(AStringView assetDirectory, AStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::CookSmokeMeshMeta(AStringView assetFilename, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
+b8 AssetsGraphicsFixture::CookSmokeMeshMeta(AStringView assetFilename, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
     return CookSmokeAssetMeta(__hidden_assets_graphics_fixture::s_MeshesDirectory, assetFilename, testArena, cookCase);
 }
 
@@ -284,7 +284,7 @@ namespace __hidden_assets_graphics_fixture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool WriteMaterialBindDiscoveryMetadata(const AssetsGraphicsFixture::Path& assetRoot){
+static b8 WriteMaterialBindDiscoveryMetadata(const AssetsGraphicsFixture::Path& assetRoot){
     if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / __hidden_assets_graphics_fixture::s_MaterialInterfacesDirectory / "bind_discovery.nwb", "include asset;\r\n\r\nasset.defines = { \"NWB_TEST_MATERIAL_BIND_DISCOVERY\": [\"1\"] };\r\n"))
         return false;
     return AssetsGraphicsFixture::WriteTextFile(
@@ -309,7 +309,7 @@ static bool WriteMaterialBindDiscoveryMetadata(const AssetsGraphicsFixture::Path
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::CookMinimalMeshWithMaterialBind(const AStringView bindText, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
+b8 AssetsGraphicsFixture::CookMinimalMeshWithMaterialBind(const AStringView bindText, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
     const Path assetRoot = cookCase.root / __hidden_assets_graphics_fixture::s_AssetsDirectory;
     if(!__hidden_assets_graphics_fixture::WriteMaterialBindDiscoveryMetadata(assetRoot))
         return false;
@@ -366,7 +366,7 @@ Expected<AssetsGraphicsFixture::Path> AssetsGraphicsFixture::EmitDuplicateGenera
 
 
 #endif
-bool AssetsGraphicsFixture::WriteMaterialBindShaderProbeSource(
+b8 AssetsGraphicsFixture::WriteMaterialBindShaderProbeSource(
     AssetsGraphicsFixture::TestArena& testArena,
     const AssetsGraphicsFixture::Path& assetRoot,
     AStringView shaderAssetType,
@@ -387,7 +387,7 @@ bool AssetsGraphicsFixture::WriteMaterialBindShaderProbeSource(
     return WriteTextFile(assetRoot / __hidden_assets_graphics_fixture::s_ShadersDirectory / sourceFilename, sourceText);
 }
 
-bool AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
+b8 AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
     AssetsGraphicsFixture::TestArena& testArena,
     const AssetsGraphicsFixture::Path& assetRoot,
     const AStringView bindText,
@@ -405,11 +405,11 @@ bool AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelS
     return WriteTextFile(assetRoot / "materials" / "test_material.nwb", materialText);
 }
 
-bool AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssets(AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::Path& assetRoot, const AStringView bindText, const AStringView materialText){
+b8 AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssets(AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::Path& assetRoot, const AStringView bindText, const AStringView materialText){
     return WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(testArena, assetRoot, bindText, materialText, s_MaterialBindShaderProbeSource);
 }
 
-bool AssetsGraphicsFixture::CookMaterialBindMaterialIntegrationWithPixelSource(
+b8 AssetsGraphicsFixture::CookMaterialBindMaterialIntegrationWithPixelSource(
     const AStringView bindText,
     const AStringView materialText,
     const AStringView pixelSourceText,
@@ -427,7 +427,7 @@ bool AssetsGraphicsFixture::CookMaterialBindMaterialIntegrationWithPixelSource(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::CookMaterialBindMaterialIntegration(const AStringView bindText, const AStringView materialText, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
+b8 AssetsGraphicsFixture::CookMaterialBindMaterialIntegration(const AStringView bindText, const AStringView materialText, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
     return CookMaterialBindMaterialIntegrationWithPixelSource(bindText, materialText, s_MaterialBindShaderProbeSource, testArena, cookCase);
 }
 
@@ -464,14 +464,14 @@ Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> AssetsGrap
     mountDesc.volumeName = __hidden_assets_graphics_fixture::s_GraphicsDirectory.data();
     mountDesc.mountDirectory = outputDirectory;
     auto filesystemResult = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
-    const bool loadedVolume = static_cast<bool>(filesystemResult);
+    const b8 loadedVolume = static_cast<b8>(filesystemResult);
     EXPECT_TRUE(loadedVolume);
     if(!loadedVolume)
         return MakeUnexpected(filesystemResult.error());
     UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = Move(*filesystemResult);
 
     NWB::Core::GraphicsBytes indexBinary(testArena.arena);
-    const bool loadedIndex = filesystem->readFile(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary);
+    const b8 loadedIndex = filesystem->readFile(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary);
     EXPECT_TRUE(loadedIndex);
     EXPECT_FALSE(indexBinary.empty());
     if(!loadedIndex || indexBinary.empty())
@@ -486,10 +486,10 @@ Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> AssetsGrap
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::EncodeTestMeshletRefs(
+b8 AssetsGraphicsFixture::EncodeTestMeshletRefs(
     const Span<const NWB::Impl::MeshletPositionStreamRef> positionRefs,
     const Span<const NWB::Impl::MeshletAttributeStreamRef> attributeRefs,
-    const bool skinRequired,
+    const b8 skinRequired,
     const Span<NWB::Impl::MeshletDesc> meshlets,
     NWB::Core::Assets::AssetVector<u8>& outPositionRefDeltas,
     NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas

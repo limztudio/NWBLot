@@ -45,7 +45,7 @@ struct FrameExecuteTimingState final : NoCopy{
     Core::GpuTimingSubmissionTicket* graphicsPrefixTimingTickets[s_GraphicsPrefixTimingTicketCount];
     Core::GpuTimingSubmissionTicket* const graphicsPrefixOwnedTimingTickets[s_GraphicsPrefixTimingTicketCount];
     // AsyncPrefix is valid only when the endpoints share one submission.
-    bool asyncPrefixTimingSpansOnePacket = true;
+    b8 asyncPrefixTimingSpansOnePacket = true;
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Optional<Core::GpuTimingMeasure> deferredClearTiming;
     GraphClearTimingRecordState deferredClearTimingState;
@@ -110,7 +110,7 @@ public:
         const Core::GpuTaskId (&graphicsPrefixTimingTasks)[s_GraphicsPrefixTimingTicketCount],
         usize graphicsPrefixUniquePacketCount,
         const RendererAvboitTaskGraphValidation& avboitValidation,
-        bool hardwareShadowSupported,
+        b8 hardwareShadowSupported,
         usize ticketCapacity,
         Core::GpuTaskGraphTaskTimingTicket* tickets
     );

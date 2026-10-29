@@ -32,7 +32,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, NWB_TEXT("SkeletonAssetCodec::serialize")))
         return false;
 
@@ -93,11 +93,11 @@ static constexpr AStringView s_SkeletonMetaDiagnosticPrefix = "Skeleton meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateSkeletonAssetFields(const Path& nwbFilePath, const Value& asset){
+[[nodiscard]] b8 ValidateSkeletonAssetFields(const Path& nwbFilePath, const Value& asset){
     return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix, { s_JointsField });
 }
 
-[[nodiscard]] bool ValidateSkeletonJointFields(const Path& nwbFilePath, const Value& joint){
+[[nodiscard]] b8 ValidateSkeletonJointFields(const Path& nwbFilePath, const Value& joint){
     return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, joint, "Skeleton joint", { s_NameField, s_ParentField, s_LocalBindPoseField });
 }
 

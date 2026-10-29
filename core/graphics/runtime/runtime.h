@@ -94,7 +94,7 @@ public:
         ResourceStates::Mask physicalInitialState = ResourceStates::Unknown;
         // See BufferSetupDesc::queue; the resolved native consumer must be admitted by the destination sharing contract.
         CommandQueue::Enum queue = CommandQueue::kCount;
-        bool hasPhysicalInitialState = false;
+        b8 hasPhysicalInitialState = false;
     };
 
     struct MeshSetupDesc{
@@ -107,7 +107,7 @@ public:
         u32 vertexStride = 0;
         // Forwarded to the constituent buffer setups' native consumer readiness contracts.
         CommandQueue::Enum queue = CommandQueue::kCount;
-        bool use32BitIndices = true;
+        b8 use32BitIndices = true;
     };
 
     struct MeshResource{
@@ -120,7 +120,7 @@ public:
 
 
     public:
-        [[nodiscard]] bool valid()const noexcept{
+        [[nodiscard]] b8 valid()const noexcept{
             return vertexBuffer != nullptr;
         }
     };
@@ -147,49 +147,49 @@ public:
 
 
 public:
-    bool init(const Common::FrameData& data);
-    bool createHeadlessDevice();
-    bool createInstance(const InstanceParameters& params);
-    bool setDebugRuntimeEnabled(bool enabled)noexcept;
+    b8 init(const Common::FrameData& data);
+    b8 createHeadlessDevice();
+    b8 createInstance(const InstanceParameters& params);
+    b8 setDebugRuntimeEnabled(b8 enabled)noexcept;
     // Controls actual hardware RT extensions/features for the next logical device. Must precede instance creation.
-    bool setHardwareRayTracingPolicy(HardwareRayTracingPolicy::Enum policy)noexcept;
+    b8 setHardwareRayTracingPolicy(HardwareRayTracingPolicy::Enum policy)noexcept;
     // Selects the native mesh-shader path when the backend supports it. Disabled configs use compute emulation.
     // Must be configured before instance creation.
-    bool setNativeMeshShadersEnabled(bool enabled)noexcept;
+    b8 setNativeMeshShadersEnabled(b8 enabled)noexcept;
     // Must be configured before device creation. Unsupported adapters retain the Graphics-only path.
-    bool setAsyncComputeLaneEnabled(bool enabled)noexcept;
+    b8 setAsyncComputeLaneEnabled(b8 enabled)noexcept;
     // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
-    bool setTransferQueueEnabled(bool enabled)noexcept;
+    b8 setTransferQueueEnabled(b8 enabled)noexcept;
     // Must be configured before device creation.
     // May expose extra queues per active family plus one auxiliary family per class when cross-family routing is on.
-    bool setSameClassMultiQueueEnabled(bool enabled)noexcept;
+    b8 setSameClassMultiQueueEnabled(b8 enabled)noexcept;
     // Extends optional same-class discovery to distinct compatible Vulkan families.
     // Individual graph tasks must still explicitly accept the resulting ownership-transfer route.
-    bool setCrossFamilySameClassQueueRoutingEnabled(bool enabled)noexcept;
+    b8 setCrossFamilySameClassQueueRoutingEnabled(b8 enabled)noexcept;
     // Selects a Vulkan adapter index, or -1 for the backend default.
     // Must be configured before device creation so paired processes can reproduce a multi-adapter route.
-    bool setAdapterIndex(i32 index)noexcept;
+    b8 setAdapterIndex(i32 index)noexcept;
     // Requests HDR10/PQ presentation where the current display surface supports it.
     // Unsupported surfaces automatically retain the normal SDR swap chain.
     // Must be configured before device creation.
-    bool setHDR10OutputEnabled(bool enabled)noexcept;
+    b8 setHDR10OutputEnabled(b8 enabled)noexcept;
     // Requests transfer-source usage for presentation images.
     // Unsupported surfaces retain the normal swap chain and report readback unavailable.
     // Must be configured before device creation.
-    bool setSwapChainReadbackEnabled(bool enabled)noexcept;
-    bool setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept;
+    b8 setSwapChainReadbackEnabled(b8 enabled)noexcept;
+    b8 setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept;
     void setPipelineCacheDirectory(const Path& directory);
-    bool setFilesystemFactory(const Filesystem::FilesystemFactory& factory);
+    b8 setFilesystemFactory(const Filesystem::FilesystemFactory& factory);
     // Holds the update/event loop while runFrame records nothing, so an external capture can sample the last finished frame.
-    void setFrameSubmissionSuspended(bool suspended)noexcept{ m_frameSubmissionSuspended = suspended; }
-    bool runFrame();
+    void setFrameSubmissionSuspended(b8 suspended)noexcept{ m_frameSubmissionSuspended = suspended; }
+    b8 runFrame();
     // A render pass calls this when an accepted cross-queue release is unrecoverable. The generation stops; the owner recreates device/resources.
     void requestDeviceRecreation()const;
-    [[nodiscard]] bool isDeviceRecreationRequested()const noexcept{ return m_deviceRecreationRequested; }
-    [[nodiscard]] bool updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
-    [[nodiscard]] bool destroy();
-    [[nodiscard]] bool waitForIdle();
-    [[nodiscard]] bool isDeviceLost()const noexcept;
+    [[nodiscard]] b8 isDeviceRecreationRequested()const noexcept{ return m_deviceRecreationRequested; }
+    [[nodiscard]] b8 updateWindowState(u32 width, u32 height, b8 windowVisible, b8 windowIsInFocus);
+    [[nodiscard]] b8 destroy();
+    [[nodiscard]] b8 waitForIdle();
+    [[nodiscard]] b8 isDeviceLost()const noexcept;
 
 
 public:
@@ -198,7 +198,7 @@ public:
     [[nodiscard]] Expected<GraphicsVector<AdapterInfo>> enumerateAdapters();
     // Identity comes from the selected physical device, not a later enumeration. Valid after device creation.
     [[nodiscard]] Expected<AdapterInfo> getSelectedAdapterInfo()const;
-    [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature)const noexcept;
+    [[nodiscard]] b8 queryFeatureSupport(Feature::Enum feature)const noexcept;
     // Wave/subgroup size, or 64 when the device cannot report it. Sizes groupshared reductions and wave-intrinsic specializations.
     [[nodiscard]] u32 queryWaveLaneCount()const noexcept;
 
@@ -209,8 +209,8 @@ public:
     // The deferred graph claims the current swap-chain binary semaphore and attaches it to its exact terminal packet.
     // Direct/non-graph render paths receive an empty hook and retain BackendContext::present()'s fallback.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
-    [[nodiscard]] bool confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept;
-    [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
+    [[nodiscard]] b8 confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] b8 cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
 
     // Optional overlays register here instead of coupling a renderer directly to their module.
     // The active contributor may append one final Graphics packet to a renderer-owned task graph before presentation.
@@ -253,13 +253,13 @@ public:
 
     [[nodiscard]] const GpuTimingRecorder& gpuTiming()const noexcept{ return m_gpuTiming; }
 
-    [[nodiscard]] bool isVSyncEnabled()const noexcept{ return m_swapChainState.vsyncEnabled; }
+    [[nodiscard]] b8 isVSyncEnabled()const noexcept{ return m_swapChainState.vsyncEnabled; }
 
-    [[nodiscard]] bool isHDR10OutputActive()const noexcept{ return m_swapChainState.outputMode == SwapChainOutputMode::HDR10; }
+    [[nodiscard]] b8 isHDR10OutputActive()const noexcept{ return m_swapChainState.outputMode == SwapChainOutputMode::HDR10; }
 
-    [[nodiscard]] bool isSwapChainReadbackAvailable()const noexcept{ return m_swapChainState.swapChainReadbackAvailable; }
+    [[nodiscard]] b8 isSwapChainReadbackAvailable()const noexcept{ return m_swapChainState.swapChainReadbackAvailable; }
 
-    void setVSyncEnabled(bool enabled)noexcept{ m_requestedVSync = enabled; }
+    void setVSyncEnabled(b8 enabled)noexcept{ m_requestedVSync = enabled; }
 
     void getWindowDimensions(i32& width, i32& height)const noexcept;
     void getDPIScaleInfo(f32& x, f32& y)const noexcept;
@@ -279,7 +279,7 @@ public:
 
     [[nodiscard]] Expected<BufferHandle> setupBuffer(const BufferSetupDesc& desc)const;
     [[nodiscard]] Expected<TextureHandle> setupTexture(const TextureSetupDesc& desc)const;
-    [[nodiscard]] bool uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
+    [[nodiscard]] b8 uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
     // Compiles, records, and submits an isolated graph synchronously.
     // This is the graph-owned escape hatch for a standalone caller that has no renderer-owned frame graph but can still provide immutable task inputs.
     [[nodiscard]] Expected<QueueSubmissionToken> submitStandaloneTaskGraph(
@@ -295,14 +295,14 @@ public:
     [[nodiscard]] Expected<usize> getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
 
     [[nodiscard]] Expected<SwapChainTransitionTicket> backBufferResizing();
-    [[nodiscard]] bool backBufferResized();
+    [[nodiscard]] b8 backBufferResized();
     void invalidateRenderPassResources();
-    [[nodiscard]] bool validateRenderPassResources();
+    [[nodiscard]] b8 validateRenderPassResources();
     void displayScaleChanged();
 
     void animate(f64 elapsedTime);
     // Allocation/submission work before each frame's preparation. After acquire, before render(); headless callers use it to order without beginFrame().
-    [[nodiscard]] bool prepareFramePreamble();
+    [[nodiscard]] b8 prepareFramePreamble();
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> render();
 
 
@@ -312,14 +312,14 @@ private:
 
 public:
     void notifyPointerScaleChanged()const;
-    [[nodiscard]] bool shouldRenderUnfocused()const;
-    bool animateRenderPresent();
+    [[nodiscard]] b8 shouldRenderUnfocused()const;
+    b8 animateRenderPresent();
 
 
 private:
-    bool animateRenderPresentInternal(CpuTimingPhaseBatch* phaseTiming);
-    [[nodiscard]] bool registerCpuTimingScopes();
-    [[nodiscard]] bool resizeBackBuffer(u32 width, u32 height, bool vsyncEnabled);
+    b8 animateRenderPresentInternal(CpuTimingPhaseBatch* phaseTiming);
+    [[nodiscard]] b8 registerCpuTimingScopes();
+    [[nodiscard]] b8 resizeBackBuffer(u32 width, u32 height, b8 vsyncEnabled);
 
 
 private:
@@ -352,13 +352,13 @@ private:
     // Declared after the backend so its device-bound command-list caches release before the device.
     NotNullUniquePtr<GraphicsModuleDetail::StandaloneGraphWorkspacePool, StandaloneGraphWorkspacesOwner::deleter_type> m_standaloneGraphWorkspaces;
 
-    bool m_hasPresentedFrame = false;
-    bool m_windowVisible = false;
-    bool m_windowIsInFocus = true;
-    bool m_requestedVSync = false;
-    bool m_instanceCreated = false;
-    mutable bool m_deviceRecreationRequested = false;
-    bool m_frameSubmissionSuspended = false;
+    b8 m_hasPresentedFrame = false;
+    b8 m_windowVisible = false;
+    b8 m_windowIsInFocus = true;
+    b8 m_requestedVSync = false;
+    b8 m_instanceCreated = false;
+    mutable b8 m_deviceRecreationRequested = false;
+    b8 m_frameSubmissionSuspended = false;
 
     List<NotNull<IRenderPass*>, Alloc::GlobalArena> m_renderPasses;
     // Non-owning: the contributing system unregisters before its lifetime ends.

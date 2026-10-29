@@ -53,23 +53,23 @@ public:
 
 public:
     // A volume is one logical namespace; custom backends may ignore sizing hints.
-    virtual bool mount(const VolumeMountDesc& desc) = 0;
+    virtual b8 mount(const VolumeMountDesc& desc) = 0;
     // Writable backends must persist pending writes before unmount.
-    virtual bool unmount() = 0;
-    [[nodiscard]] virtual bool mounted()const = 0;
-    [[nodiscard]] virtual bool writable()const = 0;
+    virtual b8 unmount() = 0;
+    [[nodiscard]] virtual b8 mounted()const = 0;
+    [[nodiscard]] virtual b8 writable()const = 0;
 
 
 public:
     // Successful reads may stop at EOF and return the number of bytes copied.
     [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const = 0;
-    virtual bool seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const = 0;
+    virtual b8 seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const = 0;
     // Writes replace the complete file and copy the supplied bytes before returning.
-    virtual bool writeFile(const Name& virtualPath, const void* data, usize bytes) = 0;
-    virtual bool writeFileDeferred(const Name& virtualPath, const void* data, usize bytes) = 0;
-    virtual bool flush() = 0;
-    virtual bool removeFile(const Name& virtualPath) = 0;
-    [[nodiscard]] virtual bool fileExists(const Name& virtualPath)const = 0;
+    virtual b8 writeFile(const Name& virtualPath, const void* data, usize bytes) = 0;
+    virtual b8 writeFileDeferred(const Name& virtualPath, const void* data, usize bytes) = 0;
+    virtual b8 flush() = 0;
+    virtual b8 removeFile(const Name& virtualPath) = 0;
+    [[nodiscard]] virtual b8 fileExists(const Name& virtualPath)const = 0;
     [[nodiscard]] virtual Expected<u64> fileSize(const Name& virtualPath)const = 0;
     [[nodiscard]] virtual u64 fileCount()const = 0;
     virtual void reserveFileCapacity(usize fileCount) = 0;
@@ -82,16 +82,16 @@ public:
     void closeFile(FileCursor& cursor)const noexcept;
 
     template<typename ByteContainer>
-    bool readFile(const Name& virtualPath, ByteContainer& outData)const;
+    b8 readFile(const Name& virtualPath, ByteContainer& outData)const;
 
     template<typename ByteContainer>
-    bool writeFile(const Name& virtualPath, const ByteContainer& data){
+    b8 writeFile(const Name& virtualPath, const ByteContainer& data){
         static_assert(sizeof(typename ByteContainer::value_type) == s_ByteElementSize, "Filesystem buffers must contain bytes");
         return writeFile(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
 
     template<typename ByteContainer>
-    bool writeFileDeferred(const Name& virtualPath, const ByteContainer& data){
+    b8 writeFileDeferred(const Name& virtualPath, const ByteContainer& data){
         static_assert(sizeof(typename ByteContainer::value_type) == s_ByteElementSize, "Filesystem buffers must contain bytes");
         return writeFileDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
@@ -102,7 +102,7 @@ public:
 
 
 template<typename ByteContainer>
-bool IFilesystem::readFile(const Name& virtualPath, ByteContainer& outData)const{
+b8 IFilesystem::readFile(const Name& virtualPath, ByteContainer& outData)const{
     static_assert(sizeof(typename ByteContainer::value_type) == s_ByteElementSize, "Filesystem buffers must contain bytes");
     outData.clear();
 

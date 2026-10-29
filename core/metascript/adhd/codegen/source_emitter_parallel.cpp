@@ -61,7 +61,7 @@ void SourceEmitter::emitTaskScopePrologue(MString& out, const u32 indent)const{
     out.append("::ScopeExit __adhd_scope_join([&__adhd_task_scope]()noexcept{ __adhd_task_scope.wait(); });\r\n");
 }
 
-bool SourceEmitter::tryEmitParallelWaitStmt(
+b8 SourceEmitter::tryEmitParallelWaitStmt(
     MString& out,
     const Stmt& stmt,
     const u32 indent

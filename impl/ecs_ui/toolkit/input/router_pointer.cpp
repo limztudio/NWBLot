@@ -36,7 +36,7 @@ void InputRouter::routePointer(const InputEvent& event, const HitTarget* hit, In
             return;
         }
         if(hasPopup() && hit == nullptr){
-            const bool dismissed = dismissPopup(PopupDismissReason::OutsideClick);
+            const b8 dismissed = dismissPopup(PopupDismissReason::OutsideClick);
             if(dismissed)
                 updateHover();
             m_capture = {};

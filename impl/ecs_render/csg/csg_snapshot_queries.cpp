@@ -27,7 +27,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ECSRenderDetail::CsgGraphResourceSnapshot::bindingValid()const noexcept{
+b8 ECSRenderDetail::CsgGraphResourceSnapshot::bindingValid()const noexcept{
     return
         receiverRanges
         && cutters
@@ -44,7 +44,7 @@ bool ECSRenderDetail::CsgGraphResourceSnapshot::bindingValid()const noexcept{
     ;
 }
 
-bool ECSRenderDetail::CsgGraphResourceSnapshot::frameReady(const CsgFrameGpuDataView& csgFrameData)const noexcept{
+b8 ECSRenderDetail::CsgGraphResourceSnapshot::frameReady(const CsgFrameGpuDataView& csgFrameData)const noexcept{
     if(!csgFrameData.hasWork())
         return true;
 

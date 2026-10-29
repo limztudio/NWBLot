@@ -80,52 +80,52 @@ public:
 
     [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requestedSkin()const noexcept{ return m_skinSelection.requestedChange(); }
 
-    [[nodiscard]] bool skinRequestPending()const noexcept{ return m_skinSelection.changePending(); }
+    [[nodiscard]] b8 skinRequestPending()const noexcept{ return m_skinSelection.changePending(); }
 
-    [[nodiscard]] bool skinRequestFailed()const noexcept{ return m_skinSelection.changeFailed(); }
+    [[nodiscard]] b8 skinRequestFailed()const noexcept{ return m_skinSelection.changeFailed(); }
 
     [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const noexcept override{
         return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
     }
     virtual void prepare(Core::ECS::World& world)override;
     [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)override;
-    virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
+    virtual b8 validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;
-    virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
+    virtual b8 prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void render(Core::Framebuffer* framebuffer)override;
     virtual void displayScaleChanged(f32 scaleX, f32 scaleY)override;
 
 
 public:
     // Main-thread profile replacement copies bindings; an empty profile disables every default shortcut.
-    [[nodiscard]] bool setInputBindings(const Ui::InputKeyBinding* bindings, usize count);
+    [[nodiscard]] b8 setInputBindings(const Ui::InputKeyBinding* bindings, usize count);
     void restoreDefaultInputBindings();
     // Main-thread ingress uses semantic commands and identified pointer sequences; device zero belongs to the native adapter.
-    [[nodiscard]] bool commandInput(Ui::InputSource source, Ui::InputCommand::Enum command, Ui::InputPhase::Enum phase, bool extend = false);
-    [[nodiscard]] bool pointerInput(const Ui::PointerInput& input);
+    [[nodiscard]] b8 commandInput(Ui::InputSource source, Ui::InputCommand::Enum command, Ui::InputPhase::Enum phase, b8 extend = false);
+    [[nodiscard]] b8 pointerInput(const Ui::PointerInput& input);
     // Main-thread provider termination cancels its active contact and retires its remaining held sources.
     void cancelDeviceInput(u64 device);
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
-    [[nodiscard]] virtual bool blocksKeyboardText()const noexcept override{ return m_blockCommandChars; }
-    virtual bool keyboardCharInput(u32 unicode, i32 mods)override;
-    virtual bool mousePosUpdate(f64 xpos, f64 ypos)override;
-    virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)override;
-    virtual bool mouseScrollUpdate(f64 xoffset, f64 yoffset)override;
-    virtual void windowFocusUpdate(bool focused)override;
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    [[nodiscard]] virtual b8 blocksKeyboardText()const noexcept override{ return m_blockCommandChars; }
+    virtual b8 keyboardCharInput(u32 unicode, i32 mods)override;
+    virtual b8 mousePosUpdate(f64 xpos, f64 ypos)override;
+    virtual b8 mouseButtonUpdate(i32 button, i32 action, i32 mods)override;
+    virtual b8 mouseScrollUpdate(f64 xoffset, f64 yoffset)override;
+    virtual void windowFocusUpdate(b8 focused)override;
     virtual void pointerLeave()override;
     virtual void pointerCaptureLost()override;
-    [[nodiscard]] bool wantsKeyboard()const noexcept;
-    [[nodiscard]] bool wantsPointer()const noexcept;
-    [[nodiscard]] bool wantsTextInput()const noexcept;
+    [[nodiscard]] b8 wantsKeyboard()const noexcept;
+    [[nodiscard]] b8 wantsPointer()const noexcept;
+    [[nodiscard]] b8 wantsTextInput()const noexcept;
 
 
 private:
-    [[nodiscard]] bool collectRoots();
+    [[nodiscard]] b8 collectRoots();
     void synchronizeInput();
-    void routeInput(const Ui::InputEvent& event, bool* consumed = nullptr, bool* blockText = nullptr);
-    void routePointerInput(const Ui::PointerInput& input, bool* consumed = nullptr);
+    void routeInput(const Ui::InputEvent& event, b8* consumed = nullptr, b8* blockText = nullptr);
+    void routePointerInput(const Ui::PointerInput& input, b8* consumed = nullptr);
     void synchronizeNativeInput();
-    [[nodiscard]] bool loadFonts(Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 loadFonts(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Core::Assets::AssetRef<UiSkin> basicSkin()const noexcept{
         if(!m_activeSceneSubsystems)
             return {};
@@ -169,13 +169,13 @@ private:
     u32 m_pressedButtons = 0u;
     UiLayerPresentation::Enum m_presentation;
     u8 m_pointerOwner = 0u;
-    bool m_blockNativeChars = false;
-    bool m_blockCommandChars = false;
+    b8 m_blockNativeChars = false;
+    b8 m_blockCommandChars = false;
     u64 m_frameGeneration = 0u;
     u32 m_width = 0u;
     u32 m_height = 0u;
-    bool m_resourcesReady = false;
-    bool m_fontsReady = false;
+    b8 m_resourcesReady = false;
+    b8 m_fontsReady = false;
 };
 
 

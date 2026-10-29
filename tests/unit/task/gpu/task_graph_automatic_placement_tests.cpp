@@ -72,7 +72,7 @@ TEST(GpuTaskGraph, PreservesDiagnosticsForSingleLegalClassAndIndependentMergeGro
         for(const Graphics::GpuTaskId task : tasks){
             const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
             ASSERT_NE(assignment, nullptr);
-            const bool requiresGraphics = task == graphics;
+            const b8 requiresGraphics = task == graphics;
             const Graphics::GpuPhysicalQueueInfo& expectedQueue = requiresGraphics ? graphicsQueue : computeQueue;
             EXPECT_EQ(assignment->queue, expectedQueue.id);
         }

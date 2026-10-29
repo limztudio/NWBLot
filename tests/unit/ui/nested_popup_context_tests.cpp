@@ -45,7 +45,7 @@ public:
 
 
 protected:
-    [[nodiscard]] bool begin(const u64 generation){
+    [[nodiscard]] b8 begin(const u64 generation){
         return m_context.beginFrame(generation) && m_context.beginRoot({ 1401u, 1u });
     }
 
@@ -69,7 +69,7 @@ protected:
         return result;
     }
 
-    [[nodiscard]] bool publish(const PopupDeclaration& popup){
+    [[nodiscard]] b8 publish(const PopupDeclaration& popup){
         HitTarget barrier;
         barrier.rectangle = popup.scope.bounds;
         barrier.clip = popup.scope.viewport;
@@ -84,7 +84,7 @@ protected:
         return m_context.addTarget(popup.action, action);
     }
 
-    [[nodiscard]] bool finish(){
+    [[nodiscard]] b8 finish(){
         return m_context.endRoot() && m_context.finishFrame();
     }
 

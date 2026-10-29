@@ -58,7 +58,7 @@ template<typename PathArenaT>
 struct RelativeAssetPathLayout{
     typename ::Path<PathArenaT>::const_iterator acceptedEnd;
     usize byteCount = 0u;
-    bool accepted = false;
+    b8 accepted = false;
 };
 
 
@@ -91,7 +91,7 @@ template<typename PathArenaT>
 template<typename PathArenaT>
 inline void WriteRelativeAssetPathText(const ::Path<PathArenaT>& relativePath, const RelativeAssetPathLayout<PathArenaT>& layout, const NotNull<char*> output)noexcept{
     char* cursor = output.get();
-    bool hasComponent = false;
+    b8 hasComponent = false;
     for(auto componentIt = relativePath.begin(); componentIt != layout.acceptedEnd; ++componentIt){
         const auto component = componentIt.nativeComponent();
         if(component.empty() || IsDot(component))
@@ -107,7 +107,7 @@ inline void WriteRelativeAssetPathText(const ::Path<PathArenaT>& relativePath, c
 }
 
 template<typename StringT, typename PathArenaT>
-[[nodiscard]] inline bool BuildRelativeAssetPathText(const ::Path<PathArenaT>& relativePath, StringT& outRelativePath){
+[[nodiscard]] inline b8 BuildRelativeAssetPathText(const ::Path<PathArenaT>& relativePath, StringT& outRelativePath){
     outRelativePath.clear();
     const auto layout = MeasureRelativeAssetPathText(relativePath);
     outRelativePath.resize(layout.byteCount);
@@ -133,7 +133,7 @@ template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
 [[nodiscard]] inline Expected<AString<ArenaT>> BuildDerivedAssetVirtualPathText(ArenaT& arena, const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<SourceArenaT>& sourceOrMetaPath, Alloc::ScratchArena& scratchArena){
     AString<ArenaT> virtualPath{arena};
     usize virtualPathSize = 0u;
-    for(const bool writeOutput : { false, true }){
+    for(const b8 writeOutput : { false, true }){
         {
             const ::Path<Alloc::ScratchArena> sourcePath(scratchArena, sourceOrMetaPath);
             const ::Path<Alloc::ScratchArena> rootPath(scratchArena, assetRoot);
@@ -203,7 +203,7 @@ template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
     return *virtualPath;
 }
 
-[[nodiscard]] inline bool HasReservedAssetVirtualRoot(const AStringView virtualPath, Alloc::ScratchArena& scratchArena){
+[[nodiscard]] inline b8 HasReservedAssetVirtualRoot(const AStringView virtualPath, Alloc::ScratchArena& scratchArena){
     const auto virtualRoot = AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, scratchArena);
     if(!virtualRoot)
         return false;
@@ -315,7 +315,7 @@ template<typename AssetRootVector>
     return PathToString(arena, normalizedSourcePath);
 }
 
-[[nodiscard]] inline bool IsListedMetadataAssetField(const AStringView fieldName, const InitializerList<AStringView> allowedFields)noexcept{
+[[nodiscard]] inline b8 IsListedMetadataAssetField(const AStringView fieldName, const InitializerList<AStringView> allowedFields)noexcept{
     for(const AStringView allowedField : allowedFields){
         if(fieldName == allowedField)
             return true;
@@ -324,7 +324,7 @@ template<typename AssetRootVector>
 }
 
 template<typename MetadataValue, typename IsAllowedField>
-[[nodiscard]] inline bool ValidateMetadataAssetFields(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, IsAllowedField&& isAllowedField){
+[[nodiscard]] inline b8 ValidateMetadataAssetFields(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, IsAllowedField&& isAllowedField){
     for(const auto& field : asset.asMap()){
         const auto& fieldName = field.first;
         const AStringView fieldNameText(fieldName.data(), fieldName.size());
@@ -338,7 +338,7 @@ template<typename MetadataValue, typename IsAllowedField>
 }
 
 template<typename MetadataValue>
-[[nodiscard]] inline bool ValidateMetadataAssetFields(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, const InitializerList<AStringView> allowedFields){
+[[nodiscard]] inline b8 ValidateMetadataAssetFields(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, const InitializerList<AStringView> allowedFields){
     return ValidateMetadataAssetFields(nwbFilePath, asset, diagnosticPrefix, [allowedFields](const AStringView fieldName)noexcept{
         return IsListedMetadataAssetField(fieldName, allowedFields);
     });
@@ -346,12 +346,12 @@ template<typename MetadataValue>
 
 struct MetadataStringField{
     AStringView text;
-    bool present = false;
+    b8 present = false;
 };
 
 
 template<typename MetadataValue>
-[[nodiscard]] inline Expected<MetadataStringField> ReadMetadataStringField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const bool required){
+[[nodiscard]] inline Expected<MetadataStringField> ReadMetadataStringField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
     MetadataStringField result;
 
     const auto* fieldValue = object.findField(fieldName);
@@ -405,7 +405,7 @@ template<typename MetadataValue>
 }
 
 template<typename MetadataValue>
-[[nodiscard]] inline Expected<f32> ReadMetadataFiniteF32Field(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const bool required){
+[[nodiscard]] inline Expected<f32> ReadMetadataFiniteF32Field(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
     const auto* fieldValue = object.findField(fieldName);
     if(!fieldValue){
         if(!required)
@@ -418,7 +418,7 @@ template<typename MetadataValue>
 }
 
 template<typename MetadataValue>
-[[nodiscard]] inline Expected<Name> ReadMetadataNameField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const bool required){
+[[nodiscard]] inline Expected<Name> ReadMetadataNameField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
     const auto text = ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, required);
     if(!text)
         return MakeUnexpected(text.error());
@@ -435,7 +435,7 @@ template<typename MetadataValue>
 }
 
 template<typename AssetT, typename MetadataValue>
-[[nodiscard]] inline Expected<AssetRef<AssetT>> ReadMetadataAssetRefField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const bool required){
+[[nodiscard]] inline Expected<AssetRef<AssetT>> ReadMetadataAssetRefField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
     const auto assetName = ReadMetadataNameField(nwbFilePath, object, diagnosticPrefix, fieldName, required);
     if(!assetName)
         return MakeUnexpected(assetName.error());
@@ -472,7 +472,7 @@ template<typename AssetT>
 }
 
 template<typename SourceStringT, typename MetadataDocument, typename ParseDocument>
-[[nodiscard]] inline bool ParseMetadataDocumentText(const Path& filePath, const AStringView diagnosticPrefix, ParseDocument&& parseDoc, SourceStringT& ioText, MetadataDocument& outDoc){
+[[nodiscard]] inline b8 ParseMetadataDocumentText(const Path& filePath, const AStringView diagnosticPrefix, ParseDocument&& parseDoc, SourceStringT& ioText, MetadataDocument& outDoc){
     if(!ReadTextFile(filePath, ioText)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to read source text"), ConvertString(diagnosticPrefix), PathToString<tchar>(filePath));
         return false;
@@ -488,7 +488,7 @@ template<typename SourceStringT, typename MetadataDocument, typename ParseDocume
     return true;
 }
 
-[[nodiscard]] inline bool CheckPairedSourceExtension(const Path& nwbFilePath, const AStringView sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena){
+[[nodiscard]] inline b8 CheckPairedSourceExtension(const Path& nwbFilePath, const AStringView sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena){
     const ::Path<Alloc::ScratchArena> sourcePathValue(scratchArena, sourcePath);
     AString<Alloc::ScratchArena> extension(PathToString(scratchArena, sourcePathValue.extensionView()));
     CanonicalizeTextInPlace(extension);
@@ -510,7 +510,7 @@ template<typename MetadataValue>
 }
 
 template<typename CookEntryT>
-[[nodiscard]] inline bool AssignCookEntryVirtualPath(CookEntryT& outEntry, const Name& virtualPath, const Path& nwbFilePath, const AStringView diagnosticPrefix){
+[[nodiscard]] inline b8 AssignCookEntryVirtualPath(CookEntryT& outEntry, const Name& virtualPath, const Path& nwbFilePath, const AStringView diagnosticPrefix){
     outEntry.virtualPath = virtualPath;
     if(outEntry.virtualPath)
         return true;
@@ -520,7 +520,7 @@ template<typename CookEntryT>
 }
 
 template<typename MetadataValue>
-[[nodiscard]] inline bool CheckMetadataAssetMap(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix){
+[[nodiscard]] inline b8 CheckMetadataAssetMap(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix){
     if(asset.isMap())
         return true;
 

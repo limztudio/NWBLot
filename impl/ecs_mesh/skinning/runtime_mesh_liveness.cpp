@@ -38,7 +38,7 @@ Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(const Cor
     return identity;
 }
 
-Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(const Core::ECS::EntityID entity, const RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* const instance, const bool boundsFresh, const bool conesFresh){
+Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(const Core::ECS::EntityID entity, const RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* const instance, const b8 boundsFresh, const b8 conesFresh){
     const auto identity = ResolveSkinnedRuntimeMeshIdentity(entity, runtimeMesh, instance);
     if(!identity)
         return MakeUnexpected(Failure{});

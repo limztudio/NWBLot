@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureBvhSortPipeline(){
+b8 RendererRayTracingSystem::ensureBvhSortPipeline(){
     if(m_rayTracingState.m_bvhSortPipeline)
         return true;
     if(m_rayTracingState.m_bvhSortPipelineFailed)
@@ -66,7 +66,7 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
+b8 RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
@@ -175,7 +175,7 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     return true;
 }
 
-bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount){
+b8 RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount){
     NWB_ASSERT(m_rayTracingState.m_bvhSortPipeline);
     NWB_ASSERT(m_rayTracingState.m_bvhSortKeysBuffer);
     NWB_ASSERT(m_rayTracingState.m_bvhSortPayloadBuffer);
@@ -245,7 +245,7 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     return true;
 }
 
-bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
+b8 RendererRayTracingSystem::ensureBvhBuildPipeline(){
     if(m_rayTracingState.m_bvhMortonPipeline && m_rayTracingState.m_bvhTopologyPipeline && m_rayTracingState.m_bvhFitPipeline)
         return true;
     if(m_rayTracingState.m_bvhBuildPipelineFailed)
@@ -277,7 +277,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
         }
     }
 
-    const auto createBuildPipeline = [this, &device, &heap](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> BvhSubsystem::* member, const NameText<char> debugLabel)->bool{
+    const auto createBuildPipeline = [this, &device, &heap](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> BvhSubsystem::* member, const NameText<char> debugLabel)->b8{
         if(pipeline)
             return true;
         if(!m_shaderSystem.loadShader<ComputeShader>(shader, member, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
@@ -290,7 +290,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
             pipeline = Move(*pipelineResult);
         else
             pipeline.reset();
-        return static_cast<bool>(pipelineResult);
+        return static_cast<b8>(pipelineResult);
     };
 
     if(
@@ -305,7 +305,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     return true;
 }
 
-bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount){
+b8 RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
@@ -372,7 +372,7 @@ void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
     m_rayTracingState.m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
-bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
+b8 RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
     // Binary scene BVH keeps CPU topology; runtime scenes refit its bounds from live mesh roots.
     const usize requiredNodes = static_cast<usize>(instanceCount) * 2u - 1u;
     if(!m_rayTracingState.m_sceneBvhNodeBuffer || m_rayTracingState.m_sceneBvhNodeCapacity < requiredNodes){

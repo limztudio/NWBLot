@@ -78,30 +78,30 @@ public:
 
 
 struct RayTracingCapabilityInputs{
-    bool accelerationStructureExtensionEnabled = false;
-    bool accelerationStructureFeatureEnabled = false;
-    bool createAccelerationStructureEntryPointAvailable = false;
-    bool destroyAccelerationStructureEntryPointAvailable = false;
-    bool getAccelerationStructureBuildSizesEntryPointAvailable = false;
-    bool getAccelerationStructureDeviceAddressEntryPointAvailable = false;
-    bool cmdBuildAccelerationStructuresEntryPointAvailable = false;
+    b8 accelerationStructureExtensionEnabled = false;
+    b8 accelerationStructureFeatureEnabled = false;
+    b8 createAccelerationStructureEntryPointAvailable = false;
+    b8 destroyAccelerationStructureEntryPointAvailable = false;
+    b8 getAccelerationStructureBuildSizesEntryPointAvailable = false;
+    b8 getAccelerationStructureDeviceAddressEntryPointAvailable = false;
+    b8 cmdBuildAccelerationStructuresEntryPointAvailable = false;
 
-    bool rayTracingPipelineExtensionEnabled = false;
-    bool rayTracingPipelineFeatureEnabled = false;
-    bool createRayTracingPipelinesEntryPointAvailable = false;
-    bool getRayTracingShaderGroupHandlesEntryPointAvailable = false;
-    bool cmdTraceRaysEntryPointAvailable = false;
+    b8 rayTracingPipelineExtensionEnabled = false;
+    b8 rayTracingPipelineFeatureEnabled = false;
+    b8 createRayTracingPipelinesEntryPointAvailable = false;
+    b8 getRayTracingShaderGroupHandlesEntryPointAvailable = false;
+    b8 cmdTraceRaysEntryPointAvailable = false;
 
-    bool opacityMicromapExtensionEnabled = false;
-    bool opacityMicromapFeatureEnabled = false;
-    bool synchronization2ExtensionEnabled = false;
-    bool createMicromapEntryPointAvailable = false;
-    bool destroyMicromapEntryPointAvailable = false;
-    bool getMicromapBuildSizesEntryPointAvailable = false;
-    bool cmdBuildMicromapsEntryPointAvailable = false;
+    b8 opacityMicromapExtensionEnabled = false;
+    b8 opacityMicromapFeatureEnabled = false;
+    b8 synchronization2ExtensionEnabled = false;
+    b8 createMicromapEntryPointAvailable = false;
+    b8 destroyMicromapEntryPointAvailable = false;
+    b8 getMicromapBuildSizesEntryPointAvailable = false;
+    b8 cmdBuildMicromapsEntryPointAvailable = false;
 };
 
-[[nodiscard]] inline constexpr bool SupportsRayTracingAccelStruct(const RayTracingCapabilityInputs& inputs)noexcept{
+[[nodiscard]] inline constexpr b8 SupportsRayTracingAccelStruct(const RayTracingCapabilityInputs& inputs)noexcept{
     return
         inputs.accelerationStructureExtensionEnabled
         && inputs.accelerationStructureFeatureEnabled
@@ -113,7 +113,7 @@ struct RayTracingCapabilityInputs{
     ;
 }
 
-[[nodiscard]] inline constexpr bool SupportsRayTracingPipeline(const RayTracingCapabilityInputs& inputs)noexcept{
+[[nodiscard]] inline constexpr b8 SupportsRayTracingPipeline(const RayTracingCapabilityInputs& inputs)noexcept{
     return
         inputs.rayTracingPipelineExtensionEnabled
         && inputs.rayTracingPipelineFeatureEnabled
@@ -124,7 +124,7 @@ struct RayTracingCapabilityInputs{
     ;
 }
 
-[[nodiscard]] inline constexpr bool SupportsRayTracingOpacityMicromap(const RayTracingCapabilityInputs& inputs)noexcept{
+[[nodiscard]] inline constexpr b8 SupportsRayTracingOpacityMicromap(const RayTracingCapabilityInputs& inputs)noexcept{
     return
         inputs.opacityMicromapExtensionEnabled
         && inputs.opacityMicromapFeatureEnabled
@@ -137,7 +137,7 @@ struct RayTracingCapabilityInputs{
     ;
 }
 
-[[nodiscard]] inline constexpr bool IsRayTracingShaderTypeAllowed(const ShaderType::Mask shaderType, const ShaderType::Mask allowedShaderTypes)noexcept{
+[[nodiscard]] inline constexpr b8 IsRayTracingShaderTypeAllowed(const ShaderType::Mask shaderType, const ShaderType::Mask allowedShaderTypes)noexcept{
     const u16 shaderTypeBits = static_cast<u16>(shaderType);
     return shaderTypeBits != 0u && (shaderTypeBits & (shaderTypeBits - 1u)) == 0u && (shaderTypeBits & static_cast<u16>(allowedShaderTypes)) == shaderTypeBits;
 }
@@ -154,7 +154,7 @@ struct RayDispatchLimits{
 
 [[nodiscard]] VkPipelineCreateFlags2 ComputeRayTracingPipelineCreateFlags(const RayTracingPipelineDesc& desc)noexcept;
 
-[[nodiscard]] bool ValidateRayDispatchDimensions(const RayTracingDispatchRaysArguments& arguments, const RayDispatchLimits& limits)noexcept;
+[[nodiscard]] b8 ValidateRayDispatchDimensions(const RayTracingDispatchRaysArguments& arguments, const RayDispatchLimits& limits)noexcept;
 
 struct RayTracingHandleLayout{
     u32 handleSize = 0u;
@@ -177,7 +177,7 @@ struct BlasGeometry{
     u32 primitiveCount = 0u;
 };
 
-Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context, const RayTracingGeometryDesc& geomDesc, TStringView operation, bool requireBuffers);
+Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context, const RayTracingGeometryDesc& geomDesc, TStringView operation, b8 requireBuffers);
 
 [[nodiscard]] VkMemoryBarrier2 BuildOpacityMicromapWriteAfterWriteBarrier()noexcept;
 
@@ -188,9 +188,9 @@ inline constexpr TStringView s_RetainBuildSignatureFailedReason = NWB_TEXT("fail
     const VkAccelerationStructureGeometrySpheresDataNV* spheresData,
     const VkAccelerationStructureGeometryLinearSweptSpheresDataNV* lssData,
     u32 primitiveCount,
-    bool transformDataPresent
+    b8 transformDataPresent
 )noexcept;
-[[nodiscard]] bool AccelStructGeometryBuildSignaturesEqual(const AccelStructGeometryBuildSignature& previous, const AccelStructGeometryBuildSignature& current)noexcept;
+[[nodiscard]] b8 AccelStructGeometryBuildSignaturesEqual(const AccelStructGeometryBuildSignature& previous, const AccelStructGeometryBuildSignature& current)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

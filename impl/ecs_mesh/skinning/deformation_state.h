@@ -39,9 +39,9 @@ public:
 
 public:
     void invalidateCurrent()noexcept;
-    void refreshCurrent(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* joints, usize jointCount, bool inputDirty)noexcept;
+    void refreshCurrent(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* joints, usize jointCount, b8 inputDirty)noexcept;
     [[nodiscard]] Expected<u64> stage(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* joints, usize jointCount);
-    [[nodiscard]] bool accept(u64 candidate)noexcept;
+    [[nodiscard]] b8 accept(u64 candidate)noexcept;
     // Zero also covers a changed pose awaiting this frame's graph submission.
     [[nodiscard]] u64 contentRevision()const noexcept{ return m_current ? m_acceptedRevision : 0u; }
 
@@ -54,7 +54,7 @@ private:
     u64 m_acceptedRevision = 0u;
     u64 m_candidateSerial = 0u;
     u64 m_pendingCandidate = 0u;
-    bool m_current = false;
+    b8 m_current = false;
 };
 
 

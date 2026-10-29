@@ -258,7 +258,7 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
         i64 first;
         i64 second;
         i64 expected;
-        bool valid;
+        b8 valid;
     };
     constexpr DeltaCase s_Cases[] = {
         { Limit<i64>::s_Max, 1, 0, false },

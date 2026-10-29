@@ -46,9 +46,9 @@ private:
         virtual u64 rowCount()const noexcept override{ return m_source.m_filteredCount; }
         virtual u64 key(u64 index)const noexcept override;
         virtual Expected<u64> indexOf(u64 key)const noexcept override;
-        virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
+        virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
         virtual StringView text(u64 index)const noexcept override;
-        virtual bool enabled(u64 index)const noexcept override;
+        virtual b8 enabled(u64 index)const noexcept override;
 
 
     private:
@@ -70,11 +70,11 @@ public:
     virtual u64 key(u64 index)const noexcept override{ return m_rows.key(index); }
 
     virtual Expected<u64> indexOf(u64 key)const noexcept override{ return m_rows.indexOf(key); }
-    virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
+    virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
     virtual StringView text(u64 index)const noexcept override{ return m_rows.text(index); }
 
-    virtual bool enabled(u64 index)const noexcept override{ return m_rows.enabled(index); }
-    [[nodiscard]] virtual bool filter(AStringView query)override;
+    virtual b8 enabled(u64 index)const noexcept override{ return m_rows.enabled(index); }
+    [[nodiscard]] virtual b8 filter(AStringView query)override;
     [[nodiscard]] virtual const Impl::Ui::IListDataSource& filtered()const noexcept override{ return m_view; }
 
 
@@ -85,7 +85,7 @@ public:
 
     void beginFrame()noexcept{ m_rows.beginFrame(); }
 
-    [[nodiscard]] bool reversed()const noexcept{ return m_rows.reversed(); }
+    [[nodiscard]] b8 reversed()const noexcept{ return m_rows.reversed(); }
 
     [[nodiscard]] u64 removedKey()const noexcept{ return m_rows.removedKey(); }
 

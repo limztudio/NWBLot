@@ -292,7 +292,7 @@ private:
 private:
     Alloc::GlobalArena& m_arena;
     mutable Futex m_channelsMutex;
-    Atomic<bool> m_hasChannels{ false };
+    Atomic<b8> m_hasChannels{ false };
     ChannelVector m_channels;
 };
 

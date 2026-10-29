@@ -53,15 +53,15 @@ struct CooperativeVectorMatMulFormatCombo{
     CooperativeVectorDataType::Enum matrixInterpretation;
     CooperativeVectorDataType::Enum biasInterpretation;
     CooperativeVectorDataType::Enum outputType;
-    bool transposeSupported;
+    b8 transposeSupported;
 };
 
 struct CooperativeVectorDeviceFeatures{
     GraphicsVector<CooperativeVectorMatMulFormatCombo> matMulFormats;
 
-    bool trainingFloat16 = false;
+    b8 trainingFloat16 = false;
 
-    bool trainingFloat32 = false;
+    b8 trainingFloat32 = false;
 
 
 public:

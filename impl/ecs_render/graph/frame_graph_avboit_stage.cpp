@@ -159,7 +159,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
         return MakeUnexpected(Failure{});
     }
     const Core::GpuTaskId avboitIntervalCompletionTask = transparentCsgTaskResult->intervalCompletionTask;
-    const bool avboitIntervalOutputsGraphOwned = transparentCsgTaskResult->intervalOutputsGraphOwned;
+    const b8 avboitIntervalOutputsGraphOwned = transparentCsgTaskResult->intervalOutputsGraphOwned;
     AvboitOccupancyGraphTask::Payload avboitOccupancyPayload{ m_arena, m_avboitSystem, inputs.targets, timing.preTimingTicket };
     AvboitOccupancyComputeEmulationGraphTask::Payload avboitOccupancyComputeEmulationPayload{ m_arena, m_graphics, m_materialSystem, inputs.targets, timing.preTimingTicket, timing.occupancyComputeEmulationTiming };
     avboitOccupancyPayload.frameBindings = inputs.frameBindings;
@@ -208,12 +208,12 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
     const Core::GpuTaskId occupancyUploadTask = occupancyUploadChainResult->uploadTask;
     const Core::GpuGraphResourceSetId occupancyMaterialGeometrySet = occupancyUploadChainResult->materialGeometrySet;
     const Core::GpuGraphResourceSetId occupancyMaterialSampledTextureSet = occupancyUploadChainResult->materialSampledTextureSet;
-    const bool occupancyCsgStreamsUploaded = occupancyUploadChainResult->csgStreamsUploaded;
-    const bool occupancyRegularComputeEmulationPlanCaptured = occupancyUploadChainResult->regularComputeEmulationPlanCaptured;
+    const b8 occupancyCsgStreamsUploaded = occupancyUploadChainResult->csgStreamsUploaded;
+    const b8 occupancyRegularComputeEmulationPlanCaptured = occupancyUploadChainResult->regularComputeEmulationPlanCaptured;
     const Core::GpuTaskId occupancyReusedGeometryProducer = occupancyUploadChainResult->reusedGeometryProducer;
-    const bool occupancyProducesReusableGeometry = occupancyUploadChainResult->producesReusableGeometry;
-    const bool occupancyCsgComputeEmulationPlanCaptured = occupancyUploadChainResult->csgComputeEmulationPlanCaptured;
-    const bool occupancySharedComputeEmulationPlanCaptured = occupancyUploadChainResult->sharedComputeEmulationPlanCaptured;
+    const b8 occupancyProducesReusableGeometry = occupancyUploadChainResult->producesReusableGeometry;
+    const b8 occupancyCsgComputeEmulationPlanCaptured = occupancyUploadChainResult->csgComputeEmulationPlanCaptured;
+    const b8 occupancySharedComputeEmulationPlanCaptured = occupancyUploadChainResult->sharedComputeEmulationPlanCaptured;
     const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan occupancySharedComputeEmulationPlan = occupancyUploadChainResult->sharedComputeEmulationPlan;
     const usize occupancySharedComputeEmulationInstanceCount = occupancyUploadChainResult->sharedComputeEmulationInstanceCount;
     const usize occupancySharedComputeEmulationMaterialTypedByteCount = occupancyUploadChainResult->sharedComputeEmulationMaterialTypedByteCount;
@@ -329,12 +329,12 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
 }
 
 
-bool FrameGraphAvboitStage::declareExtinction(
+b8 FrameGraphAvboitStage::declareExtinction(
     Core::Alloc::ScratchArena& scratchArena,
     const FrameGraphAvboitStageInputs& inputs,
     const FrameGraphAvboitStageTiming& timing,
     const Core::GpuTaskId avboitDepthWarpCompletionTask,
-    const bool avboitIntervalOutputsGraphOwned,
+    const b8 avboitIntervalOutputsGraphOwned,
     ObjectGeometryCacheGraph& objectGeometry,
     AvboitGeneratedGeometryReuse& generatedGeometry,
     AvboitComputeEffectChainBuilder& avboitComputeEffectChainBuilder
@@ -379,13 +379,13 @@ bool FrameGraphAvboitStage::declareExtinction(
     const Core::GpuTaskId extinctionUploadTask = extinctionUploadChainResult->uploadTask;
     const Core::GpuGraphResourceSetId extinctionMaterialGeometrySet = extinctionUploadChainResult->materialGeometrySet;
     const Core::GpuGraphResourceSetId extinctionMaterialSampledTextureSet = extinctionUploadChainResult->materialSampledTextureSet;
-    const bool extinctionStreamsUploaded = extinctionUploadChainResult->streamsUploaded;
-    const bool extinctionCsgStreamsUploaded = extinctionUploadChainResult->csgStreamsUploaded;
-    const bool extinctionRegularComputeEmulationPlanCaptured = extinctionUploadChainResult->regularComputeEmulationPlanCaptured;
+    const b8 extinctionStreamsUploaded = extinctionUploadChainResult->streamsUploaded;
+    const b8 extinctionCsgStreamsUploaded = extinctionUploadChainResult->csgStreamsUploaded;
+    const b8 extinctionRegularComputeEmulationPlanCaptured = extinctionUploadChainResult->regularComputeEmulationPlanCaptured;
     const Core::GpuTaskId extinctionReusedGeometryProducer = extinctionUploadChainResult->reusedGeometryProducer;
-    const bool extinctionProducesReusableGeometry = extinctionUploadChainResult->producesReusableGeometry;
-    const bool extinctionCsgComputeEmulationPlanCaptured = extinctionUploadChainResult->csgComputeEmulationPlanCaptured;
-    const bool extinctionSharedComputeEmulationPlanCaptured = extinctionUploadChainResult->sharedComputeEmulationPlanCaptured;
+    const b8 extinctionProducesReusableGeometry = extinctionUploadChainResult->producesReusableGeometry;
+    const b8 extinctionCsgComputeEmulationPlanCaptured = extinctionUploadChainResult->csgComputeEmulationPlanCaptured;
+    const b8 extinctionSharedComputeEmulationPlanCaptured = extinctionUploadChainResult->sharedComputeEmulationPlanCaptured;
     const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan extinctionSharedComputeEmulationPlan = extinctionUploadChainResult->sharedComputeEmulationPlan;
     const usize extinctionSharedComputeEmulationInstanceCount = extinctionUploadChainResult->sharedComputeEmulationInstanceCount;
     const usize extinctionSharedComputeEmulationMaterialTypedByteCount = extinctionUploadChainResult->sharedComputeEmulationMaterialTypedByteCount;
@@ -465,11 +465,11 @@ bool FrameGraphAvboitStage::declareExtinction(
     return true;
 }
 
-bool FrameGraphAvboitStage::declareAccumulation(
+b8 FrameGraphAvboitStage::declareAccumulation(
     Core::Alloc::ScratchArena& scratchArena,
     const FrameGraphAvboitStageInputs& inputs,
     const FrameGraphAvboitStageTiming& timing,
-    const bool avboitIntervalOutputsGraphOwned,
+    const b8 avboitIntervalOutputsGraphOwned,
     ObjectGeometryCacheGraph& objectGeometry,
     AvboitGeneratedGeometryReuse& generatedGeometry
 ){
@@ -512,13 +512,13 @@ bool FrameGraphAvboitStage::declareAccumulation(
     const Core::GpuTaskId accumulationUploadTask = accumulationUploadChainResult->uploadTask;
     const Core::GpuGraphResourceSetId accumulationMaterialGeometrySet = accumulationUploadChainResult->materialGeometrySet;
     const Core::GpuGraphResourceSetId accumulationMaterialSampledTextureSet = accumulationUploadChainResult->materialSampledTextureSet;
-    const bool accumulationStreamsUploaded = accumulationUploadChainResult->streamsUploaded;
-    const bool accumulationCsgStreamsUploaded = accumulationUploadChainResult->csgStreamsUploaded;
-    const bool accumulationRegularComputeEmulationPlanCaptured = accumulationUploadChainResult->regularComputeEmulationPlanCaptured;
+    const b8 accumulationStreamsUploaded = accumulationUploadChainResult->streamsUploaded;
+    const b8 accumulationCsgStreamsUploaded = accumulationUploadChainResult->csgStreamsUploaded;
+    const b8 accumulationRegularComputeEmulationPlanCaptured = accumulationUploadChainResult->regularComputeEmulationPlanCaptured;
     const Core::GpuTaskId accumulationReusedGeometryProducer = accumulationUploadChainResult->reusedGeometryProducer;
-    const bool accumulationProducesReusableGeometry = accumulationUploadChainResult->producesReusableGeometry;
-    const bool accumulationCsgComputeEmulationPlanCaptured = accumulationUploadChainResult->csgComputeEmulationPlanCaptured;
-    const bool accumulationSharedComputeEmulationPlanCaptured = accumulationUploadChainResult->sharedComputeEmulationPlanCaptured;
+    const b8 accumulationProducesReusableGeometry = accumulationUploadChainResult->producesReusableGeometry;
+    const b8 accumulationCsgComputeEmulationPlanCaptured = accumulationUploadChainResult->csgComputeEmulationPlanCaptured;
+    const b8 accumulationSharedComputeEmulationPlanCaptured = accumulationUploadChainResult->sharedComputeEmulationPlanCaptured;
     const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan accumulationSharedComputeEmulationPlan = accumulationUploadChainResult->sharedComputeEmulationPlan;
     const usize accumulationSharedComputeEmulationInstanceCount = accumulationUploadChainResult->sharedComputeEmulationInstanceCount;
     const usize accumulationSharedComputeEmulationMaterialTypedByteCount = accumulationUploadChainResult->sharedComputeEmulationMaterialTypedByteCount;

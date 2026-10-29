@@ -36,16 +36,16 @@ public:
 
 
 public:
-    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
-    [[nodiscard]] virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
+    [[nodiscard]] virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
 
 
 private:
-    [[nodiscard]] bool replaceVersion();
-    [[nodiscard]] bool paintControls(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] bool paintImages(Impl::UiPaintContext& context, f32 width, f32 right, f32 otherWidth);
-    [[nodiscard]] bool paintBuilderImages(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
-    [[nodiscard]] bool paintPopups(Impl::UiPaintContext& context, f32 right);
+    [[nodiscard]] b8 replaceVersion();
+    [[nodiscard]] b8 paintControls(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
+    [[nodiscard]] b8 paintImages(Impl::UiPaintContext& context, f32 width, f32 right, f32 otherWidth);
+    [[nodiscard]] b8 paintBuilderImages(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
+    [[nodiscard]] b8 paintPopups(Impl::UiPaintContext& context, f32 right);
     void observeState(Impl::UiPaintContext& context);
     void paintMarkers(Impl::UiPaintContext& context)const;
 
@@ -65,15 +65,15 @@ private:
     u32 m_replacementCount = 0u;
     u32 m_evictionRemaining = 0u;
     u32 m_evictionCompleted = 0u;
-    bool m_phase = false;
-    bool m_replacementAlternate = false;
-    bool m_sourcesValid = false;
+    b8 m_phase = false;
+    b8 m_replacementAlternate = false;
+    b8 m_sourcesValid = false;
 };
 
 using SharedUiTextureImageSmokeScene = RefCountPtr< RefCounter<UiTextureImageSmokeScene>, ArenaRefDeleter<RefCounter<UiTextureImageSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] bool IsUiLayerTextureImageSmokeEnabled();
-[[nodiscard]] bool IsUiLayerTextureImageSkinSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerTextureImageSmokeEnabled();
+[[nodiscard]] b8 IsUiLayerTextureImageSkinSmokeEnabled();
 [[nodiscard]] SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Core::Assets::AssetManager& assets);
 
 

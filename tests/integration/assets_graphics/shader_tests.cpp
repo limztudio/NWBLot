@@ -260,7 +260,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalF
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
     struct MetadataCase{
         AStringView fields;
-        bool accepted;
+        b8 accepted;
     };
     constexpr MetadataCase s_Cases[] = {
         { "", true },
@@ -383,7 +383,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsDefinesThatCannotRoundTripVariantSigna
     Impl::ShaderCook shaderCook(testArena.arena);
     Impl::ShaderCook::ShaderEntry shaderEntry(testArena.arena);
     Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
-    for(const bool include : { false, true }){
+    for(const b8 include : { false, true }){
         SCOPED_TRACE(include ? "include" : "shader");
         const Path metadataPath = root / (include ? "include.nwb" : "shader.nwb");
         const AStringView declaration = include ? "include asset;\n" : "compute_shader asset;\nasset.entry_point = \"main\";\n";

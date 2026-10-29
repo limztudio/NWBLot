@@ -84,7 +84,7 @@ template<typename OutputT, typename InputT>
     return converted;
 }
 
-[[nodiscard]] inline bool AccumulateBoundedCount(const u64 value, const u64 maximum, u64& total)noexcept{
+[[nodiscard]] inline b8 AccumulateBoundedCount(const u64 value, const u64 maximum, u64& total)noexcept{
     if(total > maximum || value > maximum - total)
         return false;
     total += value;
@@ -193,7 +193,7 @@ template<typename OutputT, typename InputT>
     return decoded;
 }
 
-[[nodiscard]] inline bool PacketSubmissionStatisticsRecordLess(const FrameGraphPacketSubmissionStatisticsRecord& lhs, const FrameGraphPacketSubmissionStatisticsRecord& rhs)noexcept{
+[[nodiscard]] inline b8 PacketSubmissionStatisticsRecordLess(const FrameGraphPacketSubmissionStatisticsRecord& lhs, const FrameGraphPacketSubmissionStatisticsRecord& rhs)noexcept{
     if(lhs.ownerNodeIndex != rhs.ownerNodeIndex)
         return lhs.ownerNodeIndex < rhs.ownerNodeIndex;
     return lhs.packetIndex < rhs.packetIndex;
@@ -254,9 +254,9 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
 
 [[nodiscard]] EncodedFrameGraphRuntimeStatistics EncodeRuntimeStatistics(u32 nodeIndex, const FrameGraphRuntimeStatistics& statistics)noexcept;
 [[nodiscard]] Expected<FrameGraphRuntimeStatistics> DecodeRuntimeStatistics(const EncodedFrameGraphRuntimeStatistics& encoded)noexcept;
-[[nodiscard]] bool PhysicalQueueRuntimeStatisticsRecordLess(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& lhs, const FrameGraphPhysicalQueueRuntimeStatisticsRecord& rhs)noexcept;
-[[nodiscard]] bool AccumulatePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics, FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total)noexcept;
-[[nodiscard]] bool ValidatePhysicalQueueRuntimeStatisticsOwner(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record, usize nodeCount, FrameGraphNodeKind::Enum ownerKind, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
+[[nodiscard]] b8 PhysicalQueueRuntimeStatisticsRecordLess(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& lhs, const FrameGraphPhysicalQueueRuntimeStatisticsRecord& rhs)noexcept;
+[[nodiscard]] b8 AccumulatePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics, FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total)noexcept;
+[[nodiscard]] b8 ValidatePhysicalQueueRuntimeStatisticsOwner(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record, usize nodeCount, FrameGraphNodeKind::Enum ownerKind, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
 
 struct FrameGraphPacketSubmissionStatisticsAccumulator{
     u64 nativeSubmissionCount = 0u;
@@ -272,7 +272,7 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
     f64 submissionSeconds = 0.0;
 };
 
-[[nodiscard]] inline bool ValidatePacketSubmissionStatisticsOwner(const FrameGraphPacketSubmissionStatisticsRecord& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+[[nodiscard]] inline b8 ValidatePacketSubmissionStatisticsOwner(const FrameGraphPacketSubmissionStatisticsRecord& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
     return
         IsValidFrameGraphRuntimeStatistics(ownerStatistics)
         && statistics.packetGeneration == ownerStatistics.planGeneration
@@ -283,7 +283,7 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
     ;
 }
 
-[[nodiscard]] inline bool AccumulatePacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics, const FrameGraphSubmissionRuntimeStatistics& ownerStatistics, FrameGraphPacketSubmissionStatisticsAccumulator& total)noexcept{
+[[nodiscard]] inline b8 AccumulatePacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics, const FrameGraphSubmissionRuntimeStatistics& ownerStatistics, FrameGraphPacketSubmissionStatisticsAccumulator& total)noexcept{
     if(!(
         AccumulateBoundedCount(1u, ownerStatistics.nativeSubmissionCount, total.nativeSubmissionCount)
         && AccumulateBoundedCount(statistics.taskCount, ownerStatistics.acceptedTaskCount, total.taskCount)
@@ -302,7 +302,7 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
     return IsFinite(total.submissionSeconds);
 }
 
-[[nodiscard]] inline bool PacketSubmissionDurationSumsMatch(const f64 lhs, const f64 rhs, const u64 submissionCount)noexcept{
+[[nodiscard]] inline b8 PacketSubmissionDurationSumsMatch(const f64 lhs, const f64 rhs, const u64 submissionCount)noexcept{
     if(lhs == rhs)
         return true;
     if(submissionCount == 0u)
@@ -323,8 +323,8 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
 }
 
 template<typename SubmissionStatistics>
-[[nodiscard]] inline bool PacketSubmissionStatisticsAccumulatorMatches(const FrameGraphPacketSubmissionStatisticsAccumulator& total, const SubmissionStatistics& statistics)noexcept(
-    noexcept(static_cast<bool>(
+[[nodiscard]] inline b8 PacketSubmissionStatisticsAccumulatorMatches(const FrameGraphPacketSubmissionStatisticsAccumulator& total, const SubmissionStatistics& statistics)noexcept(
+    noexcept(static_cast<b8>(
         DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().nativeSubmissionCount != DeclVal<const SubmissionStatistics&>().nativeSubmissionCount
         || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().commandListCount != DeclVal<const SubmissionStatistics&>().nativeCommandListCount
         || DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().plannedWaitTokenCount != DeclVal<const SubmissionStatistics&>().plannedWaitTokenCount
@@ -342,7 +342,7 @@ template<typename SubmissionStatistics>
         )
     ))
     && noexcept(DeclVal<void (*)(u64)noexcept>()(DeclVal<const SubmissionStatistics&>().acceptedPacketCount - DeclVal<const SubmissionStatistics&>().nativeSubmissionCount))
-    && noexcept(DeclVal<void (*)(bool)noexcept>()(DeclVal<u64>() <= DeclVal<const SubmissionStatistics&>().acceptedTaskCount - DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().taskCount))
+    && noexcept(DeclVal<void (*)(b8)noexcept>()(DeclVal<u64>() <= DeclVal<const SubmissionStatistics&>().acceptedTaskCount - DeclVal<const FrameGraphPacketSubmissionStatisticsAccumulator&>().taskCount))
 ){
     if(
         total.nativeSubmissionCount != statistics.nativeSubmissionCount
@@ -364,7 +364,7 @@ template<typename SubmissionStatistics>
 }
 
 template<typename NodeT>
-[[nodiscard]] inline bool ValidatePacketSubmissionStatisticsTable(
+[[nodiscard]] inline b8 ValidatePacketSubmissionStatisticsTable(
     Alloc::ScratchArena& scratchArena,
     const Span<const NodeT> nodes,
     const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,

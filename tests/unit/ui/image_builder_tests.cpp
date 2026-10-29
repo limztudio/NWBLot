@@ -87,7 +87,7 @@ TEST_F(UiImageBuilderTests, ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack
     EXPECT_FLOAT_EQ(sprite->bounds.x, 20.0f);
     EXPECT_FLOAT_EQ(sprite->bounds.width, 20.0f);
     EXPECT_NEAR(sprite->maximumU, (27.0f / 96.0f) * (20.0f / 128.0f), 0.000001f);
-    bool sentinel = false;
+    b8 sentinel = false;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Solid)
             continue;

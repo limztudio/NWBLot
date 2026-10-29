@@ -45,7 +45,7 @@ struct DecodedRecordContext{
 }
 
 
-[[nodiscard]] bool ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept;
+[[nodiscard]] b8 ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept;
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateUploadOperation(
     const GpuCommandIrBuiltinTaskRecord& record,
     BinaryByteView blobBytes,
@@ -54,18 +54,18 @@ struct DecodedRecordContext{
     const GpuPhysicalQueueInfo& queue
 )noexcept;
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList, const GpuPhysicalQueueInfo& queue)noexcept;
-[[nodiscard]] bool LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList);
+[[nodiscard]] b8 LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList);
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateReplayCommandListQueue(const CommandListParameters& commandListDescription, const GpuPhysicalQueueId& packetQueue, CommandQueue::Enum packetQueueClass)noexcept;
 
 struct RasterReplayState{
     GpuCommandIrRasterTaskRecord graphicsState;
     GpuTaskId task;
-    bool active = false;
-    bool heapBound = false;
-    bool pushConstantsSet = false;
+    b8 active = false;
+    b8 heapBound = false;
+    b8 pushConstantsSet = false;
 };
 
-[[nodiscard]] inline bool IsRasterOpcode(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
+[[nodiscard]] inline b8 IsRasterOpcode(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
     return
         opcode == GpuCommandIrWireOpcode::SetGraphicsState
         || opcode == GpuCommandIrWireOpcode::BindGraphicsHeap
@@ -76,7 +76,7 @@ struct RasterReplayState{
     ;
 }
 
-[[nodiscard]] inline bool IsRasterViewportValid(const Viewport& viewport)noexcept{
+[[nodiscard]] inline b8 IsRasterViewportValid(const Viewport& viewport)noexcept{
     return
         IsFinite(viewport.minX) && IsFinite(viewport.maxX)
         && IsFinite(viewport.minY) && IsFinite(viewport.maxY)
@@ -103,7 +103,7 @@ struct RasterReplayState{
 
 [[nodiscard]] const GpuTaskResourceUse* FindTaskResourceUse(const GpuTaskGraphTaskView& task, GpuGraphResourceId resource, ResourceStates::Mask state, GpuTaskResourceAccess::Enum access)noexcept;
 
-[[nodiscard]] bool LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, BinaryByteView blobBytes, CommandList& commandList);
+[[nodiscard]] b8 LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, BinaryByteView blobBytes, CommandList& commandList);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

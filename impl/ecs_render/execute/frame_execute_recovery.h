@@ -37,10 +37,10 @@ public:
 
 
 public:
-    [[nodiscard]] bool discardUnacceptedGraphPackets();
-    [[nodiscard]] bool executeFrameRecoveryTask();
-    [[nodiscard]] bool recoverPendingFrameSubmission();
-    [[nodiscard]] bool recoverPendingFrameThenDiscardUnaccepted();
+    [[nodiscard]] b8 discardUnacceptedGraphPackets();
+    [[nodiscard]] b8 executeFrameRecoveryTask();
+    [[nodiscard]] b8 recoverPendingFrameSubmission();
+    [[nodiscard]] b8 recoverPendingFrameThenDiscardUnaccepted();
     void failFrameRenderRecovery();
 
 

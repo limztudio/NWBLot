@@ -26,7 +26,7 @@ using namespace NWB::Core;
 
 TEST(X11TextInputDispatchFence, CallbackCancellationDefersContextUntilOuterNativeCallReturns){
     X11TextInputDispatchFence fence;
-    bool nativeContextAlive = true;
+    b8 nativeContextAlive = true;
     fence.enter();
     fence.enter();
     EXPECT_FALSE(fence.retire());

@@ -23,8 +23,8 @@ struct SceneShadingBufferUploads{
     ECSRenderDetail::SceneShadingGpuData sceneShadingState;
     RayTracingLightingClassification lightingClassification;
     u32 lightCount = 0u;
-    bool lightUploadRequired = false;
-    bool sceneShadingUploadRequired = false;
+    b8 lightUploadRequired = false;
+    b8 sceneShadingUploadRequired = false;
 };
 
 

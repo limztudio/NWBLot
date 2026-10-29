@@ -103,16 +103,16 @@ void AppendMeshletRefChannelDeltas(const Span<const RefT> refs, const u32 source
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MeshletDecodedPositionRefMatches(const MeshletPositionStreamRef& decoded, const MeshletPositionStreamRef& source, const bool skinRequired)noexcept{
+[[nodiscard]] NWB_INLINE b8 MeshletDecodedPositionRefMatches(const MeshletPositionStreamRef& decoded, const MeshletPositionStreamRef& source, const b8 skinRequired)noexcept{
     return decoded.position == source.position && decoded.skin == (skinRequired ? source.skin : s_MeshMissingStreamIndex);
 }
 
-[[nodiscard]] NWB_INLINE bool MeshletDecodedAttributeRefMatches(const MeshletAttributeStreamRef& decoded, const MeshletAttributeStreamRef& source)noexcept{
+[[nodiscard]] NWB_INLINE b8 MeshletDecodedAttributeRefMatches(const MeshletAttributeStreamRef& decoded, const MeshletAttributeStreamRef& source)noexcept{
     return decoded.normal == source.normal && decoded.tangent == source.tangent && decoded.uv0 == source.uv0 && decoded.color == source.color;
 }
 
 template<typename FailureHandlerT>
-[[nodiscard]] bool ValidateEncodedMeshletRefDeltas(
+[[nodiscard]] b8 ValidateEncodedMeshletRefDeltas(
     const MeshletDesc& meshlet,
     const usize meshletIndex,
     const u32 sourcePositionRefOffset,
@@ -121,14 +121,14 @@ template<typename FailureHandlerT>
     const Span<const MeshletAttributeStreamRef> attributeRefs,
     const Span<const u8> positionDeltas,
     const Span<const u8> attributeDeltas,
-    const bool skinRequired,
+    const b8 skinRequired,
     FailureHandlerT onFailure
 )noexcept(
     IsNothrowDestructible_V<FailureHandlerT>
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, s_InvalidEncodedRefWidthMessage)))
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, s_EncodedRefByteCountMismatchMessage)))
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, s_EncodedPositionRefDecodeMismatchMessage)))
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, s_EncodedAttributeRefDecodeMismatchMessage)))
+    && noexcept(DeclVal<void(*)(b8)noexcept>()(onFailure(meshletIndex, s_InvalidEncodedRefWidthMessage)))
+    && noexcept(DeclVal<void(*)(b8)noexcept>()(onFailure(meshletIndex, s_EncodedRefByteCountMismatchMessage)))
+    && noexcept(DeclVal<void(*)(b8)noexcept>()(onFailure(meshletIndex, s_EncodedPositionRefDecodeMismatchMessage)))
+    && noexcept(DeclVal<void(*)(b8)noexcept>()(onFailure(meshletIndex, s_EncodedAttributeRefDecodeMismatchMessage)))
 ){
     const auto encodedPositionBytes = MeshletEncodedPositionRefByteCount(meshlet, skinRequired);
     const auto encodedAttributeBytes = MeshletEncodedAttributeRefByteCount(meshlet);
@@ -164,10 +164,10 @@ template<
     typename AttributeDeltaVectorT,
     typename FailureHandlerT
 >
-[[nodiscard]] bool EncodeMeshletRefDeltas(
+[[nodiscard]] b8 EncodeMeshletRefDeltas(
     const Span<const MeshletPositionStreamRef> positionRefs,
     const Span<const MeshletAttributeStreamRef> attributeRefs,
-    const bool skinRequired,
+    const b8 skinRequired,
     FailureHandlerT onFailure,
     const Span<MeshletDesc> meshlets,
     PositionDeltaVectorT& outPositionDeltas,
@@ -178,10 +178,10 @@ template<
     && noexcept(outAttributeDeltas.clear())
     && noexcept(outPositionDeltas.reserve(positionRefs.size() * sizeof(MeshletPositionStreamRef)))
     && noexcept(outAttributeDeltas.reserve(attributeRefs.size() * sizeof(MeshletAttributeStreamRef)))
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(DeclVal<usize&>(), s_EmptyMeshletRefRangeMessage)))
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(DeclVal<usize&>(), s_StaticMeshletSkinRefMessage)))
-    && noexcept(static_cast<bool>(outPositionDeltas.size() > static_cast<usize>(Limit<u32>::s_Max) || outAttributeDeltas.size() > static_cast<usize>(Limit<u32>::s_Max)))
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(DeclVal<usize&>(), s_EncodedRefByteOffsetLimitMessage)))
+    && noexcept(DeclVal<void(*)(b8)noexcept>()(onFailure(DeclVal<usize&>(), s_EmptyMeshletRefRangeMessage)))
+    && noexcept(DeclVal<void(*)(b8)noexcept>()(onFailure(DeclVal<usize&>(), s_StaticMeshletSkinRefMessage)))
+    && noexcept(static_cast<b8>(outPositionDeltas.size() > static_cast<usize>(Limit<u32>::s_Max) || outAttributeDeltas.size() > static_cast<usize>(Limit<u32>::s_Max)))
+    && noexcept(DeclVal<void(*)(b8)noexcept>()(onFailure(DeclVal<usize&>(), s_EncodedRefByteOffsetLimitMessage)))
     && noexcept(static_cast<u32>(outPositionDeltas.size()))
     && noexcept(static_cast<u32>(outAttributeDeltas.size()))
     && noexcept(AppendMeshletRefChannelDeltas(positionRefs, DeclVal<const u32&>(), DeclVal<const MeshletDesc&>(), DeclVal<const MeshletPositionRefEncodeChannel&>(), u32{}, outPositionDeltas))
@@ -200,7 +200,7 @@ template<
         onFailure
     ))
 #endif
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshlets.size(), s_EncodedRefByteCountLimitMessage)))
+    && noexcept(DeclVal<void(*)(b8)noexcept>()(onFailure(meshlets.size(), s_EncodedRefByteCountLimitMessage)))
 ){
     outPositionDeltas.clear();
     outAttributeDeltas.clear();

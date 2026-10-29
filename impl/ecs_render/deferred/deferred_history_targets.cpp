@@ -36,7 +36,7 @@ void RendererDeferredSystem::resetLaggedLightingHistoryResources(DeferredFrameTa
     targets.laggedLightingHistory = DeferredLaggedLightingHistoryResources{};
 }
 
-bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTargets& targets){
+b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTargets& targets){
     DeferredLaggedLightingHistoryResources& history = targets.laggedLightingHistory;
     if(history.valid())
         return true;

@@ -49,7 +49,7 @@ struct RuntimeMeshBuffers{
 
 
 public:
-    [[nodiscard]] bool buffersValid()const noexcept{
+    [[nodiscard]] b8 buffersValid()const noexcept{
         return
             positionBuffer != nullptr
             && normalBuffer != nullptr
@@ -80,8 +80,8 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     u32 meshletCount = 0u;
     // Logical corner count; backing buffer is word-padded, never use its byte size.
     u32 meshletPrimitiveIndexCount = 0u;
-    bool dynamicMeshletBoundsFresh = false;
-    bool dynamicMeshletConesFresh = false;
+    b8 dynamicMeshletBoundsFresh = false;
+    b8 dynamicMeshletConesFresh = false;
     u64 version = 0u;
     // Accepted object-space geometry generation; zero requires conservative updates, including pending deformation.
     u64 geometryContentRevision = 0u;
@@ -92,7 +92,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return
             entity.valid()
             && meshKey != s_NameNone
@@ -113,7 +113,7 @@ public:
 public:
     [[nodiscard]] virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID entity) = 0;
     // Attachment identity remains available when buffers or an evaluated pose are not ready yet.
-    [[nodiscard]] virtual bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const = 0;
+    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(Core::ECS::EntityID entity)const = 0;
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests) = 0;
 };
 
@@ -124,11 +124,11 @@ public:
 struct RenderableMeshDesc{
     Core::Assets::AssetRef<Mesh> mesh;
     RuntimeMeshDesc runtimeMesh;
-    bool runtime = false;
+    b8 runtime = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] b8 valid()const noexcept{
         return runtime ? runtimeMesh.valid() : mesh.valid();
     }
 };

@@ -142,7 +142,7 @@ struct ReportSectionRange{
 
 
 public:
-    [[nodiscard]] bool found()const noexcept{ return removeBegin != AStringView::npos; }
+    [[nodiscard]] b8 found()const noexcept{ return removeBegin != AStringView::npos; }
 };
 
 [[nodiscard]] static Expected<ReportSectionRange> FindReportSection(const AStringView report, const AStringView header, const AStringView headerWithLeadingNewline)noexcept{
@@ -194,8 +194,8 @@ static void AppendReportWithoutSection(AString<Core::Alloc::ScratchArena>& outRe
         outReport.append(report.data() + range.removeEnd, report.size() - range.removeEnd);
 }
 
-[[nodiscard]] static bool AppendCrashHeadline(CrashReportText& outReport, const CrashPackageSummary& summary){
-    bool wrote = false;
+[[nodiscard]] static b8 AppendCrashHeadline(CrashReportText& outReport, const CrashPackageSummary& summary){
+    b8 wrote = false;
     if(!summary.triggerExpression.empty()){
         outReport += summary.triggerExpression;
         outReport += s_ReportLineEnd;

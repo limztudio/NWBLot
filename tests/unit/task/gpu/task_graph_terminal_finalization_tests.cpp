@@ -291,8 +291,8 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
     ASSERT_EQ(exportInfo->sourceCount, s_ExpectedDualCount);
     const Graphics::GpuCompiledExternalResourceExportSource* const sources = exportView.sources;
     ASSERT_NE(sources, nullptr);
-    bool hasWholeWriterTail = false;
-    bool hasPartialWriterMipZero = false;
+    b8 hasWholeWriterTail = false;
+    b8 hasPartialWriterMipZero = false;
     for(u32 sourceIndex = 0u; sourceIndex < exportInfo->sourceCount; ++sourceIndex){
         const Graphics::GpuCompiledExternalResourceExportSource& source = sources[sourceIndex];
         hasWholeWriterTail = hasWholeWriterTail || (source.producerTask == wholeWriter && source.sourceQueue == queues[0u].id && source.range.textureSubresources == terminalTailRange.textureSubresources);

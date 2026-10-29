@@ -15,12 +15,12 @@ const f64 s_UiMaxFloatF64 = cast<f64>(s_UiMaxFloat);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool HasValidUiRectDimensions(in Rect rectangle){
+b8 HasValidUiRectDimensions(in Rect rectangle){
     return isFinite(rectangle.x) && isFinite(rectangle.y) && isFinite(rectangle.width) && rectangle.width >= 0.0f && isFinite(rectangle.height) && rectangle.height >= 0.0f;
 }
 
 // Inputs may be unchecked here, so the bottom sum runs only after the right sum is finite.
-bool HasPreciseUiRectEndpoints(in Rect rectangle){
+b8 HasPreciseUiRectEndpoints(in Rect rectangle){
     const f32 right = rectangle.x + rectangle.width;
     if(!isFinite(right)){
         return false;
@@ -30,7 +30,7 @@ bool HasPreciseUiRectEndpoints(in Rect rectangle){
 }
 
 // Zero or subprecision extents remain valid when their rounded endpoints are finite.
-bool IsValidUiRect(in Rect rectangle){
+b8 IsValidUiRect(in Rect rectangle){
     if(!HasValidUiRectDimensions(rectangle)){
         return false;
     }
@@ -40,12 +40,12 @@ bool IsValidUiRect(in Rect rectangle){
 }
 
 // Controls with travel geometry additionally reject positive extents lost to coordinate precision.
-bool IsPreciseUiRect(in Rect rectangle){
+b8 IsPreciseUiRect(in Rect rectangle){
     return HasValidUiRectDimensions(rectangle) && HasPreciseUiRectEndpoints(rectangle);
 }
 
 // Image placements require both precise rounded extents and f64 endpoint sums inside the f32 upper bound.
-bool IsBoundedUiRect(in Rect rectangle){
+b8 IsBoundedUiRect(in Rect rectangle){
     if(!HasValidUiRectDimensions(rectangle)){
         return false;
     }
@@ -54,11 +54,11 @@ bool IsBoundedUiRect(in Rect rectangle){
     return end.x <= s_UiMaxFloatF64 && end.y <= s_UiMaxFloatF64 && HasPreciseUiRectEndpoints(rectangle);
 }
 
-bool IsValidUiPadding(in Insets padding){
+b8 IsValidUiPadding(in Insets padding){
     return isFinite(padding.left) && padding.left >= 0.0f && isFinite(padding.top) && padding.top >= 0.0f && isFinite(padding.right) && padding.right >= 0.0f && isFinite(padding.bottom) && padding.bottom >= 0.0f;
 }
 
-bool IsBoundedUiPadding(in Insets padding){
+b8 IsBoundedUiPadding(in Insets padding){
     if(!IsValidUiPadding(padding)){
         return false;
     }
@@ -67,11 +67,11 @@ bool IsBoundedUiPadding(in Insets padding){
     return size.x <= s_UiMaxFloatF64 && size.y <= s_UiMaxFloatF64;
 }
 
-bool IsValidUiColor(in Color color){
+b8 IsValidUiColor(in Color color){
     return isFinite(color.r) && color.r >= 0.0f && isFinite(color.g) && color.g >= 0.0f && isFinite(color.b) && color.b >= 0.0f && isFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
 }
 
-bool IsValidUiExtent(in Point point){
+b8 IsValidUiExtent(in Point point){
     return isFinite(point.x) && point.x >= 0.0f && isFinite(point.y) && point.y >= 0.0f;
 }
 

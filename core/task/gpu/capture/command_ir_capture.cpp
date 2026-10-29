@@ -20,7 +20,7 @@ namespace GpuCommandIrDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept{
+[[nodiscard]] b8 ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept{
     constexpr u32 s_AllowedResourceStates = (static_cast<u32>(ResourceStates::ConvertCoopVecMatrixOutput) << 1u) - 1u;
     if(record.opcode >= GpuCommandIrOpcode::Count || !record.task.valid() || !record.packet.valid() || !record.queue.valid() || !record.destination.valid() || record.destination.generation != record.task.generation)
         return false;
@@ -100,7 +100,7 @@ namespace __hidden_gpu_command_ir_capture{
 
 
 template<typename RecordT>
-[[nodiscard]] static bool AppendEncodedRecord(GraphicsBytes& outBytes, const RecordT& record){
+[[nodiscard]] static b8 AppendEncodedRecord(GraphicsBytes& outBytes, const RecordT& record){
     static_assert(IsStandardLayout_V<RecordT>, "Command IR records must be standard layout");
     static_assert(IsTriviallyCopyable_V<RecordT>, "Command IR records must be trivially copyable");
     static_assert(sizeof(RecordT) <= Limit<u16>::s_Max, "Command IR record exceeds its u16 byte-size field");
@@ -217,7 +217,7 @@ void GpuCommandIrCapture::reset()noexcept{
     writeStreamHeader();
 }
 
-bool GpuCommandIrCapture::beginRecordingAttempt(const u64 recordingAttemptGeneration)noexcept{
+b8 GpuCommandIrCapture::beginRecordingAttempt(const u64 recordingAttemptGeneration)noexcept{
     if(recordingAttemptGeneration == 0u)
         return false;
     if(!m_recordEndOffsets.empty() && m_recordingAttemptGeneration != recordingAttemptGeneration)
@@ -287,7 +287,7 @@ GpuCommandIrCaptureCheckpoint GpuCommandIrCapture::checkpoint()const noexcept{
     return result;
 }
 
-bool GpuCommandIrCapture::rollback(const GpuCommandIrCaptureCheckpoint& target)noexcept{
+b8 GpuCommandIrCapture::rollback(const GpuCommandIrCaptureCheckpoint& target)noexcept{
     usize prefixStateOwners = 0u;
     usize prefixHeapOwners = 0u;
     if(m_rasterOwners){
@@ -321,7 +321,7 @@ void GpuCommandIrCapture::rollback(const usize recordCount)noexcept{
     rollbackPrefix(recordCount, recordCount == 0u ? 0u : m_graphGeneration, recordCount == 0u ? 0u : m_planGeneration, recordCount == 0u ? 0u : m_recordingAttemptGeneration);
 }
 
-bool GpuCommandIrCapture::captureCopyBuffer(
+b8 GpuCommandIrCapture::captureCopyBuffer(
     const GpuTaskId task,
     const GpuSubmissionPacketId packet,
     const GpuPhysicalQueueId queue,
@@ -344,7 +344,7 @@ bool GpuCommandIrCapture::captureCopyBuffer(
     return append(record);
 }
 
-bool GpuCommandIrCapture::captureCopyTexture(
+b8 GpuCommandIrCapture::captureCopyTexture(
     const GpuTaskId task,
     const GpuSubmissionPacketId packet,
     const GpuPhysicalQueueId queue,
@@ -365,7 +365,7 @@ bool GpuCommandIrCapture::captureCopyTexture(
     return append(record);
 }
 
-bool GpuCommandIrCapture::captureClearBuffer(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuGraphResourceId destination, const u32 clearValue){
+b8 GpuCommandIrCapture::captureClearBuffer(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuGraphResourceId destination, const u32 clearValue){
     GpuCommandIrBuiltinTaskRecord record;
     record.opcode = GpuCommandIrOpcode::ClearBuffer;
     record.task = task;
@@ -376,7 +376,7 @@ bool GpuCommandIrCapture::captureClearBuffer(const GpuTaskId task, const GpuSubm
     return append(record);
 }
 
-bool GpuCommandIrCapture::captureClearTexture(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuGraphResourceId destination, const GpuClearTextureTaskDesc& clearDesc){
+b8 GpuCommandIrCapture::captureClearTexture(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuGraphResourceId destination, const GpuClearTextureTaskDesc& clearDesc){
     GpuCommandIrBuiltinTaskRecord record;
     record.opcode = GpuCommandIrOpcode::ClearTexture;
     record.task = task;
@@ -395,7 +395,7 @@ bool GpuCommandIrCapture::captureClearTexture(const GpuTaskId task, const GpuSub
     return append(record);
 }
 
-bool GpuCommandIrCapture::captureClearTextureRectUInt(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuGraphResourceId destination, const GpuClearTextureRectUIntTaskDesc& clearDesc){
+b8 GpuCommandIrCapture::captureClearTextureRectUInt(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const GpuGraphResourceId destination, const GpuClearTextureRectUIntTaskDesc& clearDesc){
     GpuCommandIrBuiltinTaskRecord record;
     record.opcode = GpuCommandIrOpcode::ClearTextureRectUInt;
     record.task = task;
@@ -408,7 +408,7 @@ bool GpuCommandIrCapture::captureClearTextureRectUInt(const GpuTaskId task, cons
     return append(record);
 }
 
-bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
+b8 GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
     if(!GpuCommandIrDetail::ValidateBuiltinRecord(record))
         return false;
 
@@ -446,7 +446,7 @@ bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
     return true;
 }
 
-bool GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& record){
+b8 GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& record){
     using namespace __hidden_gpu_command_ir_capture;
 
     switch(record.opcode){

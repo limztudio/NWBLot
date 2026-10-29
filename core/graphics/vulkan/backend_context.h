@@ -36,7 +36,7 @@ private:
 
 
     public:
-        [[nodiscard]] bool operator()(const AStringView lhs, const AStringView rhs)const noexcept{ return lhs == rhs; }
+        [[nodiscard]] b8 operator()(const AStringView lhs, const AStringView rhs)const noexcept{ return lhs == rhs; }
     };
 
 
@@ -149,7 +149,7 @@ private:
 
 private:
     [[nodiscard]] static Expected<QueueSubmissionNativeSignal> InvokeFramePresentationSignalPreparation(void* context, u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept;
-    [[nodiscard]] static bool InvokeFramePresentationSignalResolution(void* context, u64 identity, const QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] static b8 InvokeFramePresentationSignalResolution(void* context, u64 identity, const QueueSubmissionToken& token)noexcept;
 
 
 public:
@@ -163,17 +163,17 @@ public:
 
     [[nodiscard]] Expected<GraphicsVector<AdapterInfo>> enumerateAdapters();
     [[nodiscard]] Expected<AdapterInfo> getSelectedAdapterInfo()const;
-    [[nodiscard]] bool isValidationMessageIdIgnored(i32 messageId)const noexcept;
+    [[nodiscard]] b8 isValidationMessageIdIgnored(i32 messageId)const noexcept;
 
-    [[nodiscard]] bool isInstanceExtensionEnabled(AStringView extensionName)const noexcept{
+    [[nodiscard]] b8 isInstanceExtensionEnabled(AStringView extensionName)const noexcept{
         return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
     }
 
-    [[nodiscard]] bool isDeviceExtensionEnabled(AStringView extensionName)const noexcept{
+    [[nodiscard]] b8 isDeviceExtensionEnabled(AStringView extensionName)const noexcept{
         return m_enabledExtensions.device.find(extensionName) != m_enabledExtensions.device.end();
     }
 
-    [[nodiscard]] bool isLayerEnabled(AStringView layerName)const noexcept{
+    [[nodiscard]] b8 isLayerEnabled(AStringView layerName)const noexcept{
         return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
     }
 
@@ -183,71 +183,71 @@ public:
 
     void setPlatformFrameParam(const Common::FrameParam& frameParam)noexcept{ m_platformFrameParam = frameParam; }
 
-    bool createInstance();
-    bool createDevice();
-    bool createSwapChain();
-    [[nodiscard]] bool destroy();
+    b8 createInstance();
+    b8 createDevice();
+    b8 createSwapChain();
+    [[nodiscard]] b8 destroy();
     [[nodiscard]] Expected<SwapChainTransitionTicket> prepareSwapChainTransition(SwapChainTransitionKind::Enum kind);
-    [[nodiscard]] bool commitSwapChainResize(SwapChainTransitionTicket&& ticket);
-    [[nodiscard]] bool commitDestroy(SwapChainTransitionTicket&& ticket)noexcept;
+    [[nodiscard]] b8 commitSwapChainResize(SwapChainTransitionTicket&& ticket);
+    [[nodiscard]] b8 commitDestroy(SwapChainTransitionTicket&& ticket)noexcept;
     [[nodiscard]] BeginFrameResult beginFrame();
     // Idempotently retires synchronization for a healthy aborted frame.
     // The acquired WSI image stays quarantined until swap-chain or device teardown; an already-resolved frame is a successful no-op.
-    [[nodiscard]] bool abandonAcquiredFrame();
+    [[nodiscard]] b8 abandonAcquiredFrame();
     // The return value retains continuation/retirement status.
     // Output reports native present acceptance alone: true even if later sync fails, false for out-of-date surfaces.
-    [[nodiscard]] Expected<bool, PresentationFailure> present();
+    [[nodiscard]] Expected<b8, PresentationFailure> present();
     // Claims the acquired image's completion semaphore for one exact graph packet.
     // A null hook leaves the direct transition-submit path in present() active.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
     // The renderer confirms only the terminal packet token accepted by the graph submission transaction.
-    [[nodiscard]] bool confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] b8 confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept;
     // A hook from a rejected/abandoned submit is unusable; retire its signal before the next frame.
-    [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
+    [[nodiscard]] b8 cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
 
 
 private:
     void initDefaultExtensions();
-    bool createVulkanInstance(Alloc::ScratchArena& scratchArena);
-    bool createWindowSurface();
+    b8 createVulkanInstance(Alloc::ScratchArena& scratchArena);
+    b8 createWindowSurface();
     void installDebugMessenger();
-    bool pickPhysicalDevice(Alloc::ScratchArena& scratchArena);
-    bool findQueueFamilies(Alloc::ScratchArena& scratchArena, VkPhysicalDevice physicalDevice);
+    b8 pickPhysicalDevice(Alloc::ScratchArena& scratchArena);
+    b8 findQueueFamilies(Alloc::ScratchArena& scratchArena, VkPhysicalDevice physicalDevice);
     [[nodiscard]] u32 findNativeQueueIndex(u32 familyIndex, u32 queueIndex)const noexcept;
-    bool createVulkanDevice(Alloc::ScratchArena& scratchArena);
+    b8 createVulkanDevice(Alloc::ScratchArena& scratchArena);
     void logVulkanDeviceConfiguration(
         Alloc::ScratchArena& scratchArena,
         const VkPhysicalDeviceProperties& physicalDeviceProperties,
-        bool maintenance4Enabled,
+        b8 maintenance4Enabled,
         const VkPhysicalDeviceMaintenance4Features& maintenance4Features,
-        bool createComputeQueue,
-        bool createCrossFamilySecondaryComputeQueue,
+        b8 createComputeQueue,
+        b8 createCrossFamilySecondaryComputeQueue,
         i32 secondaryComputeQueueFamily,
-        bool createDedicatedTransferQueue,
-        bool createCrossFamilySecondaryTransferQueue,
+        b8 createDedicatedTransferQueue,
+        b8 createCrossFamilySecondaryTransferQueue,
         i32 secondaryTransferQueueFamily
     );
-    bool createVulkanSwapChain(Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool createSwapChainResources(Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool prepareSwapChainImageRevocation();
+    b8 createVulkanSwapChain(Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 createSwapChainResources(Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 prepareSwapChainImageRevocation();
     void commitPreparedSwapChainDestruction()noexcept;
-    [[nodiscard]] bool destroySwapChainAfterCreateFailure();
+    [[nodiscard]] b8 destroySwapChainAfterCreateFailure();
     void clearSemaphores(SemaphoreVector& semaphores)noexcept;
-    bool recreateSemaphores(SemaphoreVector& semaphores, usize count, AStringView operationName);
+    b8 recreateSemaphores(SemaphoreVector& semaphores, usize count, AStringView operationName);
     void clearAcquireSyncSlots()noexcept;
-    [[nodiscard]] bool recreateAcquireSyncSlots(usize count);
-    [[nodiscard]] bool prepareAcquireSyncSlot(AcquireSyncSlot& slot);
-    [[nodiscard]] bool waitAcquireSyncSlotsForLifecycle();
-    [[nodiscard]] bool createFrameSyncQueries();
-    [[nodiscard]] bool ensureDirectPresentCommandList(const GpuPhysicalQueueId& executionQueue);
+    [[nodiscard]] b8 recreateAcquireSyncSlots(usize count);
+    [[nodiscard]] b8 prepareAcquireSyncSlot(AcquireSyncSlot& slot);
+    [[nodiscard]] b8 waitAcquireSyncSlotsForLifecycle();
+    [[nodiscard]] b8 createFrameSyncQueries();
+    [[nodiscard]] b8 ensureDirectPresentCommandList(const GpuPhysicalQueueId& executionQueue);
     void resetDirectPresentCommandList()noexcept;
-    [[nodiscard]] bool recordDirectPresentTransition(const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy, Texture* backbufferTexture);
+    [[nodiscard]] b8 recordDirectPresentTransition(const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy, Texture* backbufferTexture);
     [[nodiscard]] Expected<QueueSubmissionNativeSignal> prepareFramePresentationSignal(u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept;
-    [[nodiscard]] bool resolveFramePresentationSignal(u64 identity, const QueueSubmissionToken& token)noexcept;
-    [[nodiscard]] bool replaceFramePresentationSemaphoreAfterIdle();
+    [[nodiscard]] b8 resolveFramePresentationSignal(u64 identity, const QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] b8 replaceFramePresentationSemaphoreAfterIdle();
     void resetFramePresentationSignal()noexcept;
-    [[nodiscard]] bool cancelFramePresentationSignalDeferred(const QueueSubmissionPreSubmitHook* claim, UniqueLock<Futex>& lifecycleLock);
-    [[nodiscard]] bool validPreparedTicket(const SwapChainTransitionTicket& ticket, SwapChainTransitionKind::Enum kind)const noexcept;
+    [[nodiscard]] b8 cancelFramePresentationSignalDeferred(const QueueSubmissionPreSubmitHook* claim, UniqueLock<Futex>& lifecycleLock);
+    [[nodiscard]] b8 validPreparedTicket(const SwapChainTransitionTicket& ticket, SwapChainTransitionKind::Enum kind)const noexcept;
 
 
 private:
@@ -316,45 +316,45 @@ private:
     Futex m_framePresentationMutex;
     u64 m_swapChainLifecycleEpoch = 0u;
     ConditionVariableAny m_framePresentationCondition;
-    bool m_framePresentationClaimIdentityExhausted = false;
-    bool m_frameAcquired = false;
-    bool m_frameAbandonmentComplete = false;
+    b8 m_framePresentationClaimIdentityExhausted = false;
+    b8 m_frameAcquired = false;
+    b8 m_frameAbandonmentComplete = false;
     FramePresentationSignalState::Enum m_framePresentationSignalState = FramePresentationSignalState::Idle;
     SwapChainLifecycleState::Enum m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
-    bool m_lifecycleDrainActive = false;
-    bool m_swapChainMutableFormatSupported = false;
-    bool m_hdr10ColorSpaceExtensionEnabled = false;
-    bool m_framePresentationClaimsEnabled = true;
-    bool m_bufferDeviceAddressSupported = false;
-    bool m_hostQueryResetFeatureEnabled = false;
-    bool m_textureCompressionBcFeatureEnabled = false;
-    bool m_textureCompressionAstcLdrFeatureEnabled = false;
-    bool m_textureCompressionAstcHdrFeatureEnabled = false;
-    bool m_dynamicRenderingSupported = false;
-    bool m_synchronization2Supported = false;
-    bool m_independentBlendFeatureEnabled = false;
-    bool m_fullDrawIndexUint32FeatureEnabled = false;
-    bool m_multiDrawIndirectFeatureEnabled = false;
-    bool m_drawIndirectFirstInstanceFeatureEnabled = false;
-    bool m_meshShaderFeatureEnabled = false;
-    bool m_accelerationStructureFeatureEnabled = false;
-    bool m_rayTracingPipelineFeatureEnabled = false;
-    bool m_rayQueryFeatureEnabled = false;
-    bool m_opacityMicromapFeatureEnabled = false;
-    bool m_clusterAccelerationStructureFeatureEnabled = false;
-    bool m_rayTracingInvocationReorderFeatureEnabled = false;
-    bool m_rayTracingInvocationReorderExtFeatureEnabled = false;
-    bool m_cooperativeVectorFeatureEnabled = false;
-    bool m_cooperativeVectorTrainingFeatureEnabled = false;
-    bool m_sameClassGraphicsQueueEnabled = false;
-    bool m_sameClassComputeQueueEnabled = false;
-    bool m_sameClassTransferQueueEnabled = false;
-    bool m_computeQueueEnabled = false;
-    bool m_asyncComputeLaneEnabled = false;
-    bool m_transferQueueEnabled = false;
-    bool m_meshTaskShaderSupported = false;
-    bool m_rayTracingSpheresSupported = false;
-    bool m_rayTracingLinearSweptSpheresSupported = false;
+    b8 m_lifecycleDrainActive = false;
+    b8 m_swapChainMutableFormatSupported = false;
+    b8 m_hdr10ColorSpaceExtensionEnabled = false;
+    b8 m_framePresentationClaimsEnabled = true;
+    b8 m_bufferDeviceAddressSupported = false;
+    b8 m_hostQueryResetFeatureEnabled = false;
+    b8 m_textureCompressionBcFeatureEnabled = false;
+    b8 m_textureCompressionAstcLdrFeatureEnabled = false;
+    b8 m_textureCompressionAstcHdrFeatureEnabled = false;
+    b8 m_dynamicRenderingSupported = false;
+    b8 m_synchronization2Supported = false;
+    b8 m_independentBlendFeatureEnabled = false;
+    b8 m_fullDrawIndexUint32FeatureEnabled = false;
+    b8 m_multiDrawIndirectFeatureEnabled = false;
+    b8 m_drawIndirectFirstInstanceFeatureEnabled = false;
+    b8 m_meshShaderFeatureEnabled = false;
+    b8 m_accelerationStructureFeatureEnabled = false;
+    b8 m_rayTracingPipelineFeatureEnabled = false;
+    b8 m_rayQueryFeatureEnabled = false;
+    b8 m_opacityMicromapFeatureEnabled = false;
+    b8 m_clusterAccelerationStructureFeatureEnabled = false;
+    b8 m_rayTracingInvocationReorderFeatureEnabled = false;
+    b8 m_rayTracingInvocationReorderExtFeatureEnabled = false;
+    b8 m_cooperativeVectorFeatureEnabled = false;
+    b8 m_cooperativeVectorTrainingFeatureEnabled = false;
+    b8 m_sameClassGraphicsQueueEnabled = false;
+    b8 m_sameClassComputeQueueEnabled = false;
+    b8 m_sameClassTransferQueueEnabled = false;
+    b8 m_computeQueueEnabled = false;
+    b8 m_asyncComputeLaneEnabled = false;
+    b8 m_transferQueueEnabled = false;
+    b8 m_meshTaskShaderSupported = false;
+    b8 m_rayTracingSpheresSupported = false;
+    b8 m_rayTracingLinearSweptSpheresSupported = false;
 };
 
 

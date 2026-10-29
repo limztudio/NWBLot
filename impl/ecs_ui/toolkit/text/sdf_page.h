@@ -44,11 +44,11 @@ struct SdfAtlasPageBinding{
     u32 distanceEncoding = s_SdfDistanceEncodingFreeTypeU8;
 };
 
-[[nodiscard]] inline bool SameSdfAtlasPageKey(const SdfAtlasPageBinding& first, const SdfAtlasPageBinding& second)noexcept{
+[[nodiscard]] inline b8 SameSdfAtlasPageKey(const SdfAtlasPageBinding& first, const SdfAtlasPageBinding& second)noexcept{
     return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.generation == second.generation && first.index == second.index;
 }
 
-[[nodiscard]] bool operator==(const SdfAtlasPageBinding& lhs, const SdfAtlasPageBinding& rhs)noexcept;
+[[nodiscard]] b8 operator==(const SdfAtlasPageBinding& lhs, const SdfAtlasPageBinding& rhs)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

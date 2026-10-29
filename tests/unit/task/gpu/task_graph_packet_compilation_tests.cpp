@@ -276,8 +276,8 @@ TEST(GpuTaskGraph, KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers){
     ASSERT_EQ(compiledPlan.packet(thirdPacket).plan->dependencyCount, 1u);
     EXPECT_EQ(compiledPlan.packet(thirdPacket).dependencies[0u].producer, firstPacket);
     ASSERT_EQ(compiledPlan.packet(fourthPacket).plan->dependencyCount, s_ExpectedDualCount);
-    bool hasSecondProducer = false;
-    bool hasThirdProducer = false;
+    b8 hasSecondProducer = false;
+    b8 hasThirdProducer = false;
     for(const Graphics::GpuPacketDependency& dependency : { compiledPlan.packet(fourthPacket).dependencies[0u], compiledPlan.packet(fourthPacket).dependencies[1u] }){
         hasSecondProducer = hasSecondProducer || dependency.producer == secondPacket;
         hasThirdProducer = hasThirdProducer || dependency.producer == thirdPacket;

@@ -52,12 +52,12 @@ struct RayTracingOpticalSceneSnapshot{
     RayTracingOpticalUploadControlHandle uploadState;
     Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::Invalid();
     u32 transparentCount = 0u;
-    bool boundsComplete = false;
-    bool unspecifiedBoundariesOnly = false;
+    b8 boundsComplete = false;
+    b8 unspecifiedBoundariesOnly = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return buffer && descriptor.valid() && upload && uploadState; }
+    [[nodiscard]] b8 valid()const noexcept{ return buffer && descriptor.valid() && upload && uploadState; }
 };
 
 class RayTracingOpticalSceneResources final : NoCopy{
@@ -68,8 +68,8 @@ public:
 public:
     void invalidate();
     void resetPrepared()noexcept{ m_prepared = false; }
-    [[nodiscard]] bool prepare(const RayTracingOpticalSceneGather& gather);
-    [[nodiscard]] bool prepareRuntimeBounds(const RayTracingOpticalSceneGather& gather, RendererShaderSystem& shaderSystem);
+    [[nodiscard]] b8 prepare(const RayTracingOpticalSceneGather& gather);
+    [[nodiscard]] b8 prepareRuntimeBounds(const RayTracingOpticalSceneGather& gather, RendererShaderSystem& shaderSystem);
     [[nodiscard]] RayTracingOpticalSceneSnapshot snapshot()const noexcept;
 
 
@@ -82,8 +82,8 @@ private:
     RayTracingOpticalBoundsFinalizeResources m_runtimeBounds;
     RayTracingOpticalBoundsFinalizeHandle m_runtimeBoundsSnapshot;
     usize m_capacity = 0u;
-    bool m_prepared = false;
-    bool m_runtimeBoundsRequired = false;
+    b8 m_prepared = false;
+    b8 m_runtimeBoundsRequired = false;
 };
 
 

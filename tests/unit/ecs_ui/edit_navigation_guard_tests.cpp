@@ -55,8 +55,8 @@ protected:
         Ui::EditModelSnapshot callbackModel(m_arena);
         Ui::EditNavigationSnapshot callbackNavigation;
         usize callbacks = 0u;
-        bool mutationAccepted = false;
-        bool innerRejected = false;
+        b8 mutationAccepted = false;
+        b8 innerRejected = false;
         m_resolver.hook = [this, mutation, &callbackModel, &callbackNavigation, &callbacks, &mutationAccepted, &innerRejected](){
             ++callbacks;
             switch(mutation){

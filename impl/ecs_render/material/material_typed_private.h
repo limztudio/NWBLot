@@ -51,7 +51,7 @@ struct MaterialTypedInstanceRanges{
 };
 
 struct MaterialTypedByteRangeKey{
-    friend bool operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs)noexcept{ return lhs.materialName == rhs.materialName && lhs.typedLayoutHash == rhs.typedLayoutHash; }
+    friend b8 operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs)noexcept{ return lhs.materialName == rhs.materialName && lhs.typedLayoutHash == rhs.typedLayoutHash; }
 
 
 public:
@@ -96,7 +96,7 @@ public:
     }
 };
 
-inline bool operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)noexcept{
+inline b8 operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)noexcept{
     if(lhs.byteHash != rhs.byteHash || lhs.bytes.size() != rhs.bytes.size())
         return false;
     if(lhs.bytes.empty())
@@ -124,11 +124,11 @@ struct MaterialTypedByteContentKeyEqual{
 
 
 public:
-    bool operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)const noexcept{
+    b8 operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)const noexcept{
         return lhs == rhs;
     }
 
-    bool operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentLookup& rhs)const noexcept{
+    b8 operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentLookup& rhs)const noexcept{
         if(lhs.byteHash != rhs.byteHash || lhs.bytes.size() != rhs.bytes.size())
             return false;
         if(lhs.bytes.empty())
@@ -240,7 +240,7 @@ template<typename DestinationByteVector, typename MaterialTypedByteRangeMap>
     return range;
 }
 
-[[nodiscard]] inline bool MaterialTypedByteRangeEmptyOffsetValid(const MaterialTypedByteRange& range)noexcept{
+[[nodiscard]] inline b8 MaterialTypedByteRangeEmptyOffsetValid(const MaterialTypedByteRange& range)noexcept{
     return range.byteCount != 0u || range.byteOffset == 0u;
 }
 

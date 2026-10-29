@@ -47,7 +47,7 @@ struct DeferredGraphSuffixInputs{
     Core::GpuGraphResourceId currentBindlessSlots;
     RendererTaskGraphDetail::ReflectionGraphResult reflectionGraph;
     ReflectionCompositeInputs reflectionCompositeInputs;
-    bool useLaggedLightingHistory = false;
+    b8 useLaggedLightingHistory = false;
     Core::GpuTaskId lightingTask;
     Core::GpuTaskId avboitFinalTask;
     Core::GpuTaskId refractionResolveTask;
@@ -65,7 +65,7 @@ struct DeferredGraphSuffixResult{
     Core::GpuGraphResourceId compositeColor;
     Core::GpuGraphResourceId compositeBindlessSlots;
     Core::GpuGraphResourceId backbuffer;
-    bool overlayRequired = false;
+    b8 overlayRequired = false;
 };
 
 

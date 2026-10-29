@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::resetTimerQuery(TimerQuery& query){
+b8 CommandList::resetTimerQuery(TimerQuery& query){
     if(!publicCommandStateAccessible())
         return false;
     if(query.m_queryPool == VK_NULL_HANDLE || &query.m_context != &m_context){
@@ -37,7 +37,7 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
     QueueSubmissionToken priorSubmission;
     {
         ScopedLock queryLock(query.m_mutex);
-        const bool resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
+        const b8 resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
         if(query.m_recordingActive || query.m_cycleGeneration != 0u || (query.m_resetRecordingOwner.commandBuffer && !resetOwnedByCurrentCommandBuffer)){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot reset a timer query while another recording transaction is active"));
             invalidateCommandRecording();
@@ -45,9 +45,9 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
         }
         priorSubmission = query.prerequisiteSubmissionWithinLock();
     }
-    const bool priorSubmissionObservedComplete = VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
+    const b8 priorSubmissionObservedComplete = VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
 
-    bool resetRecorded = false;
+    b8 resetRecorded = false;
     {
         ScopedLock queryLock(query.m_mutex);
         const QueueSubmissionToken currentPriorSubmission = query.prerequisiteSubmissionWithinLock();
@@ -84,12 +84,12 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
     return resetRecorded;
 }
 
-bool CommandList::canRecordTimerQueryHere()const noexcept{
+b8 CommandList::canRecordTimerQueryHere()const noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     return ownership.m_readable && canRecordTimerQueryHereUnchecked();
 }
 
-bool CommandList::canResetTimerQueryHere()const noexcept{
+b8 CommandList::canResetTimerQueryHere()const noexcept{
     const GraphPublicationReadOwnership ownership(*this);
     return ownership.m_readable && canResetTimerQueryHereUnchecked();
 }
@@ -105,7 +105,7 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
     }
     if(!validateCommandRecordingScope(NWB_TEXT("begin timer query")))
         return MakeUnexpected(Failure{});
-    const bool recordsInlineReset = canResetTimerQueryHereUnchecked();
+    const b8 recordsInlineReset = canResetTimerQueryHereUnchecked();
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     constexpr u32 s_CompleteTimestampValidBits = 64u;
@@ -118,7 +118,7 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
     QueueSubmissionToken priorSubmission;
     {
         ScopedLock queryLock(query.m_mutex);
-        const bool resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
+        const b8 resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
         if(query.m_recordingActive || query.m_cycleGeneration != 0u || (query.m_resetRecordingOwner.commandBuffer && !resetOwnedByCurrentCommandBuffer) || (!recordsInlineReset && !resetOwnedByCurrentCommandBuffer && !query.m_resetAuthorizationAvailable)){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Refusing a timer-query begin without an exclusive cycle and ordered reset"));
             invalidateCommandRecording();
@@ -132,12 +132,12 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
             priorSubmission = query.prerequisiteSubmissionWithinLock();
         }
     }
-    const bool priorSubmissionObservedComplete = VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
+    const b8 priorSubmissionObservedComplete = VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
 
-    bool beginRecorded = false;
+    b8 beginRecorded = false;
     {
         ScopedLock queryLock(query.m_mutex);
-        const bool resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
+        const b8 resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
         const QueueSubmissionToken currentPriorSubmission = !recordsInlineReset && !resetOwnedByCurrentCommandBuffer ? query.m_resetAuthorizationSubmission : query.prerequisiteSubmissionWithinLock();
         if(
             !query.m_recordingActive
@@ -199,7 +199,7 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
     return token;
 }
 
-bool CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token){
+b8 CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token){
     if(!publicCommandStateAccessible())
         return false;
     if(query.m_queryPool == VK_NULL_HANDLE || &query.m_context != &m_context){
@@ -217,7 +217,7 @@ bool CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToke
     }
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    bool matchingActiveCycle = false;
+    b8 matchingActiveCycle = false;
     {
         ScopedLock queryLock(query.m_mutex);
         matchingActiveCycle =
@@ -232,7 +232,7 @@ bool CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToke
             && (query.m_beginAccepted || query.m_beginRecordingOwner.commandBuffer)
         ;
         if(matchingActiveCycle){
-            const bool endOwnedByCurrentCommandBuffer = query.m_endRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_endRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID;
+            const b8 endOwnedByCurrentCommandBuffer = query.m_endRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_endRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID;
             if(query.m_endRecordingOwner.commandBuffer && !endOwnedByCurrentCommandBuffer)
                 matchingActiveCycle = false;
             if(matchingActiveCycle){
@@ -258,7 +258,7 @@ bool CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToke
     return true;
 }
 
-bool CommandList::endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQueryRecordingToken& token)noexcept{
+b8 CommandList::endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQueryRecordingToken& token)noexcept{
     if(!publicCommandStateAccessible())
         return false;
 
@@ -278,11 +278,11 @@ bool CommandList::endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQ
         return false;
     }
 
-    bool endRecorded = false;
+    b8 endRecorded = false;
     {
         NothrowScopedLock queryLock(query.m_mutex);
         TrackedCommandBuffer::TimerQueryRecordingClaim* const claim = m_currentCmdBuf->findTimerQueryRecordingClaim(query, token.generation);
-        const bool matchingOpeningClaim = claim
+        const b8 matchingOpeningClaim = claim
             && claim->recordsBegin
             && !claim->recordsEnd
             && claim->queue == queueInfo->id
@@ -310,7 +310,7 @@ bool CommandList::endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQ
     return endRecorded;
 }
 
-bool CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
+b8 CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     constexpr u32 s_CompleteTimestampValidBits = 64u;
     constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer);
@@ -327,7 +327,7 @@ bool CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
     ;
 }
 
-bool CommandList::canResetTimerQueryHereUnchecked()const noexcept{
+b8 CommandList::canResetTimerQueryHereUnchecked()const noexcept{
     if(m_renderPassActive || !canRecordTimerQueryHereUnchecked())
         return false;
 

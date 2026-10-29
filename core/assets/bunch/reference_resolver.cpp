@@ -34,7 +34,7 @@ namespace Metascript = Core::Metascript;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<bool, NameTextError::Enum> IsAssetBunchType(const AStringView typeName){
+Expected<b8, NameTextError::Enum> IsAssetBunchType(const AStringView typeName){
     const auto name = ToName(typeName);
     if(!name)
         return MakeUnexpected(name.error());

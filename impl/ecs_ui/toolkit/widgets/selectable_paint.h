@@ -25,17 +25,17 @@ struct SelectableMetrics{
 };
 
 struct SelectablePaintFlags{
-    bool enabled = true;
-    bool selected = false;
-    bool hover = false;
-    bool focused = false;
+    b8 enabled = true;
+    b8 selected = false;
+    b8 hover = false;
+    b8 focused = false;
 };
 
 class SelectablePainter final{
 public:
     [[nodiscard]] static Expected<SelectableMetrics> Measure(const UiSkin& skin, const SelectableStyle& style)noexcept;
     // Use the same display-scale visual bounds and resolved padding that sized the control.
-    [[nodiscard]] static bool Paint(
+    [[nodiscard]] static b8 Paint(
         PaintBuilder& paint, TextService& text, const UiSkin& skin, const TextLayout& layout,
         const Rect& textBounds, const Insets& padding, const Rect& bounds, const Rect& clip, const SelectableStyle& style,
         const SelectablePaintFlags& flags, const Color& textColor, const Color& disabledTextColor

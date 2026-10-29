@@ -193,7 +193,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Neon(const T& src)noexcept{
 #endif
 
 #if defined(NWB_HAS_SSE2)
-template<bool Aligned>
+template<b8 Aligned>
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadMatrixRow4(const f32& row)noexcept{
     if constexpr(Aligned)
         return _mm_load_ps((&row));
@@ -201,7 +201,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadMatrixRow4(const f32& row)noexcept
         return _mm_loadu_ps((&row));
 }
 
-template<bool Aligned, typename T>
+template<b8 Aligned, typename T>
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Sse(const T& src)noexcept{
     SIMDMatrix result;
     result.v[0] = LoadMatrixRow4<Aligned>(src._11);
@@ -211,7 +211,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Sse(const T& src)noexcept{
     return result;
 }
 
-template<bool Aligned, typename T>
+template<b8 Aligned, typename T>
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Sse(const T& src)noexcept{
     SIMDMatrix result = LoadFloat34Sse<Aligned>(src);
     result.v[3] = LoadMatrixRow4<Aligned>(src._41);
@@ -230,7 +230,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreInt4Scalar(SIMDVectorSingle src, T& dst)noexc
 #endif
 
 #if defined(NWB_HAS_SSE2)
-template<bool Aligned>
+template<b8 Aligned>
 NWB_INLINE void NWB_SIMD_CALL StoreInt4Sse(SIMDVectorSingle src, i32 (&dst)[4])noexcept{
     if constexpr(Aligned)
         _mm_store_si128(reinterpret_cast<__m128i*>(dst), _mm_castps_si128(src));

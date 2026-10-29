@@ -83,9 +83,9 @@ void WaylandTextInputService::OnPreedit(void* const data, zwp_text_input_v3* con
     if(input != service.m_input || !service.m_enabled)
         return;
     const AStringView value = text ? AStringView(text) : AStringView{};
-    const bool hidden = begin == -1 && end == -1;
-    const bool valid = ValidateTextInputUtf8(value, s_TextInputMaxEventTextBytes) == TextInputAdmission::Accepted;
-    const bool range = hidden || (begin >= 0 && end >= 0 && IsUtf8ScalarBoundary(value, static_cast<usize>(begin)) && IsUtf8ScalarBoundary(value, static_cast<usize>(end)));
+    const b8 hidden = begin == -1 && end == -1;
+    const b8 valid = ValidateTextInputUtf8(value, s_TextInputMaxEventTextBytes) == TextInputAdmission::Accepted;
+    const b8 range = hidden || (begin >= 0 && end >= 0 && IsUtf8ScalarBoundary(value, static_cast<usize>(begin)) && IsUtf8ScalarBoundary(value, static_cast<usize>(end)));
     service.m_pendingInvalid |= !valid || !range;
     if(valid && range)
         service.m_pendingPreedit.assign(value.data(), value.size());
@@ -99,7 +99,7 @@ void WaylandTextInputService::OnCommit(void* const data, zwp_text_input_v3* cons
     if(input != service.m_input || !service.m_enabled)
         return;
     const AStringView value = text ? AStringView(text) : AStringView{};
-    const bool valid = ValidateTextInputUtf8(value, s_TextInputMaxEventTextBytes) == TextInputAdmission::Accepted;
+    const b8 valid = ValidateTextInputUtf8(value, s_TextInputMaxEventTextBytes) == TextInputAdmission::Accepted;
     service.m_pendingInvalid |= !valid;
     if(valid)
         service.m_pendingCommit.assign(value.data(), value.size());
@@ -202,7 +202,7 @@ void WaylandTextInputService::receiveDone(const u32 serial){
     if(status == TextInputAdmission::Accepted && m_hasCommit)
         status = emitCommit(token, m_pendingCommit);
     if(status == TextInputAdmission::Accepted && m_hasPreedit){
-        const bool visible = m_pendingBegin != -1 || m_pendingEnd != -1;
+        const b8 visible = m_pendingBegin != -1 || m_pendingEnd != -1;
         const usize begin = visible ? static_cast<usize>(m_pendingBegin) : 0u;
         const usize end = visible ? static_cast<usize>(m_pendingEnd) : 0u;
         status = emitPreedit(token, m_pendingPreedit, begin, end, visible);

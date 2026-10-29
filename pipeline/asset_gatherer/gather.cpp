@@ -94,7 +94,7 @@ namespace __hidden_gather{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GatherAssets(const AssetGatherOptions& options){
+b8 GatherAssets(const AssetGatherOptions& options){
     Assets::AssetArena& arena = options.inputs.get_allocator().arena();
     Core::Alloc::ScratchArena scratchArena(Name("assets/gather"));
     if(options.outputDirectory.empty()){
@@ -123,7 +123,7 @@ bool GatherAssets(const AssetGatherOptions& options){
         if(!inserted.second){
             auto& existing = manifest.entries[inserted.first.value()];
             const usize payloadSize = bytes.size() - payloadOffset;
-            const bool identical = existing.payloadBytes.size() == payloadSize && NWB_MEMCMP(existing.payloadBytes.data(), bytes.data() + payloadOffset, payloadSize) == 0;
+            const b8 identical = existing.payloadBytes.size() == payloadSize && NWB_MEMCMP(existing.payloadBytes.data(), bytes.data() + payloadOffset, payloadSize) == 0;
             if(!identical){
                 if(!options.mergePayloads || !options.mergePayloads(virtualPath, bytes.data() + payloadOffset, payloadSize, scratchArena, existing.payloadBytes)){
                     NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), ConvertString(virtualPath.resolvedText()));

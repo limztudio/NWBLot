@@ -27,7 +27,7 @@ namespace __hidden_ui_gpu_sdf_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidPage(const SharedSdfAtlasPage& page)noexcept{
+[[nodiscard]] static b8 ValidPage(const SharedSdfAtlasPage& page)noexcept{
     if(!page)
         return false;
     const SdfAtlasPageBinding& binding = page->binding();
@@ -42,7 +42,7 @@ namespace __hidden_ui_gpu_sdf_resources{
     ;
 }
 
-[[nodiscard]] static bool PrepareDescriptor(GpuSdfAtlasVersion& version){
+[[nodiscard]] static b8 PrepareDescriptor(GpuSdfAtlasVersion& version){
     return PrepareGpuSampledImageDescriptor(version.m_graphics, version.m_texture, version.m_texture->getDescription().format, version.m_sampledImage);
 }
 
@@ -69,7 +69,7 @@ GpuSdfAtlasVersion::~GpuSdfAtlasVersion()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
+b8 GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
     const auto& pages = snapshot.sdfPages();
     if(pages.size() + snapshot.glyphPages().size() + snapshot.textureImages().size() > s_PaintMaxImages)
         return false;
@@ -168,7 +168,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
     return Move(version);
 }
 
-bool GpuRendererState::prepareSdfPages(GpuFrameData& frame){
+b8 GpuRendererState::prepareSdfPages(GpuFrameData& frame){
     const auto& pages = frame.m_snapshot.sdfPages();
     frame.m_sdfPages.reserve(pages.size());
     Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/gpu/sdf_upload"));

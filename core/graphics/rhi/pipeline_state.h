@@ -77,11 +77,11 @@ struct BlendState{
         BlendFactor::Enum destBlendAlpha = BlendFactor::Zero;
         BlendOp::Enum blendOpAlpha = BlendOp::Add;
         ColorMask::Mask colorWriteMask = ColorMask::All;
-        bool blendEnable = false;
+        b8 blendEnable = false;
 
 
     public:
-        constexpr RenderTarget& setBlendEnable(bool enable)noexcept{ blendEnable = enable; return *this; }
+        constexpr RenderTarget& setBlendEnable(b8 enable)noexcept{ blendEnable = enable; return *this; }
 
         constexpr RenderTarget& enableBlend()noexcept{ blendEnable = true; return *this; }
 
@@ -101,25 +101,25 @@ struct BlendState{
 
         constexpr RenderTarget& setColorWriteMask(ColorMask::Mask value)noexcept{ colorWriteMask = value; return *this; }
 
-        [[nodiscard]] bool usesConstantColor()const noexcept;
+        [[nodiscard]] b8 usesConstantColor()const noexcept;
     };
 
     RenderTarget targets[s_MaxRenderTargets];
-    bool alphaToCoverageEnable = false;
+    b8 alphaToCoverageEnable = false;
 
 
 public:
     constexpr BlendState& setRenderTarget(u32 index, const RenderTarget& target)noexcept{ targets[index] = target; return *this; }
 
-    constexpr BlendState& setAlphaToCoverageEnable(bool enable)noexcept{ alphaToCoverageEnable = enable; return *this; }
+    constexpr BlendState& setAlphaToCoverageEnable(b8 enable)noexcept{ alphaToCoverageEnable = enable; return *this; }
 
     constexpr BlendState& enableAlphaToCoverage()noexcept{ alphaToCoverageEnable = true; return *this; }
 
     constexpr BlendState& disableAlphaToCoverage()noexcept{ alphaToCoverageEnable = false; return *this; }
 
-    [[nodiscard]] bool usesConstantColor(u32 numTargets)const noexcept;
+    [[nodiscard]] b8 usesConstantColor(u32 numTargets)const noexcept;
 };
-constexpr bool operator==(const BlendState::RenderTarget& lhs, const BlendState::RenderTarget& rhs)noexcept{
+constexpr b8 operator==(const BlendState::RenderTarget& lhs, const BlendState::RenderTarget& rhs)noexcept{
     return
         lhs.blendEnable == rhs.blendEnable
         && lhs.srcBlend == rhs.srcBlend
@@ -132,9 +132,9 @@ constexpr bool operator==(const BlendState::RenderTarget& lhs, const BlendState:
     ;
 }
 
-constexpr bool operator!=(const BlendState::RenderTarget& lhs, const BlendState::RenderTarget& rhs)noexcept{ return !(lhs == rhs); }
+constexpr b8 operator!=(const BlendState::RenderTarget& lhs, const BlendState::RenderTarget& rhs)noexcept{ return !(lhs == rhs); }
 
-constexpr bool operator==(const BlendState& lhs, const BlendState& rhs)noexcept{
+constexpr b8 operator==(const BlendState& lhs, const BlendState& rhs)noexcept{
     if(lhs.alphaToCoverageEnable != rhs.alphaToCoverageEnable)
         return false;
 
@@ -146,7 +146,7 @@ constexpr bool operator==(const BlendState& lhs, const BlendState& rhs)noexcept{
     return true;
 }
 
-constexpr bool operator!=(const BlendState& lhs, const BlendState& rhs)noexcept{ return !(lhs == rhs); }
+constexpr b8 operator!=(const BlendState& lhs, const BlendState& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -170,8 +170,8 @@ namespace RasterCullMode{
 struct RasterState{
     RasterFillMode::Enum fillMode = RasterFillMode::Solid;
     RasterCullMode::Enum cullMode = RasterCullMode::Back;
-    bool frontCounterClockwise = false;
-    bool depthClipEnable = false;
+    b8 frontCounterClockwise = false;
+    b8 depthClipEnable = false;
     i32 depthBias = 0;
     f32 depthBiasClamp = 0.f;
     f32 slopeScaledDepthBias = 0.f;
@@ -192,9 +192,9 @@ public:
 
     constexpr RasterState& setCullNone()noexcept{ cullMode = RasterCullMode::None; return *this; }
 
-    constexpr RasterState& setFrontCounterClockwise(bool value)noexcept{ frontCounterClockwise = value; return *this; }
+    constexpr RasterState& setFrontCounterClockwise(b8 value)noexcept{ frontCounterClockwise = value; return *this; }
 
-    constexpr RasterState& setDepthClipEnable(bool value)noexcept{ depthClipEnable = value; return *this; }
+    constexpr RasterState& setDepthClipEnable(b8 value)noexcept{ depthClipEnable = value; return *this; }
 
     constexpr RasterState& enableDepthClip()noexcept{ depthClipEnable = true; return *this; }
 
@@ -259,26 +259,26 @@ struct DepthStencilState{
         constexpr StencilOpDesc& setStencilFunc(ComparisonFunc::Enum value)noexcept{ stencilFunc = value; return *this; }
     };
 
-    bool depthTestEnable = true;
-    bool depthWriteEnable = true;
+    b8 depthTestEnable = true;
+    b8 depthWriteEnable = true;
     ComparisonFunc::Enum depthFunc = ComparisonFunc::Less;
-    bool stencilEnable = false;
+    b8 stencilEnable = false;
     u8 stencilReadMask = s_AllStencilBits;
     u8 stencilWriteMask = s_AllStencilBits;
     u8 stencilRefValue = 0;
-    bool dynamicStencilRef = false;
+    b8 dynamicStencilRef = false;
     StencilOpDesc frontFaceStencil;
     StencilOpDesc backFaceStencil;
 
 
 public:
-    constexpr DepthStencilState& setDepthTestEnable(bool value)noexcept{ depthTestEnable = value; return *this; }
+    constexpr DepthStencilState& setDepthTestEnable(b8 value)noexcept{ depthTestEnable = value; return *this; }
 
     constexpr DepthStencilState& enableDepthTest()noexcept{ depthTestEnable = true; return *this; }
 
     constexpr DepthStencilState& disableDepthTest()noexcept{ depthTestEnable = false; return *this; }
 
-    constexpr DepthStencilState& setDepthWriteEnable(bool value)noexcept{ depthWriteEnable = value; return *this; }
+    constexpr DepthStencilState& setDepthWriteEnable(b8 value)noexcept{ depthWriteEnable = value; return *this; }
 
     constexpr DepthStencilState& enableDepthWrite()noexcept{ depthWriteEnable = true; return *this; }
 
@@ -286,7 +286,7 @@ public:
 
     constexpr DepthStencilState& setDepthFunc(ComparisonFunc::Enum value)noexcept{ depthFunc = value; return *this; }
 
-    constexpr DepthStencilState& setStencilEnable(bool value)noexcept{ stencilEnable = value; return *this; }
+    constexpr DepthStencilState& setStencilEnable(b8 value)noexcept{ stencilEnable = value; return *this; }
 
     constexpr DepthStencilState& enableStencil()noexcept{ stencilEnable = true; return *this; }
 
@@ -302,7 +302,7 @@ public:
 
     constexpr DepthStencilState& setBackFaceStencil(const StencilOpDesc& value)noexcept{ backFaceStencil = value; return *this; }
 
-    constexpr DepthStencilState& setDynamicStencilRef(bool value)noexcept{ dynamicStencilRef = value; return *this; }
+    constexpr DepthStencilState& setDynamicStencilRef(b8 value)noexcept{ dynamicStencilRef = value; return *this; }
 };
 
 
@@ -354,9 +354,9 @@ struct SamplerDesc{
     f32 maxAnisotropy = 1.f;
     f32 mipBias = 0.f;
 
-    bool minFilter = true;
-    bool magFilter = true;
-    bool mipFilter = true;
+    b8 minFilter = true;
+    b8 magFilter = true;
+    b8 mipFilter = true;
     SamplerAddressMode::Enum addressU = SamplerAddressMode::Clamp;
     SamplerAddressMode::Enum addressV = SamplerAddressMode::Clamp;
     SamplerAddressMode::Enum addressW = SamplerAddressMode::Clamp;
@@ -370,13 +370,13 @@ public:
 
     constexpr SamplerDesc& setMipBias(f32 value)noexcept{ mipBias = value; return *this; }
 
-    constexpr SamplerDesc& setMinFilter(bool enable)noexcept{ minFilter = enable; return *this; }
+    constexpr SamplerDesc& setMinFilter(b8 enable)noexcept{ minFilter = enable; return *this; }
 
-    constexpr SamplerDesc& setMagFilter(bool enable)noexcept{ magFilter = enable; return *this; }
+    constexpr SamplerDesc& setMagFilter(b8 enable)noexcept{ magFilter = enable; return *this; }
 
-    constexpr SamplerDesc& setMipFilter(bool enable)noexcept{ mipFilter = enable; return *this; }
+    constexpr SamplerDesc& setMipFilter(b8 enable)noexcept{ mipFilter = enable; return *this; }
 
-    constexpr SamplerDesc& setAllFilters(bool enable)noexcept{ minFilter = magFilter = mipFilter = enable; return *this; }
+    constexpr SamplerDesc& setAllFilters(b8 enable)noexcept{ minFilter = magFilter = mipFilter = enable; return *this; }
 
     constexpr SamplerDesc& setAddressU(SamplerAddressMode::Enum mode)noexcept{ addressU = mode; return *this; }
 

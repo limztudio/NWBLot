@@ -21,14 +21,14 @@ NWB_IMPL_UI_BEGIN
 struct ContextMenuOptions{
     Point size = s_PopupDefaultSize;
     f32 wheelRows = s_StyleScrollWheelStep;
-    bool enabled = true;
+    b8 enabled = true;
 };
 
 struct ContextMenuResult{
-    bool valid = false;
-    bool opened = false;
-    bool closed = false;
-    bool activated = false;
+    b8 valid = false;
+    b8 opened = false;
+    b8 closed = false;
+    b8 activated = false;
     u64 key = 0u;
 };
 
@@ -50,9 +50,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool open(const Rect& anchor)noexcept;
+    [[nodiscard]] b8 open(const Rect& anchor)noexcept;
     void close()noexcept;
-    [[nodiscard]] bool isOpen()const noexcept{ return m_popup.isOpen(); }
+    [[nodiscard]] b8 isOpen()const noexcept{ return m_popup.isOpen(); }
 
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_popup.instanceGeneration(); }
 

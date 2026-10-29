@@ -22,11 +22,11 @@ static constexpr f64 s_DoubleFrameFallbackTangentZAxisAlignmentThreshold = 0.999
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool FrameValidDirection(const SIMDVectorSingle value)noexcept{
+[[nodiscard]] NWB_INLINE b8 FrameValidDirection(const SIMDVectorSingle value)noexcept{
     return Vector3IsFinite(value) && Vector3Greater(Vector3LengthSq(value), VectorReplicate(s_FrameDirectionEpsilon));
 }
 
-[[nodiscard]] NWB_INLINE bool FrameDoubleValidDirection(const SIMDVectorDouble value)noexcept{
+[[nodiscard]] NWB_INLINE b8 FrameDoubleValidDirection(const SIMDVectorDouble value)noexcept{
     return VectorDouble3IsFinite(value) && VectorDouble3Greater(VectorDouble3LengthSq(value), VectorDoubleReplicate(s_DoubleFrameDirectionEpsilon));
 }
 

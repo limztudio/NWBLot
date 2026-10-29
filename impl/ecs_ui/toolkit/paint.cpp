@@ -31,14 +31,14 @@ inline constexpr u32 s_NineSliceAxisCells = 3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool HasArea(const Rect& rectangle)noexcept{
+b8 HasArea(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width > 0.0f && rectangle.height > 0.0f
         && VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
     ;
 }
 
-bool EqualClip(const Rect& lhs, const Rect& rhs)noexcept{
+b8 EqualClip(const Rect& lhs, const Rect& rhs)noexcept{
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.width == rhs.width && lhs.height == rhs.height;
 }
 
@@ -119,7 +119,7 @@ void PaintBuilder::pushClip(const Rect& clip){
     m_clips.push_back(next);
 }
 
-bool PaintBuilder::popClip()noexcept{
+b8 PaintBuilder::popClip()noexcept{
     NWB_ASSERT(m_recording);
     if(m_clips.size() <= 1u || (m_overlayDepth != 0u && m_clips.size() <= m_overlays[m_overlayDepth - 1u].clipDepth + 1u))
         return false;
@@ -131,7 +131,7 @@ void PaintBuilder::fillRect(const Rect& rectangle, const Color& color){
     emitQuad(rectangle, {}, color, PaintMaterial::Solid);
 }
 
-bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint){
+b8 PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint){
     NWB_ASSERT(m_recording);
     const auto region = FindIf(m_regions.begin(), m_regions.end(), [&regionName](const UiSkinRegion& value)noexcept{
         return value.name == regionName;

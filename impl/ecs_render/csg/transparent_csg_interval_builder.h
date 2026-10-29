@@ -55,14 +55,14 @@ struct TransparentCsgIntervalProducerInputs{
     Core::TextureSubresourceSet csgPeelSubresources{};
     Core::TextureSubresourceSet csgReceiverEventCountSubresources{};
     Core::GpuTaskId prefixTask;
-    bool hasTransparentRenderers = false;
+    b8 hasTransparentRenderers = false;
 };
 
 struct TransparentCsgIntervalProducerResult{
     Core::GpuTaskId uploadTask;
     Core::GpuGraphResourceSetId materialGeometrySet;
     Core::GpuGraphResourceSetId materialSampledTextureSet;
-    bool produced = false;
+    b8 produced = false;
 };
 
 

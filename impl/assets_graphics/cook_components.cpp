@@ -53,7 +53,7 @@ using MeshComponentCookEntry = TypedComponentCookEntry<MeshComponent>;
 using RendererComponentCookEntry = TypedComponentCookEntry<RendererComponent>;
 
 
-[[nodiscard]] static bool SerializeSingleAssetRefComponentPayload(
+[[nodiscard]] static b8 SerializeSingleAssetRefComponentPayload(
     const Name& assetName,
     Core::Assets::AssetBytes& outPayload
 ){
@@ -106,7 +106,7 @@ template<
     Core::Assets::AssetRef<ReferencedAssetT> decltype(ComponentAssetT::component)::* FieldPtr,
     const AStringView& DiagnosticPrefix
 >
-static bool ExtractSingleAssetRefComponentDependencies(
+static b8 ExtractSingleAssetRefComponentDependencies(
     const Core::Assets::CookDependencyItemContext& context,
     Core::Assets::ICookDependencyCollector& collector
 ){
@@ -249,7 +249,7 @@ static bool ExtractSingleAssetRefComponentDependencies(
     return entry;
 }
 
-static bool ExtractRendererComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+static b8 ExtractRendererComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto entry = SceneAssetCook::ParseCookDependencyEntry<RendererComponentCookEntry, &ParseRendererComponentCookMetadata>(
         context,
         s_RendererComponentDiagnosticPrefix
@@ -269,15 +269,15 @@ static bool ExtractRendererComponentDependencies(const Core::Assets::CookDepende
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ModelComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+b8 ModelComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
     return __hidden_assets_graphics_cook_components::SerializeSingleAssetRefComponentPayload(component.model.name(), outPayload);
 }
 
-bool MeshComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+b8 MeshComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
     return __hidden_assets_graphics_cook_components::SerializeSingleAssetRefComponentPayload(component.mesh.name(), outPayload);
 }
 
-bool RendererComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+b8 RendererComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
     ComponentBinaryPayload::RendererComponentPayloadBinary binaryPayload;
     binaryPayload.materialHash = component.material.name().hash();
     binaryPayload.opticalVolumeGroupHash = component.opticalVolumeGroup.hash();
@@ -295,7 +295,7 @@ bool RendererComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RegisterGraphicsComponentCookEntries(Core::Assets::CookEntryRegistry& registry){
+b8 RegisterGraphicsComponentCookEntries(Core::Assets::CookEntryRegistry& registry){
     using namespace __hidden_assets_graphics_cook_components;
 
     return
@@ -320,7 +320,7 @@ bool RegisterGraphicsComponentCookEntries(Core::Assets::CookEntryRegistry& regis
     ;
 }
 
-bool RegisterGraphicsComponentCookDependencies(Core::Assets::CookDependencyRegistry& registry){
+b8 RegisterGraphicsComponentCookDependencies(Core::Assets::CookDependencyRegistry& registry){
     using namespace __hidden_assets_graphics_cook_components;
 
     return

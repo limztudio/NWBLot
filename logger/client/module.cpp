@@ -42,8 +42,8 @@ static void CaptureInitializationFailure(const AStringView operation, const CURL
     if(output.empty() || endpoint.empty())
         return output;
 
-    const bool baseHasSlash = output.back() == static_cast<char>('/');
-    const bool endpointHasSlash = endpoint.front() == static_cast<char>('/');
+    const b8 baseHasSlash = output.back() == static_cast<char>('/');
+    const b8 endpointHasSlash = endpoint.front() == static_cast<char>('/');
     if(baseHasSlash && endpointHasSlash)
         output.pop_back();
     else if(!baseHasSlash && !endpointHasSlash)
@@ -63,7 +63,7 @@ static void CaptureInitializationFailure(const AStringView operation, const CURL
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Client::GlobalInit()noexcept{
+b8 Client::GlobalInit()noexcept{
     CURLcode curlResult;
 
     curlResult = curl_global_init(CURL_GLOBAL_ALL);
@@ -98,7 +98,7 @@ Client::~Client()noexcept{
     }
 }
 
-bool Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
+b8 Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
     if(!bytes || byteCount == 0u)
         return false;
 
@@ -112,7 +112,7 @@ bool Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
 }
 
 
-bool Client::internalInit(const AStringView url){
+b8 Client::internalInit(const AStringView url){
     m_messageUrl = url;
     m_telemetryUrl = __hidden_logger_client::UrlWithEndpoint(BaseType::arena(), url, s_TelemetryUploadEndpoint);
 
@@ -152,7 +152,7 @@ bool Client::internalInit(const AStringView url){
     return true;
 }
 
-bool Client::internalUpdate(){
+b8 Client::internalUpdate(){
     if(!m_hasPendingPayload){
         if(m_telemetryCount.load(MemoryOrder::relaxed)){
             LogBytes upload(BaseType::arena());
@@ -242,14 +242,14 @@ ClientStandalone::~ClientStandalone()noexcept{
 }
 
 
-bool ClientStandalone::internalInit(BasicStringView<tchar> logFileNameBase){
+b8 ClientStandalone::internalInit(BasicStringView<tchar> logFileNameBase){
     if(logFileNameBase.empty())
         return m_processedMessageFile.openByExecutableName();
 
     return m_processedMessageFile.open(logFileNameBase);
 }
 
-bool ClientStandalone::internalUpdate(){
+b8 ClientStandalone::internalUpdate(){
     MessageType msg = MakeMessageType(BaseType::arena());
     while(tryDequeue(msg)){
         const LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);

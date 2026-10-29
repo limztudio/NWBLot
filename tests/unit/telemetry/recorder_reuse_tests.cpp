@@ -28,7 +28,7 @@ using namespace TelemetryTestDetail;
 
 struct PayloadBuildFailure{};
 
-[[nodiscard]] bool RecordFilledPayload(Telemetry::Recorder& recorder, const usize byteCount, const u8 value){
+[[nodiscard]] b8 RecordFilledPayload(Telemetry::Recorder& recorder, const usize byteCount, const u8 value){
     return recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, [byteCount, value](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
         EXPECT_TRUE(payload.empty());
         payload.resize(byteCount, value);
@@ -36,7 +36,7 @@ struct PayloadBuildFailure{};
     });
 }
 
-void RunConcurrentReset(const bool disableCapture){
+void RunConcurrentReset(const b8 disableCapture){
     constexpr usize s_WorkerCount = 4u;
     TestArena testArena;
     const ArenaMemoryStats initial = testArena.arena.memoryStats();
@@ -50,8 +50,8 @@ void RunConcurrentReset(const bool disableCapture){
         Thread workers[s_WorkerCount];
         for(usize index = 0u; index < s_WorkerCount; ++index){
             workers[index] = Thread([&, index](){
-                bool enteredBuilder = false;
-                const bool recorded = recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 42u, static_cast<u32>(index), [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
+                b8 enteredBuilder = false;
+                const b8 recorded = recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 42u, static_cast<u32>(index), [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
                     enteredBuilder = true;
                     payload.resize(256u, static_cast<u8>(index + 1u));
                     payloadsReady.count_down();
@@ -73,7 +73,7 @@ void RunConcurrentReset(const bool disableCapture){
         payloadsReady.wait();
         recorder.clear();
         const u8 marker = 99u;
-        const bool markerRecorded = recorder.recordBinary(Telemetry::EventKind::PerfFrame, 7u, &marker, sizeof(marker), 99u);
+        const b8 markerRecorded = recorder.recordBinary(Telemetry::EventKind::PerfFrame, 7u, &marker, sizeof(marker), 99u);
         if(disableCapture)
             recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
         releasePayloads.count_down();
@@ -85,7 +85,7 @@ void RunConcurrentReset(const bool disableCapture){
         EXPECT_EQ(accepted.load(MemoryOrder::relaxed), disableCapture ? 0u : s_WorkerCount);
         EXPECT_EQ(recorder.eventCount(), disableCapture ? 0u : s_WorkerCount + 1u);
         if(!disableCapture){
-            bool seen[s_WorkerCount] = {};
+            b8 seen[s_WorkerCount] = {};
             for(usize index = 1u; index < recorder.eventCount(); ++index){
                 const auto* event = recorder.view().eventAt(index);
                 ASSERT_NE(event, nullptr);
@@ -96,7 +96,7 @@ void RunConcurrentReset(const bool disableCapture){
                 EXPECT_EQ(event->payload.front(), event->header.streamId + 1u);
                 EXPECT_EQ(event->payload.back(), event->header.streamId + 1u);
             }
-            for(const bool recorded : seen)
+            for(const b8 recorded : seen)
                 EXPECT_TRUE(recorded);
         }
     }
@@ -143,7 +143,7 @@ TEST(Telemetry, RecorderBuilderCanClearAndReenterWhileItsPayloadIsLeased){
         recorder.clear();
         EXPECT_TRUE(recorder.captureOptions().perfEnabled());
         EXPECT_EQ(recorder.eventCount(), 0u);
-        const bool nested = recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload.data(), payload.size(), 5u);
+        const b8 nested = recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload.data(), payload.size(), 5u);
         EXPECT_TRUE(nested);
         EXPECT_EQ(payload.data(), leasedData);
         for(const u8 value : payload)
@@ -179,7 +179,7 @@ TEST(Telemetry, RecorderDisableDuringBuildRejectsPublicationAndReleasesLease){
     EXPECT_EQ(recorder.eventCount(), 0u);
     const ArenaMemoryStats disabled = testArena.arena.memoryStats();
     EXPECT_EQ(disabled.usedBytes, before.usedBytes);
-    bool builderCalled = false;
+    b8 builderCalled = false;
     EXPECT_FALSE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, s_ExpectedDualCount, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&)noexcept{ builderCalled = true; return true; }
     ));
     EXPECT_FALSE(builderCalled);
@@ -217,7 +217,7 @@ TEST(Telemetry, RecorderFailedAndThrowingBuildersRecycleWithoutAllocations){
     const ArenaMemoryStats warmed = testArena.arena.memoryStats();
     EXPECT_FALSE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, [](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){ payload.resize(128u, 31u); return false; }
     ));
-    EXPECT_THROW(EXPECT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, s_ExpectedDualCount, 0u, [](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload)->bool{
+    EXPECT_THROW(EXPECT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, s_ExpectedDualCount, 0u, [](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload)->b8{
                 payload.resize(128u, 47u);
                 throw PayloadBuildFailure{};
             }
@@ -307,7 +307,7 @@ TEST(Telemetry, RecorderRejectsInvalidInputsWithoutConsumingPayloadsOrReusedSlot
     const u8* const payloadData = payload.data();
     const ArenaMemoryStats before = testArena.arena.memoryStats();
     const Telemetry::EventKind::Enum invalidKinds[] = { Telemetry::EventKind::Unknown, static_cast<Telemetry::EventKind::Enum>(0xffffu), };
-    bool builderCalled = false;
+    b8 builderCalled = false;
     for(const auto kind : invalidKinds){
         EXPECT_FALSE(recorder.recordBuiltPayload(kind, 1u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&)noexcept{ builderCalled = true; return true; }
         ));
@@ -385,7 +385,7 @@ TEST(Telemetry, RecorderExplicitForeignBuilderStorageIsCopiedOrReleasedOnEveryEx
                 {
                     Payload foreignPayload(foreignArena.arena);
                     foreignPayload.resize(64u, 37u);
-                    const auto buildPayload = [&](Telemetry::TelemetryArena&, Payload& payload)->bool{
+                    const auto buildPayload = [&](Telemetry::TelemetryArena&, Payload& payload)->b8{
                         // Explicit move construction replaces allocator identity, independently of assignment policy.
                         payload.~Payload();
                         new(&payload) Payload(Move(foreignPayload));

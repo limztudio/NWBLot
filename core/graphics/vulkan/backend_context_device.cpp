@@ -28,7 +28,7 @@ u32 BackendContext::findNativeQueueIndex(const u32 familyIndex, const u32 queueI
 }
 
 
-bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
+b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     VkResult res = VK_SUCCESS;
 
     m_bufferDeviceAddressSupported = false;
@@ -71,10 +71,10 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         return false;
     }
 
-    const bool swapchainEnabled = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    const b8 swapchainEnabled = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     for(const auto& ext : deviceExtensions){
         const AStringView name(ext.extensionName, NWB_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE));
-        bool enableExtension = false;
+        b8 enableExtension = false;
         DeviceExtensionFeature::Enum enabledFeature = DeviceExtensionFeature::None;
 
         auto optIt = m_optionalExtensions.device.find(name);
@@ -110,16 +110,16 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     const AStringView deviceName(physicalDeviceProperties.deviceName, NWB_STRNLEN(physicalDeviceProperties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE));
     m_rendererString = ConvertString(m_arena, deviceName);
 
-    const bool apiSupportsVulkan13 = physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
-    const bool coopVecExtensionEnabled = isDeviceExtensionEnabled(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME);
-    const bool dynamicRenderingExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-    const bool synchronization2ExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-    const bool maintenance4ExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
+    const b8 apiSupportsVulkan13 = physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
+    const b8 coopVecExtensionEnabled = isDeviceExtensionEnabled(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME);
+    const b8 dynamicRenderingExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    const b8 synchronization2ExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+    const b8 maintenance4ExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
 
-    const bool diagnosticsConfigExtensionEnabled = isDeviceExtensionEnabled(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
-    const bool aftermathRequested = m_deviceParams.enableGpuCrashDiagnostics && physicalDeviceProperties.vendorID == s_NvidiaVendorId;
+    const b8 diagnosticsConfigExtensionEnabled = isDeviceExtensionEnabled(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
+    const b8 aftermathRequested = m_deviceParams.enableGpuCrashDiagnostics && physicalDeviceProperties.vendorID == s_NvidiaVendorId;
     // Configure process-global NVIDIA Aftermath before device creation.
-    const bool aftermathActive = aftermathRequested && Aftermath::Initialize();
+    const b8 aftermathActive = aftermathRequested && Aftermath::Initialize();
     if(aftermathRequested && !aftermathActive)
         NWB_LOGGER_INFO(NWB_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps unavailable; using vendor-neutral GPU diagnostics only."));
 
@@ -162,7 +162,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     if(coopVecExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, cooperativeVectorFeatures);
 
-    bool queriedOptionalFeatures[s_OptionalDeviceFeatureCount] = {};
+    b8 queriedOptionalFeatures[s_OptionalDeviceFeatureCount] = {};
     for(const auto& [_, feature] : m_enabledExtensions.device){
         if(feature == DeviceExtensionFeature::DescriptorBuffer || (apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr))
             continue;
@@ -219,10 +219,10 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         }
     }
 
-    const bool synchronization2Enabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-    const bool maintenance4Enabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
-    const bool dynamicRenderingEnabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-    const bool textureCompressionAstcHdrFeatureEnabled = VulkanDetail::ShouldEnableAstcHdrFeature({
+    const b8 synchronization2Enabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+    const b8 maintenance4Enabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
+    const b8 dynamicRenderingEnabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    const b8 textureCompressionAstcHdrFeatureEnabled = VulkanDetail::ShouldEnableAstcHdrFeature({
         .apiSupportsVulkan13 = apiSupportsVulkan13,
         .vulkan13FeatureSupported = supportedVulkan13Features.textureCompressionASTC_HDR == VK_TRUE,
         .extensionEnabled = isDeviceExtensionEnabled(VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME),
@@ -265,7 +265,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(physicalQueueFamilyCount, scratchArena);
     m_instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, physicalQueueFamilies.data());
-    const bool createCrossFamilySecondaryGraphicsQueue =
+    const b8 createCrossFamilySecondaryGraphicsQueue =
         m_deviceParams.enableSameClassMultiQueue
         && m_deviceParams.enableCrossFamilySameClassQueueRouting
         && m_secondaryGraphicsQueueFamily != s_InvalidQueueFamilyIndex
@@ -274,8 +274,8 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         && physicalQueueFamilies[static_cast<usize>(m_secondaryGraphicsQueueFamily)].queueCount > s_GraphicsQueueIndex
     ;
     const i32 schedulerComputeQueueFamily = m_asyncComputeQueueFamily != s_InvalidQueueFamilyIndex ? m_asyncComputeQueueFamily : m_computeQueueFamily;
-    const bool createComputeQueue = schedulerComputeQueueFamily != s_InvalidQueueFamilyIndex && schedulerComputeQueueFamily != m_graphicsQueueFamily;
-    const bool createCrossFamilySecondaryComputeQueue =
+    const b8 createComputeQueue = schedulerComputeQueueFamily != s_InvalidQueueFamilyIndex && schedulerComputeQueueFamily != m_graphicsQueueFamily;
+    const b8 createCrossFamilySecondaryComputeQueue =
         createComputeQueue
         && m_deviceParams.enableSameClassMultiQueue
         && m_deviceParams.enableCrossFamilySameClassQueueRouting
@@ -285,8 +285,8 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         && physicalQueueFamilies[static_cast<usize>(m_secondaryComputeQueueFamily)].queueCount > s_ComputeQueueIndex
     ;
     const i32 secondaryComputeQueueFamily = createCrossFamilySecondaryComputeQueue ? m_secondaryComputeQueueFamily : s_InvalidQueueFamilyIndex;
-    const bool createDedicatedTransferQueue = m_deviceParams.enableTransferQueue && m_transferQueueFamily != s_InvalidQueueFamilyIndex && m_transferQueueFamily != m_graphicsQueueFamily && m_transferQueueFamily != m_computeQueueFamily;
-    const bool createCrossFamilySecondaryTransferQueue =
+    const b8 createDedicatedTransferQueue = m_deviceParams.enableTransferQueue && m_transferQueueFamily != s_InvalidQueueFamilyIndex && m_transferQueueFamily != m_graphicsQueueFamily && m_transferQueueFamily != m_computeQueueFamily;
+    const b8 createCrossFamilySecondaryTransferQueue =
         createDedicatedTransferQueue
         && m_deviceParams.enableSameClassMultiQueue
         && m_deviceParams.enableCrossFamilySameClassQueueRouting
@@ -399,7 +399,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     vulkan13features.textureCompressionASTC_HDR = textureCompressionAstcHdrFeatureEnabled ? VK_TRUE : VK_FALSE;
 
     pNext = nullptr;
-    bool enabledOptionalFeatures[s_OptionalDeviceFeatureCount] = {};
+    b8 enabledOptionalFeatures[s_OptionalDeviceFeatureCount] = {};
     for(const auto& [_, feature] : m_enabledExtensions.device){
         // ASTC HDR is owned by VkPhysicalDeviceVulkan13Features after promotion into Vulkan 1.3.
         if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)
@@ -556,7 +556,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         }
         return VulkanDetail::QueueCapabilitiesForQueueFlags(physicalQueueFamilies[static_cast<usize>(queueFamily)].queueFlags);
     };
-    const auto registerSameClassQueues = [this, &sameClassQueueRequests, &capabilitiesForSameClassQueue, &physicalQueueFamilies](const CommandQueue::Enum queueClass, bool& sameClassQueueEnabled, i32& secondaryQueueFamily){
+    const auto registerSameClassQueues = [this, &sameClassQueueRequests, &capabilitiesForSameClassQueue, &physicalQueueFamilies](const CommandQueue::Enum queueClass, b8& sameClassQueueEnabled, i32& secondaryQueueFamily){
         for(const SameClassQueueRequest& request : sameClassQueueRequests){
             if(request.queueClass != queueClass)
                 continue;

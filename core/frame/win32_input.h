@@ -49,7 +49,7 @@ public:
 public:
     // Returns the window procedure result when the message is an input message handled here.
     [[nodiscard]] Optional<LRESULT> handleMessage(UINT message, WPARAM wParam, LPARAM lParam);
-    void dispatchTextInputFocus(bool focused);
+    void dispatchTextInputFocus(b8 focused);
 
 
 private:

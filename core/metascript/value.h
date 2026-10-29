@@ -76,21 +76,21 @@ public:
 
     [[nodiscard]] ValueType::Enum type()const noexcept{ return m_type; }
 
-    [[nodiscard]] bool isNull()const noexcept{ return m_type == ValueType::Null; }
+    [[nodiscard]] b8 isNull()const noexcept{ return m_type == ValueType::Null; }
 
-    [[nodiscard]] bool isInteger()const noexcept{ return m_type == ValueType::Integer; }
+    [[nodiscard]] b8 isInteger()const noexcept{ return m_type == ValueType::Integer; }
 
-    [[nodiscard]] bool isDouble()const noexcept{ return m_type == ValueType::Double; }
+    [[nodiscard]] b8 isDouble()const noexcept{ return m_type == ValueType::Double; }
 
-    [[nodiscard]] bool isString()const noexcept{ return m_type == ValueType::String; }
+    [[nodiscard]] b8 isString()const noexcept{ return m_type == ValueType::String; }
 
-    [[nodiscard]] bool isReference()const noexcept{ return m_type == ValueType::Reference; }
+    [[nodiscard]] b8 isReference()const noexcept{ return m_type == ValueType::Reference; }
 
-    [[nodiscard]] bool isList()const noexcept{ return m_type == ValueType::List; }
+    [[nodiscard]] b8 isList()const noexcept{ return m_type == ValueType::List; }
 
-    [[nodiscard]] bool isMap()const noexcept{ return m_type == ValueType::Map; }
+    [[nodiscard]] b8 isMap()const noexcept{ return m_type == ValueType::Map; }
 
-    [[nodiscard]] bool isNumeric()const noexcept{ return m_type == ValueType::Integer || m_type == ValueType::Double; }
+    [[nodiscard]] b8 isNumeric()const noexcept{ return m_type == ValueType::Integer || m_type == ValueType::Double; }
 
     [[nodiscard]] i64 asInteger()const noexcept;
     [[nodiscard]] f64 asDouble()const noexcept;
@@ -117,30 +117,30 @@ public:
     [[nodiscard]] MString copyString()const;
 
     template<typename Container>
-    [[nodiscard]] bool copyStringList(Container& outList)const noexcept([]()consteval noexcept{
-        constexpr bool s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
+    [[nodiscard]] b8 copyStringList(Container& outList)const noexcept([]()consteval noexcept{
+        constexpr b8 s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
             && requires(Container& c, const MStringView text){ c.emplace_back(text); }
         ;
-        constexpr bool s_CanAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
+        constexpr b8 s_CanAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
             && requires(Container& c){ c.get_allocator().arena(); }
             && requires(Container& c, const MStringView text, typename Container::value_type::allocator_type allocator){
                 c.emplace_back(text, allocator);
             }
         ;
         using SourceIterator = typename ListType::const_iterator;
-        constexpr bool s_ReadSourceNoThrow = noexcept(DeclVal<const Value&>().isList())
+        constexpr b8 s_ReadSourceNoThrow = noexcept(DeclVal<const Value&>().isList())
             && noexcept(DeclVal<const Value&>().asList())
             && noexcept(DeclVal<const ListType&>().begin())
             && noexcept(DeclVal<const ListType&>().end())
             && IsNothrowDestructible_V<SourceIterator>
-            && noexcept(static_cast<bool>(DeclVal<SourceIterator&>() != DeclVal<SourceIterator&>()))
+            && noexcept(static_cast<b8>(DeclVal<SourceIterator&>() != DeclVal<SourceIterator&>()))
             && noexcept(++DeclVal<SourceIterator&>())
             && noexcept(*DeclVal<SourceIterator&>())
             && noexcept(DeclVal<const Value&>().isString())
             && noexcept(DeclVal<const Value&>().asString())
             && IsNothrowDestructible_V<MStringView>
         ;
-        constexpr bool s_ReadOffsetNoThrow = noexcept(DeclVal<void(*)(usize)noexcept>()(DeclVal<Container&>().size()));
+        constexpr b8 s_ReadOffsetNoThrow = noexcept(DeclVal<void(*)(usize)noexcept>()(DeclVal<Container&>().size()));
         if constexpr(s_CanAppendArenaString){
             using ArenaReference = decltype(DeclVal<Container&>().get_allocator().arena());
             return
@@ -169,10 +169,10 @@ public:
                 return false;
         }
 
-        constexpr bool s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
+        constexpr b8 s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
             && requires(Container& c, const MStringView text){ c.emplace_back(text); }
         ;
-        constexpr bool s_CanAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
+        constexpr b8 s_CanAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
             && requires(Container& c){ c.get_allocator().arena(); }
             && requires(Container& c, const MStringView text, typename Container::value_type::allocator_type allocator){
                 c.emplace_back(text, allocator);

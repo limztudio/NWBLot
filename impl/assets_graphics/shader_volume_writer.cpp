@@ -87,7 +87,7 @@ static CacheReadStatus::Enum TryReadCachedBytecode(const ShaderCook::ShaderEntry
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool GetVariantBytecode(
+static b8 GetVariantBytecode(
     const ShaderCook::ShaderEntry& entry,
     const AStringView variantName,
     const ShaderCook::DefineCombo& defineCombo,
@@ -95,7 +95,7 @@ static bool GetVariantBytecode(
     const Span<const Path> dependencies,
     const Path& sourcePath,
     const ScratchPath& bytecodeCachePath,
-    const bool compilerInputsHaveBom,
+    const b8 compilerInputsHaveBom,
     ScratchArena& scratchArena,
     Core::GraphicsBytes& outBytecode
 ){
@@ -175,7 +175,7 @@ static Expected<usize> ReserveShaderIndexRecords(const Span<const PreparedShader
     return count;
 }
 
-static bool AppendShaderIndexToManifest(
+static b8 AppendShaderIndexToManifest(
     const Span<const Core::ShaderArchive::Record> shaderIndexRecords,
     ShaderCook::CookArena& cookArena,
     ScratchArena& scratchArena,
@@ -226,7 +226,7 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AppendPreparedShadersToManifest(
+b8 AppendPreparedShadersToManifest(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     ShaderCook::CookArena& cookArena,
@@ -265,7 +265,7 @@ bool AppendPreparedShadersToManifest(
         const Name shaderName = **shaderNameResult;
         const Name stageName = **stageNameResult;
 
-        auto appendShaderVariant = [&](const ShaderCook::DefineCombo& defineCombo) -> bool{
+        auto appendShaderVariant = [&](const ShaderCook::DefineCombo& defineCombo) -> b8{
             const CookString generatedVariantName = shaderCook.buildVariantName(defineCombo, scratchArena);
 
             const u64 sourceChecksum = shaderCook.computeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, compilerFingerprint, scratchArena);

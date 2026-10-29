@@ -109,8 +109,8 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, s_ExpectedDualCount);
     const Graphics::GpuPacketStateSeed* const seeds = compiledPlan.findTask(consumerTask).prologueStateSeeds;
     ASSERT_NE(seeds, nullptr);
-    bool hasTransferSeed = false;
-    bool hasComputeSeed = false;
+    b8 hasTransferSeed = false;
+    b8 hasComputeSeed = false;
     for(u32 seedIndex = 0u; seedIndex < compiledConsumer->prologueStateSeedCount; ++seedIndex){
         const Graphics::GpuPacketStateSeed& seed = seeds[seedIndex];
         hasTransferSeed = hasTransferSeed || (seed.resource == texture && seed.range.textureSubresources == transferRange.textureSubresources && seed.sourcePacket == transferPacket);
@@ -123,8 +123,8 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, s_ExpectedDualCount);
     const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(consumerPacket).dependencies;
     ASSERT_NE(dependencies, nullptr);
-    bool waitsForTransfer = false;
-    bool waitsForCompute = false;
+    b8 waitsForTransfer = false;
+    b8 waitsForCompute = false;
     for(u32 dependencyIndex = 0u; dependencyIndex < compiledPlan.packet(consumerPacket).plan->dependencyCount; ++dependencyIndex){
         waitsForTransfer = waitsForTransfer || dependencies[dependencyIndex].producer == transferPacket;
         waitsForCompute = waitsForCompute || dependencies[dependencyIndex].producer == computePacket;
@@ -150,11 +150,11 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 5u);
     const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(consumerTask).prologueBarriers;
     ASSERT_NE(barriers, nullptr);
-    bool hasTransferAcquire = false;
-    bool hasComputeAcquire = false;
-    bool hasTransferTransition = false;
-    bool hasComputeTransition = false;
-    bool hasInitialTailTransition = false;
+    b8 hasTransferAcquire = false;
+    b8 hasComputeAcquire = false;
+    b8 hasTransferTransition = false;
+    b8 hasComputeTransition = false;
+    b8 hasInitialTailTransition = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledConsumer->prologueBarrierCount; ++barrierIndex){
         const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
         hasTransferAcquire = hasTransferAcquire || (

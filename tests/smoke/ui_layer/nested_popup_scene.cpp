@@ -66,7 +66,7 @@ UiNestedPopupSmokeScene::UiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena
     , m_afterText(arena)
     , m_childText(arena)
 {
-    const bool initialized = m_beforeText.setText("Before") && m_afterText.setText("After") && m_childText.setText("Child");
+    const b8 initialized = m_beforeText.setText("Before") && m_afterText.setText("After") && m_childText.setText("Child");
     NWB_FATAL_ASSERT(initialized);
     m_combo.select(1u);
     m_search.combo().select(1u);
@@ -77,7 +77,7 @@ UiNestedPopupSmokeScene::~UiNestedPopupSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiNestedPopupSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiNestedPopupSmokeScene::paint(Impl::UiPaintContext& context){
     ObserveSmokeDisplay(NWB_TEXT("UiNestedPopupSmoke"), context.display, m_lastDisplay, m_displayChanged);
     m_source.beginFrame();
     m_childDeclared = false;
@@ -100,7 +100,7 @@ bool UiNestedPopupSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiNestedPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
+b8 UiNestedPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key != Core::Key::F8)
@@ -110,7 +110,7 @@ bool UiNestedPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, 
     return true;
 }
 
-bool UiNestedPopupSmokeScene::paintRoot(Impl::Ui::Builder& ui){
+b8 UiNestedPopupSmokeScene::paintRoot(Impl::Ui::Builder& ui){
     using namespace Impl::Ui;
     if(!ui.beginPanel("nested_root", { 24.0f, 24.0f, 300.0f, 80.0f }))
         return false;
@@ -130,7 +130,7 @@ bool UiNestedPopupSmokeScene::paintRoot(Impl::Ui::Builder& ui){
     return ui.endContainer() && ui.endPanel();
 }
 
-bool UiNestedPopupSmokeScene::paintParent(Impl::Ui::Builder& ui){
+b8 UiNestedPopupSmokeScene::paintParent(Impl::Ui::Builder& ui){
     using namespace Impl::Ui;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
     const WidgetOptions button{ { LayoutSizePolicy::Fixed, 100.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
@@ -178,7 +178,7 @@ bool UiNestedPopupSmokeScene::paintParent(Impl::Ui::Builder& ui){
     return command.valid;
 }
 
-bool UiNestedPopupSmokeScene::paintChild(Impl::Ui::Builder& ui){
+b8 UiNestedPopupSmokeScene::paintChild(Impl::Ui::Builder& ui){
     using namespace Impl::Ui;
     PopupOptions options;
     const Rect& parent = m_parent.placement().bounds;
@@ -271,7 +271,7 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
         }
     }
     const auto current = values();
-    bool geometryChanged = false;
+    b8 geometryChanged = false;
     for(usize index = 0u; index < m_rectangles.size(); ++index)
         geometryChanged |= !SameSmokeRect(m_rectangles[index], m_lastRectangles[index]);
     if(m_sequence != 0u && !m_displayChanged && !geometryChanged && current == m_lastValues)
@@ -295,7 +295,7 @@ void UiNestedPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
 }
 
 Array<u64, 29u> UiNestedPopupSmokeScene::values()const noexcept{
-    const bool parent = m_parent.isOpen();
+    const b8 parent = m_parent.isOpen();
     return { static_cast<u64>(parent), static_cast<u64>(parent && m_childDeclared && m_child.isOpen()), m_focusScope, m_focusCode,
         m_beforeClicks, m_afterClicks, m_childClicks, m_outside, static_cast<u64>(m_beforeText.text().size()),
         static_cast<u64>(m_afterText.text().size()), static_cast<u64>(m_childText.text().size()),
@@ -319,11 +319,11 @@ Impl::Ui::Rect UiNestedPopupSmokeScene::rowBounds(const Impl::Ui::ListState& sta
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerNestedPopupSmokeEnabled(){
+b8 IsUiLayerNestedPopupSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_NESTED_POPUP");
 }
 
-bool IsUiLayerNestedPopupSkinSmokeEnabled(){
+b8 IsUiLayerNestedPopupSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_NESTED_POPUP_SKIN");
 }
 

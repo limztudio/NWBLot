@@ -23,8 +23,8 @@ FrameExecuteStateLifecycleSet::FrameExecuteStateLifecycleSet(
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources,
     const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
-    const bool hardwareShadowSupported,
-    const bool usesLaggedHistory
+    const b8 hardwareShadowSupported,
+    const b8 usesLaggedHistory
 )
     : shadowPrepareStateScratchArena(RendererArenaScope::s_TaskGraphArena)
     , meshAccelerationStateBuffers(shadowPrepareStateScratchArena)
@@ -173,7 +173,7 @@ void FrameExecuteStateLifecycleSet::collectShadowPrepareStateBuffers(RendererFra
     };
     if(rayTracingShadowResources.sceneTlasBackingBuffer)
         appendStateBuffer(rayTracingShadowResources.sceneTlasBackingBuffer);
-    bool stateCandidateRequired = static_cast<bool>(rayTracingShadowResources.sceneTlas) || renderer.m_raytracingSystem.preparedMeshSwBvhBuildsReady() || renderer.m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted();
+    b8 stateCandidateRequired = static_cast<b8>(rayTracingShadowResources.sceneTlas) || renderer.m_raytracingSystem.preparedMeshSwBvhBuildsReady() || renderer.m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted();
     // Keep accepted trace-geometry state with the handoff, including invisible streams.
     for(const Core::BufferHandle& acceptedBuffer : acceptedTraceGeometry){
         appendStateBuffer(acceptedBuffer);
@@ -201,7 +201,7 @@ void FrameExecuteStateLifecycleSet::collectShadowPrepareStateBuffers(RendererFra
     shadowPrepareStateLifecycle.stateCandidateRequired = stateCandidateRequired;
 }
 
-void FrameExecuteStateLifecycleSet::bindCallbacks(const RendererFramePipeline& renderer, const bool hardwareShadowSupported)noexcept{
+void FrameExecuteStateLifecycleSet::bindCallbacks(const RendererFramePipeline& renderer, const b8 hardwareShadowSupported)noexcept{
     recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_deferredShadowPrepareTask, .context = &shadowPrepareStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareShadowPrepareTask, };
     recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_deferredShadowVisibilityTask, .context = &shadowVisibilityStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareShadowVisibilityTask, };
     if(!hardwareShadowSupported){

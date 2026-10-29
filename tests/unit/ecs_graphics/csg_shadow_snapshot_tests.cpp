@@ -46,14 +46,14 @@ inline constexpr i32 s_FrameCacheBindingFailure = 43;
 
 struct FrameCacheRuntimeProvider final : IRuntimeMeshProvider{
     Core::ECS::EntityID receiver = Core::ECS::s_InvalidEntityId;
-    bool attached = false;
-    bool throwOnQuery = false;
+    b8 attached = false;
+    b8 throwOnQuery = false;
 
 
 public:
     [[nodiscard]] virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID)noexcept override{ return MakeUnexpected(Failure{}); }
 
-    [[nodiscard]] virtual bool hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const override{
+    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const override{
         if(throwOnQuery)
             throw s_FrameCacheBindingFailure;
         return attached && entity == receiver;
@@ -71,11 +71,11 @@ struct SnapshotContext{
 
 
 public:
-    [[nodiscard]] bool build(const Span<const CsgShadowReceiverInput> receivers){
+    [[nodiscard]] b8 build(const Span<const CsgShadowReceiverInput> receivers){
         return BuildCsgShadowSnapshot(registry, receivers, testWorld.world, scratch, snapshot);
     }
 
-    [[nodiscard]] Core::ECS::EntityID addReceiver(const Name group = s_ReceiverGroup, const bool skinned = false){
+    [[nodiscard]] Core::ECS::EntityID addReceiver(const Name group = s_ReceiverGroup, const b8 skinned = false){
         auto entity = testWorld.world.createEntity();
         if(skinned)
             entity.addComponent<SkinnedCsgMeshComponent>().receiverGroup = group;
@@ -117,7 +117,7 @@ void SetParameters(CsgCutterComponent& cutter, const Float4& parameter){
     return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
 }
 
-[[nodiscard]] bool RegisterCustomShape(SnapshotContext& context, const Name name = s_CustomShape){
+[[nodiscard]] b8 RegisterCustomShape(SnapshotContext& context, const Name name = s_CustomShape){
     CsgShapeTypeDesc description(context.testWorld.arena);
     description.name = name;
     description.shaderModule = Name("tests/csg_shadow/evaluator");

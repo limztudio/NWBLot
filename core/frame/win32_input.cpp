@@ -55,7 +55,7 @@ static constexpr u32 s_AsciiUpperLast = 'Z';
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool IsExtendedKey(LPARAM lParam)noexcept{
+static b8 IsExtendedKey(LPARAM lParam)noexcept{
     return (static_cast<usize>(lParam) & (static_cast<usize>(1) << s_Win32ExtendedKeyBit)) != 0;
 }
 
@@ -227,7 +227,7 @@ namespace FrameDetail{
 Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARAM wParam, const LPARAM lParam){
     using namespace __hidden_frame_win32_input;
 
-    const bool ordinaryText = message == WM_CHAR || message == WM_SYSCHAR || (message == WM_UNICHAR && wParam != UNICODE_NOCHAR);
+    const b8 ordinaryText = message == WM_CHAR || message == WM_SYSCHAR || (message == WM_UNICHAR && wParam != UNICODE_NOCHAR);
     const i32 textScancode = ordinaryText ? TranslateScancode(lParam) : 0;
     // Text without a producing scan code is explicit native text, independent of a physical shortcut.
     if(ordinaryText && textScancode != 0 && m_frame.input().keyboardTextBlocked(textScancode)){
@@ -359,7 +359,7 @@ Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARA
     }
 }
 
-void Win32FrameInput::dispatchTextInputFocus(const bool focused){
+void Win32FrameInput::dispatchTextInputFocus(const b8 focused){
     if(auto* textInput = m_frame.tryTextInput()){
         if(!ResetWin32FallbackCharInput(*textInput))
             NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input character reset failed"));

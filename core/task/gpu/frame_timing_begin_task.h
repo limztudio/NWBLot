@@ -31,7 +31,7 @@ struct FrameTimingBeginGraphTask{
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context);
     static void Accepted(Payload& payload, const QueueSubmissionToken& token);
 };
 

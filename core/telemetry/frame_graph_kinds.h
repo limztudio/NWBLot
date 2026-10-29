@@ -126,15 +126,15 @@ struct FrameGraphPhysicalQueueId{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return index != Limit<u16>::s_Max && deviceGeneration != 0u;
     }
 };
-inline constexpr bool operator==(const FrameGraphPhysicalQueueId& lhs, const FrameGraphPhysicalQueueId& rhs)noexcept{
+inline constexpr b8 operator==(const FrameGraphPhysicalQueueId& lhs, const FrameGraphPhysicalQueueId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.deviceGeneration == rhs.deviceGeneration;
 }
 
-inline constexpr bool operator!=(const FrameGraphPhysicalQueueId& lhs, const FrameGraphPhysicalQueueId& rhs)noexcept{
+inline constexpr b8 operator!=(const FrameGraphPhysicalQueueId& lhs, const FrameGraphPhysicalQueueId& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -157,15 +157,15 @@ struct FrameGraphQueueAssignment{
     FrameGraphQueueAssignmentReason::Enum reason = FrameGraphQueueAssignmentReason::Unknown;
     FrameGraphQueueAssignmentModifier::Mask modifiers = FrameGraphQueueAssignmentModifier::None;
     FrameGraphQueueAssignmentAcceptance::Enum acceptance = FrameGraphQueueAssignmentAcceptance::NotAccepted;
-    bool dedicated = false;
-    bool present = false;
+    b8 dedicated = false;
+    b8 present = false;
 };
 
 struct FrameGraphCompiledTask{
     u64 planGeneration = 0u;
     u32 packetIndex = Limit<u32>::s_Max;
     FrameGraphTaskPacketizationDecision::Enum packetizationDecision = FrameGraphTaskPacketizationDecision::Unknown;
-    bool present = false;
+    b8 present = false;
 };
 
 

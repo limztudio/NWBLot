@@ -25,7 +25,7 @@ namespace __hidden_ui_gpu_glyph_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SamePageVersion(const GlyphPage& first, const GlyphPage& second)noexcept{
+[[nodiscard]] static b8 SamePageVersion(const GlyphPage& first, const GlyphPage& second)noexcept{
     const GlyphPageBinding& a = first.binding();
     const GlyphPageBinding& b = second.binding();
     if(!SameGlyphPageKey(a, b) || a.generation != b.generation || a.width != b.width || a.height != b.height)
@@ -36,7 +36,7 @@ namespace __hidden_ui_gpu_glyph_resources{
     return first.pixels().size() == second.pixels().size() && NWB_MEMCMP(first.pixels().data(), second.pixels().data(), first.pixels().size()) == 0;
 }
 
-[[nodiscard]] static bool ValidPage(const SharedGlyphPage& page)noexcept{
+[[nodiscard]] static b8 ValidPage(const SharedGlyphPage& page)noexcept{
     if(!page)
         return false;
     const GlyphPageBinding& binding = page->binding();
@@ -48,7 +48,7 @@ namespace __hidden_ui_gpu_glyph_resources{
     ;
 }
 
-[[nodiscard]] static bool PrepareDescriptor(GpuGlyphVersion& version){
+[[nodiscard]] static b8 PrepareDescriptor(GpuGlyphVersion& version){
     return PrepareGpuSampledImageDescriptor(version.m_graphics, version.m_texture, Core::Format::R8_UNORM, version.m_sampledImage);
 }
 
@@ -75,7 +75,7 @@ GpuGlyphVersion::~GpuGlyphVersion()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept{
+b8 GpuRendererState::ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept{
     const auto& pages = snapshot.glyphPages();
     if(pages.size() + snapshot.sdfPages().size() + snapshot.textureImages().size() > s_PaintMaxImages)
         return false;
@@ -172,7 +172,7 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const S
     return Move(version);
 }
 
-bool GpuRendererState::prepareGlyphPages(GpuFrameData& frame){
+b8 GpuRendererState::prepareGlyphPages(GpuFrameData& frame){
     const auto& pages = frame.m_snapshot.glyphPages();
     frame.m_glyphPages.reserve(pages.size());
     // Retain successful earlier uploads if preparation fails partway through the page set.

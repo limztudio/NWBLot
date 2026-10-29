@@ -17,11 +17,11 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PaintBuilder::prepareGlyphPages(const SharedGlyphPage* const pages, const usize count){
+b8 PaintBuilder::prepareGlyphPages(const SharedGlyphPage* const pages, const usize count){
     return prepareImages(pages, count, nullptr, 0u);
 }
 
-bool PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint){
+b8 PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
     if(
         !page || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height) || uv.x < 0.0f || uv.y < 0.0f || uv.width <= 0.0f || uv.height <= 0.0f

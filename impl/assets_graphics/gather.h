@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool MergeGatheredGraphicsAsset(const Name& virtualPath, const void* incomingPayload, usize incomingSize, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload);
+[[nodiscard]] b8 MergeGatheredGraphicsAsset(const Name& virtualPath, const void* incomingPayload, usize incomingSize, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

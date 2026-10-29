@@ -46,9 +46,9 @@ struct FrameGraphReflectionResolveInputs{
     const CsgFrameState& csgFrameState;
     const RayTracingRefractionGraphResources& refractionResources;
     u32 reflectionFrameIndex = 0u;
-    bool reflectionSceneAvailable = false;
-    bool refractionActive = false;
-    bool useLaggedLightingHistory = false;
+    b8 reflectionSceneAvailable = false;
+    b8 refractionActive = false;
+    b8 useLaggedLightingHistory = false;
     Core::GpuGraphResourceId specularRoughness;
     Core::GpuGraphResourceId refractionSpecularRoughness;
     Core::GpuGraphResourceId normal;
@@ -74,17 +74,17 @@ struct FrameGraphReflectionResolveInputs{
     Core::GpuTaskId lightingTask;
     Core::GpuTaskId avboitFinalTask;
     Core::GpuTaskId surfelGiTask;
-    const bool* hardwarePreparationReady = nullptr;
-    bool* hardwareDispatchLogged = nullptr;
-    bool* fallbackDispatchLogged = nullptr;
-    bool* refractionHardwareLogged = nullptr;
-    bool* refractionScreenLogged = nullptr;
+    const b8* hardwarePreparationReady = nullptr;
+    b8* hardwareDispatchLogged = nullptr;
+    b8* fallbackDispatchLogged = nullptr;
+    b8* refractionHardwareLogged = nullptr;
+    b8* refractionScreenLogged = nullptr;
 };
 
 struct FrameGraphReflectionResolveResult{
     RendererTaskGraphDetail::ReflectionGraphResult reflectionGraph;
     ReflectionCompositeInputs reflectionCompositeInputs;
-    bool declared = false;
+    b8 declared = false;
     Core::GpuTaskId refractionResolveTask;
 };
 

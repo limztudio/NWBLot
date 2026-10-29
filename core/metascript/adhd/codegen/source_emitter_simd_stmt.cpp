@@ -19,8 +19,8 @@ void SourceEmitter::emitSimdVectorCtorReg(
     const MStringView simdType,
     const MVector<Expr*>& arguments
 )const{
-    const bool isDouble = IsDoubleSimdType(simdType);
-    const bool isInt = IsIntSimdType(simdType);
+    const b8 isDouble = IsDoubleSimdType(simdType);
+    const b8 isInt = IsIntSimdType(simdType);
 
     if(m_symbols.isSimdMatrixType(simdType)){
         if(arguments.empty()){
@@ -115,7 +115,7 @@ void SourceEmitter::emitSimdVectorCtorReg(
     out.push_back(')');
 }
 
-const SimdVarBinding* SourceEmitter::findSimdBinding(const bool isThisMember, const MStringView name)const noexcept{
+const SimdVarBinding* SourceEmitter::findSimdBinding(const b8 isThisMember, const MStringView name)const noexcept{
     if(!m_activeSimdBindings)
         return nullptr;
     for(const SimdVarBinding& binding : *m_activeSimdBindings){
@@ -214,7 +214,7 @@ void SourceEmitter::emitSimdMutCallReloads(
             if(mutBinding)
                 emitSimdLoadReloadForBinding(out, *mutBinding, indent);
         }
-        const bool isThisMethodCall = (expr.lhs && expr.lhs->kind == ExprKind::ThisMember);
+        const b8 isThisMethodCall = (expr.lhs && expr.lhs->kind == ExprKind::ThisMember);
         for(const SimdVarBinding& binding : *m_activeSimdBindings){
             if(binding.capturedByMutLambda || (isThisMethodCall && binding.isThisMember))
                 emitSimdLoadReloadForBinding(out, binding, indent);
@@ -222,7 +222,7 @@ void SourceEmitter::emitSimdMutCallReloads(
     }
 }
 
-void SourceEmitter::emitSimdBlockStores(MString& out, const u32 indent, const bool loopElementsOnly)const{
+void SourceEmitter::emitSimdBlockStores(MString& out, const u32 indent, const b8 loopElementsOnly)const{
     if(!m_activeSimdBindings)
         return;
     for(const SimdVarBinding& binding : *m_activeSimdBindings){
@@ -274,7 +274,7 @@ void SourceEmitter::emitScopedSimdBody(
 
     emitStatementList(out, statements, indent);
 
-    const bool endsWithTerminal = !statements.empty() && statements.back() && (
+    const b8 endsWithTerminal = !statements.empty() && statements.back() && (
         statements.back()->kind == StmtKind::Return
         || statements.back()->kind == StmtKind::Break
         || statements.back()->kind == StmtKind::Continue
@@ -285,7 +285,7 @@ void SourceEmitter::emitScopedSimdBody(
     m_activeSimdBindings = prevBindings;
 }
 
-bool SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const u32 indent)const{
+b8 SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const u32 indent)const{
     const SimdVarBinding* simdLocal = findSimdBinding(false, stmt.name);
     if(simdLocal && simdLocal->isLocalDecl){
         const MStringView regType = SimdRegisterCppType(simdLocal->simdType);
@@ -303,8 +303,8 @@ bool SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const
             emitSimdRegExpr(out, *stmt.expr, simdLocal->simdType);
         }
         else{
-            const bool isDouble = IsDoubleSimdType(simdLocal->simdType);
-            const bool isInt = IsIntSimdType(simdLocal->simdType);
+            const b8 isDouble = IsDoubleSimdType(simdLocal->simdType);
+            const b8 isInt = IsIntSimdType(simdLocal->simdType);
             if(m_symbols.isSimdMatrixType(simdLocal->simdType))
                 out.append(isDouble ? "::SIMDMatrixDouble{}" : "::SIMDMatrix{}");
             else if(isInt)
@@ -339,7 +339,7 @@ bool SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const
     return false;
 }
 
-bool SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u32 indent)const{
+b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u32 indent)const{
     if(stmt.expr && stmt.expr->kind == ExprKind::Binary
         && IsSimdAssignmentOp(stmt.expr->op)
         && stmt.expr->lhs && stmt.expr->rhs)
@@ -352,7 +352,7 @@ bool SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const 
             const SimdVarBinding* targetBinding = findSimdBindingForExpr(&lhs);
             const SimdVarBinding* rhsBinding = findSimdBindingForExpr(&rhs);
 
-            const bool shouldLowerNonBindingAssign = !targetBinding && (
+            const b8 shouldLowerNonBindingAssign = !targetBinding && (
                 stmt.expr->op != TokenType::Equal
                 || rhsBinding != nullptr
                 || ExprContainsSimdMath(&rhs, m_symbols)
@@ -401,8 +401,8 @@ bool SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const 
 
             if(targetBinding){
                 const MStringView simdType = targetBinding->simdType;
-                const bool isDouble = IsDoubleSimdType(simdType);
-                const bool isInt = IsIntSimdType(simdType);
+                const b8 isDouble = IsDoubleSimdType(simdType);
+                const b8 isInt = IsIntSimdType(simdType);
                 static constexpr const char* s_LaneSuffix[4] = { "X(", "Y(", "Z(", "W(" };
 
                 emitIndent(out, indent);
@@ -449,8 +449,8 @@ bool SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const 
 
             if(targetBinding){
                 const MStringView simdType = targetBinding->simdType;
-                const bool isDouble = IsDoubleSimdType(simdType);
-                const bool isInt = IsIntSimdType(simdType);
+                const b8 isDouble = IsDoubleSimdType(simdType);
+                const b8 isInt = IsIntSimdType(simdType);
 
                 emitIndent(out, indent);
                 out.append(targetBinding->regName.data(), targetBinding->regName.size());
@@ -491,11 +491,11 @@ bool SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const 
     return false;
 }
 
-bool SourceEmitter::tryEmitSimdReturnStmt(MString& out, const Stmt& stmt, const u32 indent)const{
+b8 SourceEmitter::tryEmitSimdReturnStmt(MString& out, const Stmt& stmt, const u32 indent)const{
     if(stmt.expr && IsRegisterPromotableSimdType(stmt.expr->resolvedSimdType)){
         const SimdVarBinding* retBinding = findSimdBindingForExpr(stmt.expr);
 
-        const bool needsRegStore = (retBinding && retBinding->isLocalDecl && !retBinding->needsStorageSync)
+        const b8 needsRegStore = (retBinding && retBinding->isLocalDecl && !retBinding->needsStorageSync)
             || ExprContainsSimdMath(stmt.expr, m_symbols);
         if(needsRegStore){
             const MStringView simdType = stmt.expr->resolvedSimdType;

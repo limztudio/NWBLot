@@ -37,7 +37,7 @@ inline constexpr AStringView s_JointFallbackNamePrefix = "joint_";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateStreamIndex(const u32 index, const usize count, const AStringView fieldName, const AStringView context){
+b8 ValidateStreamIndex(const u32 index, const usize count, const AStringView fieldName, const AStringView context){
     if(index < count)
         return true;
 
@@ -45,7 +45,7 @@ bool ValidateStreamIndex(const u32 index, const usize count, const AStringView f
     return false;
 }
 
-bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context){
+b8 ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context){
     if(mesh.positions.empty() || mesh.normals.empty() || mesh.uv0.empty() || mesh.colors.empty() || mesh.vertexRefs.empty() || mesh.indices.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh payload is incomplete"), ConvertString(context));
         return false;
@@ -115,7 +115,7 @@ Expected<SIMDMatrix> BuildLocalBindPoseMatrix(const SIMDMatrix& globalBindPose, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateSplitSkinSource(const SourceMeshStreams& mesh, const Span<ufbx_node* const> skeletonJoints, const Span<const JointMatrix> skeletonBindPoseMatrices, const Span<const JointMatrix> inverseBindMatrices){
+b8 ValidateSplitSkinSource(const SourceMeshStreams& mesh, const Span<ufbx_node* const> skeletonJoints, const Span<const JointMatrix> skeletonBindPoseMatrices, const Span<const JointMatrix> inverseBindMatrices){
     if(mesh.skin.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model requires source skin influences"));
         return false;
@@ -249,7 +249,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
     return outData;
 }
 
-bool RemapSkinInfluences(const Span<MeshSkinInfluence> inOutInfluences, const Span<const u16> oldToNewJointIndices){
+b8 RemapSkinInfluences(const Span<MeshSkinInfluence> inOutInfluences, const Span<const u16> oldToNewJointIndices){
     for(MeshSkinInfluence& influence : inOutInfluences){
         for(usize slot = 0u; slot < s_MeshSkinInfluenceCount; ++slot){
             const u16 oldJointIndex = influence.joint[slot];
@@ -318,7 +318,7 @@ Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const Sourc
     return result;
 }
 
-bool ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
+b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
     static constexpr AStringView s_Context = "Failed to write NWB model";
     if(!ValidateMeshGeometry(mesh, s_Context))
         return false;

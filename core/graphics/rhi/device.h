@@ -58,14 +58,14 @@ struct QueueSubmissionNativeSignal{
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return semaphore.integer != 0u; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return semaphore.integer != 0u; }
 };
 
 // Prepares a submission-local binary signal atomically; exceptions unwind to the application boundary.
 using QueueSubmissionPreSubmitCallback = Expected<QueueSubmissionNativeSignal>(*) (void* context, u64 identity, const GpuPhysicalQueueId& executionQueue);
 
 // Called once after hook preparation with the accepted token (or invalid on rejection). No throw, no Device drain.
-using QueueSubmissionResolvedCallback = bool(*) (void* context, u64 identity, const QueueSubmissionToken& submissionToken)noexcept;
+using QueueSubmissionResolvedCallback = b8(*) (void* context, u64 identity, const QueueSubmissionToken& submissionToken)noexcept;
 
 struct QueueSubmissionPreSubmitHook{
     void* context = nullptr;
@@ -75,11 +75,11 @@ struct QueueSubmissionPreSubmitHook{
 
 
 private:
-    [[nodiscard]] static bool IgnoreResolution(void*, u64, const QueueSubmissionToken&)noexcept{ return true; }
+    [[nodiscard]] static b8 IgnoreResolution(void*, u64, const QueueSubmissionToken&)noexcept{ return true; }
 
 
 public:
-    [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
+    [[nodiscard]] constexpr b8 valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
 };
 
 // Cross-queue deps. Same-queue tokens collapse to queue order. Caller owns the token array until submit returns.
@@ -88,7 +88,7 @@ struct QueueSubmissionDesc{
     usize waitTokenCount = 0;
     QueueSubmissionPreSubmitHook preSubmitHook;
     // Recovery may need an exact queue submission even after earlier work consumed every wait.
-    bool forceNativeSubmission = false;
+    b8 forceNativeSubmission = false;
 
 
 public:
@@ -170,7 +170,7 @@ typedef GraphicsBackend::Handle<CommandList> CommandListHandle;
 
 
 // View into device-lifetime marker history (or the not-found sentinel). GpuCrashTracker must outlive the view.
-typedef Pair<bool, AStringView> ResolvedMarker;
+typedef Pair<b8, AStringView> ResolvedMarker;
 
 class GpuCrashTracker;
 
@@ -279,8 +279,8 @@ public:
     LUID luid = {};
     u32 vendorID = 0;
     u32 deviceID = 0;
-    bool hasUUID = false;
-    bool hasLUID = false;
+    b8 hasUUID = false;
+    b8 hasLUID = false;
 
 
 public:
@@ -299,12 +299,12 @@ struct InstanceParameters{
     GraphicsVector<GraphicsString> requiredBackendLayers;
     GraphicsVector<GraphicsString> optionalBackendInstanceExtensions;
     GraphicsVector<GraphicsString> optionalBackendLayers;
-    bool enableDebugRuntime = false;
-    bool enableWarningsAsErrors = false;
-    bool headlessDevice = false;
-    bool enableGpuCrashDiagnostics = true;
-    bool logBufferLifetime = false;
-    bool enablePerMonitorDPI = false;
+    b8 enableDebugRuntime = false;
+    b8 enableWarningsAsErrors = false;
+    b8 headlessDevice = false;
+    b8 enableGpuCrashDiagnostics = true;
+    b8 logBufferLifetime = false;
+    b8 enablePerMonitorDPI = false;
 
 
 public:
@@ -338,32 +338,32 @@ struct DeviceCreationParameters : public InstanceParameters{
     Format::Enum swapChainFormat = Format::RGBA8_UNORM_SRGB;
     // Low-level devices retain their conservative default; GraphicsRuntime selects Automatic unless overridden.
     HardwareRayTracingPolicy::Enum hardwareRayTracingPolicy = HardwareRayTracingPolicy::Disabled;
-    bool startMaximized = false;
-    bool startFullscreen = false;
-    bool startBorderless = false;
-    bool allowModeSwitch = false;
+    b8 startMaximized = false;
+    b8 startFullscreen = false;
+    b8 startBorderless = false;
+    b8 allowModeSwitch = false;
     // Without HDR10 on this surface, keep the requested SDR format instead of failing creation.
-    bool enableHDR10Output = false;
+    b8 enableHDR10Output = false;
     // Presentation-image readback. Unsupported surfaces keep a presentable swap chain with swapChainReadbackAvailable=false.
-    bool enableSwapChainReadback = false;
+    b8 enableSwapChainReadback = false;
     // Native mesh shaders are optional. Windows ARM64 defaults to compute emulation: extension advertisement alone does not qualify mesh output.
 #if defined(_WIN32) && (defined(__aarch64__) || defined(_M_ARM64))
-    bool enableNativeMeshShaders = false;
+    b8 enableNativeMeshShaders = false;
 #else
-    bool enableNativeMeshShaders = true;
+    b8 enableNativeMeshShaders = true;
 #endif
     // Best-effort async Compute offload. Combined Graphics+Compute hardware aliases the roles unless a dedicated offload family exists.
-    bool enableAsyncComputeLane = true;
+    b8 enableAsyncComputeLane = true;
     // Optional transfer transport. Only a distinct transfer-only Vulkan family becomes CommandQueue::Transfer.
-    bool enableTransferQueue = true;
+    b8 enableTransferQueue = true;
     // Opt-in same-class transports.
     // Extra queues from each active primary family plus one alternate family per class when cross-family routing is on.
     // Graph tasks must allow same-class routing before ordinary work leaves the primary transport.
-    bool enableSameClassMultiQueue = false;
+    b8 enableSameClassMultiQueue = false;
     // Auxiliary same-class transport from another compatible family. Tasks opt in before the compiler routes across it.
-    bool enableCrossFamilySameClassQueueRouting = false;
-    bool supportExplicitDisplayScaling = false;
-    bool resizeWindowWithDisplayScale = false;
+    b8 enableCrossFamilySameClassQueueRouting = false;
+    b8 supportExplicitDisplayScaling = false;
+    b8 resizeWindowWithDisplayScale = false;
 
     GraphicsVector<GraphicsString> requiredBackendDeviceExtensions;
     GraphicsVector<GraphicsString> optionalBackendDeviceExtensions;
@@ -390,8 +390,8 @@ struct SwapChainRuntimeState{
     u32 backBufferHeight = s_BackBufferHeight;
     Format::Enum backBufferFormat = Format::RGBA8_UNORM_SRGB;
     SwapChainOutputMode::Enum outputMode = SwapChainOutputMode::SDR;
-    bool vsyncEnabled = false;
-    bool swapChainReadbackAvailable = false;
+    b8 vsyncEnabled = false;
+    b8 swapChainReadbackAvailable = false;
 };
 
 

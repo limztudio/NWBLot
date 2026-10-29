@@ -25,7 +25,7 @@ NWB_FILESYSTEM_BEGIN
 
 inline constexpr AStringView s_VolumeSegmentExtension = ".vol";
 
-[[nodiscard]] inline bool ValidVolumeName(const AStringView volumeName)noexcept{
+[[nodiscard]] inline b8 ValidVolumeName(const AStringView volumeName)noexcept{
     if(volumeName.empty())
         return false;
 
@@ -65,7 +65,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool VolumeSegmentExists(const ::Path<ArenaT>& directory, const AStringView volumeName, const usize segmentIndex = 0u){
+[[nodiscard]] inline b8 VolumeSegmentExists(const ::Path<ArenaT>& directory, const AStringView volumeName, const usize segmentIndex = 0u){
     if(directory.empty())
         return false;
 

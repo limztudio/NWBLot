@@ -68,7 +68,7 @@ struct SpirvWordSource{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return words != nullptr; }
+    [[nodiscard]] b8 valid()const noexcept{ return words != nullptr; }
 
     [[nodiscard]] usize size()const noexcept{ return wordCount; }
 
@@ -84,7 +84,7 @@ struct SpirvByteSource{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return bytecode.data() != nullptr && bytecode.size() % sizeof(u32) == 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return bytecode.data() != nullptr && bytecode.size() % sizeof(u32) == 0u; }
 
     [[nodiscard]] usize size()const noexcept{ return bytecode.size() / sizeof(u32); }
 
@@ -141,7 +141,7 @@ template<typename Source>
 }
 
 template<typename Source, typename EntryPointCallback>
-[[nodiscard]] NWB_INLINE bool ScanSpirvEntryPoints(const Source& source, EntryPointCallback entryPointCallback)noexcept(noexcept(entryPointCallback(*static_cast<SpirvEntryPointInstruction*>(nullptr))) && IsNothrowDestructible_V<EntryPointCallback>){
+[[nodiscard]] NWB_INLINE b8 ScanSpirvEntryPoints(const Source& source, EntryPointCallback entryPointCallback)noexcept(noexcept(entryPointCallback(*static_cast<SpirvEntryPointInstruction*>(nullptr))) && IsNothrowDestructible_V<EntryPointCallback>){
     const usize wordCount = source.size();
     if(!source.valid() || wordCount < s_SpirvHeaderWords)
         return false;
@@ -180,8 +180,8 @@ template<typename Source>
     if(entryName.empty() || shaderType == ShaderType::None)
         return MakeUnexpected(SpirvEntryPointLookupResult::NotFound);
 
-    bool found = false;
-    const bool validModule = ScanSpirvEntryPoints(source, [&](const SpirvEntryPointInstruction& entryPoint)noexcept{
+    b8 found = false;
+    const b8 validModule = ScanSpirvEntryPoints(source, [&](const SpirvEntryPointInstruction& entryPoint)noexcept{
         if(found || entryPoint.shaderType == ShaderType::None || entryPoint.shaderType != shaderType || entryPoint.name != entryName)
             return;
 
@@ -206,7 +206,7 @@ template<typename Source>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsValidSpirvModuleWords(const u32* words, const usize wordCount)noexcept{
+b8 IsValidSpirvModuleWords(const u32* words, const usize wordCount)noexcept{
     return __hidden_spirv_entry_point::ScanSpirvEntryPoints(__hidden_spirv_entry_point::SpirvWordSource{ words, wordCount }, [](const __hidden_spirv_entry_point::SpirvEntryPointInstruction&)noexcept{});
 }
 

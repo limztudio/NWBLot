@@ -19,12 +19,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FrameExecuteRecovery::discardUnacceptedGraphPackets(){
+b8 FrameExecuteRecovery::discardUnacceptedGraphPackets(){
     RendererFramePipeline& renderer = m_renderer;
     return renderer.m_deferredLightingSubmissionTransaction.discardUnaccepted(renderer.m_deferredLightingTaskGraph, renderer.m_deferredLightingCompiledGraph, renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration());
 }
 
-bool FrameExecuteRecovery::executeFrameRecoveryTask(){
+b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
     RendererFramePipeline& renderer = m_renderer;
 
     // Retire the scope after rejection; Graphics order needs no extra wait.
@@ -42,7 +42,7 @@ bool FrameExecuteRecovery::executeFrameRecoveryTask(){
         m_frameTimingTransaction.discard();
         return false;
     }
-    bool retireTiming = m_frameTimingTransaction.needsRetirement();
+    b8 retireTiming = m_frameTimingTransaction.needsRetirement();
     if(retireTiming && !m_frameTimingTransaction.prepareForRecovery()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frame timing recovery preparation failed; continuing resource/frontier recovery"));
         m_frameTimingTransaction.discard();
@@ -52,7 +52,7 @@ bool FrameExecuteRecovery::executeFrameRecoveryTask(){
     renderer.m_deferredFrameRecoveryRetiresTiming = retireTiming;
     Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
     const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
-    const bool recoveryAccepted = scheduler.executeAcceptedFrontierTask(
+    const b8 recoveryAccepted = scheduler.executeAcceptedFrontierTask(
         renderer.m_deferredLightingCompiledGraph,
         renderer.m_deferredFrameRecoveryTask,
         recoveryScratchArena,
@@ -68,12 +68,12 @@ bool FrameExecuteRecovery::executeFrameRecoveryTask(){
     return true;
 }
 
-bool FrameExecuteRecovery::recoverPendingFrameSubmission(){
+b8 FrameExecuteRecovery::recoverPendingFrameSubmission(){
     return (m_renderer.m_deferredLightingSubmissionTransaction.hasAcceptedPackets() || m_frameTimingTransaction.needsRetirement()) ? executeFrameRecoveryTask() : true;
 }
 
-bool FrameExecuteRecovery::recoverPendingFrameThenDiscardUnaccepted(){
-    const bool recovered = recoverPendingFrameSubmission();
+b8 FrameExecuteRecovery::recoverPendingFrameThenDiscardUnaccepted(){
+    const b8 recovered = recoverPendingFrameSubmission();
     // Record/submit while Declared; then reject remaining normal packets.
     return discardUnacceptedGraphPackets() && recovered;
 }

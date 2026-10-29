@@ -100,7 +100,7 @@ RendererCompilerStatisticsProbe::RendererCompilerStatisticsProbe(Core::GraphicsR
 
 RendererCompilerStatisticsProbe::~RendererCompilerStatisticsProbe()noexcept{ stop(); }
 
-bool RendererCompilerStatisticsProbe::start(Impl::RendererSystem& renderer, const AStringView path){
+b8 RendererCompilerStatisticsProbe::start(Impl::RendererSystem& renderer, const AStringView path){
     if(m_enabled || path.empty())
         return false;
     m_output.assign(path);
@@ -120,7 +120,7 @@ void RendererCompilerStatisticsProbe::stop(){
     m_renderer = nullptr;
 }
 
-bool RendererCompilerStatisticsProbe::write()const{
+b8 RendererCompilerStatisticsProbe::write()const{
     if(!m_enabled)
         return true;
     if(m_registered)
@@ -158,7 +158,7 @@ bool RendererCompilerStatisticsProbe::write()const{
                 << ",\"plan_generation\":" << sample.compile.planGeneration
                 << ",\"device_generation\":" << sample.compile.deviceGeneration
                 << ",\"recording_attempt_generation\":" << sample.recordingAttempt << "},\"seconds\":{";
-            bool first = true;
+            b8 first = true;
             for(const auto& field : __hidden_renderer_compiler_statistics_probe::s_Durations){
                 if(!first)
                     output << ',';
@@ -180,7 +180,7 @@ bool RendererCompilerStatisticsProbe::write()const{
         output << "}\n";
     }
     const u64 overflow = m_attempts - m_samples.size();
-    const bool complete = !m_samples.empty() && overflow == 0u;
+    const b8 complete = !m_samples.empty() && overflow == 0u;
     output << "{\"type\":\"compiler_statistics_complete\",\"attempts\":" << m_attempts << ",\"stored\":" << m_samples.size() << ",\"overflow\":" << overflow << ",\"invalid\":" << invalid << ",\"complete\":" << (complete ? "true" : "false") << "}\n";
     output.close();
     return output.good() && complete;

@@ -40,7 +40,7 @@ static constexpr u32 s_FrameTimingQueryCount = 2u;
     return state;
 }
 
-[[nodiscard]] static bool TokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token){
+[[nodiscard]] static b8 TokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token){
     if(!token.valid())
         return true;
     if(!token.hasPhysicalQueueIdentity())
@@ -126,11 +126,11 @@ void GpuFrameData::reset(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> ski
     m_prepared = false;
 }
 
-bool GpuFrameData::prefixComplete(Core::Device& device)const{
+b8 GpuFrameData::prefixComplete(Core::Device& device)const{
     return __hidden_ui_gpu::TokenComplete(device, m_vertexUpload) && __hidden_ui_gpu::TokenComplete(device, m_indexUpload) && __hidden_ui_gpu::TokenComplete(device, m_clear) && __hidden_ui_gpu::TokenComplete(device, m_raster);
 }
 
-bool GpuFrameData::recyclable(Core::Device& device)const{
+b8 GpuFrameData::recyclable(Core::Device& device)const{
     if(!__hidden_ui_gpu::TokenComplete(device, m_finalConsumer) || !prefixComplete(device))
         return false;
     for(const auto& page : m_glyphPages){
@@ -148,7 +148,7 @@ bool GpuFrameData::recyclable(Core::Device& device)const{
     return true;
 }
 
-bool GpuFrameData::complete(Core::Device& device)const{
+b8 GpuFrameData::complete(Core::Device& device)const{
     return m_finalConsumer.valid() && recyclable(device);
 }
 
@@ -186,7 +186,7 @@ void GpuRenderer::setActiveSceneSubsystems(const ActiveSceneSubsystems* subsyste
     m_state->m_activeSceneSubsystems = subsystems;
 }
 
-bool GpuRenderer::validateResources(const u32 width, const u32 height){
+b8 GpuRenderer::validateResources(const u32 width, const u32 height){
     if(width == 0u || height == 0u || width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
         return false;
     m_state->m_frameTimingScopePrepared = m_state->m_graphics.gpuTiming().prepareScopeQueries(GpuRendererTimingScope::s_Frame.identity, m_state->m_graphics.getDevice(), __hidden_ui_gpu::s_FrameTimingQueryCount);
@@ -249,7 +249,7 @@ void GpuRenderer::invalidateResources()noexcept{
     m_state->m_presentationContributor = nullptr;
 }
 
-bool GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const UiSkin& skin, const u64 skinGeneration){
+b8 GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const UiSkin& skin, const u64 skinGeneration){
     if(!identity.valid() || skinGeneration == 0u || !m_state->m_resources || !skin.validatePayload())
         return false;
     const SkinBinding binding{ identity, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };
@@ -275,7 +275,7 @@ bool GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const 
     return true;
 }
 
-bool GpuRenderer::submit(DrawSnapshot&& snapshot)noexcept{
+b8 GpuRenderer::submit(DrawSnapshot&& snapshot)noexcept{
     if(m_state->m_pending || !m_state->m_resources || !m_state->m_skin || snapshot.generation() == 0u)
         return false;
     const SkinBinding& binding = snapshot.skinBinding();
@@ -324,7 +324,7 @@ void GpuRenderer::setCommandRecordingMode(const GpuCommandRecordingMode::Enum mo
     m_state->m_recordingMode = mode;
 }
 
-bool GpuRenderer::hasPendingFrame()const noexcept{
+b8 GpuRenderer::hasPendingFrame()const noexcept{
     return m_state->m_pending != nullptr;
 }
 
@@ -336,7 +336,7 @@ Core::PresentationReceiptStatus::Enum GpuRenderer::lastAcceptedPresentationStatu
     return m_state->m_graphics.lastPresentationReceipt().status(m_state->m_lastAcceptedAcquired.backBuffer);
 }
 
-bool GpuRenderer::prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame){
+b8 GpuRenderer::prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame){
     return m_state->prepare(frame);
 }
 

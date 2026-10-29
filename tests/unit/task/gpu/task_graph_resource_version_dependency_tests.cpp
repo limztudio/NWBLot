@@ -143,8 +143,8 @@ TEST(GpuTaskGraphResourceVersion, ExportsDependencyAndLifetimeReasonsWithExplici
     const u32 producerNode = taskNodeOffset + producer.index;
     const u32 consumerNode = taskNodeOffset + consumer.index;
     const u32 overwriterNode = taskNodeOffset + overwriter.index;
-    bool foundDependency = false;
-    bool foundLifetime = false;
+    b8 foundDependency = false;
+    b8 foundLifetime = false;
     for(const Telemetry::FrameGraphEdgeDesc& edge : edges){
         if(edge.kind != Telemetry::FrameGraphEdgeKind::DependsOn)
             continue;
@@ -201,8 +201,8 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
     ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     ASSERT_EQ(analysis.inferredEdges().size(), s_ExpectedDualCount);
     ASSERT_EQ(analysis.schedulingEdges().size(), 1u);
-    bool foundVersionDependency = false;
-    bool foundPhysicalRaw = false;
+    b8 foundVersionDependency = false;
+    b8 foundPhysicalRaw = false;
     for(const Graphics::GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
         foundVersionDependency |= edge.hazard == Graphics::GpuTaskHazardType::VersionDependency;
         foundPhysicalRaw |= edge.hazard == Graphics::GpuTaskHazardType::ReadAfterWrite;
@@ -364,8 +364,8 @@ TEST(GpuTaskGraphResourceVersion, ReportsClosedMixedExplicitAndResourceVersionCy
     EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 1u);
     ExpectClosedCycle(analysis);
-    bool foundExplicit = false;
-    bool foundVersion = false;
+    b8 foundExplicit = false;
+    b8 foundVersion = false;
     for(const Graphics::GpuTaskDependencyEdge& edge : analysis.cycleEdges()){
         foundExplicit |= edge.hazard == Graphics::GpuTaskHazardType::Explicit;
         foundVersion |= edge.hazard == Graphics::GpuTaskHazardType::VersionDependency;

@@ -131,7 +131,7 @@ static void ExpectDagAnalysis(const Graphics::GpuTaskGraph& graph, const Span<co
     reducedEdgeIndices.reserve(expectedEdges.size());
     for(usize edgeIndex = 0u; edgeIndex < expectedEdges.size(); ++edgeIndex){
         const Graphics::GpuTaskDependencyEdge& edge = expectedEdges[edgeIndex];
-        bool redundant = false;
+        b8 redundant = false;
         for(usize intermediate = 0u; intermediate < taskCount; ++intermediate){
             if(adjacency[edge.producer.index * taskCount + intermediate] && reachable[intermediate * taskCount + edge.consumer.index]){
                 redundant = true;
@@ -173,7 +173,7 @@ static void ExpectDagAnalysis(const Graphics::GpuTaskGraph& graph, const Span<co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void DeclareShortcutChain(Graphics::GpuTaskGraph& graph, const usize taskCount, const bool reversed){
+static void DeclareShortcutChain(Graphics::GpuTaskGraph& graph, const usize taskCount, const b8 reversed){
     u64 generation = 0u;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
@@ -195,7 +195,7 @@ static void DeclareShortcutChain(Graphics::GpuTaskGraph& graph, const usize task
     }
 }
 
-static void ExpectReducedShortcutChain(const Graphics::GpuTaskGraphAnalysis& analysis, const usize taskCount, const bool reversed){
+static void ExpectReducedShortcutChain(const Graphics::GpuTaskGraphAnalysis& analysis, const usize taskCount, const b8 reversed){
     ASSERT_EQ(analysis.edges().size(), taskCount * 2u - 3u);
     ASSERT_EQ(analysis.schedulingEdges().size(), taskCount - 1u);
     for(usize edgeIndex = 0u; edgeIndex + 1u < taskCount; ++edgeIndex){
@@ -222,7 +222,7 @@ static void DeclareReadyOrderGraph(Graphics::GpuTaskGraph& graph, const usize ta
     }
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
         const usize half = taskCount / 2u;
-        const bool hasDependency = shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u < taskCount : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex < half : taskIndex >= half;
+        const b8 hasDependency = shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u < taskCount : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex < half : taskIndex >= half;
         const usize producerIndex = !hasDependency ? 0u : shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex + half : taskIndex - half;
         const Graphics::GpuTaskId dependency{ .generation = generation, .index = static_cast<u32>(producerIndex) };
         {
@@ -297,8 +297,8 @@ TEST(GpuTaskGraphAnalysis, RetainsCycleDiagnosticsAfterBackwardReleasePrefixExha
 
 TEST(GpuTaskGraphAnalysis, ReducesShortcutEdgesAtTheLastDirectConsumerBeforeLongTails){
     constexpr usize s_TaskCount = 257u;
-    constexpr bool s_ReversedDeclarations[] = { false, true };
-    for(const bool reversed : s_ReversedDeclarations){
+    constexpr b8 s_ReversedDeclarations[] = { false, true };
+    for(const b8 reversed : s_ReversedDeclarations){
         SCOPED_TRACE(reversed);
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);

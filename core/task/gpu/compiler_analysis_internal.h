@@ -37,7 +37,7 @@ public:
 
 void BuildTaskDependencyAdjacency(Span<const GpuTaskDependencyEdge> edges, usize taskCount, Alloc::ScratchArena& scratchArena, TaskDependencyAdjacency& outAdjacency);
 
-[[nodiscard]] bool BuildTopologicalOrder(
+[[nodiscard]] b8 BuildTopologicalOrder(
     const GpuTaskGraph::DeclarationReadView& graph,
     Span<const GpuTaskDependencyEdge> edges,
     const TaskDependencyAdjacency& adjacency,

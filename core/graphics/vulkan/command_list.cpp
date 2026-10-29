@@ -181,14 +181,14 @@ void CommandList::clearState(){
     clearStateInternal();
 }
 
-bool CommandList::publicCommandStateAccessible()const noexcept{
+b8 CommandList::publicCommandStateAccessible()const noexcept{
     const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
     return publicationState == s_GraphPublicationUnowned || (publicationState == s_GraphPublicationRecording && GraphRecordingOwnership::HasCapability(*this, m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)));
 }
 
-bool CommandList::beginGraphRecordingOwnership(const u64 recordingLeaseSerial){
+b8 CommandList::beginGraphRecordingOwnership(const u64 recordingLeaseSerial){
     u8 expectedState = s_GraphPublicationUnowned;
-    const bool ownershipAvailable = matchesRecordingLease(recordingLeaseSerial) && m_graphPublicationState.compare_exchange_strong(expectedState, s_GraphPublicationRecording, MemoryOrder::acq_rel, MemoryOrder::acquire);
+    const b8 ownershipAvailable = matchesRecordingLease(recordingLeaseSerial) && m_graphPublicationState.compare_exchange_strong(expectedState, s_GraphPublicationRecording, MemoryOrder::acq_rel, MemoryOrder::acquire);
     if(!ownershipAvailable){
         rejectCommandRecording(NWB_TEXT("begin task-graph command recording ownership"), NWB_TEXT("native recording lease is unavailable or already exclusively owned"));
         return false;
@@ -199,7 +199,7 @@ bool CommandList::beginGraphRecordingOwnership(const u64 recordingLeaseSerial){
 }
 
 void CommandList::publishGraphRecordingOwnership(const u64 recordingLeaseSerial)noexcept{
-    const bool ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationRecording && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
+    const b8 ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationRecording && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
     NWB_FATAL_ASSERT_MSG(ownershipMatches, "task-graph command recording ownership changed without its capability");
     m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
 }
@@ -207,7 +207,7 @@ void CommandList::publishGraphRecordingOwnership(const u64 recordingLeaseSerial)
 void CommandList::cancelGraphRecordingOwnership(const u64 recordingLeaseSerial)noexcept{
     const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
     const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
-    const bool ownershipMatches = (publicationState == s_GraphPublicationRecording && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
+    const b8 ownershipMatches = (publicationState == s_GraphPublicationRecording && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
     NWB_FATAL_ASSERT_MSG(ownershipMatches, "cancelled task-graph recording must retain its exact command-list capability");
     if(publicationState != s_GraphPublicationRecording)
         return;
@@ -229,7 +229,7 @@ void CommandList::revokeGraphRecordingPublication(const u64 recordingLeaseSerial
         backoff.pause();
     }
 
-    const bool ownershipMatches = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial && m_recordingLeaseSerial == recordingLeaseSerial;
+    const b8 ownershipMatches = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial && m_recordingLeaseSerial == recordingLeaseSerial;
     if(!ownershipMatches){
         m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
         return;
@@ -252,7 +252,7 @@ Expected<u64> CommandList::beginGraphSubmissionOwnership()noexcept{
     }
 
     const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
-    const bool ownershipValid = graphRecordingOwnershipSerial != 0u && !m_isRecording && !m_commandRecordingFailed && matchesNativeLeaseIdentity();
+    const b8 ownershipValid = graphRecordingOwnershipSerial != 0u && !m_isRecording && !m_commandRecordingFailed && matchesNativeLeaseIdentity();
     if(!ownershipValid){
         m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
         return MakeUnexpected(Failure{});
@@ -262,7 +262,7 @@ Expected<u64> CommandList::beginGraphSubmissionOwnership()noexcept{
 }
 
 void CommandList::acceptGraphSubmissionOwnership(const u64 recordingLeaseSerial)noexcept{
-    const bool ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationSubmitting && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
+    const b8 ownershipMatches = m_graphPublicationState.load(MemoryOrder::acquire) == s_GraphPublicationSubmitting && m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) == recordingLeaseSerial;
     NWB_FATAL_ASSERT_MSG(ownershipMatches, "accepted graph submission must retain its exact command-list capability");
     m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);
     m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
@@ -271,7 +271,7 @@ void CommandList::acceptGraphSubmissionOwnership(const u64 recordingLeaseSerial)
 void CommandList::endGraphSubmissionOwnership(const u64 recordingLeaseSerial)noexcept{
     const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
     const u64 graphRecordingOwnershipSerial = m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire);
-    const bool ownershipMatches = (publicationState == s_GraphPublicationSubmitting && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
+    const b8 ownershipMatches = (publicationState == s_GraphPublicationSubmitting && graphRecordingOwnershipSerial == recordingLeaseSerial) || (publicationState == s_GraphPublicationUnowned && graphRecordingOwnershipSerial == 0u);
     NWB_FATAL_ASSERT_MSG(ownershipMatches, "graph submission ownership changed without its exact capability");
     if(publicationState == s_GraphPublicationSubmitting)
         m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
@@ -409,11 +409,11 @@ void CommandList::clearStateInternal(){
     m_bufferOwnershipReleaseDestinations.clear();
 }
 
-bool CommandList::descriptionMatchesCreation()const noexcept{
+b8 CommandList::descriptionMatchesCreation()const noexcept{
     return m_desc.queueType == m_creationDesc.queueType && m_desc.physicalQueue == m_creationDesc.physicalQueue && m_desc.recordingWorkerDomain == m_creationDesc.recordingWorkerDomain && m_desc.recordingWorkerIndex == m_creationDesc.recordingWorkerIndex;
 }
 
-bool CommandList::matchesNativeLeaseIdentity()const noexcept{
+b8 CommandList::matchesNativeLeaseIdentity()const noexcept{
     if(
         !descriptionMatchesCreation()
         || !m_currentCmdBuf
@@ -432,11 +432,11 @@ bool CommandList::matchesNativeLeaseIdentity()const noexcept{
     return expectedQueue && expectedQueue->m_queueID == m_creationDesc.queueType && &m_currentCmdBuf->m_queue == expectedQueue;
 }
 
-bool CommandList::matchesActiveNativeLeaseIdentity()const noexcept{
+b8 CommandList::matchesActiveNativeLeaseIdentity()const noexcept{
     return m_isRecording && matchesNativeLeaseIdentity();
 }
 
-bool CommandList::matchesSubmissionLease(const GpuPhysicalQueueId executionQueue, const CommandQueue::Enum executionQueueClass, const bool graphSubmissionAuthorized)const noexcept{
+b8 CommandList::matchesSubmissionLease(const GpuPhysicalQueueId executionQueue, const CommandQueue::Enum executionQueueClass, const b8 graphSubmissionAuthorized)const noexcept{
     const u8 requiredPublicationState = graphSubmissionAuthorized ? s_GraphPublicationSubmitting : s_GraphPublicationUnowned;
     if(m_graphPublicationState.load(MemoryOrder::acquire) != requiredPublicationState)
         return false;
@@ -452,25 +452,25 @@ bool CommandList::matchesSubmissionLease(const GpuPhysicalQueueId executionQueue
     ;
 }
 
-bool CommandList::isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept{
+b8 CommandList::isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept{
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     return queueInfo && ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), *queueInfo);
 }
 
-bool CommandList::isTextureReadyForCommandQueue(Texture* const texture, const VkImageUsageFlags requiredUsage)const noexcept{
+b8 CommandList::isTextureReadyForCommandQueue(Texture* const texture, const VkImageUsageFlags requiredUsage)const noexcept{
     return m_device.isTextureReadyForGpuUse(texture, requiredUsage) && isTextureAdmittedToCommandQueue(*texture);
 }
 
-bool CommandList::isBufferAdmittedToCommandQueue(const Buffer& buffer)const noexcept{
+b8 CommandList::isBufferAdmittedToCommandQueue(const Buffer& buffer)const noexcept{
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     return queueInfo && ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), *queueInfo);
 }
 
-bool CommandList::isBufferReadyForCommandQueue(Buffer* const buffer, const VkBufferUsageFlags requiredUsage)const noexcept{
+b8 CommandList::isBufferReadyForCommandQueue(Buffer* const buffer, const VkBufferUsageFlags requiredUsage)const noexcept{
     return m_device.isBufferReadyForGpuUse(buffer, requiredUsage) && isBufferAdmittedToCommandQueue(*buffer);
 }
 
-bool CommandList::validateTrackedTexturesReadyForClose(){
+b8 CommandList::validateTrackedTexturesReadyForClose(){
     for(const auto texture : m_currentCmdBuf->m_resourceReferences.m_textures){
         if(!isTextureReadyForCommandQueue(texture.get())){
             rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("referenced texture is not ready for this exact command queue"));
@@ -509,7 +509,7 @@ bool CommandList::validateTrackedTexturesReadyForClose(){
     return true;
 }
 
-bool CommandList::validateTrackedBuffersReadyForClose(){
+b8 CommandList::validateTrackedBuffersReadyForClose(){
     for(const auto buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
         if(!isBufferReadyForCommandQueue(buffer.get())){
             rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("referenced buffer is not ready for this exact command queue"));

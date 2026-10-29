@@ -25,8 +25,8 @@ namespace __hidden_metascript_preprocessor{
 constexpr u32 s_MaxIncludeDepth = 64u;
 
 [[nodiscard]] constexpr MStringView StripLineComment(MStringView line)noexcept{
-    bool inString = false;
-    bool inChar = false;
+    b8 inString = false;
+    b8 inChar = false;
     for(usize i = 0u; i < line.size(); ++i){
         if(!inChar && line[i] == '"' && (i == 0u || line[i - 1u] != '\\'))
             inString = !inString;
@@ -87,11 +87,11 @@ void Preprocessor::undefineMacro(const MStringView name){
         m_macros.erase(it);
 }
 
-bool Preprocessor::isMacroDefined(const MStringView name)const noexcept{
+b8 Preprocessor::isMacroDefined(const MStringView name)const noexcept{
     return m_macros.find(name) != m_macros.end();
 }
 
-bool Preprocessor::isOffsetInIncludedRange(const usize offset)const noexcept{
+b8 Preprocessor::isOffsetInIncludedRange(const usize offset)const noexcept{
     for(const IncludedByteRange& range : m_includedByteRanges){
         if(offset >= range.startOffset && offset < range.endOffset)
             return true;
@@ -99,14 +99,14 @@ bool Preprocessor::isOffsetInIncludedRange(const usize offset)const noexcept{
     return false;
 }
 
-bool Preprocessor::process(const MStringView source, MString& outProcessed){
+b8 Preprocessor::process(const MStringView source, MString& outProcessed){
     outProcessed.clear();
     outProcessed.reserve(source.size());
     m_includedByteRanges.clear();
     return processInternal(source, 0u, outProcessed);
 }
 
-bool Preprocessor::processInternal(const MStringView source, const u32 depth, MString& outProcessed){
+b8 Preprocessor::processInternal(const MStringView source, const u32 depth, MString& outProcessed){
     using namespace __hidden_metascript_preprocessor;
 
     if(depth > s_MaxIncludeDepth){
@@ -117,8 +117,8 @@ bool Preprocessor::processInternal(const MStringView source, const u32 depth, MS
     Vector<ConditionalFrame, Alloc::ScratchArena> condStack{m_scratchArena};
     condStack.reserve(8u);
 
-    bool inBlockComment = false;
-    bool inNativeKeywordPendingBrace = false;
+    b8 inBlockComment = false;
+    b8 inNativeKeywordPendingBrace = false;
     u32 nativeBraceDepth = 0u;
     u32 currentLine = 1u;
     usize pos = 0u;
@@ -132,7 +132,7 @@ bool Preprocessor::processInternal(const MStringView source, const u32 depth, MS
         if(!rawLine.empty() && rawLine.back() == '\r')
             rawLine.remove_suffix(1u);
 
-        const bool isActive = condStack.empty() || condStack.back().currentActive;
+        const b8 isActive = condStack.empty() || condStack.back().currentActive;
 
         MStringView effectiveLine = rawLine;
         MStringView commentPrefix;
@@ -155,7 +155,7 @@ bool Preprocessor::processInternal(const MStringView source, const u32 depth, MS
 
         if(commentPrefix.empty() && !trimmed.empty() && trimmed[0] == '#'){
             const MStringView afterHash = TrimView(trimmed.substr(1u));
-            const bool isNativeInclude = (nativeBraceDepth > 0u)
+            const b8 isNativeInclude = (nativeBraceDepth > 0u)
                 && afterHash.starts_with("include")
                 && (afterHash.size() == 7u || !IsAsciiIdentifierChar(afterHash[7u]));
             if(isNativeInclude){
@@ -256,7 +256,7 @@ bool Preprocessor::processInternal(const MStringView source, const u32 depth, MS
     return true;
 }
 
-bool Preprocessor::handleDirective(const MStringView directiveLine, const u32 line, const u32 depth, Vector<ConditionalFrame, Alloc::ScratchArena>& condStack, MString& outProcessed){
+b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line, const u32 depth, Vector<ConditionalFrame, Alloc::ScratchArena>& condStack, MString& outProcessed){
     using namespace __hidden_metascript_preprocessor;
 
     const MStringView cleanLine = TrimView(StripLineComment(directiveLine));
@@ -266,7 +266,7 @@ bool Preprocessor::handleDirective(const MStringView directiveLine, const u32 li
 
     const MStringView cmd = cleanLine.substr(0u, cmdEnd);
     const MStringView rest = TrimView(cleanLine.substr(cmdEnd));
-    const bool parentActive = condStack.empty() || condStack.back().currentActive;
+    const b8 parentActive = condStack.empty() || condStack.back().currentActive;
 
     if(cmd == "ifdef" || cmd == "ifndef"){
         ConditionalFrame frame;
@@ -286,7 +286,7 @@ bool Preprocessor::handleDirective(const MStringView directiveLine, const u32 li
         while(nameEnd < rest.size() && IsAsciiIdentifierChar(rest[nameEnd]))
             ++nameEnd;
         const MStringView macroName = rest.substr(0u, nameEnd);
-        const bool defined = isMacroDefined(macroName);
+        const b8 defined = isMacroDefined(macroName);
         frame.currentActive = (cmd == "ifdef") ? defined : !defined;
         frame.branchTaken = frame.currentActive;
         condStack.push_back(frame);
@@ -303,7 +303,7 @@ bool Preprocessor::handleDirective(const MStringView directiveLine, const u32 li
             condStack.push_back(frame);
             return true;
         }
-        bool condResult = false;
+        b8 condResult = false;
         if(!evaluateCondition(rest, line, condResult))
             return false;
         frame.currentActive = condResult;
@@ -322,7 +322,7 @@ bool Preprocessor::handleDirective(const MStringView directiveLine, const u32 li
             frame.currentActive = false;
             return true;
         }
-        bool condResult = false;
+        b8 condResult = false;
         if(!evaluateCondition(rest, line, condResult))
             return false;
         frame.currentActive = condResult;
@@ -365,7 +365,7 @@ bool Preprocessor::handleDirective(const MStringView directiveLine, const u32 li
     return false;
 }
 
-bool Preprocessor::handleInclude(const MStringView rest, const u32 line, const u32 depth, MString& outProcessed){
+b8 Preprocessor::handleInclude(const MStringView rest, const u32 line, const u32 depth, MString& outProcessed){
     if(rest.size() < 3u){
         m_errors.push_back(ParseError{line, 1u, MString("invalid #include syntax", m_arena)});
         return false;
@@ -385,8 +385,8 @@ bool Preprocessor::handleInclude(const MStringView rest, const u32 line, const u
     }
 
     const MStringView includePath = rest.substr(1u, closePos - 1u);
-    const bool hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
-    const bool hasNwbExt = includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
+    const b8 hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
+    const b8 hasNwbExt = includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
     if(!hasAdhdExt && !hasNwbExt){
         m_errors.push_back(ParseError{line, 1u, MString("outside 'native { ... }', '#include' may only include '.adhd' or '.nwb' files; place C++ '#include' directives inside a 'native' block", m_arena)});
         return false;
@@ -420,7 +420,7 @@ bool Preprocessor::handleInclude(const MStringView rest, const u32 line, const u
     return true;
 }
 
-bool Preprocessor::handleDefine(const MStringView rest, const u32 line){
+b8 Preprocessor::handleDefine(const MStringView rest, const u32 line){
     using namespace __hidden_metascript_preprocessor;
 
     if(rest.empty() || !IsAsciiIdentifierStart(rest[0])){
@@ -472,7 +472,7 @@ bool Preprocessor::handleDefine(const MStringView rest, const u32 line){
     return true;
 }
 
-bool Preprocessor::handleUndef(const MStringView rest, const u32 line){
+b8 Preprocessor::handleUndef(const MStringView rest, const u32 line){
     if(rest.empty() || !IsAsciiIdentifierStart(rest[0])){
         m_errors.push_back(ParseError{line, 1u, MString("expected macro name after #undef", m_arena)});
         return false;

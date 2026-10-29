@@ -48,7 +48,7 @@ namespace __hidden_ui_window_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options, const WindowMetrics& metrics)noexcept{
+b8 WindowBehavior::Initialize(WindowState& state, const WindowOptions& options, const WindowMetrics& metrics)noexcept{
     if(
         !IsValidUiRect(options.initialBounds)
         || options.direction > LayoutDirection::Column || options.direction == LayoutDirection::Leaf
@@ -77,7 +77,7 @@ bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options
     return true;
 }
 
-bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture)noexcept{
+b8 WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture)noexcept{
     const auto displacement = __hidden_ui_window_behavior::LoadPointerDisplacement(gesture);
     if(!displacement)
         return false;
@@ -102,7 +102,7 @@ bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture
     return true;
 }
 
-bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gesture, const Point& minimumSize)noexcept{
+b8 WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gesture, const Point& minimumSize)noexcept{
     const auto displacement = __hidden_ui_window_behavior::LoadPointerDisplacement(gesture);
     if(!displacement || !IsFinite(minimumSize.x) || minimumSize.x <= 0.0f || !IsFinite(minimumSize.y) || minimumSize.y <= 0.0f)
         return false;
@@ -128,7 +128,7 @@ bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gestu
     return true;
 }
 
-bool WindowBehavior::Constrain(WindowState& state, const DisplayMetrics& display, const f32 titleHeight)noexcept{
+b8 WindowBehavior::Constrain(WindowState& state, const DisplayMetrics& display, const f32 titleHeight)noexcept{
     if(!IsFinite(display.logicalWidth) || display.logicalWidth <= 0.0f || !IsFinite(display.logicalHeight) || display.logicalHeight <= 0.0f || !IsFinite(titleHeight) || titleHeight <= 0.0f || !IsValidUiRect(state.bounds))
         return false;
     const f32 height = state.collapsed ? titleHeight : state.bounds.height;

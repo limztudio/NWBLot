@@ -79,14 +79,14 @@ ClipboardPollResult::Enum QueuedClipboardService::poll(const ClipboardRequestTok
     return ClipboardPollResult::Completed;
 }
 
-bool QueuedClipboardService::cancel(const ClipboardRequestToken token){
+b8 QueuedClipboardService::cancel(const ClipboardRequestToken token){
     if(!isOwnerThread())
         return false;
     Request* const request = findRequest(token);
     if(!request)
         return false;
-    const bool cancelNative = request->started && !request->completed;
-    const bool wasExecuting = request->executing;
+    const b8 cancelNative = request->started && !request->completed;
+    const b8 wasExecuting = request->executing;
     request->token = {};
     request->executing = true;
     ScopeExit restoreRequest([request, wasExecuting]()noexcept{
@@ -99,7 +99,7 @@ bool QueuedClipboardService::cancel(const ClipboardRequestToken token){
     return true;
 }
 
-bool QueuedClipboardService::pump(){
+b8 QueuedClipboardService::pump(){
     if(!isOwnerThread() || m_pumping)
         return false;
     m_pumping = true;
@@ -118,7 +118,7 @@ bool QueuedClipboardService::pump(){
             return true;
 
         const ClipboardCapabilities support = capabilities(next->channel);
-        const bool supported = next->operation == ClipboardOperation::ReadText ? support.readText : support.writeText;
+        const b8 supported = next->operation == ClipboardOperation::ReadText ? support.readText : support.writeText;
         next->executing = true;
         ScopeExit finishRequest([next]()noexcept{ next->executing = false; });
         next->started = true;
@@ -138,7 +138,7 @@ void QueuedClipboardService::cancelNativeRequest(ClipboardRequestToken){}
 
 void QueuedClipboardService::pumpNativeRequests(){}
 
-bool QueuedClipboardService::completeNativeRequest(const ClipboardRequestToken token, ClipboardStatus::Enum status, const AStringView text){
+b8 QueuedClipboardService::completeNativeRequest(const ClipboardRequestToken token, ClipboardStatus::Enum status, const AStringView text){
     if(!isOwnerThread())
         return false;
     Request* const request = findRequest(token);

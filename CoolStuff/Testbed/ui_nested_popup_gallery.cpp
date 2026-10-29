@@ -37,7 +37,7 @@ UiNestedPopupGallery::UiNestedPopupGallery(NWB::Core::Alloc::GlobalArena& arena)
     , m_afterText(arena)
     , m_childText(arena)
 {
-    const bool initialized = m_beforeText.setText("Before child") && m_afterText.setText("After child") && m_childText.setText("Inside child");
+    const b8 initialized = m_beforeText.setText("Before child") && m_afterText.setText("After child") && m_childText.setText("Inside child");
     NWB_FATAL_ASSERT(initialized);
     m_combo.select(1u);
     m_search.combo().select(1u);
@@ -61,7 +61,7 @@ void UiNestedPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
     ui.style().gap = __hidden_ui_nested_popup_gallery::s_CompactGap;
     if(!ui.beginPanel("nested_popup_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
         return;
-    bool valid = ui.label(s_TitleKey, "Nested popup / parent scope");
+    b8 valid = ui.label(s_TitleKey, "Nested popup / parent scope");
     if(ui.button("open", "Open parent and right child"))
         m_parent.open();
     valid = ui.label(s_HintKey, "Escape/outside closes the top child") && valid;
@@ -80,7 +80,7 @@ void UiNestedPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom nested popup declaration failed"));
 }
 
-bool UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
+b8 UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
     using namespace NWB::Impl::Ui;
     using namespace __hidden_ui_nested_popup_gallery;
     constexpr f32 s_ButtonWidth = 100.0f;
@@ -133,7 +133,7 @@ bool UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
     return result.valid;
 }
 
-bool UiNestedPopupGallery::paintChild(NWB::Impl::Ui::Builder& ui){
+b8 UiNestedPopupGallery::paintChild(NWB::Impl::Ui::Builder& ui){
     using namespace NWB::Impl::Ui;
     using namespace __hidden_ui_nested_popup_gallery;
     constexpr f32 s_ChildAnchorTop = 124.0f;

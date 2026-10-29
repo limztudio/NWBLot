@@ -43,7 +43,7 @@ void SoftwareTransparentSamplingHistory::accept()noexcept{
     m_accepted = m_scene.trusted && m_lightingPrepared;
 }
 
-bool SoftwareTransparentSamplingHistory::usable()const noexcept{
+b8 SoftwareTransparentSamplingHistory::usable()const noexcept{
     return m_accepted && m_lightingPrepared && m_scene.trusted && m_acceptedScene.trusted && m_scene.geometry == m_acceptedScene.geometry && m_scene.material == m_acceptedScene.material && m_lightHash == m_acceptedLightHash;
 }
 

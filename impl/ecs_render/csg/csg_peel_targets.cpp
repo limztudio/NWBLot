@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
+b8 RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     if(targets.csgIntervalTargetsValid())
         return true;
 
@@ -55,7 +55,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     NWB_ASSERT(targets.csgReceiverSpanLayerCount == ECSRenderDetail::s_CsgReceiverSpanLayerCount);
     NWB_ASSERT(targets.csgRemovedIntervalLayerCount == ECSRenderDetail::s_CsgRemovedIntervalLayerCount);
 
-    auto createCsgTexture = [&](const Core::Format::Enum format, const Name& name, const u32 layerCount, const bool renderTarget){
+    auto createCsgTexture = [&](const Core::Format::Enum format, const Name& name, const u32 layerCount, const b8 renderTarget){
         Core::TextureDesc desc;
         desc.setWidth(targets.width).setHeight(targets.height).setArraySize(layerCount).setFormat(format).setDimension(Core::TextureDimension::Texture2DArray).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
         if(renderTarget)

@@ -36,9 +36,9 @@ inline constexpr int s_ApplicationEntryFailure = -1;
 inline constexpr int s_EmptyArgCount = 0;
 #if defined(NWB_BUILDMODE)
 // Build-mode failure exits also write the allocating name-symbol file.
-inline constexpr bool s_TerminalFailureNoThrow = noexcept(!NameSymbols::WriteDefaultFile());
+inline constexpr b8 s_TerminalFailureNoThrow = noexcept(!NameSymbols::WriteDefaultFile());
 #else
-inline constexpr bool s_TerminalFailureNoThrow = true;
+inline constexpr b8 s_TerminalFailureNoThrow = true;
 #endif
 
 
@@ -179,7 +179,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return m_argv != nullptr; }
+    [[nodiscard]] b8 valid()const noexcept{ return m_argv != nullptr; }
 
     [[nodiscard]] isize argc()const noexcept{ return static_cast<isize>(m_argc); }
 

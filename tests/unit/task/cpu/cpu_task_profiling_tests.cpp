@@ -230,7 +230,7 @@ TEST(CpuTaskProfilingTests, ZeroCapacityLeavesCaptureDisabled){
 
 TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrMixBufferedEpochs){
     using namespace NWB::Core;
-    Atomic<bool> started{ false };
+    Atomic<b8> started{ false };
     Atomic<u32> callbacks{ 0u };
     CpuTaskSchedulerConfig config;
     config.workerCount = s_ExpectedDualCount;

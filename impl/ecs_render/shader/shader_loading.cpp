@@ -18,12 +18,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererShaderSystem::hasShaderArchiveStage(const Name& shaderAssetName, const AStringView variantName, const Name& stageName)const{
+b8 RendererShaderSystem::hasShaderArchiveStage(const Name& shaderAssetName, const AStringView variantName, const Name& stageName)const{
     return m_shaderPathResolver(shaderAssetName, variantName, stageName).has_value();
 }
 
 
-bool RendererShaderSystem::loadDeferredCompositeVertexShader(){
+b8 RendererShaderSystem::loadDeferredCompositeVertexShader(){
     return loadShader<VertexShader>(m_deferredCompositeVertexShader, &DeferredSubsystem::compositeVs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeVS");
 }
 

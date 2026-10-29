@@ -31,7 +31,7 @@ inline constexpr u64 s_DoubleMagnitudeBitsMask = 0x7FFFFFFFFFFFFFFFull;
 inline constexpr u64 s_DoubleInfinityBits = 0x7FF0000000000000ull;
 inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
 
-[[nodiscard]] NWB_INLINE bool HasExceptionalDurationPack(const SIMDVectorDouble pack)noexcept{
+[[nodiscard]] NWB_INLINE b8 HasExceptionalDurationPack(const SIMDVectorDouble pack)noexcept{
     using DurationBits = u64 __attribute__((ext_vector_type(4)));
     const DurationBits absoluteMask{ s_DoubleMagnitudeBitsMask, s_DoubleMagnitudeBitsMask, s_DoubleMagnitudeBitsMask, s_DoubleMagnitudeBitsMask };
     const DurationBits infinity{ s_DoubleInfinityBits, s_DoubleInfinityBits, s_DoubleInfinityBits, s_DoubleInfinityBits };
@@ -43,7 +43,7 @@ inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
 #endif
 
 template<usize Count>
-[[nodiscard]] static bool DurationsAreOrdinary(const SIMDVectorDouble(&durations)[Count])noexcept{
+[[nodiscard]] static b8 DurationsAreOrdinary(const SIMDVectorDouble(&durations)[Count])noexcept{
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
     for(const SIMDVectorDouble pack : durations){
         if(HasExceptionalDurationPack(pack))
@@ -56,7 +56,7 @@ template<usize Count>
 }
 
 template<usize Count>
-[[nodiscard]] static bool DurationsAreValid(const SIMDVectorDouble(&durations)[Count])noexcept{
+[[nodiscard]] static b8 DurationsAreValid(const SIMDVectorDouble(&durations)[Count])noexcept{
 #pragma STDC FENV_ACCESS ON
     for(const SIMDVectorDouble pack : durations){
         if(__builtin_reduce_or(pack < SIMDVectorDouble{}) != 0)
@@ -65,19 +65,19 @@ template<usize Count>
     return true;
 }
 
-[[nodiscard]] static bool DurationsDoNotExceed(const SIMDVectorDouble durations, const SIMDVectorDouble limits)noexcept{
+[[nodiscard]] static b8 DurationsDoNotExceed(const SIMDVectorDouble durations, const SIMDVectorDouble limits)noexcept{
 #pragma STDC FENV_ACCESS ON
     return __builtin_reduce_or(durations > limits) == 0;
 }
 
-[[nodiscard]] static bool DurationsAreZero(const SIMDVectorDouble durations)noexcept{
+[[nodiscard]] static b8 DurationsAreZero(const SIMDVectorDouble durations)noexcept{
 #pragma STDC FENV_ACCESS ON
     return __builtin_reduce_or(durations != SIMDVectorDouble{}) == 0;
 }
 
 
 template<typename WaitCountsT>
-[[nodiscard]] static constexpr bool TimelineWaitTokenCountsAreValid(const WaitCountsT& counts)noexcept{
+[[nodiscard]] static constexpr b8 TimelineWaitTokenCountsAreValid(const WaitCountsT& counts)noexcept{
     if(counts.sameQueueWaitElisionCount > counts.plannedWaitTokenCount)
         return false;
     u64 remainingWaitTokenCount = counts.plannedWaitTokenCount - counts.sameQueueWaitElisionCount;
@@ -91,7 +91,7 @@ template<typename WaitCountsT>
 }
 
 template<typename StatisticsT>
-[[nodiscard]] static bool SubmissionCountsAreValid(const StatisticsT& statistics)noexcept([]()consteval noexcept{
+[[nodiscard]] static b8 SubmissionCountsAreValid(const StatisticsT& statistics)noexcept([]()consteval noexcept{
     using Compile = RemoveReference_T<decltype(DeclVal<const StatisticsT&>().compile)>;
     using Recording = RemoveReference_T<decltype(DeclVal<const StatisticsT&>().recording)>;
     using Submission = RemoveReference_T<decltype(DeclVal<const StatisticsT&>().submission)>;
@@ -137,7 +137,7 @@ template<typename StatisticsT>
     return TimelineWaitTokenCountsAreValid(submission);
 }
 
-[[nodiscard]] static constexpr bool RuntimeStatisticsCountsAreValid(const FrameGraphRuntimeStatistics& statistics)noexcept{
+[[nodiscard]] static constexpr b8 RuntimeStatisticsCountsAreValid(const FrameGraphRuntimeStatistics& statistics)noexcept{
     if(!statistics.present || statistics.graphGeneration == 0u || statistics.planGeneration == 0u || statistics.recordingAttemptGeneration == 0u || statistics.deviceGeneration == 0u)
         return false;
 
@@ -179,7 +179,7 @@ template<typename StatisticsT>
     return SubmissionCountsAreValid(statistics);
 }
 
-[[nodiscard]] static constexpr bool PhysicalQueueCompileAndRecordingCountsAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+[[nodiscard]] static constexpr b8 PhysicalQueueCompileAndRecordingCountsAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
     if(
         statistics.graphGeneration == 0u
         || statistics.planGeneration == 0u
@@ -237,7 +237,7 @@ template<typename StatisticsT>
     return recording.packetCount != 0u || (recording.taskCount == 0u && recording.commandListCount == 0u && recording.barrierCount == 0u && recording.workerRoutedPacketCount == 0u && recording.parallelPacketCount == 0u);
 }
 
-[[nodiscard]] static bool PhysicalQueueSubmissionCountsAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+[[nodiscard]] static b8 PhysicalQueueSubmissionCountsAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
     if(!SubmissionCountsAreValid(statistics))
         return false;
 
@@ -269,7 +269,7 @@ template<typename StatisticsT>
     return true;
 }
 
-[[nodiscard]] static bool PhysicalQueueOwnerCompileAndRecordingPrefixAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+[[nodiscard]] static b8 PhysicalQueueOwnerCompileAndRecordingPrefixAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
     if(
         statistics.graphGeneration != ownerStatistics.graphGeneration
         || statistics.planGeneration != ownerStatistics.planGeneration
@@ -319,7 +319,7 @@ template<typename StatisticsT>
     ;
 }
 
-[[nodiscard]] static constexpr bool PhysicalQueueOwnerTailCountsAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+[[nodiscard]] static constexpr b8 PhysicalQueueOwnerTailCountsAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
     const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;
     const FrameGraphRecordingRuntimeStatistics& ownerRecording = ownerStatistics.recording;
     if(recording.taskCount - recording.packetCount > ownerRecording.taskCount - ownerRecording.packetCount || recording.commandListCount - recording.packetCount > ownerRecording.commandListCount - ownerRecording.packetCount)
@@ -364,7 +364,7 @@ template<typename StatisticsT>
 
 // Default-context copies retain the complete original validation order and compiler FP lowering.
 // Exceptional values and non-native targets use these boundaries before packed comparisons.
-[[nodiscard]] NWB_NOINLINE static bool ScalarIsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
+[[nodiscard]] NWB_NOINLINE static b8 ScalarIsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
     if(!__hidden_frame_graph_statistics_validators::RuntimeStatisticsCountsAreValid(statistics))
         return false;
 
@@ -398,7 +398,7 @@ template<typename StatisticsT>
     return true;
 }
 
-[[nodiscard]] NWB_NOINLINE static bool ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+[[nodiscard]] NWB_NOINLINE static b8 ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
     if(!__hidden_frame_graph_statistics_validators::PhysicalQueueCompileAndRecordingCountsAreValid(statistics))
         return false;
 
@@ -418,7 +418,7 @@ template<typename StatisticsT>
     return true;
 }
 
-[[nodiscard]] NWB_NOINLINE static bool ScalarIsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+[[nodiscard]] NWB_NOINLINE static b8 ScalarIsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
     if(
         !ScalarIsValidFrameGraphRuntimeStatistics(ownerStatistics)
         || !ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics)
@@ -439,7 +439,7 @@ template<typename StatisticsT>
     return __hidden_frame_graph_statistics_validators::PhysicalQueueOwnerTailCountsAreValid(statistics, ownerStatistics);
 }
 
-bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
+b8 IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
     const SIMDVectorDouble durations[] = {
         VectorDoubleSet(statistics.compile.declarationSeconds, statistics.compile.analysisSeconds, statistics.compile.validationSeconds, statistics.compile.dependencyAnalysisSeconds),
         VectorDoubleSet(statistics.compile.hazardAnalysisSeconds, statistics.compile.topologicalOrderSeconds, statistics.compile.queueAssignmentSeconds, statistics.compile.planningSeconds),
@@ -457,7 +457,7 @@ bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& stati
     return __hidden_frame_graph_statistics_validators::DurationsAreValid(durations);
 }
 
-bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+b8 IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
     const SIMDVectorDouble durations[] = {
         VectorDoubleSet(statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds),
         VectorDoubleSet(statistics.submission.submissionSeconds, 0.0, 0.0, 0.0),
@@ -475,7 +475,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQue
     return __hidden_frame_graph_statistics_validators::DurationsAreValid(durations);
 }
 
-bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+b8 IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
     const SIMDVectorDouble durations[] = {
         VectorDoubleSet(ownerStatistics.compile.declarationSeconds, ownerStatistics.compile.analysisSeconds, ownerStatistics.compile.validationSeconds, ownerStatistics.compile.dependencyAnalysisSeconds),
         VectorDoubleSet(ownerStatistics.compile.hazardAnalysisSeconds, ownerStatistics.compile.topologicalOrderSeconds, ownerStatistics.compile.queueAssignmentSeconds, ownerStatistics.compile.planningSeconds),
@@ -501,7 +501,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhy
     return __hidden_frame_graph_statistics_validators::PhysicalQueueOwnerTailCountsAreValid(statistics, ownerStatistics);
 }
 
-bool IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept{
+b8 IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept{
     if(
         statistics.ownerNodeIndex == Limit<u32>::s_Max
         || statistics.packetIndex == Limit<u32>::s_Max

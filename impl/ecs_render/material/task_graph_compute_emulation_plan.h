@@ -35,11 +35,11 @@ struct GeneratedGeometryEquivalenceKey{
     u32 outputHeapSlot = 0u;
     u32 emulationIndexByteOffset = 0u;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
-    bool indexedGeometryOutput = false;
+    b8 indexedGeometryOutput = false;
 
 
 public:
-    [[nodiscard]] bool matches(const MaterialPassDrawItem& drawItem)const noexcept{
+    [[nodiscard]] b8 matches(const MaterialPassDrawItem& drawItem)const noexcept{
         return
             drawItem.meshKey == meshKey
             && drawItem.pipelineKey.material == material
@@ -78,7 +78,7 @@ struct RegularSharedComputeEmulationGraphPlan{
     Core::BufferHandle outputBuffer;
     usize drawCount = 0u;
     u32 outputHeapSlot = 0u;
-    bool captured = false;
+    b8 captured = false;
 
 
 public:
@@ -93,7 +93,7 @@ public:
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItemsView& sourceDrawItems, const usize allowedMaxDrawCount)noexcept{
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, const usize allowedMaxDrawCount)noexcept{
         reset();
         if(!IsSupportedSharedComputeEmulationDrawCount(allowedMaxDrawCount) || sourceDrawItems.computeDrawItems.size() < s_SharedComputeEmulationMinimumDrawCount || sourceDrawItems.computeDrawItems.size() > allowedMaxDrawCount)
             return false;
@@ -118,11 +118,11 @@ public:
             drawItems[drawIndex] = drawItem;
             equivalenceKeys[drawIndex] = MakeGeneratedGeometryEquivalenceKey(drawItem);
         }
-        captured = static_cast<bool>(outputBuffer);
+        captured = static_cast<b8>(outputBuffer);
         return captured;
     }
 
-    [[nodiscard]] bool matches(const usize drawIndex)const noexcept{
+    [[nodiscard]] b8 matches(const usize drawIndex)const noexcept{
         if(!captured || drawIndex >= drawCount || !outputBuffer)
             return false;
 

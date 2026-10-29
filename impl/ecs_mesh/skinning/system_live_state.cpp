@@ -79,7 +79,7 @@ void MeshSkinningSystem::collectLiveSkinningStateBuffers(Vector<Core::BufferHand
     });
 }
 
-bool MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena){
+b8 MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena){
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& liveBuffers = m_frameLiveBuffers;
     ScopeExit releaseLiveBuffers([&]()noexcept{ liveBuffers.clear(); });
 

@@ -25,7 +25,7 @@ thread_local GpuRecordedGraph::ArtifactOperation* GpuRecordedGraph::ArtifactOper
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRecordedGraph::ArtifactOperation::ActiveFor(const GpuRecordedGraph& recordedGraph)noexcept{
+b8 GpuRecordedGraph::ArtifactOperation::ActiveFor(const GpuRecordedGraph& recordedGraph)noexcept{
     for(const ArtifactOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_recordedGraph == &recordedGraph)
             return true;
@@ -33,7 +33,7 @@ bool GpuRecordedGraph::ArtifactOperation::ActiveFor(const GpuRecordedGraph& reco
     return false;
 }
 
-bool GpuRecordedGraph::ArtifactOperation::ActiveExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept{
+b8 GpuRecordedGraph::ArtifactOperation::ActiveExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept{
     for(const ArtifactOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_recordedGraph == &recordedGraph)
             return operation->m_exclusive;
@@ -43,8 +43,8 @@ bool GpuRecordedGraph::ArtifactOperation::ActiveExclusiveFor(const GpuRecordedGr
 
 
 GpuRecordedGraph::ArtifactOperation::ArtifactOperation(const GpuRecordedGraph& recordedGraph, const ArtifactOperationMode::Enum mode)noexcept{
-    const bool exclusive = mode == ArtifactOperationMode::Exclusive;
-    const bool waitRead = mode == ArtifactOperationMode::WaitRead;
+    const b8 exclusive = mode == ArtifactOperationMode::Exclusive;
+    const b8 waitRead = mode == ArtifactOperationMode::WaitRead;
     for(const ArtifactOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_recordedGraph != &recordedGraph)
             continue;
@@ -62,7 +62,7 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(const GpuRecordedGraph& r
     // This keeps blocking cleanup outside every unrelated scheduler gate and removes the symmetric ABBA shape entirely.
     if(s_ActiveOperation || GpuGraphSubmissionTransaction::SubmissionOperation::Active())
         return;
-    const bool acquireExclusive = exclusive;
+    const b8 acquireExclusive = exclusive;
     if(acquireExclusive){
         u32 expectedState = 0u;
         if(!recordedGraph.m_operationState.compare_exchange_strong(expectedState, GpuRecordedGraph::s_ArtifactOperationWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire))

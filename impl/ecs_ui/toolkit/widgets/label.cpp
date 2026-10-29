@@ -51,14 +51,14 @@ Expected<Rect> Label::measure(TextService& text, const DisplayMetrics& display){
     return text.measure(m_layout, display);
 }
 
-bool Label::paint(TextService& text, PaintBuilder& paint, const Rect& bounds, const Color& color){
+b8 Label::paint(TextService& text, PaintBuilder& paint, const Rect& bounds, const Color& color){
     const auto measured = measure(text, paint.displayMetrics());
     if(!measured)
         return false;
     paint.pushClip(bounds);
     const SIMDVectorSingle origin = VectorSubtract(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
-    const bool painted = text.paint(paint, m_layout, { VectorGetX(origin), VectorGetY(origin) }, color);
-    const bool restored = paint.popClip();
+    const b8 painted = text.paint(paint, m_layout, { VectorGetX(origin), VectorGetY(origin) }, color);
+    const b8 restored = paint.popClip();
     return painted && restored;
 }
 

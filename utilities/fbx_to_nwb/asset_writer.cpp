@@ -47,10 +47,10 @@ ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringV
 
     BasicString<ScratchPath::value_type, Core::Alloc::ScratchArena> relativeNative(scratchArena);
     relativeNative.reserve(noExtension.native().size());
-    bool foundAssets = false;
+    b8 foundAssets = false;
     for(auto partIt = noExtension.begin(); partIt != noExtension.end(); ++partIt){
         const auto partText = partIt.nativeComponent();
-        bool assetsDirectory = partText.size() == s_AssetsSourceDirectoryText.size();
+        b8 assetsDirectory = partText.size() == s_AssetsSourceDirectoryText.size();
         for(usize i = 0u; assetsDirectory && i < partText.size(); ++i)
             assetsDirectory = ToAsciiLower(partText[i]) == static_cast<ScratchPath::value_type>(s_AssetsSourceDirectoryText[i]);
         if(assetsDirectory){
@@ -99,12 +99,12 @@ ScratchString BuildSplitAssetName(const AStringView virtualBase, const AStringVi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool WriteNwbAsset(
+b8 WriteNwbAsset(
     const ScratchPath& outputPath,
     const SourceMeshStreams& mesh,
     const AStringView assetTypeText,
     const AStringView virtualRoot,
-    const bool separateAssets,
+    const b8 separateAssets,
     const Span<ufbx_node* const> skeletonJoints,
     const Span<const JointMatrix> skeletonBindPoseMatrices,
     const Span<const JointMatrix> inverseBindMatrices,
@@ -130,7 +130,7 @@ bool WriteNwbAsset(
         return AssetWriterFormatDetail::WriteMeshAsset(outputPath, mesh);
     }
 
-    const bool skinnedModel = !mesh.skin.empty() || !skeletonJoints.empty() || !inverseBindMatrices.empty();
+    const b8 skinnedModel = !mesh.skin.empty() || !skeletonJoints.empty() || !inverseBindMatrices.empty();
     const ScratchPath packageDirectory = ScratchPath(scratchArena, outputPath.parentPathView()) / outputPath.stemView();
     const ScratchPath meshPath = packageDirectory / __hidden_asset_writer::s_MeshSplitFileName;
     const ScratchString virtualBase = __hidden_asset_writer::BuildVirtualBasePath(outputPath, virtualRoot);

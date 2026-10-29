@@ -40,7 +40,7 @@ template<typename SourceT>
 concept PathSourceLike = CanMakeCharView<SourceT> || CanMakeWCharView<SourceT> || requires(const SourceT& source){ BasicStringView<char8_t>(source); };
 
 template<typename CharT>
-[[nodiscard]] inline bool IsSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 IsSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     return ch == static_cast<CharT>('/')
 #if defined(NWB_PLATFORM_WINDOWS)
         || ch == static_cast<CharT>('\\')
@@ -95,12 +95,12 @@ template<typename CharT>
 
 
 template<typename CharT>
-[[nodiscard]] inline bool IsDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 IsDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return text.size() == 1u && text[0] == static_cast<CharT>('.');
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsDotDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline b8 IsDotDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return text.size() == GlobalFilesystemPathDetail::s_DotDotLength && text[0] == static_cast<CharT>('.') && text[1] == static_cast<CharT>('.');
 }
 
@@ -130,7 +130,7 @@ public:
 
     public:
         Iterator()noexcept = default;
-        Iterator(const Path& path, const bool atEnd)noexcept
+        Iterator(const Path& path, const b8 atEnd)noexcept
             : m_path(&path)
         {
             if(atEnd)
@@ -157,11 +157,11 @@ public:
             return copy;
         }
 
-        [[nodiscard]] bool operator==(const Iterator& rhs)const noexcept{
+        [[nodiscard]] b8 operator==(const Iterator& rhs)const noexcept{
             return m_path == rhs.m_path && m_begin == rhs.m_begin && m_end == rhs.m_end && m_atEnd == rhs.m_atEnd;
         }
 
-        [[nodiscard]] bool operator!=(const Iterator& rhs)const noexcept{ return !(*this == rhs); }
+        [[nodiscard]] b8 operator!=(const Iterator& rhs)const noexcept{ return !(*this == rhs); }
 
         // Needs a non-end iterator. The view borrows the source path; mutating or destroying it invalidates the view.
 
@@ -246,7 +246,7 @@ public:
         const Path* m_path = nullptr;
         usize m_begin = 0u;
         usize m_end = 0u;
-        bool m_atEnd = true;
+        b8 m_atEnd = true;
     };
 
 
@@ -366,7 +366,7 @@ public:
 public:
     [[nodiscard]] ArenaT& arena()const noexcept{ return m_text.get_allocator().arena(); }
 
-    [[nodiscard]] bool empty()const noexcept{ return m_text.empty(); }
+    [[nodiscard]] b8 empty()const noexcept{ return m_text.empty(); }
 
     [[nodiscard]] usize size()const noexcept{ return m_text.size(); }
 
@@ -392,11 +392,11 @@ public:
         return std::u8string(reinterpret_cast<const char8_t*>(text.data()), text.size());
     }
 
-    [[nodiscard]] bool isAbsolute()const noexcept{
+    [[nodiscard]] b8 isAbsolute()const noexcept{
         return IsAbsoluteView(native());
     }
 
-    [[nodiscard]] bool hasFilename()const noexcept{
+    [[nodiscard]] b8 hasFilename()const noexcept{
         if(m_text.empty())
             return false;
         return !GlobalFilesystemPathDetail::IsSeparator(m_text.back());
@@ -586,7 +586,7 @@ public:
 
 
 private:
-    [[nodiscard]] static bool IsAbsoluteView(const native_string_view text)noexcept{
+    [[nodiscard]] static b8 IsAbsoluteView(const native_string_view text)noexcept{
         if(text.empty())
             return false;
 
@@ -598,7 +598,7 @@ private:
         return GlobalFilesystemPathDetail::IsSeparator(text[0]);
     }
 
-    [[nodiscard]] bool aliasesText(const native_string_view view)const noexcept{
+    [[nodiscard]] b8 aliasesText(const native_string_view view)const noexcept{
         if(m_text.empty() || view.empty())
             return false;
         const usize textBegin = reinterpret_cast<usize>(m_text.data());
@@ -692,7 +692,7 @@ private:
     void appendNormalizedTo(Path& output)const{
         const usize rootNameLength = rootNameLengthInText();
         const usize rootDirectoryLength = rootDirectoryLengthInText();
-        const bool absolute = isAbsolute();
+        const b8 absolute = isAbsolute();
         if(rootNameLength != 0u)
             output.m_text.append(m_text.data(), rootNameLength);
         if(rootDirectoryLength > rootNameLength)
@@ -741,7 +741,7 @@ private:
     }
 
     template<typename OutCharT>
-    [[nodiscard]] std::basic_string<OutCharT> toStdString(const bool generic)const{
+    [[nodiscard]] std::basic_string<OutCharT> toStdString(const b8 generic)const{
         std::basic_string<OutCharT> output;
         output.reserve(m_text.size());
         auto destination = BackInserter(output);
@@ -772,13 +772,13 @@ private:
 
 
 template<typename LhsArenaT, typename RhsArenaT>
-[[nodiscard]] inline bool operator==(const Path<LhsArenaT>& lhs, const Path<RhsArenaT>& rhs)noexcept{ return lhs.native() == rhs.native(); }
+[[nodiscard]] inline b8 operator==(const Path<LhsArenaT>& lhs, const Path<RhsArenaT>& rhs)noexcept{ return lhs.native() == rhs.native(); }
 
 template<typename LhsArenaT, typename RhsArenaT>
-[[nodiscard]] inline bool operator!=(const Path<LhsArenaT>& lhs, const Path<RhsArenaT>& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] inline b8 operator!=(const Path<LhsArenaT>& lhs, const Path<RhsArenaT>& rhs)noexcept{ return !(lhs == rhs); }
 
 template<typename LhsArenaT, typename RhsArenaT>
-[[nodiscard]] inline bool operator<(const Path<LhsArenaT>& lhs, const Path<RhsArenaT>& rhs)noexcept{ return lhs.native() < rhs.native(); }
+[[nodiscard]] inline b8 operator<(const Path<LhsArenaT>& lhs, const Path<RhsArenaT>& rhs)noexcept{ return lhs.native() < rhs.native(); }
 
 template<typename ArenaT, typename SourceT>
 [[nodiscard]] inline Path<ArenaT> operator/(const Path<ArenaT>& lhs, const SourceT& rhs){

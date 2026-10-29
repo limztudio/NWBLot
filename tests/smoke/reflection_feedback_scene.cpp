@@ -48,7 +48,7 @@ namespace Tests::Smoke{
 ReflectionFeedbackScene::ReflectionFeedbackScene(Core::ECS::World& world)noexcept
     : m_world(world){}
 
-bool ReflectionFeedbackScene::create(const AStringView caseName, const bool finalState){
+b8 ReflectionFeedbackScene::create(const AStringView caseName, const b8 finalState){
     if(caseName == "feedback_mutation")
         m_case = ReflectionFeedbackCase::Mutation;
     else if(caseName == "feedback_long_miss")
@@ -76,7 +76,7 @@ bool ReflectionFeedbackScene::create(const AStringView caseName, const bool fina
     return !finalState || applyMutation();
 }
 
-bool ReflectionFeedbackScene::applyMutation()noexcept{
+b8 ReflectionFeedbackScene::applyMutation()noexcept{
     if(m_case != ReflectionFeedbackCase::Mutation)
         return false;
     if(m_finalState)
@@ -86,7 +86,7 @@ bool ReflectionFeedbackScene::applyMutation()noexcept{
     return true;
 }
 
-Core::ECS::EntityID ReflectionFeedbackScene::createPanel(const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const bool horizontal){
+Core::ECS::EntityID ReflectionFeedbackScene::createPanel(const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const b8 horizontal){
     using namespace __hidden_reflection_feedback_scene;
     const auto entity = CreateTintedStaticMeshEntity(m_world, s_Plane, s_Opaque, s_Interface, color, position, scale);
     if(!entity.valid())

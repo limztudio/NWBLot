@@ -69,10 +69,10 @@ private:
         u32 textArea = s_LayoutNoParent;
         u32 integerEdit = s_LayoutNoParent;
         u32 floatEdit = s_LayoutNoParent;
-        bool enabled = true;
-        bool checked = false;
-        bool contextMenu = false;
-        bool annotated = false;
+        b8 enabled = true;
+        b8 checked = false;
+        b8 contextMenu = false;
+        b8 annotated = false;
 
 
     public:
@@ -95,7 +95,7 @@ private:
         WidgetStyle style;
         WindowOptions options;
         WindowMetrics metrics;
-        bool firstUse = false;
+        b8 firstUse = false;
         WidgetState titleState;
         WidgetState collapseState;
         WidgetState resizeState;
@@ -123,7 +123,7 @@ private:
         usize anchor = 0u;
         usize caret = 0u;
         u32 item = s_LayoutNoParent;
-        bool focused = false;
+        b8 focused = false;
     };
 
     struct NumericEditFrame{
@@ -137,7 +137,7 @@ private:
         usize anchor = 0u;
         usize caret = 0u;
         u32 item = s_LayoutNoParent;
-        bool focused = false;
+        b8 focused = false;
     };
 
     struct IntegerEditFrame : NumericEditFrame{
@@ -153,7 +153,7 @@ private:
         Rect textBounds;
         u64 index = 0u;
         u64 key = 0u;
-        bool enabled = false;
+        b8 enabled = false;
 
 
     public:
@@ -171,8 +171,8 @@ private:
         f64 scrollOffset = 0.0;
         u64 cursorKey = 0u;
         f32 rowHeight = 0.0f;
-        bool revealCursor = false;
-        bool focusOnCommit = false;
+        b8 revealCursor = false;
+        b8 focusOnCommit = false;
         ControlToken token;
         Insets padding;
         u64 rowCount = 0u;
@@ -213,11 +213,11 @@ private:
         f32 arrowExtent = 0.0f;
         f32 queryHeight = 0.0f;
         f32 queryGap = 0.0f;
-        bool open = false;
-        bool focusOnCommit = false;
-        bool listFocusOnCommit = false;
-        bool editorSubmitted = false;
-        bool queryChanged = false;
+        b8 open = false;
+        b8 focusOnCommit = false;
+        b8 listFocusOnCommit = false;
+        b8 editorSubmitted = false;
+        b8 queryChanged = false;
     };
 
 
@@ -263,7 +263,7 @@ private:
         u64 revision = 0u;
         u32 anchorIndex = 0u;
         u32 list = s_LayoutNoParent;
-        bool open = false;
+        b8 open = false;
     };
 
 
@@ -306,9 +306,9 @@ private:
     WindowFrame m_window;
     WidgetState m_panelState;
     Rect m_bounds;
-    bool m_popupVisible = false;
-    bool m_panelActive = false;
-    bool m_windowActive = false;
+    b8 m_popupVisible = false;
+    b8 m_panelActive = false;
+    b8 m_windowActive = false;
 };
 
 

@@ -43,7 +43,7 @@ Expected<u32> Win32TextInputService::decodeFallbackCharInput(const u32 unit)noex
     return unit;
 }
 
-bool Win32TextInputService::resetFallbackCharInput()noexcept{
+b8 Win32TextInputService::resetFallbackCharInput()noexcept{
     if(!isOwnerThread())
         return false;
     m_pendingHighSurrogate = 0u;
@@ -60,7 +60,7 @@ Expected<u32> DecodeWin32FallbackCharInput(ITextInputService& service, const u32
     return MakeNotNull(checked_cast<Win32TextInputService*>(&service))->decodeFallbackCharInput(unit);
 }
 
-bool ResetWin32FallbackCharInput(ITextInputService& service)noexcept{
+b8 ResetWin32FallbackCharInput(ITextInputService& service)noexcept{
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
     return MakeNotNull(checked_cast<Win32TextInputService*>(&service))->resetFallbackCharInput();

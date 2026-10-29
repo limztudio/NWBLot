@@ -48,8 +48,8 @@ inline constexpr usize s_ClipboardChannelCount = 2u;
 
 
 struct ClipboardCapabilities{
-    bool readText = false;
-    bool writeText = false;
+    b8 readText = false;
+    b8 writeText = false;
 };
 
 struct ClipboardRequestToken{
@@ -58,10 +58,10 @@ struct ClipboardRequestToken{
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return service != 0u && generation != 0u; }
+    [[nodiscard]] b8 valid()const noexcept{ return service != 0u && generation != 0u; }
 };
 
-[[nodiscard]] inline bool operator==(const ClipboardRequestToken& lhs, const ClipboardRequestToken& rhs)noexcept{
+[[nodiscard]] inline b8 operator==(const ClipboardRequestToken& lhs, const ClipboardRequestToken& rhs)noexcept{
     return lhs.service == rhs.service && lhs.generation == rhs.generation;
 }
 
@@ -99,15 +99,15 @@ public:
 
 public:
     [[nodiscard]] virtual ClipboardCapabilities capabilities(ClipboardChannel::Enum channel)const noexcept = 0;
-    [[nodiscard]] virtual bool isOwnerThread()const noexcept = 0;
+    [[nodiscard]] virtual b8 isOwnerThread()const noexcept = 0;
     [[nodiscard]] virtual Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestReadText(ClipboardChannel::Enum channel) = 0;
     [[nodiscard]] virtual Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWriteText(ClipboardChannel::Enum channel, AStringView text) = 0;
     [[nodiscard]] virtual ClipboardPollResult::Enum poll(ClipboardRequestToken token, ClipboardCompletion& completion) = 0;
-    [[nodiscard]] virtual bool cancel(ClipboardRequestToken token) = 0;
+    [[nodiscard]] virtual b8 cancel(ClipboardRequestToken token) = 0;
     // Starts admitted operations in order and advances native transfers without waiting for another client.
     // A pending native operation preserves FIFO order; cancellation releases it.
     // Recursive pumps return false.
-    [[nodiscard]] virtual bool pump() = 0;
+    [[nodiscard]] virtual b8 pump() = 0;
 };
 
 // The native window is borrowed until service destruction.

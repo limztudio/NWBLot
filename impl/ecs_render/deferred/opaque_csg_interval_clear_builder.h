@@ -34,7 +34,7 @@ struct OpaqueCsgIntervalClearInputs{
     Core::TextureSubresourceSet csgPeelSubresources{};
     Core::TextureSubresourceSet csgReceiverEventCountSubresources{};
     Core::GpuTaskId dependencyTask;
-    bool hasOpaqueCsgFrameWork = false;
+    b8 hasOpaqueCsgFrameWork = false;
 };
 
 struct OpaqueCsgIntervalClearResult{

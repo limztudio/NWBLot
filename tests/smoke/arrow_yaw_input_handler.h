@@ -20,11 +20,11 @@ namespace NWB::Tests::Smoke{
 
 class ArrowYawInputHandler final : public Core::IInputEventHandler{
 public:
-    virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override{
+    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override{
         static_cast<void>(scancode);
         static_cast<void>(mods);
 
-        const bool held = (action != Core::InputAction::Release);
+        const b8 held = (action != Core::InputAction::Release);
         switch(key){
         case Core::Key::Left:  m_leftHeld = held;  return true;
         case Core::Key::Right: m_rightHeld = held; return true;
@@ -39,8 +39,8 @@ public:
 
 
 private:
-    bool m_leftHeld = false;
-    bool m_rightHeld = false;
+    b8 m_leftHeld = false;
+    b8 m_rightHeld = false;
 };
 
 

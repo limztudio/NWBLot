@@ -47,7 +47,7 @@ public:
     u64 contentHash = 0u;
     u64 shapeRegistryRevision = 0u;
 };
-inline bool operator==(const CsgFrameStateCacheSignature& lhs, const CsgFrameStateCacheSignature& rhs)noexcept{ return lhs.contentHash == rhs.contentHash && lhs.shapeRegistryRevision == rhs.shapeRegistryRevision; }
+inline b8 operator==(const CsgFrameStateCacheSignature& lhs, const CsgFrameStateCacheSignature& rhs)noexcept{ return lhs.contentHash == rhs.contentHash && lhs.shapeRegistryRevision == rhs.shapeRegistryRevision; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

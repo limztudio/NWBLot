@@ -23,17 +23,17 @@ struct ComboOptions{
     LayoutSize height;
     f32 popupHeight = s_ListDefaultHeight;
     f32 wheelRows = s_StyleScrollWheelStep;
-    bool enabled = true;
+    b8 enabled = true;
     StringView placeholder = "Select...";
 };
 
 struct ComboResult{
-    bool valid = false;
-    bool selectionChanged = false;
-    bool committed = false;
-    bool opened = false;
-    bool closed = false;
-    bool focused = false;
+    b8 valid = false;
+    b8 selectionChanged = false;
+    b8 committed = false;
+    b8 opened = false;
+    b8 closed = false;
+    b8 focused = false;
 };
 
 
@@ -60,7 +60,7 @@ public:
 
     [[nodiscard]] u64 selectedKey()const noexcept{ return m_selectedKey; }
 
-    [[nodiscard]] bool isOpen()const noexcept{ return m_popup.isOpen(); }
+    [[nodiscard]] b8 isOpen()const noexcept{ return m_popup.isOpen(); }
 
     [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_popup.placement(); }
 
@@ -88,11 +88,11 @@ private:
 class ComboBehavior final{
 public:
     // Rebinding after omission or to another field retires popup interaction while preserving committed selection.
-    [[nodiscard]] static bool Bind(ComboState& state, WidgetId owner, u64 declarationGeneration)noexcept;
-    [[nodiscard]] static bool Reconcile(ComboState& state, const IListDataSource& source);
+    [[nodiscard]] static b8 Bind(ComboState& state, WidgetId owner, u64 declarationGeneration)noexcept;
+    [[nodiscard]] static b8 Reconcile(ComboState& state, const IListDataSource& source);
     static void Open(ComboState& state)noexcept;
     static void Close(ComboState& state)noexcept;
-    [[nodiscard]] static bool Commit(ComboState& state, const IListDataSource& source, u64 key);
+    [[nodiscard]] static b8 Commit(ComboState& state, const IListDataSource& source, u64 key);
     [[nodiscard]] static ListState& Preview(ComboState& state)noexcept{ return state.m_list; }
 };
 

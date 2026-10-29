@@ -45,7 +45,7 @@ public:
 
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_rows.indexOf(key); }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
         return m_rows.findEnabled(start, reverse);
     }
 
@@ -58,7 +58,7 @@ public:
         return m_rows.text(index);
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return m_rows.enabled(index); }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return m_rows.enabled(index); }
 
 
 private:
@@ -69,7 +69,7 @@ private:
 
 public:
     mutable u64 textCalls = 0u;
-    mutable bool armed = false;
+    mutable b8 armed = false;
 };
 
 

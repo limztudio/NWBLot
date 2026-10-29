@@ -81,7 +81,7 @@ struct alignas(128u) AlignedExtension{
 
 
 public:
-    AlignedExtension(AssetArena& arena, ExtensionState& inState, const bool fail = false)
+    AlignedExtension(AssetArena& arena, ExtensionState& inState, const b8 fail = false)
         : member(arena, inState)
         , state(inState)
         , identity(++state.constructions)
@@ -120,7 +120,7 @@ struct ReentrantExtension{
 
 
 public:
-    ReentrantExtension(ParsedAssetMetadata& metadata, const Name& name, ExtensionState& inState, const bool recurse)
+    ReentrantExtension(ParsedAssetMetadata& metadata, const Name& name, ExtensionState& inState, const b8 recurse)
         : state(inState)
         , identity(++state.constructions)
     {
@@ -133,7 +133,7 @@ public:
 };
 
 struct ThrowingExtensionHasher{
-    NotNull<bool*> fail;
+    NotNull<b8*> fail;
 
 
 public:
@@ -169,17 +169,17 @@ public:
 public:
     [[nodiscard]] virtual usize size()const noexcept override{ return 0u; }
 
-    virtual bool parseDocument(const NWB::Path&, AStringView, const NWB::Path&, const Metascript::Document&, CookEntryParseContext&)noexcept override{ return false; }
+    virtual b8 parseDocument(const NWB::Path&, AStringView, const NWB::Path&, const Metascript::Document&, CookEntryParseContext&)noexcept override{ return false; }
 
-    virtual bool parseValue(Name, const NWB::Path&, const Metascript::Value&, CookEntryParseContext&)noexcept override{ return false; }
+    virtual b8 parseValue(Name, const NWB::Path&, const Metascript::Value&, CookEntryParseContext&)noexcept override{ return false; }
 
-    virtual bool writeCookedAssets(CookEntryWriteContext&)noexcept override{ return false; }
+    virtual b8 writeCookedAssets(CookEntryWriteContext&)noexcept override{ return false; }
 };
 
 class NullAllocatedAsset final : public TypedAsset<NullAllocatedAsset>{
 public:
     inline static u32 s_ConstructorCalls = 0u;
-    inline static bool s_LoadCalled = false;
+    inline static b8 s_LoadCalled = false;
     [[nodiscard]] static const Name& AssetTypeName()noexcept{
         static constexpr Name s_Type("tests/metadata_registry/null_allocation");
         return s_Type;
@@ -199,7 +199,7 @@ public:
 
 
 public:
-    bool loadBinary(const Span<const u8>)noexcept{
+    b8 loadBinary(const Span<const u8>)noexcept{
         s_LoadCalled = true;
         return true;
     }
@@ -211,7 +211,7 @@ public:
 
 
 public:
-    virtual bool serialize(const IAsset&, AssetBytes&)const noexcept override{ return false; }
+    virtual b8 serialize(const IAsset&, AssetBytes&)const noexcept override{ return false; }
 };
 
 struct ThrowingImplicitAssetName{
@@ -239,7 +239,7 @@ public:
 
 
 public:
-    bool loadBinary(const Span<const u8>)noexcept{ return true; }
+    b8 loadBinary(const Span<const u8>)noexcept{ return true; }
 };
 
 class ImplicitNameCodec final : public AssetCodec<ImplicitNameAsset>{
@@ -248,7 +248,7 @@ public:
 
 
 public:
-    virtual bool serialize(const IAsset&, AssetBytes&)const noexcept override{ return false; }
+    virtual b8 serialize(const IAsset&, AssetBytes&)const noexcept override{ return false; }
 };
 
 class ImplicitNameShader final : public Impl::TypedShader<ImplicitNameShader>{
@@ -266,7 +266,7 @@ public:
 
 
 struct ThrowingComparisonAnswer{
-    explicit operator bool()const{ throw 199u; }
+    explicit operator b8()const{ throw 199u; }
 };
 
 struct AssetComparisonTag{};
@@ -466,7 +466,7 @@ TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
     AssetArena mapArena(Name("tests/metadata_extension/insertion_map"));
     AssetArena ownerArena(Name("tests/metadata_extension/insertion_owner"));
     ExtensionState state;
-    bool fail = false;
+    b8 fail = false;
     {
         HashMap<Name, ParsedMetadataExtension, AssetArena, ThrowingExtensionHasher, EqualTo<Name>> values(0u, ThrowingExtensionHasher{ MakeNotNull(&fail) }, EqualTo<Name>{}, mapArena);
         values.reserve(4u);
@@ -562,7 +562,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         const AssetString normalized = PathToString(fixtureArena, path.lexicallyNormal());
         files.emplace_back(fixtureArena, root, path, normalized, s_ProjectVirtualRoot);
     }
-    for(const bool rejectDuplicate : { false, true }){
+    for(const b8 rejectDuplicate : { false, true }){
         if(rejectDuplicate)
             files.push_back(files.front());
         {

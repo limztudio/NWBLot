@@ -75,7 +75,7 @@ protected:
         m_options.inputs.emplace_back(relativePath, m_testArena.arena);
     }
 
-    bool select(){
+    b8 select(){
         return Builder::SelectBuildInputs(m_options, m_paths, m_scratchArena, m_files);
     }
 
@@ -217,7 +217,7 @@ TEST_F(BuildInputSelection, RootResolutionFailureRetainsSourceIndexWithoutPublis
     EXPECT_EQ(rejected.error().sourceIndex, 1u);
     EXPECT_EQ(rejected.error().reason, Assets::AssetRootResolutionFailure::ResolvePath);
     EXPECT_TRUE(rejected.error().inputPath.empty());
-    EXPECT_TRUE(static_cast<bool>(rejected.error().error));
+    EXPECT_TRUE(static_cast<b8>(rejected.error().error));
     sources[1] = "assets/empty";
     const auto recovered = Assets::ResolveAssetRoots(m_root, sources, true, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     ASSERT_TRUE(recovered);

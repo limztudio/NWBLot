@@ -41,16 +41,16 @@ inline constexpr Ui::InputSource s_NativePointerSource{ 0u, 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+b8 UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     static_cast<void>(scancode);
     if(!Ui::InputBindings::ValidKey(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
         return false;
     synchronizeNativeInput();
     const usize slot = static_cast<usize>(key + 1);
     const u8 storedOwner = m_nativeKeyOwners[slot];
-    const bool held = storedOwner != 0u;
+    const b8 held = storedOwner != 0u;
     const u8 previousOwner = held ? static_cast<u8>(storedOwner - 1u) : __hidden_layer_input::s_Scene;
-    const bool customOwned = held ? previousOwner == __hidden_layer_input::s_Custom : m_context.input().ownsKey(key);
+    const b8 customOwned = held ? previousOwner == __hidden_layer_input::s_Custom : m_context.input().ownsKey(key);
     if(action != Core::InputAction::Release)
         m_blockCommandChars = false;
     if(action == Core::InputAction::Release || customOwned || !held){
@@ -71,7 +71,7 @@ bool UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 
     return owner == __hidden_layer_input::s_Custom;
 }
 
-bool UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
+b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
     synchronizeNativeInput();
     m_editHost.collectNative();
     if(m_editHost.hasTextFocus()){
@@ -84,7 +84,7 @@ bool UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
     return false;
 }
 
-bool UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
+b8 UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
     if(!IsFinite(xpos) || !IsFinite(ypos))
         return false;
     const SIMDVectorDouble magnitude = VectorDoubleAbs(VectorDoubleSet(xpos, ypos, 0.0, 0.0));
@@ -102,21 +102,21 @@ bool UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
         return false;
     }
     event.phase = Ui::PointerPhase::Move;
-    bool consumed = false;
+    b8 consumed = false;
     routePointerInput(event, &consumed);
     return consumed || (m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Custom);
 }
 
-bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
+b8 UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
     if(button < Core::MouseButton::Left || button > Core::MouseButton::Button8 || (action != Core::InputAction::Press && action != Core::InputAction::Release))
         return false;
     synchronizeNativeInput();
     const u32 bit = 1u << static_cast<u32>(button);
-    const bool firstPress = action == Core::InputAction::Press && (m_pressedButtons & bit) == 0u;
+    const b8 firstPress = action == Core::InputAction::Press && (m_pressedButtons & bit) == 0u;
     if(action == Core::InputAction::Press && m_pressedButtons == 0u){
-        const bool acceptsSource = m_context.input().acceptsPointerSource(__hidden_layer_input::s_NativePointerSource);
-        const bool nativeActive = m_context.input().activePointerSource() == __hidden_layer_input::s_NativePointerSource;
-        const bool consumed = nativeActive ? m_context.input().wouldConsumePointer(m_pointer) : m_context.input().hasPopup() || m_context.input().hitTest(m_pointer).valid();
+        const b8 acceptsSource = m_context.input().acceptsPointerSource(__hidden_layer_input::s_NativePointerSource);
+        const b8 nativeActive = m_context.input().activePointerSource() == __hidden_layer_input::s_NativePointerSource;
+        const b8 consumed = nativeActive ? m_context.input().wouldConsumePointer(m_pointer) : m_context.input().hasPopup() || m_context.input().hitTest(m_pointer).valid();
         m_pointerOwner = consumed ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
         if(acceptsSource && m_pointerOwner != __hidden_layer_input::s_Custom)
             m_context.input().clearFocus();
@@ -138,7 +138,7 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
     }
     if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Middle && action == Core::InputAction::Press && m_context.input().acceptsPointerSource(__hidden_layer_input::s_NativePointerSource)){
         m_editHost.collectNative();
-        const bool pasted = m_editHost.pastePrimary(m_pointer);
+        const b8 pasted = m_editHost.pastePrimary(m_pointer);
         if(!pasted)
             m_editHost.synchronizeFocus();
     }
@@ -158,7 +158,7 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
     return owner != __hidden_layer_input::s_Scene;
 }
 
-bool UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
+b8 UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     if(!IsFinite(xoffset) || !IsFinite(yoffset))
         return false;
     synchronizeNativeInput();
@@ -171,12 +171,12 @@ bool UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     event.scrollX = xoffset;
     event.scrollY = yoffset;
     event.hoverCapable = true;
-    bool consumed = false;
+    b8 consumed = false;
     routePointerInput(event, &consumed);
     return consumed || m_pointerOwner == __hidden_layer_input::s_Custom;
 }
 
-void UiLayerSystem::windowFocusUpdate(const bool focused){
+void UiLayerSystem::windowFocusUpdate(const b8 focused){
     Ui::InputEvent event;
     event.type = focused ? Ui::InputEventType::FocusGained : Ui::InputEventType::FocusLost;
     routeInput(event);
@@ -212,21 +212,21 @@ void UiLayerSystem::pointerCaptureLost(){
     m_pointerOwner = __hidden_layer_input::s_Scene;
 }
 
-bool UiLayerSystem::wantsKeyboard()const noexcept{
+b8 UiLayerSystem::wantsKeyboard()const noexcept{
     return m_resourcesReady && m_context.input().wantsCommands();
 }
 
-bool UiLayerSystem::wantsPointer()const noexcept{
+b8 UiLayerSystem::wantsPointer()const noexcept{
     if(m_pressedButtons != 0u)
         return m_pointerOwner != __hidden_layer_input::s_Scene;
     return m_resourcesReady && m_context.input().wantsPointer();
 }
 
-bool UiLayerSystem::wantsTextInput()const noexcept{
+b8 UiLayerSystem::wantsTextInput()const noexcept{
     return m_resourcesReady && m_editHost.wantsTextInput();
 }
 
-void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool* blockText){
+void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* consumed, b8* blockText){
     if(consumed)
         *consumed = false;
     if(blockText)
@@ -241,7 +241,7 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool
         m_blockCommandChars = false;
         return;
     }
-    const bool submit = m_editHost.prepareSubmit(*normalized);
+    const b8 submit = m_editHost.prepareSubmit(*normalized);
     const Ui::InputRoutingResult result = m_context.input().process();
     m_editHost.input(*normalized, previousCapture, submit);
     if(consumed)

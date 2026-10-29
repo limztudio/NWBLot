@@ -45,8 +45,8 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         return result;
     const WidgetState field = **widget;
     const u64 previousSelection = state.selectedKey();
-    const bool previouslyOpen = state.isOpen();
-    const bool previouslyFocused = m_context.input().focus() == field.id;
+    const b8 previouslyOpen = state.isOpen();
+    const b8 previouslyFocused = m_context.input().focus() == field.id;
     if(!m_context.claimState(field, state.m_popup.instanceGeneration()) || !ComboBehavior::Bind(state, field.id, field.declarationGeneration))
         return result;
     state.m_popup.bindParent(m_context.popupToken());
@@ -122,7 +122,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     frame.popupToken = { frame.popup.id, frame.popup.declarationGeneration, state.m_popup.instanceGeneration(), state.m_popup.openGeneration() };
     frame.listToken = { state.m_list.inputGeneration(), results.instanceGeneration(), results.revision() };
     frame.open = state.isOpen();
-    const bool previouslyListFocused = m_context.input().focus() == frame.rows.id;
+    const b8 previouslyListFocused = m_context.input().focus() == frame.rows.id;
     if(!comboMatches(frame) || !applyComboInput(field, frame, result)){
         m_context.fail();
         return {};
@@ -162,7 +162,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     }
     const SIMDVectorSingle arrowMinimum = VectorSet(arrow->minimumWidth, arrow->minimumHeight, 0.0f, 0.0f);
     frame.arrowExtent = VectorGetX(VectorMax(VectorReplicate(frame.style.arrowExtent), VectorMax(arrowMinimum, VectorSplatY(arrowMinimum))));
-    const bool selected = state.selectedKey() != 0u;
+    const b8 selected = state.selectedKey() != 0u;
     const auto index = selected ? source.indexOf(state.selectedKey()) : Expected<u64>{ 0u };
     if(selected && (!index || *index >= frame.rowCount || source.key(*index) != state.selectedKey() || !source.enabled(*index))){
         m_context.fail();

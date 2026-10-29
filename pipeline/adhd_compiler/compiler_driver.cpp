@@ -32,22 +32,22 @@ public:
 
 
 public:
-    [[nodiscard]] bool resolveInclude(
+    [[nodiscard]] b8 resolveInclude(
         const NWB::Core::Metascript::MStringView includePath,
-        const bool isAngleBracket,
+        const b8 isAngleBracket,
         NWB::Core::Metascript::MetaArena& arena,
         NWB::Core::Metascript::MString& outResolvedKey,
         NWB::Core::Metascript::MString& outContent
     )override{
         using namespace NWB::Core::Metascript;
 
-        const bool hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
-        const bool hasNwbExt = includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
+        const b8 hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
+        const b8 hasNwbExt = includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
         if(!hasAdhdExt && !hasNwbExt)
             return false;
         const MString relPath(includePath.data(), includePath.size(), arena);
 
-        const auto tryResolveFromBase = [&](const Path<MetaArena>& baseDir) -> bool{
+        const auto tryResolveFromBase = [&](const Path<MetaArena>& baseDir) -> b8{
             const auto candidate = ResolveAbsolutePath(arena, baseDir, MStringView(relPath.data(), relPath.size()));
             if(!candidate || !ReadTextFile(*candidate, outContent))
                 return false;
@@ -88,7 +88,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RunAdhdCompilerDriver(
+b8 RunAdhdCompilerDriver(
     const AdhdCompilerOptions& options,
     NWB::Core::Metascript::MetaArena& arena
 ){

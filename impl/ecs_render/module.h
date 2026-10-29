@@ -70,30 +70,30 @@ public:
 
 
 public:
-    virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
+    virtual b8 validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;
 
     [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)noexcept override;
 
-    virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
+    virtual b8 prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void render(Core::Framebuffer* framebuffer)override;
-    virtual bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override;
+    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override;
 
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept;
-    void setRefractionEnabled(bool enabled)noexcept;
-    void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
-    void setRefractionDiagnosticsEnabled(bool enabled)noexcept;
+    void setRefractionEnabled(b8 enabled)noexcept;
+    void setRefractionHardwareTracingEnabled(b8 enabled)noexcept;
+    void setRefractionDiagnosticsEnabled(b8 enabled)noexcept;
     [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept;
-    [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings)noexcept;
-    [[nodiscard]] bool setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept;
-    [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept;
-    [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept;
-    [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings)noexcept;
+    [[nodiscard]] b8 setCausticQualitySettings(const CausticQualitySettings& settings)noexcept;
+    [[nodiscard]] b8 setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept;
+    [[nodiscard]] b8 setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept;
+    [[nodiscard]] b8 setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept;
+    [[nodiscard]] b8 setReflectionSettings(const ReflectionSettings& settings)noexcept;
     [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const noexcept;
-    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings)noexcept;
-    void setFrameLaggedAsyncLightingEnabled(bool enabled)noexcept;
-    [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept;
-    [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
+    [[nodiscard]] b8 setPresentationSettings(const PresentationSettings& settings)noexcept;
+    void setFrameLaggedAsyncLightingEnabled(b8 enabled)noexcept;
+    [[nodiscard]] b8 frameLaggedAsyncLightingEnabled()const noexcept;
+    [[nodiscard]] b8 setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
 
 

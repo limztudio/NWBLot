@@ -149,12 +149,12 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     return (seed >> 22u) ^ seed;
 }
 
-[[nodiscard]] static bool ShouldAnimateJoint(const u32 jointIndex, const u32 characterIndex, const bool staticPreview)noexcept{
+[[nodiscard]] static b8 ShouldAnimateJoint(const u32 jointIndex, const u32 characterIndex, const b8 staticPreview)noexcept{
     const u32 modulo = staticPreview ? s_StaticPreviewAnimatedJointModulo : s_AnimatedJointModulo;
     return jointIndex != 0u && (RandomJointSeed(jointIndex, characterIndex) % modulo) == 0u;
 }
 
-static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 jointIndex, const u32 characterIndex, const f32 timeSeconds, const bool staticPreview, SIMDMatrix& outMatrix)noexcept{
+static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 jointIndex, const u32 characterIndex, const f32 timeSeconds, const b8 staticPreview, SIMDMatrix& outMatrix)noexcept{
     outMatrix = bindJoint;
     if(!ShouldAnimateJoint(jointIndex, characterIndex, staticPreview))
         return;
@@ -252,7 +252,7 @@ public:
             m_meshSkinningSystem->markLiveRuntimeMeshes(requests);
     }
 
-    [[nodiscard]] virtual bool hasRuntimeMeshBinding(const NWB::Core::ECS::EntityID entity)const noexcept override{
+    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(const NWB::Core::ECS::EntityID entity)const noexcept override{
         return m_meshSkinningSystem && m_meshSkinningSystem->hasRuntimeMeshBinding(entity);
     }
 
@@ -261,7 +261,7 @@ private:
     NWB::Impl::MeshSystem* m_meshSystem = nullptr;
     NWB::Impl::MeshSkinningSystem* m_meshSkinningSystem = nullptr;
     BenchmarkMode::Enum m_mode = BenchmarkMode::FrustumCone;
-    bool m_registered = false;
+    b8 m_registered = false;
 };
 
 
@@ -409,7 +409,7 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         if(!m_staticPreview)
             m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::PerfOnly());
         if(m_gpuTimingEnabled)
@@ -495,7 +495,7 @@ public:
         }
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) && delta > 0.0f ? delta : 1.0f / 60.0f;
         if(m_gpuTimingEnabled)
             m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
@@ -550,11 +550,11 @@ private:
     u32 m_caseRenderedFrames = 0u;
     u32 m_finishDrainFrames = 0u;
     u32 m_repeatIndex = 0u;
-    const bool m_gpuTimingEnabled = ReadSmokeEnvironmentFlag(s_GpuTimingEnv);
-    bool m_finished = false;
-    bool m_quitRequested = false;
-    bool m_staticPreview = false;
-    bool m_fastSmoke = false;
+    const b8 m_gpuTimingEnabled = ReadSmokeEnvironmentFlag(s_GpuTimingEnv);
+    b8 m_finished = false;
+    b8 m_quitRequested = false;
+    b8 m_staticPreview = false;
+    b8 m_fastSmoke = false;
 };
 
 

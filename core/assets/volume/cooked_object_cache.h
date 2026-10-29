@@ -37,7 +37,7 @@ struct CookedObjectPayloadView{
     AssetVolumePayloadIdentity identity;
 };
 
-[[nodiscard]] bool BuildRegistryObjectManifestEntries(
+[[nodiscard]] b8 BuildRegistryObjectManifestEntries(
     Core::Alloc::GlobalArena& arena,
     Core::CpuTaskScheduler& cpuScheduler,
     const ResolvedCookPaths& resolvedPaths,

@@ -31,9 +31,9 @@ struct AreaModelSnapshot{
     u64 composition = 0u;
     usize anchor = 0u;
     usize caret = 0u;
-    bool composing = false;
-    bool undo = false;
-    bool redo = false;
+    b8 composing = false;
+    b8 undo = false;
+    b8 redo = false;
 
 
 public:
@@ -78,11 +78,11 @@ public:
 
 
 protected:
-    [[nodiscard]] bool seedModel(){
+    [[nodiscard]] b8 seedModel(){
         return m_model.setText(AStringView(m_dense)) && m_model.setSelection(0u, 0u) && m_state.scrollTo({});
     }
 
-    [[nodiscard]] bool prepareOverflow(const u64 generation = 1u, const TextAreaOptions& options = SmallOptions(), const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
+    [[nodiscard]] b8 prepareOverflow(const u64 generation = 1u, const TextAreaOptions& options = SmallOptions(), const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
         return seedModel() && frameArea(generation, options, bounds) && m_state.scrollbars().horizontal.visible && m_state.scrollbars().vertical.visible;
     }
 
@@ -91,14 +91,14 @@ protected:
         return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, s_ChildPopupKey)), s_TextAreaKey));
     }
 
-    [[nodiscard]] bool popupFrame(const u64 generation){
+    [[nodiscard]] b8 popupFrame(const u64 generation){
         if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, LargeLoanParentOptions()) || !m_builder.beginPopup(s_ChildPopupKey, m_child, LargeLoanChildOptions()))
             return false;
         m_result = m_builder.textArea(s_TextAreaKey, m_model, m_state, SmallOptions());
         return m_result.valid && m_builder.endPopup() && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] bool wheel(const f64 delta = -1.0){
+    [[nodiscard]] b8 wheel(const f64 delta = -1.0){
         InputEvent event;
         event.type = InputEventType::PointerWheel;
         event.position = UiWidgetTests::Center(m_state.scrollbars().viewport);
@@ -106,7 +106,7 @@ protected:
         return send(event).pointerConsumed;
     }
 
-    [[nodiscard]] bool startThumb(const WidgetId area){
+    [[nodiscard]] b8 startThumb(const WidgetId area){
         const WidgetId thumbId = UiTestSupport::RequireWidgetId(MakeWidgetId(area, "scroll.y.thumb"));
         const HitTarget* thumb = target(thumbId);
         if(thumb == nullptr)
@@ -169,7 +169,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, IdenticalExternalScrollIntentRetiresAnAcce
 TEST_F(UiTextAreaScrollLifetimeTests, IdenticalAndAwayBackSelectionIntentsRetireAcceptedWheel){
     ASSERT_TRUE(prepareOverflow());
     u64 generation = 2u;
-    for(const bool awayBack : { false, true }){
+    for(const b8 awayBack : { false, true }){
         ASSERT_TRUE(wheel());
         const u64 revision = m_model.revision();
         const u64 selection = m_model.selectionGeneration();

@@ -25,11 +25,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline BoundingFrustum::BoundingFrustum(const SIMDMatrix& projection, const bool rightHandedCoordinates)noexcept{
+inline BoundingFrustum::BoundingFrustum(const SIMDMatrix& projection, const b8 rightHandedCoordinates)noexcept{
     CreateFromMatrix(*this, projection, rightHandedCoordinates);
 }
 
-inline BoundingDoubleFrustum::BoundingDoubleFrustum(const SIMDMatrixDouble& projection, const bool rightHandedCoordinates)noexcept{
+inline BoundingDoubleFrustum::BoundingDoubleFrustum(const SIMDMatrixDouble& projection, const b8 rightHandedCoordinates)noexcept{
     CreateFromMatrix(*this, projection, rightHandedCoordinates);
 }
 
@@ -162,26 +162,26 @@ inline void BoundingDoubleFrustum::getCorners(PointT (&corners)[s_DoubleCornerCo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingSphere& sphere)const noexcept{
+[[nodiscard]] inline b8 BoundingFrustum::intersects(const BoundingSphere& sphere)const noexcept{
     return FrustumTests::IntersectsSphere(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(sphere.centerRadius));
 }
 
-[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingBox& box)const noexcept{
+[[nodiscard]] inline b8 BoundingFrustum::intersects(const BoundingBox& box)const noexcept{
     return FrustumTests::IntersectsBox(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(box.center), LoadFloat(box.extents));
 }
 
-[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingOrientedBox& box)const noexcept{
+[[nodiscard]] inline b8 BoundingFrustum::intersects(const BoundingOrientedBox& box)const noexcept{
     return FrustumTests::IntersectsOrientedBox(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(box.center), LoadFloat(box.extents), LoadFloat(box.orientation));
 }
 
-[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingFrustum& frustum)const noexcept{
+[[nodiscard]] inline b8 BoundingFrustum::intersects(const BoundingFrustum& frustum)const noexcept{
     return FrustumTests::IntersectsFrustum(
         LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope,
         frustum.nearPlane, frustum.farPlane
     );
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingFrustum::intersects(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
+[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingFrustum::intersects(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
     return contains(v0, v1, v2) != ContainmentType::Disjoint;
 }
 
@@ -193,26 +193,26 @@ inline void BoundingDoubleFrustum::getCorners(PointT (&corners)[s_DoubleCornerCo
     return FrustumTests::IntersectsRay(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, rayOrigin, direction);
 }
 
-[[nodiscard]] inline bool BoundingDoubleFrustum::intersects(const BoundingDoubleSphere& sphere)const noexcept{
+[[nodiscard]] inline b8 BoundingDoubleFrustum::intersects(const BoundingDoubleSphere& sphere)const noexcept{
     return FrustumDoubleTests::IntersectsSphere(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadDouble(sphere.centerRadius));
 }
 
-[[nodiscard]] inline bool BoundingDoubleFrustum::intersects(const BoundingDoubleBox& box)const noexcept{
+[[nodiscard]] inline b8 BoundingDoubleFrustum::intersects(const BoundingDoubleBox& box)const noexcept{
     return FrustumDoubleTests::IntersectsBox(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadDouble(box.center), LoadDouble(box.extents));
 }
 
-[[nodiscard]] inline bool BoundingDoubleFrustum::intersects(const BoundingDoubleOrientedBox& box)const noexcept{
+[[nodiscard]] inline b8 BoundingDoubleFrustum::intersects(const BoundingDoubleOrientedBox& box)const noexcept{
     return FrustumDoubleTests::IntersectsOrientedBox(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadDouble(box.center), LoadDouble(box.extents), LoadDouble(box.orientation));
 }
 
-[[nodiscard]] inline bool BoundingDoubleFrustum::intersects(const BoundingDoubleFrustum& frustum)const noexcept{
+[[nodiscard]] inline b8 BoundingDoubleFrustum::intersects(const BoundingDoubleFrustum& frustum)const noexcept{
     return FrustumDoubleTests::IntersectsFrustum(
         LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope,
         frustum.nearPlane, frustum.farPlane
     );
 }
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingDoubleFrustum::intersects(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
+[[nodiscard]] inline b8 NWB_SIMD_CALL BoundingDoubleFrustum::intersects(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{
     return contains(v0, v1, v2) != ContainmentType::Disjoint;
 }
 
@@ -278,7 +278,7 @@ inline void BoundingDoubleFrustum::getPlanes(SIMDVectorDouble* nearPlaneOut, SIM
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL BoundingFrustum::CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, const bool rightHandedCoordinates)noexcept{
+inline void NWB_SIMD_CALL BoundingFrustum::CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, const b8 rightHandedCoordinates)noexcept{
     outFrustum.origin = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     outFrustum.orientation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -302,7 +302,7 @@ inline void NWB_SIMD_CALL BoundingFrustum::CreateFromMatrix(BoundingFrustum& out
     outFrustum.farPlane = VectorGetY(planeDistances);
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleFrustum::CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, const bool rightHandedCoordinates)noexcept{
+inline void NWB_SIMD_CALL BoundingDoubleFrustum::CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, const b8 rightHandedCoordinates)noexcept{
     outFrustum.origin = Double4(0.0, 0.0, 0.0, 0.0);
     outFrustum.orientation = Double4(0.0, 0.0, 0.0, 1.0);
 

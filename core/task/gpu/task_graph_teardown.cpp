@@ -31,7 +31,7 @@ GpuTaskGraph::PayloadLifetimeScope::~PayloadLifetimeScope()noexcept(false){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::retireTaskPayloads(){
+b8 GpuTaskGraph::retireTaskPayloads(){
     {
         NothrowScopedLock lock(m_lifecycleMutex);
         if(
@@ -60,7 +60,7 @@ bool GpuTaskGraph::retireTaskPayloads(){
 }
 
 
-bool GpuTaskGraph::destroyTaskPayloads(){
+b8 GpuTaskGraph::destroyTaskPayloads(){
     DiscardNotificationScope notification(*this);
     TaskPayloadDestroyScope payloadDestroy(*this);
     u64 notificationGeneration = 0u;
@@ -73,7 +73,7 @@ bool GpuTaskGraph::destroyTaskPayloads(){
                 return false;
             }
         }
-        bool hasUnacceptedTask = false;
+        b8 hasUnacceptedTask = false;
         for(const GpuTaskNode& task : m_tasks){
             if(task.lifecycleState == TaskLifecycleState::Declared || task.lifecycleState == TaskLifecycleState::Recorded)
                 hasUnacceptedTask = true;
@@ -102,7 +102,7 @@ bool GpuTaskGraph::destroyTaskPayloads(){
     return true;
 }
 
-bool GpuTaskGraph::destroyTaskPayloadsWithoutCallbacks()noexcept{
+b8 GpuTaskGraph::destroyTaskPayloadsWithoutCallbacks()noexcept{
     {
         NothrowScopedLock lock(m_lifecycleMutex);
         if(!m_teardownInProgress || m_activeDeclarationAccessCount != 0u || m_activeDiscardNotificationCount != 0u || m_submissionBindingState == SubmissionBindingState::Active)

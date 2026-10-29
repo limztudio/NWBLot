@@ -58,7 +58,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
     result.uploadTask = inputs.prefixTask;
     Core::GpuGraphResourceSetId transparentCsgMaterialGeometrySet;
     Core::GpuGraphResourceSetId transparentCsgMaterialSampledTextureSet;
-    const bool hasTransparentCsgFrameWork = inputs.hasTransparentRenderers && (inputs.csgFrameState.hasTransparentStaticWork || inputs.csgFrameState.hasTransparentSkinnedWork);
+    const b8 hasTransparentCsgFrameWork = inputs.hasTransparentRenderers && (inputs.csgFrameState.hasTransparentStaticWork || inputs.csgFrameState.hasTransparentSkinnedWork);
     if(hasTransparentCsgFrameWork){
         MaterialPassDrawItemPartitions transparentCsgDrawItems{ scratchArena };
         InstanceGpuDataVector transparentCsgInstanceData{ scratchArena };

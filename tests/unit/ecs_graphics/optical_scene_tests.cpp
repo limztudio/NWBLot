@@ -59,7 +59,7 @@ TEST(OpticalScene, OnlyEmittedTransparentPoliciesRequireClosedMedia){
 TEST(OpticalScene, ClosedAndUnknownTransparentPoliciesRequireGeneralTransport){
     const OpticalBoundaryMode::Enum modes[] = { OpticalBoundaryMode::ClosedNested, OpticalBoundaryMode::ClosedPriority, static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max), };
     for(const auto mode : modes){
-        for(const bool boundsValid : {false, true}){
+        for(const b8 boundsValid : {false, true}){
             OpticalSceneContext context;
             RendererComponent renderer;
             context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), true);

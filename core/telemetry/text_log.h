@@ -51,10 +51,10 @@ struct TextLogPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsValidTextLogType(Common::LogType::Enum type)noexcept;
-[[nodiscard]] bool BuildTextLogPayload(Alloc::ScratchArena& scratchArena, Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload);
+[[nodiscard]] b8 IsValidTextLogType(Common::LogType::Enum type)noexcept;
+[[nodiscard]] b8 BuildTextLogPayload(Alloc::ScratchArena& scratchArena, Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload);
 [[nodiscard]] Expected<TextLogPayload> ParseTextLogPayload(const void* payload, usize payloadBytes)noexcept;
-[[nodiscard]] bool RecordTextLog(Recorder& recorder, Common::LogType::Enum type, TStringView message, u64 frameIndex = 0u, u32 streamId = 0u);
+[[nodiscard]] b8 RecordTextLog(Recorder& recorder, Common::LogType::Enum type, TStringView message, u64 frameIndex = 0u, u32 streamId = 0u);
 
 class TextLogCaptureLogger final : public Common::ILogger{
 public:

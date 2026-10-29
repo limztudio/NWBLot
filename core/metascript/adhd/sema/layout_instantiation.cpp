@@ -16,7 +16,7 @@ NWB_ADHD_BEGIN
 
 void LayoutOptimizer::collectAllTemplateInstantiations(TranslationUnit& unit){
     for(const u32 pass : { 0u, 1u }){
-        const bool wantImported = (pass == 0u);
+        const b8 wantImported = (pass == 0u);
         m_collectingImported = wantImported;
 
         for(const Stmt* c : unit.globalConstants){

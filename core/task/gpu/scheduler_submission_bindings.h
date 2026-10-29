@@ -58,7 +58,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool resolve(
+    [[nodiscard]] b8 resolve(
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuSubmissionPacketRange& range,
@@ -67,7 +67,7 @@ public:
         const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks,
         usize taskSubmissionHookCount
     );
-    [[nodiscard]] bool validateOwnedTimingTicket(GpuSubmissionPacketId packet, GpuTimingSubmissionTicket* timingTicket)const noexcept;
+    [[nodiscard]] b8 validateOwnedTimingTicket(GpuSubmissionPacketId packet, GpuTimingSubmissionTicket* timingTicket)const noexcept;
     [[nodiscard]] const QueueSubmissionPreSubmitHook* collectPacket(GpuSubmissionPacketId packet, Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena>& inOutTimingTickets)const;
 };
 

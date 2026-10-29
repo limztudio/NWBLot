@@ -35,8 +35,8 @@ NWB_IMPL_BEGIN
 
     Vector<u32, Core::Alloc::ScratchArena> outIndices(primitiveIndexCount, scratchArena);
 
-    if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept -> bool {
-        const bool skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
+    if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept -> b8 {
+        const b8 skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
         const u32 localPositionIndex = static_cast<u32>(localVertexRef.localDeformedPosition);
         const auto positionRef = DecodeMeshletPositionRef(deltaBytes, deltaByteCount, meshlet, localPositionIndex, skinRequired);
         if(!positionRef)

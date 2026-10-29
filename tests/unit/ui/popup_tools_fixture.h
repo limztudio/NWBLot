@@ -59,7 +59,7 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
         u64 index = 0u;
         if(start >= count)
             return MakeUnexpected(Failure{});
@@ -100,7 +100,7 @@ public:
         return index < count && index < 5u ? s_Labels[index] : StringView{};
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return index < count && index + 1u != 3u; }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count && index + 1u != 3u; }
 
 
 public:
@@ -108,7 +108,7 @@ public:
     u64 count = 5u;
     u64 selectListKey = 4u;
     mutable u64 contentRevision = 1u;
-    mutable bool changeRevisionOnText = false;
+    mutable b8 changeRevisionOnText = false;
     mutable ContextMenuState* closeOnText = nullptr;
     mutable TooltipState* resetTooltipOnText = nullptr;
     mutable ListState* selectListOnText = nullptr;
@@ -129,7 +129,7 @@ protected:
         m_menuOptions.size = { 240.0f, 220.0f };
     }
 
-    [[nodiscard]] bool declareTools(const u64 generation, const bool tooltip = true, const bool menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
+    [[nodiscard]] b8 declareTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
         if(!begin(generation) || !m_builder.beginPanel(s_PopupToolsPanelKey, bounds))
             return false;
         m_builder.setDeltaSeconds(m_deltaSeconds);
@@ -145,15 +145,15 @@ protected:
         return true;
     }
 
-    [[nodiscard]] bool prepareTools(const u64 generation, const bool tooltip = true, const bool menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
+    [[nodiscard]] b8 prepareTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
         return declareTools(generation, tooltip, menu, bounds) && finishPanel();
     }
 
-    [[nodiscard]] bool acceptTools(const u64 generation, const bool tooltip = true, const bool menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
+    [[nodiscard]] b8 acceptTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
         return prepareTools(generation, tooltip, menu, bounds) && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] bool acceptPopupTooltip(const u64 generation){
+    [[nodiscard]] b8 acceptPopupTooltip(const u64 generation){
         if(!begin(generation))
             return false;
         PopupOptions options;
@@ -184,7 +184,7 @@ protected:
         return nullptr;
     }
 
-    [[nodiscard]] bool moveToAnchor(const AStringView parent = s_PopupToolsPanelKey){
+    [[nodiscard]] b8 moveToAnchor(const AStringView parent = s_PopupToolsPanelKey){
         const HitTarget* accepted = target(anchor(parent));
         if(!accepted)
             return false;
@@ -197,7 +197,7 @@ protected:
         EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryUp }).pointerConsumed);
     }
 
-    [[nodiscard]] bool openBySecondary(const u64 generation){
+    [[nodiscard]] b8 openBySecondary(const u64 generation){
         const HitTarget* accepted = target(anchor());
         if(!accepted)
             return false;
@@ -217,7 +217,7 @@ protected:
     ContextMenuOptions m_menuOptions;
     ContextMenuResult m_menuResult;
     f32 m_deltaSeconds = 0.0f;
-    bool m_anchorActivated = false;
+    b8 m_anchorActivated = false;
 };
 
 

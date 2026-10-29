@@ -59,7 +59,7 @@ protected:
         return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(rowsId(), s_ListRowsKey)), key));
     }
 
-    [[nodiscard]] bool beginChild(const u64 generation){
+    [[nodiscard]] b8 beginChild(const u64 generation){
         if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()))
             return false;
         if(m_builder.button("before", "Parent before", Control()))
@@ -67,7 +67,7 @@ protected:
         return m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions());
     }
 
-    [[nodiscard]] bool finishChild(const u64 generation){
+    [[nodiscard]] b8 finishChild(const u64 generation){
         if(m_builder.button(s_AfterKey, "Child after", Control()) || !m_builder.endPopup())
             return false;
         if(m_builder.button(s_AfterKey, "Parent after", Control()) || !m_builder.endPopup())
@@ -75,14 +75,14 @@ protected:
         return m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] bool acceptChildCombo(const u64 generation){
+    [[nodiscard]] b8 acceptChildCombo(const u64 generation){
         if(!beginChild(generation))
             return false;
         m_result = m_builder.comboBox(s_ComboKey, m_source, m_state, Options());
         return m_result.valid && finishChild(generation);
     }
 
-    [[nodiscard]] bool acceptChildMenu(const u64 generation){
+    [[nodiscard]] b8 acceptChildMenu(const u64 generation){
         if(!beginChild(generation))
             return false;
         m_anchorActivated = m_builder.button(s_AnchorKey, "Commands", Control());
@@ -108,7 +108,7 @@ protected:
     ContextMenuState m_menu;
     PopupToolsSource m_menuSource;
     ContextMenuResult m_menuResult;
-    bool m_anchorActivated = false;
+    b8 m_anchorActivated = false;
 };
 
 

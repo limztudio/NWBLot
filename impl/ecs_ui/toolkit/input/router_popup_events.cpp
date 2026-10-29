@@ -25,7 +25,7 @@ Expected<PopupDismissReason::Enum> InputRouter::consumePopupDismissal(const Popu
     return MakeUnexpected(Failure{});
 }
 
-bool InputRouter::dismissPopup(const PopupDismissReason::Enum reason){
+b8 InputRouter::dismissPopup(const PopupDismissReason::Enum reason){
     if(m_popups.empty() || reason <= PopupDismissReason::None || reason > PopupDismissReason::FocusLost)
         return false;
     auto& top = m_popups.back();
@@ -55,8 +55,8 @@ void InputRouter::fencePopup(const PopupToken& token)noexcept{
 }
 
 void InputRouter::retirePopup(const WidgetId id){
-    Array<bool, s_InputMaxPopups> removed{};
-    bool found = false;
+    Array<b8, s_InputMaxPopups> removed{};
+    b8 found = false;
     for(usize index = 0u; index < m_popups.size(); ++index){
         removed[index] = m_popups[index].scope.token.widget == id;
         for(usize ancestor = 0u; ancestor < index && !removed[index]; ++ancestor)
@@ -65,11 +65,11 @@ void InputRouter::retirePopup(const WidgetId id){
     }
     if(!found)
         return;
-    const bool top = removed[m_popups.size() - 1u];
+    const b8 top = removed[m_popups.size() - 1u];
     PopupRecord restore = m_popups.back();
     const auto splice = [this, &removed](PopupRecord& record)noexcept{
         for(usize depth = 0u; depth < s_InputMaxPopups; ++depth){
-            bool foundParent = false;
+            b8 foundParent = false;
             for(usize index = 0u; index < m_popups.size(); ++index){
                 if(removed[index] && record.restorePopup == m_popups[index].scope.token){
                     const auto& ancestor = m_popups[index];
@@ -91,14 +91,14 @@ void InputRouter::retirePopup(const WidgetId id){
             splice(m_popups[index]);
     }
     for(usize index = m_targets.size(); index > 0u; --index){
-        bool remove = false;
+        b8 remove = false;
         for(usize popup = 0u; popup < m_popups.size(); ++popup)
             remove |= removed[popup] && m_targets[index - 1u].popup == m_popups[popup].scope.token;
         if(remove)
             m_targets.erase(m_targets.begin() + static_cast<isize>(index - 1u));
     }
     for(usize index = m_popupDismissals.size(); index > 0u; --index){
-        bool remove = false;
+        b8 remove = false;
         for(usize popup = 0u; popup < m_popups.size(); ++popup)
             remove |= removed[popup] && m_popupDismissals[index - 1u].token == m_popups[popup].scope.token;
         if(remove)

@@ -52,7 +52,7 @@ public:
         return ComboSource::text(index);
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
         mutate(MutationKind::EnabledOpen);
         return ComboSource::enabled(index);
     }
@@ -112,7 +112,7 @@ public:
 
 private:
     ComboSource& m_foreign;
-    mutable bool m_armed = false;
+    mutable b8 m_armed = false;
     mutable u64 m_mutations = 0u;
 };
 
@@ -128,11 +128,11 @@ public:
 
 
 protected:
-    [[nodiscard]] bool declareCallbacks(const u64 generation){
+    [[nodiscard]] b8 declareCallbacks(const u64 generation){
         return declareSource(generation, m_callbacks, m_state);
     }
 
-    [[nodiscard]] bool acceptCallbacks(const u64 generation){
+    [[nodiscard]] b8 acceptCallbacks(const u64 generation){
         return declareCallbacks(generation) && finishPanel() && m_context.commitFrame(generation);
     }
 

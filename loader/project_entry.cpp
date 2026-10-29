@@ -21,7 +21,7 @@ void ProjectRuntimeContext::setTelemetryCapture(const Core::Telemetry::CaptureOp
         telemetryCapture(options);
 }
 
-bool ProjectRuntimeContext::flushTelemetryUpload(const bool clearAfterUpload){
+b8 ProjectRuntimeContext::flushTelemetryUpload(const b8 clearAfterUpload){
     return telemetryUploadFlush ? telemetryUploadFlush(clearAfterUpload) : false;
 }
 

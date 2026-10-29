@@ -61,7 +61,7 @@ void RendererReflectionPostprocess::invalidateResources(){
     m_layout = nullptr;
 }
 
-bool RendererReflectionPostprocess::prepareResources(const u32 width, const u32 height, const ReflectionSettings& settings){
+b8 RendererReflectionPostprocess::prepareResources(const u32 width, const u32 height, const ReflectionSettings& settings){
     if(settings.spatialRadius > NWB_REFLECTION_SPATIAL_MAX_RADIUS)
         return false;
     auto& device = m_graphics.getDevice();
@@ -80,7 +80,7 @@ bool RendererReflectionPostprocess::prepareResources(const u32 width, const u32 
         }
         m_control = Move(*controlResult);
     }
-    const bool active = settings.traceMode != ReflectionTraceMode::Disabled;
+    const b8 active = settings.traceMode != ReflectionTraceMode::Disabled;
     if(settings.temporalEnabled && active){
         if(
             !preparePipeline(m_temporalPipeline, m_temporalShader, &ReflectionSubsystem::temporalCs, Core::ShaderArchive::s_DefaultVariant)
@@ -132,7 +132,7 @@ void RendererReflectionPostprocess::releaseTargets(){
     m_height = 0u;
 }
 
-bool RendererReflectionPostprocess::preparePipeline(
+b8 RendererReflectionPostprocess::preparePipeline(
     Core::ComputePipelineHandle& pipeline,
     Core::ShaderHandle& shader,
     const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* shaderMember,
@@ -164,10 +164,10 @@ bool RendererReflectionPostprocess::preparePipeline(
         pipeline = Move(*pipelineResult);
     else
         pipeline.reset();
-    return static_cast<bool>(pipelineResult);
+    return static_cast<b8>(pipelineResult);
 }
 
-bool RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& image, const u32 descriptorIndex, const Name name){
+b8 RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& image, const u32 descriptorIndex, const Name name){
     if(image.texture)
         return true;
     Core::TextureDesc desc;

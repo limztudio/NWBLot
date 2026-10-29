@@ -22,7 +22,7 @@ namespace __hidden_metascript_operation_validator{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs)noexcept{
+[[nodiscard]] b8 BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs)noexcept{
     switch(op){
     case TokenType::Plus:
     case TokenType::PlusEqual:
@@ -43,7 +43,7 @@ namespace __hidden_metascript_operation_validator{
     return false;
 }
 
-[[nodiscard]] bool IsZero(const Value& value)noexcept{
+[[nodiscard]] b8 IsZero(const Value& value)noexcept{
     if(value.isInteger())
         return value.asInteger() == 0;
     if(value.isDouble())
@@ -61,7 +61,7 @@ namespace __hidden_metascript_operation_validator{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool OperationValidator::validateBinaryOperation(const TokenType::Enum op, const Value& lhs, const Value& rhs, const u32 line, const u32 column){
+b8 OperationValidator::validateBinaryOperation(const TokenType::Enum op, const Value& lhs, const Value& rhs, const u32 line, const u32 column){
     switch(op){
     case TokenType::Plus:
         if(lhs.isNumeric() && rhs.isNumeric())
@@ -96,7 +96,7 @@ bool OperationValidator::validateBinaryOperation(const TokenType::Enum op, const
     return false;
 }
 
-bool OperationValidator::validateAssignment(const TokenType::Enum op, const Value& target, const Value& rhs, const u32 line, const u32 column){
+b8 OperationValidator::validateAssignment(const TokenType::Enum op, const Value& target, const Value& rhs, const u32 line, const u32 column){
     switch(op){
     case TokenType::Equal:
         return true;
@@ -135,7 +135,7 @@ bool OperationValidator::validateAssignment(const TokenType::Enum op, const Valu
 }
 
 
-bool OperationValidator::validateNumericOperands(const TokenType::Enum op, const Value& lhs, const Value& rhs, const u32 line, const u32 column, const AStringView operandError, const bool rejectZeroDivisor){
+b8 OperationValidator::validateNumericOperands(const TokenType::Enum op, const Value& lhs, const Value& rhs, const u32 line, const u32 column, const AStringView operandError, const b8 rejectZeroDivisor){
     using namespace __hidden_metascript_operation_validator;
 
     if(!(lhs.isNumeric() && rhs.isNumeric())){

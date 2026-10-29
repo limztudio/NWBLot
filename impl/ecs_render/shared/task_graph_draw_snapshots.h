@@ -75,7 +75,7 @@ public:
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
     CsgFrameWorkRegion csgWorkRegion;
-    bool captured = false;
+    b8 captured = false;
 
 
 public:
@@ -140,7 +140,7 @@ public:
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
     CsgFrameWorkRegion csgWorkRegion;
-    bool captured = false;
+    b8 captured = false;
 
 
 public:
@@ -194,7 +194,7 @@ public:
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
     CsgFrameWorkRegion csgWorkRegion;
-    bool captured = false;
+    b8 captured = false;
 
 
 public:

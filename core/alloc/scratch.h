@@ -81,7 +81,7 @@ private:
             return ret;
         }
 
-        inline bool tryPopLifo(void* p, usize size)noexcept{
+        inline b8 tryPopLifo(void* p, usize size)noexcept{
             const usize available = reinterpret_cast<usize>(m_available.get());
             const usize allocationBegin = reinterpret_cast<usize>(p);
             if(AddOverflows<usize>(allocationBegin, size))
@@ -92,7 +92,7 @@ private:
                 return false;
 
             const usize bufferBegin = reinterpret_cast<usize>(m_buffer.get());
-            const bool isValidRequest = allocationBegin >= bufferBegin && allocationEnd <= available && size <= (m_size - m_remaining);
+            const b8 isValidRequest = allocationBegin >= bufferBegin && allocationEnd <= available && size <= (m_size - m_remaining);
             if(!isValidRequest)
                 return false;
 
@@ -110,7 +110,7 @@ private:
             return available - allocationBegin;
         }
 
-        inline bool tryResizeLifoTop(NotNull<void*> p, usize newSize)noexcept{
+        inline b8 tryResizeLifoTop(NotNull<void*> p, usize newSize)noexcept{
             const usize bufferBegin = reinterpret_cast<usize>(m_buffer.get());
             const usize allocationBegin = reinterpret_cast<usize>(p.get());
             if(AddOverflows<usize>(allocationBegin, newSize))
@@ -142,7 +142,7 @@ private:
 
 
 private:
-    [[nodiscard]] static constexpr bool IsValidAlignment(usize align)noexcept{
+    [[nodiscard]] static constexpr b8 IsValidAlignment(usize align)noexcept{
         return align != 0u && align <= s_MaxAlignSize && IsSupportedAlignmentValue(align);
     }
 
@@ -268,7 +268,7 @@ private:
         while(chunk && chunk->m_size < size)
             chunk = chunk->m_next;
 
-        const bool created = !chunk;
+        const b8 created = !chunk;
         if(created){
             usize chunkSize = bucket.size;
             if(size > chunkSize)

@@ -36,7 +36,7 @@ BackendContext::BackendContext(const DeviceCreationParameters& params, SwapChain
 }
 
 
-bool BackendContext::isValidationMessageIdIgnored(i32 messageId)const noexcept{
+b8 BackendContext::isValidationMessageIdIgnored(i32 messageId)const noexcept{
     for(const auto& ignored : m_deviceParams.ignoredValidationMessageIds){
         if(ignored == messageId)
             return true;

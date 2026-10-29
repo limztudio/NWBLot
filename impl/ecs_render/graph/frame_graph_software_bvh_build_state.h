@@ -29,12 +29,12 @@ class RendererMeshSystem;
 // Software-BVH build-state import owns the mesh software-BVH parent plus raytracing BVH sort-buffer graph imports.
 struct FrameGraphSoftwareBvhBuildStateInputs{
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources;
-    bool softwareTraceResourcesPrepared = false;
+    b8 softwareTraceResourcesPrepared = false;
 };
 
 struct FrameGraphSoftwareBvhBuildStateResult{
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> buildStateResources;
-    bool declared = false;
+    b8 declared = false;
 
 
 public:

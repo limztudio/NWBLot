@@ -32,7 +32,7 @@ struct TerminalTestError{
 TEST(TerminalEntry, TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingContextRemainsAlive){
     u32 cleanupCount = 0u;
     u32 handled = 0u;
-    bool reportingContextAlive = true;
+    b8 reportingContextAlive = true;
     int result = 0;
     {
         ScopeExit reportingContext([&]()noexcept{ reportingContextAlive = false; });
@@ -59,7 +59,7 @@ TEST(TerminalEntry, TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingContex
 TEST(TerminalEntry, UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup){
     u32 order[3u] = {};
     u32 count = 0u;
-    bool typedHandled = false;
+    b8 typedHandled = false;
     const int result = InvokeTerminalEntry<TerminalTestError>([&]()->int{
         ScopeExit first([&]()noexcept{ order[count] = 1u; ++count; });
         ScopeExit second([&]()noexcept{ order[count] = s_ExpectedDualCount; ++count; });

@@ -14,15 +14,15 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TypeChecker::checkExpr(
+b8 TypeChecker::checkExpr(
     ClassDecl* ownerClass,
     MethodDecl& method,
     Expr& expr,
     const MVector<ScopedVarInfo>& scope,
-    const bool isMutationTarget,
+    const b8 isMutationTarget,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
 
     switch(expr.kind){
     case ExprKind::IntegerLiteral:
@@ -59,7 +59,7 @@ bool TypeChecker::checkExpr(
             }
         }
         else{
-            bool reportedUnqualifiedMember = false;
+            b8 reportedUnqualifiedMember = false;
             if(ownerClass && (findClassField(*ownerClass, expr.text) || findClassMethod(*ownerClass, expr.text))){
                 reportError(errors, expr.span, "class member must be accessed explicitly via 'this.member' in adhd");
                 ok = false;
@@ -86,7 +86,7 @@ bool TypeChecker::checkExpr(
             reportError(errors, expr.span, "accessing 'this' inside a lambda requires capturing 'in this' or 'mut this'");
             ok = false;
         }
-        const bool isConstThis = method.isConst || (lambdaThis && lambdaThis->isConst);
+        const b8 isConstThis = method.isConst || (lambdaThis && lambdaThis->isConst);
         const FieldDecl* field = findClassField(*ownerClass, expr.text);
         const MethodDecl* memberMethod = findClassMethod(*ownerClass, expr.text);
         if(!field && !memberMethod){
@@ -189,8 +189,8 @@ bool TypeChecker::checkExpr(
                 : inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
             u32 simdLanes = 4u;
             if(SymbolTable::isSimdVectorType(baseType, simdLanes)){
-                bool isSwizzlePattern = false;
-                bool validLanes = true;
+                b8 isSwizzlePattern = false;
+                b8 validLanes = true;
                 if(CheckSwizzlePattern(expr.text, simdLanes, isSwizzlePattern, validLanes) && isSwizzlePattern){
                     if(!validLanes){
                         reportError(errors, expr.span, "invalid SIMD swizzle component for vector width or mixed xyzw/rgba set");
@@ -206,8 +206,8 @@ bool TypeChecker::checkExpr(
                 }
             }
             else if(u32 unalignedLanes = 0u; SymbolTable::isUnalignedVectorType(baseType, unalignedLanes)){
-                bool isSwizzlePattern = false;
-                bool validLanes = true;
+                b8 isSwizzlePattern = false;
+                b8 validLanes = true;
                 if(!CheckSwizzlePattern(expr.text, unalignedLanes, isSwizzlePattern, validLanes) || !isSwizzlePattern || !validLanes || expr.text.size() != 1u){
                     reportError(errors, expr.span, "invalid component access on unaligned vector type; only single-lane .x/.y/.z/.w or .r/.g/.b/.a within vector width is supported");
                     ok = false;
@@ -243,14 +243,14 @@ bool TypeChecker::checkExpr(
     case ExprKind::Index:{
         const u32 savedParallelDepth = m_parallelDepth;
         m_parallelDepth = 0u;
-        bool lhsNeedsMut = isMutationTarget;
-        bool rhsNeedsMut = false;
+        b8 lhsNeedsMut = isMutationTarget;
+        b8 rhsNeedsMut = false;
         const MethodDecl* customOpIdx = nullptr;
         const TypeRef* containerTypeRef = expr.lhs ? inferExprTypeRef(ownerClass, &method, *expr.lhs, scope) : nullptr;
         const MStringView lhsBaseType = containerTypeRef
             ? m_symbols.resolveBaseTypeName(containerTypeRef->name)
             : (expr.lhs ? inferExprTypeName(ownerClass, &method, *expr.lhs, scope) : MStringView{});
-        const bool recvIsConst = expr.lhs ? isReceiverConst(ownerClass, method, *expr.lhs, scope) : false;
+        const b8 recvIsConst = expr.lhs ? isReceiverConst(ownerClass, method, *expr.lhs, scope) : false;
         const usize oneArg = 1u;
         if(const ClassDecl* cls = m_symbols.findClass(lhsBaseType)){
             customOpIdx = findClassOperator(*cls, "[]", &oneArg, recvIsConst, ownerClass != cls);
@@ -303,13 +303,13 @@ bool TypeChecker::checkExpr(
             ok = false;
         break;
     case ExprKind::Unary:{
-        bool mutates = (expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus);
+        b8 mutates = (expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus);
         if(expr.lhs){
             const MStringView lhsType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
                 const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
                 const usize zeroArgs = 0u;
-                const bool recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
+                const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
                 if(const MethodDecl* opMethod = findClassOperator(*cls, opSym, &zeroArgs, recvIsConst, ownerClass != cls)){
                     if(ownerClass != cls && opMethod->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
@@ -364,24 +364,24 @@ bool TypeChecker::checkExpr(
     return ok;
 }
 
-bool TypeChecker::checkBinaryExpr(
+b8 TypeChecker::checkBinaryExpr(
     ClassDecl* ownerClass,
     MethodDecl& method,
     Expr& expr,
     const MVector<ScopedVarInfo>& scope,
     MVector<ParseError>& errors
 ){
-    bool ok = true;
+    b8 ok = true;
 
-    const bool isAssign = IsCompoundOrSimpleAssignment(expr.op);
-    bool lhsNeedsMut = isAssign;
-    bool rhsNeedsMut = false;
+    const b8 isAssign = IsCompoundOrSimpleAssignment(expr.op);
+    b8 lhsNeedsMut = isAssign;
+    b8 rhsNeedsMut = false;
     if(expr.lhs && expr.op != TokenType::Equal){
         const MStringView lhsType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
         if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
             const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
             const usize oneArg = 1u;
-            const bool recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
+            const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
             if(const MethodDecl* opMethod = findClassOperator(*cls, opSym, &oneArg, recvIsConst, ownerClass != cls)){
                 if(ownerClass != cls && opMethod->access != AccessSpecifier::Public){
                     reportError(errors, expr.span, "cannot call 'private' or 'protected' operator outside of its declaring class");
@@ -424,7 +424,7 @@ bool TypeChecker::checkBinaryExpr(
             if(lhsRefMode != ParamPassingMode::None && m_symbols.findInterface(baseLhsTypeName)){
                 lhsNeedsMut = false;
                 if(expr.lhs->lhs){
-                    const bool savedDeref = expr.lhs->lhs->derefNotNull;
+                    const b8 savedDeref = expr.lhs->lhs->derefNotNull;
                     if(!checkExpr(ownerClass, method, *expr.lhs->lhs, scope, true, errors))
                         ok = false;
                     expr.lhs->lhs->derefNotNull = savedDeref;
@@ -434,7 +434,7 @@ bool TypeChecker::checkBinaryExpr(
     }
     if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, lhsNeedsMut, errors))
         ok = false;
-    bool rhsInClassArenaCtx = false;
+    b8 rhsInClassArenaCtx = false;
     if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::ThisMember && ownerClass){
         if(const FieldDecl* field = findClassField(*ownerClass, expr.lhs->text)){
             const MStringView baseFieldTypeName = field->type ? m_symbols.resolveBaseTypeName(field->type->name) : MStringView{};
@@ -515,7 +515,7 @@ bool TypeChecker::checkBinaryExpr(
     if(expr.rhs){
         if(rhsNeedsMut)
             expr.rhs->isMutArg = true;
-        const bool savedClassArenaCtx = m_inClassArenaContext;
+        const b8 savedClassArenaCtx = m_inClassArenaContext;
         if(rhsInClassArenaCtx)
             m_inClassArenaContext = true;
         if(!checkExpr(ownerClass, method, *expr.rhs, scope, rhsNeedsMut, errors))
@@ -538,7 +538,7 @@ bool TypeChecker::checkBinaryExpr(
     return ok;
 }
 
-bool TypeChecker::isReceiverConst(
+b8 TypeChecker::isReceiverConst(
     ClassDecl* ownerClass,
     const MethodDecl& method,
     const Expr& recv,
@@ -556,7 +556,7 @@ bool TypeChecker::isReceiverConst(
     }
     else if(recv.kind == ExprKind::ThisMember && ownerClass){
         const ScopedVarInfo* lambdaThis = m_inLambda ? findScopedVar(scope, "this") : nullptr;
-        const bool isConstThis = method.isConst || (lambdaThis && lambdaThis->isConst);
+        const b8 isConstThis = method.isConst || (lambdaThis && lambdaThis->isConst);
         if(const FieldDecl* field = findClassField(*ownerClass, recv.text)){
             const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(field->type);
             if(fieldRefMode != ParamPassingMode::None)

@@ -47,14 +47,14 @@ public:
 
 
 public:
-    [[nodiscard]] explicit operator bool()const noexcept{
+    [[nodiscard]] explicit operator b8()const noexcept{
         return valid();
     }
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{
-        return static_cast<bool>(virtualPath);
+    [[nodiscard]] b8 valid()const noexcept{
+        return static_cast<b8>(virtualPath);
     }
 
 
@@ -69,12 +69,12 @@ public:
 
 
 template<typename TAsset>
-[[nodiscard]] inline bool operator==(const AssetRef<TAsset>& lhs, const AssetRef<TAsset>& rhs)noexcept{
+[[nodiscard]] inline b8 operator==(const AssetRef<TAsset>& lhs, const AssetRef<TAsset>& rhs)noexcept{
     return lhs.virtualPath == rhs.virtualPath;
 }
 
 template<typename TAsset>
-[[nodiscard]] inline bool operator!=(const AssetRef<TAsset>& lhs, const AssetRef<TAsset>& rhs)noexcept{
+[[nodiscard]] inline b8 operator!=(const AssetRef<TAsset>& lhs, const AssetRef<TAsset>& rhs)noexcept{
     return !(lhs == rhs);
 }
 

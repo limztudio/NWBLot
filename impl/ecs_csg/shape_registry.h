@@ -39,7 +39,7 @@ inline constexpr Float4 s_CsgCapsuleDefaultRadiusHalfHeight = Float4(1.0f, 1.0f,
 struct alignas(SIMDVectorSingle) CsgShapeBounds{
     SIMDVectorSingle minBounds = VectorZero();
     SIMDVectorSingle maxBounds = VectorZero();
-    bool finiteBounds = false;
+    b8 finiteBounds = false;
 };
 static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 
@@ -110,7 +110,7 @@ static_assert(IsTriviallyCopyable_V<CsgCapsuleShapeParameters>, "CsgCapsuleShape
 
 
 class CsgShapeRegistry final : NoCopy{
-    friend bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry);
+    friend b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry);
 
 
 private:
@@ -124,7 +124,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<CsgShapeTypeId> registerShapeType(const CsgShapeTypeDesc& desc, bool replaceExisting = false);
+    [[nodiscard]] Expected<CsgShapeTypeId> registerShapeType(const CsgShapeTypeDesc& desc, b8 replaceExisting = false);
 
 
 public:
@@ -157,7 +157,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry);
+b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

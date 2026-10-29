@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NumericEditResult FloatEditModel::commit(const FloatBounds& bounds, const bool canonical){
+NumericEditResult FloatEditModel::commit(const FloatBounds& bounds, const b8 canonical){
     if(!ValidateFloatBounds(bounds))
         return {};
     NumericEditResult result = NumericEditDetail::CommitDraft(
@@ -32,7 +32,7 @@ NumericEditResult FloatEditModel::commit(const FloatBounds& bounds, const bool c
     return result;
 }
 
-Expected<bool, ErrorCode> FloatEditModel::canonicalize(const f64 value){
+Expected<b8, ErrorCode> FloatEditModel::canonicalize(const f64 value){
     char buffer[s_NumericEditMaxBytes];
     return NumericEditDetail::CanonicalizeDraft(FormatF64(value, buffer), m_draft, m_acceptedDraft);
 }
@@ -60,11 +60,11 @@ NumericParseStatus::Enum FloatEditModel::status(const FloatBounds& bounds)const 
     return NumericEditDetail::DraftStatus(ParseFloatDraft(m_draft.text()), bounds);
 }
 
-bool FloatEditModel::dirty()const noexcept{
+b8 FloatEditModel::dirty()const noexcept{
     return NumericEditDetail::DraftDirty(m_draft, m_acceptedDraft);
 }
 
-bool FloatEditModel::setValue(const f64 value){
+b8 FloatEditModel::setValue(const f64 value){
     if(!IsFinite(value) || !canonicalize(value))
         return false;
     m_value = value;
@@ -72,7 +72,7 @@ bool FloatEditModel::setValue(const f64 value){
     return true;
 }
 
-bool FloatEditModel::setDraft(const AStringView text){
+b8 FloatEditModel::setDraft(const AStringView text){
     return NumericEditDetail::SetDraftText(text, m_draft, m_revision);
 }
 

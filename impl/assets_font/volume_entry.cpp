@@ -29,7 +29,7 @@ namespace __hidden_font_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool RegisterFontCookEntry(Core::Assets::CookEntryRegistry& registry){
+static b8 RegisterFontCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontCookEntry, Font, FontAssetCodec>(
         registry, FontBinaryPayload::s_FontAssetKindLabel,
         [](const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){

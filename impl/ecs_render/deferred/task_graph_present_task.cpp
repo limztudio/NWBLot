@@ -26,9 +26,9 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool DeferredPresentGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+[[nodiscard]] b8 DeferredPresentGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(context, payload.shadowVisibilityTask);
-    const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
+    const b8 shadowVisibilityRunsOnCompute = shadowVisibilityQueue && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
     if(!payload.presentationFrame.valid() || !payload.backBuffer.valid() || !shadowVisibilityQueue)
         return false;
     const Core::Framebuffer& presentationFramebuffer = *payload.presentationFrame.framebuffer;
@@ -47,7 +47,7 @@ namespace RendererTaskGraphDetail{
             return false;
     }
 
-    const bool presentRecorded = payload.deferredSystem.renderDeferredPresent(commandList, payload.targets, payload.presentationFrame, payload.outputLayer.sampledImage);
+    const b8 presentRecorded = payload.deferredSystem.renderDeferredPresent(commandList, payload.targets, payload.presentationFrame, payload.outputLayer.sampledImage);
     if(shadowVisibilityRunsOnCompute && presentRecorded && payload.asyncFinalTiming.has_value()){
         payload.asyncFinalTiming.value().finishTiming(commandList);
         payload.asyncFinalTiming.reset();

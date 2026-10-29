@@ -33,8 +33,8 @@ public:
         return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
     }
 
-    [[nodiscard]] bool deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
-        const bool completed = completeNativeRequest(token, status, text);
+    [[nodiscard]] b8 deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
+        const b8 completed = completeNativeRequest(token, status, text);
         if(completed && token == m_nativeToken)
             m_nativeToken = {};
         return completed;
@@ -155,7 +155,7 @@ TEST(ClipboardAsync, CancellationInvalidatesTokenBeforeReentrantNativeCleanup){
     const ClipboardRequestToken old = *oldAdmission;
     ASSERT_TRUE(service.pump());
     ClipboardRequestToken replacement;
-    bool observedCancellation = false;
+    b8 observedCancellation = false;
     service.m_onCancel = [&](){
         if(observedCancellation)
             return;

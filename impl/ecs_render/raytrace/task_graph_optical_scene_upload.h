@@ -22,11 +22,11 @@ NWB_IMPL_BEGIN
 struct RayTracingOpticalSceneGraphBuffer{
     Core::GpuGraphResourceId resource;
     Core::GpuTaskId uploadTask;
-    bool reused = false;
+    b8 reused = false;
 
 
 public:
-    [[nodiscard]] bool valid()const noexcept{ return resource.valid() && (reused || uploadTask.valid()); }
+    [[nodiscard]] b8 valid()const noexcept{ return resource.valid() && (reused || uploadTask.valid()); }
 };
 
 // Declare once per frame; persistent metadata writes follow the shared selector reader drain.

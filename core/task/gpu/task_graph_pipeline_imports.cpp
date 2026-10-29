@@ -26,7 +26,7 @@ namespace __hidden_gpu_task_graph_pipeline_imports{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool CompatiblePipelineMetadata(const GpuTaskGraphPipelineView& pipeline, const GpuGraphPipelineDesc& desc)noexcept{
+[[nodiscard]] static b8 CompatiblePipelineMetadata(const GpuTaskGraphPipelineView& pipeline, const GpuGraphPipelineDesc& desc)noexcept{
     // Identity and concrete pipeline kind define the graph-side table key.
     // Marker text is observational metadata, matching resource imports where a later compatible import reuses the original graph-owned label.
     return pipeline.identity == desc.identity && pipeline.type == desc.type;
@@ -265,8 +265,8 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::appendPipeline(const GpuGraphPipeline
 
     const usize markerCount = m_markerText.size();
     const usize pipelineCount = m_pipelines.size();
-    bool identityInserted = false;
-    bool pointerInserted = false;
+    b8 identityInserted = false;
+    b8 pointerInserted = false;
     ScopeExit appendRollback([&]()noexcept{
         if(pointerInserted)
             m_pipelinePointerIndex->erase(pointerKey);

@@ -53,10 +53,10 @@ struct LightSpaceCsgState{
     Vector<u8, Core::Alloc::GlobalArena> bytes;
     Vector<Span<const u32>, Core::Alloc::GlobalArena> solidTriangleMasks;
     u64 captureGeometryIdentity = 0u;
-    bool captureGeometryTrusted = false;
-    bool gathering = false;
-    bool hardware = false;
-    bool limitationLogged = false;
+    b8 captureGeometryTrusted = false;
+    b8 gathering = false;
+    b8 hardware = false;
+    b8 limitationLogged = false;
 
 
 public:
@@ -78,9 +78,9 @@ public:
     Span<const Core::TextureHandle> textures
 )noexcept;
 
-void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, usize capacity, bool hardware);
-void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, Core::ECS::EntityID entity, bool transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, SIMDVectorSingle localMin, SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh);
-[[nodiscard]] bool FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const CsgShapeRegistry& registry, Core::Alloc::ScratchArena& scratchArena);
+void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, usize capacity, b8 hardware);
+void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, Core::ECS::EntityID entity, b8 transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, SIMDVectorSingle localMin, SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh);
+[[nodiscard]] b8 FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const CsgShapeRegistry& registry, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

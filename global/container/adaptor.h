@@ -154,12 +154,12 @@ private:
 
 
 template<typename T, typename U, typename ArenaT>
-inline bool operator==(const ArenaAllocator<T, ArenaT>& lhs, const ArenaAllocator<U, ArenaT>& rhs)noexcept{
+inline b8 operator==(const ArenaAllocator<T, ArenaT>& lhs, const ArenaAllocator<U, ArenaT>& rhs)noexcept{
     return lhs.arenaPtr() == rhs.arenaPtr();
 }
 
 template<typename T, typename U, typename ArenaT>
-inline bool operator!=(const ArenaAllocator<T, ArenaT>& lhs, const ArenaAllocator<U, ArenaT>& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const ArenaAllocator<T, ArenaT>& lhs, const ArenaAllocator<U, ArenaT>& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -207,12 +207,12 @@ public:
 
 
 template<typename T, typename U, typename ArenaT, ArenaT& (*DefaultArena)()>
-inline bool operator==(const DefaultArenaAllocator<T, ArenaT, DefaultArena>& lhs, const DefaultArenaAllocator<U, ArenaT, DefaultArena>& rhs)noexcept{
+inline b8 operator==(const DefaultArenaAllocator<T, ArenaT, DefaultArena>& lhs, const DefaultArenaAllocator<U, ArenaT, DefaultArena>& rhs)noexcept{
     return lhs.arenaPtr() == rhs.arenaPtr();
 }
 
 template<typename T, typename U, typename ArenaT, ArenaT& (*DefaultArena)()>
-inline bool operator!=(const DefaultArenaAllocator<T, ArenaT, DefaultArena>& lhs, const DefaultArenaAllocator<U, ArenaT, DefaultArena>& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const DefaultArenaAllocator<T, ArenaT, DefaultArena>& lhs, const DefaultArenaAllocator<U, ArenaT, DefaultArena>& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -314,12 +314,12 @@ private:
 
 
 template<typename T, typename U, typename ArenaT>
-inline bool operator==(const ArenaCacheAlignedAllocator<T, ArenaT>& lhs, const ArenaCacheAlignedAllocator<U, ArenaT>& rhs)noexcept{
+inline b8 operator==(const ArenaCacheAlignedAllocator<T, ArenaT>& lhs, const ArenaCacheAlignedAllocator<U, ArenaT>& rhs)noexcept{
     return lhs.arenaPtr() == rhs.arenaPtr();
 }
 
 template<typename T, typename U, typename ArenaT>
-inline bool operator!=(const ArenaCacheAlignedAllocator<T, ArenaT>& lhs, const ArenaCacheAlignedAllocator<U, ArenaT>& rhs)noexcept{ return !(lhs == rhs); }
+inline b8 operator!=(const ArenaCacheAlignedAllocator<T, ArenaT>& lhs, const ArenaCacheAlignedAllocator<U, ArenaT>& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

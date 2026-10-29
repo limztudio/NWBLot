@@ -102,31 +102,31 @@ public:
     [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept;
     void invalidateSceneLightingUploadMirrors()noexcept;
     void invalidateResources()noexcept;
-    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings)noexcept;
+    [[nodiscard]] b8 setPresentationSettings(const PresentationSettings& settings)noexcept;
 
     // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.
     [[nodiscard]] SceneShadingBufferUploads prepareSceneShadingBufferUploads(f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput)noexcept;
-    void confirmSceneShadingBufferUploads(Span<const ECSRenderDetail::SceneLightGpuData> lights, bool lightUploadRequired, const ECSRenderDetail::SceneShadingGpuData& sceneShadingState, bool sceneShadingUploadRequired)noexcept;
-    [[nodiscard]] bool createDeferredLightingResources();
-    [[nodiscard]] bool createDeferredLightingPipeline();
-    [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, bool useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket);
-    [[nodiscard]] bool renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, bool useLaggedLightingHistory = false);
+    void confirmSceneShadingBufferUploads(Span<const ECSRenderDetail::SceneLightGpuData> lights, b8 lightUploadRequired, const ECSRenderDetail::SceneShadingGpuData& sceneShadingState, b8 sceneShadingUploadRequired)noexcept;
+    [[nodiscard]] b8 createDeferredLightingResources();
+    [[nodiscard]] b8 createDeferredLightingPipeline();
+    [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, b8 useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket);
+    [[nodiscard]] b8 renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, b8 useLaggedLightingHistory = false);
     [[nodiscard]] Expected<DeferredFrameTargets> createDeferredFrameTargets(u32 width, u32 height);
-    [[nodiscard]] bool createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
-    [[nodiscard]] bool createDeferredCompositeResources();
-    [[nodiscard]] bool createDeferredCompositePipeline();
-    [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer& presentationFramebuffer);
+    [[nodiscard]] b8 createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
+    [[nodiscard]] b8 createDeferredCompositeResources();
+    [[nodiscard]] b8 createDeferredCompositePipeline();
+    [[nodiscard]] b8 createDeferredPresentPipeline(Core::Framebuffer& presentationFramebuffer);
     void resetDeferredFrameTargets(DeferredFrameTargets& targets);
     [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredCompositeTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const ReflectionCompositeInputs& reflectionInputs, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket);
-    [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs);
-    [[nodiscard]] bool renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, Core::GpuDescriptorHandle outputLayerImage);
+    [[nodiscard]] b8 renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs);
+    [[nodiscard]] b8 renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, Core::GpuDescriptorHandle outputLayerImage);
 
 
 private:
-    [[nodiscard]] bool createDeferredBindlessFrameResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
+    [[nodiscard]] b8 createDeferredBindlessFrameResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
     void resetDeferredBindlessFrameResources(DeferredFrameTargets& targets);
     void resetLaggedLightingHistoryResources(DeferredFrameTargets& targets);
-    [[nodiscard]] bool createLaggedLightingHistoryResources(DeferredFrameTargets& targets);
+    [[nodiscard]] b8 createLaggedLightingHistoryResources(DeferredFrameTargets& targets);
 
 
 private:

@@ -82,7 +82,7 @@ template<typename Plan>
     return desc;
 }
 
-[[nodiscard]] inline Core::GpuTaskResourceUse ReadUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource, const bool hasIndependentStateSource = false)noexcept{
+[[nodiscard]] inline Core::GpuTaskResourceUse ReadUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource, const b8 hasIndependentStateSource = false)noexcept{
     return Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = state, .access = Core::GpuTaskResourceAccess::Read, .hasIndependentStateSource = hasIndependentStateSource, };
 }
 
@@ -91,7 +91,7 @@ template<typename Plan>
     const Core::GpuGraphResourceId resource,
     const Core::BufferRange& range,
     const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
-    const bool hasIndependentStateSource = false
+    const b8 hasIndependentStateSource = false
 )noexcept{
     Core::GpuTaskResourceUse result = ReadUse(resource, state, hasIndependentStateSource);
     result.range.bufferRange = range;
@@ -102,7 +102,7 @@ template<typename Plan>
     const Core::GpuGraphResourceId resource,
     const Core::TextureSubresourceSet& subresources,
     const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
-    const bool hasIndependentStateSource = false
+    const b8 hasIndependentStateSource = false
 )noexcept{
     Core::GpuTaskResourceUse result = ReadUse(resource, state, hasIndependentStateSource);
     result.range.textureSubresources = subresources;

@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize CommandListResourceSelection::HashIdentity(void* const resource, const bool texture)noexcept{
+usize CommandListResourceSelection::HashIdentity(void* const resource, const b8 texture)noexcept{
     return Hasher<void*>()(resource) ^ (texture ? static_cast<usize>(s_HashCombineGoldenRatio64) : 0u);
 }
 
@@ -47,15 +47,15 @@ CommandListResourceSelection::~CommandListResourceSelection()noexcept{
         m_scratchArena.deallocate(m_storage, alignof(Entry), m_capacity * s_BytesPerEntry);
 }
 
-bool CommandListResourceSelection::addTexture(Texture* const texture, const usize inputIndex)noexcept{
+b8 CommandListResourceSelection::addTexture(Texture* const texture, const usize inputIndex)noexcept{
     return addResource(texture, inputIndex, true);
 }
 
-bool CommandListResourceSelection::addBuffer(Buffer* const buffer, const usize inputIndex)noexcept{
+b8 CommandListResourceSelection::addBuffer(Buffer* const buffer, const usize inputIndex)noexcept{
     return addResource(buffer, inputIndex, false);
 }
 
-bool CommandListResourceSelection::addResource(void* const resource, const usize inputIndex, const bool texture)noexcept{
+b8 CommandListResourceSelection::addResource(void* const resource, const usize inputIndex, const b8 texture)noexcept{
     if(!m_valid)
         return false;
     if(!resource || containsResource(resource, texture))
@@ -82,7 +82,7 @@ bool CommandListResourceSelection::addResource(void* const resource, const usize
     return true;
 }
 
-bool CommandListResourceSelection::containsIndexedResource(void* const resource, const bool texture)const noexcept{
+b8 CommandListResourceSelection::containsIndexedResource(void* const resource, const b8 texture)const noexcept{
     const Entry* const values = static_cast<const Entry*>(m_storage);
     const usize* const buckets = reinterpret_cast<const usize*>(static_cast<const u8*>(m_storage) + m_capacity * sizeof(Entry));
     const usize bucketCount = m_capacity * s_BucketCountFactor;
@@ -100,7 +100,7 @@ bool CommandListResourceSelection::containsIndexedResource(void* const resource,
     return false;
 }
 
-bool CommandListResourceSelection::grow()noexcept{
+b8 CommandListResourceSelection::grow()noexcept{
     static_assert(IsTriviallyCopyable_V<Entry> && IsStandardLayout_V<Entry>);
     static_assert(alignof(Entry) >= alignof(usize) && sizeof(Entry) % alignof(usize) == 0u);
     if(MultiplyOverflows<usize>(m_capacity, s_BucketCountFactor))

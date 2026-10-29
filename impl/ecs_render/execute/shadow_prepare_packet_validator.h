@@ -28,15 +28,15 @@ class RendererFramePipeline;
 
 // Shadow-prepare packet validation owns first-packet merge checks for uploads plus BVH builds.
 struct ShadowPreparePacketValidationResult{
-    bool softwareBvhBuildsMerged = false;
-    bool softwareSceneRefitMerged = false;
-    bool accelStructFinalizeMerged = false;
-    bool bindlessSlotsUploadMerged = false;
-    bool rayTraceMaterialContextSlotsUploadMerged = false;
-    bool causticEmissionTargetsUploadMerged = false;
-    bool surfelFrameConstantsUploadMerged = false;
-    bool shadowMaterialContextUploadsMerged = false;
-    bool sceneBvhUploadsMerged = false;
+    b8 softwareBvhBuildsMerged = false;
+    b8 softwareSceneRefitMerged = false;
+    b8 accelStructFinalizeMerged = false;
+    b8 bindlessSlotsUploadMerged = false;
+    b8 rayTraceMaterialContextSlotsUploadMerged = false;
+    b8 causticEmissionTargetsUploadMerged = false;
+    b8 surfelFrameConstantsUploadMerged = false;
+    b8 shadowMaterialContextUploadsMerged = false;
+    b8 sceneBvhUploadsMerged = false;
 };
 
 

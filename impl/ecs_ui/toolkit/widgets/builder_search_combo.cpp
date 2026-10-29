@@ -29,7 +29,7 @@ SearchComboResult Builder::searchComboBox(AStringView stableKey, ISearchableList
     return result;
 }
 
-bool Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
+b8 Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
     SearchComboState& state = *frame.search;
     EditModel& query = state.query();
     if(!frame.open){
@@ -95,7 +95,7 @@ void Builder::snapshotComboQuery(ComboFrame& frame)noexcept{
     frame.queryCaret = query.caret();
 }
 
-bool Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
+b8 Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
     if(frame.editor >= m_scope->m_comboEditors.size() || !comboMatches(frame))
         return false;
     const Item& item = m_scope->m_comboEditors[frame.editor];

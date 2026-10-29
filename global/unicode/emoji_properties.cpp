@@ -185,7 +185,7 @@ static constexpr UnicodePropertyRange s_Ranges[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsExtendedPictographic(const u32 codePoint)noexcept{
+b8 IsExtendedPictographic(const u32 codePoint)noexcept{
     const u8 property = LookupUnicodePropertyRanges(__hidden_unicode_emoji::s_Ranges, codePoint, 0u);
     return property != 0u;
 }

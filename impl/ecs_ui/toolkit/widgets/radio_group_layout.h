@@ -38,7 +38,7 @@ struct RadioGroupMetrics{
 
 struct RadioGroupChoicePlacement{
     u64 key = 0u;
-    bool enabled = false;
+    b8 enabled = false;
     Rect rectangle;
     Rect clip;
     Rect indicator;

@@ -184,7 +184,7 @@ void SuppressNextPlatformCrashCapture()noexcept{
     g_State.suppressedPlatformCrashCaptures.fetch_add(1u, MemoryOrder::release);
 }
 
-bool TryConsumeSuppressedPlatformCrashCapture()noexcept{
+b8 TryConsumeSuppressedPlatformCrashCapture()noexcept{
     u32 count = g_State.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
     while(count != 0u){
         if(g_State.suppressedPlatformCrashCaptures.compare_exchange_weak(count, count - 1u, MemoryOrder::acq_rel, MemoryOrder::acquire))
@@ -226,7 +226,7 @@ CrashRequest BuildCrashDumpRequest(const CrashReasonKind::Enum reasonKind, const
         if(frame == 0u)
             continue;
 
-        bool duplicate = false;
+        b8 duplicate = false;
         for(u32 existing = 0u; existing < outputCallstackFrameCount; ++existing){
             if(request.callstackFrames[existing] == frame){
                 duplicate = true;

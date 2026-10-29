@@ -69,7 +69,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count);
+    [[nodiscard]] b8 setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count);
     [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override;
 
 

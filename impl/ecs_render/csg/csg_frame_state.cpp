@@ -28,11 +28,11 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
     Expected<CsgFrameStateCacheSignature> signature = MakeUnexpected(Failure{});
     if(ecsMeshSystemPtr)
         signature = CsgFrameCacheDetail::BuildSignature(m_world, m_csgShapeRegistry, *ecsMeshSystemPtr);
-    const bool cacheable = signature.has_value();
+    const b8 cacheable = signature.has_value();
     if(cacheable && m_csgState.m_frameStateCacheValid && m_csgState.m_frameStateCacheSignature == *signature)
         return m_csgState.m_frameStateCache;
 
-    bool frameStateCacheable = cacheable;
+    b8 frameStateCacheable = cacheable;
     CsgFrameState state;
     auto finishFrameState = [&](const CsgFrameState& frameState)noexcept -> CsgFrameState{
         if(frameStateCacheable){
@@ -108,8 +108,8 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
 
         const u32 opaqueCutterCount = !materialInfo->transparent && receiver.affectOpaquePass ? countPassCutters(CsgReceiverPass::Opaque) : 0u;
         const u32 transparentCutterCount = materialInfo->transparent && receiver.affectTransparentPass ? countPassCutters(CsgReceiverPass::Transparent) : 0u;
-        const bool opaqueWork = opaqueCutterCount > 0u;
-        const bool transparentWork = transparentCutterCount > 0u;
+        const b8 opaqueWork = opaqueCutterCount > 0u;
+        const b8 transparentWork = transparentCutterCount > 0u;
         if(!opaqueWork && !transparentWork)
             continue;
 

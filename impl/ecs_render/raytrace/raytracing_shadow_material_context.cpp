@@ -24,9 +24,9 @@ void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()noex
 }
 
 // The frozen software traversal indexes this context, so a new context always drops it.
-bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
+b8 RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     const PreparedShadowMaterialContextRoute::Enum route,
-    const bool staticScene,
+    const b8 staticScene,
     const u64 hash,
     const Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
     const Span<const InstanceGpuData> instances,
@@ -38,7 +38,7 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     return true;
 }
 
-bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
+b8 RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
     clearPreparedSceneSwBvhTraversal();
     return m_preparedShadowMaterialContext.captureCacheReuse(m_rayTracingState, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
 }

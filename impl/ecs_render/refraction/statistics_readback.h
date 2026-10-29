@@ -50,7 +50,7 @@ public:
 
 
 public:
-    void accept(const RefractionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
+    void accept(const RefractionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, b8 hardwareReady)noexcept;
     void complete(const RefractionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept;
 };
 
@@ -66,7 +66,7 @@ public:
 
 
 public:
-    void accept(const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
+    void accept(const Core::QueueSubmissionToken& token, b8 hardwareReady)noexcept;
 };
 
 struct RefractionStatisticsReadbackSnapshot{
@@ -84,7 +84,7 @@ public:
 
 public:
     void invalidateResources()noexcept;
-    [[nodiscard]] bool prepareResources();
+    [[nodiscard]] b8 prepareResources();
     void pollCompleted();
     [[nodiscard]] Expected<RefractionStatistics> tryGetLatestStatistics()const noexcept;
     [[nodiscard]] RefractionStatisticsReadbackSnapshot snapshot(const RefractionStatistics& metadata)const noexcept;

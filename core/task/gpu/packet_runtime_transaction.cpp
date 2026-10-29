@@ -84,7 +84,7 @@ private:
     const NotNull<GpuTimingSubmissionTicket*>* const m_timingTickets = nullptr;
     const GpuSubmissionPacketId m_packet;
     const usize m_timingTicketCount = 0u;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 
@@ -107,7 +107,7 @@ void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph)
 }
 
 
-bool GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGraph){
+b8 GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGraph){
     SubmissionOperation submissionOperation(*this, SubmissionOperationMode::TryExclusiveBarrier);
     if(!submissionOperation.valid())
         return false;
@@ -166,18 +166,18 @@ bool GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGra
 }
 
 
-bool GpuGraphSubmissionTransaction::validFor(const GpuCompiledGraph::ReadView& planAccess)const noexcept{
+b8 GpuGraphSubmissionTransaction::validFor(const GpuCompiledGraph::ReadView& planAccess)const noexcept{
     NothrowScopedLock lock(m_mutex);
     return validForLocked(planAccess);
 }
 
 
-bool GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph::ReadView& planAccess)const noexcept{
+b8 GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph::ReadView& planAccess)const noexcept{
     return m_valid && planAccess.valid() && m_generation == planAccess.generation() && m_planGeneration == planAccess.planGeneration() && m_deviceGeneration == planAccess.deviceGeneration() && m_packets.size() == planAccess.packetCount();
 }
 
 
-bool GpuGraphSubmissionTransaction::hasUnresolvedSubmissionBinding(const GpuCompiledGraph& compiledGraph)const noexcept{
+b8 GpuGraphSubmissionTransaction::hasUnresolvedSubmissionBinding(const GpuCompiledGraph& compiledGraph)const noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())
         return false;
@@ -189,7 +189,7 @@ bool GpuGraphSubmissionTransaction::hasUnresolvedSubmissionBinding(const GpuComp
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()const noexcept{
+b8 GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()const noexcept{
     if(!SubmissionOperation::ActiveExclusiveFor(*this))
         return false;
 
@@ -198,7 +198,7 @@ bool GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPa
 }
 
 
-bool GpuGraphSubmissionTransaction::allPacketsTerminalLocked()const noexcept{
+b8 GpuGraphSubmissionTransaction::allPacketsTerminalLocked()const noexcept{
     if(m_packets.empty())
         return false;
     for(const PacketRuntime& runtime : m_packets){
@@ -220,7 +220,7 @@ void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(con
         NWB_FATAL_ASSERT_MSG(false, "terminal transaction packets must resolve their exact graph binding");
 }
 
-bool GpuGraphSubmissionTransaction::beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packetID, const u64 recordingAttemptGeneration, GpuPacketSubmissionLease& outLease)noexcept{
+b8 GpuGraphSubmissionTransaction::beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packetID, const u64 recordingAttemptGeneration, GpuPacketSubmissionLease& outLease)noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(
         !planAccess.valid()
@@ -255,7 +255,7 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(const GpuTaskGraph& gr
     return true;
 }
 
-bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
+b8 GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     GpuTaskGraph& graph,
     GpuPacketSubmissionLease& lease,
     const GpuCompiledGraph& compiledGraph,
@@ -268,7 +268,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
 ){
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
-    const bool submissionValid =
+    const b8 submissionValid =
         planAccess.valid()
         && packetView.valid()
         && validFor(planAccess)
@@ -283,7 +283,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
 
     const GpuSubmissionPacket& packet = *packetView.plan;
     const GpuPhysicalQueueInfo* const queueInfo = planAccess.queueInfo(packet.queue);
-    const bool tokenValid = queueInfo && token.queue == queueInfo->queueClass && token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration);
+    const b8 tokenValid = queueInfo && token.queue == queueInfo->queueClass && token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration);
     if(!tokenValid)
         NWB_FATAL_ASSERT_MSG(false, "native-accepted packet token must match its exact compiled physical queue");
     if(timingTicketCount != 0u && !timingTickets)
@@ -293,8 +293,8 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     graph.beginPacketSubmissionAcceptance(compiledGraph, planAccess, packetID, token, lease);
     AcceptedPacketPublicationGuard publicationGuard(*this, graph, lease, compiledGraph, planAccess, packetID, token, nativeSubmissionInfo, timingTickets, timingTicketCount);
 
-    bool callbacksAccepted = true;
-    bool timingResolved = true;
+    b8 callbacksAccepted = true;
+    b8 timingResolved = true;
     for(usize timingTicketIndex = 0u; timingTicketIndex < timingTicketCount; ++timingTicketIndex){
         if(!timingTickets[timingTicketIndex]->resolveSubmission(token))
             timingResolved = false;
@@ -365,10 +365,10 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& gra
     m_submissionStatistics.nativeCommandListCountByQueueClass[queueClassIndex] += nativeSubmissionInfo.commandListCount;
     m_submissionStatistics.timelineWaitCountByQueueClass[queueClassIndex] += nativeSubmissionInfo.timelineWaitCount;
 
-    bool foundLatestQueue = false;
+    b8 foundLatestQueue = false;
     for(LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
         if(latest.queue == packet.queue){
-            const bool latestMatchesQueue = latest.token.valid() && latest.token.queue == token.queue && latest.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration);
+            const b8 latestMatchesQueue = latest.token.valid() && latest.token.queue == token.queue && latest.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration);
             if(!latestMatchesQueue)
                 NWB_FATAL_ASSERT_MSG(false, "accepted queue frontier token must preserve its exact physical queue identity");
             if(token.value > latest.token.value)

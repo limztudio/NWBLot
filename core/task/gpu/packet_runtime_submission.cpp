@@ -21,7 +21,7 @@ namespace GpuPacketRuntimeDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateInitialOwnershipCompletionToken(
+[[nodiscard]] b8 ValidateInitialOwnershipCompletionToken(
     const GpuTaskGraphInitialOwnerHandoffSourceView& source,
     const GpuCompiledBarrier& barrier,
     const GpuPhysicalQueueInfo& sourceQueue,
@@ -42,7 +42,7 @@ namespace GpuPacketRuntimeDetail{
 }
 
 // External completions may come from any queue. With an imported acquire, the completion must prove the exact releasing queue.
-[[nodiscard]] bool ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)noexcept{
+[[nodiscard]] b8 ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)noexcept{
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     if(!packetView.valid())
         return false;
@@ -96,7 +96,7 @@ namespace GpuPacketRuntimeDetail{
         const GpuPhysicalQueueId waitQueue{ .index = waitToken.physicalQueueIndex, .deviceGeneration = waitToken.deviceGeneration, };
         const GpuPhysicalQueueId* const distinctQueues = overflowQueues.empty() ? inlineQueues.data() : overflowQueues.data();
         const usize distinctQueueCount = overflowQueues.empty() ? inlineQueueCount : overflowQueues.size();
-        bool merged = false;
+        b8 merged = false;
         for(usize queueIndex = 0u; queueIndex < distinctQueueCount; ++queueIndex){
             if(distinctQueues[queueIndex] == waitQueue){
                 merged = true;
@@ -124,7 +124,7 @@ namespace GpuPacketRuntimeDetail{
     return statistics;
 }
 
-[[nodiscard]] bool ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept{
+[[nodiscard]] b8 ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept{
     if(!planAccess.validFor(declarationAccess) || !planAccess.validPacketRange(range))
         return false;
 

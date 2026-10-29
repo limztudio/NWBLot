@@ -28,7 +28,7 @@ namespace __hidden_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool LoadComputeShader(
+[[nodiscard]] static b8 LoadComputeShader(
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver,
@@ -58,7 +58,7 @@ namespace __hidden_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningSystem::ensureSkinningPipeline(){
+b8 MeshSkinningSystem::ensureSkinningPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
@@ -103,7 +103,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
     return false;
 }
 
-bool MeshSkinningSystem::ensureBoundsPipeline(){
+b8 MeshSkinningSystem::ensureBoundsPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
@@ -148,7 +148,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
     return false;
 }
 
-bool MeshSkinningSystem::ensureLocalBoundsPipeline(){
+b8 MeshSkinningSystem::ensureLocalBoundsPipeline(){
     if(m_localBoundsComputePipeline)
         return true;
     if(!ensureBoundsPipeline())
@@ -170,7 +170,7 @@ bool MeshSkinningSystem::ensureLocalBoundsPipeline(){
     return false;
 }
 
-bool MeshSkinningSystem::ensureRepackPipeline(){
+b8 MeshSkinningSystem::ensureRepackPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
@@ -216,15 +216,15 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
 }
 
 
-bool MeshSkinningSystem::skinningPipelineReady()const noexcept{
+b8 MeshSkinningSystem::skinningPipelineReady()const noexcept{
     return m_skinningBindingLayout && m_skinningComputePipeline;
 }
 
-bool MeshSkinningSystem::boundsPipelinesReady()const noexcept{
+b8 MeshSkinningSystem::boundsPipelinesReady()const noexcept{
     return m_boundsBindingLayout && m_boundsComputePipeline && m_localBoundsComputePipeline;
 }
 
-bool MeshSkinningSystem::repackPipelineReady()const noexcept{
+b8 MeshSkinningSystem::repackPipelineReady()const noexcept{
     return m_repackBindingLayout && m_repackComputePipeline;
 }
 

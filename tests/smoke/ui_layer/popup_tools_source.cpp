@@ -51,7 +51,7 @@ Expected<u64> UiPopupToolsSmokeSource::indexOf(const u64 keyValue)const noexcept
     return index;
 }
 
-Expected<u64> UiPopupToolsSmokeSource::findEnabled(const u64 start, const bool reverse)const noexcept{
+Expected<u64> UiPopupToolsSmokeSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
     return FindAdjacentEnabledRow(*this, start, reverse);
 }
 

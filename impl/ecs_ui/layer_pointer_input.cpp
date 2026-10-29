@@ -16,9 +16,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiLayerSystem::pointerInput(const Ui::PointerInput& input){
+b8 UiLayerSystem::pointerInput(const Ui::PointerInput& input){
     synchronizeNativeInput();
-    bool consumed = false;
+    b8 consumed = false;
     routePointerInput(input, &consumed);
     return consumed;
 }
@@ -42,7 +42,7 @@ void UiLayerSystem::cancelDeviceInput(const u64 device){
     }
 }
 
-void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, bool* consumed){
+void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8* consumed){
     if(consumed)
         *consumed = false;
     m_editHost.collectNative();

@@ -185,7 +185,7 @@ TEST(UiTextEditOwned, OwnedCollectionAdoptionAndCancellationRejectAnotherThread)
     ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
     TextInputPollResult::Enum poll = TextInputPollResult::Pending;
     TextInputAdmission::Enum adopt = TextInputAdmission::Accepted;
-    bool cancelled = true;
+    b8 cancelled = true;
     Thread other([&]()noexcept{
         poll = session.pollOwned(event);
         adopt = session.adoptLocal(s_Owner, model, s_Caret);

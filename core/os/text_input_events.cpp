@@ -23,7 +23,7 @@ TextInputAdmission::Enum QueuedTextInputService::emitCommit(const TextInputSessi
     return admitEvent(token, TextInputEventKind::Commit, text, 0u, 0u, 0u, 0u, true);
 }
 
-TextInputAdmission::Enum QueuedTextInputService::emitPreedit(const TextInputSessionToken token, const AStringView text, const usize anchorByte, const usize caretByte, const bool caretVisible){
+TextInputAdmission::Enum QueuedTextInputService::emitPreedit(const TextInputSessionToken token, const AStringView text, const usize anchorByte, const usize caretByte, const b8 caretVisible){
     return admitEvent(token, TextInputEventKind::Preedit, text, anchorByte, caretByte, 0u, 0u, caretVisible);
 }
 
@@ -45,7 +45,7 @@ TextInputAdmission::Enum QueuedTextInputService::emitDeleteSurrounding(const Tex
     return admitEvent(token, TextInputEventKind::DeleteSurrounding, {}, 0u, 0u, beforeBytes, afterBytes, true, basis);
 }
 
-bool QueuedTextInputService::cancelSession(const TextInputSessionToken token, const TextInputCancelReason::Enum reason){
+b8 QueuedTextInputService::cancelSession(const TextInputSessionToken token, const TextInputCancelReason::Enum reason){
     if(!isOwnerThread() || !token.valid() || token != m_activeToken)
         return false;
     const u64 revision = m_surroundingRevision;
@@ -61,7 +61,7 @@ bool QueuedTextInputService::cancelSession(const TextInputSessionToken token, co
     event.surroundingRevision = revision;
     event.kind = TextInputEventKind::Cancelled;
     event.cancelReason = reason;
-    const bool wasTransitioning = m_transitioning;
+    const b8 wasTransitioning = m_transitioning;
     m_transitioning = true;
     ScopeExit finishTransition([this, wasTransitioning]()noexcept{ m_transitioning = wasTransitioning; });
     endNativeSession(token);
@@ -80,7 +80,7 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     const usize caretByte,
     const usize beforeBytes,
     const usize afterBytes,
-    const bool caretVisible,
+    const b8 caretVisible,
     const TextInputDeletionBasis::Enum basis
 ){
     if(!isOwnerThread())
@@ -98,7 +98,7 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
         return TextInputAdmission::Accepted;
 
     // Only consecutive preedit updates may coalesce; a commit or deletion is an ordering barrier.
-    const bool replace = kind == TextInputEventKind::Preedit && !m_events.empty() && m_events.back().kind == TextInputEventKind::Preedit;
+    const b8 replace = kind == TextInputEventKind::Preedit && !m_events.empty() && m_events.back().kind == TextInputEventKind::Preedit;
     const usize oldBytes = replace ? m_events.back().text.size() : 0u;
     if((!replace && m_events.size() >= s_TextInputMaxEvents) || text.size() > s_TextInputMaxQueuedTextBytes - (m_queuedTextBytes - oldBytes)){
         if(!cancelSession(token, TextInputCancelReason::Overflow))

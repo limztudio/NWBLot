@@ -137,15 +137,15 @@ static void ReleaseLogFont()noexcept{
 }
 
 // Callers must already hold s_ListMutex; validates the item index against the live store.
-static bool IsMessageIndexValid(UINT itemID)noexcept{
+static b8 IsMessageIndexValid(UINT itemID)noexcept{
     return s_Store && static_cast<usize>(itemID) < s_Store->messages.size();
 }
 
-static LogRowColors SelectLogRowColors(const bool alternate, const LogRowColors& even, const LogRowColors& odd)noexcept{
+static LogRowColors SelectLogRowColors(const b8 alternate, const LogRowColors& even, const LogRowColors& odd)noexcept{
     return alternate ? odd : even;
 }
 
-static LogRowColors ResolveLogRowColors(const Core::Common::LogType::Enum type, const bool alternate)noexcept{
+static LogRowColors ResolveLogRowColors(const Core::Common::LogType::Enum type, const b8 alternate)noexcept{
     switch(type){
     case Core::Common::LogType::EssentialInfo:
     case Core::Common::LogType::Info:
@@ -482,7 +482,7 @@ Frame::~Frame()noexcept{
     FrameDetail::s_Store.reset();
 }
 
-bool Frame::init(){
+b8 Frame::init(){
     static constexpr TStringView s_WindowClassName = NWB_TEXT("NWB_LOGGER");
     static constexpr TStringView s_WindowTitle = NWB_TEXT("NWBLogger");
     constexpr DWORD s_WindowExtendedStyle = 0;
@@ -514,7 +514,7 @@ void Frame::showFrame(){
     ShowWindow(data<FrameDetail::WinFrame>().hwnd(), SW_SHOW);
 }
 
-bool Frame::mainLoop(){
+b8 Frame::mainLoop(){
     MSG message = {};
     for(;;){
         const BOOL result = GetMessage(&message, nullptr, 0, 0);

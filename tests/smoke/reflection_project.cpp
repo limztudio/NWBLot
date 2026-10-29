@@ -78,7 +78,7 @@ static constexpr f32 s_GlassF0 = ((s_GlassIor - 1.0f) * (s_GlassIor - 1.0f)) / (
 static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World& world, NWB::ProjectRuntimeContext& context){
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
     const auto caseText = ReadSmokeEnvironmentText(scratchArena, s_SmokeCaseEnvironment);
-    const bool hasCase = caseText.has_value();
+    const b8 hasCase = caseText.has_value();
     const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView{};
     if(hasCase && (caseName == "temporal_deform" || caseName == "rough_deform")){
         AddSmokeSkinnedRenderSystems(world, context);
@@ -100,7 +100,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool prepareQueries(const u32 width, const u32 height){
+    [[nodiscard]] b8 prepareQueries(const u32 width, const u32 height){
         u32 mipCount = 0u;
         for(u32 extent = Max(width, height); extent > 0u; extent >>= 1u)
             ++mipCount;
@@ -146,7 +146,7 @@ public:
         return true;
     }
 
-    virtual bool shouldRenderUnfocused()noexcept override{ return true; }
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
 
 
@@ -163,10 +163,10 @@ public:
 
 
 public:
-    virtual bool onStartup()override{
+    virtual b8 onStartup()override{
         NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
         const auto caseText = ReadSmokeEnvironmentText(scratchArena, s_SmokeCaseEnvironment);
-        const bool hasCase = caseText.has_value();
+        const b8 hasCase = caseText.has_value();
         const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView(s_OffscreenCase);
         m_feedbackCase = caseName.starts_with("feedback_");
         m_opticalCase = caseName.starts_with("optical_");
@@ -177,7 +177,7 @@ public:
         m_glassRoughnessCase = caseName == "rough_glass";
         if(!configureRenderer(scratchArena))
             return false;
-        bool cpuDiagnostics = false;
+        b8 cpuDiagnostics = false;
         if(!readFlag(scratchArena, "NWB_REFLECTION_SMOKE_CPU_DIAGNOSTICS", cpuDiagnostics))
             return false;
         const auto cpuTimingPath = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_CPU_GPU_TIMING_FILE");
@@ -209,7 +209,7 @@ public:
             if(!m_spatialOwnerProbe || !m_spatialOwnerProbe->configure(AStringView(spatialOwnerSelection->data(), spatialOwnerSelection->size()), m_reflectionSettings) || !m_renderer.setReflectionSettings(m_reflectionSettings))
                 return false;
         }
-        const bool screenCase = caseName == "onscreen" || caseName == s_OnscreenMovedCase || caseName == s_BoundaryCase || caseName == s_FloorCase;
+        const b8 screenCase = caseName == "onscreen" || caseName == s_OnscreenMovedCase || caseName == s_BoundaryCase || caseName == s_FloorCase;
         if(caseName != s_OffscreenCase && caseName != s_MovedCase && caseName != s_OpaqueGlassCase && !screenCase && !m_extendedCase){
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown case '{}'"), ConvertString(caseName));
             return false;
@@ -283,7 +283,7 @@ public:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: shutdown"));
     }
 
-    virtual bool onUpdate(const f32 delta)override{
+    virtual b8 onUpdate(const f32 delta)override{
         if(m_cpuTimingProbe && !m_cpuTimingProbe->update())
             return false;
         if(m_csgContextProbe && !m_csgContextProbe->sampleSynchronizedFrame(m_latestStatistics))
@@ -311,7 +311,7 @@ public:
 
 
 private:
-    bool readFlag(NWB::Core::Alloc::ScratchArena& scratchArena, const AStringView name, bool& value){
+    b8 readFlag(NWB::Core::Alloc::ScratchArena& scratchArena, const AStringView name, b8& value){
         const auto text = ReadSmokeEnvironmentText(scratchArena, name);
         if(!text)
             return true;
@@ -326,7 +326,7 @@ private:
         return true;
     }
 
-    bool readU32(NWB::Core::Alloc::ScratchArena& scratchArena, const AStringView name, const u32 minimum, const u32 maximum, u32& value){
+    b8 readU32(NWB::Core::Alloc::ScratchArena& scratchArena, const AStringView name, const u32 minimum, const u32 maximum, u32& value){
         const auto text = ReadSmokeEnvironmentText(scratchArena, name);
         if(!text)
             return true;
@@ -342,7 +342,7 @@ private:
     void updateRoughnessScene(){
         if(!m_roughnessScene || !m_roughnessScene->mutationCase() || m_mutationApplied || m_latestStatistics.sequence == 0u)
             return;
-        const bool warmed = m_roughnessScene->deforming() || !m_reflectionSettings.temporalEnabled ? m_latestStatistics.frameIndex >= 32u : m_latestStatistics.historySampleCount >= 32u;
+        const b8 warmed = m_roughnessScene->deforming() || !m_reflectionSettings.temporalEnabled ? m_latestStatistics.frameIndex >= 32u : m_latestStatistics.historySampleCount >= 32u;
         if(!warmed)
             return;
         m_mutationGraphicsFrame = m_context.graphics.getFrameIndex();
@@ -372,7 +372,7 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeFeedbackMutation: graphics_frame={} fresh_final={}"), m_mutationGraphicsFrame, m_freshFinalState ? 1u : 0u);
     }
 
-    bool shouldCapture(const u64 graphicsFrame)const noexcept{
+    b8 shouldCapture(const u64 graphicsFrame)const noexcept{
         if(m_spatialOwnerProbe)
             return m_spatialOwnerProbe->shouldCapture(graphicsFrame);
         if(m_feedbackScene && m_feedbackScene->mutationCase())
@@ -389,7 +389,7 @@ private:
         return m_reflectionSettings.temporalEnabled && !(m_roughnessScene && m_roughnessScene->deforming()) ? m_latestStatistics.historySampleCount >= m_targetSamples : m_latestStatistics.frameIndex >= Max(m_targetSamples, 3u);
     }
 
-    bool configureRenderer(NWB::Core::Alloc::ScratchArena& scratchArena){
+    b8 configureRenderer(NWB::Core::Alloc::ScratchArena& scratchArena){
         auto& settings = m_reflectionSettings;
         settings.traceMode = NWB::Impl::ReflectionTraceMode::Hardware;
         settings.environmentTop = Float3U(0.0f, 0.0f, 0.0f);
@@ -444,7 +444,7 @@ private:
             settings.maxHardwareRaysPerFrame = static_cast<u32>(*parsed);
         }
         const auto routeText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_MODE");
-        const bool hasRoute = routeText.has_value();
+        const b8 hasRoute = routeText.has_value();
         const AStringView route = hasRoute ? AStringView(routeText->data(), routeText->size()) : AStringView(s_HardwareRoute);
         if(route == "disabled")
             settings.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
@@ -474,7 +474,7 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: screen steps {}"), settings.screenMaxSteps);
         m_renderer.setRefractionEnabled(true);
         m_renderer.setRefractionHardwareTracingEnabled(true);
-        const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+        const b8 hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware {}"), hardwareAvailable ? NWB_TEXT("available") : NWB_TEXT("unavailable"));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: reflection mode {}"), ConvertString(route));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware ray budget {}"), settings.maxHardwareRaysPerFrame);
@@ -553,7 +553,7 @@ private:
             m_framebufferCapture->finish();
     }
 
-    bool configureFramebufferCapture(NWB::Core::Alloc::ScratchArena& scratchArena){
+    b8 configureFramebufferCapture(NWB::Core::Alloc::ScratchArena& scratchArena){
         if(m_csgContextProbe)
             return true;
         FramebufferCaptureOptions options;
@@ -627,7 +627,7 @@ private:
         createPanel(s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(2.8f, 1.0f, 1.8f, 0.0f), 0.95f);
     }
 
-    void createMirrorScene(const bool moved){
+    void createMirrorScene(const b8 moved){
         createMirrorBackdrop();
         const f32 shift = moved ? 0.9f : 0.0f;
         // Marker spheres behind the camera reflect through z=0 to virtual images at z=+8.
@@ -637,7 +637,7 @@ private:
         NWB_FATAL_ASSERT_MSG(red.valid() && green.valid(), NWB_TEXT("ReflectionSmokeProject: offscreen markers failed"));
     }
 
-    void createOnscreenMirrorScene(const bool moved, const bool boundary){
+    void createOnscreenMirrorScene(const b8 moved, const b8 boundary){
         createMirrorBackdrop();
         const f32 redX = moved ? -1.45f : -1.7f;
         const f32 greenX = boundary ? 3.0f : (moved ? 1.45f : 1.7f);
@@ -696,18 +696,18 @@ private:
     u32 m_postResetSamples = 1u;
     u32 m_requestedSeed = 0u;
     f32 m_authoredRoughness = 0.f;
-    bool m_extendedCase = false;
-    bool m_feedbackCase = false;
-    bool m_feedbackCapture = false;
-    bool m_feedbackObservedBypass = false;
-    bool m_opticalCase = false;
-    bool m_csgOpticalCase = false;
-    bool m_opticalTir = false;
-    bool m_furnace = false;
-    bool m_glassRoughnessCase = false;
-    bool m_freshFinalState = false;
-    bool m_mutationApplied = false;
-    bool m_timingRenderPassRegistered = false;
+    b8 m_extendedCase = false;
+    b8 m_feedbackCase = false;
+    b8 m_feedbackCapture = false;
+    b8 m_feedbackObservedBypass = false;
+    b8 m_opticalCase = false;
+    b8 m_csgOpticalCase = false;
+    b8 m_opticalTir = false;
+    b8 m_furnace = false;
+    b8 m_glassRoughnessCase = false;
+    b8 m_freshFinalState = false;
+    b8 m_mutationApplied = false;
+    b8 m_timingRenderPassRegistered = false;
 };
 
 

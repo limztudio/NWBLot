@@ -106,14 +106,14 @@ struct InferredDependencyEqual{
 
 
 public:
-    [[nodiscard]] bool operator()(const usize lhsIndex, const usize rhsIndex)const noexcept{
+    [[nodiscard]] b8 operator()(const usize lhsIndex, const usize rhsIndex)const noexcept{
         const GpuTaskDependencyEdge& lhs = (*edges)[lhsIndex];
         const GpuTaskDependencyEdge& rhs = (*edges)[rhsIndex];
         return lhs.producer == rhs.producer && lhs.consumer == rhs.consumer && lhs.resource == rhs.resource && lhs.resourceVersion == rhs.resourceVersion && lhs.hazard == rhs.hazard;
     }
 };
 
-[[nodiscard]] static bool IsResourceVersionHazard(const GpuTaskHazardType::Enum hazard)noexcept{
+[[nodiscard]] static b8 IsResourceVersionHazard(const GpuTaskHazardType::Enum hazard)noexcept{
     return hazard == GpuTaskHazardType::VersionDependency || hazard == GpuTaskHazardType::VersionLifetime;
 }
 
@@ -164,7 +164,7 @@ void GpuTaskGraphAnalysis::reset()noexcept{
     m_valid = false;
 }
 
-bool GpuTaskGraphAnalysis::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
+b8 GpuTaskGraphAnalysis::validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept{
     // A successful analyze() publishes complete topology and scheduling adjacency before setting m_valid.
     NWB_ASSERT(
         !m_valid
@@ -211,7 +211,7 @@ GpuTaskGraphSchedulingTaskIndexView GpuTaskGraphAnalysis::schedulingProducers(co
     return GpuTaskGraphSchedulingTaskIndexView{ .taskIndices = producerEnd != firstProducer ? m_schedulingIncomingProducers.data() + firstProducer : nullptr, .taskCount = producerEnd - firstProducer, };
 }
 
-bool GpuTaskGraphAnalysis::hasExplicitEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept{
+b8 GpuTaskGraphAnalysis::hasExplicitEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept{
     for(const GpuTaskDependencyEdge& edge : m_edges){
         if(edge.producer == producer && edge.consumer == consumer && edge.hazard == GpuTaskHazardType::Explicit)
             return true;
@@ -219,7 +219,7 @@ bool GpuTaskGraphAnalysis::hasExplicitEdge(const GpuTaskId& producer, const GpuT
     return false;
 }
 
-bool GpuTaskGraphAnalysis::hasInferredEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept{
+b8 GpuTaskGraphAnalysis::hasInferredEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept{
     for(const GpuTaskDependencyEdge& edge : m_inferredEdges){
         if(edge.producer == producer && edge.consumer == consumer)
             return true;
@@ -231,7 +231,7 @@ bool GpuTaskGraphAnalysis::hasInferredEdge(const GpuTaskId& producer, const GpuT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysis& outAnalysis)const{
+b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysis& outAnalysis)const{
     using namespace GpuTaskGraphCompilerDetail;
     using namespace __hidden_gpu_task_graph_compiler_analysis;
 
@@ -347,7 +347,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
         NWB_ASSERT(edge.hazard != GpuTaskHazardType::Explicit);
 
         DependencyPairIndices& pair = appendRawEdge(edge);
-        bool indexed = pair.firstInferredEdge == s_IndexedInferredEdges;
+        b8 indexed = pair.firstInferredEdge == s_IndexedInferredEdges;
         if(!indexed){
             usize reasonCount = 0u;
             for(usize index = pair.firstInferredEdge; index != Limit<usize>::s_Max; index = nextInferredEdges[index]){
@@ -473,7 +473,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
                 accesses.writers.append(writers, task.id, (*plannedRange));
             }
             else if(IsReadAccess(use.access)){
-                bool alreadyWrittenByTask = false;
+                b8 alreadyWrittenByTask = false;
                 for(usize index = accesses.writers.first; index != s_InvalidAccess; index = writers[index].next){
                     const TrackedResourceAccess& writer = writers[index];
                     if(writer.task == task.id && RangeContains(resource, writer.range, (*plannedRange))){
@@ -569,7 +569,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
                 reachesProducer[outAnalysis.m_schedulingIncomingProducers[edgeIndex]] = 1u;
         }
 
-        bool hasBackBufferWriter = false;
+        b8 hasBackBufferWriter = false;
         for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
             const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
             for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){

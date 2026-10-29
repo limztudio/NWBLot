@@ -31,8 +31,8 @@ public:
 
 
 private:
-    [[nodiscard]] bool paintParent(NWB::Impl::Ui::Builder& ui);
-    [[nodiscard]] bool paintChild(NWB::Impl::Ui::Builder& ui);
+    [[nodiscard]] b8 paintParent(NWB::Impl::Ui::Builder& ui);
+    [[nodiscard]] b8 paintChild(NWB::Impl::Ui::Builder& ui);
 
 
 private:

@@ -288,7 +288,7 @@ TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfEls
         "\r\n"
         "class LookupTable : ILookup {\r\n"
         "    private in ILookup fallback;\r\n"
-        "    public LookupTable(in bool usePrimary, in ILookup primary, in ILookup secondary) {\r\n"
+        "    public LookupTable(in b8 usePrimary, in ILookup primary, in ILookup secondary) {\r\n"
         "        if (usePrimary) {\r\n"
         "            this.fallback = primary;\r\n"
         "        } else {\r\n"
@@ -440,7 +440,7 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
     EXPECT_NE(hdrView.find("if(this->optRef.has_value() && this->optRef->valid()) callback(this->optRef->virtualPath);"), MStringView::npos);
     EXPECT_NE(hdrView.find("for(const auto& __dep : this->refList){ if(__dep.valid()) callback(__dep.virtualPath); }"), MStringView::npos);
     EXPECT_NE(hdrView.find("this->nested.forEachAssetDependency(callback);"), MStringView::npos);
-    EXPECT_NE(hdrView.find("[[nodiscard]] static bool extractNwbAssetDependencies(const NwbValue& inMap, [[maybe_unused]] DependencyCallback&& callback)noexcept{"), MStringView::npos);
+    EXPECT_NE(hdrView.find("[[nodiscard]] static b8 extractNwbAssetDependencies(const NwbValue& inMap, [[maybe_unused]] DependencyCallback&& callback)noexcept{"), MStringView::npos);
     EXPECT_NE(hdrView.find("__f->isMap() && !NestedAssetGroup::extractNwbAssetDependencies(*__f, callback)) return false;"), MStringView::npos);
     EXPECT_NE(hdrView.find("template<>\r\nclass OolPair<u64> final{"), MStringView::npos);
     const usize leafInnerDefPos = hdrView.find("class LeafInner final{");
@@ -494,6 +494,13 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
         "}\r\n";
     CompileResult badCtorMutRes(arena.arena);
     EXPECT_FALSE(Compiler::compile(s_MutateInRefInCtorSource, "impl/sim/bad_ctor_in_mut.adhd", arena.arena, badCtorMutRes));
+
+    static constexpr MStringView s_ProhibitedBoolSource =
+        "class BadFlagHolder {\r\n"
+        "    public bo" "ol enabled = false;\r\n"
+        "}\r\n";
+    CompileResult prohibitedBoolRes(arena.arena);
+    EXPECT_FALSE(Compiler::compile(s_ProhibitedBoolSource, "impl/sim/prohibited_b8.adhd", arena.arena, prohibitedBoolRes));
 }
 
 

@@ -25,7 +25,7 @@ class TransparentShadowSamplingHistory{
         this.m_pendingSlots = 0u;
     }
 
-    public bool covers(in u32 slotMask)const{
+    public b8 covers(in u32 slotMask)const{
         return slotMask != 0u && (this.m_acceptedSlots & slotMask) == slotMask;
     }
 }

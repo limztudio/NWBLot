@@ -18,8 +18,8 @@ namespace RangeForDetail{
 
 
 template<typename IteratorT, typename SentinelT, typename VisitT>
-[[nodiscard]] consteval bool IsNothrowIteration()noexcept{
-    return IsNothrowDestructible_V<IteratorT> && IsNothrowDestructible_V<SentinelT> && noexcept(static_cast<bool>(DeclVal<IteratorT&>() != DeclVal<SentinelT&>())) && noexcept(++DeclVal<IteratorT&>()) && noexcept(DeclVal<VisitT&>()(*DeclVal<IteratorT&>()));
+[[nodiscard]] consteval b8 IsNothrowIteration()noexcept{
+    return IsNothrowDestructible_V<IteratorT> && IsNothrowDestructible_V<SentinelT> && noexcept(static_cast<b8>(DeclVal<IteratorT&>() != DeclVal<SentinelT&>())) && noexcept(++DeclVal<IteratorT&>()) && noexcept(DeclVal<VisitT&>()(*DeclVal<IteratorT&>()));
 }
 
 
@@ -34,7 +34,7 @@ template<typename IteratorT, typename SentinelT, typename VisitT>
 
 // Match range-for lookup and its auto iterator/sentinel storage, including copies from reference results.
 template<typename RangeT, typename VisitT>
-[[nodiscard]] consteval bool IsNothrowRangeFor()noexcept{
+[[nodiscard]] consteval b8 IsNothrowRangeFor()noexcept{
     if constexpr(IsBoundedArray_V<RangeT>){
         using IteratorT = RemoveExtent_T<RangeT>*;
         return RangeForDetail::IsNothrowIteration<IteratorT, IteratorT, VisitT>();

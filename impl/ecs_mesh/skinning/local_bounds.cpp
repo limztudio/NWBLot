@@ -51,7 +51,7 @@ static_assert(offsetof(LocalBoundsPushConstants, bindlessResourceSlots) == sizeo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSkinningRuntimeInstance& instance){
+b8 CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSkinningRuntimeInstance& instance){
     instance.deformationState.invalidateCurrent();
     if(instance.meshlets.empty() || instance.meshlets.size() > Limit<u32>::s_Max / NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime local bounds partial count is empty or exceeds shader addressing"));
@@ -97,7 +97,7 @@ MeshSkinningLocalBoundsTask::Payload::Payload(Core::GraphicsRuntime& graphics, C
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningLocalBoundsTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 MeshSkinningLocalBoundsTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     if(payload.dispatches.empty())
         return false;
     auto& device = payload.graphics.getDevice();

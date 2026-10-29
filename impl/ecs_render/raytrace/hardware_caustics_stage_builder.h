@@ -48,11 +48,11 @@ struct HardwareCausticsStageInputs{
     Span<const Core::GpuGraphResourceId> hardwareTraceGeometryResources{};
     Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
     Core::GpuTaskId graphicsPrefixTask;
-    const bool* shadowPreparationReady = nullptr;
+    const b8* shadowPreparationReady = nullptr;
     const Core::GpuExternalCompletionId* historyWriterDrainCompletion = nullptr;
     Core::GpuPersistentResourceStateCache* accumulatorPersistentState = nullptr;
-    bool declaresHardwareCaustics = false;
-    bool* producerDispatched = nullptr;
+    b8 declaresHardwareCaustics = false;
+    b8* producerDispatched = nullptr;
     Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
     Optional<Core::GpuTimingMeasure>* photonTiming = nullptr;
     Optional<Core::GpuTimingMeasure>* resolveTiming = nullptr;
@@ -73,7 +73,7 @@ struct HardwareCausticsStageResult{
     Core::GpuTaskId causticResolveFourthWaveletTask;
     Core::GpuTaskId causticResolveFifthWaveletTask;
     Core::GpuTaskId causticResolveUpsampleTask;
-    bool declared = false;
+    b8 declared = false;
 };
 
 

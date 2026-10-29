@@ -38,24 +38,24 @@ public:
 
 
 public:
-    [[nodiscard]] bool parseTranslationUnit(TranslationUnit& outUnit);
+    [[nodiscard]] b8 parseTranslationUnit(TranslationUnit& outUnit);
 
 
 private:
-    [[nodiscard]] bool parseTopLevelDeclaration(TranslationUnit& outUnit);
+    [[nodiscard]] b8 parseTopLevelDeclaration(TranslationUnit& outUnit);
     [[nodiscard]] TypeAliasDecl* parseTypeAlias(SourceSpan span, const MVector<ParsedAttribute>& attributes);
     [[nodiscard]] EnumDecl* parseEnumDecl(SourceSpan span, const MVector<ParsedAttribute>& attributes);
     [[nodiscard]] InterfaceDecl* parseInterfaceDecl(SourceSpan span, const MVector<ParsedAttribute>& attributes);
     [[nodiscard]] ClassDecl* parseClassDecl(SourceSpan span, const MVector<ParsedAttribute>& attributes);
-    [[nodiscard]] bool parseClassMember(ClassDecl& classDecl);
+    [[nodiscard]] b8 parseClassMember(ClassDecl& classDecl);
     void parseClassMethodQualifiers(MethodDecl& method)noexcept;
-    [[nodiscard]] bool parseClassMemberCallableBody(MethodDecl& method, MStringView missingTerminatorMessage);
+    [[nodiscard]] b8 parseClassMemberCallableBody(MethodDecl& method, MStringView missingTerminatorMessage);
     [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, const MVector<ParsedAttribute>& attributes);
-    [[nodiscard]] bool parseCallableOwnerOrTemplateHeader(MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outTemplateParams, bool failOnInvalidTemplateParams);
-    [[nodiscard]] bool applyCallableAttributes(const MVector<ParsedAttribute>& attributes, SourceSpan span, MethodDecl& decl);
-    [[nodiscard]] bool parseOperatorName(MStringView& outOpName);
-    [[nodiscard]] static bool validateMemberOperatorArity(MStringView opName, usize paramCount, MStringView& outErrorMsg)noexcept;
-    [[nodiscard]] bool isCurrentTokenImported()const noexcept;
+    [[nodiscard]] b8 parseCallableOwnerOrTemplateHeader(MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outTemplateParams, b8 failOnInvalidTemplateParams);
+    [[nodiscard]] b8 applyCallableAttributes(const MVector<ParsedAttribute>& attributes, SourceSpan span, MethodDecl& decl);
+    [[nodiscard]] b8 parseOperatorName(MStringView& outOpName);
+    [[nodiscard]] static b8 validateMemberOperatorArity(MStringView opName, usize paramCount, MStringView& outErrorMsg)noexcept;
+    [[nodiscard]] b8 isCurrentTokenImported()const noexcept;
 
 
 private:

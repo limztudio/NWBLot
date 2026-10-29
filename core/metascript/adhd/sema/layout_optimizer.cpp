@@ -26,7 +26,7 @@ namespace __hidden_adhd_layout_optimizer{
     return (offset + alignment - 1u) & ~(alignment - 1u);
 }
 
-[[nodiscard]] bool TypeReferencesClassByValue(
+[[nodiscard]] b8 TypeReferencesClassByValue(
     const TypeRef& type,
     const MStringView targetClassName,
     const SymbolTable& symbols,
@@ -46,7 +46,7 @@ namespace __hidden_adhd_layout_optimizer{
         return false;
     }
     if(const ClassDecl* subCls = symbols.findClass(name)){
-        const bool hasTemplateSub = !subCls->templateParams.empty() && unwrapped->templateArgs.size() == subCls->templateParams.size();
+        const b8 hasTemplateSub = !subCls->templateParams.empty() && unwrapped->templateArgs.size() == subCls->templateParams.size();
         for(const FieldDecl* subField : subCls->fields){
             if(!subField || !subField->type)
                 continue;
@@ -60,7 +60,7 @@ namespace __hidden_adhd_layout_optimizer{
     return false;
 }
 
-[[nodiscard]] bool IsTypeBinarySerializable(
+[[nodiscard]] b8 IsTypeBinarySerializable(
     const TypeRef& type,
     const SymbolTable& symbols,
     MStringView& outReason,
@@ -107,7 +107,7 @@ namespace __hidden_adhd_layout_optimizer{
             outReason = "'[serialize]' class cannot contain non-transient polymorphic class members implementing an interface";
             return false;
         }
-        const bool hasTemplateSub = !subCls->templateParams.empty() && unwrapped->templateArgs.size() == subCls->templateParams.size();
+        const b8 hasTemplateSub = !subCls->templateParams.empty() && unwrapped->templateArgs.size() == subCls->templateParams.size();
         for(const FieldDecl* subField : subCls->fields){
             if(subField && !subField->isTransient && subField->type){
                 const TypeRef* subFieldType = hasTemplateSub
@@ -132,9 +132,9 @@ namespace __hidden_adhd_layout_optimizer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
+b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
     m_unit = &unit;
-    bool ok = true;
+    b8 ok = true;
     for(ClassDecl* classDecl : unit.classes){
         if(!computeClassLayout(*classDecl, errors))
             ok = false;
@@ -143,11 +143,11 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
         return false;
     MVector<ParseError> silentErrors(m_arena);
     for(usize iter = 0u; iter < unit.classes.size(); ++iter){
-        bool changed = false;
+        b8 changed = false;
         for(ClassDecl* classDecl : unit.classes){
             const usize prevSize = classDecl->totalSize;
             const usize prevAlign = classDecl->totalAlign;
-            const bool prevArena = classDecl->needsClassArena;
+            const b8 prevArena = classDecl->needsClassArena;
             (void)computeClassLayout(*classDecl, silentErrors);
             if(classDecl->totalSize != prevSize || classDecl->totalAlign != prevAlign || classDecl->needsClassArena != prevArena)
                 changed = true;
@@ -171,7 +171,7 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
     }
     const usize maxPostPasses = unit.classes.size() + unit.templateInstantiations.size() + 1u;
     for(usize iter = 0u; iter < maxPostPasses; ++iter){
-        bool changed = false;
+        b8 changed = false;
         for(ClassTemplateInstantiation* inst : unit.templateInstantiations){
             if(!inst || !inst->templateDecl)
                 continue;
@@ -199,7 +199,7 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
         for(ClassDecl* classDecl : unit.classes){
             const usize prevSize = classDecl->totalSize;
             const usize prevAlign = classDecl->totalAlign;
-            const bool prevArena = classDecl->needsClassArena;
+            const b8 prevArena = classDecl->needsClassArena;
             if(!computeClassLayout(*classDecl, silentErrors))
                 ok = false;
             if(classDecl->totalSize != prevSize || classDecl->totalAlign != prevAlign || classDecl->needsClassArena != prevArena)
@@ -213,8 +213,8 @@ bool LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Par
 
 void LayoutOptimizer::sortAndPackFields(
     MVector<FieldDecl*>& orderedFields,
-    const bool isSerialize,
-    const bool hasInterfaces,
+    const b8 isSerialize,
+    const b8 hasInterfaces,
     usize& outTotalSize,
     usize& outTotalAlign
 )noexcept{
@@ -224,7 +224,7 @@ void LayoutOptimizer::sortAndPackFields(
             usize j = i;
             while(j > 0u){
                 const FieldDecl* prev = orderedFields[j - 1u];
-                const bool keyBeforePrev = (key->resolvedAlign > prev->resolvedAlign)
+                const b8 keyBeforePrev = (key->resolvedAlign > prev->resolvedAlign)
                     || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize > prev->resolvedSize)
                     || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize == prev->resolvedSize && key->originalIndex < prev->originalIndex);
                 if(!keyBeforePrev)
@@ -273,7 +273,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
         }
     }
 
-    if(name == "bool" || name == "i8" || name == "u8"){
+    if(name == "b8" || name == "i8" || name == "u8"){
         outSize = 1u;
         outAlign = 1u;
         return;
@@ -445,7 +445,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
     outAlign = 8u;
 }
 
-bool LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors){
+b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>& errors){
     if(classDecl.isSerialize && !classDecl.implementedInterfaces.empty()){
         ReportAdhdDiagnostic(m_arena, errors, classDecl.span, "'[serialize]' class cannot implement an interface (virtual table pointers cannot be binary serialized)");
         return false;

@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::canSubmitCommand(const InputEvent& event)const noexcept{
+b8 InputRouter::canSubmitCommand(const InputEvent& event)const noexcept{
     if(event.type != InputEventType::CommandUp || !event.edit || (event.command != InputCommand::Accept && event.command != InputCommand::Submit))
         return false;
     const CommandSource* source = findCommandSource(event.source);
@@ -31,7 +31,7 @@ void InputRouter::cancelSubmitCommands(const WidgetId id)noexcept{
     }
 }
 
-bool InputRouter::pressed(const WidgetId id)const noexcept{
+b8 InputRouter::pressed(const WidgetId id)const noexcept{
     if(m_primaryDown && m_pointerSubmitArmed && m_capture == id && hitTest(m_interactionPosition) == id)
         return true;
     for(const CommandSource& source : m_commandSources){
@@ -41,7 +41,7 @@ bool InputRouter::pressed(const WidgetId id)const noexcept{
     return false;
 }
 
-bool InputRouter::currentCommandFocus(const CommandSource& source)const noexcept{
+b8 InputRouter::currentCommandFocus(const CommandSource& source)const noexcept{
     const auto& owner = source.focusOwner;
     const HitTarget* focused = findTarget(owner.target, owner.declarationGeneration);
     return

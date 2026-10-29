@@ -46,7 +46,7 @@ public:
 struct CrashIngestResult{
     LogString message;
     Core::Common::LogType::Enum type = Core::Common::LogType::EssentialInfo;
-    bool accepted = false;
+    b8 accepted = false;
 
 
 public:

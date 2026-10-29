@@ -126,7 +126,7 @@ Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::Scrat
     return outScene;
 }
 
-UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, const bool includeHidden){
+UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, const b8 includeHidden){
     UtilityVector<MeshInstance> instances;
     if(!scene)
         return instances;

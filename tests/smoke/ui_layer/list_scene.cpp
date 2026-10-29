@@ -55,7 +55,7 @@ UiListSmokeScene::~UiListSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiListSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiListSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     ObserveSmokeDisplay(__hidden_ui_list_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     m_source.beginFrame();
@@ -94,7 +94,7 @@ bool UiListSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiListSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
+b8 UiListSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
@@ -161,11 +161,11 @@ void UiListSmokeScene::observeState(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerListSmokeEnabled(){
+b8 IsUiLayerListSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_LIST");
 }
 
-bool IsUiLayerListSkinSmokeEnabled(){
+b8 IsUiLayerListSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_LIST_SKIN");
 }
 

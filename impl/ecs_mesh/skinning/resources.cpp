@@ -72,8 +72,8 @@ static Expected<Core::GpuDescriptorHandle> RegisterUniformBuffer(Core::GpuDescri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<bool> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
-    const bool hasSkinPayload = !instance.skin.empty();
+Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
+    const b8 hasSkinPayload = !instance.skin.empty();
     if(instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max) || (hasSkinPayload && (instance.skeletonJointCount == 0u || instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u))){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has invalid skin resource counts"), instance.handle.value);
         return MakeUnexpected(Failure{});
@@ -87,7 +87,7 @@ Expected<bool> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeIns
     const u32 meshletCount = static_cast<u32>(instance.meshlets.size());
     const u32 skinCount = static_cast<u32>(instance.skin.size());
     const u32 jointCount = hasSkinPayload ? instance.skeletonJointCount : 0u;
-    const bool rebuild =
+    const b8 rebuild =
         inserted
         || resources.buffers != buffers
         || resources.editRevision != instance.editRevision
@@ -121,7 +121,7 @@ Expected<bool> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeIns
     private:
         MeshSkinningSystem& m_system;
         RuntimeResources& m_resources;
-        bool m_active = true;
+        b8 m_active = true;
     };
 
     RuntimeResources rebuilt;
@@ -204,7 +204,7 @@ Expected<bool> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeIns
     return true;
 }
 
-bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources){
+b8 MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){

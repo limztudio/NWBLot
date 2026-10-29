@@ -50,7 +50,7 @@ struct RayTracingOpacityMicromapUsageCount{
 
 struct RayTracingOpacityMicromapDesc{
     Name debugName;
-    bool trackLiveness = true;
+    b8 trackLiveness = true;
 
     // OMM flags. Applies to all OMMs in array.
     RayTracingOpacityMicromapBuildFlags::Mask flags = RayTracingOpacityMicromapBuildFlags::None;
@@ -77,7 +77,7 @@ public:
 public:
     constexpr RayTracingOpacityMicromapDesc& setDebugName(const Name& value)noexcept{ debugName = value; return *this; }
 
-    constexpr RayTracingOpacityMicromapDesc& setTrackLiveness(bool value)noexcept{ trackLiveness = value; return *this; }
+    constexpr RayTracingOpacityMicromapDesc& setTrackLiveness(b8 value)noexcept{ trackLiveness = value; return *this; }
 
     constexpr RayTracingOpacityMicromapDesc& setFlags(RayTracingOpacityMicromapBuildFlags::Mask value)noexcept{ flags = value; return *this; }
 
@@ -340,7 +340,7 @@ struct RayTracingGeometryDesc{
 
     RayTracingGeometryFlags::Mask flags = RayTracingGeometryFlags::None;
     RayTracingGeometryType::Enum geometryType = RayTracingGeometryType::Triangles;
-    bool useTransform = false;
+    b8 useTransform = false;
 
 
 public:
@@ -446,9 +446,9 @@ struct RayTracingAccelStructDesc{
     Name debugName;
     RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-    bool trackLiveness = true;
-    bool isTopLevel = false;
-    bool isVirtual = false;
+    b8 trackLiveness = true;
+    b8 isTopLevel = false;
+    b8 isVirtual = false;
 
 
 public:
@@ -468,11 +468,11 @@ public:
 
     constexpr RayTracingAccelStructDesc& setQueueSharing(ResourceQueueSharing::Mask value)noexcept{ queueSharing = value; return *this; }
 
-    constexpr RayTracingAccelStructDesc& setTrackLiveness(bool value)noexcept{ trackLiveness = value; return *this; }
+    constexpr RayTracingAccelStructDesc& setTrackLiveness(b8 value)noexcept{ trackLiveness = value; return *this; }
 
-    constexpr RayTracingAccelStructDesc& setIsTopLevel(bool value)noexcept{ isTopLevel = value; return *this; }
+    constexpr RayTracingAccelStructDesc& setIsTopLevel(b8 value)noexcept{ isTopLevel = value; return *this; }
 
-    constexpr RayTracingAccelStructDesc& setIsVirtual(bool value)noexcept{ isVirtual = value; return *this; }
+    constexpr RayTracingAccelStructDesc& setIsVirtual(b8 value)noexcept{ isVirtual = value; return *this; }
 };
 
 
@@ -510,7 +510,7 @@ namespace RayTracingClusterOperationMode{
         GetSizes,                   // Require only the size result array
     };
 
-    [[nodiscard]] constexpr bool IsDestinationTopologyValid(const Enum mode, const bool hasAddresses, const bool hasSizes, const bool hasImplicitDestination)noexcept{
+    [[nodiscard]] constexpr b8 IsDestinationTopologyValid(const Enum mode, const b8 hasAddresses, const b8 hasSizes, const b8 hasImplicitDestination)noexcept{
         switch(mode){
         case ImplicitDestinations: return hasImplicitDestination;
         case ExplicitDestinations: return hasAddresses && hasSizes && !hasImplicitDestination;

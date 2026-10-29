@@ -58,7 +58,7 @@ namespace MaterialPipelineCsgMode{
     };
 };
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass)noexcept{
+[[nodiscard]] NWB_INLINE b8 MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass)noexcept{
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
@@ -70,7 +70,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass)noexcept{
+[[nodiscard]] NWB_INLINE b8 MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass)noexcept{
     switch(pass){
     case MaterialPipelinePass::Opaque:
     case MaterialPipelinePass::CsgReceiverSurface:
@@ -80,7 +80,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const bool transparent)noexcept{
+[[nodiscard]] NWB_INLINE b8 MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const b8 transparent)noexcept{
     switch(pass){
     case MaterialPipelinePass::Opaque:
         return !transparent;
@@ -91,7 +91,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass)noexcept{
+[[nodiscard]] NWB_INLINE b8 MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass)noexcept{
     return pass == MaterialPipelinePass::Opaque || MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
@@ -115,15 +115,15 @@ struct MaterialPipelineKey{
     u64 csgShapeRegistryRevision = 0u;
     Core::FramebufferInfo framebufferInfo;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
-    bool twoSided = false;
+    b8 twoSided = false;
     MaterialPipelineCsgMode::Enum csgMode = MaterialPipelineCsgMode::None;
 };
 
 struct MaterialPipelineCsgBindingUse{
-    bool clip = false;
-    bool avboitClip = false;
-    bool receiverSurface = false;
-    bool intervalSample = false;
+    b8 clip = false;
+    b8 avboitClip = false;
+    b8 receiverSurface = false;
+    b8 intervalSample = false;
 };
 
 [[nodiscard]] NWB_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(const MaterialPipelineKey& pipelineKey, const MaterialPipelinePass::Enum pass)noexcept{
@@ -138,7 +138,7 @@ struct MaterialPipelineKeyHasher{
     usize operator()(const MaterialPipelineKey& key)const noexcept;
 };
 struct MaterialPipelineKeyEqualTo{
-    bool operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept;
+    b8 operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept;
 };
 
 struct MaterialSurfaceInfo{
@@ -163,13 +163,13 @@ struct MaterialSurfaceInfo{
     u32 shadingModelId = 0u;
     u32 surfaceDispatchId = 0u;
     // CSG caps evaluate the generated surface hook with this material's constants. Opaque stage shaders have no hook.
-    bool csgCapSurfaceDispatchAvailable = false;
-    bool csgCapSurfaceDispatchUnavailableLogged = false;
-    bool resourceReferencesResolved = false;
+    b8 csgCapSurfaceDispatchAvailable = false;
+    b8 csgCapSurfaceDispatchUnavailableLogged = false;
+    b8 resourceReferencesResolved = false;
     // Refractive classifies RT casters; NwbMeshSurface owns IOR and shadow absorption values.
-    bool transparent = false;
-    bool twoSided = false;
-    bool refractive = false;
+    b8 transparent = false;
+    b8 twoSided = false;
+    b8 refractive = false;
 
 
 public:
@@ -195,8 +195,8 @@ struct MaterialPipelineResources{
     Core::ShaderHandle meshShader;
     Core::ShaderHandle computeShader;
     RenderPath::Enum renderPath = RenderPath::MeshShader;
-    bool sharedGeometryComputeProgram = false;
-    bool indexedGeometryOutput = false;
+    b8 sharedGeometryComputeProgram = false;
+    b8 indexedGeometryOutput = false;
 };
 
 

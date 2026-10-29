@@ -23,7 +23,7 @@ namespace __hidden_ui_router_popup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool Area(const Rect& rectangle)noexcept{
+[[nodiscard]] static b8 Area(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width > 0.0f && rectangle.height > 0.0f
@@ -31,7 +31,7 @@ namespace __hidden_ui_router_popup{
     ;
 }
 
-[[nodiscard]] static bool Focusable(const SIMDVectorSingle rectangle, const SIMDVectorSingle clip)noexcept{
+[[nodiscard]] static b8 Focusable(const SIMDVectorSingle rectangle, const SIMDVectorSingle clip)noexcept{
     const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(rectangle, clip);
     return (VectorMoveMask(VectorGreater(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;
 }
@@ -54,19 +54,19 @@ const PopupScope* InputRouter::popupScope(const PopupToken& token)const noexcept
     return nullptr;
 }
 
-bool InputRouter::allowedByPopup(const HitTarget& target)const noexcept{
+b8 InputRouter::allowedByPopup(const HitTarget& target)const noexcept{
     if(m_popups.empty())
         return !target.popup.widget.valid();
     const PopupRecord& top = m_popups.back();
     return !top.closing && target.popup == top.scope.token;
 }
 
-bool InputRouter::popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept{
+b8 InputRouter::popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept{
     PopupToken current = token;
     for(usize depth = 0u; depth < s_InputMaxPopups && current.valid(); ++depth){
         if(current == ancestor)
             return true;
-        bool found = false;
+        b8 found = false;
         for(const auto& record : m_popups){
             if(record.scope.token == current){
                 current = record.scope.parent;
@@ -80,7 +80,7 @@ bool InputRouter::popupDescendant(const PopupToken& token, const PopupToken& anc
     return false;
 }
 
-bool InputRouter::stagePopups(const PopupScope* scopes, const usize count){
+b8 InputRouter::stagePopups(const PopupScope* scopes, const usize count){
     if(count > s_InputMaxPopups || (count != 0u && !scopes))
         return false;
     m_stagedPopups.clear();
@@ -102,7 +102,7 @@ bool InputRouter::stagePopups(const PopupScope* scopes, const usize count){
                 return false;
         }
         if(!scope.parent.empty()){
-            bool parent = false;
+            b8 parent = false;
             for(usize previous = 0u; previous < index; ++previous)
                 parent |= scopes[previous].token == scope.parent;
             if(!scope.parent.valid() || !parent)
@@ -120,7 +120,7 @@ bool InputRouter::stagePopups(const PopupScope* scopes, const usize count){
     return true;
 }
 
-bool InputRouter::validPopupTarget(const HitTarget& target)const noexcept{
+b8 InputRouter::validPopupTarget(const HitTarget& target)const noexcept{
     if(!target.popup.widget.valid()){
         return target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
     }
@@ -133,7 +133,7 @@ bool InputRouter::validPopupTarget(const HitTarget& target)const noexcept{
 
 void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
     for(usize index = m_popupDismissals.size(); index > 0u; --index){
-        bool retained = false;
+        b8 retained = false;
         for(const auto& record : m_stagedPopups)
             retained |= record.scope.token == m_popupDismissals[index - 1u].token;
         if(!retained)
@@ -153,7 +153,7 @@ void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
     WidgetId candidateFocus = m_popups.empty() ? m_focus : m_popups.front().restoreFocus;
     u64 candidateDeclaration = m_popups.empty() ? m_focusDeclaration : m_popups.front().restoreDeclaration;
     PopupToken candidatePopup;
-    const bool lostFocus = !m_windowFocused || (expectedFocusLossGeneration != Limit<u64>::s_Max && expectedFocusLossGeneration != m_focusLossGeneration);
+    const b8 lostFocus = !m_windowFocused || (expectedFocusLossGeneration != Limit<u64>::s_Max && expectedFocusLossGeneration != m_focusLossGeneration);
     if(!eligible(candidateFocus, candidateDeclaration, candidatePopup)){
         candidateFocus = {};
         candidateDeclaration = 0u;

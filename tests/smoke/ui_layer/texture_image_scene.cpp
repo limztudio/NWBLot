@@ -98,7 +98,7 @@ UiTextureImageSmokeScene::~UiTextureImageSmokeScene()noexcept{
     m_input.removeHandler(*this);
 }
 
-bool UiTextureImageSmokeScene::paint(Impl::UiPaintContext& context){
+b8 UiTextureImageSmokeScene::paint(Impl::UiPaintContext& context){
     if(!m_sourcesValid)
         return false;
     if(m_evictionRemaining != 0u){
@@ -124,7 +124,7 @@ bool UiTextureImageSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-bool UiTextureImageSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+b8 UiTextureImageSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     static_cast<void>(scancode);
     static_cast<void>(mods);
     if(key != Core::Key::F4 && key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
@@ -150,7 +150,7 @@ bool UiTextureImageSmokeScene::keyboardUpdate(const i32 key, const i32 scancode,
     return true;
 }
 
-bool UiTextureImageSmokeScene::replaceVersion(){
+b8 UiTextureImageSmokeScene::replaceVersion(){
     if(!m_default || !m_alternate || !m_replacement)
         return false;
     const Impl::Texture& payload = m_replacementAlternate ? m_default->texture() : m_alternate->texture();
@@ -172,7 +172,7 @@ bool UiTextureImageSmokeScene::replaceVersion(){
     return true;
 }
 
-bool UiTextureImageSmokeScene::paintControls(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
+b8 UiTextureImageSmokeScene::paintControls(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     if(!ui.beginPanel("texture_image_controls", bounds))
         return false;
@@ -187,7 +187,7 @@ bool UiTextureImageSmokeScene::paintControls(Impl::Ui::Builder& ui, const Impl::
     return ui.endPanel();
 }
 
-bool UiTextureImageSmokeScene::paintImages(Impl::UiPaintContext& context, const f32 width, const f32 right, const f32 otherWidth){
+b8 UiTextureImageSmokeScene::paintImages(Impl::UiPaintContext& context, const f32 width, const f32 right, const f32 otherWidth){
     using namespace Impl::Ui;
     using namespace __hidden_ui_texture_image_scene;
     auto& paint = context.paint;
@@ -229,14 +229,14 @@ bool UiTextureImageSmokeScene::paintImages(Impl::UiPaintContext& context, const 
     tint = { 0.0f, 0.0f, 0.0f, 1.0f };
     m_declared.values[9u] = static_cast<u64>(!declaredSource);
     paint.pushClip(rectangles[8u]);
-    const bool clipped = paint.drawImage(m_default, rectangles[7u], TextureUv(16.0f, 4.0f, 12.0f));
-    const bool popped = paint.popClip();
+    const b8 clipped = paint.drawImage(m_default, rectangles[7u], TextureUv(16.0f, 4.0f, 12.0f));
+    const b8 popped = paint.popClip();
     if(!clipped || !popped)
         return false;
     return paint.drawImage(m_default, rectangles[9u]) && paint.drawImage(m_alternate, rectangles[10u]) && paint.drawRegion(Name("progress.fill"), rectangles[11u]);
 }
 
-bool UiTextureImageSmokeScene::paintBuilderImages(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
+b8 UiTextureImageSmokeScene::paintBuilderImages(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
     using namespace Impl::Ui;
     if(!ui.beginPanel("texture_image_builder", bounds))
         return false;
@@ -259,7 +259,7 @@ bool UiTextureImageSmokeScene::paintBuilderImages(Impl::Ui::Builder& ui, const I
     return ui.endPanel();
 }
 
-bool UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const f32 right){
+b8 UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const f32 right){
     using namespace Impl::Ui;
     auto& ui = context.ui;
     PopupOptions parent;
@@ -317,11 +317,11 @@ bool UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsUiLayerTextureImageSmokeEnabled(){
+b8 IsUiLayerTextureImageSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXTURE_IMAGE");
 }
 
-bool IsUiLayerTextureImageSkinSmokeEnabled(){
+b8 IsUiLayerTextureImageSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXTURE_IMAGE_SKIN");
 }
 

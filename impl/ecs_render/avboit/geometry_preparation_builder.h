@@ -42,8 +42,8 @@ struct AvboitGeometryPreparationInputs{
 struct AvboitGeometryPreparationResult{
     Core::GpuGraphResourceSetId materialGeometrySet;
     Core::GpuGraphResourceSetId materialSampledTextureSet;
-    bool geometryOwned = false;
-    bool sampledTexturesCollected = false;
+    b8 geometryOwned = false;
+    b8 sampledTexturesCollected = false;
 };
 
 

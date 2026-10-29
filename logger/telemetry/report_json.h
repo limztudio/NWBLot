@@ -54,10 +54,10 @@ void AppendFrameGraphRuntimeStatisticsJson(
     Span<const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     Span<const Telemetry::FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
     const FrameGraphOwnerStatisticsRange& ownerRange,
-    const bool physicalQueueRuntimeStatisticsPresent,
-    const bool packetSubmissionStatisticsPresent
+    const b8 physicalQueueRuntimeStatisticsPresent,
+    const b8 packetSubmissionStatisticsPresent
 );
-void AppendFrameGraphJson(const FrameGraphReportRecord& record, const usize graphIndex, const bool finalGraph, AString<TelemetryArena>& out);
+void AppendFrameGraphJson(const FrameGraphReportRecord& record, const usize graphIndex, const b8 finalGraph, AString<TelemetryArena>& out);
 void BuildJson(const TelemetryReportSummary& summary, Span<const FrameGraphReportRecord> graphs, const AStringView memoryRecords, AString<TelemetryArena>& out);
 
 

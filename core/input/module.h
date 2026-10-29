@@ -215,23 +215,23 @@ public:
 
 
 public:
-    virtual void windowFocusUpdate(bool){}
+    virtual void windowFocusUpdate(b8){}
 
     virtual void pointerLeave(){}
 
     virtual void pointerCaptureLost(){}
 
-    virtual bool keyboardUpdate(i32, i32, i32, i32){ return false; }
+    virtual b8 keyboardUpdate(i32, i32, i32, i32){ return false; }
     // Queried immediately from the consuming press/repeat handler before native ordinary text is admitted.
-    [[nodiscard]] virtual bool blocksKeyboardText()const{ return false; }
+    [[nodiscard]] virtual b8 blocksKeyboardText()const{ return false; }
 
-    virtual bool keyboardCharInput(u32, i32){ return false; }
+    virtual b8 keyboardCharInput(u32, i32){ return false; }
 
-    virtual bool mousePosUpdate(f64, f64){ return false; }
+    virtual b8 mousePosUpdate(f64, f64){ return false; }
 
-    virtual bool mouseButtonUpdate(i32, i32, i32){ return false; }
+    virtual b8 mouseButtonUpdate(i32, i32, i32){ return false; }
 
-    virtual bool mouseScrollUpdate(f64, f64){ return false; }
+    virtual b8 mouseScrollUpdate(f64, f64){ return false; }
 };
 
 
@@ -272,16 +272,16 @@ public:
 
     void setMousePositionScale(f32 x, f32 y)noexcept;
 
-    [[nodiscard]] bool windowFocused()const noexcept{ return m_windowFocused; }
+    [[nodiscard]] b8 windowFocused()const noexcept{ return m_windowFocused; }
     // Focus is window lifecycle state; every current handler observes each transition.
-    void windowFocusUpdate(bool focused);
+    void windowFocusUpdate(b8 focused);
     // Native pointer lifecycle reaches every owner and never consumes keyboard state.
     void pointerLeave();
     void pointerCaptureLost();
 
     void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
     // Releases preserve queued character policy; a supplied native scancode selects its captured press/repeat policy.
-    [[nodiscard]] bool keyboardTextBlocked(i32 scancode = -1)const noexcept;
+    [[nodiscard]] b8 keyboardTextBlocked(i32 scancode = -1)const noexcept;
     void keyboardCharInput(u32 unicode, i32 mods);
     void mousePosUpdate(f64 xpos, f64 ypos);
     void mouseButtonUpdate(i32 button, i32 action, i32 mods);
@@ -309,7 +309,7 @@ private:
 
     void queueOrApplyHandlerMutation(HandlerMutationType::Enum type, IInputEventHandler& handler);
     void applyPendingHandlerMutations();
-    bool isHandlerPendingRemoval(const IInputEventHandler& handler)const noexcept;
+    b8 isHandlerPendingRemoval(const IInputEventHandler& handler)const noexcept;
 
 
 private:
@@ -318,10 +318,10 @@ private:
     HandlerMutationVector m_pendingHandlerMutations;
     usize m_pendingHandlerRemovalCount = 0;
     u64 m_keyboardTextPolicyEpoch = 0u;
-    Array<bool, s_KeyboardScancodeCount> m_keyboardTextPolicies{};
+    Array<b8, s_KeyboardScancodeCount> m_keyboardTextPolicies{};
     u32 m_dispatchDepth = 0;
-    bool m_keyboardTextBlocked = false;
-    bool m_windowFocused = true;
+    b8 m_keyboardTextBlocked = false;
+    b8 m_windowFocused = true;
     f32 m_mousePositionScaleX = 1.f;
     f32 m_mousePositionScaleY = 1.f;
 };

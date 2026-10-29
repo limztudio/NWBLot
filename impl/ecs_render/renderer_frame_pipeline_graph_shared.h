@@ -97,7 +97,7 @@ inline constexpr usize s_CausticResolveUpsampleResourceUseCapacity = 5u;
 // Five raytracing scene/shadow buffers shared by the caustics and shadow-visibility graph declares.
 // The importer callback matches each file's local importBuffer lambda, so call sites keep their exact graph.
 template<typename ImportBufferFn, typename AppendBufferFn>
-[[nodiscard]] inline bool AppendRayTracingSceneShadowBuffers(const RayTracingDeferredGraphResourceSnapshot& rayTracingResources, ImportBufferFn&& importBuffer, AppendBufferFn&& appendBuffer){
+[[nodiscard]] inline b8 AppendRayTracingSceneShadowBuffers(const RayTracingDeferredGraphResourceSnapshot& rayTracingResources, ImportBufferFn&& importBuffer, AppendBufferFn&& appendBuffer){
     const ReferenceWrapper<const Core::BufferHandle> sceneShadowBuffers[] = {
         rayTracingResources.sceneBvhNodeBuffer,
         rayTracingResources.sceneInstanceBuffer,
@@ -129,7 +129,7 @@ struct TraceResourceSetUses{
 };
 
 template<typename AppendBufferFn>
-[[nodiscard]] inline bool AppendCurrentCsgRayGeometry(const Core::BufferHandle& context, const Span<const Core::BufferHandle> bounds, Core::GpuTaskGraph& graph, AppendBufferFn&& appendBuffer){
+[[nodiscard]] inline b8 AppendCurrentCsgRayGeometry(const Core::BufferHandle& context, const Span<const Core::BufferHandle> bounds, Core::GpuTaskGraph& graph, AppendBufferFn&& appendBuffer){
     if(!context)
         return true;
     const auto appendRead = [&](const Core::BufferHandle& buffer){

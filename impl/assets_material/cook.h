@@ -57,10 +57,10 @@ public:
     u32 shadingModelId = 0u;
     // Surface dispatch id, deduped over the `surface` source set.
     u32 surfaceDispatchId = 0u;
-    bool transparent = false;
-    bool twoSided = false;
+    b8 transparent = false;
+    b8 twoSided = false;
     // Explicit caster classification, independent of transparency; NwbMeshSurface supplies the optical parameters.
-    bool refractive = false;
+    b8 refractive = false;
 
 
 public:
@@ -129,7 +129,7 @@ public:
 
 
 [[nodiscard]] Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool ValidateMaterialCookInterfaces(Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries);
+[[nodiscard]] b8 ValidateMaterialCookInterfaces(Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries);
 [[nodiscard]] Expected<MaterialCookString> BuildMaterialBindIncludeSource(MaterialCookArena& arena, const MaterialBindEntry& entry, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, AStringView configurationSafeName, Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena);
 struct MaterialBindDependency{
@@ -137,7 +137,7 @@ struct MaterialBindDependency{
     // Authored `.bind` files behind the generated includes. They are not compiler inputs, but their edits must recook the shader.
     MaterialCookVector<Path> interfaceSources;
     Name interfaceName = s_NameNone;
-    bool dependsOnMaterialBind = false;
+    b8 dependsOnMaterialBind = false;
 
 
 public:
@@ -159,7 +159,7 @@ public:
 
 // Deterministic shading-model id (unique `bxdf`) + surface dispatch id (unique `surface`); shared sources share ids.
 // Before material build + dispatch emission.
-[[nodiscard]] bool AssignMaterialShadingModelIds(Span<MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 AssignMaterialShadingModelIds(Span<MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
 // BXDF dispatch module (per-bxdf include, macro-renamed per id; unknown id = magenta, no engine default).
 // Always written; after AssignMaterialShadingModelIds, before PrepareShaderEntriesForCook.
 [[nodiscard]] Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, AStringView configurationSafeName, Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);

@@ -48,7 +48,7 @@ protected:
         m_builder.progressStyle().padding = { 4.0f, 4.0f, 4.0f, 4.0f };
     }
 
-    void configureProgress(const bool preferred = true, const bool fallback = true){
+    void configureProgress(const b8 preferred = true, const b8 fallback = true){
         configureSkin();
         UiSkin::RegionVector regions(m_arena);
         for(const UiSkinRegion& region : m_skin.regions())
@@ -177,7 +177,7 @@ TEST_F(UiProgressBuilderTests, ExternalClipConstrainsPaintAndBothNestedClipsAreR
     ASSERT_TRUE(fill);
     EXPECT_FLOAT_EQ(fill->bounds.x, 20.0f);
     EXPECT_FLOAT_EQ(fill->bounds.width, 20.0f);
-    bool sentinel = false;
+    b8 sentinel = false;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Solid)
             continue;

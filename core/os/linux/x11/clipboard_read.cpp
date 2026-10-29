@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 
 
 void X11ClipboardService::requestConversion(){
-    bool succeeded = false;
+    b8 succeeded = false;
     {
         X11CheckedOperation checked(m_display);
         XDeleteProperty(&m_display, m_operationWindow, m_propertyAtom);

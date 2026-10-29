@@ -26,19 +26,19 @@ RendererAvboitSystem::RendererAvboitSystem(Core::Alloc::GlobalArena& arena, Core
 {}
 
 
-bool RendererAvboitSystem::shouldClearTargets(const bool hasTransparentRenderers)const noexcept{
+b8 RendererAvboitSystem::shouldClearTargets(const b8 hasTransparentRenderers)const noexcept{
     return hasTransparentRenderers || m_avboitState.m_targetsNeedClear;
 }
 
-bool RendererAvboitSystem::captureTargetClearState()const noexcept{
+b8 RendererAvboitSystem::captureTargetClearState()const noexcept{
     return m_avboitState.m_targetsNeedClear;
 }
 
-void RendererAvboitSystem::restoreTargetClearState(const bool targetsNeedClear)noexcept{
+void RendererAvboitSystem::restoreTargetClearState(const b8 targetsNeedClear)noexcept{
     m_avboitState.m_targetsNeedClear = targetsNeedClear;
 }
 
-void RendererAvboitSystem::markFrameTargetUsage(const bool hasTransparentRenderers)noexcept{
+void RendererAvboitSystem::markFrameTargetUsage(const b8 hasTransparentRenderers)noexcept{
     m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
 }
 

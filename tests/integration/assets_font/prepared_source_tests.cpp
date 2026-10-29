@@ -82,7 +82,7 @@ struct MalformedField{
     AStringView filename;
     usize offset = 0u;
     u32 value = 0u;
-    bool rejectsBeforeDirectoryAllocation = false;
+    b8 rejectsBeforeDirectoryAllocation = false;
 };
 
 
@@ -175,7 +175,7 @@ TEST(PreparedFontSource, SfntByteAndDigestCorruptionRejectBothReadModes){
         auto corruptedPathResult = WriteCase(testArena, s_Filenames[index], corrupted);
         ASSERT_TRUE(corruptedPathResult);
         path = Move(*corruptedPathResult);
-        for(const bool includePixels : { false, true }){
+        for(const b8 includePixels : { false, true }){
             EXPECT_FALSE(ReadPreparedFontSource(path, testArena.arena, includePixels));
         }
     }
@@ -232,7 +232,7 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
         auto malformedPathResult = WriteCase(testArena, field.filename, malformed);
         ASSERT_TRUE(malformedPathResult);
         path = Move(*malformedPathResult);
-        for(const bool includePixels : { false, true }){
+        for(const b8 includePixels : { false, true }){
             const ArenaMemoryStats before = outputArena.memoryStats();
             EXPECT_FALSE(ReadPreparedFontSource(path, outputArena, includePixels)) << field.filename;
             const ArenaMemoryStats after = outputArena.memoryStats();
@@ -251,7 +251,7 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
     auto oversizedPathResult = WriteCase(testArena, "missing_large_image.font", oversized);
     ASSERT_TRUE(oversizedPathResult);
     path = Move(*oversizedPathResult);
-    for(const bool includePixels : { false, true }){
+    for(const b8 includePixels : { false, true }){
         const ArenaMemoryStats before = outputArena.memoryStats();
         EXPECT_FALSE(ReadPreparedFontSource(path, outputArena, includePixels));
         EXPECT_LE(outputArena.memoryStats().peakUsedBytes, before.usedBytes + 8u * sizeof(PreparedFontImageGroup));
@@ -291,7 +291,7 @@ TEST(PreparedFontSource, TruncatedSectionsAndTrailingBytesRejectBothReadModes){
         auto malformedPathResult = WriteCase(testArena, cut.filename, malformed);
         ASSERT_TRUE(malformedPathResult);
         path = Move(*malformedPathResult);
-        for(const bool includePixels : { false, true }){
+        for(const b8 includePixels : { false, true }){
             EXPECT_FALSE(ReadPreparedFontSource(path, testArena.arena, includePixels)) << cut.filename;
         }
     }

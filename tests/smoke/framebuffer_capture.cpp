@@ -56,11 +56,11 @@ static void WriteU32LE(const NotNull<u8*> destination, const u32 value)noexcept{
     destination.get()[3] = static_cast<u8>((value >> s_Byte3Shift) & s_ByteMask);
 }
 
-static bool IsSupportedSdrFormat(const Core::Format::Enum format)noexcept{
+static b8 IsSupportedSdrFormat(const Core::Format::Enum format)noexcept{
     return format == Core::Format::RGBA8_UNORM || format == Core::Format::RGBA8_UNORM_SRGB || format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
 }
 
-static bool IsBgraFormat(const Core::Format::Enum format)noexcept{
+static b8 IsBgraFormat(const Core::Format::Enum format)noexcept{
     return format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
 }
 
@@ -97,7 +97,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.source || !payload.destination || !payload.completionState || context.commandIrCapture)
             return false;
 
@@ -148,7 +148,7 @@ FramebufferCapture::~FramebufferCapture()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FramebufferCapture::start(){
+b8 FramebufferCapture::start(){
     if(m_registered)
         return true;
     if(m_failed || m_stopped)
@@ -233,7 +233,7 @@ void FramebufferCapture::update(){
     }
 
     Core::Alloc::ScratchArena scratchArena(__hidden_framebuffer_capture::s_BitmapScratchArena);
-    const bool captureWritten = writeCapture(MakeNotNull(static_cast<const u8*>(mapping->data)), mapping->rowPitch, scratchArena);
+    const b8 captureWritten = writeCapture(MakeNotNull(static_cast<const u8*>(mapping->data)), mapping->rowPitch, scratchArena);
     device.unmapStagingTexture(*m_readback);
     if(!captureWritten){
         markFailed(NWB_TEXT("failed to write the framebuffer capture atomically"));
@@ -248,7 +248,7 @@ void FramebufferCapture::update(){
         requestTerminalQuit();
 }
 
-bool FramebufferCapture::rearm(::Path<Core::Alloc::GlobalArena>&& outputPath)noexcept{
+b8 FramebufferCapture::rearm(::Path<Core::Alloc::GlobalArena>&& outputPath)noexcept{
     if(!m_registered || !m_captureReady || m_failed || m_skipped || m_quitRequested || outputPath.empty() || m_completionState->generation == Limit<u64>::s_Max)
         return false;
 
@@ -275,7 +275,7 @@ void FramebufferCapture::finish(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FramebufferCapture::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+b8 FramebufferCapture::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
     if(m_skipped || m_failed || width == 0u || height == 0u)
         return true;
@@ -312,7 +312,7 @@ void FramebufferCapture::backBufferResizing(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FramebufferCapture::prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame){
+b8 FramebufferCapture::prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame){
     m_taskGraphPresentationPrepared = false;
     if(m_captureReady || m_skipped || m_failed || m_completionState->acceptedToken.valid())
         return true;
@@ -353,7 +353,7 @@ bool FramebufferCapture::prepareTaskGraphPresentation(const Core::AcquiredPresen
     return true;
 }
 
-bool FramebufferCapture::hasTaskGraphPresentationWork()const noexcept{
+b8 FramebufferCapture::hasTaskGraphPresentationWork()const noexcept{
     return m_taskGraphPresentationPrepared && m_readback && !m_completionState->acceptedToken.valid() && !m_captureReady && !m_skipped && !m_failed;
 }
 
@@ -447,7 +447,7 @@ void FramebufferCapture::resetPendingReadback(){
     m_taskGraphPresentationClaimed = false;
 }
 
-bool FramebufferCapture::stagingMatches(const Core::TextureDesc& description)const noexcept{
+b8 FramebufferCapture::stagingMatches(const Core::TextureDesc& description)const noexcept{
     return
         m_readback
         && m_captureDescription.width == description.width
@@ -463,7 +463,7 @@ bool FramebufferCapture::stagingMatches(const Core::TextureDesc& description)con
     ;
 }
 
-bool FramebufferCapture::prepareReadback(const Core::TextureDesc& description){
+b8 FramebufferCapture::prepareReadback(const Core::TextureDesc& description){
     if(!__hidden_framebuffer_capture::IsSupportedSdrFormat(description.format)){
         markFailed(NWB_TEXT("swap-chain format is not SDR RGBA8/BGRA8 UNORM or SRGB"));
         return false;
@@ -489,7 +489,7 @@ bool FramebufferCapture::prepareReadback(const Core::TextureDesc& description){
     return true;
 }
 
-bool FramebufferCapture::writeCapture(const NotNull<const u8*> sourceBytes, const usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena){
+b8 FramebufferCapture::writeCapture(const NotNull<const u8*> sourceBytes, const usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena){
     const u32 width = m_captureDescription.width;
     const u32 height = m_captureDescription.height;
     if(width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
@@ -525,7 +525,7 @@ bool FramebufferCapture::writeCapture(const NotNull<const u8*> sourceBytes, cons
     __hidden_framebuffer_capture::WriteU16LE(MakeNotNull(bitmapBytes.data() + 28u), 24u);
     __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 34u), static_cast<u32>(*bitmapPixelBytes));
 
-    const bool sourceIsBgra = __hidden_framebuffer_capture::IsBgraFormat(m_captureDescription.format);
+    const b8 sourceIsBgra = __hidden_framebuffer_capture::IsBgraFormat(m_captureDescription.format);
     for(u32 bitmapY = 0u; bitmapY < height; ++bitmapY){
         const usize sourceY = static_cast<usize>(height - 1u - bitmapY);
         const auto sourceRowOffset = TryMultiply<usize>(sourceY, sourceRowPitch);

@@ -52,7 +52,7 @@ public:
     mutable IntegerEditModel* onRevision = nullptr;
     mutable NumericMutationSource* armSource = nullptr;
     IntegerEditModel* armModel = nullptr;
-    mutable bool mutationApplied = false;
+    mutable b8 mutationApplied = false;
 };
 
 using UiNumericEditLoanTests = NumericFixture;

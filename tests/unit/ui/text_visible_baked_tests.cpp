@@ -56,7 +56,7 @@ public:
 
 
 protected:
-    [[nodiscard]] bool installBaked(const StringView text){
+    [[nodiscard]] b8 installBaked(const StringView text){
         if(!installCoverageFonts())
             return false;
         auto layout = m_text.layout({ .text = text, .fontSize = 32.0f });

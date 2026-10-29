@@ -47,15 +47,15 @@ namespace FrustumPlaneIndex{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool Vector3AnyTrue(const SIMDVectorSingle value)noexcept{
+[[nodiscard]] NWB_INLINE b8 Vector3AnyTrue(const SIMDVectorSingle value)noexcept{
     return (VectorMoveMask(value) & VectorComponentMask::s_XYZ) != 0u;
 }
 
-[[nodiscard]] NWB_INLINE bool Vector4AllTrue(const SIMDVectorSingle value)noexcept{
+[[nodiscard]] NWB_INLINE b8 Vector4AllTrue(const SIMDVectorSingle value)noexcept{
     return (VectorMoveMask(value) & VectorComponentMask::s_XYZW) == VectorComponentMask::s_XYZW;
 }
 
-[[nodiscard]] NWB_INLINE bool Vector4AnyTrue(const SIMDVectorSingle value)noexcept{
+[[nodiscard]] NWB_INLINE b8 Vector4AnyTrue(const SIMDVectorSingle value)noexcept{
     return (VectorMoveMask(value) & VectorComponentMask::s_XYZW) != 0u;
 }
 
@@ -136,7 +136,7 @@ namespace FrustumPlaneIndex{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool PointsInsideMinMax(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
+[[nodiscard]] inline b8 PointsInsideMinMax(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
     for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         const SIMDVectorSingle outside = VectorOrInt(VectorLess(points[pointIndex], minBounds), VectorGreater(points[pointIndex], maxBounds));
         if(Vector3AnyTrue(outside))
@@ -145,7 +145,7 @@ namespace FrustumPlaneIndex{
     return true;
 }
 
-[[nodiscard]] inline bool PointsInsideSphere(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle center, const SIMDVectorSingle radius)noexcept{
+[[nodiscard]] inline b8 PointsInsideSphere(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle center, const SIMDVectorSingle radius)noexcept{
     const SIMDVectorSingle radiusSq = VectorMultiply(radius, radius);
     for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         const SIMDVectorSingle delta = VectorSubtract(points[pointIndex], center);
@@ -178,7 +178,7 @@ NWB_INLINE void ExpandMinMax(const SIMDVectorSingle point, SIMDVectorSingle& inO
     return VectorMin(VectorMax(point, minBounds), maxBounds);
 }
 
-[[nodiscard]] NWB_INLINE bool MinMaxIntersects(const SIMDVectorSingle lhsMinBounds, const SIMDVectorSingle lhsMaxBounds, const SIMDVectorSingle rhsMinBounds, const SIMDVectorSingle rhsMaxBounds)noexcept{
+[[nodiscard]] NWB_INLINE b8 MinMaxIntersects(const SIMDVectorSingle lhsMinBounds, const SIMDVectorSingle lhsMaxBounds, const SIMDVectorSingle rhsMinBounds, const SIMDVectorSingle rhsMaxBounds)noexcept{
     const SIMDVectorSingle disjoint = VectorOrInt(VectorGreater(lhsMinBounds, rhsMaxBounds), VectorGreater(rhsMinBounds, lhsMaxBounds));
     return !Vector3AnyTrue(disjoint);
 }
@@ -226,15 +226,15 @@ namespace FrustumPlaneIndex{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE bool VectorDouble3AnyTrue(const SIMDVectorDouble value)noexcept{
+[[nodiscard]] NWB_INLINE b8 VectorDouble3AnyTrue(const SIMDVectorDouble value)noexcept{
     return (VectorDoubleMoveMask(value) & VectorDoubleComponentMask::s_DoubleXYZ) != 0u;
 }
 
-[[nodiscard]] NWB_INLINE bool VectorDouble4AllTrue(const SIMDVectorDouble value)noexcept{
+[[nodiscard]] NWB_INLINE b8 VectorDouble4AllTrue(const SIMDVectorDouble value)noexcept{
     return (VectorDoubleMoveMask(value) & VectorDoubleComponentMask::s_DoubleXYZW) == VectorDoubleComponentMask::s_DoubleXYZW;
 }
 
-[[nodiscard]] NWB_INLINE bool VectorDouble4AnyTrue(const SIMDVectorDouble value)noexcept{
+[[nodiscard]] NWB_INLINE b8 VectorDouble4AnyTrue(const SIMDVectorDouble value)noexcept{
     return (VectorDoubleMoveMask(value) & VectorDoubleComponentMask::s_DoubleXYZW) != 0u;
 }
 
@@ -315,7 +315,7 @@ namespace FrustumPlaneIndex{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool PointsInsideMinMax(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
+[[nodiscard]] inline b8 PointsInsideMinMax(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
     for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         const SIMDVectorDouble outside = VectorDoubleOrInt(VectorDoubleLess(points[pointIndex], minBounds), VectorDoubleGreater(points[pointIndex], maxBounds));
         if(VectorDouble3AnyTrue(outside))
@@ -324,7 +324,7 @@ namespace FrustumPlaneIndex{
     return true;
 }
 
-[[nodiscard]] inline bool PointsInsideSphere(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble center, const SIMDVectorDouble radius)noexcept{
+[[nodiscard]] inline b8 PointsInsideSphere(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble center, const SIMDVectorDouble radius)noexcept{
     const SIMDVectorDouble radiusSq = VectorDoubleMultiply(radius, radius);
     for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         const SIMDVectorDouble delta = VectorDoubleSubtract(points[pointIndex], center);
@@ -358,7 +358,7 @@ NWB_INLINE void ExpandMinMax(const SIMDVectorDouble point, SIMDVectorDouble& inO
     return VectorDoubleMin(VectorDoubleMax(point, minBounds), maxBounds);
 }
 
-[[nodiscard]] NWB_INLINE bool MinMaxIntersects(const SIMDVectorDouble lhsMinBounds, const SIMDVectorDouble lhsMaxBounds, const SIMDVectorDouble rhsMinBounds, const SIMDVectorDouble rhsMaxBounds)noexcept{
+[[nodiscard]] NWB_INLINE b8 MinMaxIntersects(const SIMDVectorDouble lhsMinBounds, const SIMDVectorDouble lhsMaxBounds, const SIMDVectorDouble rhsMinBounds, const SIMDVectorDouble rhsMaxBounds)noexcept{
     const SIMDVectorDouble disjoint = VectorDoubleOrInt(VectorDoubleGreater(lhsMinBounds, rhsMaxBounds), VectorDoubleGreater(rhsMinBounds, lhsMaxBounds));
     return !VectorDouble3AnyTrue(disjoint);
 }

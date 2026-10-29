@@ -29,7 +29,7 @@ Expected<DiscoveredNwbFile> MeshCookMetadata::BuildDiscoveredNwbFile(const Path&
 }
 
 
-bool MeshCookMetadata::AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount)noexcept{
+b8 MeshCookMetadata::AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount)noexcept{
     if(value.isList()){
         for(const Core::Metascript::Value& child : value.asList()){
             if(!AccumulateFlattenedValueLeafCount(child, inOutCount))

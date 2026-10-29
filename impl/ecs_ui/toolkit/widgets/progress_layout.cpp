@@ -49,7 +49,7 @@ inline constexpr u32 s_MetricRowCount = 3u;
     } };
 }
 
-[[nodiscard]] static bool ValidMetrics(const SIMDMatrixDouble& values)noexcept{
+[[nodiscard]] static b8 ValidMetrics(const SIMDMatrixDouble& values)noexcept{
     for(u32 index = 0u; index < s_MetricRowCount; ++index){
         if(
             VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u

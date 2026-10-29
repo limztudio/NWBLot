@@ -57,14 +57,14 @@ public:
 private:
     RendererMeshSystem& m_meshSystem;
     MeshResources& m_mesh;
-    bool m_active = true;
+    b8 m_active = true;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool RuntimeMeshSourceMatches(const MeshResources& mesh, const RuntimeMeshDesc& desc)noexcept{
+[[nodiscard]] static b8 RuntimeMeshSourceMatches(const MeshResources& mesh, const RuntimeMeshDesc& desc)noexcept{
     return
         mesh.runtimeMeshVersion == desc.version
         && mesh.positionBuffer == desc.positionBuffer
@@ -130,8 +130,8 @@ template<typename PayloadT>
     const AStringView suffix,
     const Span<const PayloadT> payload,
     const TStringView label,
-    const bool canHaveRawViews = false,
-    const bool accelStructBuildInput = false
+    const b8 canHaveRawViews = false,
+    const b8 accelStructBuildInput = false
 ){
     const auto bufferName = DeriveMeshBufferName(meshName, suffix, label);
     if(!bufferName)
@@ -165,7 +165,7 @@ template<typename PayloadT>
     return Move(*buffer);
 }
 
-[[nodiscard]] static bool ValidateRawBufferLogicalByteCount(const Core::BufferHandle& buffer, const u32 logicalByteCount, const Name& meshName, const TStringView label){
+[[nodiscard]] static b8 ValidateRawBufferLogicalByteCount(const Core::BufferHandle& buffer, const u32 logicalByteCount, const Name& meshName, const TStringView label){
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no {} buffer"), ConvertString(meshName.resolvedText()), label);
         return false;
@@ -249,53 +249,53 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
     }
     createdMesh.csgLocalBounds = *positionBounds;
 
-    const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
+    const b8 rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
     // Both tracing backends read raw position/index buffers for material evaluation.
-    const bool swShadow = !rtSupported;
+    const b8 swShadow = !rtSupported;
 
-    bool uploaded = true;
+    b8 uploaded = true;
     auto positionBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Float3U>(m_graphics, meshPath, RendererArenaScope::s_PositionsBufferName, mesh.positionStream(), RendererArenaScope::s_PositionBufferLabel, true, rtSupported);
     if(positionBufferResult)
         createdMesh.positionBuffer = Move(*positionBufferResult);
     else
         createdMesh.positionBuffer.reset();
-    uploaded = static_cast<bool>(positionBufferResult) && uploaded;
+    uploaded = static_cast<b8>(positionBufferResult) && uploaded;
     auto normalBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Half4U>(m_graphics, meshPath, RendererArenaScope::s_NormalsBufferName, mesh.normalStream(), RendererArenaScope::s_NormalBufferLabel);
     if(normalBufferResult)
         createdMesh.normalBuffer = Move(*normalBufferResult);
     else
         createdMesh.normalBuffer.reset();
-    uploaded = static_cast<bool>(normalBufferResult) && uploaded;
+    uploaded = static_cast<b8>(normalBufferResult) && uploaded;
     auto tangentBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Half4U>(m_graphics, meshPath, RendererArenaScope::s_TangentsBufferName, mesh.tangentStream(), RendererArenaScope::s_TangentBufferLabel);
     if(tangentBufferResult)
         createdMesh.tangentBuffer = Move(*tangentBufferResult);
     else
         createdMesh.tangentBuffer.reset();
-    uploaded = static_cast<bool>(tangentBufferResult) && uploaded;
+    uploaded = static_cast<b8>(tangentBufferResult) && uploaded;
     auto uv0BufferResult = __hidden_mesh_resources::SetupMeshBuffer<Float2U>(m_graphics, meshPath, RendererArenaScope::s_Uv0BufferName, mesh.uv0Stream(), RendererArenaScope::s_Uv0BufferLabel);
     if(uv0BufferResult)
         createdMesh.uv0Buffer = Move(*uv0BufferResult);
     else
         createdMesh.uv0Buffer.reset();
-    uploaded = static_cast<bool>(uv0BufferResult) && uploaded;
+    uploaded = static_cast<b8>(uv0BufferResult) && uploaded;
     auto colorBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Half4U>(m_graphics, meshPath, RendererArenaScope::s_ColorsBufferName, mesh.colorStream(), RendererArenaScope::s_ColorBufferLabel);
     if(colorBufferResult)
         createdMesh.colorBuffer = Move(*colorBufferResult);
     else
         createdMesh.colorBuffer.reset();
-    uploaded = static_cast<bool>(colorBufferResult) && uploaded;
+    uploaded = static_cast<b8>(colorBufferResult) && uploaded;
     auto meshletDescBufferResult = __hidden_mesh_resources::SetupMeshBuffer<MeshletDesc>(m_graphics, meshPath, RendererArenaScope::s_MeshletsBufferName, mesh.meshlets(), RendererArenaScope::s_MeshletDescriptorBufferLabel);
     if(meshletDescBufferResult)
         createdMesh.meshletDescBuffer = Move(*meshletDescBufferResult);
     else
         createdMesh.meshletDescBuffer.reset();
-    uploaded = static_cast<bool>(meshletDescBufferResult) && uploaded;
+    uploaded = static_cast<b8>(meshletDescBufferResult) && uploaded;
     auto meshletBoundsBufferResult = __hidden_mesh_resources::SetupMeshBuffer<MeshletBounds>(m_graphics, meshPath, RendererArenaScope::s_MeshletBoundsBufferName, mesh.meshletBounds(), RendererArenaScope::s_MeshletBoundsBufferLabel, true);
     if(meshletBoundsBufferResult)
         createdMesh.meshletBoundsBuffer = Move(*meshletBoundsBufferResult);
     else
         createdMesh.meshletBoundsBuffer.reset();
-    uploaded = static_cast<bool>(meshletBoundsBufferResult) && uploaded;
+    uploaded = static_cast<b8>(meshletBoundsBufferResult) && uploaded;
     auto meshletPositionRefDeltaBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(
         m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletPositionRefDeltasBufferName, mesh.meshletPositionRefDeltas(), RendererArenaScope::s_MeshletPositionRefDeltaBufferLabel
     );
@@ -303,7 +303,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         createdMesh.meshletPositionRefDeltaBuffer = Move(*meshletPositionRefDeltaBufferResult);
     else
         createdMesh.meshletPositionRefDeltaBuffer.reset();
-    uploaded = static_cast<bool>(meshletPositionRefDeltaBufferResult) && uploaded;
+    uploaded = static_cast<b8>(meshletPositionRefDeltaBufferResult) && uploaded;
     auto meshletAttributeRefDeltaBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(
         m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletAttributeRefDeltasBufferName, mesh.meshletAttributeRefDeltas(), RendererArenaScope::s_MeshletAttributeRefDeltaBufferLabel
     );
@@ -311,7 +311,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         createdMesh.meshletAttributeRefDeltaBuffer = Move(*meshletAttributeRefDeltaBufferResult);
     else
         createdMesh.meshletAttributeRefDeltaBuffer.reset();
-    uploaded = static_cast<bool>(meshletAttributeRefDeltaBufferResult) && uploaded;
+    uploaded = static_cast<b8>(meshletAttributeRefDeltaBufferResult) && uploaded;
     auto meshletLocalVertexRefBufferResult = __hidden_mesh_resources::SetupMeshBuffer<MeshletLocalVertexRef>(
         m_graphics, meshPath, RendererArenaScope::s_MeshletLocalVertexRefsBufferName, mesh.meshletLocalVertexRefs(), RendererArenaScope::s_MeshletLocalVertexRefBufferLabel
     );
@@ -319,7 +319,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         createdMesh.meshletLocalVertexRefBuffer = Move(*meshletLocalVertexRefBufferResult);
     else
         createdMesh.meshletLocalVertexRefBuffer.reset();
-    uploaded = static_cast<bool>(meshletLocalVertexRefBufferResult) && uploaded;
+    uploaded = static_cast<b8>(meshletLocalVertexRefBufferResult) && uploaded;
     auto meshletPrimitiveIndexBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(
         m_graphics, scratchArena, meshPath, RendererArenaScope::s_MeshletPrimitiveIndicesBufferName, mesh.meshletPrimitiveIndices(), RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel
     );
@@ -327,7 +327,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         createdMesh.meshletPrimitiveIndexBuffer = Move(*meshletPrimitiveIndexBufferResult);
     else
         createdMesh.meshletPrimitiveIndexBuffer.reset();
-    uploaded = static_cast<bool>(meshletPrimitiveIndexBufferResult) && uploaded;
+    uploaded = static_cast<b8>(meshletPrimitiveIndexBufferResult) && uploaded;
     if(!uploaded)
         return MakeUnexpected(Failure{});
 

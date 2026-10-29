@@ -114,12 +114,12 @@ UiClipboardPublicationResult UiClipboardPublications::drain(){
     return result;
 }
 
-bool UiClipboardPublications::cancel(){
+b8 UiClipboardPublications::cancel(){
     if(m_requests.empty())
         return true;
     if(!m_service.isOwnerThread())
         return false;
-    bool cancelled = true;
+    b8 cancelled = true;
     for(const auto& publication : m_requests){
         if(!m_service.cancel(publication.token) && m_service.poll(publication.token, m_completion) != Core::ClipboardPollResult::InvalidRequest)
             cancelled = false;

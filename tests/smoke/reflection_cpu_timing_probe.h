@@ -35,8 +35,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool initialize(AStringView caseName, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool update();
+    [[nodiscard]] b8 initialize(AStringView caseName, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 update();
     void finish();
 
 
@@ -47,9 +47,9 @@ private:
     Timer m_preparationBegin = {};
     u64 m_intervalSourceFrame = 0u;
     u32 m_positiveIntervals = 0u;
-    bool m_prepared = false;
-    bool m_measuring = false;
-    bool m_complete = false;
+    b8 m_prepared = false;
+    b8 m_measuring = false;
+    b8 m_complete = false;
 };
 
 

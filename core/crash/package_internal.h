@@ -37,8 +37,8 @@ struct CrashUploadSnapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool WriteCrashPackage(const CrashRequest& request);
-[[nodiscard]] bool FlushCrashReportsForRequest(const CrashRequest& request);
+[[nodiscard]] b8 WriteCrashPackage(const CrashRequest& request);
+[[nodiscard]] b8 FlushCrashReportsForRequest(const CrashRequest& request);
 void CaptureCrashPackageFilesystemFailure(AStringView operation, const ErrorCode& error)noexcept;
 
 template<typename ArenaT, typename PathArenaT>
@@ -46,7 +46,7 @@ template<typename ArenaT, typename PathArenaT>
 template<typename ArenaT>
 [[nodiscard]] Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchArena, const ::Path<ArenaT>& spoolDirectory, const CrashSpoolRetentionConfig& retention, AStringView protectedPendingPackageName = AStringView());
 template<typename ArenaT>
-[[nodiscard]] bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapshot);
+[[nodiscard]] b8 FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapshot);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

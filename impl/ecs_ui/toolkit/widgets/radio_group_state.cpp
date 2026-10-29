@@ -43,7 +43,7 @@ RadioGroupSnapshot RadioGroupState::snapshot()const noexcept{
     return { m_instanceGeneration, m_inputGeneration, m_revision, m_selected, m_cursor, m_sourceGeneration, m_sourceRevision };
 }
 
-bool RadioGroupState::matches(const RadioGroupSnapshot& value)const noexcept{
+b8 RadioGroupState::matches(const RadioGroupSnapshot& value)const noexcept{
     return snapshot() == value;
 }
 

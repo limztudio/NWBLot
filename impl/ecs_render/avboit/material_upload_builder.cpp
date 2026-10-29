@@ -103,12 +103,12 @@ struct UploadIdentities{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<bool> AvboitMaterialUploadBuilder::declare(
+[[nodiscard]] Expected<b8> AvboitMaterialUploadBuilder::declare(
     const AvboitMaterialUploadInputs& inputs,
     const Span<const InstanceGpuData> instanceData,
     const Span<const u8> materialTypedBytes,
     const CsgFrameGpuDataView& csgFrameData,
-    const bool hasCsgDrawItems,
+    const b8 hasCsgDrawItems,
     Core::GpuTaskId& inOutUploadTask
 ){
     if(!inOutUploadTask.valid())

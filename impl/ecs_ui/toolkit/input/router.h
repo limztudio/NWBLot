@@ -33,7 +33,7 @@ class InputRouter final : NoCopy{
 private:
     struct PointerGestureRecord{
         PointerGesture gesture;
-        bool pendingUpdate = true;
+        b8 pendingUpdate = true;
     };
     struct TargetLookup{
         u64 value = 0u;
@@ -44,14 +44,14 @@ private:
         WidgetId restoreFocus;
         u64 restoreDeclaration = 0u;
         PopupToken restorePopup;
-        bool closing = false;
+        b8 closing = false;
     };
     struct ControlCommandOwner{
         WidgetId host;
         u64 declarationGeneration = 0u;
         PopupToken popup;
         ControlToken control;
-        bool horizontal = false;
+        b8 horizontal = false;
     };
     struct TargetOwner{
         WidgetId target;
@@ -68,10 +68,10 @@ private:
         ControlCommandOwner controlOwner{};
         TargetOwner focusOwner{};
         Point contextPosition;
-        bool consumed = false;
-        bool delegated = false;
-        bool submitArmed = false;
-        bool contextArmed = false;
+        b8 consumed = false;
+        b8 delegated = false;
+        b8 submitArmed = false;
+        b8 contextArmed = false;
     };
     struct HoverIdentity{
         WidgetId owner;
@@ -82,18 +82,18 @@ private:
     struct PointerBinding{
         InputSource source;
         PointerIntent::Enum intent = PointerIntent::Activate;
-        bool hoverCapable = false;
+        b8 hoverCapable = false;
     };
     struct PointerSource{
         InputSource source;
         PointerIntent::Enum intent = PointerIntent::Activate;
-        bool consumed = false;
-        bool inert = false;
+        b8 consumed = false;
+        b8 inert = false;
     };
 
 
 private:
-    [[nodiscard]] static bool IsPointerEvent(InputEventType::Enum type)noexcept;
+    [[nodiscard]] static b8 IsPointerEvent(InputEventType::Enum type)noexcept;
 
 
 public:
@@ -103,7 +103,7 @@ public:
 public:
     [[nodiscard]] Expected<InputEvent> queue(const InputEvent& event);
     [[nodiscard]] Expected<InputEvent> queuePointer(const PointerInput& input);
-    [[nodiscard]] bool setBindings(const InputKeyBinding* bindings, usize count);
+    [[nodiscard]] b8 setBindings(const InputKeyBinding* bindings, usize count);
     void restoreDefaultBindings();
 
     [[nodiscard]] const InputBindings& bindings()const noexcept{ return m_bindings; }
@@ -112,13 +112,13 @@ public:
     [[nodiscard]] InputRoutingResult process();
     // Failure preserves the committed layout and all interaction state; generations increase until reset.
     // Context passes the focus-loss generation captured at preparation to fence delayed popup acceptance.
-    [[nodiscard]] bool commitTargets(const HitTarget* targets, usize count, u64 layoutGeneration, const PopupScope* popups = nullptr, usize popupCount = 0u, u64 expectedFocusLossGeneration = Limit<u64>::s_Max);
+    [[nodiscard]] b8 commitTargets(const HitTarget* targets, usize count, u64 layoutGeneration, const PopupScope* popups = nullptr, usize popupCount = 0u, u64 expectedFocusLossGeneration = Limit<u64>::s_Max);
     [[nodiscard]] Expected<PopupDismissReason::Enum> consumePopupDismissal(const PopupToken& token)noexcept;
-    [[nodiscard]] bool dismissPopup(PopupDismissReason::Enum reason);
+    [[nodiscard]] b8 dismissPopup(PopupDismissReason::Enum reason);
     void closePopup(const PopupToken& token)noexcept;
     void fencePopup(const PopupToken& token)noexcept;
 
-    [[nodiscard]] bool hasPopup()const noexcept{ return !m_popups.empty(); }
+    [[nodiscard]] b8 hasPopup()const noexcept{ return !m_popups.empty(); }
 
     [[nodiscard]] usize popupCount()const noexcept{ return m_popups.size(); }
 
@@ -138,7 +138,7 @@ public:
     void reset()noexcept;
     // Device termination may suppress releases; only this device's pending sources are removed.
     void cancelDeviceInput(u64 device)noexcept;
-    [[nodiscard]] bool consumeActivation(WidgetId id)noexcept;
+    [[nodiscard]] b8 consumeActivation(WidgetId id)noexcept;
     [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(WidgetId id, u64 declarationGeneration)noexcept;
     [[nodiscard]] Expected<ControlAction> consumeControlAction(WidgetId host, u64 declarationGeneration, const ControlToken& token)noexcept;
     // A replaced borrowed model cannot receive input from its still displayed earlier lifetime.
@@ -146,7 +146,7 @@ public:
     // Active updates are consumed once while retaining their press baseline; terminal updates survive until consumed.
     [[nodiscard]] Expected<PointerGesture> consumePointerGesture(WidgetId id, u64 declarationGeneration)noexcept;
     [[nodiscard]] WidgetId hitTest(const Point& position)const noexcept;
-    [[nodiscard]] bool wouldConsumePointer(const Point& position)const noexcept;
+    [[nodiscard]] b8 wouldConsumePointer(const Point& position)const noexcept;
 
     [[nodiscard]] u64 layoutGeneration()const noexcept{ return m_layoutGeneration; }
 
@@ -167,30 +167,30 @@ public:
     // One spatial source can own activation and context-menu roles concurrently; other held contacts remain inert.
     [[nodiscard]] InputSource activePointerSource()const noexcept{ return m_activePointerSource; }
 
-    [[nodiscard]] bool acceptsPointerSource(const InputSource& source)const noexcept;
-    [[nodiscard]] bool ownsPointerSource(const InputSource& source, PointerIntent::Enum intent = PointerIntent::Activate)const noexcept;
+    [[nodiscard]] b8 acceptsPointerSource(const InputSource& source)const noexcept;
+    [[nodiscard]] b8 ownsPointerSource(const InputSource& source, PointerIntent::Enum intent = PointerIntent::Activate)const noexcept;
 
-    [[nodiscard]] bool primaryDown()const noexcept{ return m_primaryDown; }
+    [[nodiscard]] b8 primaryDown()const noexcept{ return m_primaryDown; }
 
-    [[nodiscard]] bool secondaryDown()const noexcept{ return m_secondaryDown; }
+    [[nodiscard]] b8 secondaryDown()const noexcept{ return m_secondaryDown; }
 
-    [[nodiscard]] bool pointerKnown()const noexcept{ return m_pointerKnown; }
+    [[nodiscard]] b8 pointerKnown()const noexcept{ return m_pointerKnown; }
 
     // Only an explicitly hover-capable source supplies cursor geometry; contact gestures keep their own position.
     [[nodiscard]] const Point& pointerPosition()const noexcept{ return m_pointer; }
 
-    [[nodiscard]] bool windowFocused()const noexcept{ return m_windowFocused; }
+    [[nodiscard]] b8 windowFocused()const noexcept{ return m_windowFocused; }
 
-    [[nodiscard]] bool wantsPointer()const noexcept;
-    [[nodiscard]] bool wantsCommands()const noexcept;
-    [[nodiscard]] bool ownsKey(i32 key)const noexcept;
-    [[nodiscard]] bool ownsSource(const InputSource& source)const noexcept;
+    [[nodiscard]] b8 wantsPointer()const noexcept;
+    [[nodiscard]] b8 wantsCommands()const noexcept;
+    [[nodiscard]] b8 ownsKey(i32 key)const noexcept;
+    [[nodiscard]] b8 ownsSource(const InputSource& source)const noexcept;
     // Held commands cannot switch editors or begin editing after their delegated owner has retired.
-    [[nodiscard]] bool canEditCommand(const InputEvent& event)const noexcept;
+    [[nodiscard]] b8 canEditCommand(const InputEvent& event)const noexcept;
     // Query a queued release before process retires its physical source.
-    [[nodiscard]] bool canSubmitCommand(const InputEvent& event)const noexcept;
+    [[nodiscard]] b8 canSubmitCommand(const InputEvent& event)const noexcept;
     void cancelSubmitCommands(WidgetId id)noexcept;
-    [[nodiscard]] bool pressed(WidgetId id)const noexcept;
+    [[nodiscard]] b8 pressed(WidgetId id)const noexcept;
 
 
 private:
@@ -204,33 +204,33 @@ private:
     void terminatePointerSource(InputSource source)noexcept;
     [[nodiscard]] CommandSource* findCommandSource(const InputSource& source)noexcept;
     [[nodiscard]] const CommandSource* findCommandSource(const InputSource& source)const noexcept;
-    [[nodiscard]] bool currentCommandFocus(const CommandSource& source)const noexcept;
+    [[nodiscard]] b8 currentCommandFocus(const CommandSource& source)const noexcept;
     void releaseCommand(const InputEvent& event, const CommandSource& source, InputRoutingResult& result);
     void cancelCommandPresses()noexcept;
     void retireCommandFocus()noexcept;
     void reconcileCommandPresses()noexcept;
     void cancelPointerPress()noexcept;
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const noexcept;
-    [[nodiscard]] bool isInteractive(const HitTarget& target)const noexcept;
-    [[nodiscard]] bool validControlTargets()const noexcept;
-    [[nodiscard]] bool validCommandOwners()const noexcept;
+    [[nodiscard]] b8 isInteractive(const HitTarget& target)const noexcept;
+    [[nodiscard]] b8 validControlTargets()const noexcept;
+    [[nodiscard]] b8 validCommandOwners()const noexcept;
     [[nodiscard]] const HitTarget* commandHost(const HitTarget& source)const noexcept;
-    [[nodiscard]] bool currentControlCommandOwner(const CommandSource& held)const noexcept;
+    [[nodiscard]] b8 currentControlCommandOwner(const CommandSource& held)const noexcept;
     [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const noexcept;
-    [[nodiscard]] bool currentControlAction(const ControlAction& action)const noexcept;
+    [[nodiscard]] b8 currentControlAction(const ControlAction& action)const noexcept;
     void reconcileControlActions()noexcept;
-    [[nodiscard]] bool currentContextMenuOwner(const TargetOwner& owner)const noexcept;
+    [[nodiscard]] b8 currentContextMenuOwner(const TargetOwner& owner)const noexcept;
     void reconcileContextMenus()noexcept;
     void appendContextMenu(const HitTarget& target, const Point& position, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
-    [[nodiscard]] bool routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, bool alreadyPressed, CommandSource& source)noexcept;
+    [[nodiscard]] b8 routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, b8 alreadyPressed, CommandSource& source)noexcept;
     void routeSecondary(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
     void appendControlAction(InputRoutingResult& result, const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, f64 deltaX = 0.0);
-    [[nodiscard]] bool routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, bool alreadyPressed, CommandSource& held, InputRoutingResult& result);
+    [[nodiscard]] b8 routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, b8 alreadyPressed, CommandSource& held, InputRoutingResult& result);
     void routeWheel(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
-    [[nodiscard]] bool allowedByPopup(const HitTarget& target)const noexcept;
-    [[nodiscard]] bool popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept;
-    [[nodiscard]] bool stagePopups(const PopupScope* scopes, usize count);
-    [[nodiscard]] bool validPopupTarget(const HitTarget& target)const noexcept;
+    [[nodiscard]] b8 allowedByPopup(const HitTarget& target)const noexcept;
+    [[nodiscard]] b8 popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept;
+    [[nodiscard]] b8 stagePopups(const PopupScope* scopes, usize count);
+    [[nodiscard]] b8 validPopupTarget(const HitTarget& target)const noexcept;
     void installPopups(u64 expectedFocusLossGeneration);
     void retirePopup(WidgetId id);
     void cancelPopupFocus();
@@ -243,12 +243,12 @@ private:
     void cancelInteraction()noexcept;
     void appendActivation(const HitTarget& target, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
     void appendPointerGesture(const HitTarget& target, InputRoutingResult& result);
-    void updatePointerGesture(const Point& position, bool completed)noexcept;
+    void updatePointerGesture(const Point& position, b8 completed)noexcept;
     void reconcilePointerGestures()noexcept;
     void routePointer(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
     void routeCommand(const InputEvent& event, InputRoutingResult& result);
-    [[nodiscard]] bool moveFocus(bool reverse)noexcept;
-    [[nodiscard]] bool moveFocusForTraversal(bool reverse);
+    [[nodiscard]] b8 moveFocus(b8 reverse)noexcept;
+    [[nodiscard]] b8 moveFocusForTraversal(b8 reverse);
 
 
 private:
@@ -289,13 +289,13 @@ private:
     Point m_secondaryPosition;
     InputSource m_hoverPointerSource;
     InputSource m_activePointerSource;
-    bool m_pointerKnown = false;
-    bool m_primaryDown = false;
-    bool m_pointerSequenceConsumed = false;
-    bool m_pointerSubmitArmed = false;
-    bool m_secondaryDown = false;
-    bool m_secondarySequenceConsumed = false;
-    bool m_windowFocused = true;
+    b8 m_pointerKnown = false;
+    b8 m_primaryDown = false;
+    b8 m_pointerSequenceConsumed = false;
+    b8 m_pointerSubmitArmed = false;
+    b8 m_secondaryDown = false;
+    b8 m_secondarySequenceConsumed = false;
+    b8 m_windowFocused = true;
 };
 
 

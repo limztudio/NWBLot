@@ -31,9 +31,9 @@ struct InputKeyBinding{
     i32 ignoredModifiers = 0;
     InputCommand::Enum command = InputCommand::None;
     InputSelectionPolicy::Enum selection = InputSelectionPolicy::None;
-    bool edit = true;
+    b8 edit = true;
     // Allow this command's ordinary native character to reach the editor as well.
-    bool allowText = false;
+    b8 allowText = false;
 };
 
 inline constexpr usize s_InputMaxBindings = 256u;
@@ -45,7 +45,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool ValidKey(i32 key)noexcept;
+    [[nodiscard]] static b8 ValidKey(i32 key)noexcept;
 
 
 public:
@@ -54,7 +54,7 @@ public:
 
 public:
     // Replacement is atomic, accepts an empty profile, and rejects overlapping chords for the same physical key.
-    [[nodiscard]] bool set(const InputKeyBinding* bindings, usize count);
+    [[nodiscard]] b8 set(const InputKeyBinding* bindings, usize count);
     void restoreDefaults();
     [[nodiscard]] InputCommandIntent resolve(i32 key, i32 modifiers)const noexcept;
     // Borrowed observations remain valid until a successful profile replacement or default restoration.

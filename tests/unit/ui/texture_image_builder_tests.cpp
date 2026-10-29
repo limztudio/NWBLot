@@ -242,7 +242,7 @@ TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePa
     EXPECT_FLOAT_EQ(sample->bounds.width, 20.0f);
     EXPECT_NEAR(sample->uv.x, 7.0f / 96.0f, 0.000001f);
     EXPECT_NEAR(VectorGetX(VectorAdd(VectorReplicate(sample->uv.x), VectorReplicate(sample->uv.width))), 27.0f / 96.0f, 0.000001f);
-    bool sentinel = false;
+    b8 sentinel = false;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Solid)
             continue;

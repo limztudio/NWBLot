@@ -29,7 +29,7 @@ namespace __hidden_telemetry_frame_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool BuildFrameGraphPayloadImpl(
+[[nodiscard]] static b8 BuildFrameGraphPayloadImpl(
     Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
     Span<const FrameGraphNodeDesc> nodes,
@@ -43,19 +43,19 @@ namespace __hidden_telemetry_frame_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsValidStringTableText(const AStringView text)noexcept{
+[[nodiscard]] static b8 IsValidStringTableText(const AStringView text)noexcept{
     return !text.empty() && !HasEmbeddedNull(text) && text.size() < static_cast<usize>(Limit<u32>::s_Max);
 }
 
 
-[[nodiscard]] static bool ValidateHeader(const u32 magic, const u16 reserved)noexcept{
+[[nodiscard]] static b8 ValidateHeader(const u32 magic, const u16 reserved)noexcept{
     return magic == s_FrameGraphPayloadMagic && reserved == 0u;
 }
 
 
-[[nodiscard]] static bool ValidateNodeInput(const FrameGraphNodeDesc& node)noexcept{
+[[nodiscard]] static b8 ValidateNodeInput(const FrameGraphNodeDesc& node)noexcept{
     return
-        static_cast<bool>(node.name)
+        static_cast<b8>(node.name)
         && IsValidFrameGraphNodeKind(node.kind)
         && IsValidStringTableText(node.label)
         && (!node.queueAssignment.present || (node.kind == FrameGraphNodeKind::Pass && IsValidFrameGraphQueueAssignment(node.queueAssignment)))
@@ -64,15 +64,15 @@ namespace __hidden_telemetry_frame_graph{
     ;
 }
 
-[[nodiscard]] static bool ValidateEdgeInput(const FrameGraphEdgeDesc& edge, const usize nodeCount)noexcept{
+[[nodiscard]] static b8 ValidateEdgeInput(const FrameGraphEdgeDesc& edge, const usize nodeCount)noexcept{
     return IsValidFrameGraphEdgeKind(edge.kind) && static_cast<usize>(edge.fromNodeIndex) < nodeCount && static_cast<usize>(edge.toNodeIndex) < nodeCount;
 }
 
-[[nodiscard]] static bool ValidateEncodedNode(const EncodedFrameGraphNode& node)noexcept{
+[[nodiscard]] static b8 ValidateEncodedNode(const EncodedFrameGraphNode& node)noexcept{
     return node.reserved == 0u && !NameDetail::IsZeroHash(node.nameHash) && IsValidFrameGraphNodeKind(static_cast<FrameGraphNodeKind::Enum>(node.kind));
 }
 
-[[nodiscard]] static bool ValidateEncodedEdge(const EncodedFrameGraphEdge& edge, const usize nodeCount)noexcept{
+[[nodiscard]] static b8 ValidateEncodedEdge(const EncodedFrameGraphEdge& edge, const usize nodeCount)noexcept{
     return edge.reserved == 0u && IsValidFrameGraphEdgeKind(static_cast<FrameGraphEdgeKind::Enum>(edge.kind)) && static_cast<usize>(edge.fromNodeIndex) < nodeCount && static_cast<usize>(edge.toNodeIndex) < nodeCount;
 }
 
@@ -110,11 +110,11 @@ namespace __hidden_telemetry_frame_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, const u64 frameIndex, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges, TelemetryBytes& outPayload){
+b8 BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, const u64 frameIndex, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges, TelemetryBytes& outPayload){
     return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(scratchArena, frameIndex, nodes, edges, Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord>{}, nullptr, outPayload);
 }
 
-bool BuildFrameGraphPayload(
+b8 BuildFrameGraphPayload(
     Alloc::ScratchArena& scratchArena,
     const u64 frameIndex,
     const Span<const FrameGraphNodeDesc> nodes,
@@ -125,7 +125,7 @@ bool BuildFrameGraphPayload(
     return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, nullptr, outPayload);
 }
 
-bool BuildFrameGraphPayload(
+b8 BuildFrameGraphPayload(
     Alloc::ScratchArena& scratchArena,
     const u64 frameIndex,
     const Span<const FrameGraphNodeDesc> nodes,
@@ -147,7 +147,7 @@ namespace __hidden_telemetry_frame_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildFrameGraphPayloadImpl(
+b8 BuildFrameGraphPayloadImpl(
     Alloc::ScratchArena& scratchArena,
     const u64 frameIndex,
     const Span<const FrameGraphNodeDesc> nodes,
@@ -217,7 +217,7 @@ bool BuildFrameGraphPayloadImpl(
             return false;
     }
 
-    const bool hasPacketSubmissionStatistics = packetSubmissionStatistics != nullptr;
+    const b8 hasPacketSubmissionStatistics = packetSubmissionStatistics != nullptr;
     if(hasPacketSubmissionStatistics){
         if(!FrameGraphStatisticsCodecDetail::ValidatePacketSubmissionStatisticsTable(scratchArena, nodes, orderedPhysicalQueueRuntimeStatistics, orderedPacketSubmissionStatistics))
             return false;
@@ -340,7 +340,7 @@ Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc:
     const u32 runtimeStatisticsCount = header.runtimeStatisticsCount;
     const u32 physicalQueueRuntimeStatisticsCount = header.physicalQueueRuntimeStatisticsCount;
     const u32 packetSubmissionStatisticsCount = header.packetSubmissionStatisticsCount;
-    const bool packetSubmissionStatisticsPresent = header.packetSubmissionStatisticsPresent != 0u;
+    const b8 packetSubmissionStatisticsPresent = header.packetSubmissionStatisticsPresent != 0u;
     parsedPayload.packetSubmissionStatisticsPresent = packetSubmissionStatisticsPresent;
     if(queueAssignmentCount > header.nodeCount || compiledTaskCount > header.nodeCount || runtimeStatisticsCount > header.nodeCount)
         return MakeUnexpected(Failure{});

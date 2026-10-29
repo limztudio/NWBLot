@@ -22,13 +22,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysicalQueueInfo* const readbackQueue, const Span<const Core::BufferHandle> counterBuffers){
+b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysicalQueueInfo* const readbackQueue, const Span<const Core::BufferHandle> counterBuffers){
     RendererFramePipeline& renderer = m_renderer;
     if(!renderer.m_deferredSurfelGiCounterReadbackTask.valid())
         return true;
 
     // No normal-frame consumer; record only after Present.
-    const bool readbackTailAvailable =
+    const b8 readbackTailAvailable =
         m_finalPresentationSubmissionToken.valid()
         && renderer.m_deferredLightingTaskGraphScheduled
         && m_compiledPlan.findTask(renderer.m_deferredSurfelGiCounterReadbackTask).valid()
@@ -47,7 +47,7 @@ bool FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysi
         const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{ .task = renderer.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::PrepareReadbackFinalState, };
         const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{ .task = renderer.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::AcceptReadbackFinalState, };
         const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
-        const bool readbackAccepted = scheduler.executeTask(
+        const b8 readbackAccepted = scheduler.executeTask(
             renderer.m_deferredLightingCompiledGraph,
             renderer.m_deferredSurfelGiCounterReadbackTask,
             &readbackRecordedCallback,
@@ -76,7 +76,7 @@ bool FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysi
     return true;
 }
 
-void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrameTargets& targets, const Core::GpuPhysicalQueueInfo* const historyQueue, const bool requestsCapture, const bool captureDeclared, const bool laggedAsyncLightingSchedule){
+void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrameTargets& targets, const Core::GpuPhysicalQueueInfo* const historyQueue, const b8 requestsCapture, const b8 captureDeclared, const b8 laggedAsyncLightingSchedule){
     RendererFramePipeline& renderer = m_renderer;
     if(requestsCapture && !captureDeclared){
         // Present already completed; force next frame through bootstrap.
@@ -116,7 +116,7 @@ void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrame
             const Core::GpuTaskGraphTaskRecordedCallback historyCopyRecordedCallback{ .task = renderer.m_deferredLaggedLightingHistoryTask, .context = &historyCopyAcceptance, .invoke = FrameExecuteHistoryCopy::PrepareHistoryCopyFinalState, };
             const Core::GpuTaskGraphTaskAcceptedCallback historyCopyAcceptedCallback{ .task = renderer.m_deferredLaggedLightingHistoryTask, .context = &historyCopyAcceptance, .invoke = FrameExecuteHistoryCopy::AcceptHistoryCopyFinalState, };
             const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
-            const bool historyCopyAccepted = scheduler.executeTask(
+            const b8 historyCopyAccepted = scheduler.executeTask(
                 renderer.m_deferredLightingCompiledGraph,
                 renderer.m_deferredLaggedLightingHistoryTask,
                 &historyCopyRecordedCallback,

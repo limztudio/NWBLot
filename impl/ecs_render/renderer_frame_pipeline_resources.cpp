@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererFramePipeline::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+b8 RendererFramePipeline::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
     m_raytracingSystem.logCapabilityOnce();
     if(width == 0 || height == 0)
@@ -51,7 +51,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
     DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;
-    bool targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height && deferredTargets->surfelResolveFactor == surfelResolveFactor && deferredTargets->shadowReceiverFactor == shadowReceiverFactor;
+    b8 targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height && deferredTargets->surfelResolveFactor == surfelResolveFactor && deferredTargets->shadowReceiverFactor == shadowReceiverFactor;
     if(!targetsReady){
         // New targets invalidate stale compute scratch and visibility returns.
         resetTargetGenerationStateHandoffs();
@@ -178,7 +178,7 @@ void RendererFramePipeline::update(Core::ECS::World& world, f32 delta)noexcept{
     static_cast<void>(delta);
 }
 
-bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
+b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     m_shadowPreparationOutcome.resourcesValid = false;
     m_shadowPreparationOutcome.ready = false;
     m_preparedHasTransparentRenderers = false;
@@ -206,7 +206,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
     m_meshSystem.pruneRuntimeMeshResources(scratchArena);
-    const bool hasVisibleTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
+    const b8 hasVisibleTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
     m_preparedHasTransparentRenderers = isTransparentFeatureEnabled() && hasVisibleTransparentRenderers;
     m_materialSystem.prepareVisibleMaterialInstanceMutableCache();
     m_preparedCsgFrameState = CsgFrameState{};
@@ -224,7 +224,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         m_opticalVolumes.reset();
     m_preparedCsgFrameState = (isCsgFeatureEnabled() && HasCsgFrameCandidates(m_world)) ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem) : CsgFrameState{};
     m_preparedCsgFrameStateValid = true;
-    const bool hasCsgFrameWork = !m_preparedCsgFrameState.empty();
+    const b8 hasCsgFrameWork = !m_preparedCsgFrameState.empty();
     if(!m_reflectionSystem.prepareResources(deferredTargets.width, deferredTargets.height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), hasCsgFrameWork && m_graphics.queryFeatureSupport(Core::Feature::RayQuery), m_reflectionSettings))
         return false;
 
@@ -262,14 +262,14 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     }
     m_shadowPreparationOutcome.resourcesValid = true;
     // The ray scene prepares geometry on its own. Reflection borrows neutral context only after that preflight picks a generation.
-    const bool reflectionHardwareRequested = m_reflectionSettings.traceMode == ReflectionTraceMode::Hardware || m_reflectionSettings.traceMode == ReflectionTraceMode::Hybrid;
+    const b8 reflectionHardwareRequested = m_reflectionSettings.traceMode == ReflectionTraceMode::Hardware || m_reflectionSettings.traceMode == ReflectionTraceMode::Hybrid;
     m_preparedReflectionSceneAvailable = reflectionHardwareRequested && m_raytracingSystem.prepareSceneQueryResources();
     ++m_reflectionFrameIndex;
 
     // Refraction loads shaders and creates pipelines in preparation; the graph build only consumes the snapshot.
-    const bool opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
+    const b8 opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
     m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
-    const bool hasTransparentCsgFrameWork = m_preparedCsgFrameState.hasTransparentStaticWork || m_preparedCsgFrameState.hasTransparentSkinnedWork;
+    const b8 hasTransparentCsgFrameWork = m_preparedCsgFrameState.hasTransparentStaticWork || m_preparedCsgFrameState.hasTransparentSkinnedWork;
     if(m_preparedRefractionActive && hasTransparentCsgFrameWork && !m_csgSystem.prepareRefractionIntervalCapResources(deferredTargets))
         return false;
     m_preparedRefractionResources = m_raytracingSystem.snapshotRefractionGraphResources(deferredTargets.width, deferredTargets.height, m_reflectionFrameIndex);
@@ -306,7 +306,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     return true;
 }
 
-bool RendererFramePipeline::prepareGpuTimingScopes(){
+b8 RendererFramePipeline::prepareGpuTimingScopes(){
     auto& device = m_graphics.getDevice();
     // A range costs one begin/end pair. Raster scopes emit many; sort and interval-clear scopes each emit two.
     static constexpr u32 s_GpuTimingQueriesPerRange = 2u;

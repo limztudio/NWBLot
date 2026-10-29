@@ -39,7 +39,7 @@ struct PathSelectionIndex{
 
 
 public:
-    PathSelectionIndex(const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const bool preserveCase)
+    PathSelectionIndex(const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const b8 preserveCase)
         : m_entries(scratchArena){
         m_entries.reserve(files.size());
         if(preserveCase){
@@ -58,9 +58,9 @@ public:
     }
 };
 
-[[nodiscard]] static bool SelectPathRange(const PathSelectionIndex& index, const AStringView path, const bool prefix, const Span<u8> selected)noexcept{
+[[nodiscard]] static b8 SelectPathRange(const PathSelectionIndex& index, const AStringView path, const b8 prefix, const Span<u8> selected)noexcept{
     auto entry = LowerBound(index.m_entries.begin(), index.m_entries.end(), path, [](const IndexedPath& candidate, const AStringView value)noexcept{ return candidate.text < value; });
-    bool matched = false;
+    b8 matched = false;
     for(; entry != index.m_entries.end(); ++entry){
         if(prefix ? !entry->text.starts_with(path) : entry->text != path)
             break;
@@ -80,7 +80,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCookPaths& paths, Assets::ScratchArena& scratchArena, Assets::DiscoveredNwbFileVector& files){
+b8 SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCookPaths& paths, Assets::ScratchArena& scratchArena, Assets::DiscoveredNwbFileVector& files){
     if(options.inputs.empty()){
         files.clear();
         return true;
@@ -105,13 +105,13 @@ bool SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedC
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a file or directory '{}'"), PathToString<tchar>(path));
             return false;
         }
-        const auto regular = *directory ? Expected<bool, ErrorCode>(true) : IsRegularFile(path);
+        const auto regular = *directory ? Expected<b8, ErrorCode>(true) : IsRegularFile(path);
         if(!*directory && (!regular || !*regular)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a file or directory '{}'"), PathToString<tchar>(path));
             return false;
         }
 
-        const bool isDirectory = *directory;
+        const b8 isDirectory = *directory;
         Assets::ScratchString normalized = PathToString(scratchArena, path.lexicallyNormal());
 #if defined(NWB_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(normalized);
@@ -119,7 +119,7 @@ bool SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedC
         if(!isDirectory)
             CanonicalizeTextInPlace(normalized);
 #endif
-        bool matched = false;
+        b8 matched = false;
         if(isDirectory){
             for(const Assets::ResolvedAssetRoot& root : paths.assetRoots){
                 Assets::ScratchString rootText = PathToString(scratchArena, root.path.lexicallyNormal());

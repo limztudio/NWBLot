@@ -53,7 +53,7 @@ namespace __hidden_builder_slider{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::slider(const AStringView stableKey, SliderState& state, const SliderOptions& options){
+b8 Builder::slider(const AStringView stableKey, SliderState& state, const SliderOptions& options){
     if(declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed() || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes){
         m_context.fail();
         return false;
@@ -104,7 +104,7 @@ bool Builder::slider(const AStringView stableKey, SliderState& state, const Slid
     return true;
 }
 
-bool Builder::prepareSlider(SliderFrame& frame)noexcept{
+b8 Builder::prepareSlider(SliderFrame& frame)noexcept{
     if(!sliderMatches(frame) || !m_skin || !IsFinite(m_skin->referenceDensity()) || m_skin->referenceDensity() <= 0.0f)
         return false;
     const UiSkinRegion* track = region(frame.m_style.track, frame.m_style.trackFallback);

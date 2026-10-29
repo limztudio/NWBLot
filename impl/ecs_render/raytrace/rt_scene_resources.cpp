@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareSceneQueryResources(){
+b8 RendererRayTracingSystem::prepareSceneQueryResources(){
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(
         !m_shadowVisibilityHardwareSupported
@@ -59,7 +59,7 @@ RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResour
     return resources;
 }
 
-bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
+b8 RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 

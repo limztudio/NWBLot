@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 
 
 DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range)noexcept{
-    const bool isVolatile = buffer && buffer->getCreationDescription().isVolatile;
+    const b8 isVolatile = buffer && buffer->getCreationDescription().isVolatile;
 
     DescriptorWriteItem result = Base(slot, isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer, buffer, Format::UNKNOWN, TextureDimension::Unknown);
     result.range = range;

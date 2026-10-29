@@ -80,7 +80,7 @@ void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Sh
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.cost = static_cast<Graphics::GpuTaskCostHint::Enum>(taskIndex % Graphics::GpuTaskCostHint::Count);
         scheduling.mergeWithPrevious = shape == Shape::MergedPairs && taskIndex % 2u != 0u;
-        const bool graphicsTask = shape == Shape::MergedPairs ? (taskIndex / 2u) % 2u == 0u : taskIndex % 2u == 0u;
+        const b8 graphicsTask = shape == Shape::MergedPairs ? (taskIndex / 2u) % 2u == 0u : taskIndex % 2u == 0u;
         char identityText[32u] = {};
         const auto derivedNameResult = DeriveName(Name("tests/queue_partial_dag/"), FormatDecimal(taskIndex, identityText));
         ASSERT_TRUE(derivedNameResult);
@@ -124,7 +124,7 @@ void CheckIndexedScores(const Shape::Enum shape){
     ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, scratch, groups));
 
     // Scalar Floyd-Warshall is independent of packed rows, word bounds, and queue-cost membership.
-    Vector<Array<bool, s_TaskCount>, Graphics::Alloc::ScratchArena> reachable(s_TaskCount, scratch);
+    Vector<Array<b8, s_TaskCount>, Graphics::Alloc::ScratchArena> reachable(s_TaskCount, scratch);
     for(const auto& edge : analysis.schedulingEdges())
         reachable[edge.producer.index][edge.consumer.index] = true;
     for(usize intermediate = 0u; intermediate < s_TaskCount; ++intermediate)
@@ -145,7 +145,7 @@ void CheckIndexedScores(const Shape::Enum shape){
             const auto& other = assignments[row];
             if(other.queue == queue)
                 continue;
-            bool independent = true;
+            b8 independent = true;
             for(usize offset = 0u; offset < group.assignmentCount; ++offset){
                 const usize member = assignments[group.assignmentOffset + offset].task.index;
                 independent = independent && !reachable[member][other.task.index] && !reachable[other.task.index][member];
@@ -346,8 +346,8 @@ TEST(GpuTaskQueueScoring, OrderedAndUnusedReachabilityAvoidMaskAllocationsAcross
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
     constexpr usize s_TaskCount = 129u;
-    constexpr bool s_BuildReachabilityCases[] = { false, true };
-    for(const bool buildReachability : s_BuildReachabilityCases){
+    constexpr b8 s_BuildReachabilityCases[] = { false, true };
+    for(const b8 buildReachability : s_BuildReachabilityCases){
         SCOPED_TRACE(buildReachability);
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);

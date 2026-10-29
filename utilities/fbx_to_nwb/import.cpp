@@ -25,7 +25,7 @@ Expected<MeshBuildResult> BuildMesh(
     const Span<const MeshInstance> instances,
     const Span<const usize> selection,
     const ImportOptions& options,
-    const bool wantsSkinning,
+    const b8 wantsSkinning,
     const Vec4& defaultColor,
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
@@ -41,7 +41,7 @@ Expected<MeshBuildResult> BuildMesh(
         return MakeUnexpected(Failure{});
     }
 
-    bool usedDefaultUvs = false;
+    b8 usedDefaultUvs = false;
     FbxSourceMeshStreams::ReserveSourceMeshStreams(result.mesh, *estimatedTriangleCorners, wantsSkinning);
     SourceMeshBuildContext meshContext{ result.mesh, scratchArena };
     FbxSourceMeshStreams::ReserveSourceMeshBuildContext(meshContext, *estimatedTriangleCorners, wantsSkinning);

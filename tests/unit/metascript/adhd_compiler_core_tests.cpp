@@ -19,7 +19,7 @@ TEST(AdhdInplaceFunction, StatelessZeroByteAndStatefulTrampolines){
     static_assert(sizeof(StatelessFn) == sizeof(void*), "Stateless InplaceFunction<0> must be 1 pointer wide");
 
     StatelessFn addFn([](const i32 a, const i32 b) -> i32{ return a + b; });
-    ASSERT_TRUE(static_cast<bool>(addFn));
+    ASSERT_TRUE(static_cast<b8>(addFn));
     EXPECT_EQ(addFn(10, 22), 32);
 
     const StatelessFn copiedStateless = addFn;
@@ -37,7 +37,7 @@ TEST(AdhdInplaceFunction, StatelessZeroByteAndStatefulTrampolines){
         accumulator += delta;
         return accumulator;
     });
-    ASSERT_TRUE(static_cast<bool>(statefulFn));
+    ASSERT_TRUE(static_cast<b8>(statefulFn));
     EXPECT_EQ(statefulFn(15), 115);
 
     auto statefulTrampoline = statefulFn.cTrampolineLast();
@@ -82,7 +82,7 @@ TEST(AdhdCompiler, ReordersClassFieldsByDescendingAlignmentAndSize){
         "    flag Visible,\r\n"
         "}\r\n"
         "class TransformNode {\r\n"
-        "    public bool dirty = false;\r\n"
+        "    public b8 dirty = false;\r\n"
         "    public u32 entityId = 0;\r\n"
         "    public f32x4 translation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
         "    public u64 handle = 0;\r\n"

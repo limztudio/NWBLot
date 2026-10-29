@@ -102,7 +102,7 @@ static void AppendDecimalText(CrashTestText& outText, const u64 value){
 }
 
 
-[[nodiscard]] static Expected<bool, ErrorCode> LinuxExternalSymbolizerAvailable(NWB::Core::Alloc::GlobalArena& arena){
+[[nodiscard]] static Expected<b8, ErrorCode> LinuxExternalSymbolizerAvailable(NWB::Core::Alloc::GlobalArena& arena){
     const auto pathText = ReadEnvironmentVariable(arena, "PATH");
     if(!pathText)
         return MakeUnexpected(pathText.error());
@@ -135,7 +135,7 @@ static void LinuxSilenceExpectedCrashChildConsole(){
         close(nullFd);
 }
 
-[[nodiscard]] static bool PendingDirectoryContainsManifestTexts(NWB::Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, const AStringView firstNeedle, const AStringView secondNeedle){
+[[nodiscard]] static b8 PendingDirectoryContainsManifestTexts(NWB::Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, const AStringView firstNeedle, const AStringView secondNeedle){
     const auto directory = DirectoryIterator<NWB::Core::Alloc::GlobalArena>::Create(pendingDirectory);
     if(!directory)
         return false;
@@ -323,10 +323,10 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     crashConfig.buildId = AStringView("recoverable-error-observe-test");
     crashConfig.spoolDirectory = spoolDirectory;
 
-    const bool installed = NWB::Core::Crash::InstallCrashHandler(crashConfig);
+    const b8 installed = NWB::Core::Crash::InstallCrashHandler(crashConfig);
     EXPECT_TRUE(installed);
 
-    bool continuedAfterError = false;
+    b8 continuedAfterError = false;
     if(installed){
         CaptureRecoverableErrorForCrashObservation(s_ErrorMessage);
         continuedAfterError = true;

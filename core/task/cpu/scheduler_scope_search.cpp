@@ -41,7 +41,7 @@ u32 CpuTaskScheduler::findScopeReadyLocked(const usize queue, ScopeWait& wait, u
     return index;
 }
 
-void CpuTaskScheduler::invalidateScopeSearchLocked(const bool publication)noexcept{
+void CpuTaskScheduler::invalidateScopeSearchLocked(const b8 publication)noexcept{
     if(publication && ++m_scopePublicationGeneration == 0u)
         TerminateInvariant();
     m_scopeSearchGeneration += s_ScopeSearchGenerationStep;
@@ -52,7 +52,7 @@ void CpuTaskScheduler::invalidateScopeSearchLocked(const bool publication)noexce
     m_scopeSearchGeneration = s_ScopeSearchGenerationStep;
 }
 
-bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& wait)noexcept{
+b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& wait)noexcept{
     if(m_nodes[index].scope == &wait.m_scope)
         return true;
     if(m_scopeSearchIdentity != wait.m_scopeIdentity){

@@ -111,7 +111,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     Core::GpuTaskId dependency = inputs.gbufferTask;
     const Span<const Core::GpuTaskResourceSetUse> resourceSetUseSpan(resourceSetUses, resourceSetUseCount);
     for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
-        const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
+        const b8 isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
         const auto phaseTask = declarePhase(
             inputs,
             scheduling,
@@ -144,7 +144,7 @@ Expected<Core::GpuTaskId> OpaqueSharedComputeEmulationChainBuilder::declarePhase
     const Core::GpuTaskId& dependency,
     const ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum phase,
     const usize drawIndex,
-    const bool finishTiming,
+    const b8 finishTiming,
     const Span<const Core::GpuTaskResourceUse> resourceUses,
     const Span<const Core::GpuTaskResourceSetUse> resourceSetUses
 ){

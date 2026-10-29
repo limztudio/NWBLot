@@ -23,7 +23,7 @@ NWB_IMPL_UI_BEGIN
 }
 
 // This validates scalar UTF-8 and admitted label controls, not Unicode grapheme or paragraph segmentation.
-[[nodiscard]] TextLayoutStatus::Enum ValidateTextRequest(const ShapeRequest& request, bool allowLineBreaks)noexcept;
+[[nodiscard]] TextLayoutStatus::Enum ValidateTextRequest(const ShapeRequest& request, b8 allowLineBreaks)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

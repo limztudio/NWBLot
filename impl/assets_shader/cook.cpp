@@ -85,7 +85,7 @@ static Expected<ShaderOptimizationLevel::Enum> TryParseShaderOptimizationLevel(c
 
 
 template <typename DefineMap>
-static bool ValidateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const DefineMap& defineValues, Alloc::ScratchArena& scratchArena){
+static b8 ValidateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const DefineMap& defineValues, Alloc::ScratchArena& scratchArena){
     if(variantSignature.empty())
         return true;
 
@@ -139,7 +139,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
             return false;
         }
 
-        bool valueFound = false;
+        b8 valueFound = false;
         for(const CookString& allowedValue : defineIt.value().values){
             if(AStringView(allowedValue) == defineValue){
                 valueFound = true;
@@ -171,7 +171,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<bool> ParseOptionalIntegerFlagField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView fieldName, const bool defaultValue){
+static Expected<b8> ParseOptionalIntegerFlagField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView fieldName, const b8 defaultValue){
     const Metascript::Value* fieldValue = asset.findField(fieldName);
     if(!fieldValue)
         return defaultValue;
@@ -376,7 +376,7 @@ Expected<ShaderCook::IncludeEntry> ShaderCook::parseIncludeMeta(const Path& nwbF
     return entry;
 }
 
-bool ShaderCook::validateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Alloc::ScratchArena& scratchArena){
+b8 ShaderCook::validateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Alloc::ScratchArena& scratchArena){
     return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, scratchArena);
 }
 
@@ -385,7 +385,7 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const Span<const
     inheritedEntries.reserve(dependencies.size());
 
     usize defineReserveCount = inOutEntry.defineValues.size();
-    bool canReserveDefineValues = true;
+    b8 canReserveDefineValues = true;
     for(const Path& dep : dependencies){
         __hidden_shader_cook::ScratchString depKey = PathToString(scratchArena, dep);
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -416,7 +416,7 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const Span<const
     }
 }
 
-bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations){
+b8 ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations){
     outCombinations.clear();
     DefineCombo initialCombo{m_memoryArena};
     initialCombo.reserve(defineValues.size());
@@ -514,7 +514,7 @@ ShaderCook::CookString ShaderCook::buildVariantName(const DefineCombo& combo, Al
 
     CookString variantName{m_memoryArena};
     variantName.reserve(variantNameSize);
-    bool first = true;
+    b8 first = true;
     for(const auto& entry : entries){
         if(!first)
             variantName += ';';

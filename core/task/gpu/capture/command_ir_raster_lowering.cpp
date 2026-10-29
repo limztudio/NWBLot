@@ -89,7 +89,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
             return GpuCommandIrReplayError::InvalidRasterOwner;
         if(!buffer || !buffer->getDescription().isVertexBuffer || binding.offset >= buffer->getDescription().byteSize)
             return GpuCommandIrReplayError::BackendResourceNotReady;
-        const bool sharedIndex = record.indexResource.valid() && buffer == owner.indexBuffer.get();
+        const b8 sharedIndex = record.indexResource.valid() && buffer == owner.indexBuffer.get();
         const ResourceStates::Mask requiredState = sharedIndex ? ResourceStates::VertexBuffer | ResourceStates::IndexBuffer : ResourceStates::VertexBuffer;
         const GpuCommandIrReplayError::Enum bufferError = ValidateBuffer(*buffer, requiredState, queue, commandList);
         if(bufferError != GpuCommandIrReplayError::None)
@@ -114,7 +114,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
 }
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateDraw(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrRasterTaskRecord& stateRecord, const GpuCommandIrRasterStateOwner& owner)noexcept{
-    const bool indexed = record.opcode == GpuCommandIrWireOpcode::DrawIndexed;
+    const b8 indexed = record.opcode == GpuCommandIrWireOpcode::DrawIndexed;
     if(indexed){
         // Graph preflight requires an index resource for indexed draws, and the state owner check admitted its buffer.
         auto& index = *MakeNotNull(owner.indexBuffer.get());
@@ -139,7 +139,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
             return GpuCommandIrReplayError::InvalidRasterDraw;
 
         u32 requiredBytes = 0u;
-        bool foundAttribute = false;
+        b8 foundAttribute = false;
         for(u32 matchingIndex = 0u; matchingIndex < inputLayout->getNumAttributes(); ++matchingIndex){
             const VertexAttributeDesc* const matching = inputLayout->getAttributeDescription(matchingIndex);
             if(!matching || matching->bufferIndex != required.slot)
@@ -153,7 +153,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
         }
         if(!foundAttribute)
             return GpuCommandIrReplayError::InvalidRasterDraw;
-        const bool instanceRate = required.instanceRate;
+        const b8 instanceRate = required.instanceRate;
         if(indexed && !instanceRate)
             continue;
         const u32 first = instanceRate ? record.drawArguments.startInstanceLocation : record.drawArguments.startVertexLocation;
@@ -252,7 +252,7 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
 }
 
 // Backend operand preflight already admitted these owners and blob ranges on the same stable stream.
-bool LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, const BinaryByteView blobBytes, CommandList& commandList){
+b8 LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, const BinaryByteView blobBytes, CommandList& commandList){
     switch(record.opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{
         auto& owner = *MakeNotNull(stream.rasterStateOwner(record.framebufferOwnerIndex));

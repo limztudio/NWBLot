@@ -120,39 +120,39 @@ Expected<u32> MaterialTypedValueParser::ParseMaterialParameterUnsignedToken(cons
 
 Expected<u32> MaterialTypedValueParser::ParseMaterialParameterToken(const AStringView token, const MaterialParameterValueType::Enum type)noexcept{
     AStringView numericToken = token;
-    if(type == MaterialParameterValueType::Float)
+    if(type == MaterialParameterValueType::f32)
         numericToken = StripMaterialNumericSuffix(token, 'f', 'F');
-    else if(type == MaterialParameterValueType::Half){
+    else if(type == MaterialParameterValueType::f16){
         numericToken = StripMaterialNumericSuffix(token, 'h', 'H');
         if(numericToken == token)
             numericToken = StripMaterialNumericSuffix(token, 'f', 'F');
     }
-    else if(type == MaterialParameterValueType::UChar || type == MaterialParameterValueType::UShort || type == MaterialParameterValueType::UInt)
+    else if(type == MaterialParameterValueType::u8 || type == MaterialParameterValueType::u16 || type == MaterialParameterValueType::u32)
         numericToken = StripMaterialNumericSuffix(token, 'u', 'U');
 
     switch(type){
-    case MaterialParameterValueType::Bool:
+    case MaterialParameterValueType::b8:
         return ParseMaterialBoolToken(token);
-    case MaterialParameterValueType::Char:
+    case MaterialParameterValueType::i8:
         return ParseMaterialParameterSignedToken(numericToken, static_cast<i64>(Limit<i8>::s_Min), static_cast<i64>(Limit<i8>::s_Max), NWB_MATERIAL_TYPED_BYTE_MASK);
-    case MaterialParameterValueType::UChar:
+    case MaterialParameterValueType::u8:
         return ParseMaterialParameterUnsignedToken(numericToken, static_cast<u64>(Limit<u8>::s_Max));
-    case MaterialParameterValueType::Short:
+    case MaterialParameterValueType::i16:
         return ParseMaterialParameterSignedToken(numericToken, static_cast<i64>(Limit<i16>::s_Min), static_cast<i64>(Limit<i16>::s_Max), NWB_MATERIAL_TYPED_U16_MASK);
-    case MaterialParameterValueType::UShort:
+    case MaterialParameterValueType::u16:
         return ParseMaterialParameterUnsignedToken(numericToken, static_cast<u64>(Limit<u16>::s_Max));
-    case MaterialParameterValueType::Int:
+    case MaterialParameterValueType::i32:
         return ParseMaterialParameterSignedToken(numericToken, static_cast<i64>(Limit<i32>::s_Min), static_cast<i64>(Limit<i32>::s_Max), Limit<u32>::s_Max);
-    case MaterialParameterValueType::UInt:
+    case MaterialParameterValueType::u32:
         return ParseMaterialParameterUnsignedToken(numericToken, static_cast<u64>(Limit<u32>::s_Max));
-    case MaterialParameterValueType::Half:{
+    case MaterialParameterValueType::f16:{
         const auto converted = ParseMaterialParameterF32Token(numericToken);
         if(!converted)
             return MakeUnexpected(Failure{});
 
         return static_cast<u32>(ConvertFloatToHalf(*converted));
     }
-    case MaterialParameterValueType::Float:{
+    case MaterialParameterValueType::f32:{
         const auto converted = ParseMaterialParameterF32Token(numericToken);
         if(!converted)
             return MakeUnexpected(Failure{});
@@ -184,15 +184,15 @@ bool MaterialTypedValueParser::StoreMaterialTypedValueComponent(MaterialTypedVal
         return false;
 
     switch(valueType){
-    case MaterialParameterValueType::Bool:
+    case MaterialParameterValueType::b8:
         return StoreMaterialTypedValueScalar<u8>(outParameter, componentIndex, value != 0u ? 1u : 0u);
-    case MaterialParameterValueType::Char:
-    case MaterialParameterValueType::UChar:
+    case MaterialParameterValueType::i8:
+    case MaterialParameterValueType::u8:
         return StoreMaterialTypedValueScalar<u8>(outParameter, componentIndex, value);
-    case MaterialParameterValueType::Short:
-    case MaterialParameterValueType::UShort:
+    case MaterialParameterValueType::i16:
+    case MaterialParameterValueType::u16:
         return StoreMaterialTypedValueScalar<u16>(outParameter, componentIndex, value);
-    case MaterialParameterValueType::Half:
+    case MaterialParameterValueType::f16:
         return StoreMaterialTypedValueScalar<Half>(outParameter, componentIndex, value);
     default:
         outParameter.data.raw[componentIndex] = value;

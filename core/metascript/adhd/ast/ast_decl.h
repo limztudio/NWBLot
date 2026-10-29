@@ -160,6 +160,8 @@ struct ClassDecl{
     MVector<FieldDecl*> orderedFields;
     MVector<MethodDecl*> methods;
     MStringView assetTypeName;
+    MStringView subsystemTypeName;
+    MStringView componentAssetTypeName;
     SourceSpan span;
     usize totalSize = 1u;
     usize totalAlign = 1u;

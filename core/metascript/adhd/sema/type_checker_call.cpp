@@ -262,11 +262,11 @@ bool TypeChecker::checkCallExpr(
                 if(fnName == "abs" || fnName == "floor" || fnName == "ceil" || fnName == "round"
                     || fnName == "sqrt" || fnName == "rsqrt" || fnName == "length" || fnName == "lengthSq"
                     || fnName == "normalize" || fnName == "transpose" || fnName == "inverse"
-                    || fnName == "sin" || fnName == "cos" || fnName == "tan")
+                    || fnName == "sin" || fnName == "cos" || fnName == "tan" || fnName == "isFinite")
                 {
                     expectedBuiltinArity = 1u;
                 }
-                else if(fnName == "min" || fnName == "max" || fnName == "dot" || fnName == "cross" || fnName == "mul"){
+                else if(fnName == "min" || fnName == "max" || fnName == "dot" || fnName == "cross" || fnName == "mul" || fnName == "divideUp"){
                     expectedBuiltinArity = 2u;
                 }
                 else if(fnName == "clamp" || fnName == "lerp"){

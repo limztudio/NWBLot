@@ -68,7 +68,7 @@ static constexpr AStringView s_PaletteRoleNames[] = {
     "scrollbar.disabled", "popup.backdrop", "control.hover_tint", "control.pressed_tint",
     "control.disabled_tint", "progress.track_tint", "progress.fill_tint",
 };
-static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin palette role fixture drifted");
+static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::kCount, "UI skin palette role fixture drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,7 +86,7 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
 
 [[nodiscard]] static Core::Assets::AssetBytes MakeBinary(SkinTestArena& testArena, const UiSkinBinaryPayload::HeaderBinary& header, const UiSkinBinaryPayload::RegionBinary& region){
     Core::Assets::AssetBytes binary(testArena.arena);
-    binary.reserve(sizeof(header) + sizeof(region) + UiSkinColorRole::Count * sizeof(UiSkinBinaryPayload::ColorBinary) + sizeof(UiSkinBinaryPayload::TypographyBinary));
+    binary.reserve(sizeof(header) + sizeof(region) + UiSkinColorRole::kCount * sizeof(UiSkinBinaryPayload::ColorBinary) + sizeof(UiSkinBinaryPayload::TypographyBinary));
     AppendPOD(binary, header);
     AppendPOD(binary, region);
     for(const UiSkinColor& color : UiSkinPalette{}.colors)
@@ -127,7 +127,7 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
     if(variant == 1u)
         return metadata;
     metadata.append("asset.colors = [\r\n");
-    const usize count = variant == 2u ? UiSkinColorRole::Count - 1u : UiSkinColorRole::Count;
+    const usize count = variant == 2u ? UiSkinColorRole::kCount - 1u : UiSkinColorRole::kCount;
     for(usize index = 0u; index < count; ++index){
         const AStringView name = variant == 3u && index == count - 1u ? s_PaletteRoleNames[0u] : variant == 4u && index == count - 1u ? AStringView("unknown.role") : s_PaletteRoleNames[index];
         metadata.append("  { \"name\": \"");
@@ -154,7 +154,7 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
     UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
     Core::Assets::AssetBytes binary = MakeBinary(testArena, header, ValidRegion());
     binary.resize(sizeof(header) + sizeof(UiSkinBinaryPayload::RegionBinary));
-    for(u32 index = 0u; index < UiSkinColorRole::Count; ++index)
+    for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index)
         AppendPOD(binary, color);
     UiSkinBinaryPayload::TypographyBinary typography;
     typography.defaultFontSize = defaultFontSize;
@@ -255,7 +255,7 @@ TEST(AssetsUiSkin, RejectsObsoleteBinaryVersionsWithoutReplacingCurrentSkin){
         header.version = version;
         Core::Assets::AssetBytes binary = MakeBinary(testArena, header, ValidRegion());
         EXPECT_FALSE(skin.loadBinary(binary)) << version;
-        binary.resize(sizeof(header) + sizeof(UiSkinBinaryPayload::RegionBinary) + (version == 2u ? UiSkinColorRole::Count * sizeof(UiSkinBinaryPayload::ColorBinary) : 0u));
+        binary.resize(sizeof(header) + sizeof(UiSkinBinaryPayload::RegionBinary) + (version == 2u ? UiSkinColorRole::kCount * sizeof(UiSkinBinaryPayload::ColorBinary) : 0u));
         EXPECT_FALSE(skin.loadBinary(binary)) << version;
         EXPECT_EQ(skin.regions().size(), 1u);
         EXPECT_FLOAT_EQ(skin.typography().defaultFontSize, 16.0f);

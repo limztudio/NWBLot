@@ -157,9 +157,9 @@ public:
             return {};
         const Half packedIor = ConvertFloatToHalf(ior);
         const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.f);
-        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::Half, Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))))
+        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))))
             return MakeUnexpected(Failure{});
-        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::Half3, Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)))
+        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)))
             return MakeUnexpected(Failure{});
         return {};
     }

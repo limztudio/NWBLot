@@ -5,15 +5,15 @@
 #pragma once
 
 
-#include <impl/ecs_render/caustic/settings.h>
-#include <impl/ecs_render/gi/quality_settings.h>
+#include <impl/ecs_render/caustic/settings.adhd.h>
+#include <impl/ecs_render/gi/quality_settings.adhd.h>
 #include <impl/ecs_render/material/material_instance.h>
-#include <impl/ecs_render/reflection/settings.h>
+#include <impl/ecs_render/reflection/settings.adhd.h>
 #include <impl/ecs_render/reflection/statistics.h>
 #include <impl/ecs_render/refraction/statistics.h>
-#include <impl/ecs_render/deferred/presentation_settings.h>
-#include <impl/ecs_render/shadow/light_space_settings.h>
-#include <impl/ecs_render/shadow/quality_settings.h>
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
+#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
+#include <impl/ecs_render/shadow/quality_settings.adhd.h>
 
 #include <core/alloc/general.h>
 #include <core/ecs/system.h>

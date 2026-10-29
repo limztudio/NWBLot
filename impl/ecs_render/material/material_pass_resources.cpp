@@ -9,7 +9,7 @@
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
-#include <impl/assets_graphics/mesh/subsystem.h>
+#include <impl/assets_graphics/mesh/subsystem.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>

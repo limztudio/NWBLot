@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Base grid sides that MakeCausticPhotonBudget accepts.
+const u32 s_CausticReducedBaseGridSide = 128u;
+const u32 s_CausticFullBaseGridSide = 512u;
+
+[reflect]
+class CausticQualitySettings{
+    // Divide each photon-grid dimension by 1, 2, or 4; temporal phases and filtering stay unchanged.
+    public u32 photonGridDivisor = 1u;
+}
+
+[reflect]
+class CausticPhotonBudget{
+    public u32 gridSide = 0u;
+    public u32 fullGridCount = 0u;
+    public u32 photonsPerFrame = 0u;
+}
+
+bool ValidateCausticQualitySettings(in CausticQualitySettings settings){
+    const u32 s_HalfPhotonGridDivisor = 2u;
+    const u32 s_QuarterPhotonGridDivisor = 4u;
+    return settings.photonGridDivisor == 1u || settings.photonGridDivisor == s_HalfPhotonGridDivisor || settings.photonGridDivisor == s_QuarterPhotonGridDivisor;
+}
+
+// Callers supply validated settings, a supported base grid, and the current 1/2 temporal phase count.
+CausticPhotonBudget MakeCausticPhotonBudget(in CausticQualitySettings settings, in u32 baseGridSide, in u32 temporalPhaseCount){
+    const u32 s_CausticTemporalDisabledPhaseCount = 1u;
+    const u32 s_CausticTemporalPhaseCount = 2u;
+    assert(ValidateCausticQualitySettings(settings));
+    assert(baseGridSide == s_CausticReducedBaseGridSide || baseGridSide == s_CausticFullBaseGridSide);
+    assert(temporalPhaseCount == s_CausticTemporalDisabledPhaseCount || temporalPhaseCount == s_CausticTemporalPhaseCount);
+    CausticPhotonBudget budget;
+    budget.gridSide = baseGridSide / settings.photonGridDivisor;
+    budget.fullGridCount = budget.gridSide * budget.gridSide;
+    budget.photonsPerFrame = budget.fullGridCount / temporalPhaseCount;
+    return budget;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

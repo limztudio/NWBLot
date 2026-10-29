@@ -8,7 +8,7 @@
 #include "light_space_plan.h"
 #include "light_space_capture_history.h"
 #include "light_space_csg.h"
-#include "quality_settings.h"
+#include <impl/ecs_render/shadow/quality_settings.adhd.h>
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/pipeline.h>

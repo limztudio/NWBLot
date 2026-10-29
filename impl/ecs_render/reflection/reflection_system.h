@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "settings.h"
+#include <impl/ecs_render/reflection/settings.adhd.h>
 #include "statistics_readback.h"
 #include "postprocess_resources.h"
 #include "feedback_resources.h"

@@ -63,7 +63,7 @@ struct MaterialInstanceValueTraits;
 
 template<>
 struct MaterialInstanceValueTraits<f32>{
-    static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::Float;
+    static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::f32;
 
 
 public:
@@ -74,7 +74,7 @@ public:
 
 template<>
 struct MaterialInstanceValueTraits<Float4>{
-    static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::Float4;
+    static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::f32x4;
 
 
 public:
@@ -85,7 +85,7 @@ public:
 
 template<>
 struct MaterialInstanceValueTraits<Half4U>{
-    static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::Half4;
+    static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::f16x4;
 
 
 public:

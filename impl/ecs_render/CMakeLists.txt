@@ -6,6 +6,12 @@ nwb_target_adhd_sources(nwb_ecs_render_components
     NAMESPACE "NWB::Impl"
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/components.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/caustic/settings.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/gi/quality_settings.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/reflection/settings.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/shadow/quality_settings.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_settings.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/deferred/presentation_settings.adhd"
     DEPENDS
         "${PROJECT_SOURCE_DIR}/impl/assets_material/types.adhd"
 )
@@ -13,20 +19,12 @@ target_link_libraries(nwb_ecs_render_components PUBLIC nwb_assets nwb_assets_mat
 
 nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/caustic/settings.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/caustic/settings.h"
-    "${CMAKE_CURRENT_LIST_DIR}/gi/quality_settings.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/gi/quality_settings.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_caustics_quality.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/shadow/quality_settings.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/shadow/quality_settings.h"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/quality_runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/transparent_sampling_history.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/transparent_sampling_history.h"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_capture_history.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_capture_history.h"
-    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_settings.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_settings.h"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_plan.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_plan.h"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_shadow.h"
@@ -41,8 +39,6 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shadow/soft_shadow_split_task_chain.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/shadow_cutter_snapshot.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg/shadow_cutter_snapshot.h"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection/settings.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/reflection/settings.h"
     "${CMAKE_CURRENT_LIST_DIR}/reflection/statistics.h"
     "${CMAKE_CURRENT_LIST_DIR}/reflection/statistics_readback.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reflection/statistics_readback.h"
@@ -290,8 +286,6 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/renderer_deferred_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_system.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/deferred/presentation_settings.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/deferred/presentation_settings.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/renderer_avboit_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/renderer_raytracing_state.cpp"
@@ -451,5 +445,5 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_resource_utils.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/format_private.h"
 )
-target_link_libraries(nwb_ecs_render PUBLIC nwb_ecs_render_components nwb_ecs nwb_ecs_mesh nwb_graphics nwb_assets_material nwb_ecs_csg nwb_ecs_scene nwb_assets_scene)
+target_link_libraries(nwb_ecs_render PUBLIC nwb_ecs_render_components nwb_ecs nwb_ecs_mesh nwb_graphics nwb_assets_material nwb_ecs_csg nwb_ecs_scene nwb_assets_scene nwb_assets_graphics_types)
 target_link_libraries(nwb_ecs_render PRIVATE nwb_assets_mesh nwb_assets_shader_loader nwb_assets_texture_loader nwb_assets_sampler_loader)

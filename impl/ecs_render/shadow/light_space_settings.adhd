@@ -1,0 +1,64 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> SoftwareShadowBackend{
+    enum Automatic,
+    enum SoftwareTrace,
+    enum LightSpace
+}
+
+[reflect]
+enum<u8> SoftwareShadowCoverage{
+    enum Reference,
+    enum FittedVolume
+}
+
+[reflect]
+enum<u8> SoftwareShadowBlockerSearch{
+    enum ReferenceGrid9,
+    enum CompactCross5,
+    enum Center1
+}
+
+[reflect]
+enum<u8> SoftwareShadowCaptureCadence{
+    enum EveryFrame,
+    enum ReuseOneFrame,
+    enum ReuseTwoFrames
+}
+
+const u32 s_ShadowCaptureReuseLimitOneFrame = 1u;
+const u32 s_ShadowCaptureReuseLimitTwoFrames = 2u;
+const u32 s_ShadowDefaultDirectionalResolution = 512u;
+const u32 s_ShadowDefaultPointResolution = 256u;
+const u64 s_ShadowDefaultMemoryBudgetBytes = 268435456ull;
+const u32 s_ShadowMinResolution = 32u;
+const u32 s_ShadowMaxResolution = 2048u;
+const u64 s_ShadowMaxMemoryBudgetBytes = 4294967295ull;
+
+[reflect]
+class SoftwareShadowSettings{
+    public SoftwareShadowBackend backend = SoftwareShadowBackend::Enum::Automatic;
+    public SoftwareShadowCoverage coverage = SoftwareShadowCoverage::Enum::Reference;
+    public SoftwareShadowBlockerSearch blockerSearch = SoftwareShadowBlockerSearch::Enum::ReferenceGrid9;
+    public SoftwareShadowCaptureCadence captureCadence = SoftwareShadowCaptureCadence::Enum::EveryFrame;
+    public u32 directionalResolution = s_ShadowDefaultDirectionalResolution;
+    public u32 pointResolution = s_ShadowDefaultPointResolution;
+    public u64 memoryBudgetBytes = s_ShadowDefaultMemoryBudgetBytes;
+}
+
+bool ValidateSoftwareShadowSettings(in SoftwareShadowSettings settings){
+    return
+        cast<u8>(settings.backend) <= cast<u8>(SoftwareShadowBackend::Enum::LightSpace)
+        && cast<u8>(settings.coverage) <= cast<u8>(SoftwareShadowCoverage::Enum::FittedVolume)
+        && cast<u8>(settings.blockerSearch) <= cast<u8>(SoftwareShadowBlockerSearch::Enum::Center1)
+        && cast<u8>(settings.captureCadence) <= cast<u8>(SoftwareShadowCaptureCadence::Enum::ReuseTwoFrames)
+        && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
+        && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
+        && settings.memoryBudgetBytes > 0ull && settings.memoryBudgetBytes <= s_ShadowMaxMemoryBudgetBytes;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -287,6 +287,62 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     else if(namespacePath.size() >= 9u && namespacePath.substr(0u, 9u) == "NWB::Impl")
         out.append("#include <impl/global.h>\r\n");
 
+    bool hasSubsystemDecl = false;
+    bool hasSubsystemCsg = false;
+    bool hasSubsystemFontAtlas = false;
+    bool hasSubsystemSampler = false;
+    bool hasSubsystemShader = false;
+    bool hasSubsystemUiSkin = false;
+    bool hasComponentAssetDecl = false;
+    for(const ClassDecl* classDecl : unit.classes){
+        if(!classDecl || classDecl->isImported)
+            continue;
+        if(!classDecl->subsystemTypeName.empty()){
+            hasSubsystemDecl = true;
+            for(const FieldDecl* field : classDecl->fields){
+                if(!field || !field->type)
+                    continue;
+                const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
+                MStringView assetName;
+                if(resolved && resolved->name == "Vector" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+                    const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
+                    if(elemType && !elemType->templateArgs.empty() && elemType->templateArgs[0].type)
+                        assetName = elemType->templateArgs[0].type->name;
+                }
+                else if(resolved && resolved->name == "AssetRef" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+                    assetName = resolved->templateArgs[0].type->name;
+                }
+                if(assetName == "CsgShape")
+                    hasSubsystemCsg = true;
+                else if(assetName == "FontAtlas")
+                    hasSubsystemFontAtlas = true;
+                else if(assetName == "Sampler")
+                    hasSubsystemSampler = true;
+                else if(assetName == "UiSkin")
+                    hasSubsystemUiSkin = true;
+                else if(assetName.size() >= 6u && assetName.substr(assetName.size() - 6u) == "Shader")
+                    hasSubsystemShader = true;
+            }
+        }
+        if(!classDecl->componentAssetTypeName.empty())
+            hasComponentAssetDecl = true;
+    }
+    if(hasSubsystemDecl){
+        if(hasSubsystemCsg)
+            out.append("#include <impl/assets_csg/asset.h>\r\n");
+        if(hasSubsystemFontAtlas)
+            out.append("#include <impl/assets_font_atlas/asset.h>\r\n");
+        if(hasSubsystemSampler)
+            out.append("#include <impl/assets_sampler/asset.h>\r\n");
+        if(hasSubsystemShader)
+            out.append("#include <impl/assets_shader/asset.h>\r\n");
+        if(hasSubsystemUiSkin)
+            out.append("#include <impl/assets_ui_skin/asset.h>\r\n");
+        out.append("#include <impl/assets_subsystem/asset.h>\r\n");
+    }
+    if(hasComponentAssetDecl)
+        out.append("#include <impl/assets_scene/components.h>\r\n");
+
     for(const MString& inc : unit.includedAdhdFiles){
         const MStringView incView = StripAdhdExtension(MStringView(inc.data(), inc.size()));
         out.append("#include \"");

@@ -1,0 +1,21 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[subsystem("refractive_subsystem")]
+class RefractiveSubsystem{
+    public AssetRef<ComputeShader> causticAccumulatorDecayCs;
+    public AssetRef<ComputeShader> causticGeometryDownsampleCs;
+    public AssetRef<ClosestHitShader> causticPhotonHwChit;
+    public AssetRef<MissShader> causticPhotonHwMiss;
+    public AssetRef<RayGenerationShader> causticPhotonHwRaygen;
+    public AssetRef<ComputeShader> causticPhotonSwCs;
+    public AssetRef<ComputeShader> causticResolveCs;
+    public AssetRef<ComputeShader> refractionClassifyTilesCs;
+    public AssetRef<ComputeShader> refractionFinalizeTilesCs;
+    public AssetRef<ComputeShader> refractionResolveHwCs;
+    public AssetRef<ComputeShader> refractionResolveScreenCs;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

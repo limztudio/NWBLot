@@ -464,12 +464,14 @@ bool LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseErro
         }
 
         const MStringView baseFieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
-        if(m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(baseFieldTypeName)){
-            field->usesClassArena = true;
-            classDecl.needsClassArena = true;
-        }
-        else if(TypeContainsArenaBackedContainer(*field->type, m_symbols)){
-            classDecl.needsClassArena = true;
+        if(classDecl.subsystemTypeName.empty() && classDecl.componentAssetTypeName.empty()){
+            if(m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(baseFieldTypeName)){
+                field->usesClassArena = true;
+                classDecl.needsClassArena = true;
+            }
+            else if(TypeContainsArenaBackedContainer(*field->type, m_symbols)){
+                classDecl.needsClassArena = true;
+            }
         }
 
         usize fieldSize = 8u;

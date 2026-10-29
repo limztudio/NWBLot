@@ -1,0 +1,41 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> TransparentShadowSampling{
+    enum ReferenceThree,
+    enum TemporalOne
+}
+
+[reflect]
+enum<u8> ShadowReceiverResolution{
+    enum Half = 2u,
+    enum Quarter = 4u
+}
+
+const u32 s_ShadowReceiverFactorHalf = cast<u32>(ShadowReceiverResolution::Enum::Half);
+const u32 s_ShadowReceiverFactorQuarter = cast<u32>(ShadowReceiverResolution::Enum::Quarter);
+const u32 s_SwShadowTransparentSpp = 3u;
+
+[reflect]
+class ShadowQualitySettings{
+    public TransparentShadowSampling transparentSampling = TransparentShadowSampling::Enum::ReferenceThree;
+    public ShadowReceiverResolution receiverResolution = ShadowReceiverResolution::Enum::Half;
+}
+
+bool ValidateShadowQualitySettings(in ShadowQualitySettings settings){
+    return cast<u8>(settings.transparentSampling) <= cast<u8>(TransparentShadowSampling::Enum::TemporalOne)
+        && (settings.receiverResolution == ShadowReceiverResolution::Enum::Half || settings.receiverResolution == ShadowReceiverResolution::Enum::Quarter);
+}
+
+// Reduced sampling requires an accepted history and an available transparent temporal filter.
+u32 ResolveTransparentShadowSampleCount(in ShadowQualitySettings settings, in bool temporalHistoryUsable){
+    if(settings.transparentSampling == TransparentShadowSampling::Enum::TemporalOne && temporalHistoryUsable){
+        return 1u;
+    }
+    return s_SwShadowTransparentSpp;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include <impl/assets_ui_skin/types.adhd.h>
 
 #include <core/assets/module.h>
 #include <core/assets/ref.h>
@@ -21,82 +22,6 @@ NWB_IMPL_BEGIN
 
 
 class Texture;
-
-inline constexpr u32 s_UiSkinMaxRegionCount = 4096u;
-inline constexpr f32 s_UiSkinPaletteRgbMax = 16.0f;
-inline constexpr f32 s_UiSkinDefaultFontSize = 16.0f;
-inline constexpr f32 s_UiSkinMinDefaultFontSizeScale = 64.0f;
-inline constexpr f32 s_UiSkinMinDefaultFontSize = 1.0f / s_UiSkinMinDefaultFontSizeScale;
-inline constexpr f32 s_UiSkinMaxDefaultFontSize = 2048.0f;
-
-namespace UiSkinDrawMode{
-    enum Enum : u8{
-        Sprite = 0u,
-        NineSlice,
-    };
-};
-
-// Atlas rectangles and slice borders use top-left-origin pixels; padding and minimum sizes use logical units.
-struct UiSkinRect{
-    u32 x = 0u;
-    u32 y = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-};
-
-struct UiSkinSliceInsets{
-    u32 left = 0u;
-    u32 top = 0u;
-    u32 right = 0u;
-    u32 bottom = 0u;
-};
-
-struct UiSkinInsets{
-    f32 left = 0.0f;
-    f32 top = 0.0f;
-    f32 right = 0.0f;
-    f32 bottom = 0.0f;
-};
-
-struct UiSkinRegion{
-    Name name = s_NameNone;
-    UiSkinRect rectangle;
-    UiSkinSliceInsets sliceInsets;
-    UiSkinInsets padding;
-    f32 minimumWidth = 0.0f;
-    f32 minimumHeight = 0.0f;
-    UiSkinDrawMode::Enum drawMode = UiSkinDrawMode::Sprite;
-};
-
-namespace UiSkinColorRole{
-    enum Enum : u8{
-        TextNormal,
-        TextDisabled,
-        TextTooltip,
-        EditBackground,
-        EditSelection,
-        EditInactiveSelection,
-        EditCaret,
-        EditPreedit,
-        ScrollbarTrack,
-        ScrollbarThumb,
-        ScrollbarDisabled,
-        PopupBackdrop,
-        ControlHoverTint,
-        ControlPressedTint,
-        ControlDisabledTint,
-        ProgressTrackTint,
-        ProgressFillTint,
-        Count,
-    };
-};
-
-struct UiSkinColor{
-    f32 r = 0.0f;
-    f32 g = 0.0f;
-    f32 b = 0.0f;
-    f32 a = 0.0f;
-};
 
 inline constexpr UiSkinColor s_DefaultTextNormalColor = { 0.92f, 0.94f, 0.98f, 1.0f };
 inline constexpr UiSkinColor s_DefaultTextDisabledColor = { 0.48f, 0.5f, 0.55f, 1.0f };
@@ -117,7 +42,7 @@ inline constexpr UiSkinColor s_DefaultProgressTrackTintColor = { 1.0f, 1.0f, 1.0
 inline constexpr UiSkinColor s_DefaultProgressFillTintColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
 struct UiSkinPalette{
-    Array<UiSkinColor, UiSkinColorRole::Count> colors{{
+    Array<UiSkinColor, UiSkinColorRole::kCount> colors{{
         s_DefaultTextNormalColor, // TextNormal
         s_DefaultTextDisabledColor, // TextDisabled
         s_DefaultTextTooltipColor, // TextTooltip
@@ -136,10 +61,6 @@ struct UiSkinPalette{
         s_DefaultProgressTrackTintColor, // ProgressTrackTint
         s_DefaultProgressFillTintColor, // ProgressFillTint
     }};
-};
-
-struct UiSkinTypography{
-    f32 defaultFontSize = s_UiSkinDefaultFontSize;
 };
 
 

@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[subsystem("gi_subsystem")]
+class GiSubsystem{
+    public AssetRef<ComputeShader> surfelAgeFreeCs;
+    public AssetRef<ComputeShader> surfelHashBuildCs;
+    public AssetRef<ComputeShader> surfelResolveCs;
+    public AssetRef<ComputeShader> surfelSpawnCs;
+    public AssetRef<ComputeShader> surfelTraceBuildArgsCs;
+    public AssetRef<ComputeShader> surfelTraceCs;
+    public AssetRef<ComputeShader> surfelTraceHwCs;
+    public AssetRef<ComputeShader> surfelUpsampleCs;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

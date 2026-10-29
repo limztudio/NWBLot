@@ -19,7 +19,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     out.append("namespace ");
     out.append(decl.name.data(), decl.name.size());
     out.append("{\r\n");
-    out.append("    enum Enum : ");
+    out.append("    enum Enum : ::");
     out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
     out.append("{\r\n");
 

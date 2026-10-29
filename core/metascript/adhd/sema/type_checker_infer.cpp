@@ -109,6 +109,8 @@ MStringView TypeChecker::inferExprTypeName(
             }
             if(!expr.arguments.empty() && expr.arguments[0]){
                 const MStringView fnName = expr.lhs->text;
+                if(fnName == "isFinite")
+                    return "bool";
                 if(fnName == "dot" || fnName == "length" || fnName == "lengthSq"){
                     const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
                     u32 simdLanes = 0u;
@@ -131,7 +133,8 @@ MStringView TypeChecker::inferExprTypeName(
                     || fnName == "floor" || fnName == "ceil" || fnName == "round"
                     || fnName == "sin" || fnName == "cos" || fnName == "tan"
                     || fnName == "cross" || fnName == "normalize"
-                    || fnName == "transpose" || fnName == "inverse")
+                    || fnName == "transpose" || fnName == "inverse"
+                    || fnName == "divideUp")
                 {
                     for(const Expr* arg : expr.arguments){
                         if(!arg)

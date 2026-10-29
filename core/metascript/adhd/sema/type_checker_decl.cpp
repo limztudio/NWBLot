@@ -147,6 +147,61 @@ bool TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const 
 bool TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors){
     bool ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
 
+    if(!classDecl.subsystemTypeName.empty()){
+        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.componentAssetTypeName.empty()
+            || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty())
+        {
+            reportError(errors, classDecl.span, "'[subsystem(\"...\")]' class may only declare 'public' AssetRef<T> or Vector<AssetRef<T>> fields");
+            ok = false;
+        }
+        if(classDecl.fields.empty()){
+            reportError(errors, classDecl.span, "'[subsystem(\"...\")]' class must declare at least one asset field");
+            ok = false;
+        }
+        for(const FieldDecl* field : classDecl.fields){
+            if(!field)
+                continue;
+            if(field->access != AccessSpecifier::Public || field->defaultExpr || field->hasCtorInit || !field->type){
+                reportError(errors, field->span, "'[subsystem(\"...\")]' field must be 'public' without an inline initializer");
+                ok = false;
+                continue;
+            }
+            const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
+            bool validSubsystemField = false;
+            if(resolved && resolved->refMode == ParamPassingMode::None){
+                if(resolved->name == "AssetRef" && resolved->templateArgs.size() == 1u && resolved->templateArgs[0].type && !resolved->templateArgs[0].type->name.empty()){
+                    validSubsystemField = true;
+                }
+                else if(resolved->name == "Vector" && resolved->templateArgs.size() == 1u && resolved->templateArgs[0].type){
+                    const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
+                    if(elemType && elemType->name == "AssetRef" && elemType->templateArgs.size() == 1u && elemType->templateArgs[0].type && !elemType->templateArgs[0].type->name.empty())
+                        validSubsystemField = true;
+                }
+            }
+            if(!validSubsystemField){
+                reportError(errors, field->span, "'[subsystem(\"...\")]' field must have type 'AssetRef<TAsset>' or 'Vector<AssetRef<TAsset>>'");
+                ok = false;
+            }
+        }
+    }
+
+    if(!classDecl.componentAssetTypeName.empty()){
+        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.subsystemTypeName.empty()
+            || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty())
+        {
+            reportError(errors, classDecl.span, "'[component_asset(\"...\")]' class may only declare a single 'public' component field");
+            ok = false;
+        }
+        if(classDecl.fields.size() != 1u || !classDecl.fields[0]
+            || classDecl.fields[0]->access != AccessSpecifier::Public
+            || classDecl.fields[0]->name != "component"
+            || classDecl.fields[0]->defaultExpr || classDecl.fields[0]->hasCtorInit)
+        {
+            reportError(errors, classDecl.span, "'[component_asset(\"...\")]' class must declare exactly one 'public <ComponentType> component;' field");
+            ok = false;
+        }
+    }
+
     for(usize i = 0u; i < classDecl.implementedInterfaces.size(); ++i){
         const TypeRef* ifaceType = classDecl.implementedInterfaces[i];
         if(!ifaceType)

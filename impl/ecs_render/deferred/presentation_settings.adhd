@@ -1,0 +1,28 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u32> PresentationToneMap{
+    enum LinearClamp = 0u,
+    enum Reinhard = 1u
+}
+
+// Stages exchange linear radiance; exposure applies at presentation.
+const f32 s_PresentationDefaultShoulder = 0.65f;
+
+[reflect]
+class PresentationSettings{
+    public PresentationToneMap toneMap = PresentationToneMap::Enum::Reinhard;
+    public f32 exposure = 1.0f;
+    public f32 shoulder = s_PresentationDefaultShoulder;
+}
+
+bool ValidatePresentationSettings(in PresentationSettings settings){
+    return cast<u32>(settings.toneMap) <= cast<u32>(PresentationToneMap::Enum::Reinhard)
+        && isFinite(settings.exposure) && settings.exposure >= 0.0f
+        && isFinite(settings.shoulder) && settings.shoulder > 0.0f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

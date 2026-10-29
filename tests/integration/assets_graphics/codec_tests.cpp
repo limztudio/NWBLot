@@ -4,7 +4,7 @@
 
 #include "assets_graphics_fixture.h"
 
-#include <impl/assets_graphics/components.h>
+#include <impl/assets_graphics/components.adhd.h>
 
 #include <core/assets/input_list.h>
 #include <core/assets/volume/built_asset.h>

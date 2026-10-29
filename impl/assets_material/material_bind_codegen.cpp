@@ -170,12 +170,12 @@ static AStringView MaterialBindFieldLookupFunctionTypeName(const MaterialLayoutF
         "Float3",
         "Float4"
     };
-    static_assert(LengthOf(s_TypeNames) == static_cast<usize>(static_cast<u32>(MaterialLayoutFieldType::Float4) - static_cast<u32>(MaterialLayoutFieldType::Bool) + 1u));
+    static_assert(LengthOf(s_TypeNames) == static_cast<usize>(static_cast<u32>(MaterialLayoutFieldType::f32x4) - static_cast<u32>(MaterialLayoutFieldType::b8) + 1u));
 
     if(!IsMaterialLayoutNumericFieldType(fieldType))
         return AStringView();
 
-    return s_TypeNames[static_cast<u32>(fieldType) - static_cast<u32>(MaterialLayoutFieldType::Bool)];
+    return s_TypeNames[static_cast<u32>(fieldType) - static_cast<u32>(MaterialLayoutFieldType::b8)];
 }
 
 static AStringView MaterialBindResourceSlangTypeName(const MaterialLayoutFieldType::Enum fieldType)noexcept{

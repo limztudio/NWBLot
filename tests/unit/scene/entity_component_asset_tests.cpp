@@ -4,9 +4,9 @@
 
 #include "scene_asset_test_helpers.h"
 
-#include <impl/assets_graphics/components.h>
+#include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_graphics/component_binary_payload.h>
-#include <impl/assets_graphics/renderer/subsystem.h>
+#include <impl/assets_graphics/renderer/subsystem.adhd.h>
 
 #include <core/alloc/general.h>
 #include <core/assets/registry.h>

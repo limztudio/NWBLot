@@ -5,7 +5,7 @@
 #include "material_system.h"
 
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
-#include <impl/assets_graphics/mesh/subsystem.h>
+#include <impl/assets_graphics/mesh/subsystem.adhd.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/mesh/mesh_compute_push_constants.h>

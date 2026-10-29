@@ -213,6 +213,8 @@ void AppendIntSimdLaneExtract(
     if(name == "sin") return "::Sin";
     if(name == "cos") return "::Cos";
     if(name == "tan") return "::Tan";
+    if(name == "isFinite") return "::IsFinite";
+    if(name == "divideUp") return "::DivideUp";
     return {};
 }
 

@@ -211,10 +211,6 @@ bool TransformComponentAsset::validatePayload()const{
     return true;
 }
 
-void TransformComponentAsset::applyToEntity(Core::ECS::Entity& entity)const{
-    entity.addComponent<Scene::TransformComponent>() = component;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -250,10 +246,6 @@ bool CameraComponentAsset::validatePayload()const{
         return false;
     }
     return true;
-}
-
-void CameraComponentAsset::applyToEntity(Core::ECS::Entity& entity)const{
-    entity.addComponent<Scene::CameraComponent>() = component;
 }
 
 
@@ -308,10 +300,6 @@ bool LightComponentAsset::validatePayload()const{
         return false;
     }
     return true;
-}
-
-void LightComponentAsset::applyToEntity(Core::ECS::Entity& entity)const{
-    entity.addComponent<Scene::LightComponent>() = component;
 }
 
 

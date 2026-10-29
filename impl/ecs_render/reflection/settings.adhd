@@ -1,0 +1,116 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> ReflectionTraceMode{
+    enum Disabled,
+    enum ScreenSpace,
+    enum Hardware,
+    enum Hybrid
+}
+
+[reflect]
+enum<u8> ReflectionDebugView{
+    enum None,
+    enum TraceSource,
+    enum Confidence
+}
+
+const u32 s_ReflectionDefaultTemporalMaxSamples = 16u;
+const u32 s_ReflectionDefaultSpatialRadius = 2u;
+const f32 s_ReflectionDefaultMaxRayDistance = 100.0f;
+const f32 s_ReflectionDefaultDistanceFadeStart = 80.0f;
+const f32 s_ReflectionDefaultRoughnessCutoff = 0.8f;
+const u32 s_ReflectionDefaultMaxHardwareRaysPerFrame = 262144u;
+const u32 s_ReflectionDefaultMaxOpticalQueries = 16u;
+const u32 s_ReflectionDefaultScreenMaxSteps = 96u;
+const f32 s_ReflectionDefaultScreenThickness = 0.03f;
+const f32 s_ReflectionDefaultScreenConfidenceThreshold = 0.8f;
+const f32 s_ReflectionDefaultScreenEdgeFade = 0.05f;
+const f32x3u s_ReflectionDefaultEnvironmentTop(0.15f, 0.2f, 0.3f);
+const f32x3u s_ReflectionDefaultEnvironmentBottom(0.04f, 0.04f, 0.04f);
+
+[reflect]
+class ReflectionSettings{
+    public u32 temporalMaxSamples = s_ReflectionDefaultTemporalMaxSamples;
+    public u32 samplingSeed = 0u;
+    public u32 spatialRadius = s_ReflectionDefaultSpatialRadius;
+    // Reflected-path distance in world units, not camera-to-receiver distance.
+    public f32 maxRayDistance = s_ReflectionDefaultMaxRayDistance;
+    public f32 distanceFadeStart = s_ReflectionDefaultDistanceFadeStart;
+    public f32 roughnessCutoff = s_ReflectionDefaultRoughnessCutoff;
+    public u32 maxHardwareRaysPerFrame = s_ReflectionDefaultMaxHardwareRaysPerFrame;
+    // Scene queries per admitted path, including optional initial-medium discovery.
+    public u32 maxOpticalQueries = s_ReflectionDefaultMaxOpticalQueries;
+    public u32 screenMaxSteps = s_ReflectionDefaultScreenMaxSteps;
+    // Surface uncertainty, confidence, and edge-fade width.
+    public f32 screenThickness = s_ReflectionDefaultScreenThickness;
+    public f32 screenConfidenceThreshold = s_ReflectionDefaultScreenConfidenceThreshold;
+    public f32 screenEdgeFade = s_ReflectionDefaultScreenEdgeFade;
+    // Linear HDR radiance for ordinary exterior misses.
+    public f32x3u environmentTop = s_ReflectionDefaultEnvironmentTop;
+    public f32x3u environmentBottom = s_ReflectionDefaultEnvironmentBottom;
+    public ReflectionTraceMode traceMode = ReflectionTraceMode::Enum::Hybrid;
+    public ReflectionDebugView debugView = ReflectionDebugView::Enum::None;
+    public bool diagnosticsEnabled = false;
+    // Lets stable smooth Hybrid tiles bypass proven screen misses. Off until measured.
+    public bool screenFeedbackEnabled = false;
+    public bool temporalEnabled = true;
+    public bool spatialFilterEnabled = true;
+}
+
+bool SameReflectionTraceSettings(in ReflectionSettings first, in ReflectionSettings second){
+    return
+        first.traceMode == second.traceMode && first.samplingSeed == second.samplingSeed
+        && first.maxHardwareRaysPerFrame == second.maxHardwareRaysPerFrame && first.maxOpticalQueries == second.maxOpticalQueries
+        && first.maxRayDistance == second.maxRayDistance && first.distanceFadeStart == second.distanceFadeStart
+        && first.roughnessCutoff == second.roughnessCutoff && first.screenMaxSteps == second.screenMaxSteps
+        && first.screenThickness == second.screenThickness && first.screenConfidenceThreshold == second.screenConfidenceThreshold
+        && first.screenEdgeFade == second.screenEdgeFade
+        && first.environmentTop.x == second.environmentTop.x && first.environmentTop.y == second.environmentTop.y
+        && first.environmentTop.z == second.environmentTop.z && first.environmentBottom.x == second.environmentBottom.x
+        && first.environmentBottom.y == second.environmentBottom.y && first.environmentBottom.z == second.environmentBottom.z;
+}
+
+// Settings are an external boundary; reject invalid values early.
+bool ValidateReflectionSettings(in ReflectionSettings settings){
+    const u32 s_MaxTemporalSamples = 256u;
+    const u32 s_MaxSpatialRadius = 3u;
+    if(settings.temporalMaxSamples == 0u || settings.temporalMaxSamples > s_MaxTemporalSamples || settings.spatialRadius > s_MaxSpatialRadius){
+        return false;
+    }
+    if(settings.maxOpticalQueries == 0u || settings.maxOpticalQueries > s_ReflectionDefaultMaxOpticalQueries){
+        return false;
+    }
+    if(cast<u8>(settings.traceMode) > cast<u8>(ReflectionTraceMode::Enum::Hybrid) || cast<u8>(settings.debugView) > cast<u8>(ReflectionDebugView::Enum::Confidence)){
+        return false;
+    }
+    if(
+        !isFinite(settings.maxRayDistance) || settings.maxRayDistance <= 0.0f
+        || !isFinite(settings.distanceFadeStart) || settings.distanceFadeStart < 0.0f
+        || settings.distanceFadeStart >= settings.maxRayDistance
+        || !isFinite(settings.roughnessCutoff) || settings.roughnessCutoff < 0.0f || settings.roughnessCutoff > 1.0f
+    ){
+        return false;
+    }
+    const u32 s_MinScreenSteps = 8u;
+    const u32 s_MaxScreenSteps = 256u;
+    const f32 s_MaxScreenEdgeFade = 0.25f;
+    if(
+        settings.screenMaxSteps < s_MinScreenSteps || settings.screenMaxSteps > s_MaxScreenSteps
+        || !isFinite(settings.screenThickness) || settings.screenThickness <= 0.0f
+        || !isFinite(settings.screenConfidenceThreshold)
+        || settings.screenConfidenceThreshold <= 0.0f || settings.screenConfidenceThreshold > 1.0f
+        || !isFinite(settings.screenEdgeFade) || settings.screenEdgeFade < 0.0f || settings.screenEdgeFade > s_MaxScreenEdgeFade
+    ){
+        return false;
+    }
+    return isFinite(settings.environmentTop.x) && isFinite(settings.environmentTop.y) && isFinite(settings.environmentTop.z)
+        && isFinite(settings.environmentBottom.x) && isFinite(settings.environmentBottom.y) && isFinite(settings.environmentBottom.z)
+        && settings.environmentTop.x >= 0.0f && settings.environmentTop.y >= 0.0f && settings.environmentTop.z >= 0.0f
+        && settings.environmentBottom.x >= 0.0f && settings.environmentBottom.y >= 0.0f && settings.environmentBottom.z >= 0.0f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

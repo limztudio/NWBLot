@@ -5,7 +5,7 @@
 #include "skin_asset.h"
 #include "skin_binary_payload.h"
 #include "skin_validation.h"
-#include "subsystem.h"
+#include <impl/assets_mesh/subsystem.adhd.h>
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>

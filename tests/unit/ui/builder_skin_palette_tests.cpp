@@ -23,7 +23,7 @@ using namespace NWB::UiWidgetTests;
 
 [[nodiscard]] static UiSkinPalette MakePalette(const f32 offset)noexcept{
     UiSkinPalette palette;
-    for(u32 index = 0u; index < UiSkinColorRole::Count; ++index){
+    for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index){
         // Lane x is the base value and lane y is alpha.
         const SIMDVectorSingle steps = VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(index)), VectorSet(0.02f, 0.01f, 0.0f, 0.0f), VectorSet(offset, 0.5f, 0.0f, 0.0f));
         const SIMDVectorSingle channels = VectorAdd(VectorSplatX(steps), VectorSet(0.0f, 0.01f, 0.02f, 0.0f));

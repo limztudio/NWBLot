@@ -6,7 +6,7 @@
 #include "ui_gallery_constants.h"
 
 #include <impl/assets_ui_skin/asset.h>
-#include <impl/assets_ui_skin/subsystem.h>
+#include <impl/assets_ui_skin/subsystem.adhd.h>
 #include <impl/ecs_ui/toolkit/images/image_loader.h>
 
 #include <core/common/log.h>

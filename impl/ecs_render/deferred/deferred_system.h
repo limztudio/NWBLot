@@ -7,7 +7,7 @@
 
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/reflection/composite_inputs.h>
-#include <impl/ecs_render/deferred/presentation_settings.h>
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/deferred/scene_shading_uploads.h>
 
 #include <core/alloc/global.h>

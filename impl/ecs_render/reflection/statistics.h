@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "settings.h"
+#include <impl/ecs_render/reflection/settings.adhd.h>
 #include "feedback.h"
 
 #include <core/graphics/rhi/command.h>

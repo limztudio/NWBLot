@@ -97,9 +97,9 @@ Core::ECS::EntityID ReflectionFeedbackScene::createPanel(const Float4& color, co
     }
     const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
     const Half packedRoughness = ConvertFloatToHalf(0.f);
-    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::Half3, Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
+    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
         return Core::ECS::s_InvalidEntityId;
-    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::Half, Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
+    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
         return Core::ECS::s_InvalidEntityId;
     return entity;
 }

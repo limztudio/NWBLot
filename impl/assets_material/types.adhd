@@ -5,15 +5,15 @@
 [reflect]
 enum<u32> MaterialParameterValueType{
     enum None = 0u,
-    enum Bool,
-    enum Char,
-    enum UChar,
-    enum Short,
-    enum UShort,
-    enum Int,
-    enum UInt,
-    enum Half,
-    enum Float
+    enum b8,
+    enum i8,
+    enum u8,
+    enum i16,
+    enum u16,
+    enum i32,
+    enum u32,
+    enum f16,
+    enum f32
 }
 
 [reflect]
@@ -41,42 +41,42 @@ bool IsValidMaterialResourceKind(in MaterialResourceKind resourceKind){
 [reflect]
 enum<u32> MaterialLayoutFieldType{
     enum None = 0u,
-    enum Bool,
-    enum Bool2,
-    enum Bool3,
-    enum Bool4,
-    enum Char,
-    enum Char2,
-    enum Char3,
-    enum Char4,
-    enum UChar,
-    enum UChar2,
-    enum UChar3,
-    enum UChar4,
-    enum Short,
-    enum Short2,
-    enum Short3,
-    enum Short4,
-    enum UShort,
-    enum UShort2,
-    enum UShort3,
-    enum UShort4,
-    enum Int,
-    enum Int2,
-    enum Int3,
-    enum Int4,
-    enum UInt,
-    enum UInt2,
-    enum UInt3,
-    enum UInt4,
-    enum Half,
-    enum Half2,
-    enum Half3,
-    enum Half4,
-    enum Float,
-    enum Float2,
-    enum Float3,
-    enum Float4,
+    enum b8,
+    enum b8x2,
+    enum b8x3,
+    enum b8x4,
+    enum i8,
+    enum i8x2,
+    enum i8x3,
+    enum i8x4,
+    enum u8,
+    enum u8x2,
+    enum u8x3,
+    enum u8x4,
+    enum i16,
+    enum i16x2,
+    enum i16x3,
+    enum i16x4,
+    enum u16,
+    enum u16x2,
+    enum u16x3,
+    enum u16x4,
+    enum i32,
+    enum i32x2,
+    enum i32x3,
+    enum i32x4,
+    enum u32,
+    enum u32x2,
+    enum u32x3,
+    enum u32x4,
+    enum f16,
+    enum f16x2,
+    enum f16x3,
+    enum f16x4,
+    enum f32,
+    enum f32x2,
+    enum f32x3,
+    enum f32x4,
     // Resource fields occupy one patched uint heap slot in the typed-byte payload.
     // They intentionally live after the contiguous numeric range so a resource can never be mistaken for an authored uint parameter.
     enum SampledImage2D = 37u,
@@ -84,15 +84,15 @@ enum<u32> MaterialLayoutFieldType{
 }
 
 const u32 s_MaterialLayoutFieldComponentsPerValueType = 4u;
-const u32 s_MaterialLayoutFieldFirstTypeId = cast<u32>(MaterialLayoutFieldType::Enum::Bool);
-const u32 s_MaterialParameterFirstValueTypeId = cast<u32>(MaterialParameterValueType::Enum::Bool);
+const u32 s_MaterialLayoutFieldFirstTypeId = cast<u32>(MaterialLayoutFieldType::Enum::b8);
+const u32 s_MaterialParameterFirstValueTypeId = cast<u32>(MaterialParameterValueType::Enum::b8);
 
 bool IsValidMaterialLayoutFieldType(in MaterialLayoutFieldType fieldType){
-    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::Enum::Bool) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Enum::Sampler);
+    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::Enum::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Enum::Sampler);
 }
 
 bool IsMaterialLayoutNumericFieldType(in MaterialLayoutFieldType fieldType){
-    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::Enum::Bool) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Enum::Float4);
+    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::Enum::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Enum::f32x4);
 }
 
 bool IsMaterialLayoutResourceFieldType(in MaterialLayoutFieldType fieldType){
@@ -134,15 +134,15 @@ MaterialLayoutFieldType MaterialLayoutFieldTypeFromParameterType(in MaterialPara
 
     u32 firstFieldType = 0u;
     switch(valueType){
-        case MaterialParameterValueType::Enum::Bool: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Bool); break;
-        case MaterialParameterValueType::Enum::Char: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Char); break;
-        case MaterialParameterValueType::Enum::UChar: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::UChar); break;
-        case MaterialParameterValueType::Enum::Short: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Short); break;
-        case MaterialParameterValueType::Enum::UShort: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::UShort); break;
-        case MaterialParameterValueType::Enum::Int: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Int); break;
-        case MaterialParameterValueType::Enum::UInt: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::UInt); break;
-        case MaterialParameterValueType::Enum::Half: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Half); break;
-        case MaterialParameterValueType::Enum::Float: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::Float); break;
+        case MaterialParameterValueType::Enum::b8: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::b8); break;
+        case MaterialParameterValueType::Enum::i8: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::i8); break;
+        case MaterialParameterValueType::Enum::u8: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::u8); break;
+        case MaterialParameterValueType::Enum::i16: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::i16); break;
+        case MaterialParameterValueType::Enum::u16: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::u16); break;
+        case MaterialParameterValueType::Enum::i32: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::i32); break;
+        case MaterialParameterValueType::Enum::u32: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::u32); break;
+        case MaterialParameterValueType::Enum::f16: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::f16); break;
+        case MaterialParameterValueType::Enum::f32: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::f32); break;
         default: return MaterialLayoutFieldType::Enum::None;
     }
 
@@ -151,17 +151,17 @@ MaterialLayoutFieldType MaterialLayoutFieldTypeFromParameterType(in MaterialPara
 
 u32 MaterialParameterValueTypeByteSize(in MaterialParameterValueType valueType){
     switch(valueType){
-        case MaterialParameterValueType::Enum::Bool:
-        case MaterialParameterValueType::Enum::Char:
-        case MaterialParameterValueType::Enum::UChar:
+        case MaterialParameterValueType::Enum::b8:
+        case MaterialParameterValueType::Enum::i8:
+        case MaterialParameterValueType::Enum::u8:
             return 1u;
-        case MaterialParameterValueType::Enum::Short:
-        case MaterialParameterValueType::Enum::UShort:
-        case MaterialParameterValueType::Enum::Half:
+        case MaterialParameterValueType::Enum::i16:
+        case MaterialParameterValueType::Enum::u16:
+        case MaterialParameterValueType::Enum::f16:
             return 2u;
-        case MaterialParameterValueType::Enum::Int:
-        case MaterialParameterValueType::Enum::UInt:
-        case MaterialParameterValueType::Enum::Float:
+        case MaterialParameterValueType::Enum::i32:
+        case MaterialParameterValueType::Enum::u32:
+        case MaterialParameterValueType::Enum::f32:
             return 4u;
         default:
             return 0u;

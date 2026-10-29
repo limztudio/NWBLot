@@ -13,7 +13,7 @@
 #include "shader_volume_writer.h"
 
 #include <impl/assets_csg/cook.h>
-#include <impl/assets_graphics/mesh/subsystem.h>
+#include <impl/assets_graphics/mesh/subsystem.adhd.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/shader_types.h>

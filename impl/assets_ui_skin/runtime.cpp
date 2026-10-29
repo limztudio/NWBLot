@@ -4,7 +4,7 @@
 
 #include "asset.h"
 #include "binary_payload.h"
-#include "subsystem.h"
+#include <impl/assets_ui_skin/subsystem.adhd.h>
 
 #include <impl/assets_texture/asset.h>
 
@@ -33,7 +33,7 @@ namespace __hidden_ui_skin_runtime{
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_UiSkinAssetCodecAutoRegistrar, UiSkinAssetCodec);
 NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_UiSubsystemAssetAutoRegistrar, UiSubsystem);
-static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColorCount, "UI skin palette layout drifted");
+static_assert(UiSkinColorRole::kCount == UiSkinBinaryPayload::s_UiSkinPaletteColorCount, "UI skin palette layout drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -133,7 +133,7 @@ bool UiSkin::loadBinary(const Span<const u8> binary){
         candidate.m_regions.push_back(region);
     }
     UiSkinPalette palette;
-    for(u32 index = 0u; index < UiSkinColorRole::Count; ++index){
+    for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index){
         UiSkinBinaryPayload::ColorBinary packed;
         const auto packedResult = ReadPOD<UiSkinBinaryPayload::ColorBinary>(binary, cursor);
         if(!packedResult){

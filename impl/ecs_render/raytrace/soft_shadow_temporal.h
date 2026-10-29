@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/shadow/quality_settings.h>
+#include <impl/ecs_render/shadow/quality_settings.adhd.h>
 
 #include <global/simdmath.h>
 

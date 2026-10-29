@@ -10,7 +10,7 @@
 
 #include <loader/project_entry.h>
 
-#include <impl/ecs_render/reflection/settings.h>
+#include <impl/ecs_render/reflection/settings.adhd.h>
 #include <impl/ecs_render/reflection/statistics.h>
 
 #include <core/perf/timing.h>

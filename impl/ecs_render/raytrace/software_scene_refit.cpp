@@ -5,7 +5,7 @@
 #include "software_scene_refit.h"
 
 #include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
-#include <impl/assets_graphics/bvh/subsystem.h>
+#include <impl/assets_graphics/bvh/subsystem.adhd.h>
 #include <impl/ecs_render/shader/shader_system.h>
 
 #include <core/graphics/runtime/runtime.h>

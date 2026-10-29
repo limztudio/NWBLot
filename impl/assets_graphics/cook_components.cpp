@@ -9,8 +9,12 @@
 
 
 #include "cook_components.h"
-#include "components.h"
 #include "component_binary_payload.h"
+
+#include <impl/assets_graphics/components.adhd.h>
+#include <impl/assets_material/asset.h>
+#include <impl/assets_mesh/asset.h>
+#include <impl/assets_model/asset.h>
 
 #include <impl/assets_scene/cook.h>
 

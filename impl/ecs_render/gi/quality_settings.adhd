@@ -1,0 +1,35 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> SurfelGiResolveResolution{
+    enum Half = 2u,
+    enum Quarter = 4u
+}
+
+[reflect]
+class SurfelGiQualitySettings{
+    public SurfelGiResolveResolution resolveResolution = SurfelGiResolveResolution::Enum::Half;
+}
+
+[reflect]
+class SurfelGiResolveSize{
+    public u32 width = 0u;
+    public u32 height = 0u;
+}
+
+bool ValidateSurfelGiQualitySettings(in SurfelGiQualitySettings settings){
+    return settings.resolveResolution == SurfelGiResolveResolution::Enum::Half || settings.resolveResolution == SurfelGiResolveResolution::Enum::Quarter;
+}
+
+SurfelGiResolveSize MakeSurfelGiResolveSize(in u32 width, in u32 height, in u32 factor){
+    assert(factor == cast<u32>(SurfelGiResolveResolution::Enum::Half) || factor == cast<u32>(SurfelGiResolveResolution::Enum::Quarter));
+    SurfelGiResolveSize size;
+    size.width = divideUp(width, factor);
+    size.height = divideUp(height, factor);
+    return size;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

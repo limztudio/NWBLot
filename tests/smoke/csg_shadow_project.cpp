@@ -205,12 +205,12 @@ private:
             const Half packedIor = ConvertFloatToHalf(1.5f);
             const Half4U packedTransmission = MakeHalf4U(0.25f, 0.5f, 0.75f, 0.0f);
             NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
-                *m_world, entity, Name(s_OpenInterface), "runtime.ior", NWB::Impl::MaterialLayoutFieldType::Half,
+                *m_world, entity, Name(s_OpenInterface), "runtime.ior", NWB::Impl::MaterialLayoutFieldType::f16,
                 NWB::Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))
             ), NWB_TEXT("CsgShadowSmokeProject: open-sheet IOR override failed")
             );
             NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
-                *m_world, entity, Name(s_OpenInterface), "runtime.unit_transmission", NWB::Impl::MaterialLayoutFieldType::Half3,
+                *m_world, entity, Name(s_OpenInterface), "runtime.unit_transmission", NWB::Impl::MaterialLayoutFieldType::f16x3,
                 NWB::Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)
             ), NWB_TEXT("CsgShadowSmokeProject: open-sheet transmission override failed")
             );

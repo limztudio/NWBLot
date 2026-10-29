@@ -4,7 +4,7 @@
 
 #include "caustic_photon_parameters.h"
 
-#include <impl/ecs_render/caustic/settings.h>
+#include <impl/ecs_render/caustic/settings.adhd.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>

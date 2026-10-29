@@ -256,9 +256,9 @@ private:
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
         const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.f);
         const Half roughness = ConvertFloatToHalf(0.f);
-        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::Half3, NWB::Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)))
+        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)))
             return false;
-        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::Half, NWB::Impl::PackMaterialInstanceBytes(&roughness, sizeof(roughness))))
+        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceBytes(&roughness, sizeof(roughness))))
             return false;
         ++m_renderers;
         return true;

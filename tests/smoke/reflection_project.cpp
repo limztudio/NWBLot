@@ -604,12 +604,12 @@ private:
         const Half4U f0 = MakeHalf4U(specularF0, specularF0, specularF0, 0.0f);
         const Half roughness = ConvertFloatToHalf(m_glassRoughnessCase && specularF0 == s_GlassF0 ? m_authoredRoughness : 0.f);
         NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
-            *m_world, entity, materialInterface, "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::Half3,
+            *m_world, entity, materialInterface, "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3,
             NWB::Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)
         ), NWB_TEXT("ReflectionSmokeProject: F0 override failed")
         );
         NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
-            *m_world, entity, materialInterface, "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::Half,
+            *m_world, entity, materialInterface, "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16,
             NWB::Impl::PackMaterialInstanceBytes(&roughness, sizeof(roughness))
         ), NWB_TEXT("ReflectionSmokeProject: roughness override failed")
         );

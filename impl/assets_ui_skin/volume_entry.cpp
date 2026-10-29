@@ -10,7 +10,7 @@
 
 #include "cook.h"
 #include "binary_payload.h"
-#include "subsystem.h"
+#include <impl/assets_ui_skin/subsystem.adhd.h>
 
 #include <impl/assets_subsystem/cook.h>
 #include <impl/assets_texture/asset.h>

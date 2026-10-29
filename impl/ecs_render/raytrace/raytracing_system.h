@@ -9,7 +9,7 @@
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/refraction/statistics_readback.h>
 #include <impl/ecs_render/raytrace/soft_shadow_wavelet.h>
-#include <impl/ecs_render/caustic/settings.h>
+#include <impl/ecs_render/caustic/settings.adhd.h>
 #include <impl/ecs_render/raytrace/caustic_resolve_activity.h>
 #include <impl/ecs_render/raytrace/scene_resources.h>
 #include <impl/ecs_render/raytrace/optical_scene_resources.h>
@@ -20,7 +20,7 @@
 #include <impl/ecs_render/raytrace/prepared_shadow_material_context.h>
 #include <impl/ecs_render/raytrace/software_scene_refit.h>
 #include <impl/ecs_render/shadow/light_space_shadow.h>
-#include <impl/ecs_render/shadow/quality_settings.h>
+#include <impl/ecs_render/shadow/quality_settings.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/gpu_timing.h>

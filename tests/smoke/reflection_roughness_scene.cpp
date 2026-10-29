@@ -146,9 +146,9 @@ NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMateri
     StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
     const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
     const Half packedRoughness = ConvertFloatToHalf(roughness);
-    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::Half3, NWB::Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
         return NWB::Core::ECS::s_InvalidEntityId;
-    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::Half, NWB::Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
         return NWB::Core::ECS::s_InvalidEntityId;
     return entity;
 }

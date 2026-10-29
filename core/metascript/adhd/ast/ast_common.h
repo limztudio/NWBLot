@@ -147,6 +147,25 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
     return StripAdhdExtension(path.substr(fileStart));
 }
 
+inline void AppendCamelToSnakeCase(MString& out, const MStringView text){
+    for(usize i = 0u; i < text.size(); ++i){
+        const char ch = text[i];
+        if(ch >= 'A' && ch <= 'Z'){
+            if(i > 0u){
+                const char prev = text[i - 1u];
+                const bool prevLowerOrDigit = (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9');
+                const bool nextLower = (i + 1u < text.size()) && (text[i + 1u] >= 'a' && text[i + 1u] <= 'z');
+                if(prevLowerOrDigit || nextLower)
+                    out.push_back('_');
+            }
+            out.push_back(static_cast<char>(ch + ('a' - 'A')));
+        }
+        else{
+            out.push_back(ch);
+        }
+    }
+}
+
 inline void AppendAdhdTextCrlf(MString& out, const MStringView text){
     for(usize i = 0u; i < text.size(); ++i){
         const char ch = text[i];

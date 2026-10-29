@@ -5,7 +5,7 @@
 #include "optical_bounds_finalize.h"
 
 #include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
-#include <impl/assets_graphics/transparent/subsystem.h>
+#include <impl/assets_graphics/transparent/subsystem.adhd.h>
 #include <impl/ecs_render/shader/shader_system.h>
 
 #include <core/graphics/runtime/runtime.h>

@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[subsystem("reflection_subsystem")]
+class ReflectionSubsystem{
+    public AssetRef<ComputeShader> buildArgsCs;
+    public AssetRef<ComputeShader> classifyCs;
+    public AssetRef<ComputeShader> depthReduceCs;
+    public AssetRef<ComputeShader> resolveHwCs;
+    public AssetRef<ComputeShader> spatialCs;
+    public AssetRef<ComputeShader> temporalCs;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

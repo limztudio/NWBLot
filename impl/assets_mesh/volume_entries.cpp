@@ -12,7 +12,7 @@
 #include "skin_cook.h"
 #include "binary_payload.h"
 #include "skin_binary_payload.h"
-#include "subsystem.h"
+#include <impl/assets_mesh/subsystem.adhd.h>
 
 #include <impl/assets_subsystem/cook.h>
 

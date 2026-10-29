@@ -1,0 +1,90 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_UiSkinMaxRegionCount = 4096u;
+const f32 s_UiSkinPaletteRgbMax = 16.0f;
+const f32 s_UiSkinDefaultFontSize = 16.0f;
+const f32 s_UiSkinMinDefaultFontSizeScale = 64.0f;
+const f32 s_UiSkinMinDefaultFontSize = 1.0f / s_UiSkinMinDefaultFontSizeScale;
+const f32 s_UiSkinMaxDefaultFontSize = 2048.0f;
+
+[reflect]
+enum<u8> UiSkinDrawMode{
+    enum Sprite = 0u,
+    enum NineSlice
+}
+
+// Atlas rectangles and slice borders use top-left-origin pixels; padding and minimum sizes use logical units.
+[reflect]
+class UiSkinRect{
+    public u32 x = 0u;
+    public u32 y = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+}
+
+[reflect]
+class UiSkinSliceInsets{
+    public u32 left = 0u;
+    public u32 top = 0u;
+    public u32 right = 0u;
+    public u32 bottom = 0u;
+}
+
+[reflect]
+class UiSkinInsets{
+    public f32 left = 0.0f;
+    public f32 top = 0.0f;
+    public f32 right = 0.0f;
+    public f32 bottom = 0.0f;
+}
+
+[reflect]
+class UiSkinRegion{
+    public Name name = s_NameNone;
+    public UiSkinRect rectangle;
+    public UiSkinSliceInsets sliceInsets;
+    public UiSkinInsets padding;
+    public f32 minimumWidth = 0.0f;
+    public f32 minimumHeight = 0.0f;
+    public UiSkinDrawMode drawMode = UiSkinDrawMode::Enum::Sprite;
+}
+
+[reflect]
+enum<u8> UiSkinColorRole{
+    enum TextNormal,
+    enum TextDisabled,
+    enum TextTooltip,
+    enum EditBackground,
+    enum EditSelection,
+    enum EditInactiveSelection,
+    enum EditCaret,
+    enum EditPreedit,
+    enum ScrollbarTrack,
+    enum ScrollbarThumb,
+    enum ScrollbarDisabled,
+    enum PopupBackdrop,
+    enum ControlHoverTint,
+    enum ControlPressedTint,
+    enum ControlDisabledTint,
+    enum ProgressTrackTint,
+    enum ProgressFillTint,
+    enum kCount
+}
+
+[reflect]
+class UiSkinColor{
+    public f32 r = 0.0f;
+    public f32 g = 0.0f;
+    public f32 b = 0.0f;
+    public f32 a = 0.0f;
+}
+
+[reflect]
+class UiSkinTypography{
+    public f32 defaultFontSize = s_UiSkinDefaultFontSize;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

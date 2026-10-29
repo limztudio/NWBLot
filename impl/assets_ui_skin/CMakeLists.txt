@@ -1,15 +1,23 @@
+nwb_declare_static_library(nwb_assets_ui_skin_types)
+nwb_target_adhd_sources(nwb_assets_ui_skin_types
+    NAMESPACE "NWB::Impl"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/types.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/subsystem.adhd"
+)
+target_link_libraries(nwb_assets_ui_skin_types PUBLIC nwb_assets)
+
 nwb_declare_static_library(nwb_assets_ui_skin)
 target_sources(nwb_assets_ui_skin PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/region_index.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/toolkit_contract.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
-    "${CMAKE_CURRENT_LIST_DIR}/subsystem.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/toolkit_contract.h"
     "${CMAKE_CURRENT_LIST_DIR}/region_names.h"
 )
-target_link_libraries(nwb_assets_ui_skin PUBLIC nwb_assets nwb_assets_subsystem)
+target_link_libraries(nwb_assets_ui_skin PUBLIC nwb_assets nwb_assets_subsystem nwb_assets_ui_skin_types)
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_ui_skin_cook)
@@ -20,13 +28,12 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
-        "${CMAKE_CURRENT_LIST_DIR}/subsystem.h"
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/toolkit_contract.h"
         "${CMAKE_CURRENT_LIST_DIR}/region_names.h"
     )
-    target_link_libraries(nwb_assets_ui_skin_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_metascript)
+    target_link_libraries(nwb_assets_ui_skin_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_assets_ui_skin_types nwb_metascript)
     target_compile_definitions(nwb_assets_ui_skin_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_ui_skin_volume_entry)

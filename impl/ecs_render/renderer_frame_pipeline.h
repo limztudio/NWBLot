@@ -12,7 +12,7 @@
 #include <impl/ecs_render/csg/renderer_csg_state.h>
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
-#include <impl/ecs_render/gi/quality_settings.h>
+#include <impl/ecs_render/gi/quality_settings.adhd.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
@@ -26,9 +26,9 @@
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/task_graph_stage.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
-#include <impl/assets_graphics/csg/subsystem.h>
-#include <impl/assets_graphics/renderer/subsystem.h>
-#include <impl/assets_graphics/transparent/subsystem.h>
+#include <impl/assets_graphics/csg/subsystem.adhd.h>
+#include <impl/assets_graphics/renderer/subsystem.adhd.h>
+#include <impl/assets_graphics/transparent/subsystem.adhd.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_scene/asset.h>
 #include <impl/ecs_csg/frame_state.h>

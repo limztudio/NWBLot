@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "light_space_settings.h"
+#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
 
 #include <impl/ecs_scene/components.adhd.h>
 #include <impl/assets/graphics/shadow/light_space_constants.h>

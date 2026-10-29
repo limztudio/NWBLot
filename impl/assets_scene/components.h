@@ -221,77 +221,21 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TransformComponentAsset final : public TypedComponent<TransformComponentAsset>{
-public:
-    NWB_DEFINE_ASSET_TYPE("transform_component")
-
-
-public:
-    Scene::TransformComponent component;
-
-
-public:
-    using TypedComponent<TransformComponentAsset>::TypedComponent;
-
-
-public:
-    [[nodiscard]] virtual bool loadComponentPayload(Span<const u8> payload)override;
-    [[nodiscard]] virtual bool validatePayload()const override;
-    virtual void applyToEntity(Core::ECS::Entity& entity)const override;
-#if defined(NWB_COOK)
-    [[nodiscard]] virtual bool serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const override;
-#endif
-};
-
-class CameraComponentAsset final : public TypedComponent<CameraComponentAsset>{
-public:
-    NWB_DEFINE_ASSET_TYPE("camera_component")
-
-
-public:
-    Scene::CameraComponent component;
-
-
-public:
-    using TypedComponent<CameraComponentAsset>::TypedComponent;
-
-
-public:
-    [[nodiscard]] virtual bool loadComponentPayload(Span<const u8> payload)override;
-    [[nodiscard]] virtual bool validatePayload()const override;
-    virtual void applyToEntity(Core::ECS::Entity& entity)const override;
-#if defined(NWB_COOK)
-    [[nodiscard]] virtual bool serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const override;
-#endif
-};
-
-class LightComponentAsset final : public TypedComponent<LightComponentAsset>{
-public:
-    NWB_DEFINE_ASSET_TYPE("light_component")
-
-
-public:
-    Scene::LightComponent component;
-
-
-public:
-    using TypedComponent<LightComponentAsset>::TypedComponent;
-
-
-public:
-    [[nodiscard]] virtual bool loadComponentPayload(Span<const u8> payload)override;
-    [[nodiscard]] virtual bool validatePayload()const override;
-    virtual void applyToEntity(Core::ECS::Entity& entity)const override;
-#if defined(NWB_COOK)
-    [[nodiscard]] virtual bool serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const override;
-#endif
-};
+using Scene::TransformComponent;
+using Scene::CameraComponent;
+using Scene::LightComponent;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_scene/component_assets.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

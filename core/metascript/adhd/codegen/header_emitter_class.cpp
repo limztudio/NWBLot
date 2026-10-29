@@ -17,6 +17,168 @@ NWB_ADHD_BEGIN
 
 
 void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
+    if(!decl.subsystemTypeName.empty()){
+        out.append("class ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append(" final : public ::NWB::Impl::TypedSubsystem<");
+        out.append(decl.name.data(), decl.name.size());
+        out.append(">{\r\n");
+        out.append("public:\r\n");
+        out.append("    NWB_DEFINE_ASSET_TYPE(\"");
+        out.append(decl.subsystemTypeName.data(), decl.subsystemTypeName.size());
+        out.append("\")\r\n\r\n");
+
+        bool hasVectorField = false;
+        for(const FieldDecl* field : decl.fields){
+            if(!field || !field->type)
+                continue;
+            const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
+            if(resolved && resolved->name == "Vector"){
+                hasVectorField = true;
+                break;
+            }
+        }
+
+        out.append("public:\r\n");
+        if(!hasVectorField){
+            out.append("    using ::NWB::Impl::TypedSubsystem<");
+            out.append(decl.name.data(), decl.name.size());
+            out.append(">::TypedSubsystem;\r\n\r\n");
+        }
+        else{
+            out.append("    explicit ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append("(::NWB::Core::Assets::AssetArena& arena)noexcept\r\n");
+            out.append("        : TypedSubsystem(arena)\r\n");
+            for(const FieldDecl* field : decl.fields){
+                if(!field || !field->type)
+                    continue;
+                const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
+                if(resolved && resolved->name == "Vector"){
+                    out.append("        , ");
+                    out.append(field->name.data(), field->name.size());
+                    out.append("(arena)\r\n");
+                }
+            }
+            out.append("    {}\r\n");
+            out.append("    ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append("(::NWB::Core::Assets::AssetArena& arena, const ::Name& virtualPath)noexcept\r\n");
+            out.append("        : TypedSubsystem(arena, virtualPath)\r\n");
+            for(const FieldDecl* field : decl.fields){
+                if(!field || !field->type)
+                    continue;
+                const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
+                if(resolved && resolved->name == "Vector"){
+                    out.append("        , ");
+                    out.append(field->name.data(), field->name.size());
+                    out.append("(arena)\r\n");
+                }
+            }
+            out.append("    {}\r\n\r\n");
+        }
+
+        out.append("public:\r\n");
+        for(const FieldDecl* field : decl.fields){
+            if(!field || !field->type)
+                continue;
+            const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
+            if(!resolved)
+                continue;
+            if(resolved->name == "Vector" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+                const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
+                const MStringView assetName = (elemType && !elemType->templateArgs.empty() && elemType->templateArgs[0].type)
+                    ? elemType->templateArgs[0].type->name
+                    : MStringView{};
+                out.append("    ::NWB::Impl::SubsystemAssetRefVector<");
+                out.append(assetName.data(), assetName.size());
+                out.append("> ");
+                out.append(field->name.data(), field->name.size());
+                out.append(";\r\n");
+            }
+            else if(resolved->name == "AssetRef" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+                const MStringView assetName = resolved->templateArgs[0].type->name;
+                out.append("    ::NWB::Core::Assets::AssetRef<");
+                out.append(assetName.data(), assetName.size());
+                out.append("> ");
+                out.append(field->name.data(), field->name.size());
+                out.append(";\r\n");
+            }
+        }
+
+        out.append("\r\npublic:\r\n");
+        out.append("    static constexpr ::NWB::Impl::SubsystemFieldDescriptor<");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("> s_Fields[] = {\r\n");
+        for(const FieldDecl* field : decl.fields){
+            if(!field || !field->type)
+                continue;
+            const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
+            if(!resolved)
+                continue;
+            MStringView assetName;
+            if(resolved->name == "Vector" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+                const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
+                if(elemType && !elemType->templateArgs.empty() && elemType->templateArgs[0].type)
+                    assetName = elemType->templateArgs[0].type->name;
+            }
+            else if(resolved->name == "AssetRef" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+                assetName = resolved->templateArgs[0].type->name;
+            }
+            out.append("        ::NWB::Impl::MakeSubsystemFieldDescriptor<");
+            out.append(decl.name.data(), decl.name.size());
+            out.append(", ");
+            out.append(assetName.data(), assetName.size());
+            out.append(", &");
+            out.append(decl.name.data(), decl.name.size());
+            out.append("::");
+            out.append(field->name.data(), field->name.size());
+            out.append(">(\"");
+            AppendCamelToSnakeCase(out, field->name);
+            out.append("\"),\r\n");
+        }
+        out.append("    };\r\n");
+        out.append("};\r\n\r\n");
+        return;
+    }
+
+    if(!decl.componentAssetTypeName.empty()){
+        out.append("class ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append(" final : public ::NWB::Impl::TypedComponent<");
+        out.append(decl.name.data(), decl.name.size());
+        out.append(">{\r\n");
+        out.append("public:\r\n");
+        out.append("    NWB_DEFINE_ASSET_TYPE(\"");
+        out.append(decl.componentAssetTypeName.data(), decl.componentAssetTypeName.size());
+        out.append("\")\r\n\r\n");
+        out.append("public:\r\n    ");
+        if(!decl.fields.empty() && decl.fields[0] && decl.fields[0]->type){
+            m_typeEmitter.emitTypeCpp(out, *decl.fields[0]->type);
+            out.push_back(' ');
+            out.append(decl.fields[0]->name.data(), decl.fields[0]->name.size());
+            out.append(";\r\n\r\n");
+        }
+        out.append("public:\r\n");
+        out.append("    using ::NWB::Impl::TypedComponent<");
+        out.append(decl.name.data(), decl.name.size());
+        out.append(">::TypedComponent;\r\n\r\n");
+        out.append("public:\r\n");
+        out.append("    [[nodiscard]] virtual bool loadComponentPayload(Span<const u8> payload)override;\r\n");
+        out.append("    [[nodiscard]] virtual bool validatePayload()const override;\r\n");
+        out.append("    virtual void applyToEntity(::NWB::Core::ECS::Entity& entity)const override{\r\n");
+        out.append("        entity.addComponent<");
+        if(!decl.fields.empty() && decl.fields[0] && decl.fields[0]->type)
+            m_typeEmitter.emitTypeCpp(out, *decl.fields[0]->type);
+        out.append(">() = component;\r\n");
+        out.append("    }\r\n");
+        out.append("#if defined(NWB_COOK)\r\n");
+        out.append("    [[nodiscard]] virtual bool serializeComponentPayload(::NWB::Core::Assets::AssetBytes& outPayload)const override;\r\n");
+        out.append("#endif\r\n");
+        out.append("};\r\n\r\n");
+        return;
+    }
+
     ReflectionEmitter reflectionEmitter(m_symbols);
 
     if(decl.isSerialize)

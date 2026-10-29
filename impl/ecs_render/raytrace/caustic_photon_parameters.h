@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 
 
 struct DeferredFrameTargets;
-struct CausticPhotonBudget;
+class CausticPhotonBudget;
 class RendererRayTracingState;
 
 namespace ECSRenderDetail{

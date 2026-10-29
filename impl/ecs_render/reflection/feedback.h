@@ -6,7 +6,7 @@
 
 
 #include "scene_content_stamp.h"
-#include "settings.h"
+#include <impl/ecs_render/reflection/settings.adhd.h>
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/command.h>

@@ -5,7 +5,7 @@
 #include "refraction_tile_probe.h"
 #include "assets/shaders/refraction_tile_probe_layout.h"
 
-#include <impl/assets_graphics/refractive/subsystem.h>
+#include <impl/assets_graphics/refractive/subsystem.adhd.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>

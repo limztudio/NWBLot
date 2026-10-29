@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "components.h"
+#include <impl/assets_graphics/components.adhd.h>
 #include "component_binary_payload.h"
 
 #include <core/common/log.h>
@@ -73,10 +73,6 @@ bool ModelComponentAsset::validatePayload()const{
     return true;
 }
 
-void ModelComponentAsset::applyToEntity(Core::ECS::Entity& entity)const{
-    entity.addComponent<ModelComponent>() = component;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -100,10 +96,6 @@ bool MeshComponentAsset::validatePayload()const{
         return false;
     }
     return true;
-}
-
-void MeshComponentAsset::applyToEntity(Core::ECS::Entity& entity)const{
-    entity.addComponent<MeshComponent>() = component;
 }
 
 
@@ -166,10 +158,6 @@ bool RendererComponentAsset::validatePayload()const{
         return false;
     }
     return true;
-}
-
-void RendererComponentAsset::applyToEntity(Core::ECS::Entity& entity)const{
-    entity.addComponent<RendererComponent>() = component;
 }
 
 

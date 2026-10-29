@@ -1,0 +1,38 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[subsystem("shadow_subsystem")]
+class ShadowSubsystem{
+    public AssetRef<ComputeShader> hardwareTransparentEvaluateCs;
+    public AssetRef<ComputeShader> hardwareTransparentGatherCs;
+    public AssetRef<ComputeShader> hardwareTransparentOverflowCs;
+    public AssetRef<PixelShader> lightSpaceCapturePs;
+    public AssetRef<VertexShader> lightSpaceCaptureVs;
+    public AssetRef<ComputeShader> lightSpaceCullCs;
+    public AssetRef<ComputeShader> lightSpaceFallbackCs;
+    public AssetRef<ComputeShader> lightSpaceResolveCs;
+    public AssetRef<ComputeShader> lightSpaceResolveHwCs;
+    public AssetRef<ComputeShader> lightSpaceShadeCs;
+    public AssetRef<ComputeShader> lightSpaceViewCs;
+    public AssetRef<ComputeShader> shadowGeometryDownsampleCs;
+    public AssetRef<ComputeShader> shadowRayqueryCs;
+    public AssetRef<ComputeShader> shadowRayquerySoftCs;
+    public AssetRef<ComputeShader> shadowReprojectMergeCombinedCs;
+    public AssetRef<ComputeShader> shadowReprojectMergeCs;
+    public AssetRef<ComputeShader> shadowResolveCombinedCs;
+    public AssetRef<ComputeShader> shadowResolveCs;
+    public AssetRef<ComputeShader> shadowResolveRgbCs;
+    public AssetRef<ComputeShader> shadowResolveWaveletCombinedCs;
+    public AssetRef<ComputeShader> swShadowOpaquePrepassCs;
+    public AssetRef<ComputeShader> swShadowSoftOpaqueCs;
+    public AssetRef<ComputeShader> swShadowTransparentBuildargsCs;
+    public AssetRef<ComputeShader> swShadowTransparentClassifyCs;
+    public AssetRef<ComputeShader> swShadowTransparentCoarseCs;
+    public AssetRef<ComputeShader> swShadowTransparentIndirectCs;
+    public AssetRef<ComputeShader> swShadowTransparentResolveCs;
+    public AssetRef<ComputeShader> swShadowTransparentSoftCs;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

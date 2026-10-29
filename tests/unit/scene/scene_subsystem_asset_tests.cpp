@@ -4,12 +4,12 @@
 
 #include "scene_asset_test_helpers.h"
 
-#include <impl/assets_graphics/csg/subsystem.h>
-#include <impl/assets_graphics/refractive/subsystem.h>
-#include <impl/assets_graphics/renderer/subsystem.h>
-#include <impl/assets_graphics/transparent/subsystem.h>
-#include <impl/assets_mesh/subsystem.h>
-#include <impl/assets_ui_skin/subsystem.h>
+#include <impl/assets_graphics/csg/subsystem.adhd.h>
+#include <impl/assets_graphics/refractive/subsystem.adhd.h>
+#include <impl/assets_graphics/renderer/subsystem.adhd.h>
+#include <impl/assets_graphics/transparent/subsystem.adhd.h>
+#include <impl/assets_mesh/subsystem.adhd.h>
+#include <impl/assets_ui_skin/subsystem.adhd.h>
 
 #include <core/alloc/general.h>
 #include <core/assets/registry.h>

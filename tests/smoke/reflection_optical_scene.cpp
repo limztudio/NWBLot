@@ -94,9 +94,9 @@ static Core::ECS::EntityID CreatePanel(Core::ECS::World& world, const Float4& co
     StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
     const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
     const Half packedRoughness = ConvertFloatToHalf(0.f);
-    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_SurfaceInterface), s_SpecularParameterPath, Impl::MaterialLayoutFieldType::Half3, Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_SurfaceInterface), s_SpecularParameterPath, Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
         return Core::ECS::s_InvalidEntityId;
-    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_SurfaceInterface), s_RoughnessParameterPath, Impl::MaterialLayoutFieldType::Half, Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_SurfaceInterface), s_RoughnessParameterPath, Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
         return Core::ECS::s_InvalidEntityId;
     return entity;
 }
@@ -115,9 +115,9 @@ static Core::ECS::EntityID CreateBoundary(
     renderer.opticalMediumPriority = priority;
     const Half packedIor = ConvertFloatToHalf(ior);
     const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.f);
-    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::Half, Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))))
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))))
         return Core::ECS::s_InvalidEntityId;
-    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::Half3, Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)))
+    if(!Impl::SetMaterialMutableParameter(world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)))
         return Core::ECS::s_InvalidEntityId;
     return entity;
 }
@@ -140,9 +140,9 @@ static Expected<OpticalReceiverEntities> CreateDenseReceiver(Core::ECS::World& w
         return MakeUnexpected(Failure{});
     const Half4U packedF0 = MakeHalf4U(0.f, 0.f, 0.f, 0.f);
     const Half packedRoughness = ConvertFloatToHalf(1.f);
-    if(!Impl::SetMaterialMutableParameter(world, receiver, Name(s_SurfaceInterface), s_SpecularParameterPath, Impl::MaterialLayoutFieldType::Half3, Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
+    if(!Impl::SetMaterialMutableParameter(world, receiver, Name(s_SurfaceInterface), s_SpecularParameterPath, Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
         return MakeUnexpected(Failure{});
-    if(!Impl::SetMaterialMutableParameter(world, receiver, Name(s_SurfaceInterface), s_RoughnessParameterPath, Impl::MaterialLayoutFieldType::Half, Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
+    if(!Impl::SetMaterialMutableParameter(world, receiver, Name(s_SurfaceInterface), s_RoughnessParameterPath, Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
         return MakeUnexpected(Failure{});
     if(!csg)
         return OpticalReceiverEntities{ .receiver = receiver };

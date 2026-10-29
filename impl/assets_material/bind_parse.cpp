@@ -40,15 +40,15 @@ Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePat
 
 Expected<MaterialParameterType> ParseMaterialParameterTypeText(const AStringView typeText)noexcept{
     static constexpr ::NamedEnumCase<MaterialParameterValueType::Enum> s_Types[] = {
-        { "bool", MaterialParameterValueType::Bool },
-        { "char", MaterialParameterValueType::Char },
-        { "uchar", MaterialParameterValueType::UChar },
-        { "short", MaterialParameterValueType::Short },
-        { "ushort", MaterialParameterValueType::UShort },
-        { "int", MaterialParameterValueType::Int },
-        { "uint", MaterialParameterValueType::UInt },
-        { "half", MaterialParameterValueType::Half },
-        { "float", MaterialParameterValueType::Float }
+        { "bool", MaterialParameterValueType::b8 },
+        { "char", MaterialParameterValueType::i8 },
+        { "uchar", MaterialParameterValueType::u8 },
+        { "short", MaterialParameterValueType::i16 },
+        { "ushort", MaterialParameterValueType::u16 },
+        { "int", MaterialParameterValueType::i32 },
+        { "uint", MaterialParameterValueType::u32 },
+        { "half", MaterialParameterValueType::f16 },
+        { "float", MaterialParameterValueType::f32 }
     };
     for(const auto& type : s_Types){
         const AStringView baseName = type.text;

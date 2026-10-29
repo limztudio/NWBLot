@@ -61,8 +61,8 @@ static_assert(
     "Material layout field component count drifted"
 );
 static_assert(
-    static_cast<u32>(MaterialParameterValueType::Float) - s_MaterialParameterFirstValueTypeId
-        == (static_cast<u32>(MaterialLayoutFieldType::Float4) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType,
+    static_cast<u32>(MaterialParameterValueType::f32) - s_MaterialParameterFirstValueTypeId
+        == (static_cast<u32>(MaterialLayoutFieldType::f32x4) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType,
     "Material layout field/value type ordering must remain contiguous"
 );
 

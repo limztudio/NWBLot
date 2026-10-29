@@ -43,7 +43,7 @@ static constexpr AStringView s_ColorNames[] = {
     "scrollbar.disabled", "popup.backdrop", "control.hover_tint", "control.pressed_tint",
     "control.disabled_tint", "progress.track_tint", "progress.fill_tint",
 };
-static_assert(LengthOf(s_ColorNames) == UiSkinColorRole::Count, "UI skin color names must match palette roles");
+static_assert(LengthOf(s_ColorNames) == UiSkinColorRole::kCount, "UI skin color names must match palette roles");
 
 static constexpr AStringView s_NameField = "name";
 static constexpr AStringView s_RectField = "rect";
@@ -173,12 +173,12 @@ template<usize Count>
     const auto colors = Core::Assets::FindMetadataListField(path, asset, s_DiagnosticPrefix, s_ColorsField);
     if(!colors)
         return MakeUnexpected(colors.error());
-    if((*colors)->asList().size() != UiSkinColorRole::Count){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), static_cast<u32>(UiSkinColorRole::Count));
+    if((*colors)->asList().size() != UiSkinColorRole::kCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), static_cast<u32>(UiSkinColorRole::kCount));
         return MakeUnexpected(Failure{});
     }
 
-    Array<bool, UiSkinColorRole::Count> seen{};
+    Array<bool, UiSkinColorRole::kCount> seen{};
     for(const Value& value : (*colors)->asList()){
         if(!Core::Assets::CheckMetadataAssetMap(path, value, s_DiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, value, s_DiagnosticPrefix, { s_NameField, s_RgbaField }))
             return MakeUnexpected(Failure{});
@@ -187,14 +187,14 @@ template<usize Count>
         if(!nameResultValue)
             return MakeUnexpected(Failure{});
         name = nameResultValue->text;
-        usize role = UiSkinColorRole::Count;
-        for(usize index = 0u; index < UiSkinColorRole::Count; ++index){
+        usize role = UiSkinColorRole::kCount;
+        for(usize index = 0u; index < UiSkinColorRole::kCount; ++index){
             if(name == s_ColorNames[index]){
                 role = index;
                 break;
             }
         }
-        if(role == UiSkinColorRole::Count || seen[role]){
+        if(role == UiSkinColorRole::kCount || seen[role]){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unknown or duplicate palette role '{}'"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
             return MakeUnexpected(Failure{});
         }

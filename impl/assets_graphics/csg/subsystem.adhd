@@ -1,0 +1,17 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[subsystem("csg_subsystem")]
+class CsgSubsystem{
+    public Vector<AssetRef<CsgShape>> basicShapes;
+    public AssetRef<PixelShader> intervalCapFillPs;
+    public AssetRef<ComputeShader> intervalCombineCs;
+    public AssetRef<ComputeShader> intervalPeelCs;
+    public AssetRef<ComputeShader> receiverSpanBuildCs;
+    public AssetRef<PixelShader> receiverSurfacePs;
+    public AssetRef<PixelShader> refractionCapFillPs;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

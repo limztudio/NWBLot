@@ -7,7 +7,7 @@
 
 #include "scene_resources.h"
 
-#include <impl/ecs_render/shadow/quality_settings.h>
+#include <impl/ecs_render/shadow/quality_settings.adhd.h>
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
 
 #include <core/graphics/rhi/command.h>

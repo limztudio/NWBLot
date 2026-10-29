@@ -12,7 +12,8 @@
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/assets/graphics/deferred/binding_slots.h>
-#include <impl/assets_graphics/deferred/subsystem.h>
+#include <impl/assets/graphics/deferred/presentation_constants.h>
+#include <impl/assets_graphics/deferred/subsystem.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>

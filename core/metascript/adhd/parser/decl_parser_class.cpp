@@ -40,8 +40,22 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const MVector<Parse
             decl->assetTypeName = attr.arguments[0].text;
             decl->isReflect = true;
         }
+        else if(attr.name == "subsystem"){
+            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::StringLiteral){
+                m_cursor.error(attr.line, attr.column, "'[subsystem(\"...\")]' requires a single string literal argument");
+                return nullptr;
+            }
+            decl->subsystemTypeName = attr.arguments[0].text;
+        }
+        else if(attr.name == "component_asset"){
+            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::StringLiteral){
+                m_cursor.error(attr.line, attr.column, "'[component_asset(\"...\")]' requires a single string literal argument");
+                return nullptr;
+            }
+            decl->componentAssetTypeName = attr.arguments[0].text;
+        }
         else{
-            m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'serialize', 'reflect', or 'asset(\"...\")'");
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'serialize', 'reflect', 'asset(\"...\")', 'subsystem(\"...\")', or 'component_asset(\"...\")'");
             return nullptr;
         }
     }

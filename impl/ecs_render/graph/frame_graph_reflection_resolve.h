@@ -10,7 +10,7 @@
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
-#include <impl/ecs_render/reflection/settings.h>
+#include <impl/ecs_render/reflection/settings.adhd.h>
 #include <impl/ecs_render/reflection/scene_content_stamp.h>
 #include <impl/ecs_render/reflection/reflection_system.h>
 #include <impl/ecs_render/reflection/composite_inputs.h>

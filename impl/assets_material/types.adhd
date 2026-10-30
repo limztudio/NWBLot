@@ -45,11 +45,11 @@ b8 IsAllowedMaterialAssetField(in StringView fieldName){
 
 [reflect]
 enum<u32> MaterialFlag{
-    enum None = 0u,
+    flag None = 0u,
     flag Transparent,
     flag TwoSided,
     flag Refractive,
-    enum All = Transparent | TwoSided | Refractive
+    flag All = Transparent | TwoSided | Refractive
 }
 
 [reflect]

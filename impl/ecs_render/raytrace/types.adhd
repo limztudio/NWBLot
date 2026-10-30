@@ -58,10 +58,10 @@ const usize s_NwbRtInstanceMaterialGpuByteSize = 36u;
 // Shader-mirrored flags: transparent selects transmittance; refractive selects caustics.
 enum<u32> RtInstanceMaterialFlag{
     flag None = 0u,
-    flag Transparent = 1u << 0u,
-    flag Refractive = 1u << 1u,
-    flag CsgShadow = 1u << 2u,
-    flag RefractionEntryCertified = 1u << 3u
+    flag Transparent,
+    flag Refractive,
+    flag CsgShadow,
+    flag RefractionEntryCertified
 }
 
 

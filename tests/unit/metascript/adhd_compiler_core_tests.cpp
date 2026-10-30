@@ -300,7 +300,7 @@ TEST(AdhdCompiler, SupportsEnumFlagKeywordsBitwiseOperatorsAndSimdLowering){
 
     static constexpr MStringView s_Source =
         "enum<u32> RenderMask {\r\n"
-        "    enum None = 0,\r\n"
+        "    flag None = 0,\r\n"
         "    flag Opaque = 1 << 0,\r\n"
         "    flag Shadow = 1 << 1,\r\n"
         "}\r\n"

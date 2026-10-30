@@ -4,11 +4,11 @@
 
 enum<u8> RuntimeMeshDirtyFlag{
     flag None = 0u,
-    flag TopologyDirty = 1u << 0u,
-    flag AttributesDirty = 1u << 1u,
-    flag SkinningInputDirty = 1u << 2u,
-    flag GpuUploadDirty = 1u << 3u,
-    flag MeshletBoundsDirty = 1u << 4u,
+    flag TopologyDirty,
+    flag AttributesDirty,
+    flag SkinningInputDirty,
+    flag GpuUploadDirty,
+    flag MeshletBoundsDirty,
     flag All = TopologyDirty | AttributesDirty | SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty
 }
 type RuntimeMeshDirtyFlags = u8;

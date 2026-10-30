@@ -94,7 +94,7 @@ TEST(AdhdCompiler, SupportsReturnFuncCapturePropagationEnumAliasScopeOverloadedI
     static constexpr MStringView s_Source =
         "const u32 kGlobalLimit = 100u;\r\n"
         "enum<u8> StageMask {\r\n"
-        "    enum Idle = 0,\r\n"
+        "    flag Idle = 0,\r\n"
         "    flag Active = 1 << 0,\r\n"
         "}\r\n"
         "type StageMaskAlias = StageMask;\r\n"

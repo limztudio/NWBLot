@@ -30,14 +30,14 @@ FrameGraphAvboitAccumulationUploadChain::FrameGraphAvboitAccumulationUploadChain
     , m_csgSystem(csgSystem)
 {}
 
-Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationUploadChain::declare(
+Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitAccumulationUploadChain::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const FrameGraphAvboitAccumulationUploadInputs& inputs,
     RendererTaskGraphDetail::AvboitAccumulationGraphTask::Payload& accumulationPayload,
     RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask::Payload& computeEmulationPayload,
     AvboitGeneratedGeometryReuse& generatedGeometry
 ){
-    FrameGraphAvboitAccumulationUploadResult result{};
+    FrameGraphAvboitMaterialUploadResult result{};
     RendererTaskGraphDetail::AvboitAccumulationGraphTask::Payload& avboitAccumulationPayload = accumulationPayload;
     RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask::Payload& avboitAccumulationComputeEmulationPayload = computeEmulationPayload;
     DeferredFrameTargets& deferredTargets = inputs.targets;

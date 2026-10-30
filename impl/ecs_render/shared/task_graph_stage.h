@@ -20,32 +20,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using NWB::Impl::s_SharedComputeEmulationPhasesPerDraw;
-using NWB::Impl::s_SharedComputeEmulationMinimumDrawCount;
-using NWB::Impl::s_SharedComputeEmulationMaximumDrawCount;
-using NWB::Impl::s_SharedComputeEmulationMinimumPhaseCount;
-using NWB::Impl::s_SharedComputeEmulationMaximumPhaseCount;
-using NWB::Impl::IsSupportedSharedComputeEmulationDrawCount;
-using NWB::Impl::SharedComputeEmulationPhaseCountForDrawCount;
-using NWB::Impl::IsSupportedSharedComputeEmulationPhaseCount;
-using NWB::Impl::RendererFrameGraphFeatures;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Domains publish this boundary after declaring topology; downstream avoids local coupling.
 struct RendererTaskGraphTransparencyStage{
     Core::GpuTaskId firstTask;

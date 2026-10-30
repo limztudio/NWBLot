@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font/types.adhd.h>
 #include <impl/assets_font_atlas/asset.h>
-#include <impl/assets_font_atlas/types.adhd.h>
 #include <impl/assets_font_atlas/cook.h>
 
 #include <tests/common/capturing_logger.h>
@@ -458,13 +456,11 @@ TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFon
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     AtlasTestArena testArena;
-    const Path sourcePath = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default" / "latin.font";
-    Core::Assets::AssetBytes bytes(testArena.arena);
-    auto bytesResult = ReadBundledFontBytes(sourcePath, bytes.get_allocator().arena());
+    const Path sourcePath = DefaultBundledFontRoot(testArena) / "latin.font";
+    auto bytesResult = ReadBundledFontBytes(sourcePath, testArena.arena);
     ASSERT_TRUE(bytesResult);
-    bytes = Move(*bytesResult);
     Font font(testArena.arena, Name(s_BodyFontPath));
-    font.setFontBytes(Move(bytes));
+    font.setFontBytes(Move(*bytesResult));
     ASSERT_TRUE(font.validatePayload());
     FontAtlasPayload payload = MakePayload(testArena);
     payload.fontSha256 = ComputeSha256({ font.fontBytes().data(), font.fontBytes().size() });

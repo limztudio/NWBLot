@@ -92,10 +92,10 @@ class CameraComponent{
 
 [reflect]
 enum<u8> LightType{
-    enum Directional,
-    enum Point,
-    enum Spot,
-    enum kCount
+    Directional,
+    Point,
+    Spot,
+    kCount
 }
 
 [reflect]
@@ -124,7 +124,7 @@ class LightComponent{
     public f32 outerConeCos = s_LightOuterConeCos;
     public f32 angularRadius = s_LightDirectionalAngularRadius;
     public f32 sourceRadius = s_LightPunctualSourceRadius;
-    public LightType type = LightType::Enum::Directional;
+    public LightType type = LightType::Directional;
     public b8 enableCaustics = s_LightEnableCaustics;
 }
 
@@ -150,7 +150,7 @@ class SceneLight{
     // Soft-shadow source size: angular radius (radians) / punctual radius (world units).
     public f32 angularRadius = s_LightDirectionalAngularRadius;
     public f32 sourceRadius = s_LightPunctualSourceRadius;
-    public LightType type = LightType::Enum::Directional;
+    public LightType type = LightType::Directional;
     public b8 enableCaustics = s_LightEnableCaustics;
 }
 

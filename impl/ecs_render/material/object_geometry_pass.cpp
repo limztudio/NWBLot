@@ -8,7 +8,6 @@
 #include <impl/assets_graphics/mesh/subsystem.adhd.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
-#include <impl/ecs_render/mesh/mesh_compute_push_constants.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
@@ -121,13 +120,13 @@ b8 RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawCont
     state.setPipeline(pipeline.get());
     context.commandList.setComputeState(state);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipeline.get());
-    ECSRenderDetail::MeshFrameHeapSlots slots;
+    MeshFrameHeapSlots slots;
     slots.instance = context.frameBindings.instanceHeapHandle.slot();
     slots.materialTyped = context.frameBindings.materialTypedHeapHandle.slot();
     slots.view = context.frameBindings.meshView.heapHandle.slot();
     slots.generatedVertex = cache.heapHandle.slot();
-    const ECSRenderDetail::ShaderDrivenPushConstants meshPush = ECSRenderDetail::BuildShaderDrivenPushConstants(mesh.meshletCount, drawItem.instanceIndex, drawItem.materialConstantByteOffset, context.viewportState, slots, 0u);
-    const ECSRenderDetail::MeshComputePushConstants push{ .mesh = meshPush, .generatedIndexByteOffset = cache.indexByteOffset, };
+    const ShaderDrivenPushConstants meshPush = ECSRenderDetail::BuildShaderDrivenPushConstants(mesh.meshletCount, drawItem.instanceIndex, drawItem.materialConstantByteOffset, context.viewportState, slots, 0u);
+    const MeshComputePushConstants push{ .mesh = meshPush, .generatedIndexByteOffset = cache.indexByteOffset, };
     context.commandList.setPushConstants(&push, sizeof(push));
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);

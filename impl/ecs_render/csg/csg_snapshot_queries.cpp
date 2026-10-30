@@ -4,8 +4,6 @@
 
 #include "csg_system.h"
 
-#include <impl/ecs_render/csg/renderer_csg_state.h>
-#include <impl/ecs_csg/module.h>
 
 #include <core/graphics/runtime/runtime.h>
 

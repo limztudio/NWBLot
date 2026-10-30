@@ -31,22 +31,22 @@ const u32 s_TextUnicodeParagraphSeparator = 0x2029u;
 
 
 enum<u8> TextDirection{
-    enum LeftToRight,
-    enum RightToLeft,
+    LeftToRight,
+    RightToLeft,
 }
 
 enum<u8> TextLayoutStatus{
-    enum Success,
-    enum InvalidUtf8,
-    enum UnsupportedControl,
-    enum MissingGlyph,
-    enum InvalidParameters,
-    enum FontFailure,
+    Success,
+    InvalidUtf8,
+    UnsupportedControl,
+    MissingGlyph,
+    InvalidParameters,
+    FontFailure,
 }
 
 enum<u8> TextCaretEdge{
-    enum Leading,
-    enum Trailing,
+    Leading,
+    Trailing,
 }
 
 class ShapeRequest{
@@ -54,7 +54,7 @@ class ShapeRequest{
     public StringView language = s_TextDefaultLanguage;
     public f32 fontSize = s_TextDefaultFontSize;
     public u32 scriptTag = s_TextDefaultScriptTag;
-    public TextDirection direction = TextDirection::Enum::LeftToRight;
+    public TextDirection direction = TextDirection::LeftToRight;
 }
 
 class FontMetrics{
@@ -81,13 +81,13 @@ TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBre
         || request.scriptTag == 0u
         || request.language.empty()
         || request.language.size() > s_TextMaxLanguageBytes
-        || (request.direction != TextDirection::Enum::LeftToRight && request.direction != TextDirection::Enum::RightToLeft)
+        || (request.direction != TextDirection::LeftToRight && request.direction != TextDirection::RightToLeft)
     )
-        return TextLayoutStatus::Enum::InvalidParameters;
+        return TextLayoutStatus::InvalidParameters;
     for(u32 byte = 0u; byte < s_ScriptTagLetterCount; ++byte){
         const u32 letter = (request.scriptTag >> (byte * s_ScriptTagBitsPerByte)) & s_ScriptTagLetterMask;
         if(!IsTextAsciiAlpha(letter))
-            return TextLayoutStatus::Enum::InvalidParameters;
+            return TextLayoutStatus::InvalidParameters;
     }
     b8 validLanguage = true;
     const StringView language = request.language;
@@ -100,8 +100,8 @@ TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBre
         }
     }
     if(!validLanguage)
-        return TextLayoutStatus::Enum::InvalidParameters;
-    TextLayoutStatus utf8Status = TextLayoutStatus::Enum::Success;
+        return TextLayoutStatus::InvalidParameters;
+    TextLayoutStatus utf8Status = TextLayoutStatus::Success;
     const StringView text = request.text;
     native(in text, in allowLineBreaks, mut utf8Status){
         usize offset = 0u;

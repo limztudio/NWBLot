@@ -23,10 +23,6 @@ namespace __hidden_ui_router_popup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 Area(const Rect& rectangle)noexcept{
-    return IsValidUiRect(rectangle) && rectangle.width > 0.0f && rectangle.height > 0.0f;
-}
-
 [[nodiscard]] static b8 Focusable(const SIMDVectorSingle rectangle, const SIMDVectorSingle clip)noexcept{
     const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(rectangle, clip);
     return (VectorMoveMask(VectorGreater(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;
@@ -83,7 +79,7 @@ b8 InputRouter::stagePopups(const PopupScope* scopes, const usize count){
     for(usize index = 0u; index < count; ++index){
         const PopupScope& scope = scopes[index];
         if(
-            !scope.token.valid() || !__hidden_ui_router_popup::Area(scope.bounds) || !__hidden_ui_router_popup::Area(scope.viewport)
+            !scope.token.valid() || !HasUiRectArea(scope.bounds) || !HasUiRectArea(scope.viewport)
             || scope.layer == 0u || (index != 0u && scope.layer <= scopes[index - 1u].layer)
             || (scope.dismissFocusTraversal && (!scope.focusAnchor.valid() || scope.focusAnchorDeclarationGeneration == 0u))
             || scope.bounds.x < scope.viewport.x || scope.bounds.y < scope.viewport.y

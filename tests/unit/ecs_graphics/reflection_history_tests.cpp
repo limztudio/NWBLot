@@ -3,8 +3,6 @@
 
 
 #include <impl/ecs_render/reflection/history.h>
-#include <impl/assets/graphics/reflection/frame_constants.h>
-#include <impl/ecs_render/reflection/statistics_readback.h>
 
 #include <core/alloc/general.h>
 #include <core/task/gpu/task_graph.h>

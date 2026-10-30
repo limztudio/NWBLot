@@ -495,6 +495,16 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
     }
 }
 
+void EmitCppTypeOrBaseName(MString& out, const TypeRef* typeRef, const MStringView baseName, const SymbolTable& symbols){
+    if(typeRef){
+        const CppTypeEmitter typeEmitter(symbols);
+        typeEmitter.emitTypeCpp(out, *typeRef);
+    }
+    else{
+        out.append(baseName.data(), baseName.size());
+    }
+}
+
 void EmitNwbContainerElementDependencyExtract(MString& out, const TypeRef* itemTypeRef, const MStringView itemBaseName, const MStringView itemExpr, const SymbolTable& symbols){
     out.append("if(");
     out.append(itemExpr.data(), itemExpr.size());
@@ -505,13 +515,7 @@ void EmitNwbContainerElementDependencyExtract(MString& out, const TypeRef* itemT
     }
     else{
         out.append(".isMap() && !");
-        if(itemTypeRef){
-            const CppTypeEmitter typeEmitter(symbols);
-            typeEmitter.emitTypeCpp(out, *itemTypeRef);
-        }
-        else{
-            out.append(itemBaseName.data(), itemBaseName.size());
-        }
+        EmitCppTypeOrBaseName(out, itemTypeRef, itemBaseName, symbols);
         out.append("::extractNwbAssetDependencies(");
         out.append(itemExpr.data(), itemExpr.size());
         out.append(", callback)) return false;");
@@ -602,21 +606,11 @@ void ReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, cons
     out.append("        if(!inMap.isMap())\r\n");
     out.append("            return false;\r\n");
     for(const FieldDecl* field : fields){
-        if(!field || !IsFieldReflected(*field) || !field->type || !IsAssetDependencyField(*field, m_symbols))
+        if(!field || !IsFieldReflected(*field) || !field->type || !IsAssetDependencyType(field->type, m_symbols))
             continue;
-        const TypeRef* resolvedFieldType = m_symbols.unwrapTypeAlias(field->type);
-        const MStringView tname = resolvedFieldType ? resolvedFieldType->name : field->type->name;
-        const TypeRef* effectiveTypeRef = (
-            tname == "Optional"
-            && resolvedFieldType
-            && !resolvedFieldType->templateArgs.empty()
-            && resolvedFieldType->templateArgs[0].type
-        )
-            ? m_symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[0].type)
-            : resolvedFieldType;
-        const MStringView effectiveScalarOrClassType = effectiveTypeRef
-            ? m_symbols.resolveBaseTypeName(effectiveTypeRef->name)
-            : tname;
+        b8 isOptional = false;
+        MStringView effectiveScalarOrClassType;
+        const TypeRef* effectiveTypeRef = UnwrapOptionalFieldType(field->type, m_symbols, isOptional, effectiveScalarOrClassType);
 
         if(effectiveScalarOrClassType == "AssetRef"){
             EmitNwbFieldFindPrefix(out, field->name);
@@ -625,13 +619,7 @@ void ReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, cons
         else if(m_symbols.findClass(effectiveScalarOrClassType)){
             EmitNwbFieldFindPrefix(out, field->name);
             out.append("__f->isMap() && !");
-            if(effectiveTypeRef){
-                const CppTypeEmitter typeEmitter(m_symbols);
-                typeEmitter.emitTypeCpp(out, *effectiveTypeRef);
-            }
-            else{
-                out.append(effectiveScalarOrClassType.data(), effectiveScalarOrClassType.size());
-            }
+            EmitCppTypeOrBaseName(out, effectiveTypeRef, effectiveScalarOrClassType, m_symbols);
             out.append("::extractNwbAssetDependencies(*__f, callback)) return false;\r\n");
         }
         else if(IsReflectedLinearContainerType(effectiveScalarOrClassType) && effectiveTypeRef && !effectiveTypeRef->templateArgs.empty() && effectiveTypeRef->templateArgs[0].type){

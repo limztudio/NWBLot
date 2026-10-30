@@ -103,13 +103,10 @@ TEST(AssetsFontMetadata, BunchRejectsInvalidAndDuplicateChildrenWithoutPublicati
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(LoadMetadata(testArena, document));
     Core::CpuTaskScheduler scheduler(1u);
-    Core::Assets::ExpandedAssetMetadataVector expanded(scratchArena);
     const Path filePath = directory / s_LatinMetadataFilename;
-    {
-        auto expandedResult = Core::Assets::AssetsBunchCook::ExpandAssetBunch(directory, s_FontVirtualRoot, filePath, document, scratchArena);
-        ASSERT_TRUE(expandedResult);
-        expanded = Move(*expandedResult);
-    }
+    auto expandedResult = Core::Assets::AssetsBunchCook::ExpandAssetBunch(directory, s_FontVirtualRoot, filePath, document, scratchArena);
+    ASSERT_TRUE(expandedResult);
+    const Core::Assets::ExpandedAssetMetadataVector& expanded = *expandedResult;
     ASSERT_EQ(expanded.size(), 2u);
     Core::Assets::CookEntryPathHashSet parsedPaths(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     Core::Assets::CookEntryParseContext parseContext{ testArena.arena, scheduler, scratchArena, parsedPaths };
@@ -146,12 +143,10 @@ TEST(AssetsFontMetadata, FieldlessAndEmptyFontDeclarationsRejectNonmapValues){
     ASSERT_TRUE(asset->isNull());
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     const Path path = directory / s_LatinMetadataFilename;
-    auto entryParseResult = ParseFontCookMetadata(directory, s_FontVirtualRoot, path, document, testArena.arena, scratchArena);
-    ASSERT_TRUE(entryParseResult);
+    ASSERT_TRUE(ParseFontCookMetadata(directory, s_FontVirtualRoot, path, document, testArena.arena, scratchArena));
     asset->makeMap();
     ASSERT_TRUE(asset->asMap().empty());
-    auto entryParseResult2 = ParseFontCookMetadata(directory, s_FontVirtualRoot, path, document, testArena.arena, scratchArena);
-    ASSERT_TRUE(entryParseResult2);
+    ASSERT_TRUE(ParseFontCookMetadata(directory, s_FontVirtualRoot, path, document, testArena.arena, scratchArena));
     for(u32 caseIndex = 0u; caseIndex < 5u; ++caseIndex){
         Core::Metascript::Value invalid(testArena.arena);
         switch(caseIndex){
@@ -174,21 +169,19 @@ TEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataAreRejected){
     ASSERT_TRUE(PrepareFiles(testArena, directory));
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(LoadMetadata(testArena, document));
-    ASSERT_NE(document.findVariable("face"), nullptr);
-    ASSERT_NE(document.findVariable("atlas"), nullptr);
+    ASSERT_NE(document.findVariable(s_FaceVariable), nullptr);
+    ASSERT_NE(document.findVariable(s_AtlasVariable), nullptr);
     Core::Metascript::Value face(*document.findVariable(s_FaceVariable));
     Core::Metascript::Value atlas(*document.findVariable(s_AtlasVariable));
     atlas.field(s_FontField).setString(s_LatinFacePath);
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    FontCookEntry fontEntry(testArena.arena);
-    FontAtlasCookEntry atlasEntry(testArena.arena);
     const Path path = directory / s_LatinMetadataFilename;
-    auto fontEntryParseResult = ParseFontCookMetadataValue(Name(s_LatinFacePath), path, face, fontEntry.arena);
+    auto fontEntryParseResult = ParseFontCookMetadataValue(Name(s_LatinFacePath), path, face, testArena.arena);
     ASSERT_TRUE(fontEntryParseResult);
-    fontEntry.faceIndex = Move(fontEntryParseResult->faceIndex);
-    auto atlasEntryParseResult = ParseFontAtlasCookMetadataValue(Name(s_LatinAtlasPath), path, atlas, atlasEntry.arena, scratchArena);
+    const FontCookEntry& fontEntry = *fontEntryParseResult;
+    auto atlasEntryParseResult = ParseFontAtlasCookMetadataValue(Name(s_LatinAtlasPath), path, atlas, testArena.arena, scratchArena);
     ASSERT_TRUE(atlasEntryParseResult);
-    atlasEntry.payload = Move(atlasEntryParseResult->payload);
+    const FontAtlasCookEntry& atlasEntry = *atlasEntryParseResult;
     ASSERT_TRUE(face.isNull());
     static constexpr AStringView s_FontFields[] = { "face_index", "units_per_em", "glyph_count" };
     for(const AStringView field : s_FontFields){
@@ -248,22 +241,21 @@ TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsAreRejected){
     ASSERT_TRUE(PrepareFiles(testArena, directory));
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(LoadMetadata(testArena, document));
-    ASSERT_NE(document.findVariable("atlas"), nullptr);
+    ASSERT_NE(document.findVariable(s_AtlasVariable), nullptr);
     Core::Metascript::Value metadata(*document.findVariable(s_AtlasVariable));
     metadata.field(s_FontField).setString(s_LatinFacePath);
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    FontAtlasCookEntry entry(testArena.arena);
     const Path path = directory / s_LatinMetadataFilename;
-    auto entryParseResult3 = ParseFontAtlasCookMetadataValue(Name(s_LatinAtlasPath), path, metadata, entry.arena, scratchArena);
+    auto entryParseResult3 = ParseFontAtlasCookMetadataValue(Name(s_LatinAtlasPath), path, metadata, testArena.arena, scratchArena);
     ASSERT_TRUE(entryParseResult3);
-    entry.payload = Move(entryParseResult3->payload);
+    const FontAtlasCookEntry& entry = *entryParseResult3;
     const usize originalGlyphCount = entry.payload.glyphs.size();
     ASSERT_GT(originalGlyphCount, 1u);
     Core::Metascript::Value incomplete(metadata);
     incomplete.field(s_GlyphsField).asList().pop_back();
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, incomplete, entry.arena, scratchArena));
     Core::Metascript::Value obsoleteId(metadata);
-    EXPECT_EQ(obsoleteId.field("glyphs").asList()[0u].findField("id"), nullptr);
+    EXPECT_EQ(obsoleteId.field(s_GlyphsField).asList()[0u].findField("id"), nullptr);
     obsoleteId.field(s_GlyphsField).asList()[0u].field("id").setInteger(0);
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, obsoleteId, entry.arena, scratchArena));
     static constexpr AStringView s_IntegerFields[] = { "group", "channel", "x", "y", "width", "height" };
@@ -317,7 +309,7 @@ TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsAreRejected){
     emptyWithGeometry.field(s_GlyphsField).asList()[emptyIndex].field("x").setInteger(0);
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, emptyWithGeometry, entry.arena, scratchArena));
     Core::Metascript::Value missingWidth(metadata);
-    ASSERT_EQ(missingWidth.field("glyphs").asList()[drawableIndex].asMap().erase(AStringView("width")), 1u);
+    ASSERT_EQ(missingWidth.field(s_GlyphsField).asList()[drawableIndex].asMap().erase(AStringView("width")), 1u);
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, missingWidth, entry.arena, scratchArena));
 }
 
@@ -330,19 +322,17 @@ TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesAreRejec
     ASSERT_TRUE(PrepareFiles(testArena, directory));
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(LoadMetadata(testArena, document));
-    ASSERT_NE(document.findVariable("face"), nullptr);
-    ASSERT_NE(document.findVariable("atlas"), nullptr);
+    ASSERT_NE(document.findVariable(s_FaceVariable), nullptr);
+    ASSERT_NE(document.findVariable(s_AtlasVariable), nullptr);
     Core::Metascript::Value face(*document.findVariable(s_FaceVariable));
     Core::Metascript::Value metadata(*document.findVariable(s_AtlasVariable));
     metadata.field(s_FontField).setString(s_LatinFacePath);
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    FontAtlasCookEntry entry(testArena.arena);
     const Path path = directory / s_LatinMetadataFilename;
-    auto fontEntryParseResult2 = ParseFontCookMetadataValue(Name(s_LatinFacePath), path, face, testArena.arena);
-    ASSERT_TRUE(fontEntryParseResult2);
-    auto entryParseResult4 = ParseFontAtlasCookMetadataValue(Name(s_LatinAtlasPath), path, metadata, entry.arena, scratchArena);
+    ASSERT_TRUE(ParseFontCookMetadataValue(Name(s_LatinFacePath), path, face, testArena.arena));
+    auto entryParseResult4 = ParseFontAtlasCookMetadataValue(Name(s_LatinAtlasPath), path, metadata, testArena.arena, scratchArena);
     ASSERT_TRUE(entryParseResult4);
-    entry.payload = Move(entryParseResult4->payload);
+    const FontAtlasCookEntry& entry = *entryParseResult4;
     const Sha256Digest originalHash = entry.payload.fontSha256;
     const Path fontPath = directory / s_LatinFontFilename;
     Core::Assets::AssetBytes originalFont(testArena.arena);
@@ -366,13 +356,9 @@ TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesAreRejec
     Core::Assets::AssetBytes otherFont(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(DefaultBundledFontRoot(testArena) / "korean.font", otherFont));
     ASSERT_TRUE(WriteBinaryFile(fontPath, otherFont));
-    FontCookEntry replacementFont(testArena.arena);
-    auto replacementFontParseResult = ParseFontCookMetadataValue(Name("project/other"), path, face, replacementFont.arena);
+    auto replacementFontParseResult = ParseFontCookMetadataValue(Name("project/other"), path, face, testArena.arena);
     ASSERT_TRUE(replacementFontParseResult);
-    replacementFont.fontBytes = Move(replacementFontParseResult->fontBytes);
-    replacementFont.virtualPath = Move(replacementFontParseResult->virtualPath);
-    replacementFont.faceIndex = Move(replacementFontParseResult->faceIndex);
-    EXPECT_NE(ComputeSha256({ replacementFont.fontBytes.data(), replacementFont.fontBytes.size() }), originalHash);
+    EXPECT_NE(ComputeSha256({ replacementFontParseResult->fontBytes.data(), replacementFontParseResult->fontBytes.size() }), originalHash);
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, metadata, entry.arena, scratchArena));
     ASSERT_TRUE(WriteBinaryFile(fontPath, originalFont));
     EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), directory / "missing.nwb", face, testArena.arena));

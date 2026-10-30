@@ -38,8 +38,8 @@ const Name s_AssetsFontAtlasSerializeArena = "impl/assets_font_atlas/serialize";
 
 [reflect]
 enum<u32> FontAtlasRasterMode{
-    enum Outline = 0u,
-    enum Bitmap = 1u
+    Outline = 0u,
+    Bitmap = 1u
 }
 
 [reflect]

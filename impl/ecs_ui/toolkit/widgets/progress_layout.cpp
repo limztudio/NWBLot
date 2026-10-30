@@ -36,7 +36,10 @@ inline constexpr u32 s_MetricRowCount = 3u;
 
 
 [[nodiscard]] static SIMDMatrixDouble LoadMetrics(const ProgressMetrics& metrics)noexcept{
-    if(!IsFinite(metrics.padding.left) || !IsFinite(metrics.padding.top) || !IsFinite(metrics.padding.right) || !IsFinite(metrics.padding.bottom) || !IsFinite(metrics.fillMinimum.x) || !IsFinite(metrics.fillMinimum.y) || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y))
+    if(
+        !IsFinite(metrics.padding.left) || !IsFinite(metrics.padding.top) || !IsFinite(metrics.padding.right) || !IsFinite(metrics.padding.bottom)
+        || !IsFinite(metrics.fillMinimum.x) || !IsFinite(metrics.fillMinimum.y) || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y)
+    )
         return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
     return SIMDMatrixDouble{ .v = {
         VectorDoubleSet(metrics.padding.left, metrics.padding.top, metrics.padding.right, metrics.padding.bottom),
@@ -65,19 +68,12 @@ inline constexpr u32 s_MetricRowCount = 3u;
 
 [[nodiscard]] static Expected<SIMDVectorSingleResult> LoadMinimumSize(const UiSkinRegion& region, const SIMDVectorDouble density)noexcept{
     const Insets padding{ region.padding.left, region.padding.top, region.padding.right, region.padding.bottom };
-    if(!IsBoundedUiPadding(padding) || !IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
+    if(!IsBoundedUiPadding(padding))
         return MakeUnexpected(Failure{});
     const auto sliceExtents = LoadUiSkinSliceExtents(region);
     if(!sliceExtents)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleSet(static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleDivide(sliceExtents->value, density);
-    const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleGreater(geometryPair1Operand0, geometryPair1Operand1));
-    const f64 width = VectorDoubleGetX(widthHeightValue);
-    const f64 height = VectorDoubleGetY(widthHeightValue);
-    if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
-        return MakeUnexpected(Failure{});
-    return SIMDVectorSingleResult{ ConvertVectorDoubleToSingle(widthHeightValue) };
+    return LoadUiSkinMinimumSize(region, sliceExtents->value, density);
 }
 
 
@@ -166,7 +162,10 @@ Expected<ProgressPlacement> ProgressLayout::Place(const Rect& bounds, const Rect
         if(!fillReveal)
             return MakeUnexpected(Failure{});
         candidate.fillReveal = *fillReveal;
-        const SIMDVectorDouble canvasWidth = candidate.fillReveal.width == 0.0f ? VectorDoubleZero() : VectorDoubleMin(VectorDoubleSplatZ(contentVector), VectorDoubleMax(VectorDoubleReplicate(candidate.fillReveal.width), VectorDoubleReplicate(metrics.fillMinimum.x)));
+        const SIMDVectorDouble canvasWidth = candidate.fillReveal.width == 0.0f
+            ? VectorDoubleZero()
+            : VectorDoubleMin(VectorDoubleSplatZ(contentVector), VectorDoubleMax(VectorDoubleReplicate(candidate.fillReveal.width), VectorDoubleReplicate(metrics.fillMinimum.x)))
+        ;
         const auto fillCanvas = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoubleSelect(contentVector, canvasWidth, s_DoubleSIMDMaskZ));
         if(!fillCanvas)
             return MakeUnexpected(Failure{});

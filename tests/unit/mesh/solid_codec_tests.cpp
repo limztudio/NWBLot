@@ -163,9 +163,9 @@ TEST(MeshSolidCodec, UnaddressableBoundsCountIsRejectedBeforeStreamReadAndPreser
     const u32 retainedSolidWord = loaded.solidTriangleWords()[0];
 
     Core::Assets::AssetBytes malformed(*cooked);
-    constexpr u64 s_UnaddressableBoundsCount = static_cast<u64>(Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE) + 1u;
-    static_assert((s_UnaddressableBoundsCount - 1u) * NWB_MESHLET_BOUNDS_STRIDE <= Limit<u32>::s_Max);
-    static_assert(s_UnaddressableBoundsCount * NWB_MESHLET_BOUNDS_STRIDE > Limit<u32>::s_Max);
+    constexpr u64 s_UnaddressableBoundsCount = static_cast<u64>(Limit<u32>::s_Max / Impl::s_MeshletBoundsStride) + 1u;
+    static_assert((s_UnaddressableBoundsCount - 1u) * Impl::s_MeshletBoundsStride <= Limit<u32>::s_Max);
+    static_assert(s_UnaddressableBoundsCount * Impl::s_MeshletBoundsStride > Limit<u32>::s_Max);
     NWB_MEMCPY(malformed.data() + offsetof(Impl::MeshBinaryHeader, meshletCount), sizeof(s_UnaddressableBoundsCount), &s_UnaddressableBoundsCount, sizeof(s_UnaddressableBoundsCount));
     NWB_MEMCPY(malformed.data() + offsetof(Impl::MeshBinaryHeader, meshletBoundCount), sizeof(s_UnaddressableBoundsCount), &s_UnaddressableBoundsCount, sizeof(s_UnaddressableBoundsCount));
     EXPECT_FALSE(loaded.loadBinary(malformed));

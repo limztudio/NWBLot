@@ -38,11 +38,7 @@ struct BufferFlags{
     b8 isIndexBuffer = false;
 };
 
-namespace BufferSetupFailure = NWB::Impl::BufferSetupFailure;
-using NWB::Impl::s_RawByteLoadAlignmentBytes;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename PayloadT>
@@ -80,7 +76,13 @@ template<typename PayloadT>
     return SetupBuffer<PayloadT>(graphics, debugName, payload, flags);
 }
 
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(Core::GraphicsRuntime& graphics, Core::Alloc::ScratchArena& scratchArena, const Name& debugName, const Span<const u8> payload, const BufferFlags flags){
+[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(
+    Core::GraphicsRuntime& graphics,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Name& debugName,
+    const Span<const u8> payload,
+    const BufferFlags flags
+){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);
 

@@ -19,8 +19,8 @@ NWB_IMPL_BEGIN
 
 
 struct SceneShadingBufferUploads{
-    ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
-    ECSRenderDetail::SceneShadingGpuData sceneShadingState;
+    SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
+    SceneShadingGpuData sceneShadingState;
     RayTracingLightingClassification lightingClassification;
     u32 lightCount = 0u;
     b8 lightUploadRequired = false;

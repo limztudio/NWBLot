@@ -145,7 +145,7 @@ TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
             return nullptr;
         }
         if(m_cursor.check(TokenType::LeftBracket)){
-            m_cursor.error("C-style array types ('T[N]') are prohibited in adhd; use 'Array<T, N>' or 'Vector<T>'");
+            m_cursor.error(s_ProhibitedCStyleArrayError);
             return nullptr;
         }
     }
@@ -308,7 +308,7 @@ b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams){
             m_cursor.advance();
 
             if(m_cursor.check(TokenType::LeftBracket)){
-                m_cursor.error("C-style arrays ('T name[N]') are prohibited in adhd; use 'Array<T, N>' or 'Span<T>'");
+                m_cursor.error(s_ProhibitedCStyleArrayError);
                 return false;
             }
             if(m_cursor.check(TokenType::Equal)){

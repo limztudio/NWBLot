@@ -35,8 +35,6 @@ namespace __hidden_font_atlas_cook_metadata{
 
 
 using Core::Metascript::Value;
-static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
-static constexpr AStringView s_FontField = "font";
 static constexpr AStringView s_BakePpemField = "bake_ppem";
 static constexpr AStringView s_SpreadPixelsField = "spread_pixels";
 static constexpr AStringView s_RasterModeField = "raster_mode";
@@ -96,20 +94,20 @@ static constexpr AStringView s_RasterModeOutline = "outline";
     if(!spreadPixelsResult)
         return false;
     payload.spreadPixels = *spreadPixelsResult;
-    auto ascenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, s_AscenderUnitsField, true);
+    auto ascenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_AscenderUnitsField, true);
     if(!ascenderUnitsResult)
         return false;
     payload.ascenderUnits = *ascenderUnitsResult;
-    auto descenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, s_DescenderUnitsField, true);
+    auto descenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_DescenderUnitsField, true);
     if(!descenderUnitsResult)
         return false;
     payload.descenderUnits = *descenderUnitsResult;
-    auto lineGapUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, s_LineGapUnitsField, true);
+    auto lineGapUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_LineGapUnitsField, true);
     if(!lineGapUnitsResult)
         return false;
     payload.lineGapUnits = *lineGapUnitsResult;
     AStringView rasterMode;
-    auto rasterModeResult = Core::Assets::ReadMetadataStringField(path, asset, s_DiagnosticPrefix, s_RasterModeField, true);
+    auto rasterModeResult = Core::Assets::ReadMetadataStringField(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_RasterModeField, true);
     if(!rasterModeResult)
         return false;
     rasterMode = rasterModeResult->text;
@@ -153,7 +151,7 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, c
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
-    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, __hidden_font_atlas_cook_metadata::s_DiagnosticPrefix);
+    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_FontAtlasMetaDiagnosticPrefix);
     if(!asset)
         return MakeUnexpected(asset.error());
     return ParseFontAtlasCookMetadataValue(virtualPath, nwbFilePath, **asset, arena, scratchArena);
@@ -162,12 +160,17 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, c
 Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_font_atlas_cook_metadata;
     if(
-        !virtualPath || !Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix)
-        || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { s_FontField, s_BakePpemField, s_SpreadPixelsField, s_RasterModeField, s_AscenderUnitsField, s_DescenderUnitsField, s_LineGapUnitsField, s_FontAtlasGlyphsField })
+        !virtualPath || !Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_FontAtlasMetaDiagnosticPrefix)
+        || !Core::Assets::ValidateMetadataAssetFields(
+            nwbFilePath,
+            asset,
+            s_FontAtlasMetaDiagnosticPrefix,
+            { s_FontAtlasMetaFontField, s_BakePpemField, s_SpreadPixelsField, s_RasterModeField, s_AscenderUnitsField, s_DescenderUnitsField, s_LineGapUnitsField, s_FontAtlasGlyphsField }
+        )
     )
         return MakeUnexpected(Failure{});
     FontAtlasCookEntry candidate(arena);
-    auto fontResult = Core::Assets::ReadMetadataAssetRefField<Font>(nwbFilePath, asset, s_DiagnosticPrefix, s_FontField, true);
+    auto fontResult = Core::Assets::ReadMetadataAssetRefField<Font>(nwbFilePath, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasMetaFontField, true);
     if(!fontResult)
         return MakeUnexpected(Failure{});
     candidate.payload.font = *fontResult;

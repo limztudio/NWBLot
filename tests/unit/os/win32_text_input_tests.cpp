@@ -409,20 +409,17 @@ TEST_F(Win32TextInputFixture, SceneFallbackCannotJoinSurrogatesAcrossSessionOwne
 
 TEST_F(Win32TextInputFixture, SceneFallbackFocusResetDiscardsPartialPair){
     ASSERT_TRUE(m_service->end(m_token));
-    Expected<u32> codePoint = MakeUnexpected(Failure{});
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xd83du)));
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 0xd83du));
     ASSERT_TRUE(m_service->setFocused(false));
     ASSERT_TRUE(ResetWin32FallbackCharInput(*m_service));
     ASSERT_TRUE(m_service->setFocused(true));
     ASSERT_TRUE(ResetWin32FallbackCharInput(*m_service));
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xde00u)));
-
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 0xde00u));
 }
 
 TEST_F(Win32TextInputFixture, SceneFallbackDecoderNeverConsumesActivePair){
     EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 0xd83du, 0), 0);
-    Expected<u32> codePoint = MakeUnexpected(Failure{});
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xde00u)));
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 0xde00u));
 
     EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 0xde00u, 0), 0);
     TextInputEvent event(m_arena.arena);
@@ -437,18 +434,18 @@ TEST_F(Win32TextInputFixture, SceneFallbackSurrogateStateIsPerServiceAndValidate
     const GlobalUniquePtr<ITextInputService> second = Move(*secondResult);
     ASSERT_NE(second.get(), nullptr);
     ASSERT_TRUE(second->setFocused(true));
-    Expected<u32> codePoint = MakeUnexpected(Failure{});
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xd83du)));
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*second, 0xde00u)));
-    ASSERT_TRUE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xde00u)));
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 0xd83du));
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*second, 0xde00u));
+    Expected<u32> codePoint = DecodeWin32FallbackCharInput(*m_service, 0xde00u);
+    ASSERT_TRUE(codePoint);
     EXPECT_EQ(*codePoint, 0x1f600u);
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0x110000u)));
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 0x110000u));
 
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0u)));
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xd83du)));
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 0u));
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 0xd83du));
     ASSERT_TRUE((codePoint = DecodeWin32FallbackCharInput(*m_service, 'B')));
     EXPECT_EQ(*codePoint, static_cast<u32>('B'));
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xde00u)));
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 0xde00u));
 }
 
 TEST_F(Win32TextInputFixture, SceneFallbackBridgeRejectsForeignServiceAndWrongThread){
@@ -456,18 +453,17 @@ TEST_F(Win32TextInputFixture, SceneFallbackBridgeRejectsForeignServiceAndWrongTh
     auto unsupportedResult = CreateTextInputService(m_arena.arena, nullptr);
     ASSERT_TRUE(unsupportedResult);
     const GlobalUniquePtr<ITextInputService> unsupported = Move(*unsupportedResult);
-    Expected<u32> codePoint = MakeUnexpected(Failure{});
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*unsupported, 'A')));
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*unsupported, 'A'));
 
     EXPECT_FALSE(ResetWin32FallbackCharInput(*unsupported));
     Thread worker([&](){
-        Expected<u32> workerCodePoint = MakeUnexpected(Failure{});
-        EXPECT_FALSE((workerCodePoint = DecodeWin32FallbackCharInput(*m_service, 'A')));
+        EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 'A'));
 
         EXPECT_FALSE(ResetWin32FallbackCharInput(*m_service));
     });
     worker.join();
-    ASSERT_TRUE((codePoint = DecodeWin32FallbackCharInput(*m_service, 'C')));
+    Expected<u32> codePoint = DecodeWin32FallbackCharInput(*m_service, 'C');
+    ASSERT_TRUE(codePoint);
     EXPECT_EQ(*codePoint, static_cast<u32>('C'));
 }
 
@@ -541,12 +537,10 @@ TEST_F(Win32TextInputFixture, KeyboardFocusMessagesCancelQueuedWorkWithoutActiva
 
 TEST_F(Win32TextInputFixture, InactiveKeyboardFocusMessagesResetSceneSurrogateState){
     ASSERT_TRUE(m_service->end(m_token));
-    Expected<u32> codePoint = MakeUnexpected(Failure{});
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xd83du)));
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 0xd83du));
     EXPECT_EQ(SendMessageW(m_window, WM_KILLFOCUS, 0u, 0), 0);
     EXPECT_EQ(SendMessageW(m_window, WM_SETFOCUS, 0u, 0), 0);
-    EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*m_service, 0xde00u)));
-
+    EXPECT_FALSE(DecodeWin32FallbackCharInput(*m_service, 0xde00u));
 }
 
 

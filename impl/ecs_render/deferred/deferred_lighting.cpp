@@ -83,7 +83,7 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(
         Span<const f32>(causticLightImportance, lightCount),
         rayTracingInput.refractiveInstanceCount,
-        Span<ECSRenderDetail::SceneLightGpuData>(uploads.lightData, lightCount)
+        Span<SceneLightGpuData>(uploads.lightData, lightCount)
     );
     uploads.lightingClassification.causticLightCount = causticLightCount;
     // Bitmask of shadow slots holding a light.
@@ -98,7 +98,7 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
     }
     uploads.lightingClassification.softShadowSlotMask = softShadowSlotMask;
 
-    const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
+    const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(SceneLightGpuData);
     NWB_ASSERT(lightByteCount <= sizeof(m_deferredState.m_lightGpuData));
     const b8 lightDataUnchanged = m_deferredState.m_lightGpuDataValid && m_deferredState.m_lightGpuDataCount == lightCount && NWB_MEMCMP(m_deferredState.m_lightGpuData, uploads.lightData, lightByteCount) == 0;
     // A zero-light scene has nothing to copy; still record the empty mirror.
@@ -111,13 +111,13 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
 }
 
 void RendererDeferredSystem::confirmSceneShadingBufferUploads(
-    const Span<const ECSRenderDetail::SceneLightGpuData> lights,
+    const Span<const SceneLightGpuData> lights,
     const b8 lightUploadRequired,
-    const ECSRenderDetail::SceneShadingGpuData& sceneShadingState,
+    const SceneShadingGpuData& sceneShadingState,
     const b8 sceneShadingUploadRequired
 )noexcept{
     const u32 lightCount = static_cast<u32>(lights.size());
-    const usize lightByteCount = lights.size() * sizeof(ECSRenderDetail::SceneLightGpuData);
+    const usize lightByteCount = lights.size() * sizeof(SceneLightGpuData);
     // Commit the empty mirror on accept so later diffs stay correct.
     if(lightUploadRequired || lightCount == 0u){
         if(lightByteCount != 0u){
@@ -143,7 +143,7 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
     if(!m_deferredState.m_sceneShadingBuffer){
         Core::BufferDesc sceneShadingBufferDesc;
         sceneShadingBufferDesc
-            .setByteSize(sizeof(ECSRenderDetail::SceneShadingGpuData))
+            .setByteSize(sizeof(SceneShadingGpuData))
             .setIsConstantBuffer(true)
             .setDebugName(ECSRenderDetail::s_SceneShadingBufferName)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
@@ -163,8 +163,8 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
     if(!m_deferredState.m_lightBuffer){
         Core::BufferDesc lightBufferDesc;
         lightBufferDesc
-            .setByteSize(static_cast<u64>(sizeof(ECSRenderDetail::SceneLightGpuData) * NWB_SCENE_MAX_LIGHTS))
-            .setStructStride(sizeof(ECSRenderDetail::SceneLightGpuData))
+            .setByteSize(static_cast<u64>(sizeof(SceneLightGpuData) * NWB_SCENE_MAX_LIGHTS))
+            .setStructStride(sizeof(SceneLightGpuData))
             .setDebugName(ECSRenderDetail::s_SceneLightBufferName)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)

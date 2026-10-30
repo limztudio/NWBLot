@@ -42,8 +42,8 @@ NWB_IMPL_BEGIN
         && drawItems.csg.empty()
         && inputs.geometryOwned
         && inputs.sampledTexturesCollected
-        && result.sharedPlan.capture(drawItems.regular, ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount)
-        && ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(result.sharedPlan.drawCount)
+        && result.sharedPlan.capture(drawItems.regular, s_SharedComputeEmulationMaximumDrawCount)
+        && IsSupportedSharedComputeEmulationDrawCount(result.sharedPlan.drawCount)
     ;
     NWB_ASSERT(!(result.regularCaptured && result.csgCaptured));
     NWB_ASSERT(!result.sharedCaptured || (!result.regularCaptured && !result.csgCaptured));

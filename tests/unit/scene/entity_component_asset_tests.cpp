@@ -9,11 +9,9 @@
 #include <impl/assets_scene/component_assets.adhd.h>
 
 #include <core/alloc/general.h>
-#include <core/assets/registry.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/ecs_test_world.h>
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -83,7 +81,7 @@ TEST(SceneSubsystemAssets, EntityAndComponentAssetsDecodeAndInstantiate){
     source.setBinary(Name("project/entities/hero"), MakeEntityBinary(arena, heroComponents));
 
     SceneAsset::SubsystemRefVector sceneSubsystems(arena);
-    sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/renderer"));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_RendererSubsystemPath));
     SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
     SceneAsset::EntityRefVector sceneEntities(arena);
     sceneEntities.push_back(SceneAsset::EntityRef("project/entities/hero"));

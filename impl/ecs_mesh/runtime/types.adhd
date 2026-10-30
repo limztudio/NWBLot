@@ -2,17 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum<u8> RuntimeMeshDirtyFlag{
-    flag None = 0u,
-    flag TopologyDirty,
-    flag AttributesDirty,
-    flag SkinningInputDirty,
-    flag GpuUploadDirty,
-    flag MeshletBoundsDirty,
-    flag All = TopologyDirty | AttributesDirty | SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty
+flag<u8> RuntimeMeshDirtyFlag{
+    None = 0u,
+    SkinningInputDirty,
+    GpuUploadDirty,
+    MeshletBoundsDirty,
+    All = SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty
 }
-type RuntimeMeshDirtyFlags = u8;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,14 +34,14 @@ class RuntimeMeshLocalBounds{
 
 
 enum<u8> RenderableMeshResolution{
-    enum Absent,
-    enum Unavailable
+    Absent,
+    Unavailable
 }
 
 enum<u8> BufferSetupFailure{
-    enum EmptyPayload,
-    enum ByteSizeOverflow,
-    enum CreateFailed
+    EmptyPayload,
+    ByteSizeOverflow,
+    CreateFailed
 }
 
 // ByteAddress loads whole words; zero-fill tails so terminal u8 decodes stay in range.

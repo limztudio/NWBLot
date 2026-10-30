@@ -32,7 +32,7 @@ UiEditClipboardController::~UiEditClipboardController()noexcept{
 }
 
 
-UiEditClipboardResult UiEditClipboardController::request(const UiTextEditOwner& owner, const Ui::EditModel& model, const Ui::EditClipboardAction::Enum action, const Core::ClipboardChannel::Enum channel, const b8 readOnly){
+UiEditClipboardResult UiEditClipboardController::request(const Ui::UiTextEditOwner& owner, const Ui::EditModel& model, const Ui::EditClipboardAction::Enum action, const Core::ClipboardChannel::Enum channel, const b8 readOnly){
     if(!m_service.isOwnerThread())
         return { UiEditClipboardStatus::WrongThread };
     if(!owner.valid())
@@ -67,7 +67,7 @@ UiEditClipboardResult UiEditClipboardController::request(const UiTextEditOwner& 
     return { UiEditClipboardStatus::Pending };
 }
 
-UiEditClipboardResult UiEditClipboardController::drain(const UiTextEditOwner& owner, Ui::EditModel& model, const b8 readOnly){
+UiEditClipboardResult UiEditClipboardController::drain(const Ui::UiTextEditOwner& owner, Ui::EditModel& model, const b8 readOnly){
     if(!m_service.isOwnerThread())
         return { UiEditClipboardStatus::WrongThread };
     if(!m_token.valid())

@@ -4,8 +4,6 @@
 
 #include "preprocessor.h"
 
-#include <global/text_utils.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,6 +21,13 @@ namespace __hidden_metascript_preprocessor{
 
 
 constexpr u32 s_MaxIncludeDepth = 64u;
+
+[[nodiscard]] constexpr MStringView ExtractLeadingIdentifier(const MStringView text)noexcept{
+    usize nameEnd = 0u;
+    while(nameEnd < text.size() && IsAsciiIdentifierChar(text[nameEnd]))
+        ++nameEnd;
+    return text.substr(0u, nameEnd);
+}
 
 [[nodiscard]] constexpr MStringView StripLineComment(MStringView line)noexcept{
     b8 inString = false;
@@ -440,32 +445,7 @@ b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line
     const MStringView rest = TrimView(cleanLine.substr(cmdEnd));
     const b8 parentActive = condStack.empty() || condStack.back().currentActive;
 
-    if(cmd == "ifdef" || cmd == "ifndef"){
-        ConditionalFrame frame;
-        frame.line = line;
-        frame.parentActive = parentActive;
-        if(!parentActive){
-            frame.branchTaken = true;
-            frame.currentActive = false;
-            condStack.push_back(frame);
-            return true;
-        }
-        if(rest.empty()){
-            m_errors.push_back(ParseError{line, 1u, MString("expected macro name after #ifdef/#ifndef", m_arena)});
-            return false;
-        }
-        usize nameEnd = 0u;
-        while(nameEnd < rest.size() && IsAsciiIdentifierChar(rest[nameEnd]))
-            ++nameEnd;
-        const MStringView macroName = rest.substr(0u, nameEnd);
-        const b8 defined = isMacroDefined(macroName);
-        frame.currentActive = (cmd == "ifdef") ? defined : !defined;
-        frame.branchTaken = frame.currentActive;
-        condStack.push_back(frame);
-        return true;
-    }
-
-    if(cmd == "if"){
+    if(cmd == "ifdef" || cmd == "ifndef" || cmd == "if"){
         ConditionalFrame frame;
         frame.line = line;
         frame.parentActive = parentActive;
@@ -476,8 +456,19 @@ b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line
             return true;
         }
         b8 condResult = false;
-        if(!evaluateCondition(rest, line, condResult))
-            return false;
+        if(cmd == "if"){
+            if(!evaluateCondition(rest, line, condResult))
+                return false;
+        }
+        else{
+            if(rest.empty()){
+                m_errors.push_back(ParseError{line, 1u, MString("expected macro name after #ifdef/#ifndef", m_arena)});
+                return false;
+            }
+            const MStringView macroName = ExtractLeadingIdentifier(rest);
+            const b8 defined = isMacroDefined(macroName);
+            condResult = (cmd == "ifdef") ? defined : !defined;
+        }
         frame.currentActive = condResult;
         frame.branchTaken = condResult;
         condStack.push_back(frame);
@@ -612,11 +603,8 @@ b8 Preprocessor::handleDefine(const MStringView rest, const u32 line){
         return false;
     }
 
-    usize nameEnd = 0u;
-    while(nameEnd < rest.size() && IsAsciiIdentifierChar(rest[nameEnd]))
-        ++nameEnd;
-
-    const MStringView name = rest.substr(0u, nameEnd);
+    const MStringView name = ExtractLeadingIdentifier(rest);
+    const usize nameEnd = name.size();
     PreprocessorMacro macro(m_arena);
     macro.name.assign(name.data(), name.size());
 
@@ -670,10 +658,7 @@ b8 Preprocessor::handleUndef(const MStringView rest, const u32 line){
         m_errors.push_back(ParseError{line, 1u, MString("expected macro name after #undef", m_arena)});
         return false;
     }
-    usize nameEnd = 0u;
-    while(nameEnd < rest.size() && IsAsciiIdentifierChar(rest[nameEnd]))
-        ++nameEnd;
-    undefineMacro(rest.substr(0u, nameEnd));
+    undefineMacro(__hidden_metascript_preprocessor::ExtractLeadingIdentifier(rest));
     return true;
 }
 

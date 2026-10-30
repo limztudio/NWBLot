@@ -188,15 +188,21 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         return false;
     };
 
-    b8 emittedEarlyConst = false;
-    for(const Stmt* c : unit.globalConstants){
-        if(!c || c->isImported || !c->varType || constUsesLocalTypeAlias(*c) || constUsesLocalClass(*c))
-            continue;
-        emittedEarlyConst = true;
-        emitGlobalConstDecl(out, *c);
-    }
-    if(emittedEarlyConst)
-        out.append("\r\n\r\n");
+    const auto emitMatchingGlobalConsts = [&](const auto& pred){
+        b8 emittedAny = false;
+        for(const Stmt* c : unit.globalConstants){
+            if(!c || c->isImported || !c->varType || !pred(*c))
+                continue;
+            emittedAny = true;
+            emitGlobalConstDecl(out, *c);
+        }
+        if(emittedAny)
+            out.append("\r\n\r\n");
+    };
+
+    emitMatchingGlobalConsts([&](const Stmt& c)noexcept{
+        return !constUsesLocalTypeAlias(c) && !constUsesLocalClass(c);
+    });
 
     MVector<const TypeAliasDecl*> localAliases(m_arena);
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
@@ -212,15 +218,9 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
     }
 
-    b8 emittedMidConst = false;
-    for(const Stmt* c : unit.globalConstants){
-        if(!c || c->isImported || !c->varType || !constUsesLocalTypeAlias(*c) || constUsesLocalClass(*c))
-            continue;
-        emittedMidConst = true;
-        emitGlobalConstDecl(out, *c);
-    }
-    if(emittedMidConst)
-        out.append("\r\n\r\n");
+    emitMatchingGlobalConsts([&](const Stmt& c)noexcept{
+        return constUsesLocalTypeAlias(c) && !constUsesLocalClass(c);
+    });
 
     MVector<const InterfaceDecl*> localInterfaces(m_arena);
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
@@ -233,6 +233,14 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         for(const InterfaceDecl* ifaceDecl : sortedInterfaces){
             if(ifaceDecl)
                 emitInterfaceDecl(out, *ifaceDecl);
+        }
+    }
+
+    const b8 emitFreeFnPrototypesEarly = !unit.classes.empty() || unit.freeFunctions.size() > 1u;
+    if(emitFreeFnPrototypesEarly){
+        for(const MethodDecl* fn : unit.freeFunctions){
+            if(fn && !fn->isImported)
+                m_sourceEmitter.emitOutOfClassCallable(out, nullptr, *fn, false, false);
         }
     }
 
@@ -318,19 +326,17 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
     }
 
-    b8 emittedClassConst = false;
-    for(const Stmt* c : unit.globalConstants){
-        if(!c || c->isImported || !c->varType || !constUsesLocalClass(*c))
-            continue;
-        emittedClassConst = true;
-        emitGlobalConstDecl(out, *c);
-    }
-    if(emittedClassConst)
-        out.append("\r\n\r\n");
+    emitMatchingGlobalConsts([&](const Stmt& c)noexcept{
+        return constUsesLocalClass(c);
+    });
 
     for(const MethodDecl* fn : unit.freeFunctions){
-        if(fn && !fn->isImported)
-            emitFreeFunctionDecl(out, *fn);
+        if(!fn || fn->isImported)
+            continue;
+        const b8 emitInlineBody = (fn->isInline || !fn->templateParams.empty()) && fn->hasBody;
+        if(emitFreeFnPrototypesEarly && !emitInlineBody)
+            continue;
+        m_sourceEmitter.emitOutOfClassCallable(out, nullptr, *fn, emitInlineBody, true);
     }
 
     if(!namespacePath.empty()){

@@ -21,6 +21,19 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ECSRenderDetail{
+
+
+// Generated geometry stores compact vertices and indices in one allocation; non-indexed draws use only its vertex region.
+inline constexpr Core::ResourceStates::Mask s_GeneratedGeometryRasterState = s_ObjectGeometryRasterState;
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct MaterialPassMeshResourceSnapshot{
     RuntimeMeshBuffers sourceBuffers;
     Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};

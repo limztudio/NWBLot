@@ -99,10 +99,8 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
         if(stmt.expr)
             emitExpr(out, *stmt.expr);
         out.append(").size(), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
-        if(stmt.usesScratchArena){
-            emitIndent(out, indent + 1u);
-            out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));\r\n");
-        }
+        if(stmt.usesScratchArena)
+            emitScratchArenaPrologue(out, indent + 1u, "parallel");
         emitIndent(out, indent + 1u);
         if(stmt.rangeMode == ParamPassingMode::In)
             out.append("const ");
@@ -119,7 +117,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
 
         const SimdVarBinding* loopBinding = findSimdBinding(false, stmt.name);
         if(loopBinding && loopBinding->isLoopElement)
-            emitSimdLoopElementLoad(out, *loopBinding, indent + 1u);
+            emitSimdBindingInitialDecl(out, *loopBinding, true, false, indent + 1u);
 
         emitStatementList(out, stmt.statements, indent + 1u);
 
@@ -171,10 +169,8 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             out.append("1u");
         }
         out.append(", [&](const usize __adhd_idx)noexcept{\r\n");
-        if(stmt.usesScratchArena){
-            emitIndent(out, indent + 1u);
-            out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));\r\n");
-        }
+        if(stmt.usesScratchArena)
+            emitScratchArenaPrologue(out, indent + 1u, "parallel");
         if(stmt.initStmt && stmt.initStmt->varType){
             emitIndent(out, indent + 1u);
             out.append("const ");
@@ -216,10 +212,8 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
         out.append("const auto __adhd_submit_");
         appendBlockSuffix();
         out.append(" = __adhd_task_scope.submit([&]()noexcept{\r\n");
-        if(stmt.usesScratchArena){
-            emitIndent(out, indent + 1u);
-            out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));\r\n");
-        }
+        if(stmt.usesScratchArena)
+            emitScratchArenaPrologue(out, indent + 1u, "parallel");
         emitStatementList(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
         out.append("}, ");

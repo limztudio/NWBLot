@@ -302,6 +302,30 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, MethodDecl& method, 
 b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors){
     b8 ok = true;
 
+    auto checkLoopOrParallelBody = [&](const b8 isPar) -> b8{
+        const u32 savedLoop = m_loopDepth;
+        const u32 savedSwitch = m_switchDepth;
+        const b8 savedParScratch = m_activeParallelBlockUsesScratch;
+        if(isPar){
+            m_loopDepth = 0u;
+            m_switchDepth = 0u;
+            m_activeParallelBlockUsesScratch = false;
+            ++m_parallelDepth;
+        }
+        else{
+            ++m_loopDepth;
+        }
+        const b8 bodyOk = checkStatementList(ownerClass, method, stmt.statements, scope, errors);
+        if(isPar){
+            --m_parallelDepth;
+            stmt.usesScratchArena = m_activeParallelBlockUsesScratch;
+            m_activeParallelBlockUsesScratch = savedParScratch;
+        }
+        m_loopDepth = savedLoop;
+        m_switchDepth = savedSwitch;
+        return bodyOk;
+    };
+
     switch(stmt.kind){
     case StmtKind::Block:{
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
@@ -310,20 +334,8 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
     }
     case StmtKind::ParallelBlock:{
         method.usesTaskScope = true;
-        const u32 savedLoop = m_loopDepth;
-        const u32 savedSwitch = m_switchDepth;
-        const b8 savedParScratch = m_activeParallelBlockUsesScratch;
-        m_loopDepth = 0u;
-        m_switchDepth = 0u;
-        m_activeParallelBlockUsesScratch = false;
-        ++m_parallelDepth;
-        if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
+        if(!checkLoopOrParallelBody(true))
             ok = false;
-        --m_parallelDepth;
-        stmt.usesScratchArena = m_activeParallelBlockUsesScratch;
-        m_activeParallelBlockUsesScratch = savedParScratch;
-        m_loopDepth = savedLoop;
-        m_switchDepth = savedSwitch;
         break;
     }
     case StmtKind::VarDecl:{
@@ -436,9 +448,9 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                         if(sc.matchExpr->kind == ExprKind::IntegerLiteral || sc.matchExpr->kind == ExprKind::BoolLiteral || sc.matchExpr->kind == ExprKind::StringLiteral || sc.matchExpr->kind == ExprKind::Identifier){
                             isDup = (prevSc.matchExpr->text == sc.matchExpr->text);
                         }
-                        else if(sc.matchExpr->kind == ExprKind::ScopeAccess && !prevSc.matchExpr->scopeChain.empty() && !sc.matchExpr->scopeChain.empty()){
+                        else if(sc.matchExpr->kind == ExprKind::ScopeAccess && prevSc.matchExpr->scopeChain.size() == 2u && sc.matchExpr->scopeChain.size() == 2u){
                             isDup = (prevSc.matchExpr->scopeChain[0] == sc.matchExpr->scopeChain[0]
-                                && prevSc.matchExpr->scopeChain.back() == sc.matchExpr->scopeChain.back());
+                                && prevSc.matchExpr->scopeChain[1] == sc.matchExpr->scopeChain[1]);
                         }
                     }
                     if(isDup){
@@ -509,27 +521,8 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         loopVar.isConst = (stmt.rangeMode == ParamPassingMode::In);
         loopVar.isParam = true;
         scope.push_back(loopVar);
-        const u32 savedLoop = m_loopDepth;
-        const u32 savedSwitch = m_switchDepth;
-        const b8 savedParScratch = m_activeParallelBlockUsesScratch;
-        if(isPar){
-            m_loopDepth = 0u;
-            m_switchDepth = 0u;
-            m_activeParallelBlockUsesScratch = false;
-            ++m_parallelDepth;
-        }
-        else{
-            ++m_loopDepth;
-        }
-        if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
+        if(!checkLoopOrParallelBody(isPar))
             ok = false;
-        if(isPar){
-            --m_parallelDepth;
-            stmt.usesScratchArena = m_activeParallelBlockUsesScratch;
-            m_activeParallelBlockUsesScratch = savedParScratch;
-        }
-        m_loopDepth = savedLoop;
-        m_switchDepth = savedSwitch;
         while(scope.size() > saved)
             scope.pop_back();
         break;
@@ -560,29 +553,12 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             ok = false;
         if(stmt.stepExpr && !checkExpr(ownerClass, method, *stmt.stepExpr, scope, false, errors))
             ok = false;
-        const u32 savedLoop = m_loopDepth;
-        const u32 savedSwitch = m_switchDepth;
-        const b8 savedParScratch = m_activeParallelBlockUsesScratch;
         if(isPar){
             for(usize i = saved; i < scope.size(); ++i)
                 scope[i].isConst = true;
-            m_loopDepth = 0u;
-            m_switchDepth = 0u;
-            m_activeParallelBlockUsesScratch = false;
-            ++m_parallelDepth;
         }
-        else{
-            ++m_loopDepth;
-        }
-        if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
+        if(!checkLoopOrParallelBody(isPar))
             ok = false;
-        if(isPar){
-            --m_parallelDepth;
-            stmt.usesScratchArena = m_activeParallelBlockUsesScratch;
-            m_activeParallelBlockUsesScratch = savedParScratch;
-        }
-        m_loopDepth = savedLoop;
-        m_switchDepth = savedSwitch;
         while(scope.size() > saved)
             scope.pop_back();
         break;

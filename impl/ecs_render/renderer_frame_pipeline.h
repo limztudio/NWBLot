@@ -352,7 +352,7 @@ private:
     void declareDeferredSurfelCountReadbackTask(const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources);
     void buildDeferredLightingTaskGraph(
         Core::Alloc::ScratchArena& scratchArena,
-        const ECSRenderDetail::RendererFrameGraphFeatures& features,
+        const RendererFrameGraphFeatures& features,
         const CsgFrameState& csgFrameState,
         b8 clearAvboitTargets,
         b8 hasTransparentRenderers,
@@ -458,7 +458,7 @@ private:
     // Small shared-output regular paths keep dispatch/raster alternation in the same packet.
     // Keep every phase ID so validation can prove the strict D(A) -> R(A) -> ... order, not just endpoint coalescing.
     // The active prefix holds four, six, eight, or ten phases for two through five draws.
-    Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount] = {};
+    Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[s_SharedComputeEmulationMaximumPhaseCount] = {};
     usize m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     // Receiver-surface CSG has its own readiness gate but needs the same packet-local output handoff.
     Core::GpuTaskId m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;

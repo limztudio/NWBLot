@@ -468,7 +468,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
 
         const SimdVarBinding* loopBinding = findSimdBinding(false, stmt.name);
         if(loopBinding && loopBinding->isLoopElement)
-            emitSimdLoopElementLoad(out, *loopBinding, indent + 1u);
+            emitSimdBindingInitialDecl(out, *loopBinding, true, false, indent + 1u);
 
         const SimdVarBinding* prevSimdLoopBinding = m_activeSimdLoopBinding;
         const u32 prevInnerBreakDepth = m_activeSimdLoopInnerBreakDepth;

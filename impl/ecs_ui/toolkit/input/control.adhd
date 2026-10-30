@@ -2,12 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../id.adhd"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // The host supplies value lifetimes; the router retains no model or data-source address.
 class ControlToken{
     public b8 operator==(in ControlToken rhs)const{
@@ -32,17 +26,17 @@ class ControlToken{
 }
 
 enum<u8> ControlActionKind{
-    enum Wheel,
-    enum Up,
-    enum Down,
-    enum PageUp,
-    enum PageDown,
-    enum Home,
-    enum End,
-    enum Submit,
-    enum Activate,
-    enum Left,
-    enum Right,
+    Wheel,
+    Up,
+    Down,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    Submit,
+    Activate,
+    Left,
+    Right,
 }
 
 

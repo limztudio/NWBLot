@@ -50,26 +50,26 @@ class WidgetRoot{
 }
 
 enum<u8> WidgetKind{
-    enum Panel,
-    enum Container,
-    enum Label,
-    enum Button,
-    enum Checkbox,
-    enum Window,
-    enum Separator,
-    enum EditBox,
-    enum Popup,
-    enum Selectable,
-    enum VirtualList,
-    enum ComboBox,
-    enum SearchComboBox,
-    enum Tooltip,
-    enum ContextMenu,
-    enum TextArea,
-    enum RadioGroup,
-    enum Slider,
-    enum Progress,
-    enum Image,
+    Panel,
+    Container,
+    Label,
+    Button,
+    Checkbox,
+    Window,
+    Separator,
+    EditBox,
+    Popup,
+    Selectable,
+    VirtualList,
+    ComboBox,
+    SearchComboBox,
+    Tooltip,
+    ContextMenu,
+    TextArea,
+    RadioGroup,
+    Slider,
+    Progress,
+    Image,
 }
 
 class WidgetState{
@@ -78,7 +78,7 @@ class WidgetState{
         this.root = WidgetRoot();
         this.declarationGeneration = 0u;
         this.lastSeenFrame = 0u;
-        this.kind = WidgetKind::Enum::Panel;
+        this.kind = WidgetKind::Panel;
     }
 
     public WidgetState(in WidgetId id, in WidgetRoot root, in u64 declarationGeneration, in u64 lastSeenFrame, in WidgetKind kind){

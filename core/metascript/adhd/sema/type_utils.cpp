@@ -49,8 +49,8 @@ inline constexpr BuiltinSimdVectorInfo s_BuiltinSimdVectorTypes[] = {
 };
 
 inline constexpr BuiltinSimdMatrixInfo s_BuiltinSimdMatrixTypes[] = {
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
-    BuiltinSimdMatrixInfo{ adhdName, cppExportName, elemScalarType, regCppType, loadCppFunc, storeCppFunc, rows, cols, elemCount, byteSize, byteAlign, isDoubleReg },
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    BuiltinSimdMatrixInfo{ adhdName, cppExportName, elemScalarType, regCppType, loadCppFunc, storeCppFunc, elemCount, byteSize, byteAlign, isDoubleReg },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
 };
@@ -127,7 +127,7 @@ const BuiltinSimdMatrixInfo* FindBuiltinSimdMatrixType(const MStringView name)no
 }
 
 b8 FindBuiltinFixedLayout(const MStringView name, usize& outSize, usize& outAlign)noexcept{
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
     if(name == adhdName){ outSize = byteSize; outAlign = byteAlign; return true; }
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SCALAR_TYPE
@@ -192,14 +192,6 @@ MStringView FindBuiltinGlobalConstantType(const MStringView name)noexcept{
 MStringView FindBuiltinGlobalConstantCppName(const MStringView name)noexcept{
     if(const BuiltinGlobalConstantInfo* info = FindBuiltinGlobalConstant(name))
         return info->cppExportName;
-    return {};
-}
-
-MStringView FindScalarDefaultLiteral(const MStringView name)noexcept{
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
-    if(name == adhdName) return defaultLiteral;
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SCALAR_TYPE
     return {};
 }
 
@@ -334,9 +326,7 @@ b8 AreTemplateArgListsEqual(const Span<const TypeArg> a, const Span<const TypeAr
                 return false;
         }
         else{
-            const MStringView lhsName = a[i].type ? a[i].type->name : a[i].constantText;
-            const MStringView rhsName = b[i].type ? b[i].type->name : b[i].constantText;
-            if(!AreConstantTemplateArgsEquivalent(lhsName, rhsName, symbols))
+            if(!AreConstantTemplateArgsEquivalent(a[i].constantOrTypeName(), b[i].constantOrTypeName(), symbols))
                 return false;
         }
     }
@@ -418,8 +408,7 @@ b8 IsConcreteTemplateArgList(const Span<const TemplateParamDecl> params, const S
         return false;
     for(usize i = 0u; i < params.size(); ++i){
         if(params[i].constValueType){
-            const MStringView ctext = args[i].type ? args[i].type->name : args[i].constantText;
-            if(!IsConcreteConstTemplateArgText(ctext, symbols))
+            if(!IsConcreteConstTemplateArgText(args[i].constantOrTypeName(), symbols))
                 return false;
         }
         else{
@@ -499,6 +488,28 @@ b8 IsReflectedMapContainerType(const MStringView baseName)noexcept{
     return false;
 }
 
+const TypeRef* UnwrapOptionalFieldType(const TypeRef* const fieldType, const SymbolTable& symbols, b8& outIsOptional, MStringView& outBaseTypeName)noexcept{
+    outIsOptional = false;
+    outBaseTypeName = {};
+    if(!fieldType)
+        return nullptr;
+    const TypeRef* resolvedFieldType = symbols.unwrapTypeAlias(fieldType);
+    const MStringView outerName = resolvedFieldType ? resolvedFieldType->name : fieldType->name;
+    outIsOptional = (
+        outerName == "Optional"
+        && resolvedFieldType
+        && !resolvedFieldType->templateArgs.empty()
+        && resolvedFieldType->templateArgs[0].type
+    );
+    const TypeRef* effectiveTypeRef = outIsOptional
+        ? symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[0].type)
+        : resolvedFieldType;
+    outBaseTypeName = effectiveTypeRef
+        ? symbols.resolveBaseTypeName(effectiveTypeRef->name)
+        : (outIsOptional ? symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name) : outerName);
+    return effectiveTypeRef;
+}
+
 b8 IsAssetDependencyType(const TypeRef* const type, const SymbolTable& symbols, const u32 depth)noexcept{
     if(!type || depth > 8u)
         return false;
@@ -522,10 +533,6 @@ b8 IsAssetDependencyType(const TypeRef* const type, const SymbolTable& symbols, 
     if(IsReflectedMapContainerType(tname) && resolved->templateArgs.size() >= 2u && resolved->templateArgs[1].type)
         return IsAssetDependencyType(resolved->templateArgs[1].type, symbols, depth + 1u);
     return false;
-}
-
-b8 IsAssetDependencyField(const FieldDecl& field, const SymbolTable& symbols, const u32 depth)noexcept{
-    return IsAssetDependencyType(field.type, symbols, depth);
 }
 
 

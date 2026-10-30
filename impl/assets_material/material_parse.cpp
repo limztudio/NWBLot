@@ -51,7 +51,14 @@ static Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena, CookVector<MaterialCookEntry>& materialEntries){
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries){
+    using namespace MaterialCookDetail;
     auto materialBindLookupResult = BuildMaterialBindInterfaceLookup(materialBindEntries, scratchArena);
     if(!materialBindLookupResult)
         return false;
@@ -107,12 +114,6 @@ b8 ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBi
 
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

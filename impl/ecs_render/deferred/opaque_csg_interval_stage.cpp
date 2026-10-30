@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
-#include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
@@ -203,7 +202,11 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     constexpr usize s_MaterialBufferResourceUseCount = 2u;
     constexpr usize s_CsgRemovedIntervalResourceUseCount = 4u;
     constexpr usize s_GbufferColorResourceUseCount = 4u;
-    csgIntervalSampleResourceUses.reserve(1u + (inputs.hasOpaqueDrawItems ? s_MaterialBufferResourceUseCount : 0u) + (inputs.hasCsgFrameGpuWork ? s_OpaqueCsgFrameGpuResourceUseCount : 0u) + s_CsgRemovedIntervalResourceUseCount + s_GbufferColorResourceUseCount);
+    csgIntervalSampleResourceUses.reserve(
+        1u + (inputs.hasOpaqueDrawItems ? s_MaterialBufferResourceUseCount : 0u)
+        + (inputs.hasCsgFrameGpuWork ? s_OpaqueCsgFrameGpuResourceUseCount : 0u)
+        + s_CsgRemovedIntervalResourceUseCount + s_GbufferColorResourceUseCount
+    );
     csgIntervalSampleResourceUses.push_back(ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer));
     if(inputs.hasOpaqueDrawItems){
         csgIntervalSampleResourceUses.push_back(ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange));

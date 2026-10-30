@@ -18,11 +18,11 @@ class PopupStyle{
 }
 
 enum<u8> PopupPlacementSide{
-    enum Below,
-    enum Above,
-    enum Right,
-    enum Left,
-    enum Center,
+    Below,
+    Above,
+    Right,
+    Left,
+    Center,
 }
 
 const Point s_PopupDefaultSize = Point(220.0f, 160.0f);
@@ -30,7 +30,7 @@ const Point s_PopupDefaultSize = Point(220.0f, 160.0f);
 class PopupOptions{
     public Rect anchor;
     public Point size = s_PopupDefaultSize;
-    public PopupPlacementSide side = PopupPlacementSide::Enum::Below;
+    public PopupPlacementSide side = PopupPlacementSide::Below;
     public f32 gap = s_StyleSpacingSmall;
     public b8 modal = false;
     public b8 dismissOutside = true;
@@ -41,7 +41,7 @@ class PopupOptions{
 class PopupPlacement{
     public Rect bounds;
     public Rect viewport;
-    public PopupPlacementSide side = PopupPlacementSide::Enum::Below;
+    public PopupPlacementSide side = PopupPlacementSide::Below;
 }
 
 class ContextMenuOptions{

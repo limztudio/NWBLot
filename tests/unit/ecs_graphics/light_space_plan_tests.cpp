@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_render/shadow/light_space_plan.h>
+#include <impl/ecs_scene/components.adhd.h>
+#include <impl/assets/graphics/scene/binding_slots.h>
 
 #include <global/limit.h>
 

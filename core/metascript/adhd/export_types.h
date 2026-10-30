@@ -3,7 +3,7 @@
 
 
 #ifndef NWB_ADHD_EXPORT_SCALAR_TYPE
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral)
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat)
 #define NWB_ADHD_EXPORT_SCALAR_TYPE_AUTO_UNDEF
 #endif
 
@@ -13,7 +13,7 @@
 #endif
 
 #ifndef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc)
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc)
 #define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE_AUTO_UNDEF
 #endif
 
@@ -41,19 +41,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ADHD_EXPORT_SCALAR_TYPE("b8",    1u, 1u, false, false, false, false, "false")
-NWB_ADHD_EXPORT_SCALAR_TYPE("i8",    1u, 1u, true,  true,  true,  false, "0")
-NWB_ADHD_EXPORT_SCALAR_TYPE("u8",    1u, 1u, true,  true,  false, false, "0")
-NWB_ADHD_EXPORT_SCALAR_TYPE("i16",   2u, 2u, true,  true,  true,  false, "0")
-NWB_ADHD_EXPORT_SCALAR_TYPE("u16",   2u, 2u, true,  true,  false, false, "0")
-NWB_ADHD_EXPORT_SCALAR_TYPE("i32",   4u, 4u, true,  true,  true,  false, "0")
-NWB_ADHD_EXPORT_SCALAR_TYPE("u32",   4u, 4u, true,  true,  false, false, "0")
-NWB_ADHD_EXPORT_SCALAR_TYPE("i64",   8u, 8u, true,  true,  true,  false, "0")
-NWB_ADHD_EXPORT_SCALAR_TYPE("u64",   8u, 8u, true,  true,  false, false, "0")
-NWB_ADHD_EXPORT_SCALAR_TYPE("isize", 8u, 8u, true,  false, true,  false, "0")
-NWB_ADHD_EXPORT_SCALAR_TYPE("usize", 8u, 8u, true,  false, false, false, "0")
-NWB_ADHD_EXPORT_SCALAR_TYPE("f32",   4u, 4u, false, false, true,  true,  "0.0f")
-NWB_ADHD_EXPORT_SCALAR_TYPE("f64",   8u, 8u, false, false, true,  true,  "0.0")
+NWB_ADHD_EXPORT_SCALAR_TYPE("b8",    1u, 1u, false, false, false, false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("i8",    1u, 1u, true,  true,  true,  false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("u8",    1u, 1u, true,  true,  false, false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("i16",   2u, 2u, true,  true,  true,  false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("u16",   2u, 2u, true,  true,  false, false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("i32",   4u, 4u, true,  true,  true,  false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("u32",   4u, 4u, true,  true,  false, false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("i64",   8u, 8u, true,  true,  true,  false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("u64",   8u, 8u, true,  true,  false, false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("isize", 8u, 8u, true,  false, true,  false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("usize", 8u, 8u, true,  false, false, false)
+NWB_ADHD_EXPORT_SCALAR_TYPE("f32",   4u, 4u, false, false, true,  true)
+NWB_ADHD_EXPORT_SCALAR_TYPE("f64",   8u, 8u, false, false, true,  true)
 
 NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE("f32x4",     "Float4",      4u, 16u, 16u, "f32", "f32", true,  false, false, false, false, "::SIMDVectorSingle", "::LoadFloat",     "::StoreFloat")
 NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE("i32x4",     "Int4",        4u, 16u, 16u, "i32", "i32", false, false, true,  true,  false, "::SIMDVectorSingle", "::LoadInt",       "::StoreInt")
@@ -68,11 +68,11 @@ NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE("u64x4",     "UInt64x4",    4u, 32u, 32u, "u64"
 NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE("f64x3_i64", "Double3Int",  4u, 32u, 32u, "f64", "i64", false, true,  false, false, true,  "",                   "",                "")
 NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE("f64x3_u64", "Double3UInt", 4u, 32u, 32u, "f64", "u64", false, true,  false, false, true,  "",                   "",                "")
 
-NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f32x3x4", "Float34",  3u, 4u, 12u, 48u,  16u, "f32", false, "::SIMDMatrix",       "::LoadFloat",  "::StoreFloat")
-NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f32x4x4", "Float44",  4u, 4u, 16u, 64u,  16u, "f32", false, "::SIMDMatrix",       "::LoadFloat",  "::StoreFloat")
-NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f64x3x3", "Double33", 3u, 3u, 9u,  96u,  32u, "f64", true,  "::SIMDMatrixDouble", "::LoadDouble", "::StoreDouble")
-NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f64x3x4", "Double34", 3u, 4u, 12u, 96u,  32u, "f64", true,  "::SIMDMatrixDouble", "::LoadDouble", "::StoreDouble")
-NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f64x4x4", "Double44", 4u, 4u, 16u, 128u, 32u, "f64", true,  "::SIMDMatrixDouble", "::LoadDouble", "::StoreDouble")
+NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f32x3x4", "Float34",  12u, 48u,  16u, "f32", false, "::SIMDMatrix",       "::LoadFloat",  "::StoreFloat")
+NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f32x4x4", "Float44",  16u, 64u,  16u, "f32", false, "::SIMDMatrix",       "::LoadFloat",  "::StoreFloat")
+NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f64x3x3", "Double33", 9u,  96u,  32u, "f64", true,  "::SIMDMatrixDouble", "::LoadDouble", "::StoreDouble")
+NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f64x3x4", "Double34", 12u, 96u,  32u, "f64", true,  "::SIMDMatrixDouble", "::LoadDouble", "::StoreDouble")
+NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f64x4x4", "Double44", 16u, 128u, 32u, "f64", true,  "::SIMDMatrixDouble", "::LoadDouble", "::StoreDouble")
 
 NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("f16x2u", "Half2U",    2u, 4u,  4u, "u16")
 NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("f16x4u", "Half4U",    4u, 8u,  4u, "u16")

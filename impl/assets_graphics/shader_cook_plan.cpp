@@ -418,7 +418,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
                 { resolvedPaths.repoRoot, s_DependencyRepoRootAlias },
                 { resolvedPaths.cacheDirectory, s_DependencyGeneratedCacheRootAlias },
                 { materialBindIncludeRoot, MaterialBindNames::GeneratedIncludeCacheDirectoryText() },
-                { csgShapeIncludeRoot, AssetsCsgCook::s_GeneratedIncludeCacheDirectory }
+                { csgShapeIncludeRoot, s_GeneratedIncludeCacheDirectory }
             },
             scratchArena
         );

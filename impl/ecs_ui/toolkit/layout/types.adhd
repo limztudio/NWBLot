@@ -16,21 +16,21 @@ const u32 s_LayoutMaxNodes = 4096u;
 
 
 enum<u8> LayoutDirection{
-    enum Leaf,
-    enum Row,
-    enum Column,
-    enum Overlay,
+    Leaf,
+    Row,
+    Column,
+    Overlay,
 }
 
 enum<u8> LayoutSizePolicy{
-    enum Fixed,
-    enum Content,
-    enum Stretch,
+    Fixed,
+    Content,
+    Stretch,
 }
 
 class LayoutSize{
     public LayoutSize(){
-        this.policy = LayoutSizePolicy::Enum::Content;
+        this.policy = LayoutSizePolicy::Content;
         this.value = 0.0f;
     }
 
@@ -50,7 +50,7 @@ class LayoutSize{
 }
 
 class LayoutNodeDesc{
-    public LayoutDirection direction = LayoutDirection::Enum::Leaf;
+    public LayoutDirection direction = LayoutDirection::Leaf;
     public b8 clipChildren = true;
     public LayoutSize width;
     public LayoutSize height;

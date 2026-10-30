@@ -58,9 +58,6 @@ struct FrameGraphAvboitAccumulationUploadInputs{
     b8 intervalOutputsGraphOwned = false;
 };
 
-using FrameGraphAvboitAccumulationUploadResult = FrameGraphAvboitMaterialUploadResult;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -70,7 +67,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<FrameGraphAvboitAccumulationUploadResult> declare(
+    [[nodiscard]] Expected<FrameGraphAvboitMaterialUploadResult> declare(
         Core::Alloc::ScratchArena& scratchArena,
         const FrameGraphAvboitAccumulationUploadInputs& inputs,
         RendererTaskGraphDetail::AvboitAccumulationGraphTask::Payload& accumulationPayload,

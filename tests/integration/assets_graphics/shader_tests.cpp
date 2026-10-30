@@ -4,9 +4,6 @@
 
 #include "assets_graphics_fixture.h"
 
-#include <impl/assets_shader/binary_payload.h>
-#include <impl/assets_shader/source_dependencies.h>
-
 #include <gtest/gtest.h>
 
 
@@ -197,13 +194,11 @@ TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "default_variant_include.slangi", ""));
 
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
-    NWB::Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includeMetaPath, testArena, scratchArena, shaderCook));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'default_variant'")));
 
     EXPECT_TRUE(RemoveAllIfExists(root));
-#else
 #endif
 }
 
@@ -220,7 +215,6 @@ TEST(AssetsGraphics, ShaderMetadataRejectsRetiredGenericTypeAndStageField){
     const Path metadataPath = root / "shader.nwb";
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "[numthreads(1, 1, 1)] void main(){}\n"));
     Impl::ShaderCook shaderCook(testArena.arena);
-    Impl::ShaderCook::ShaderEntry entry(testArena.arena);
     constexpr AStringView s_ValidMetadata = "compute_shader asset;\nasset.entry_point = \"main\";\n";
     constexpr AStringView s_RetiredMetadata[] = {
         "shader asset;\nasset.stage = \"cs\";\nasset.entry_point = \"main\";\n",
@@ -231,17 +225,11 @@ TEST(AssetsGraphics, ShaderMetadataRejectsRetiredGenericTypeAndStageField){
     for(const AStringView metadata : s_RetiredMetadata){
         SCOPED_TRACE(metadata);
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_ValidMetadata));
-        auto metadataResult8 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook);
-        ASSERT_TRUE(metadataResult8);
-        if(metadataResult8)
-            entry = Move(*metadataResult8);
+        ASSERT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
         EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_ValidMetadata));
-        auto metadataResult7 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook);
-        EXPECT_TRUE(metadataResult7);
-        if(metadataResult7)
-            entry = Move(*metadataResult7);
+        EXPECT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
     }
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
@@ -278,7 +266,6 @@ TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalF
         { "asset.emit_mesh_compute_shadow = 1;\n", false },
     };
     Impl::ShaderCook shaderCook(testArena.arena);
-    Impl::ShaderCook::ShaderEntry entry(testArena.arena);
     for(const MetadataCase& testCase : s_Cases){
         SCOPED_TRACE(testCase.fields);
         Impl::ShaderCook::CookString metadata("compute_shader asset;\nasset.entry_point = \"main\";\n", testArena.arena);
@@ -293,10 +280,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalF
         EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
     }
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, "mesh_shader asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
-    auto metadataResult6 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook);
-    ASSERT_TRUE(metadataResult6);
-    if(metadataResult6)
-        entry = Move(*metadataResult6);
+    ASSERT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 

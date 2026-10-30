@@ -26,7 +26,7 @@ class SliderStyle{
 }
 
 class SliderOptions{
-    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public f32 height = s_StyleControlHeight;
     public b8 enabled = true;
     public f64 minimum = 0.0;
@@ -44,11 +44,23 @@ class SliderResult{
 
 class SliderSnapshot{
     public b8 operator==(in SliderSnapshot rhs)const{
-        return this.instanceGeneration == rhs.instanceGeneration && this.inputGeneration == rhs.inputGeneration && this.revision == rhs.revision && this.admissionGeneration == rhs.admissionGeneration && this.valueBits == rhs.valueBits && this.press == rhs.press && this.pressMoved == rhs.pressMoved;
+        return this.instanceGeneration == rhs.instanceGeneration
+            && this.inputGeneration == rhs.inputGeneration
+            && this.revision == rhs.revision
+            && this.admissionGeneration == rhs.admissionGeneration
+            && this.valueBits == rhs.valueBits
+            && this.press == rhs.press
+            && this.pressMoved == rhs.pressMoved;
     }
 
     public b8 operator!=(in SliderSnapshot rhs)const{
-        return this.instanceGeneration != rhs.instanceGeneration || this.inputGeneration != rhs.inputGeneration || this.revision != rhs.revision || this.admissionGeneration != rhs.admissionGeneration || this.valueBits != rhs.valueBits || this.press != rhs.press || this.pressMoved != rhs.pressMoved;
+        return this.instanceGeneration != rhs.instanceGeneration
+            || this.inputGeneration != rhs.inputGeneration
+            || this.revision != rhs.revision
+            || this.admissionGeneration != rhs.admissionGeneration
+            || this.valueBits != rhs.valueBits
+            || this.press != rhs.press
+            || this.pressMoved != rhs.pressMoved;
     }
 
     public u64 instanceGeneration = 0u;

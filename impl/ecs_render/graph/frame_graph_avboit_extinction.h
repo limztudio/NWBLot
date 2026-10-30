@@ -59,9 +59,6 @@ struct FrameGraphAvboitExtinctionUploadInputs{
     b8 hasTransparentRenderers = false;
 };
 
-using FrameGraphAvboitExtinctionUploadResult = FrameGraphAvboitMaterialUploadResult;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -71,7 +68,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<FrameGraphAvboitExtinctionUploadResult> declare(
+    [[nodiscard]] Expected<FrameGraphAvboitMaterialUploadResult> declare(
         Core::Alloc::ScratchArena& scratchArena,
         const FrameGraphAvboitExtinctionUploadInputs& inputs,
         RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& extinctionPayload,

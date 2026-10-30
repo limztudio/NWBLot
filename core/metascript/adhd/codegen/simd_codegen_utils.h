@@ -33,10 +33,8 @@ void AppendIntSimdLaneExtract(MString& out, MStringView varName, u32 lane, b8 is
 [[nodiscard]] MStringView MapBuiltinMathFunction(MStringView name)noexcept;
 [[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(MStringView callee, b8 isDouble)noexcept;
 void AppendSimdLaneCountIntrinsicPrefix(MString& out, b8 isDouble, u32 effLanes, MStringView suffix);
-[[nodiscard]] b8 IsSimdAssignmentOp(TokenType::Enum op)noexcept;
 [[nodiscard]] TokenType::Enum MapSimdAssignToBinaryOp(TokenType::Enum op)noexcept;
 [[nodiscard]] MStringView SimdBinaryScalarOpSymbol(TokenType::Enum binaryOp)noexcept;
-[[nodiscard]] MStringView SimdCompoundScalarOpSymbol(TokenType::Enum op)noexcept;
 [[nodiscard]] b8 IsSingleSwizzleLane(MStringView text, u32& outLane)noexcept;
 [[nodiscard]] u32 MapSwizzleCharToLane(char c)noexcept;
 [[nodiscard]] b8 IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB)noexcept;

@@ -4,9 +4,9 @@
 
 #include "material_system.h"
 
-#include <impl/ecs_render/avboit/avboit_private.h>
 #include <impl/ecs_render/material/material_shader_variants_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
+#include <impl/ecs_render/material/renderer_render_state_private.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/assets_graphics/csg/subsystem.adhd.h>
 #include <impl/assets_graphics/mesh/subsystem.adhd.h>

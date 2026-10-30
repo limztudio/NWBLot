@@ -70,21 +70,18 @@ namespace __hidden_skin_cook{
 
 using namespace Core::Metascript;
 
-static constexpr AStringView s_MeshField = "mesh";
-static constexpr AStringView s_SkeletonField = "skeleton";
 static constexpr AStringView s_InfluencesField = "influences";
 static constexpr AStringView s_InverseBindMatricesField = "inverse_bind_matrices";
 static constexpr AStringView s_JointsField = "joints";
 static constexpr AStringView s_WeightsField = "weights";
 static constexpr AStringView s_SkinMetaKind = "Skin";
-static constexpr AStringView s_SkinMetaDiagnosticPrefix = "Skin meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] b8 ValidateSkinAssetFields(const Path& nwbFilePath, const Value& asset){
-    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, { s_MeshField, s_SkeletonField, s_InfluencesField, s_InverseBindMatricesField });
+    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, { s_SkinMetaMeshField, s_SkinMetaSkeletonField, s_InfluencesField, s_InverseBindMatricesField });
 }
 
 [[nodiscard]] b8 ValidateSkinInfluenceFields(const Path& nwbFilePath, const Value& influence){
@@ -301,11 +298,11 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
         return MakeUnexpected(Failure{});
     if(!ValidateSkinAssetFields(nwbFilePath, asset))
         return MakeUnexpected(Failure{});
-    auto meshResult = Core::Assets::ReadMetadataAssetRefField<Mesh>(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_MeshField, true);
+    auto meshResult = Core::Assets::ReadMetadataAssetRefField<Mesh>(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaMeshField, true);
     if(!meshResult)
         return MakeUnexpected(Failure{});
     entry.mesh = *meshResult;
-    auto skeletonResult = Core::Assets::ReadMetadataAssetRefField<Skeleton>(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkeletonField, true);
+    auto skeletonResult = Core::Assets::ReadMetadataAssetRefField<Skeleton>(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaSkeletonField, true);
     if(!skeletonResult)
         return MakeUnexpected(Failure{});
     entry.skeleton = *skeletonResult;
@@ -329,7 +326,7 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, const AStri
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
-    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, __hidden_skin_cook::s_SkinMetaDiagnosticPrefix);
+    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_SkinMetaDiagnosticPrefix);
     if(!asset)
         return MakeUnexpected(asset.error());
     return ParseSkinCookMetadata(virtualPath, nwbFilePath, **asset, arena);

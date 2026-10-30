@@ -244,8 +244,6 @@ b8 LightComponentAsset::validatePayload()const{
 
     const Float4 color = component.color();
     const f32 intensity = component.intensity();
-    constexpr f32 s_ConeCosineMin = -1.0f;
-    constexpr f32 s_ConeCosineMax = 1.0f;
     if(
         component.type >= Scene::LightType::kCount
         || !IsFinite(color.x) || !IsFinite(color.y) || !IsFinite(color.z)
@@ -253,7 +251,7 @@ b8 LightComponentAsset::validatePayload()const{
         || !IsFinite(intensity) || intensity <= 0.0f
         || !IsFinite(component.range) || component.range <= 0.0f
         || !IsFinite(component.innerConeCos) || !IsFinite(component.outerConeCos)
-        || component.outerConeCos < s_ConeCosineMin || component.outerConeCos > component.innerConeCos || component.innerConeCos > s_ConeCosineMax
+        || component.outerConeCos < Scene::s_ConeCosineMin || component.outerConeCos > component.innerConeCos || component.innerConeCos > Scene::s_ConeCosineMax
         || !IsFinite(component.angularRadius) || component.angularRadius < 0.0f
         || !IsFinite(component.sourceRadius) || component.sourceRadius < 0.0f
     ){

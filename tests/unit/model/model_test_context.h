@@ -32,8 +32,7 @@ namespace ModelTests{
 
 struct EmptyAssetSource final : public Core::Assets::IAssetBinarySource{
 public:
-    virtual b8 readAssetBinary(const Name& virtualPath, Core::Assets::AssetBytes& outBinary)const noexcept override{
-        static_cast<void>(virtualPath);
+    virtual b8 readAssetBinary(const Name&, Core::Assets::AssetBytes& outBinary)const noexcept override{
         outBinary.clear();
         ++readCount;
         return false;

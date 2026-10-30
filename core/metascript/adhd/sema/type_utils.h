@@ -28,7 +28,7 @@ namespace GenericParamKind{
 
 namespace BuiltinMemberReturnRule{
     enum Enum : u8{
-        None,
+        None = 0u,
         Void,
         Usize,
         Bool,
@@ -117,8 +117,6 @@ struct BuiltinSimdMatrixInfo{
     MStringView regCppType;
     MStringView loadCppFunc;
     MStringView storeCppFunc;
-    u32 rows;
-    u32 cols;
     u32 elemCount;
     u32 byteSize;
     u32 byteAlign;
@@ -168,7 +166,6 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(MStringView name)noexcept;
 [[nodiscard]] MStringView FindBuiltinGlobalConstantType(MStringView name)noexcept;
 [[nodiscard]] MStringView FindBuiltinGlobalConstantCppName(MStringView name)noexcept;
-[[nodiscard]] MStringView FindScalarDefaultLiteral(MStringView name)noexcept;
 [[nodiscard]] b8 IsNwbMapKeyType(MStringView name)noexcept;
 
 [[nodiscard]] b8 IsNonThreadSafeContainer(MStringView typeName)noexcept;
@@ -193,8 +190,8 @@ struct BuiltinGlobalConstantInfo{
 
 [[nodiscard]] b8 IsReflectedLinearContainerType(MStringView baseName)noexcept;
 [[nodiscard]] b8 IsReflectedMapContainerType(MStringView baseName)noexcept;
+[[nodiscard]] const TypeRef* UnwrapOptionalFieldType(const TypeRef* fieldType, const SymbolTable& symbols, b8& outIsOptional, MStringView& outBaseTypeName)noexcept;
 [[nodiscard]] b8 IsAssetDependencyType(const TypeRef* type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
-[[nodiscard]] b8 IsAssetDependencyField(const FieldDecl& field, const SymbolTable& symbols, u32 depth = 0u)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

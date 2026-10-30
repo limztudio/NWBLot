@@ -67,7 +67,7 @@ class WidgetOptions{
 }
 
 class ContainerOptions{
-    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public LayoutSize height;
     public Insets padding;
     public f32 gap = s_StyleSpacingMedium;
@@ -75,8 +75,8 @@ class ContainerOptions{
 
 // Content dimensions use atlas reference density for named regions and logical texel extent for engine sources.
 class ImageOptions{
-    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Content, 0.0f);
-    public LayoutSize height = LayoutSize(LayoutSizePolicy::Enum::Content, 0.0f);
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Content, 0.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Content, 0.0f);
     public Color tint;
 }
 
@@ -109,7 +109,7 @@ const Point s_WindowDefaultMinimumSize = Point(160.0f, 80.0f);
 class WindowOptions{
     public Rect initialBounds = s_WindowDefaultBounds;
     public Point minimumSize = s_WindowDefaultMinimumSize;
-    public LayoutDirection direction = LayoutDirection::Enum::Column;
+    public LayoutDirection direction = LayoutDirection::Column;
     public b8 contentWidthFirstUse = false;
     public b8 contentHeightFirstUse = false;
     public b8 movable = true;
@@ -127,15 +127,15 @@ class WindowMetrics{
 }
 
 enum<u8> SeparatorDirection{
-    enum Horizontal,
-    enum Vertical,
+    Horizontal,
+    Vertical,
 }
 
 class SeparatorOptions{
-    public LayoutSize length = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize length = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     // Zero uses the skin's minimum thickness, or one logical unit when no minimum is specified.
     public f32 thickness = 0.0f;
-    public SeparatorDirection direction = SeparatorDirection::Enum::Horizontal;
+    public SeparatorDirection direction = SeparatorDirection::Horizontal;
 }
 
 

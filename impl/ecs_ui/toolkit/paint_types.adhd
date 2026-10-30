@@ -44,11 +44,11 @@ class DisplayMetrics{
 }
 
 enum<u8> PaintMaterial{
-    enum Solid,
-    enum Skin,
-    enum Glyph,
-    enum SdfGlyph,
-    enum Image,
+    Solid,
+    Skin,
+    Glyph,
+    SdfGlyph,
+    Image,
 }
 
 class DrawCommand{
@@ -61,7 +61,7 @@ class DrawCommand{
     // Base paint is layer zero; higher layers render later without changing owned index or image bindings.
     public u32 layer = 0u;
     public u32 textureImageIndex = 0xffffffffu;
-    public PaintMaterial material = PaintMaterial::Enum::Solid;
+    public PaintMaterial material = PaintMaterial::Solid;
 }
 
 // Share of free space placed before an item to center it, or the midpoint of an extent.
@@ -69,10 +69,10 @@ const f32 s_RectCenterFraction = 0.5f;
 const f64 s_RectCenterFractionF64 = 0.5;
 
 enum<u8> UiRectPrecision{
-    enum RoundedEndpoints,
-    enum BoundedEndpoints,
-    enum PreciseExtents,
-    enum EmptyPaint,
+    RoundedEndpoints,
+    BoundedEndpoints,
+    PreciseExtents,
+    EmptyPaint,
 }
 
 const u32 s_GlyphAtlasPageExtent = 512u;
@@ -84,8 +84,8 @@ const usize s_PaintMaxOverlayDepth = 16u;
 const usize s_PaintDefaultClipDepth = 8u;
 
 enum<u8> GpuCommandRecordingMode{
-    enum Direct,
-    enum CommandIrReplay,
+    Direct,
+    CommandIrReplay,
 }
 
 [serialize]

@@ -130,7 +130,7 @@ public:
                 }
             }
             else if(options.enabled && event.kind == NumericEventKind::Key){
-                const auto command = ApplyEditCommand(draft, TranslateEditCommand(event.intent, false), options.readOnly);
+                const auto command = ApplyEditCommand(draft, TranslateEditCommand(event.intent, false, EditTextMode::SingleLine), options.readOnly);
                 result.submitted |= command.submitted;
                 result.cancelled |= command.cancelled;
                 if(command.submitted || command.cancelled){

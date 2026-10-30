@@ -11,7 +11,6 @@
 #include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
-#include <impl/ecs_render/shadow/quality_settings.adhd.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/avboit/avboit.h>
@@ -135,6 +134,12 @@ static_assert(offsetof(ShadowGeometryDownsamplePushConstants, receiverFactor) ==
 static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + sizeof(u32) * 16u, "ShadowReprojectMergePushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowReprojectMergePushConstants, receiverFactor) == 124u);
 
+static_assert(sizeof(ShadowCombinedTemporalPushConstants) == 128u);
+static_assert(offsetof(ShadowCombinedTemporalPushConstants, receiverFactor) == 64u);
+static_assert(offsetof(ShadowCombinedTemporalPushConstants, opaqueSoftTraceSlot) == 88u);
+static_assert(offsetof(ShadowCombinedTemporalPushConstants, transparentSoftTraceSlot) == 108u);
+static_assert(offsetof(ShadowCombinedTemporalPushConstants, transparentMomentsOutSlot) == 124u);
+
 static_assert(sizeof(CausticResolvePushConstants) == s_CausticResolvePushConstantsByteSize, "CausticResolvePushConstants must match the shader push-constant layout");
 static_assert(offsetof(CausticResolvePushConstants, activityInputSlot) == s_CausticResolvePushConstantsActivityInputSlotOffset);
 static_assert(offsetof(CausticResolvePushConstants, activityOutputSlot) == s_CausticResolvePushConstantsActivityOutputSlotOffset);
@@ -159,7 +164,7 @@ inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;
 
 // Frame-parity reuse retains the same two-phase checkerboard for both photon producers.
 static_assert(s_CausticTemporalPhaseCount == 2u);
-static_assert(s_CausticTemporalPhaseCount > NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT);
+static_assert(s_CausticTemporalPhaseCount > s_CausticTemporalDisabledPhaseCount);
 static_assert((s_CausticHwPhotonGridSide % s_CausticTemporalPhaseCount) == 0u);
 static_assert((s_CausticSwPhotonGridSide % s_CausticTemporalPhaseCount) == 0u);
 
@@ -182,13 +187,6 @@ static_assert((s_CausticSwPhotonGridSide % s_CausticTemporalPhaseCount) == 0u);
 
 // Cross-TU ray-tracing helpers.
 namespace RayTracingDetail{
-
-
-using DispatchGroups = NWB::Impl::RayTracingDispatchGroups;
-
-[[nodiscard]] NWB_INLINE DispatchGroups ResolveDispatchGroups(const u32 width, const u32 height, const u32 receiverFactor, const u32 groupSize)noexcept{
-    return ResolveRayTracingDispatchGroups(width, height, receiverFactor, groupSize);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

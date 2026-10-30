@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/edit_click_tracker.h>
+#include <impl/ecs_ui/toolkit/input/popup.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -18,6 +18,7 @@ namespace __hidden_ui_edit_click_tracker_tests{
 
 using namespace NWB;
 using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
 
 constexpr UiTextEditOwner s_Owner{ { 11u }, 2u, 3u };
 constexpr UiTextEditOwner s_OtherOwner{ { 12u }, 2u, 3u };

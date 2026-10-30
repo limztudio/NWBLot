@@ -108,18 +108,8 @@ b8 IsValidScopedEnumTemplateArg(MStringView text, const SymbolTable& symbols, co
     if(!ed)
         return false;
 
-    const MStringView rest = TrimView(text.substr(firstSep + 2u));
-    MStringView entryName = rest;
-    const usize secondSep = rest.find("::");
-    if(secondSep != MStringView::npos){
-        const MStringView mid = TrimView(rest.substr(0u, secondSep));
-        if(mid != "Enum" && mid != "Flag")
-            return false;
-        entryName = TrimView(rest.substr(secondSep + 2u));
-        if(entryName.find("::") != MStringView::npos)
-            return false;
-    }
-    if(entryName.empty())
+    const MStringView entryName = TrimView(text.substr(firstSep + 2u));
+    if(entryName.empty() || entryName.find("::") != MStringView::npos)
         return false;
 
     for(const EnumEntry& entry : ed->entries){
@@ -146,7 +136,7 @@ b8 TryEvaluateEnumEntryConstant(const EnumDecl& ed, const MStringView targetEntr
                 return false;
             nextSeq = curVal + 1;
         }
-        else if(entry.isFlag){
+        else if(ed.isFlag){
             curVal = static_cast<i64>(usize(1) << flagBitIndex++);
             nextSeq = curVal + 1;
         }
@@ -173,12 +163,12 @@ b8 TryEvaluateExprConstant(const Expr* expr, const SymbolTable& symbols, const u
         outVal = (expr->text == "true") ? 1 : 0;
         return true;
     case ExprKind::ScopeAccess:{
-        if(expr->scopeChain.size() < 2u)
+        if(expr->scopeChain.size() != 2u)
             return false;
         const EnumDecl* ed = symbols.findEnum(symbols.resolveBaseTypeName(expr->scopeChain[0]));
         if(!ed)
             return false;
-        return TryEvaluateEnumEntryConstant(*ed, expr->scopeChain.back(), symbols, depth, outVal);
+        return TryEvaluateEnumEntryConstant(*ed, expr->scopeChain[1], symbols, depth, outVal);
     }
     case ExprKind::Unary:{
         if(expr->isPostfix)
@@ -350,8 +340,6 @@ b8 IsConcreteConstTemplateArgText(const MStringView text, const SymbolTable& sym
     i64 dummyVal = 0;
     if(TryEvaluateTextConstant(text, symbols, dummyVal))
         return true;
-    if(IsValidScopedEnumTemplateArg(text, symbols))
-        return true;
     MStringView ident = TrimView(text);
     if(!ident.empty() && (ident.front() == '+' || ident.front() == '-'))
         ident = TrimView(ident.substr(1u));
@@ -376,16 +364,12 @@ b8 AreConstantTemplateArgsEquivalent(const MStringView a, const MStringView b, c
 
 b8 HasConstValueTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, const MStringView name)noexcept{
     if(method){
-        for(const TemplateParamDecl& tp : method->templateParams){
-            if(tp.constValueType && tp.name == name)
-                return true;
-        }
+        if(const TemplateParamDecl* tp = FindTemplateParamByName(method->templateParams, name); tp && tp->constValueType)
+            return true;
     }
     if(ownerClass){
-        for(const TemplateParamDecl& tp : ownerClass->templateParams){
-            if(tp.constValueType && tp.name == name)
-                return true;
-        }
+        if(const TemplateParamDecl* tp = FindTemplateParamByName(ownerClass->templateParams, name); tp && tp->constValueType)
+            return true;
     }
     return false;
 }

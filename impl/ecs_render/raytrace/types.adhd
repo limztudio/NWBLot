@@ -9,7 +9,6 @@
 
 
 const u32 s_RtInvalidSlot = 0xffffffffu;
-const u64 s_RtMaxU32Value = 4294967295ull;
 const u64 s_RtAddressableBytes = 4294967296ull;
 const u32 s_RtMaxI32AsU32 = 2147483647u;
 
@@ -56,12 +55,12 @@ class NwbRtInstanceMaterialGpu{
 const usize s_NwbRtInstanceMaterialGpuByteSize = 36u;
 
 // Shader-mirrored flags: transparent selects transmittance; refractive selects caustics.
-enum<u32> RtInstanceMaterialFlag{
-    flag None = 0u,
-    flag Transparent,
-    flag Refractive,
-    flag CsgShadow,
-    flag RefractionEntryCertified
+flag<u32> RtInstanceMaterialFlag{
+    None = 0u,
+    Transparent,
+    Refractive,
+    CsgShadow,
+    RefractionEntryCertified
 }
 
 
@@ -119,15 +118,15 @@ class ShadowCombinedTemporalPushConstants{
 }
 
 enum<u8> SoftShadowOpaqueResolvePhase{
-    enum TemporalAndWavelet,
-    enum TemporalOnly,
-    enum WaveletOnly
+    TemporalAndWavelet,
+    TemporalOnly,
+    WaveletOnly
 }
 
 // Soft resolve either overwrites visibility or multiplies transparent transmittance.
 enum<u32> SoftShadowUpsampleFold{
-    enum Overwrite = 0u,
-    enum Multiply
+    Overwrite = 0u,
+    Multiply
 }
 
 b8 CanCombineSoftShadowWavelets(in b8 combinedUpsample, in b8 pipelineReady, in b8 opaqueTemporalReady, in b8 transparentTemporalReady, in u32 opaquePassCount, in u32 transparentPassCount){
@@ -203,9 +202,9 @@ class SceneSwBvhInstanceGpu{
 }
 
 enum<u8> PreparedShadowMaterialContextRoute{
-    enum None = 0u,
-    enum Hardware = 1u,
-    enum Software = 2u
+    None = 0u,
+    Hardware = 1u,
+    Software = 2u
 }
 
 [serialize]
@@ -314,12 +313,12 @@ class SceneBvhNodeCalculation{
 }
 
 // Shader-mirrored BVH child encoding.
-enum<u32> BvhNodeIndex{
-    flag LeafFlag = 0x80000000u,
+flag<u32> BvhNodeIndex{
+    LeafFlag = 0x80000000u,
     // Reuses LeafFlag in rightChild to mark transparent subtrees.
-    flag TransparentSubtreeFlag = 0x80000000u,
-    flag ChildIndexMask = 0x7fffffffu,
-    flag Invalid = 0xffffffffu
+    TransparentSubtreeFlag = 0x80000000u,
+    ChildIndexMask = 0x7fffffffu,
+    Invalid = 0xffffffffu
 }
 
 const usize s_SceneBvhInitialInstanceCapacity = 64u;
@@ -396,8 +395,8 @@ class ShadowRqSoftPushConstants{
 
 // Shader-mirrored shadow resolve stages.
 enum<u32> ShadowResolveStage{
-    enum Wavelet = 1u,
-    enum Upsample = 2u
+    Wavelet = 1u,
+    Upsample = 2u
 }
 
 // CPU mirror of NwbShadowResolvePushConstants.
@@ -475,9 +474,9 @@ class ShadowReprojectMergePushConstants{
 
 // Shader-mirrored caustic resolve stages.
 enum<u32> CausticResolveStage{
-    enum PrepareDownsample = 0u,
-    enum Wavelet = 1u,
-    enum Upsample = 2u
+    PrepareDownsample = 0u,
+    Wavelet = 1u,
+    Upsample = 2u
 }
 
 // CPU mirror of caustic resolve push constants.
@@ -558,8 +557,8 @@ class RayTracingDispatchGroups{
 }
 
 RayTracingDispatchGroups ResolveRayTracingDispatchGroups(in u32 width, in u32 height, in u32 receiverFactor, in u32 groupSize){
-    const u32 receiverWidth = (width + receiverFactor - 1u) / receiverFactor;
-    const u32 receiverHeight = (height + receiverFactor - 1u) / receiverFactor;
+    const u32 receiverWidth = divideUp(width, receiverFactor);
+    const u32 receiverHeight = divideUp(height, receiverFactor);
     RayTracingDispatchGroups groups;
     groups.x = divideUp(receiverWidth, groupSize);
     groups.y = divideUp(receiverHeight, groupSize);

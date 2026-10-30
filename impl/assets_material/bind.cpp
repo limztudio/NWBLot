@@ -143,22 +143,6 @@ Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, Ma
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return MaterialBindDetail::BuildMaterialBindTypedLayoutImpl(bindEntry, contextName, arena, scratchArena);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, Core::Alloc::ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache){
-    return MaterialBindDetail::FindOrBuildMaterialBindTypedLayoutImpl(materialInterface, bindEntry, scratchArena, inOutCache);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes){
     outLayoutHash = layout.layoutHash;
     outBlocks.reserve(layout.typedLayoutBlocks.size());

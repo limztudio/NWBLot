@@ -31,7 +31,11 @@ namespace __hidden_adhd_source_emitter{
         for(const Stmt* stmt : list){
             if(!stmt)
                 continue;
-            if(stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary && stmt->expr->op == TokenType::Equal && stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::ThisMember && stmt->expr->lhs->text == fieldName && stmt->expr->rhs){
+            if(
+                stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary
+                && stmt->expr->op == TokenType::Equal && stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::ThisMember
+                && stmt->expr->lhs->text == fieldName && stmt->expr->rhs
+            ){
                 if(!firstFound){
                     firstFound = stmt->expr;
                     firstIsTopLevel = topLevel;
@@ -148,12 +152,8 @@ void SourceEmitter::emitOutOfClassCallable(MString& out, const ClassDecl* ownerC
 }
 
 void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, const u32 indent)const{
-    if(method.usesScratchArena){
-        emitIndent(out, indent);
-        out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"");
-        out.append(method.name.data(), method.name.size());
-        out.append("\"));\r\n");
-    }
+    if(method.usesScratchArena)
+        emitScratchArenaPrologue(out, indent, method.name);
     if(method.usesTaskScope)
         emitTaskScopePrologue(out, indent);
 
@@ -252,6 +252,13 @@ void SourceEmitter::emitCtorOrCallArgs(MString& out, const MStringView baseTypeN
 void SourceEmitter::emitIndent(MString& out, const u32 indent)const{
     for(u32 i = 0u; i < indent; ++i)
         out.append("    ");
+}
+
+void SourceEmitter::emitScratchArenaPrologue(MString& out, const u32 indent, const MStringView arenaName)const{
+    emitIndent(out, indent);
+    out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"");
+    out.append(arenaName.data(), arenaName.size());
+    out.append("\"));\r\n");
 }
 
 

@@ -2,9 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/optical_scene_upload.h>
 #include <impl/ecs_render/components.adhd.h>
-#include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
+#include <impl/ecs_render/raytrace/optical_scene_upload.h>
 
 #include <core/alloc/general.h>
 

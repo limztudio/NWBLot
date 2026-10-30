@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
-#include <impl/ecs_render/material/generated_geometry_state.h>
 
 #include <core/common/log.h>
 
@@ -103,15 +102,15 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
         "Opaque Shared Compute Emulation Generate E",
         "Opaque Shared Compute Emulation Raster E",
     };
-    const usize phaseCount = ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(inputs.plan.drawCount);
-    if(!ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount) || phaseCount > tasks.size()){
+    const usize phaseCount = SharedComputeEmulationPhaseCountForDrawCount(inputs.plan.drawCount);
+    if(!IsSupportedSharedComputeEmulationPhaseCount(phaseCount) || phaseCount > tasks.size()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
         return MakeUnexpected(Failure{});
     }
     Core::GpuTaskId dependency = inputs.gbufferTask;
     const Span<const Core::GpuTaskResourceSetUse> resourceSetUseSpan(resourceSetUses, resourceSetUseCount);
     for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
-        const b8 isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
+        const b8 isRasterPhase = phaseIndex % s_SharedComputeEmulationPhasesPerDraw != 0u;
         const auto phaseTask = declarePhase(
             inputs,
             scheduling,
@@ -119,7 +118,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
             phaseMarkers[phaseIndex],
             dependency,
             isRasterPhase ? OpaqueSharedPhase::Raster : OpaqueSharedPhase::Generate,
-            phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
+            phaseIndex / s_SharedComputeEmulationPhasesPerDraw,
             phaseIndex + 1u == phaseCount,
             isRasterPhase ? Span<const Core::GpuTaskResourceUse>(rasterResourceUses) : Span<const Core::GpuTaskResourceUse>(generateResourceUses),
             resourceSetUseSpan

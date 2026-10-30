@@ -24,19 +24,19 @@ class SkinnedRuntimeMeshIdentity{
 [serialize, reflect]
 class MeshSkinningSubmissionCommit{
     public b8 empty()const{
-        return this.handledDirtyFlags == RuntimeMeshDirtyFlag::Flag::None && !this.bindlessResourceSlotsUploadRecorded;
+        return this.handledDirtyFlags == RuntimeMeshDirtyFlag::None && !this.bindlessResourceSlotsUploadRecorded;
     }
 
     public u32 editRevision = 0u;
     public b8 bindlessResourceSlotsUploadRecorded = false;
-    public RuntimeMeshDirtyFlags handledDirtyFlags = RuntimeMeshDirtyFlag::Flag::None;
+    public RuntimeMeshDirtyFlag handledDirtyFlags = RuntimeMeshDirtyFlag::None;
 }
 
-void ApplyMeshSkinningSubmissionCommit(in b8 submissionAccepted, in u32 currentEditRevision, in MeshSkinningSubmissionCommit commit, mut RuntimeMeshDirtyFlags inOutDirtyFlags, mut b8 inOutBindlessResourceSlotsUploaded){
+void ApplyMeshSkinningSubmissionCommit(in b8 submissionAccepted, in u32 currentEditRevision, in MeshSkinningSubmissionCommit commit, mut RuntimeMeshDirtyFlag inOutDirtyFlags, mut b8 inOutBindlessResourceSlotsUploaded){
     if(!submissionAccepted || currentEditRevision != commit.editRevision)
         return;
 
-    inOutDirtyFlags = cast<RuntimeMeshDirtyFlags>(cast<u8>(inOutDirtyFlags) & ~cast<u8>(commit.handledDirtyFlags));
+    inOutDirtyFlags &= ~commit.handledDirtyFlags;
     if(commit.bindlessResourceSlotsUploadRecorded)
         inOutBindlessResourceSlotsUploaded = true;
 }
@@ -96,7 +96,7 @@ class MeshSkinningPushConstants{
     public u32 meshletCount = 0u;
     public u32 skinCount = 0u;
     public u32 jointCount = 0u;
-    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::Enum::LinearBlend);
+    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
     // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
     public u32 bindlessResourceSlots = 0u;
 }

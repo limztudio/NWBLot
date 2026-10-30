@@ -36,8 +36,6 @@ namespace ECSRenderDetail{
 
 inline constexpr Core::ResourceStates::Mask s_ObjectGeometryRasterState = Core::ResourceStates::VertexBuffer | Core::ResourceStates::IndexBuffer;
 
-using NWB::Impl::ObjectGeometryCacheLayout;
-
 struct ObjectGeometryCacheState{
     Core::BufferHandle buffer;
     Core::ComputePipelineHandle decoderPipeline;

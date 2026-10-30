@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
-#include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
 #include <impl/ecs_render/kernel/arena_names.h>
@@ -19,7 +18,7 @@
 #include <impl/ecs_render/deferred/opaque_csg_interval_stage.h>
 #include <impl/ecs_render/deferred/opaque_shared_compute_emulation_chain.h>
 #include <impl/ecs_render/deferred/prefix_scene_upload_builder.h>
-#include <impl/ecs_render/deferred/lighting_content_stamp.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
@@ -265,7 +264,18 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         m_graphicsPrefixSceneShadingSetupReady,
         opaqueCsgIntervalSampleComputeEmulationTiming
     );
-    opaqueCsgIntervalStage.capturePayloads(frameBindings, csgResources, opaqueDrawItems, csgFrameData, instanceData.size(), materialTypedBytes.size(), gbufferPayload.materialDrawBuffersUploaded, gbufferPayload.csgFrameBuffersUploaded, hasOpaqueDrawItems, hasOpaqueCsgFrameWork);
+    opaqueCsgIntervalStage.capturePayloads(
+        frameBindings,
+        csgResources,
+        opaqueDrawItems,
+        csgFrameData,
+        instanceData.size(),
+        materialTypedBytes.size(),
+        gbufferPayload.materialDrawBuffersUploaded,
+        gbufferPayload.csgFrameBuffersUploaded,
+        hasOpaqueDrawItems,
+        hasOpaqueCsgFrameWork
+    );
 
     // G-buffer makes peel/event images; span build publishes spans; Combine publishes removed-interval images; Sample takes them.
     // Their native thunks consume graph-owned StorageImage state without staging target transitions.
@@ -387,7 +397,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         && gbufferPayload.materialFrameStatesGraphOwned
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
-        && opaqueSharedComputeEmulationPlan.capture(opaqueDrawItems.regular, ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount)
+        && opaqueSharedComputeEmulationPlan.capture(opaqueDrawItems.regular, s_SharedComputeEmulationMaximumDrawCount)
     ;
     b8 opaqueSharedComputeEmulationOutputStatesGraphOwned = false;
     if(opaqueSharedComputeEmulationPlanCaptured){
@@ -696,7 +706,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
     m_graphicsPrefixTask = *graphicsPrefixTaskResult;
     // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes immediately after this successful return.
-    m_raytracingSystem.publishPreparedLightingClassification(rayTracingLightingClassification, Span<const ECSRenderDetail::SceneLightGpuData>(prefixSceneUploadResult->lightData, sceneLightCount));
+    m_raytracingSystem.publishPreparedLightingClassification(rayTracingLightingClassification, Span<const SceneLightGpuData>(prefixSceneUploadResult->lightData, sceneLightCount));
     return prefixSceneUploadResult->sceneLightingContentHash;
 }
 

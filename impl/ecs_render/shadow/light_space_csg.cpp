@@ -5,7 +5,6 @@
 #include "light_space_csg.h"
 
 #include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_render/raytrace/instance_material.h>
 #include <impl/assets/graphics/bvh/constants.h>
 
 #include <core/common/log.h>
@@ -69,7 +68,16 @@ void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world
     state.solidTriangleMasks.reserve(capacity);
 }
 
-void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, const Core::ECS::EntityID entity, const b8 transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, const SIMDVectorSingle localMin, const SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh){
+void AppendLightSpaceCsgReceiver(
+    LightSpaceCsgState& state,
+    const Core::ECS::EntityID entity,
+    const b8 transparent,
+    const SIMDMatrix& objectToWorld,
+    const SIMDMatrix& worldToObject,
+    const SIMDVectorSingle localMin,
+    const SIMDVectorSingle localMax,
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+){
     if(!state.gathering)
         return;
     Fnv64AppendValue(state.captureGeometryIdentity, entity.id);

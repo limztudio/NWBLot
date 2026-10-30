@@ -159,20 +159,22 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
         for(usize i = 0u; i < enumDecl->entries.size(); ++i){
             const EnumEntry& entry = enumDecl->entries[i];
             if(entry.name == "Count"){
-                reportError(errors, entry.span, "use 'kCount' instead of 'Count' for enum count sentries");
+                reportError(errors, entry.span, enumDecl->isFlag
+                    ? "use 'kCount' instead of 'Count' for flag count sentries"
+                    : "use 'kCount' instead of 'Count' for enum count sentries");
                 ok = false;
             }
             for(usize j = 0u; j < i; ++j){
                 if(enumDecl->entries[j].name == entry.name){
-                    reportError(errors, entry.span, "duplicate enumerator name in enum");
+                    reportError(errors, entry.span, enumDecl->isFlag ? "duplicate enumerator name in flag" : "duplicate enumerator name in enum");
                     ok = false;
                     break;
                 }
             }
             if(!enumDecl->isImported){
-                if(entry.isFlag && !entry.valueExpr){
+                if(enumDecl->isFlag && !entry.valueExpr){
                     if(autoFlagBitIndex >= static_cast<u32>(enumDecl->underlyingSize) * 8u){
-                        reportError(errors, entry.span, "auto-assigned 'flag' bit position exceeds underlying enum bit width");
+                        reportError(errors, entry.span, "auto-assigned 'flag' bit position exceeds underlying flag bit width");
                         ok = false;
                     }
                     ++autoFlagBitIndex;
@@ -184,7 +186,9 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                     else{
                         const MStringView valType = inferExprTypeName(nullptr, &dummyEnumCtx, *entry.valueExpr, enumScope);
                         if(entry.valueExpr->kind == ExprKind::FloatLiteral || entry.valueExpr->kind == ExprKind::StringLiteral || IsFloatScalarType(valType) || SymbolTable::IsStringSwitchType(valType)){
-                            reportError(errors, entry.span, "enum entry value must be an integral constant expression");
+                            reportError(errors, entry.span, enumDecl->isFlag
+                                ? "flag entry value must be an integral constant expression"
+                                : "enum entry value must be an integral constant expression");
                             ok = false;
                         }
                     }
@@ -360,7 +364,11 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
                 methodTemplateParamsMatch = false;
                 break;
             }
-            if((declTp.constValueType != nullptr) != (oolTp.constValueType != nullptr) || (declTp.constValueType && oolTp.constValueType && !AreTypeRefsEquivalent(declTp.constValueType, oolTp.constValueType, m_symbols)) || declTp.interfaceBounds.size() != oolTp.interfaceBounds.size()){
+            if(
+                (declTp.constValueType != nullptr) != (oolTp.constValueType != nullptr)
+                || (declTp.constValueType && oolTp.constValueType && !AreTypeRefsEquivalent(declTp.constValueType, oolTp.constValueType, m_symbols))
+                || declTp.interfaceBounds.size() != oolTp.interfaceBounds.size()
+            ){
                 reportError(errors, ool->span, "out-of-line method template parameter constraints do not match class declaration");
                 ok = false;
                 methodTemplateParamsMatch = false;
@@ -536,6 +544,18 @@ MStringView TypeChecker::resolveScopedVarBaseType(const ScopedVarInfo& var)const
 b8 TypeChecker::isThisConstInScope(const MethodDecl& method, const Span<const ScopedVarInfo> scope)const noexcept{
     const ScopedVarInfo* lambdaThis = m_inLambda ? FindScopedVar(scope, "this") : nullptr;
     return method.isConst || (lambdaThis && lambdaThis->isConst);
+}
+
+b8 TypeChecker::validateThisAccess(const ClassDecl* ownerClass, const SourceSpan span, const Span<const ScopedVarInfo> scope, MVector<ParseError>& errors)const{
+    if(!ownerClass){
+        reportError(errors, span, "'this' cannot be used in a free function");
+        return false;
+    }
+    if(m_inLambda && !FindScopedVar(scope, "this")){
+        reportError(errors, span, "accessing 'this' inside a lambda requires capturing 'in this' or 'mut this'");
+        return false;
+    }
+    return true;
 }
 
 b8 TypeChecker::isConstructibleTypeName(const MStringView calleeName, const MStringView baseCallee)const noexcept{

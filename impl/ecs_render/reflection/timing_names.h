@@ -6,7 +6,6 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/reflection/settings.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 

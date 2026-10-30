@@ -111,8 +111,9 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         return true;
     }
 
-    if(m_cursor.matchIdentifier("enum")){
-        EnumDecl* enumDecl = parseEnumDecl(span, attributes);
+    const b8 isFlagDecl = m_cursor.matchIdentifier("flag");
+    if(isFlagDecl || m_cursor.matchIdentifier("enum")){
+        EnumDecl* enumDecl = parseEnumDecl(span, attributes, isFlagDecl);
         if(!enumDecl)
             return false;
         enumDecl->isImported = isImported;
@@ -186,20 +187,22 @@ TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const Span<cons
     return decl;
 }
 
-EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes){
+EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isFlag){
     for(const ParsedAttribute& attr : attributes){
         if(attr.name != "reflect" || !attr.arguments.empty()){
-            m_cursor.error(attr.line, attr.column, "unsupported attribute on 'enum'; only '[reflect]' is permitted");
+            m_cursor.error(attr.line, attr.column, isFlag ? "unsupported attribute on 'flag'; only '[reflect]' is permitted" : "unsupported attribute on 'enum'; only '[reflect]' is permitted");
             return nullptr;
         }
     }
     if(!m_cursor.match(TokenType::Less)){
-        m_cursor.error("'enum' must explicitly specify an integer size type: 'enum<u8|u16|u32|u64|i8|i16|i32|i64>'");
+        m_cursor.error(isFlag
+            ? "'flag' must explicitly specify an integer size type: 'flag<u8|u16|u32|u64|i8|i16|i32|i64> Name'"
+            : "'enum' must explicitly specify an integer size type: 'enum<u8|u16|u32|u64|i8|i16|i32|i64> Name'");
         return nullptr;
     }
 
     if(!m_cursor.check(TokenType::Identifier)){
-        m_cursor.errorExpected("expected integer size type inside 'enum<...>'");
+        m_cursor.errorExpected(isFlag ? "expected integer size type inside 'flag<...>'" : "expected integer size type inside 'enum<...>'");
         return nullptr;
     }
 
@@ -207,50 +210,47 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
     if(!ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign)){
-        m_cursor.error("invalid enum underlying type; expected u8, u16, u32, u64, i8, i16, i32, or i64");
+        m_cursor.error("invalid enum/flag underlying type; expected u8, u16, u32, u64, i8, i16, i32, or i64");
         return nullptr;
     }
     m_cursor.advance();
 
-    if(!m_cursor.expect(TokenType::Greater, "expected '>' after enum size type"))
+    if(!m_cursor.expect(TokenType::Greater, "expected '>' after underlying size type"))
         return nullptr;
 
     if(!m_cursor.check(TokenType::Identifier)){
-        m_cursor.errorExpected("expected enum name");
+        m_cursor.errorExpected(isFlag ? "expected flag name" : "expected enum name");
         return nullptr;
     }
+    const MStringView enumName = m_cursor.current().text;
+    m_cursor.advance();
 
     EnumDecl* decl = AllocateAstNode<EnumDecl>(m_cursor.arena());
-    decl->name = m_cursor.current().text;
+    decl->name = enumName;
     decl->sizeTypeName = sizeTypeName;
     decl->underlyingSize = underlyingSize;
     decl->underlyingAlign = underlyingAlign;
     decl->span = span;
-    m_cursor.advance();
+    decl->isFlag = isFlag;
 
-    if(!m_cursor.expect(TokenType::LeftBrace, "expected '{' to start enum body"))
+    if(!m_cursor.expect(TokenType::LeftBrace, isFlag ? "expected '{' to start flag body" : "expected '{' to start enum body"))
         return nullptr;
 
     while(!m_cursor.check(TokenType::RightBrace) && !m_cursor.check(TokenType::EndOfFile)){
-        b8 isFlag = false;
-        if(m_cursor.matchIdentifier("flag")){
-            isFlag = true;
-        }
-        else if(!m_cursor.matchIdentifier("enum")){
-            m_cursor.error("enum entry must explicitly begin with 'enum' or 'flag'");
-            return nullptr;
-        }
-
         if(!m_cursor.check(TokenType::Identifier)){
-            m_cursor.errorExpected("expected enum enumerator name");
+            m_cursor.errorExpected(isFlag ? "expected flag enumerator name" : "expected enum enumerator name");
             return nullptr;
         }
 
         EnumEntry entry;
         entry.name = m_cursor.current().text;
         entry.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
-        entry.isFlag = isFlag;
         m_cursor.advance();
+
+        if((entry.name == "enum" || entry.name == "flag") && m_cursor.check(TokenType::Identifier)){
+            m_cursor.error("enumerator entries must not be prefixed with 'enum' or 'flag'");
+            return nullptr;
+        }
 
         if(m_cursor.match(TokenType::Equal)){
             entry.valueExpr = m_exprParser.parseExpression();
@@ -262,11 +262,11 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
 
         if(m_cursor.check(TokenType::RightBrace))
             break;
-        if(!m_cursor.expect(TokenType::Comma, "expected ',' or '}' in enum body"))
+        if(!m_cursor.expect(TokenType::Comma, isFlag ? "expected ',' or '}' in flag body" : "expected ',' or '}' in enum body"))
             return nullptr;
     }
 
-    if(!m_cursor.expect(TokenType::RightBrace, "expected '}' to close enum declaration"))
+    if(!m_cursor.expect(TokenType::RightBrace, isFlag ? "expected '}' to close flag declaration" : "expected '}' to close enum declaration"))
         return nullptr;
     while(m_cursor.match(TokenType::Semicolon)){}
 

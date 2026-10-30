@@ -4,7 +4,6 @@
 
 #include "feedback_resources.h"
 
-#include <impl/assets/graphics/reflection/feedback_constants.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>

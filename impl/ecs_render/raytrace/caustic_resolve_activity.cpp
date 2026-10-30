@@ -7,7 +7,6 @@
 #include "raytracing_system.h"
 #include "renderer_raytracing_state.h"
 
-#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection/backend.h>
@@ -69,7 +68,12 @@ b8 RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth, 
     auto& activity = m_rayTracingState.m_causticResolve.m_activity;
     for(u32 index = 0u; index < LengthOf(activity.buffers); ++index){
         Core::BufferDesc desc;
-        desc.setByteSize(layout->bufferByteSize).setCanHaveRawViews(true).setCanHaveUAVs(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::Common).setDebugName(s_CausticResolveActivityBufferNames[index]);
+        desc.setByteSize(layout->bufferByteSize)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+            .setDebugName(s_CausticResolveActivityBufferNames[index]);
         auto buffersResult = m_graphics.createBuffer(desc);
         if(buffersResult)
             activity.buffers[index] = Move(*buffersResult);

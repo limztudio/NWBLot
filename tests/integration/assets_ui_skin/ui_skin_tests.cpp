@@ -2,12 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_ui_skin/asset.h>
 #include <impl/assets_ui_skin/cook.h>
-#include <impl/assets_texture/cook.h>
-
-#include <core/assets/auto_registration.h>
-#include <core/assets/paths.h>
+#include <impl/assets_texture/asset.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>

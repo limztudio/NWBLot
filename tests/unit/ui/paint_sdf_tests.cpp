@@ -195,7 +195,7 @@ TEST_F(UiPaintSdfTests, PageFactoryRejectsUnsupportedEncodingSpreadAndIncomplete
     binding.distanceEncoding = 2u;
     EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
     EXPECT_EQ(pixels.size(), 256u);
-    binding.distanceEncoding = s_SdfDistanceEncodingFreeTypeU8;
+    binding.distanceEncoding = s_FontAtlasDistanceEncoding;
     binding.spreadPixels = s_FontAtlasMaxSpreadPixels + 1u;
     EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
     binding.spreadPixels = 8u;

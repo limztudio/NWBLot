@@ -131,7 +131,7 @@ void UiEditBoxHost::synchronizeFocus(){
         return;
     const Entry* entry = find(m_context.input().focus());
     const b8 focused = hasTextFocus() && entry;
-    m_clickTracker.retainFocus(focused ? entry->owner : UiTextEditOwner{});
+    m_clickTracker.retainFocus(focused ? entry->owner : Ui::UiTextEditOwner{});
     for(auto& candidate : m_entries){
         const b8 active = focused && candidate.owner == entry->owner;
         if(candidate.actionCapable){
@@ -197,7 +197,7 @@ const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const 
     return nullptr;
 }
 
-void UiEditBoxHost::discard(const UiTextEditOwner& owner)noexcept{
+void UiEditBoxHost::discard(const Ui::UiTextEditOwner& owner)noexcept{
     for(usize index = m_events.size(); index > 0u; --index){
         if(m_events[index - 1u].owner == owner){
             m_queuedTextBytes -= m_events[index - 1u].native.text.size();

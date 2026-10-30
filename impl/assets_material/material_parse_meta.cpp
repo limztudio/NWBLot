@@ -444,7 +444,14 @@ static Expected<b8> ParseMaterialBoolProperty(const Path& nwbFilePath, const Cor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, ScratchArena& scratchArena){
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    using namespace MaterialCookDetail;
     MaterialCookEntry entry(arena);
 
     const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_MaterialMetaDiagnosticPrefix);
@@ -506,12 +513,6 @@ Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStri
 
     return entry;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -417,16 +417,20 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 return;
             }
 
+            auto emitSimdCallRegArgsAndClose = [&](const Span<Expr* const> callArgs){
+                for(usize i = 0u; i < callArgs.size(); ++i){
+                    if(i > 0u)
+                        out.append(", ");
+                    if(callArgs[i])
+                        emitSimdRegExpr(out, *callArgs[i], simdType);
+                }
+                out.push_back(')');
+            };
+
             const MStringView unaryIntrinsic = MapSimdUnaryFloatIntrinsic(callee, isDouble);
             if(!unaryIntrinsic.empty()){
                 out.append(unaryIntrinsic.data(), unaryIntrinsic.size());
-                for(usize i = 0u; i < expr.arguments.size(); ++i){
-                    if(i > 0u)
-                        out.append(", ");
-                    if(expr.arguments[i])
-                        emitSimdRegExpr(out, *expr.arguments[i], simdType);
-                }
-                out.push_back(')');
+                emitSimdCallRegArgsAndClose(expr.arguments);
                 return;
             }
             if(callee == "lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
@@ -455,13 +459,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
             if(!laneVectorSuffix.empty() && !expr.arguments.empty() && expr.arguments[0]){
                 const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0]);
                 AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes > maxVectorLanes ? maxVectorLanes : effLanes, laneVectorSuffix);
-                for(usize i = 0u; i < expr.arguments.size(); ++i){
-                    if(i > 0u)
-                        out.append(", ");
-                    if(expr.arguments[i])
-                        emitSimdRegExpr(out, *expr.arguments[i], simdType);
-                }
-                out.push_back(')');
+                emitSimdCallRegArgsAndClose(expr.arguments);
                 return;
             }
             if(callee == "mul" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){

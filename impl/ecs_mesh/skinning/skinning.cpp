@@ -37,7 +37,7 @@ b8 MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& 
     if(!resourcesChanged)
         return false;
     if(*resourcesChanged)
-        instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags | RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty);
+        instance.dirtyFlags |= RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty;
     return true;
 }
 

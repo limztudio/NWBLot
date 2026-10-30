@@ -132,13 +132,6 @@ public:
 
 // Shared-buffer occupancy draws cannot batch generators; keep D/R streams as explicit callbacks.
 struct AvboitOccupancySharedComputeEmulationGraphTask{
-    struct Phase{
-        enum Enum : u8{
-            Generate,
-            Raster,
-        };
-    };
-
     // All bindings required: shared emulation always generates against this frame's bindings.
     struct Payload{
         Core::GraphicsRuntime& graphics;
@@ -156,11 +149,11 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
         b8 materialGeometryStatesGraphOwned = false;
         b8 beginTiming = false;
         b8 finishTiming = false;
-        Phase::Enum phase = Phase::Generate;
+        AvboitSharedComputeEmulationPhase::Enum phase = AvboitSharedComputeEmulationPhase::Generate;
     };
 
     [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
-        return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
+        return { payload.phase == AvboitSharedComputeEmulationPhase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
@@ -226,8 +219,6 @@ public:
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
     static void Discarded(Payload& payload)noexcept;
 };
-
-// Extinction emulation streams freeze after prior uploads; regular and CSG stay exclusive.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

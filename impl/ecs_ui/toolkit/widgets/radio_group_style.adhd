@@ -33,7 +33,7 @@ class RadioGroupStyle{
 const u32 s_RadioGroupMaxChoices = 64u;
 
 class RadioGroupOptions{
-    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public b8 enabled = true;
 }
 
@@ -58,11 +58,23 @@ class RadioGroupChoices{
 
 class RadioGroupSnapshot{
     public b8 operator==(in RadioGroupSnapshot rhs)const{
-        return this.instanceGeneration == rhs.instanceGeneration && this.inputGeneration == rhs.inputGeneration && this.revision == rhs.revision && this.selectedKey == rhs.selectedKey && this.cursorKey == rhs.cursorKey && this.sourceGeneration == rhs.sourceGeneration && this.sourceRevision == rhs.sourceRevision;
+        return this.instanceGeneration == rhs.instanceGeneration
+            && this.inputGeneration == rhs.inputGeneration
+            && this.revision == rhs.revision
+            && this.selectedKey == rhs.selectedKey
+            && this.cursorKey == rhs.cursorKey
+            && this.sourceGeneration == rhs.sourceGeneration
+            && this.sourceRevision == rhs.sourceRevision;
     }
 
     public b8 operator!=(in RadioGroupSnapshot rhs)const{
-        return this.instanceGeneration != rhs.instanceGeneration || this.inputGeneration != rhs.inputGeneration || this.revision != rhs.revision || this.selectedKey != rhs.selectedKey || this.cursorKey != rhs.cursorKey || this.sourceGeneration != rhs.sourceGeneration || this.sourceRevision != rhs.sourceRevision;
+        return this.instanceGeneration != rhs.instanceGeneration
+            || this.inputGeneration != rhs.inputGeneration
+            || this.revision != rhs.revision
+            || this.selectedKey != rhs.selectedKey
+            || this.cursorKey != rhs.cursorKey
+            || this.sourceGeneration != rhs.sourceGeneration
+            || this.sourceRevision != rhs.sourceRevision;
     }
 
     public u64 instanceGeneration = 0u;

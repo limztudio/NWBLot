@@ -90,12 +90,6 @@
 #define NWB_REFLECTION_DEFAULT_SCREEN_EDGE_FADE 0.05f
 
 // Eleven std140 lanes: targets own descriptors; this frame payload only borrows selectors.
-#define NWB_REFLECTION_FRAME_ROUTE_UINT_FIELDS(FIELD) \
-    FIELD(width, 0u) \
-    FIELD(height, 0u) \
-    FIELD(traceMode, 0u) \
-    FIELD(hardwareEnabled, 0u)
-
 #define NWB_REFLECTION_FRAME_RESOURCE_UINT_FIELDS(FIELD) \
     FIELD(opaqueSpecularSlot, 0u) \
     FIELD(glassSpecularSlot, 0u) \
@@ -125,10 +119,6 @@
     FIELD(feedbackWriteSlot, 0u) \
     FIELD(feedbackFlags, 0u) \
     FIELD(feedbackProbeIndex, 0u)
-
-#define NWB_REFLECTION_FRAME_UINT_FIELDS(FIELD) \
-    NWB_REFLECTION_FRAME_ROUTE_UINT_FIELDS(FIELD) \
-    NWB_REFLECTION_FRAME_RESOURCE_UINT_FIELDS(FIELD)
 
 #define NWB_REFLECTION_FRAME_FLOAT_FIELDS(FIELD) \
     FIELD(maxRayDistance, NWB_REFLECTION_DEFAULT_MAX_RAY_DISTANCE) \

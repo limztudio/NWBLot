@@ -302,7 +302,6 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     PreserveObservedReport(arena, report, "linux_assert");
 
     RemoveTestArtifacts(arena, s_Group);
-#else
 #endif
 }
 
@@ -369,7 +368,6 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     PreserveObservedReport(arena, report, "recoverable_error");
 
     RemoveTestArtifacts(arena, s_Group);
-#else
 #endif
 }
 

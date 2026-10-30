@@ -29,7 +29,7 @@ UiTextEditSession::~UiTextEditSession()noexcept{
 }
 
 
-Core::TextInputAdmission::Enum UiTextEditSession::begin(const UiTextEditOwner& owner, Ui::EditModel& model, const Core::TextInputRect caret){
+Core::TextInputAdmission::Enum UiTextEditSession::begin(const Ui::UiTextEditOwner& owner, Ui::EditModel& model, const Core::TextInputRect caret){
     if(!m_service.isOwnerThread())
         return Core::TextInputAdmission::WrongThread;
     if(!owner.valid() || model.composition().active)
@@ -54,7 +54,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::begin(const UiTextEditOwner& o
     return Core::TextInputAdmission::Accepted;
 }
 
-Core::TextInputAdmission::Enum UiTextEditSession::refresh(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret){
+Core::TextInputAdmission::Enum UiTextEditSession::refresh(const Ui::UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret){
     if(!m_service.isOwnerThread())
         return Core::TextInputAdmission::WrongThread;
     if(!m_token.valid() || !(m_owner == owner) || !m_expectedModel.matches(model))
@@ -67,7 +67,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::refresh(const UiTextEditOwner&
     return publishSurrounding(model);
 }
 
-UiTextEditResult UiTextEditSession::drain(const UiTextEditOwner& owner, Ui::EditModel& model){
+UiTextEditResult UiTextEditSession::drain(const Ui::UiTextEditOwner& owner, Ui::EditModel& model){
     UiTextEditResult result;
     if(!m_service.isOwnerThread()){
         result.status = UiTextEditStatus::WrongThread;
@@ -98,7 +98,7 @@ UiTextEditResult UiTextEditSession::drain(const UiTextEditOwner& owner, Ui::Edit
         }
         else{
             m_lastSequence = m_event.sequence;
-            result.status = applyEvent(model);
+            result.status = ApplyUiTextEditEvent(model, m_event, m_surroundingRevision, matchesPublishedModel(model));
         }
         if(result.status != UiTextEditStatus::Applied){
             model.cancelComposition();
@@ -121,7 +121,7 @@ UiTextEditResult UiTextEditSession::drain(const UiTextEditOwner& owner, Ui::Edit
     return result;
 }
 
-b8 UiTextEditSession::end(const UiTextEditOwner& owner, Ui::EditModel& model){
+b8 UiTextEditSession::end(const Ui::UiTextEditOwner& owner, Ui::EditModel& model){
     if(!m_service.isOwnerThread() || !m_token.valid() || !(m_owner == owner))
         return false;
     if(m_expectedModel.matches(model))
@@ -164,17 +164,9 @@ b8 UiTextEditSession::release(){
     m_owner = {};
     m_expectedModel.clear();
     m_publishedText.clear();
-    m_preeditCaretVisible = true;
     return true;
 }
 
-UiTextEditStatus::Enum UiTextEditSession::applyEvent(Ui::EditModel& model){
-    if(m_event.kind == Core::TextInputEventKind::Commit)
-        m_preeditCaretVisible = true;
-    else if(m_event.kind == Core::TextInputEventKind::Preedit)
-        m_preeditCaretVisible = m_event.caretVisible;
-    return ApplyUiTextEditEvent(model, m_event, m_surroundingRevision, matchesPublishedModel(model));
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,7 +7,6 @@
 #include "mesh_system.h"
 
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
-#include <impl/assets_mesh/payload_types.adhd.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 
 #include <core/common/log.h>

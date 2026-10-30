@@ -177,10 +177,6 @@ void SourceEmitter::emitSimdLoadReloadForBinding(MString& out, const SimdVarBind
     out.append(");\r\n");
 }
 
-void SourceEmitter::emitSimdLoopElementLoad(MString& out, const SimdVarBinding& loopBinding, const u32 indent)const{
-    emitSimdBindingInitialDecl(out, loopBinding, true, false, indent);
-}
-
 void SourceEmitter::emitSimdMutCallReloads(MString& out, const Expr& expr, const u32 indent)const{
     if(!m_activeSimdBindings)
         return;
@@ -314,7 +310,7 @@ b8 SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const u
 }
 
 b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u32 indent)const{
-    if(stmt.expr && stmt.expr->kind == ExprKind::Binary && IsSimdAssignmentOp(stmt.expr->op) && stmt.expr->lhs && stmt.expr->rhs){
+    if(stmt.expr && stmt.expr->kind == ExprKind::Binary && IsCompoundOrSimpleAssignment(stmt.expr->op) && stmt.expr->lhs && stmt.expr->rhs){
         const Expr& lhs = *stmt.expr->lhs;
         const Expr& rhs = *stmt.expr->rhs;
 
@@ -392,7 +388,7 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
                     emitExpr(out, rhs);
                 }
                 else{
-                    const MStringView opSym = SimdCompoundScalarOpSymbol(stmt.expr->op);
+                    const MStringView opSym = SimdBinaryScalarOpSymbol(MapSimdAssignToBinaryOp(stmt.expr->op));
                     out.push_back('(');
                     emitExpr(out, lhs);
                     out.append(opSym.data(), opSym.size());

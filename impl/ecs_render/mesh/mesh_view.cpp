@@ -28,7 +28,7 @@ b8 RendererMeshSystem::createMeshViewBuffer(){
     meshViewBufferDesc
         .setByteSize(sizeof(ECSRenderDetail::MeshViewGpuData))
         .setIsConstantBuffer(true)
-        .setDebugName(ECSRenderDetail::s_MeshViewBufferName)
+        .setDebugName(s_MeshViewBufferName)
         // Either caustic producer can consume the view; keep concurrent to avoid serializing lanes.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;

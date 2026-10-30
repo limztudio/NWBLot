@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "meshlet_constants.h"
 #include <impl/assets_mesh/payload_types.adhd.h>
 
 

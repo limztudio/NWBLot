@@ -99,15 +99,15 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
     mesh.csgLocalBounds.maxBounds.w = 0;
 }
 
-static void ReportMeshBufferSetupFailure(const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure, const Name& meshName, const TStringView label){
+static void ReportMeshBufferSetupFailure(const BufferSetupFailure::Enum failure, const Name& meshName, const TStringView label){
     switch(failure){
-    case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
+    case BufferSetupFailure::EmptyPayload:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload"), ConvertString(meshName.resolvedText()), label);
         return;
-    case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
+    case BufferSetupFailure::ByteSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows"), ConvertString(meshName.resolvedText()), label);
         return;
-    case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
+    case BufferSetupFailure::CreateFailed:
         break;
     }
     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'"), label, ConvertString(meshName.resolvedText()));
@@ -124,7 +124,7 @@ static void ReportMeshBufferSetupFailure(const RuntimeMeshBufferUpload::BufferSe
 }
 
 template<typename PayloadT>
-[[nodiscard]] static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupMeshBuffer(
+[[nodiscard]] static Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupMeshBuffer(
     Core::GraphicsRuntime& graphics,
     const Name& meshName,
     const AStringView suffix,
@@ -135,7 +135,7 @@ template<typename PayloadT>
 ){
     const auto bufferName = DeriveMeshBufferName(meshName, suffix, label);
     if(!bufferName)
-        return MakeUnexpected(RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed);
+        return MakeUnexpected(BufferSetupFailure::CreateFailed);
 
     auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(graphics, *bufferName, payload, { false, canHaveRawViews, accelStructBuildInput, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
     if(!buffer){
@@ -145,7 +145,7 @@ template<typename PayloadT>
     return Move(*buffer);
 }
 
-[[nodiscard]] static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupPaddedRawMeshBuffer(
+[[nodiscard]] static Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupPaddedRawMeshBuffer(
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,
     const Name& meshName,
@@ -155,7 +155,7 @@ template<typename PayloadT>
 ){
     const auto bufferName = DeriveMeshBufferName(meshName, suffix, label);
     if(!bufferName)
-        return MakeUnexpected(RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed);
+        return MakeUnexpected(BufferSetupFailure::CreateFailed);
 
     auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, scratchArena, *bufferName, payload, { false, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
     if(!buffer){

@@ -63,10 +63,7 @@ static void AppendCsgShapeCookEntry(NWB::Impl::AssetsCsgCook::CsgShapeCookEntryV
     return NWB::Impl::s_InvalidCsgShapeTypeId;
 }
 
-Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)noexcept{
-    static_cast<void>(shapeToWorld);
-    static_cast<void>(parameterBytes);
-    static_cast<void>(parameterByteSize);
+Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(const SIMDMatrix&, const u8*, const usize)noexcept{
     return NWB::Impl::CsgShapeBounds{ VectorSet(-1.0f, -1.0f, -1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), true };
 }
 
@@ -353,7 +350,7 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
 
 
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    EXPECT_FALSE(EmitCsgShapeModuleIncludes(root / "cache", "tests", entries, scratchArena));
+    EXPECT_FALSE(EmitCsgShapeModuleIncludes(root / s_CacheDirectory, "tests", entries, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("generated include")));
 
     EXPECT_TRUE(RemoveAllIfExists(root));

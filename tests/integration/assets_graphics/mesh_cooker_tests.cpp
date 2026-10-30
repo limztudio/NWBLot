@@ -37,7 +37,6 @@ using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
 using TestArena = AssetsGraphicsFixture::TestArena;
 #if defined(NWB_FINAL)
 using CookSingleMetaFn = decltype(&AssetsGraphicsFixture::CookSingleMeshMeta);
-using Path = AssetsGraphicsFixture::Path;
 #endif
 
 
@@ -136,7 +135,12 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
     TestArena testArena;
     ExpectCookFailure(testArena, MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), AssetsGraphicsFixture::s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields");
     ExpectCookFailure(testArena, MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), AssetsGraphicsFixture::s_MismatchedMeshMeta, "mismatched_mesh_streams");
-    ExpectCookFailure(testArena, MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), AssetsGraphicsFixture::BuildMeshTriangleMeta("", AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField), "missing_mesh_normal_field");
+    ExpectCookFailure(
+        testArena,
+        MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta("", AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
+        "missing_mesh_normal_field"
+    );
     ExpectCookFailure(
         testArena,
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
@@ -155,7 +159,12 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
         AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_EmptyNormalMapField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
         "empty_map_mesh_normal"
     );
-    ExpectCookFailure(testArena, MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, "", AssetsGraphicsFixture::s_TriangleVertexRefsField), "missing_mesh_tangent_field");
+    ExpectCookFailure(
+        testArena,
+        MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, "", AssetsGraphicsFixture::s_TriangleVertexRefsField),
+        "missing_mesh_tangent_field"
+    );
     ExpectCookFailure(
         testArena,
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
@@ -183,7 +192,6 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'tangents' must be a list")));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("vertex_ref tangent index is out of range")));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'tangents' must not be empty")));
-#else
 #endif
 }
 

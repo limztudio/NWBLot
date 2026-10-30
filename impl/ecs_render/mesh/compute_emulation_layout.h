@@ -23,8 +23,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using NWB::Impl::ComputeEmulationLayout;
-
 [[nodiscard]] inline Expected<ComputeEmulationLayout> ResolveComputeEmulationLayout(const u64 localVertexRefByteSize, const u32 primitiveIndexCount)noexcept{
     ComputeEmulationLayout layout{};
     if(!TryResolveComputeEmulationLayout(localVertexRefByteSize, primitiveIndexCount, layout))

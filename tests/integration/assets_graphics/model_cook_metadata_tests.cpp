@@ -134,7 +134,7 @@ TEST(ModelCookMetadata, UniqueAssetPathReferencesFailAndLocalObjectReferencesRec
         metadata.asset.field(s_SkinnedMeshes).field(s_MeshObjectField).field(s_Skeleton).setString(assetPath);
         EXPECT_FALSE(metadata.parse());
         metadata.verifyObjectReferences();
-        EXPECT_EQ(metadata.asset.field(s_SkinnedMeshes).field("mesh_0").field(s_Skeleton).asString(), assetPath);
+        EXPECT_EQ(metadata.asset.field(s_SkinnedMeshes).field(s_MeshObjectField).field(s_Skeleton).asString(), assetPath);
         metadata.asset.field(s_SkinnedMeshes).field(s_MeshObjectField).field(s_Skeleton).setString("rig_0");
         ASSERT_TRUE(metadata.parse());
         metadata.verifyObjectReferences();
@@ -215,7 +215,7 @@ TEST(ModelCookMetadata, RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyRefere
     metadata.verifyObjectReferences();
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'mesh'")));
 
-    ASSERT_EQ(object.asMap().erase(AStringView("mesh")), 1u);
+    ASSERT_EQ(object.asMap().erase(s_MeshField), 1u);
     ASSERT_TRUE(metadata.parse());
     metadata.verifyObjectReferences();
     EXPECT_EQ(logger.errorCount(), 1u);

@@ -9,8 +9,11 @@
 
 #include <impl/assets_ui_skin/asset.h>
 
+#include <global/simd/convert.h>
 #include <global/simd/result.h>
 #include <global/simd/vector.h>
+#include <global/simd/vector_arithmetic.h>
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,6 +41,19 @@ NWB_IMPL_UI_BEGIN
     else
         return MakeUnexpected(Failure{});
     return SIMDVectorDoubleResult{ VectorDoubleSet(static_cast<f64>(horizontal), static_cast<f64>(vertical), 0.0, 0.0) };
+}
+
+[[nodiscard]] NWB_INLINE Expected<SIMDVectorSingleResult> LoadUiSkinMinimumSize(const UiSkinRegion& region, const SIMDVectorDouble sliceExtents, const SIMDVectorDouble density)noexcept{
+    if(!IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
+        return MakeUnexpected(Failure{});
+    const SIMDVectorDouble minimumSize = VectorDoubleSet(static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight), 0.0, 0.0);
+    const SIMDVectorDouble scaledSlices = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleDivide(sliceExtents, density), s_DoubleSIMDMaskXY);
+    const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(scaledSlices, minimumSize, VectorDoubleGreater(minimumSize, scaledSlices));
+    const f64 width = VectorDoubleGetX(widthHeightValue);
+    const f64 height = VectorDoubleGetY(widthHeightValue);
+    if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
+        return MakeUnexpected(Failure{});
+    return SIMDVectorSingleResult{ ConvertVectorDoubleToSingle(widthHeightValue) };
 }
 
 

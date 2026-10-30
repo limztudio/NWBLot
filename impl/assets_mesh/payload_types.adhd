@@ -17,6 +17,7 @@ const u32 s_MeshletTriangleIndexCount = 3u;
 const u32 s_MeshletSolidTriangleWordBits = 32u;
 const u32 s_MeshletSolidTriangleWordRoundUp = 31u;
 const u32 s_MeshletConeFlagEnabled = 1u;
+const u32 s_MeshletBoundsStride = 20u;
 const u32 s_MeshletCountMask = 0xffu;
 const u32 s_MeshletPrimitiveCountShift = 8u;
 const u32 s_MeshletPositionCountShift = 16u;
@@ -46,9 +47,9 @@ const usize s_AttribGpuByteSize = 16u;
 
 [reflect]
 enum<u32> MeshletRefDeltaWidth{
-    enum U8 = 0u,
-    enum U16 = 1u,
-    enum U32 = 2u
+    U8 = 0u,
+    U16 = 1u,
+    U32 = 2u
 }
 
 class MeshletDesc{
@@ -127,8 +128,8 @@ class MeshletPositionRefEncodingLayout{
     public usize positionByteOffset = 0u;
     public usize skinByteOffset = 0u;
     public usize byteCount = 0u;
-    public MeshletRefDeltaWidth positionWidth = MeshletRefDeltaWidth::Enum::U8;
-    public MeshletRefDeltaWidth skinWidth = MeshletRefDeltaWidth::Enum::U8;
+    public MeshletRefDeltaWidth positionWidth = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth skinWidth = MeshletRefDeltaWidth::U8;
 }
 
 class MeshletAttributeRefEncodingLayout{
@@ -137,14 +138,17 @@ class MeshletAttributeRefEncodingLayout{
     public usize uv0ByteOffset = 0u;
     public usize colorByteOffset = 0u;
     public usize byteCount = 0u;
-    public MeshletRefDeltaWidth normalWidth = MeshletRefDeltaWidth::Enum::U8;
-    public MeshletRefDeltaWidth tangentWidth = MeshletRefDeltaWidth::Enum::U8;
-    public MeshletRefDeltaWidth uv0Width = MeshletRefDeltaWidth::Enum::U8;
-    public MeshletRefDeltaWidth colorWidth = MeshletRefDeltaWidth::Enum::U8;
+    public MeshletRefDeltaWidth normalWidth = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth tangentWidth = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth uv0Width = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth colorWidth = MeshletRefDeltaWidth::U8;
 }
 
 u32 PackMeshletCounts(in u32 vertexCount, in u32 primitiveCount, in u32 positionCount, in u32 attributeCount){
-    return (vertexCount & s_MeshletCountMask) | ((primitiveCount & s_MeshletCountMask) << s_MeshletPrimitiveCountShift) | ((positionCount & s_MeshletCountMask) << s_MeshletPositionCountShift) | ((attributeCount & s_MeshletCountMask) << s_MeshletAttributeCountShift);
+    return (vertexCount & s_MeshletCountMask)
+        | ((primitiveCount & s_MeshletCountMask) << s_MeshletPrimitiveCountShift)
+        | ((positionCount & s_MeshletCountMask) << s_MeshletPositionCountShift)
+        | ((attributeCount & s_MeshletCountMask) << s_MeshletAttributeCountShift);
 }
 
 u32 MeshletVertexCount(in MeshletDesc meshlet){
@@ -165,10 +169,10 @@ u32 MeshletAttributeCount(in MeshletDesc meshlet){
 
 MeshletRefDeltaWidth MeshletRefDeltaWidthForMaxDelta(in u32 maxDelta){
     if(maxDelta <= 0xffu)
-        return MeshletRefDeltaWidth::Enum::U8;
+        return MeshletRefDeltaWidth::U8;
     if(maxDelta <= 0xffffu)
-        return MeshletRefDeltaWidth::Enum::U16;
-    return MeshletRefDeltaWidth::Enum::U32;
+        return MeshletRefDeltaWidth::U16;
+    return MeshletRefDeltaWidth::U32;
 }
 
 u32 PackMeshletRefEncodingWidth(in MeshletRefDeltaWidth width, in u32 shift){
@@ -191,7 +195,7 @@ MeshletRefDeltaWidth MeshletRefEncodingWidth(in u32 encoding, in u32 shift){
 }
 
 b8 MeshletRefDeltaFitsWidth(in u32 delta, in MeshletRefDeltaWidth width){
-    return width == MeshletRefDeltaWidth::Enum::U32 || (width == MeshletRefDeltaWidth::Enum::U16 && delta <= 0xffffu) || (width == MeshletRefDeltaWidth::Enum::U8 && delta <= 0xffu);
+    return width == MeshletRefDeltaWidth::U32 || (width == MeshletRefDeltaWidth::U16 && delta <= 0xffffu) || (width == MeshletRefDeltaWidth::U8 && delta <= 0xffu);
 }
 
 u32 MeshletConeFlags(in MeshletBounds bounds){
@@ -207,13 +211,13 @@ b8 MeshletConeEnabled(in MeshletBounds bounds){
 }
 
 b8 MeshletRefDeltaWidthValid(in MeshletRefDeltaWidth width){
-    return width == MeshletRefDeltaWidth::Enum::U8 || width == MeshletRefDeltaWidth::Enum::U16 || width == MeshletRefDeltaWidth::Enum::U32;
+    return width == MeshletRefDeltaWidth::U8 || width == MeshletRefDeltaWidth::U16 || width == MeshletRefDeltaWidth::U32;
 }
 
 u32 MeshletRefDeltaByteWidth(in MeshletRefDeltaWidth width){
-    if(width == MeshletRefDeltaWidth::Enum::U8)
+    if(width == MeshletRefDeltaWidth::U8)
         return 1u;
-    if(width == MeshletRefDeltaWidth::Enum::U16)
+    if(width == MeshletRefDeltaWidth::U16)
         return 2u;
     return 4u;
 }

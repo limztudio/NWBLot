@@ -39,11 +39,11 @@ class PopupToken{
 }
 
 enum<u8> PopupDismissReason{
-    enum None,
-    enum Cancel,
-    enum OutsideClick,
-    enum FocusTraversal,
-    enum FocusLost,
+    None,
+    Cancel,
+    OutsideClick,
+    FocusTraversal,
+    FocusLost,
 }
 
 class PopupScope{
@@ -63,7 +63,7 @@ class PopupScope{
 
 class PopupDismissal{
     public PopupToken token;
-    public PopupDismissReason reason = PopupDismissReason::Enum::None;
+    public PopupDismissReason reason = PopupDismissReason::None;
 }
 
 
@@ -71,8 +71,8 @@ class PopupDismissal{
 
 
 enum<u8> UiEditClickKind{
-    enum Caret,
-    enum Word,
+    Caret,
+    Word,
 }
 
 // The host advances the corresponding generation when a declaration or its backing model is replaced.
@@ -115,7 +115,7 @@ class UiEditClickTracker{
     public UiEditClickKind press(in UiTextEditOwner owner, in PopupToken popup, in u64 revision, in u64 externalRevision, in Point position, in u64 timestampMs, in b8 shift){
         if(!owner.valid() || timestampMs == 0u || shift || !isFinite(position.x) || !isFinite(position.y)){
             this.cancel();
-            return UiEditClickKind::Enum::Caret;
+            return UiEditClickKind::Caret;
         }
         const f64x2 delta = f64x2(cast<f64>(position.x), cast<f64>(position.y)) - f64x2(cast<f64>(this.m_position.x), cast<f64>(this.m_position.y));
         const f64 distanceSquared = lengthSq(delta);
@@ -136,8 +136,8 @@ class UiEditClickTracker{
         this.m_down = true;
         this.m_released = false;
         if(second)
-            return UiEditClickKind::Enum::Word;
-        return UiEditClickKind::Enum::Caret;
+            return UiEditClickKind::Word;
+        return UiEditClickKind::Caret;
     }
 
     public void move(in Point position){

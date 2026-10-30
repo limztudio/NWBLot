@@ -5,7 +5,7 @@
 #include "prefix_scene_upload_builder.h"
 
 #include <impl/ecs_render/deferred/deferred_system.h>
-#include <impl/ecs_render/deferred/lighting_content_stamp.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/mesh/task_graph_prefix_tasks.h>
@@ -50,7 +50,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
     const auto& rayTracingLightingClassification = uploads.lightingClassification;
     const b8 sceneLightUploadRequired = uploads.lightUploadRequired;
     const b8 sceneShadingUploadRequired = uploads.sceneShadingUploadRequired;
-    result.sceneLightingContentHash = ComputeSceneLightingContentHash(sceneShadingState, Span<const ECSRenderDetail::SceneLightGpuData>(sceneLightData, sceneLightCount));
+    result.sceneLightingContentHash = ComputeSceneLightingContentHash(sceneShadingState, Span<const SceneLightGpuData>(sceneLightData, sceneLightCount));
 
     Core::GpuTaskSchedulingHint meshViewSetupScheduling;
     meshViewSetupScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -118,7 +118,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
     Core::GpuTaskId sceneUploadTask = meshViewCommitTask;
     if(sceneLightUploadRequired){
         const usize sceneLightByteCount = static_cast<usize>(sceneLightCount) * sizeof(sceneLightData[0u]);
-        const auto sceneLightBlobResult = m_graph.copyUploadData(sceneLightData, sceneLightByteCount, alignof(ECSRenderDetail::SceneLightGpuData));
+        const auto sceneLightBlobResult = m_graph.copyUploadData(sceneLightData, sceneLightByteCount, alignof(SceneLightGpuData));
         Core::GpuTaskDesc sceneLightUploadDesc;
         sceneLightUploadDesc.setIdentity(Name("render.graphics_prefix.scene_lights_upload")).setMarkerLabel("Scene Lights Upload").setScheduling(immutableUploadScheduling).setDependencies(&sceneUploadTask, 1u);
         if(!sceneLightBlobResult)
@@ -141,7 +141,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
     }
 
     if(sceneShadingUploadRequired){
-        const auto sceneShadingBlobResult = m_graph.copyUploadData(&sceneShadingState, sizeof(sceneShadingState), alignof(ECSRenderDetail::SceneShadingGpuData));
+        const auto sceneShadingBlobResult = m_graph.copyUploadData(&sceneShadingState, sizeof(sceneShadingState), alignof(SceneShadingGpuData));
         Core::GpuTaskDesc sceneShadingUploadDesc;
         sceneShadingUploadDesc.setIdentity(Name("render.graphics_prefix.scene_shading_upload")).setMarkerLabel("Scene Shading Upload").setScheduling(immutableUploadScheduling).setDependencies(&sceneUploadTask, 1u);
         if(!sceneShadingBlobResult)

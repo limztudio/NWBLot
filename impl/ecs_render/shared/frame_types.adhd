@@ -126,20 +126,20 @@ class AvboitPassUploadResult{
 }
 
 enum<u8> AvboitSharedComputeEmulationPhase{
-    enum Generate = 0u,
-    enum Raster = 1u
+    Generate = 0u,
+    Raster = 1u
 }
 
 enum<u8> AvboitGeometryPhase{
-    enum Occupancy = 0u,
-    enum Extinction = 1u,
-    enum Accumulation = 2u
+    Occupancy = 0u,
+    Extinction = 1u,
+    Accumulation = 2u
 }
 
 enum<u8> AvboitMaterialUploadPhase{
-    enum Occupancy = 0u,
-    enum Extinction = 1u,
-    enum Accumulation = 2u
+    Occupancy = 0u,
+    Extinction = 1u,
+    Accumulation = 2u
 }
 
 
@@ -284,10 +284,10 @@ class RendererTaskTimingFeedbackDrainResult{
 }
 
 enum<u8> RendererTaskTimingFeedbackCollectionAction{
-    enum None = 0u,
-    enum Enable = 1u,
-    enum Disable = 2u,
-    enum kCount = 3u
+    None = 0u,
+    Enable = 1u,
+    Disable = 2u,
+    kCount = 3u
 }
 
 

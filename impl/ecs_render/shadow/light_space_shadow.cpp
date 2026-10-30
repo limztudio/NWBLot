@@ -117,19 +117,19 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     if(!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace || !state.m_sceneEligible))
         return;
     // Use the same scene ordering and shadow-slot allocator as the later prefix. That prefix may only select a fitting generation.
-    ECSRenderDetail::SceneLightGpuData lights[NWB_SCENE_MAX_LIGHTS];
+    SceneLightGpuData lights[NWB_SCENE_MAX_LIGHTS];
     f32 causticImportance[NWB_SCENE_MAX_LIGHTS] = {};
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, NWB_SCENE_MAX_LIGHTS, lights, causticImportance);
     for(u32 index = 0u; index < lightCount; ++index)
         state.m_csgRequired = state.m_csgRequired || (state.m_csg.snapshot.hasCsg && lights[index].params.z >= 0.f);
-    const auto planResult = buildLightSpaceShadowPlan(Span<const ECSRenderDetail::SceneLightGpuData>(lights, lightCount));
+    const auto planResult = buildLightSpaceShadowPlan(Span<const SceneLightGpuData>(lights, lightCount));
     if(!planResult)
         return;
     const LightSpacePlan& plan = *planResult;
     state.m_resourcesPrepared = ensureLightSpaceShadowPipelines() && ensureLightSpaceShadowStorage(plan);
 }
 
-Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(const Span<const ECSRenderDetail::SceneLightGpuData> lights)const noexcept{
+Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(const Span<const SceneLightGpuData> lights)const noexcept{
     const auto& state = m_lightSpaceShadow;
     const usize lightCount = lights.size();
     if(
@@ -167,7 +167,7 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(con
 }
 
 // Graph declaration can change the admitted light list, but never creates or grows its GPU resources.
-void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const ECSRenderDetail::SceneLightGpuData> lights){
+void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const SceneLightGpuData> lights){
     auto& state = m_lightSpaceShadow;
     auto& snapshot = state.m_snapshot;
     snapshot.ready = false;
@@ -205,7 +205,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const ECSRend
     identity.lighting = s_Fnv64OffsetBasis;
     const u32 lightCount = static_cast<u32>(lights.size());
     Fnv64AppendValue(identity.lighting, lightCount);
-    for(const ECSRenderDetail::SceneLightGpuData& light : lights){
+    for(const SceneLightGpuData& light : lights){
         Fnv64AppendValue(identity.lighting, light.position);
         Fnv64AppendValue(identity.lighting, light.direction);
         Fnv64AppendValue(identity.lighting, light.colorIntensity);

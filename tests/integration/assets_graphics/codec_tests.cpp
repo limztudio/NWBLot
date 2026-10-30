@@ -198,16 +198,6 @@ using AssetObjectCachePathVector = Vector<Path, NWB::Core::Alloc::GlobalArena>;
     return bytes;
 }
 
-static b8 AssetBytesEqual(const Span<const u8> lhs, const Span<const u8> rhs)noexcept{
-    if(lhs.size() != rhs.size())
-        return false;
-    for(usize i = 0u; i < lhs.size(); ++i){
-        if(lhs[i] != rhs[i])
-            return false;
-    }
-    return true;
-}
-
 TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -230,10 +220,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     const auto firstObjectBytes = ReadAssetObjectCacheBytes(testArena, *objectPath);
     ASSERT_TRUE(firstObjectBytes);
 
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    auto loadedAssetLoadResult = AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory);
-    ASSERT_TRUE(loadedAssetLoadResult);
-    loadedAsset = Move(*loadedAssetLoadResult);
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory));
 
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
     const auto unchangedObjectPath = FindSingleAssetObjectCachePath(testArena, root / s_Cache);
@@ -242,7 +229,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
 
     const auto unchangedObjectBytes = ReadAssetObjectCacheBytes(testArena, *unchangedObjectPath);
     ASSERT_TRUE(unchangedObjectBytes);
-    EXPECT_TRUE(AssetBytesEqual(*firstObjectBytes, *unchangedObjectBytes));
+    EXPECT_EQ(*firstObjectBytes, *unchangedObjectBytes);
 
     // The compact path omits this type-hash lane, so the full header must still reject it as a cache hit.
     auto mismatchedObjectBytes = *firstObjectBytes;
@@ -257,7 +244,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
     const auto repairedObjectBytes = ReadAssetObjectCacheBytes(testArena, *objectPath);
     ASSERT_TRUE(repairedObjectBytes);
-    EXPECT_TRUE(AssetBytesEqual(*firstObjectBytes, *repairedObjectBytes));
+    EXPECT_EQ(*firstObjectBytes, *repairedObjectBytes);
 
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_DefaultColorMeshMeta));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
@@ -267,12 +254,9 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
 
     const auto changedObjectBytes = ReadAssetObjectCacheBytes(testArena, *changedObjectPath);
     ASSERT_TRUE(changedObjectBytes);
-    EXPECT_FALSE(AssetBytesEqual(*firstObjectBytes, *changedObjectBytes));
+    EXPECT_NE(*firstObjectBytes, *changedObjectBytes);
 
-    loadedAsset.reset();
-    auto loadedAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory);
-    ASSERT_TRUE(loadedAssetLoadResult2);
-    loadedAsset = Move(*loadedAssetLoadResult2);
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory));
 
     EXPECT_TRUE(RemoveAllIfExists(root));
     EXPECT_EQ(logger.errorCount(), 0u);

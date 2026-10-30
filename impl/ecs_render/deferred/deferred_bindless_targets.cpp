@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/deferred/deferred_bindless_registrar.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>

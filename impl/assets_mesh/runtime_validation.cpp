@@ -141,7 +141,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
         MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("has incomplete meshlet payload"));
         return false;
     }
-    if(meshlets.size() > Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE){
+    if(meshlets.size() > Limit<u32>::s_Max / s_MeshletBoundsStride){
         MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("meshlet bounds exceed u32 byte-address limits"));
         return false;
     }

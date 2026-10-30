@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/assets_skeleton/joint_types.adhd.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
 #include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include <impl/ecs_skeleton/components.adhd.h>

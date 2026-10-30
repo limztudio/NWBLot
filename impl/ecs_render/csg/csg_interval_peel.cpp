@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/csg/csg_interval_private.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
@@ -157,7 +156,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     commandList.setGraphicsState(graphicsState);
     m_graphics.getDevice().getDescriptorHeap().bindGraphics(commandList, *m_csgState.m_intervalCapFillPipeline);
 
-    ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
+    MeshFrameHeapSlots frameHeapSlots;
     frameHeapSlots.generatedVertex = csgResources.clipContextSlotsHeapHandle.slot();
     ECSRenderDetail::SetShaderDrivenPushConstants(commandList, 0u, 0u, 0u, viewportState, frameHeapSlots, 0u);
 
@@ -182,7 +181,7 @@ void RendererCsgSystem::renderRefractionIntervalCaps(Core::CommandList& commandL
     commandList.setGraphicsState(graphicsState);
     m_graphics.getDevice().getDescriptorHeap().bindGraphics(commandList, *csgResources.refractionCapFillPipeline);
 
-    ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
+    MeshFrameHeapSlots frameHeapSlots;
     frameHeapSlots.view = targets.bindless.slotsBufferDescriptor.slot();
     frameHeapSlots.generatedVertex = csgResources.clipContextSlotsHeapHandle.slot();
     Core::DrawArguments drawArgs;

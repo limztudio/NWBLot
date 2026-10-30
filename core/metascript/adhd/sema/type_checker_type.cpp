@@ -16,16 +16,12 @@ NWB_ADHD_BEGIN
 
 const TemplateParamDecl* TypeChecker::FindTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, const MStringView name)noexcept{
     if(method){
-        for(const TemplateParamDecl& tp : method->templateParams){
-            if(!tp.constValueType && tp.name == name)
-                return &tp;
-        }
+        if(const TemplateParamDecl* tp = FindTemplateParamByName(method->templateParams, name); tp && !tp->constValueType)
+            return tp;
     }
     if(ownerClass){
-        for(const TemplateParamDecl& tp : ownerClass->templateParams){
-            if(!tp.constValueType && tp.name == name)
-                return &tp;
-        }
+        if(const TemplateParamDecl* tp = FindTemplateParamByName(ownerClass->templateParams, name); tp && !tp->constValueType)
+            return tp;
     }
     return nullptr;
 }
@@ -57,7 +53,7 @@ b8 TypeChecker::checkTemplateParamBounds(const Span<const TemplateParamDecl> par
                 const TypeRef* unwrappedConstType = m_symbols.unwrapTypeAlias(param.constValueType);
                 const MStringView baseConstName = unwrappedConstType ? m_symbols.resolveBaseTypeName(unwrappedConstType->name) : MStringView{};
                 if(!unwrappedConstType || m_symbols.resolveRefMode(param.constValueType) != ParamPassingMode::None || !(baseConstName == "b8" || IsIntegerScalarType(baseConstName) || m_symbols.findEnum(baseConstName) != nullptr)){
-                    reportError(errors, param.span, "non-type template parameter must have an integer, b8, or enum value type");
+                    reportError(errors, param.span, "non-type template parameter must have an integer, b8, enum, or flag value type");
                     ok = false;
                 }
             }

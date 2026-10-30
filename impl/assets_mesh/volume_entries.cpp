@@ -35,10 +35,6 @@ namespace __hidden_assets_mesh_volume_entries{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_SkinDiagnosticPrefix = "Skin meta";
-static constexpr AStringView s_MeshField = "mesh";
-static constexpr AStringView s_SkeletonField = "skeleton";
-
 static Expected<MeshCookEntry> ParseMeshDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
     return ParseMeshCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.cpuScheduler, context.scratchArena);
 }
@@ -60,10 +56,10 @@ static Expected<SkinCookEntry> ParseSkinValue(const Name virtualPath, const Path
 }
 
 static b8 ExtractSkinDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto meshRef = Core::Assets::ReadMetadataAssetRefField<Mesh>(context.nwbFilePath, context.asset, s_SkinDiagnosticPrefix, s_MeshField, true);
+    const auto meshRef = Core::Assets::ReadMetadataAssetRefField<Mesh>(context.nwbFilePath, context.asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaMeshField, true);
     if(!meshRef)
         return false;
-    const auto skeletonRef = Core::Assets::ReadMetadataAssetRefField<Skeleton>(context.nwbFilePath, context.asset, s_SkinDiagnosticPrefix, s_SkeletonField, true);
+    const auto skeletonRef = Core::Assets::ReadMetadataAssetRefField<Skeleton>(context.nwbFilePath, context.asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaSkeletonField, true);
     if(!skeletonRef)
         return false;
     if(!collector.addAssetDependency(meshRef->name(), Mesh::AssetTypeName()))

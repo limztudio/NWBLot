@@ -118,62 +118,31 @@ namespace __hidden_adhd_layout_optimizer{
     return false;
 }
 
-void VisitTypeAliasTopo(const usize idx, const Span<const TypeAliasDecl* const> aliases, MVector<u8>& state, MVector<const TypeAliasDecl*>& outSorted){
+template<typename DeclT, typename DependsOnPred>
+void VisitDeclTopo(const usize idx, const Span<const DeclT* const> items, const DependsOnPred& dependsOn, MVector<u8>& state, MVector<const DeclT*>& outSorted){
     if(state[idx] != 0u)
         return;
     state[idx] = 1u;
-    const TypeAliasDecl* cur = aliases[idx];
-    if(cur && cur->aliasedType){
-        for(usize j = 0u; j < aliases.size(); ++j){
-            if(j != idx && state[j] == 0u && aliases[j] && TypeRefReferencesSymbol(*cur->aliasedType, aliases[j]->name))
-                VisitTypeAliasTopo(j, aliases, state, outSorted);
-        }
-    }
-    state[idx] = 2u;
-    outSorted.push_back(cur);
-}
-
-void VisitInterfaceTopo(const usize idx, const Span<const InterfaceDecl* const> interfaces, const SymbolTable& symbols, MVector<u8>& state, MVector<const InterfaceDecl*>& outSorted){
-    if(state[idx] != 0u)
-        return;
-    state[idx] = 1u;
-    const InterfaceDecl* cur = interfaces[idx];
+    const DeclT* cur = items[idx];
     if(cur){
-        for(const TypeRef* baseRef : cur->baseInterfaces){
-            if(!baseRef)
-                continue;
-            const MStringView baseName = symbols.resolveBaseTypeName(baseRef->name);
-            for(usize j = 0u; j < interfaces.size(); ++j){
-                if(j != idx && state[j] == 0u && interfaces[j] && interfaces[j]->name == baseName)
-                    VisitInterfaceTopo(j, interfaces, symbols, state, outSorted);
-            }
+        for(usize j = 0u; j < items.size(); ++j){
+            if(j != idx && state[j] == 0u && items[j] && dependsOn(*cur, *items[j]))
+                VisitDeclTopo(j, items, dependsOn, state, outSorted);
         }
     }
     state[idx] = 2u;
     outSorted.push_back(cur);
 }
 
-void VisitClassTopo(const usize idx, const Span<const ClassDecl* const> classes, const SymbolTable& symbols, MVector<u8>& state, MVector<const ClassDecl*>& outSorted){
-    if(state[idx] != 0u)
+template<typename DeclT, typename DependsOnPred>
+void SortDeclsTopologically(const Span<const DeclT* const> items, MetaArena& arena, const DependsOnPred& dependsOn, MVector<const DeclT*>& outSorted){
+    outSorted.clear();
+    if(items.empty())
         return;
-    state[idx] = 1u;
-    const ClassDecl* cur = classes[idx];
-    if(cur){
-        for(usize j = 0u; j < classes.size(); ++j){
-            if(j != idx && state[j] == 0u && classes[j] && ClassDependsOnClassByValue(*cur, classes[j]->name, symbols))
-                VisitClassTopo(j, classes, symbols, state, outSorted);
-        }
-    }
-    state[idx] = 2u;
-    outSorted.push_back(cur);
-}
-
-[[nodiscard]] b8 HasTemplateParamName(const Span<const TemplateParamDecl> params, const MStringView name)noexcept{
-    for(const TemplateParamDecl& p : params){
-        if(p.name == name)
-            return true;
-    }
-    return false;
+    MVector<u8> state(items.size(), 0u, arena);
+    outSorted.reserve(items.size());
+    for(usize i = 0u; i < items.size(); ++i)
+        VisitDeclTopo(i, items, dependsOn, state, outSorted);
 }
 
 
@@ -239,33 +208,25 @@ b8 InstantiationDependsOnClassByValue(const ClassTemplateInstantiation& inst, co
 }
 
 void SortTypeAliasesTopologically(const Span<const TypeAliasDecl* const> aliases, MetaArena& arena, MVector<const TypeAliasDecl*>& outSorted){
-    outSorted.clear();
-    if(aliases.empty())
-        return;
-    MVector<u8> state(aliases.size(), 0u, arena);
-    outSorted.reserve(aliases.size());
-    for(usize i = 0u; i < aliases.size(); ++i)
-        __hidden_adhd_layout_optimizer::VisitTypeAliasTopo(i, aliases, state, outSorted);
+    __hidden_adhd_layout_optimizer::SortDeclsTopologically(aliases, arena, [](const TypeAliasDecl& cur, const TypeAliasDecl& dep)noexcept{
+        return cur.aliasedType && TypeRefReferencesSymbol(*cur.aliasedType, dep.name);
+    }, outSorted);
 }
 
 void SortInterfacesTopologically(const Span<const InterfaceDecl* const> interfaces, const SymbolTable& symbols, MetaArena& arena, MVector<const InterfaceDecl*>& outSorted){
-    outSorted.clear();
-    if(interfaces.empty())
-        return;
-    MVector<u8> state(interfaces.size(), 0u, arena);
-    outSorted.reserve(interfaces.size());
-    for(usize i = 0u; i < interfaces.size(); ++i)
-        __hidden_adhd_layout_optimizer::VisitInterfaceTopo(i, interfaces, symbols, state, outSorted);
+    __hidden_adhd_layout_optimizer::SortDeclsTopologically(interfaces, arena, [&](const InterfaceDecl& cur, const InterfaceDecl& dep)noexcept{
+        for(const TypeRef* baseRef : cur.baseInterfaces){
+            if(baseRef && symbols.resolveBaseTypeName(baseRef->name) == dep.name)
+                return true;
+        }
+        return false;
+    }, outSorted);
 }
 
 void SortClassesTopologically(const Span<const ClassDecl* const> classes, const SymbolTable& symbols, MetaArena& arena, MVector<const ClassDecl*>& outSorted){
-    outSorted.clear();
-    if(classes.empty())
-        return;
-    MVector<u8> state(classes.size(), 0u, arena);
-    outSorted.reserve(classes.size());
-    for(usize i = 0u; i < classes.size(); ++i)
-        __hidden_adhd_layout_optimizer::VisitClassTopo(i, classes, symbols, state, outSorted);
+    __hidden_adhd_layout_optimizer::SortDeclsTopologically(classes, arena, [&](const ClassDecl& cur, const ClassDecl& dep)noexcept{
+        return __hidden_adhd_layout_optimizer::ClassDependsOnClassByValue(cur, dep.name, symbols);
+    }, outSorted);
 }
 
 void CollectExternalForwardDeclClasses(
@@ -295,8 +256,8 @@ void CollectExternalForwardDeclClasses(
         isRefOrAsset
         && !type.name.empty()
         && type.templateArgs.empty()
-        && !__hidden_adhd_layout_optimizer::HasTemplateParamName(outerTemplateParams, type.name)
-        && !__hidden_adhd_layout_optimizer::HasTemplateParamName(innerTemplateParams, type.name)
+        && !FindTemplateParamByName(outerTemplateParams, type.name)
+        && !FindTemplateParamByName(innerTemplateParams, type.name)
         && !IsKnownConcreteTypeName(type.name, symbols)
     ){
         b8 alreadyPresent = false;
@@ -365,7 +326,7 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
     if(!ok)
         return false;
     MVector<ParseError> silentErrors(m_arena);
-    for(usize iter = 0u; iter < unit.classes.size(); ++iter){
+    auto recomputeClassLayouts = [&]() -> b8{
         b8 changed = false;
         for(ClassDecl* classDecl : unit.classes){
             const usize prevSize = classDecl->totalSize;
@@ -376,7 +337,10 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
             if(classDecl->totalSize != prevSize || classDecl->totalAlign != prevAlign || classDecl->needsClassArena != prevArena)
                 changed = true;
         }
-        if(!changed)
+        return changed;
+    };
+    for(usize iter = 0u; iter < unit.classes.size(); ++iter){
+        if(!recomputeClassLayouts())
             break;
     }
     collectAllTemplateInstantiations(unit);
@@ -405,15 +369,8 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
             if(inst->totalSize != prevSize || inst->totalAlign != prevAlign)
                 changed = true;
         }
-        for(ClassDecl* classDecl : unit.classes){
-            const usize prevSize = classDecl->totalSize;
-            const usize prevAlign = classDecl->totalAlign;
-            const b8 prevArena = classDecl->needsClassArena;
-            if(!computeClassLayout(*classDecl, silentErrors))
-                ok = false;
-            if(classDecl->totalSize != prevSize || classDecl->totalAlign != prevAlign || classDecl->needsClassArena != prevArena)
-                changed = true;
-        }
+        if(recomputeClassLayouts())
+            changed = true;
         if(!changed)
             break;
     }
@@ -493,10 +450,8 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
         usize count = 1u;
         if(!type.templateArgs.empty() && type.templateArgs[0].type)
             resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, elemSize, elemAlign);
-        if(type.templateArgs.size() >= 2u){
-            const MStringView countText = type.templateArgs[1].type ? type.templateArgs[1].type->name : type.templateArgs[1].constantText;
-            count = ParseUnsignedConstant(countText, m_symbols);
-        }
+        if(type.templateArgs.size() >= 2u)
+            count = ParseUnsignedConstant(type.templateArgs[1].constantOrTypeName(), m_symbols);
         if(name == "Array"){
             outSize = elemSize * count;
             outAlign = elemAlign;

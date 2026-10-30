@@ -69,14 +69,21 @@ static const MaterialBindEntry* FindMaterialBindEntry(const Span<const MaterialB
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
-    CookArena& arena,
+    MaterialCookArena& arena,
     const AStringView shaderName,
     const Path& materialBindIncludeRoot,
     const Span<const MaterialBindEntry> materialBindEntries,
     const Span<const Path> dependencies,
-    ScratchArena& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
+    using namespace MaterialCookDetail;
     MaterialBindDependency result(arena);
 
     ScratchPath normalizedMaterialBindIncludeRoot(scratchArena);
@@ -133,12 +140,6 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
 
     return result;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

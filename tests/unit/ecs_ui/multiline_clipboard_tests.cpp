@@ -25,7 +25,7 @@ class UiMultilineClipboardTests : public UiEditBoxHostTests{};
 TEST_F(UiMultilineClipboardTests, NormalizedCapacityFailurePreservesSelectionAndHistory){
     Ui::EditModel model(m_arena, { 6u }, Ui::EditTextMode::Multiline);
     UiEditClipboardController controller(m_arena, m_clipboard);
-    const UiTextEditOwner owner{ { 51u }, 1u, model.instanceGeneration() };
+    const Ui::UiTextEditOwner owner{ { 51u }, 1u, model.instanceGeneration() };
     ASSERT_TRUE(model.setText("a\nb"));
     ASSERT_TRUE(model.setSelection(1u, 2u));
     const u64 revision = model.revision();
@@ -46,7 +46,7 @@ TEST_F(UiMultilineClipboardTests, NormalizedCapacityFailurePreservesSelectionAnd
 TEST_F(UiMultilineClipboardTests, UnsupportedControlsRejectBeforeReplacement){
     Ui::EditModel model(m_arena, {}, Ui::EditTextMode::Multiline);
     UiEditClipboardController controller(m_arena, m_clipboard);
-    const UiTextEditOwner owner{ { 51u }, 1u, model.instanceGeneration() };
+    const Ui::UiTextEditOwner owner{ { 51u }, 1u, model.instanceGeneration() };
     ASSERT_TRUE(model.setText("a\nb"));
     ASSERT_TRUE(model.selectAll());
     const u64 selection = model.selectionGeneration();

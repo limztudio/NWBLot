@@ -156,14 +156,8 @@ MStringView TypeChecker::inferExprTypeName(ClassDecl* ownerClass, const MethodDe
     if(expr.kind == ExprKind::Identifier){
         if(const ScopedVarInfo* local = FindScopedVar(scope, expr.text))
             return resolveScopedVarBaseType(*local);
-        if(const Stmt* gc = m_symbols.findGlobalConstant(expr.text); gc && gc->varType)
-            return m_symbols.resolveBaseTypeName(gc->varType->name);
         if(const MStringView builtinConstType = FindBuiltinGlobalConstantType(expr.text); !builtinConstType.empty())
             return builtinConstType;
-    }
-    else if(expr.kind == ExprKind::ThisMember && ownerClass){
-        if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text); field && field->type)
-            return m_symbols.resolveBaseTypeName(field->type->name);
     }
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
         const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
@@ -175,8 +169,6 @@ MStringView TypeChecker::inferExprTypeName(ClassDecl* ownerClass, const MethodDe
             return unalignedInfo->laneScalarType;
         if(expr.isSwizzle)
             return lhsType;
-        if(const TypeRef* memberType = inferExprTypeRef(ownerClass, method, expr, scope))
-            return m_symbols.resolveBaseTypeName(memberType->name);
     }
     else if(expr.kind == ExprKind::Index && expr.lhs){
         const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
@@ -184,19 +176,17 @@ MStringView TypeChecker::inferExprTypeName(ClassDecl* ownerClass, const MethodDe
             return simdInfo->xyzScalarType;
         if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(lhsType))
             return unalignedInfo->laneScalarType;
-        if(const TypeRef* indexedType = inferExprTypeRef(ownerClass, method, expr, scope))
-            return m_symbols.resolveBaseTypeName(indexedType->name);
     }
-    else if(expr.kind == ExprKind::Unary && expr.lhs){
-        if(const TypeRef* unaryTypeRef = inferExprTypeRef(ownerClass, method, expr, scope))
-            return m_symbols.resolveBaseTypeName(unaryTypeRef->name);
+
+    if(const TypeRef* resolvedRef = inferExprTypeRef(ownerClass, method, expr, scope))
+        return m_symbols.resolveBaseTypeName(resolvedRef->name);
+
+    if(expr.kind == ExprKind::Unary && expr.lhs){
         if(expr.op == TokenType::Bang)
             return "b8";
         return inferExprTypeName(ownerClass, method, *expr.lhs, scope);
     }
-    else if(expr.kind == ExprKind::Binary){
-        if(const TypeRef* binTypeRef = inferExprTypeRef(ownerClass, method, expr, scope))
-            return m_symbols.resolveBaseTypeName(binTypeRef->name);
+    if(expr.kind == ExprKind::Binary){
         if(
             expr.op == TokenType::EqualEqual || expr.op == TokenType::BangEqual
             || expr.op == TokenType::Less || expr.op == TokenType::LessEqual
@@ -216,9 +206,7 @@ MStringView TypeChecker::inferExprTypeName(ClassDecl* ownerClass, const MethodDe
             return rhsT;
         return !lhsT.empty() ? lhsT : rhsT;
     }
-    else if(expr.kind == ExprKind::Call && expr.lhs){
-        if(const TypeRef* callType = inferExprTypeRef(ownerClass, method, expr, scope))
-            return m_symbols.resolveBaseTypeName(callType->name);
+    if(expr.kind == ExprKind::Call && expr.lhs){
         if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(expr.lhs->text)){
                 if(memberInfo->returnRule == BuiltinMemberReturnRule::Usize)
@@ -263,9 +251,6 @@ MStringView TypeChecker::inferExprTypeName(ClassDecl* ownerClass, const MethodDe
                 }
             }
         }
-    }
-    else if((expr.kind == ExprKind::Cast || expr.kind == ExprKind::BitCast) && expr.targetType){
-        return m_symbols.resolveBaseTypeName(expr.targetType->name);
     }
     else if(expr.kind == ExprKind::ScopeAccess && !expr.scopeChain.empty()){
         return resolveScopeAccessEnumTypeName(ownerClass, method, expr, scope);

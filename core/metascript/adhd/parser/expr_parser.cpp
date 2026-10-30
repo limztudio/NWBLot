@@ -313,7 +313,7 @@ Expr* ExprParser::parsePrimary(){
             TypeRef* maybeType = m_typeParser.parseType(false, false);
             if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.match(TokenType::RightParen)){
                 const b8 isKnownType = maybeType->refMode != ParamPassingMode::None || maybeType->isFuncType || !maybeType->templateArgs.empty() || IsBuiltinTypeName(maybeType->name);
-                const b8 looksLikeType = isKnownType || (!maybeType->name.empty() && maybeType->name[0] >= 'A' && maybeType->name[0] <= 'Z');
+                const b8 looksLikeType = isKnownType || (!maybeType->name.empty() && IsAsciiUpper(maybeType->name[0]));
                 const b8 nextIsUnambiguousCastOperand = m_cursor.check(TokenType::Identifier)
                     || m_cursor.check(TokenType::IntegerLiteral)
                     || m_cursor.check(TokenType::FloatLiteral)

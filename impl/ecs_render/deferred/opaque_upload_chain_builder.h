@@ -37,7 +37,7 @@ struct OpaqueUploadChainInputs{
     Span<InstanceGpuData> instanceData;
     CsgFrameGpuDataView csgFrameData{};
 #if defined(NWB_DEBUG)
-    Span<const ECSRenderDetail::MaterialTypedInstanceRanges> materialTypedRanges;
+    Span<const MaterialTypedInstanceRanges> materialTypedRanges;
 #endif
     Span<const u8> materialTypedBytes;
     Core::GpuGraphResourceId materialInstances;

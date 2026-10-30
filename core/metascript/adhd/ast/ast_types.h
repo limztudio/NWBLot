@@ -26,6 +26,10 @@ struct TypeRef;
 struct TypeArg{
     TypeRef* type = nullptr;
     MStringView constantText;
+
+
+public:
+    [[nodiscard]] constexpr MStringView constantOrTypeName()const noexcept;
 };
 
 
@@ -76,6 +80,18 @@ public:
         : interfaceBounds(arena)
     {}
 };
+
+constexpr MStringView TypeArg::constantOrTypeName()const noexcept{
+    return type ? type->name : constantText;
+}
+
+[[nodiscard]] constexpr const TemplateParamDecl* FindTemplateParamByName(const Span<const TemplateParamDecl> params, const MStringView name)noexcept{
+    for(const TemplateParamDecl& tp : params){
+        if(tp.name == name)
+            return &tp;
+    }
+    return nullptr;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -55,8 +55,8 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(Core::CommandList& 
 
     // Prepare reads accumulated photons and resolve geometry, then writes the parity-selected half-resolution target.
     RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);
-    const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, s_CausticResolveDownscaleFactor, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
-    const f32 temporalDecay = ECSRenderDetail::s_DefaultCausticTemporalDecay;
+    const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, s_CausticResolveDownscaleFactor, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    const f32 temporalDecay = s_DefaultCausticTemporalDecay;
     const f32 effectiveIntensity = VectorGetX(EffectiveCausticIntensity(VectorReplicate(temporalDecay)));
     const b8 prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA{ targets.causticHistory.get(), targets.bindless.causticHistory.slot(), targets.bindless.causticHistoryStorage.slot() };

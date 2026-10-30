@@ -9,23 +9,23 @@
 
 
 enum<u8> MaterialPipelinePass{
-    enum Opaque,
-    enum CsgReceiverSurface,
-    enum AvboitOccupancy,
-    enum AvboitExtinction,
-    enum AvboitAccumulate,
-    enum AvboitRefractionCapture
+    Opaque,
+    CsgReceiverSurface,
+    AvboitOccupancy,
+    AvboitExtinction,
+    AvboitAccumulate,
+    AvboitRefractionCapture
 }
 
 enum<u8> RenderPath{
-    enum MeshShader,
-    enum VertexIndexed,
-    enum ComputeEmulation
+    MeshShader,
+    VertexIndexed,
+    ComputeEmulation
 }
 
 enum<u8> MaterialPipelineCsgMode{
-    enum None,
-    enum ClipOnly
+    None,
+    ClipOnly
 }
 
 class MaterialPipelineCsgBindingUse{
@@ -34,19 +34,19 @@ class MaterialPipelineCsgBindingUse{
 }
 
 b8 MaterialPipelinePassUsesRendererAvboit(in MaterialPipelinePass pass){
-    return pass == MaterialPipelinePass::Enum::AvboitOccupancy || pass == MaterialPipelinePass::Enum::AvboitExtinction || pass == MaterialPipelinePass::Enum::AvboitAccumulate || pass == MaterialPipelinePass::Enum::AvboitRefractionCapture;
+    return pass == MaterialPipelinePass::AvboitOccupancy || pass == MaterialPipelinePass::AvboitExtinction || pass == MaterialPipelinePass::AvboitAccumulate || pass == MaterialPipelinePass::AvboitRefractionCapture;
 }
 
 b8 MaterialPipelinePassUsesRendererCsgShaderVariant(in MaterialPipelinePass pass){
-    if(pass == MaterialPipelinePass::Enum::Opaque || pass == MaterialPipelinePass::Enum::CsgReceiverSurface)
+    if(pass == MaterialPipelinePass::Opaque || pass == MaterialPipelinePass::CsgReceiverSurface)
         return true;
     return MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
 b8 MaterialPipelinePassUsesRendererCsgClip(in MaterialPipelinePass pass, in b8 transparent){
-    if(pass == MaterialPipelinePass::Enum::Opaque)
+    if(pass == MaterialPipelinePass::Opaque)
         return !transparent;
-    if(pass == MaterialPipelinePass::Enum::CsgReceiverSurface)
+    if(pass == MaterialPipelinePass::CsgReceiverSurface)
         return true;
     return transparent && MaterialPipelinePassUsesRendererAvboit(pass);
 }
@@ -74,8 +74,8 @@ class MaterialInstanceParameterNames{
 }
 
 enum<u8> RendererResourceLookupMode{
-    enum CreateMissing = 0u,
-    enum PreparedOnly = 1u
+    CreateMissing = 0u,
+    PreparedOnly = 1u
 }
 
 class ShadowOccluderMaterialContext{
@@ -84,9 +84,9 @@ class ShadowOccluderMaterialContext{
 }
 
 enum<u8> SampledTextureImportFailure{
-    enum GraphUnavailable = 0u,
-    enum MissingIdentity = 1u,
-    enum ImportFailed = 2u
+    GraphUnavailable = 0u,
+    MissingIdentity = 1u,
+    ImportFailed = 2u
 }
 
 

@@ -60,7 +60,7 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(const u32 first, const u32 s
         return found.value();
     }
     const SIMDVectorSingle denominator = VectorSubtract(VectorReplicate(firstDistance), VectorReplicate(secondDistance));
-    if(!CsgDeformValidator::FiniteFloat(VectorGetX(denominator)) || VectorGetX(VectorAbs(denominator)) < s_SplitDenominatorEpsilon)
+    if(!IsFinite(VectorGetX(denominator)) || VectorGetX(VectorAbs(denominator)) < s_SplitDenominatorEpsilon)
         return MakeUnexpected(Failure{});
     // A zero secondDistance selects the second endpoint.
     const SIMDVectorSingle blend = VectorSaturate(VectorAbs(VectorDivide(VectorReplicate(secondDistance), denominator)));

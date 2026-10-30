@@ -90,13 +90,11 @@ struct AvboitSharedComputeEmulationRecordInputs{
     AvboitSharedComputeEmulationPhase::Enum phase = AvboitSharedComputeEmulationPhase::Generate;
 };
 
-using AvboitSharedComputeEmulationRecordTrait = AvboitComputeEmulationRecordTrait;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait);
+[[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
 
 template<typename PayloadT>
 [[nodiscard]] inline b8 RecordAvboitComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait, Optional<Core::GpuTimingMeasure>& timing){
@@ -154,7 +152,7 @@ template<typename PayloadT, typename DispatchFn>
 }
 
 template<typename PayloadT>
-[[nodiscard]] inline b8 RecordAvboitSharedComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const b8 isRasterPhase, const AvboitSharedComputeEmulationRecordTrait& trait, Optional<Core::GpuTimingMeasure>& timing){
+[[nodiscard]] inline b8 RecordAvboitSharedComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait, Optional<Core::GpuTimingMeasure>& timing){
     const AvboitSharedComputeEmulationRecordInputs inputs{
         payload.graphics,
         payload.materialSystem,
@@ -171,7 +169,7 @@ template<typename PayloadT>
         payload.materialGeometryStatesGraphOwned,
         payload.beginTiming,
         payload.finishTiming,
-        isRasterPhase ? AvboitSharedComputeEmulationPhase::Raster : AvboitSharedComputeEmulationPhase::Generate,
+        payload.phase,
     };
     return RecordAvboitSharedComputeEmulation(inputs, commandList, trait);
 }

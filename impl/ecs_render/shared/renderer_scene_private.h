@@ -31,9 +31,8 @@ namespace ECSRenderDetail{
 
 
 inline constexpr f32 s_ShadowSlotUnassigned = -1.f;
-inline constexpr f32 s_CausticSlotUnassigned = s_ShadowSlotUnassigned;
 inline constexpr f32 s_CausticSlotDisabled = -2.f;
-inline constexpr f32 s_CausticSlotEnabledThreshold = s_CausticSlotUnassigned - 0.5f;
+inline constexpr f32 s_CausticSlotEnabledThreshold = s_ShadowSlotUnassigned - 0.5f;
 inline constexpr f32 s_Rec709LuminanceRed = 0.2126f;
 inline constexpr f32 s_Rec709LuminanceGreen = 0.7152f;
 inline constexpr f32 s_Rec709LuminanceBlue = 0.0722f;
@@ -97,7 +96,7 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, const u32 maxLights, Scen
         dst.position = src.position;
         dst.direction = src.direction;
         dst.colorIntensity = src.colorIntensity;
-        dst.params = Float4(src.range, static_cast<f32>(src.type), s_ShadowSlotUnassigned, src.enableCaustics ? s_CausticSlotUnassigned : s_CausticSlotDisabled); // z = shadow slot; w = caustic slot, or disabled when the light did not opt in
+        dst.params = Float4(src.range, static_cast<f32>(src.type), s_ShadowSlotUnassigned, src.enableCaustics ? s_ShadowSlotUnassigned : s_CausticSlotDisabled); // z = shadow slot; w = caustic slot, or disabled when the light did not opt in
         dst.params2 = Float4(src.angularRadius, src.sourceRadius, 0.f, 0.f); // soft-shadow source size
         outCausticImportance[i] = VectorGetX(CausticSlotImportance(LoadFloat(src.colorIntensity)));
     }
@@ -111,7 +110,7 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, const u32 maxLights, Scen
         const NWB::Impl::Scene::SceneLight& light = sceneLights[i];
         shadowImportance[i] = VectorGetX(ShadowSlotImportance(
             LoadFloat(light.colorIntensity),
-            VectorSet(light.range, static_cast<f32>(light.type), s_ShadowSlotUnassigned, light.enableCaustics ? s_CausticSlotUnassigned : s_CausticSlotDisabled),
+            VectorSet(light.range, static_cast<f32>(light.type), s_ShadowSlotUnassigned, light.enableCaustics ? s_ShadowSlotUnassigned : s_CausticSlotDisabled),
             LoadFloat(light.position),
             cameraPosition
         ));

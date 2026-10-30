@@ -173,7 +173,7 @@ struct TextureDesc{
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     Format::Enum format = Format::UNKNOWN;
-    TextureDimension::Enum dimension = TextureDimension::Enum::Texture2D;
+    TextureDimension::Enum dimension = TextureDimension::Texture2D;
     b8 isShaderResource = true;
     b8 isRenderTarget = false;
     b8 isUAV = false;

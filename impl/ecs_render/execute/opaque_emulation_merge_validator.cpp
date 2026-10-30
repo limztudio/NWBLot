@@ -72,7 +72,7 @@ void OpaqueEmulationMergeValidator::validate(const Core::GpuCompiledGraph::ReadV
             }
             return true;
         }
-        if(!ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount))
+        if(!IsSupportedSharedComputeEmulationPhaseCount(phaseCount))
             return false;
         if(
             !opaqueSharedComputeEmulationQueue

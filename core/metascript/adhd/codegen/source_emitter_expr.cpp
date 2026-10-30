@@ -322,26 +322,16 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 out.append(cap.name.data(), cap.name.size());
             }
         }
-        out.append("](");
-        for(usize i = 0u; i < expr.lambdaParams.size(); ++i){
-            if(i > 0u)
-                out.append(", ");
-            const ParamDecl& p = expr.lambdaParams[i];
-            if(p.type)
-                m_typeEmitter.emitParamTypeCpp(out, p.mode, *p.type);
-            out.push_back(' ');
-            out.append(p.name.data(), p.name.size());
-        }
-        out.append(")noexcept -> ");
+        out.push_back(']');
+        m_typeEmitter.emitParamListCpp(out, expr.lambdaParams);
+        out.append("noexcept -> ");
         if(expr.lambdaReturnType)
             m_typeEmitter.emitTypeCpp(out, *expr.lambdaReturnType);
         else
             out.append("void");
         out.append("{\r\n");
-        if(expr.lambdaUsesScratchArena){
-            emitIndent(out, 2u);
-            out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"lambda\"));\r\n");
-        }
+        if(expr.lambdaUsesScratchArena)
+            emitScratchArenaPrologue(out, 2u, "lambda");
         if(expr.lambdaUsesTaskScope)
             emitTaskScopePrologue(out, 2u);
         const b8 prevTaskScope = m_activeScopeUsesTaskScope;

@@ -135,8 +135,7 @@ TEST_F(EditBoxLayoutTests, LigaturesExposeEachGraphemeCaretAndPartialSelection){
     ASSERT_TRUE(selection);
     EXPECT_FLOAT_EQ(selection->x, 20.0f);
     EXPECT_FLOAT_EQ(selection->width, 10.0f);
-    Expected<usize> hit = MakeUnexpected(Failure{});
-    hit = m_view.hitTest({ 21.0f, 24.0f }, m_placement);
+    Expected<usize> hit = m_view.hitTest({ 21.0f, 24.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 1u);
     hit = m_view.hitTest({ 27.0f, 24.0f }, m_placement);
@@ -150,8 +149,7 @@ TEST_F(EditBoxLayoutTests, CombiningAndDecomposedHangulHitsStayOnWholeGraphemes)
     ASSERT_TRUE(place());
     ASSERT_EQ(m_view.caretStops().size(), 3u);
     EXPECT_EQ(m_view.caretStops()[1].committedByte, 3u);
-    Expected<usize> hit = MakeUnexpected(Failure{});
-    hit = m_view.hitTest({ 14.9f, 24.0f }, m_placement);
+    Expected<usize> hit = m_view.hitTest({ 14.9f, 24.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 0u);
     hit = m_view.hitTest({ 15.1f, 24.0f }, m_placement);
@@ -193,8 +191,7 @@ TEST_F(EditBoxLayoutTests, PreeditReplacesOnlyTheDisplayAndOwnsItsSelectionAndUn
     EXPECT_FLOAT_EQ(preedit->x, 20.0f);
     EXPECT_FLOAT_EQ(preedit->width, 20.0f);
     EXPECT_FLOAT_EQ(VectorGetX(VectorMin(VectorReplicate(m_placement.caret.width), VectorReplicate(preedit->height))), 1.0f);
-    Expected<usize> hit = MakeUnexpected(Failure{});
-    hit = m_view.hitTest({ 39.0f, 24.0f }, m_placement);
+    const Expected<usize> hit = m_view.hitTest({ 39.0f, 24.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 2u);
     m_model.cancelComposition();
@@ -264,23 +261,15 @@ TEST_F(EditBoxLayoutTests, MismatchedAndRtlLayoutsPreserveTheAdmittedGeometry){
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(place());
     const f32 oldCaret = m_placement.caret.x;
-    TextLayout wrong(m_arena);
-    {
-        auto layoutResult = m_builder.layout({ "other" });
-        ASSERT_TRUE(layoutResult);
-        wrong = Move(*layoutResult);
-    }
-    EXPECT_FALSE(m_view.adoptLayout(Move(wrong)));
+    auto wrong = m_builder.layout({ "other" });
+    ASSERT_TRUE(wrong);
+    EXPECT_FALSE(m_view.adoptLayout(Move(*wrong)));
     EXPECT_EQ(m_view.layout().utf8(), "abc");
-    TextLayout rtl(m_arena);
     ShapeRequest request{ "abc" };
     request.direction = TextDirection::RightToLeft;
-    {
-        auto layoutResult = m_builder.layout(request);
-        ASSERT_TRUE(layoutResult);
-        rtl = Move(*layoutResult);
-    }
-    EXPECT_FALSE(m_view.adoptLayout(Move(rtl)));
+    auto rtl = m_builder.layout(request);
+    ASSERT_TRUE(rtl);
+    EXPECT_FALSE(m_view.adoptLayout(Move(*rtl)));
     ASSERT_TRUE(place());
     EXPECT_FLOAT_EQ(m_placement.caret.x, oldCaret);
     TextService service(m_arena);
@@ -400,11 +389,9 @@ TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDispl
     Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
     Font font(m_arena, Name(s_EditBoxFontPath));
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / s_LatinFontFileName;
-    Core::Assets::AssetBytes bytes(m_arena);
-    auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-    ASSERT_TRUE(bytesResult);
-    bytes = Move(*bytesResult);
-    font.setFontBytes(Move(bytes));
+    auto bytes = Tests::ReadBundledFontBytes(path, m_arena);
+    ASSERT_TRUE(bytes);
+    font.setFontBytes(Move(*bytes));
     ASSERT_TRUE(font.validatePayload());
     TextService service(m_arena);
     const FontSource source{ Core::Assets::AssetRef<Font>(s_EditBoxFontPath), font, 1u };

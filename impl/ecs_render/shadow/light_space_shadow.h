@@ -7,8 +7,7 @@
 
 #include "light_space_plan.h"
 #include "light_space_csg.h"
-#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
-#include <impl/ecs_render/shadow/quality_settings.adhd.h>
+#include <impl/assets/graphics/scene/binding_slots.h>
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/pipeline.h>

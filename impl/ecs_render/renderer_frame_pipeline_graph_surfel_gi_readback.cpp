@@ -7,7 +7,6 @@
 #include <impl/ecs_render/raytrace/task_graph_float_clear_tasks.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <core/task/gpu/capture/command_ir.h>
@@ -33,7 +32,10 @@ void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(const RayTrac
         return;
 
     const auto counterResult = m_deferredLightingTaskGraph.importBuffer(rayTracingSurfelResources.counterBuffer, BufferResourceDesc(Name(RendererFramePipelineDetail::s_SurfelCounterName), RendererFramePipelineDetail::s_SurfelCounterLabel));
-    const auto readbackResult = m_deferredLightingTaskGraph.importBuffer(rayTracingSurfelResources.counterReadbackBuffer, BufferResourceDesc(Name(RendererFramePipelineDetail::s_SurfelCounterReadbackName), RendererFramePipelineDetail::s_SurfelCounterReadbackLabel));
+    const auto readbackResult = m_deferredLightingTaskGraph.importBuffer(
+        rayTracingSurfelResources.counterReadbackBuffer,
+        BufferResourceDesc(Name(RendererFramePipelineDetail::s_SurfelCounterReadbackName), RendererFramePipelineDetail::s_SurfelCounterReadbackLabel)
+    );
     if(!counterResult || !readbackResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel counter-readback graph resources"));
         return;

@@ -81,11 +81,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSRenderDetail{
-    using NWB::Impl::SceneShadingGpuData;
-    using NWB::Impl::SceneLightGpuData;
-};
-
 class RendererDeferredState;
 class RendererShaderSystem;
 
@@ -106,7 +101,7 @@ public:
 
     // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.
     [[nodiscard]] SceneShadingBufferUploads prepareSceneShadingBufferUploads(f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput)noexcept;
-    void confirmSceneShadingBufferUploads(Span<const ECSRenderDetail::SceneLightGpuData> lights, b8 lightUploadRequired, const ECSRenderDetail::SceneShadingGpuData& sceneShadingState, b8 sceneShadingUploadRequired)noexcept;
+    void confirmSceneShadingBufferUploads(Span<const SceneLightGpuData> lights, b8 lightUploadRequired, const SceneShadingGpuData& sceneShadingState, b8 sceneShadingUploadRequired)noexcept;
     [[nodiscard]] b8 createDeferredLightingResources();
     [[nodiscard]] b8 createDeferredLightingPipeline();
     [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, b8 useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket);

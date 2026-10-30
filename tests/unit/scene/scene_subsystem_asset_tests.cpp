@@ -12,10 +12,8 @@
 #include <impl/assets_ui_skin/subsystem.adhd.h>
 
 #include <core/alloc/general.h>
-#include <core/assets/registry.h>
 
 #include <tests/common/capturing_logger.h>
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -123,8 +121,8 @@ TEST(SceneSubsystemAssets, ProjectAndSceneBinaryDecodeAndValidation){
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("start_scene must not be empty")));
 
     SceneAsset::SubsystemRefVector sceneSubsystems(arena);
-    sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/renderer"));
-    sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/skinning"));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_RendererSubsystemPath));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_SkinningSubsystemPath));
     sceneSubsystems.push_back(SceneAsset::SubsystemRef("project/subsystems/custom_fx"));
     SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
     sceneAssets.emplace(Name("cesium_man_model"), SceneAsset::AssetRef("project/characters/cesium_man/model"));
@@ -137,8 +135,8 @@ TEST(SceneSubsystemAssets, ProjectAndSceneBinaryDecodeAndValidation){
     const auto* decodedScene = static_cast<const SceneAsset*>(decodedSceneResult->get());
     ASSERT_NE(decodedScene, nullptr);
     ASSERT_EQ(decodedScene->subsystems().size(), 3u);
-    EXPECT_EQ(decodedScene->subsystems()[0], SceneAsset::SubsystemRef("engine/subsystems/renderer"));
-    EXPECT_EQ(decodedScene->subsystems()[1], SceneAsset::SubsystemRef("engine/subsystems/skinning"));
+    EXPECT_EQ(decodedScene->subsystems()[0], SceneAsset::SubsystemRef(s_RendererSubsystemPath));
+    EXPECT_EQ(decodedScene->subsystems()[1], SceneAsset::SubsystemRef(s_SkinningSubsystemPath));
     EXPECT_EQ(decodedScene->subsystems()[2], SceneAsset::SubsystemRef("project/subsystems/custom_fx"));
     ASSERT_EQ(decodedScene->assets().size(), 1u);
     const auto foundModel = decodedScene->assets().find(Name("cesium_man_model"));
@@ -174,24 +172,24 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
     PopulateRequiredSubsystemFields(skinningSubsystem);
 
     TransparentSubsystem transparentSubsystem(arena, s_TransparentSubsystemPath);
-    transparentSubsystem.subsystems.push_back(ISubsystem::SubsystemRef("engine/subsystems/renderer"));
-    transparentSubsystem.subsystems.push_back(ISubsystem::SubsystemRef("engine/subsystems/skinning"));
+    transparentSubsystem.subsystems.push_back(ISubsystem::SubsystemRef(s_RendererSubsystemPath));
+    transparentSubsystem.subsystems.push_back(ISubsystem::SubsystemRef(s_SkinningSubsystemPath));
     transparentSubsystem.avboitDepthWarpCs = AssetRef<ComputeShader>("engine/graphics/avboit/depth_warp_cs");
     PopulateRequiredSubsystemFields(transparentSubsystem);
 
     UiSubsystem uiSubsystem(arena, s_UiSubsystemPath);
-    uiSubsystem.subsystems.push_back(ISubsystem::SubsystemRef("engine/subsystems/renderer"));
-    uiSubsystem.subsystems.push_back(ISubsystem::SubsystemRef("engine/subsystems/renderer"));
+    uiSubsystem.subsystems.push_back(ISubsystem::SubsystemRef(s_RendererSubsystemPath));
+    uiSubsystem.subsystems.push_back(ISubsystem::SubsystemRef(s_RendererSubsystemPath));
     uiSubsystem.basicFonts.push_back(AssetRef<FontAtlas>("engine/ui/fonts/default/latin/atlas"));
     uiSubsystem.basicFonts.push_back(AssetRef<FontAtlas>("engine/ui/fonts/default/korean/atlas"));
     uiSubsystem.basicSkin = AssetRef<UiSkin>("engine/ui/skins/default/atlas");
     PopulateRequiredSubsystemFields(uiSubsystem);
 
     SceneAsset::SubsystemRefVector sceneSubsystems(arena);
-    sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/renderer"));
-    sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/renderer"));
-    sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/ui"));
-    sceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/transparent"));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_RendererSubsystemPath));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_RendererSubsystemPath));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_UiSubsystemPath));
+    sceneSubsystems.push_back(SceneAsset::SubsystemRef(s_TransparentSubsystemPath));
     SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
     sceneAssets.emplace(Name("cesium_man_model"), SceneAsset::AssetRef("project/characters/cesium_man/model"));
 
@@ -243,7 +241,7 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
     PopulateRequiredSubsystemFields(duplicateRendererSubsystem);
     source.setBinary(Name("project/subsystems/renderer_override"), MakeSubsystemBinary(arena, duplicateRendererSubsystem));
     SceneAsset::SubsystemRefVector duplicateTypeSceneSubsystems(arena);
-    duplicateTypeSceneSubsystems.push_back(SceneAsset::SubsystemRef("engine/subsystems/renderer"));
+    duplicateTypeSceneSubsystems.push_back(SceneAsset::SubsystemRef(s_RendererSubsystemPath));
     duplicateTypeSceneSubsystems.push_back(SceneAsset::SubsystemRef("project/subsystems/renderer_override"));
     source.setBinary(Name("project/scenes/duplicate_type"), MakeSceneBinary(arena, duplicateTypeSceneSubsystems, sceneAssets));
     EXPECT_FALSE(active.loadScene(assets, ActiveSceneSubsystems::SceneRef("project/scenes/duplicate_type")));

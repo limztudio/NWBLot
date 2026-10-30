@@ -173,7 +173,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         EXPECT_TRUE(failureLogger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
     }
 
-    const Name cacheInterface("project/material_interfaces/test_surface");
+    const Name cacheInterface(s_ProjectMaterialInterfacesTestSurface);
     NWB::Impl::MaterialBindTypedLayoutCache layoutCache(testArena.arena);
     {
         SCOPED_TRACE("material_bind_float1_default_cache");
@@ -228,7 +228,6 @@ TEST(AssetsGraphics, MaterialBindCookRejectsMalformedParametersAndInterfaceMisma
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-#if defined(NWB_FINAL)
     auto invalidCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_unknown_interface_parameter");
     ASSERT_TRUE(invalidCookCase);
     Path& invalidRoot = invalidCookCase->root;
@@ -313,7 +312,6 @@ TEST(AssetsGraphics, MaterialBindCookRejectsMalformedParametersAndInterfaceMisma
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("includes generated material bind interface 'project/material_interfaces/other_surface'")));
 
     EXPECT_TRUE(RemoveAllIfExists(interfaceIdentityMismatchRoot));
-#endif
 #endif
 }
 
@@ -450,7 +448,7 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
 
     const Path generatedIncludePath = root / s_Cache / s_Tests / s_MaterialBindIncludes / s_Project / s_MaterialInterfaces / s_TestSurfaceBind;
     // Removing the last bind source must clear its generated include on a recook with the same cache.
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_AssetsDir;
     const auto removedBind = RemoveFile(assetRoot / s_MaterialInterfaces / s_TestSurfaceBind);
     ASSERT_TRUE(removedBind);
     ASSERT_TRUE(*removedBind);

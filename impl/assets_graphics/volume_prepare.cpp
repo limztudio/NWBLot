@@ -15,7 +15,6 @@
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_graphics/mesh/subsystem.adhd.h>
 #include <impl/assets_material/cook.h>
-#include <impl/assets_material/types.adhd.h>
 #include <impl/assets_shader/shader_types.h>
 #include <impl/assets_shader/cook.h>
 #include <impl/assets_subsystem/cook.h>

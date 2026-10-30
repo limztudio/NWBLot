@@ -10,23 +10,23 @@
 
 [reflect]
 enum<u8> CsgReceiverKind{
-    enum Static,
-    enum Skinned
+    Static,
+    Skinned
 }
 
 [reflect]
 enum<u8> CsgReceiverPass{
-    enum Opaque,
-    enum Transparent
+    Opaque,
+    Transparent
 }
 
 [reflect]
 class CsgReceiverDrawState{
     public u32 firstCutter = 0u;
-    public u32 cutterCount = 0u;
-    public CsgReceiverKind receiverKind = CsgReceiverKind::Enum::Static;
-    public b8 active = false;
     // cutterCount lets render CSG iterate the lookup range directly, skipping receiver/group resolve.
+    public u32 cutterCount = 0u;
+    public CsgReceiverKind receiverKind = CsgReceiverKind::Static;
+    public b8 active = false;
 }
 
 [reflect]
@@ -53,14 +53,14 @@ class CsgFrameCutterRange{
 [reflect]
 class CsgResolvedReceiver{
     public CsgReceiverComponent receiver;
-    public CsgReceiverKind receiverKind = CsgReceiverKind::Enum::Static;
+    public CsgReceiverKind receiverKind = CsgReceiverKind::Static;
 }
 
 void AddCsgFrameReceiverWork(mut CsgFrameState inOutState, in CsgReceiverKind receiverKind, in b8 opaqueWork, in b8 transparentWork, in u32 cutterCount){
     inOutState.receiverCount = AddSaturating<u32>(inOutState.receiverCount, 1u);
     inOutState.cutterCount = AddSaturating<u32>(inOutState.cutterCount, cutterCount);
 
-    if(receiverKind == CsgReceiverKind::Enum::Static){
+    if(receiverKind == CsgReceiverKind::Static){
         inOutState.hasOpaqueStaticWork = inOutState.hasOpaqueStaticWork || opaqueWork;
         inOutState.hasTransparentStaticWork = inOutState.hasTransparentStaticWork || transparentWork;
     }

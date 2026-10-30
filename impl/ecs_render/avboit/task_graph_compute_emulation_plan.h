@@ -7,7 +7,6 @@
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
 #include <impl/ecs_render/material/compute_emulation_output_index.h>
-#include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/generated_geometry_validation.h>
 
 

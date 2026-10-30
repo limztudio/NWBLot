@@ -234,9 +234,8 @@ TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReduction
         ASSERT_TRUE(document.parse(AStringView(metadata)));
         const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedMetadataCase) / s_AssetsDirectory;
         const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
-        NWB::Impl::SamplerCookEntry entry(testArena.arena);
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-        EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, entry.arena, scratchArena)) << assignment;
+        EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena)) << assignment;
         const TStringView expectedDiagnostic = assignment.starts_with(s_ReductionAssignmentPrefix) ? NWB_TEXT("unsupported reduction type") : NWB_TEXT("unsupported asset field 'border_color'");
         EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic)) << assignment;
     }
@@ -258,9 +257,8 @@ TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
 
     const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedMetadataCase) / s_AssetsDirectory;
     const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
-    NWB::Impl::SamplerCookEntry entry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, entry.arena, scratchArena));
+    EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'version'")));
 #endif
 }

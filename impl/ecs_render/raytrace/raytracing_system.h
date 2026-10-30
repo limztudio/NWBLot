@@ -74,7 +74,6 @@ struct MaterialSurfaceInfo;
 namespace ECSRenderDetail{
     struct MeshRayTracingResourceSnapshot;
     struct MeshViewBufferSnapshot;
-    using NWB::Impl::SceneLightGpuData;
 };
 
 
@@ -148,7 +147,7 @@ public:
     void releaseSceneTlasHeapHandle();
 
     [[nodiscard]] RayTracingLightingClassificationInput snapshotLightingClassificationInput()const noexcept;
-    void publishPreparedLightingClassification(const RayTracingLightingClassification& classification, Span<const ECSRenderDetail::SceneLightGpuData> lights);
+    void publishPreparedLightingClassification(const RayTracingLightingClassification& classification, Span<const SceneLightGpuData> lights);
     [[nodiscard]] RayTracingFrameCpuStateSnapshot captureFrameCpuState()const noexcept;
     void restoreShadowPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
     void restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
@@ -691,8 +690,8 @@ private:
         Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer
     );
     void preflightLightSpaceShadowResources();
-    [[nodiscard]] Expected<LightSpacePlan> buildLightSpaceShadowPlan(Span<const ECSRenderDetail::SceneLightGpuData> lights)const noexcept;
-    void prepareLightSpaceShadows(Span<const ECSRenderDetail::SceneLightGpuData> lights);
+    [[nodiscard]] Expected<LightSpacePlan> buildLightSpaceShadowPlan(Span<const SceneLightGpuData> lights)const noexcept;
+    void prepareLightSpaceShadows(Span<const SceneLightGpuData> lights);
     [[nodiscard]] b8 ensureLightSpaceShadowPipelines();
     [[nodiscard]] b8 ensureLightSpaceShadowStorage(const LightSpacePlan& plan);
     void releaseLightSpaceShadowResources();

@@ -4,8 +4,6 @@
 
 #include "deform_cutter_field.h"
 
-#include "deform_validator.h"
-
 #include <global/simd/vector.h>
 
 
@@ -24,10 +22,6 @@ using CsgDeformDistanceFunc = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSi
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-CsgDeformShapeKind::Enum CsgDeformCutterField::ClassifyDeformShape(const Name& shapeType)noexcept{
-    return ClassifyCsgDeformShape(shapeType);
-}
 
 SIMDVectorSingle CsgDeformCutterField::PlaneSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept{
     return VectorAdd(Vector3Dot(shapePosition, parameter0), VectorSplatW(parameter0));
@@ -56,7 +50,7 @@ SIMDVectorSingle CsgDeformCutterField::CapsuleSignedDistanceVec(SIMDVectorSingle
 }
 
 Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistances(const CsgDeformShape& shape, const Span<const CsgDeformVertex> vertices, const SIMDVectorSingle epsilon, Vector<f32, ScratchArena>& outDistances){
-    const CsgDeformShapeKind::Enum shapeKind = CsgDeformCutterField::ClassifyDeformShape(shape.shapeType);
+    const CsgDeformShapeKind::Enum shapeKind = ClassifyCsgDeformShape(shape.shapeType);
     if(shapeKind == CsgDeformShapeKind::Invalid)
         return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
     const usize vertexCount = vertices.size();
@@ -90,7 +84,7 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
         const SIMDVectorSingle shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
         const SIMDVectorSingle distanceValue = VectorSplatX(distanceFunc(shapePosition, parameter0));
         f32 distance = VectorGetX(distanceValue);
-        if(!CsgDeformValidator::FiniteFloat(distance))
+        if(!IsFinite(distance))
             return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
         if(Vector4LessOrEqual(VectorAbs(distanceValue), epsilon))
             distance = s_KeepDistanceZero;

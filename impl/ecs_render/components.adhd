@@ -10,26 +10,26 @@
 
 [reflect]
 enum<u8> OpticalVolumeCoincidence{
-    enum Independent,
-    enum IdenticalMaterial,
-    enum SharedGroup
+    Independent,
+    IdenticalMaterial,
+    SharedGroup
 }
 
 [reflect]
 enum<u8> OpticalBoundaryMode{
-    enum Unspecified,
-    enum ClosedNested,
-    enum ClosedPriority
+    Unspecified,
+    ClosedNested,
+    ClosedPriority
 }
 
 [reflect]
 class RendererComponent{
     public AssetRef<Material> material;
     public b8 visible = true;
-    public OpticalVolumeCoincidence opticalVolumeCoincidence = OpticalVolumeCoincidence::Enum::Independent;
+    public OpticalVolumeCoincidence opticalVolumeCoincidence = OpticalVolumeCoincidence::Independent;
     public Name opticalVolumeGroup = s_NameNone;
     public i32 opticalVolumePriority = 0;
-    public OpticalBoundaryMode opticalBoundaryMode = OpticalBoundaryMode::Enum::Unspecified;
+    public OpticalBoundaryMode opticalBoundaryMode = OpticalBoundaryMode::Unspecified;
     public i32 opticalMediumPriority = 0;
 }
 
@@ -39,7 +39,7 @@ class MaterialInstanceParameter{
     public Name blockName = s_NameNone;
     public Name fieldName = s_NameNone;
     [transient]
-    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::Enum::None;
+    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::None;
     [transient]
     public u32x4u value;
 }

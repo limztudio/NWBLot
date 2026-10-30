@@ -32,16 +32,12 @@ namespace __hidden_font_atlas_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_FontAtlasDiagnosticPrefix = "Font atlas meta";
-static constexpr AStringView s_FontField = "font";
-
-
 static Expected<FontAtlas> BuildFontAtlasCookedAsset(FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     return BuildFontAtlasAsset(entry, arena, scratchArena);
 }
 
 static b8 ExtractFontAtlasDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto fontRef = Core::Assets::ReadMetadataAssetRefField<Font>(context.nwbFilePath, context.asset, s_FontAtlasDiagnosticPrefix, s_FontField, true);
+    const auto fontRef = Core::Assets::ReadMetadataAssetRefField<Font>(context.nwbFilePath, context.asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasMetaFontField, true);
     if(!fontRef)
         return false;
     return collector.addAssetDependency(fontRef->name(), Font::AssetTypeName());

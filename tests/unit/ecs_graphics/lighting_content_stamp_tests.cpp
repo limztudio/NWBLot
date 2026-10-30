@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/lighting_content_stamp.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
 #include <gtest/gtest.h>
@@ -28,28 +28,28 @@ using namespace NWB::Impl;
 
 
 TEST(LightingContentStamp, OnlyTheSelectedLightPrefixContributes){
-    ECSRenderDetail::SceneShadingGpuData shading;
-    ECSRenderDetail::SceneLightGpuData lights[2];
-    const u64 original = ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(lights, 1u));
+    SceneShadingGpuData shading;
+    SceneLightGpuData lights[2];
+    const u64 original = ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights, 1u));
     lights[1].position.x = 3.f;
     lights[1].colorIntensity.w = 0.f;
-    EXPECT_EQ(ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(lights, 1u)), original);
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(lights, s_ExpectedDualCount)), original);
+    EXPECT_EQ(ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights, 1u)), original);
+    EXPECT_NE(ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights, s_ExpectedDualCount)), original);
     EXPECT_EQ(
-        ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>{}),
-        ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(lights, 0u))
+        ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>{}),
+        ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights, 0u))
     );
 }
 
 
 TEST(LightingContentStamp, ReversingSelectedLightsChangesSemanticIdentity){
-    ECSRenderDetail::SceneShadingGpuData shading;
-    ECSRenderDetail::SceneLightGpuData lights[2];
+    SceneShadingGpuData shading;
+    SceneLightGpuData lights[2];
     lights[0].colorIntensity.x = 0.2f;
     lights[1].colorIntensity.y = 0.7f;
-    const u64 original = ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(lights, s_ExpectedDualCount));
-    const ECSRenderDetail::SceneLightGpuData reversed[2] = {lights[1], lights[0]};
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(reversed, s_ExpectedDualCount)), original);
+    const u64 original = ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights, s_ExpectedDualCount));
+    const SceneLightGpuData reversed[2] = {lights[1], lights[0]};
+    EXPECT_NE(ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(reversed, s_ExpectedDualCount)), original);
 }
 
 

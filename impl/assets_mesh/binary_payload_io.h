@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "meshlet_constants.h"
 #include <impl/assets_mesh/payload_types.adhd.h>
 
 #include <core/assets/binary_payload_io.h>
@@ -58,7 +57,7 @@ inline constexpr TStringView s_SolidTriangleWordsStreamLabel = NWB_TEXT("solid t
         && header.uv0Count != 0u
         && header.colorCount != 0u
         && header.meshletCount != 0u
-        && header.meshletCount <= static_cast<u64>(Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE)
+        && header.meshletCount <= static_cast<u64>(Limit<u32>::s_Max / s_MeshletBoundsStride)
         && header.meshletBoundCount == header.meshletCount
         && header.meshletPositionRefDeltaByteCount != 0u
         && header.meshletAttributeRefDeltaByteCount != 0u
@@ -112,7 +111,14 @@ inline constexpr TStringView s_SolidTriangleWordsStreamLabel = NWB_TEXT("solid t
         return false;
     if(!Core::Assets::ReadVectorPayload(binary, header.meshletPrimitiveIndexCount, failureContext, s_MeshletPrimitiveIndicesStreamLabel, inOutCursor, outMeshletPrimitiveIndices))
         return false;
-    return Core::Assets::ReadVectorPayload(binary, (header.meshletPrimitiveIndexCount / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits, failureContext, s_SolidTriangleWordsStreamLabel, inOutCursor, outSolidTriangleWords);
+    return Core::Assets::ReadVectorPayload(
+        binary,
+        (header.meshletPrimitiveIndexCount / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits,
+        failureContext,
+        s_SolidTriangleWordsStreamLabel,
+        inOutCursor,
+        outSolidTriangleWords
+    );
 }
 
 

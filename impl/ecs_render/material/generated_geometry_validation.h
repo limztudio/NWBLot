@@ -6,7 +6,6 @@
 
 
 #include "renderer_draw_types.h"
-#include "generated_geometry_state.h"
 #include "compute_emulation_output_index.h"
 
 

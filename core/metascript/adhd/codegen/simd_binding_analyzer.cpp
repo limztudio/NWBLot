@@ -284,7 +284,7 @@ void AnalyzeSimdExprReads(const Expr* expr, const SymbolTable& symbols, const b8
         return;
     }
 
-    if(expr->kind == ExprKind::Binary && IsSimdAssignmentOp(expr->op) && expr->lhs){
+    if(expr->kind == ExprKind::Binary && IsCompoundOrSimpleAssignment(expr->op) && expr->lhs){
         if(IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType)){
             AnalyzeSimdExprReads(expr->rhs, symbols, false, false, arena, bindings);
             if(expr->lhs->kind == ExprKind::Identifier || expr->lhs->kind == ExprKind::ThisMember){

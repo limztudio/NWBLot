@@ -32,9 +32,6 @@ namespace AssetsCsgCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ::NWB::Impl::s_DefaultGeneratedIncludeDirectory;
-using ::NWB::Impl::s_GeneratedIncludeCacheDirectory;
-
 using CookArena = Core::Alloc::GlobalArena;
 using CookString = AString<CookArena>;
 template<typename T>

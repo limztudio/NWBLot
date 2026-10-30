@@ -5,7 +5,6 @@
 #include <tests/common/test_context.h>
 
 #include <impl/ecs_render/execute/shadow_visibility_merge_validator.h>
-#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 
 #include <core/task/gpu/compiler_internal.h>
 

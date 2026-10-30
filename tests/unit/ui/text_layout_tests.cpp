@@ -100,9 +100,8 @@ TEST_F(TextLayoutTests, CrLfAndTrailingNewlinePreserveSourceRangesAndEmptyFinalL
     EXPECT_EQ(m_layout.lines()[2].glyphCount, 0u);
     EXPECT_FLOAT_EQ(m_layout.measure().y, 36.0f);
     EXPECT_EQ(m_layout.hitTest({ 20.0f, 100.0f }).byteOffset, 5u);
-    Expected<Rect> caret = MakeUnexpected(Failure{});
     EXPECT_FALSE(m_layout.caretRect(2u, TextCaretEdge::Leading));
-    caret = m_layout.caretRect(5u, TextCaretEdge::Leading);
+    const Expected<Rect> caret = m_layout.caretRect(5u, TextCaretEdge::Leading);
     ASSERT_TRUE(caret);
     EXPECT_FLOAT_EQ(caret->y, 24.0f);
     EXPECT_FLOAT_EQ(caret->height, 12.0f);
@@ -146,10 +145,9 @@ TEST_F(TextLayoutTests, NonBmpAndHangulClustersMapUtf8BytesRatherThanScalarIndic
     EXPECT_EQ(m_layout.clusters()[1].byteEnd, 4u);
     EXPECT_EQ(m_layout.clusters()[2].byteBegin, 4u);
     EXPECT_EQ(m_layout.clusters()[2].byteEnd, 8u);
-    Expected<Rect> caret = MakeUnexpected(Failure{});
     EXPECT_FALSE(m_layout.caretRect(2u, TextCaretEdge::Trailing));
     EXPECT_FALSE(m_layout.caretRect(6u, TextCaretEdge::Leading));
-    caret = m_layout.caretRect(4u, TextCaretEdge::Leading);
+    const Expected<Rect> caret = m_layout.caretRect(4u, TextCaretEdge::Leading);
     ASSERT_TRUE(caret);
     EXPECT_FLOAT_EQ(caret->x, 20.0f);
 }
@@ -170,8 +168,7 @@ TEST_F(TextLayoutTests, RtlVisualOrderReversesLogicalClusterEdgesAndPreservesByt
     EXPECT_EQ(m_layout.hitTest({ -1.0f, 4.0f }).byteOffset, 3u);
     EXPECT_EQ(m_layout.hitTest({ 31.0f, 4.0f }).byteOffset, 0u);
     EXPECT_EQ(m_layout.hitTest({ 5.0f, 4.0f }).byteOffset, 2u);
-    Expected<Rect> caret = MakeUnexpected(Failure{});
-    caret = m_layout.caretRect(0u, TextCaretEdge::Leading);
+    Expected<Rect> caret = m_layout.caretRect(0u, TextCaretEdge::Leading);
     ASSERT_TRUE(caret);
     EXPECT_FLOAT_EQ(caret->x, 30.0f);
     caret = m_layout.caretRect(3u, TextCaretEdge::Trailing);
@@ -216,8 +213,7 @@ TEST_F(TextLayoutTests, EmptyTextHasOneTypographicLineAndNoInk){
     EXPECT_FLOAT_EQ(m_layout.measure().x, 0.0f);
     EXPECT_FLOAT_EQ(m_layout.measure().y, 12.0f);
     EXPECT_FLOAT_EQ(m_layout.inkBounds().width, 0.0f);
-    Expected<Rect> caret = MakeUnexpected(Failure{});
-    caret = m_layout.caretRect(0u, TextCaretEdge::Leading);
+    const Expected<Rect> caret = m_layout.caretRect(0u, TextCaretEdge::Leading);
     ASSERT_TRUE(caret);
     EXPECT_FLOAT_EQ(caret->height, 12.0f);
 }

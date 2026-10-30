@@ -2,13 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/csg/frame_state_cache.h>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
 #include <impl/ecs_render/shadow/light_space_csg.h>
-#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
 #include <impl/ecs_render/raytrace/instance_material.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_mesh/system.h>
 #include <impl/ecs_scene/components.adhd.h>
 
@@ -106,8 +105,7 @@ void SetParameters(CsgCutterComponent& cutter, const Float4& parameter){
     NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
 }
 
-[[nodiscard]] Expected<CsgShapeBounds> CustomBounds(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)noexcept{
-    static_cast<void>(parameterBytes);
+[[nodiscard]] Expected<CsgShapeBounds> CustomBounds(const SIMDMatrix& shapeToWorld, const u8*, const usize parameterByteSize)noexcept{
     if(parameterByteSize != 0u)
         return MakeUnexpected(Failure{});
     const auto bounds = AabbTests::Transform(shapeToWorld, VectorReplicate(-1.0f), VectorReplicate(1.0f));
@@ -519,7 +517,12 @@ TEST(CsgShadowSnapshot, UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture)
             AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
             ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
             EXPECT_EQ(state.captureGeometryTrusted, revision != 0u);
-            const LightSpaceCaptureIdentity identity{ BuildLightSpaceCsgCaptureIdentity(state, Span<const NwbRtInstanceMaterialGpu>(&material, 1u), Span<const InstanceGpuData>(&instance, 1u), Span<const u8>{}, Span<const Core::TextureHandle>{}), 11u, 13u, state.captureGeometryTrusted };
+            const LightSpaceCaptureIdentity identity{
+                BuildLightSpaceCsgCaptureIdentity(state, Span<const NwbRtInstanceMaterialGpu>(&material, 1u), Span<const InstanceGpuData>(&instance, 1u), Span<const u8>{}, Span<const Core::TextureHandle>{}),
+                11u,
+                13u,
+                state.captureGeometryTrusted
+            };
             history.beginFrame();
             const auto ticket = history.prepare(identity, cadence);
             EXPECT_FALSE(ticket.reuse);

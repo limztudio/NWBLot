@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_ui/toolkit/widgets/slider.h>
-#include <impl/ecs_ui/toolkit/widgets/slider_style.adhd.h>
 
 #include <global/simdmath.h>
 #include <global/simplemath.h>
@@ -96,8 +95,7 @@ protected:
 
 
 TEST(UiSliderMathTests, OutOfRangeAndConstantSpansClampNormalization){
-    Expected<f64> normalized = MakeUnexpected(Failure{});
-    normalized = SliderBehavior::Normalize(10.0, 30.0, -100.0);
+    Expected<f64> normalized = SliderBehavior::Normalize(10.0, 30.0, -100.0);
     ASSERT_TRUE(normalized);
     EXPECT_EQ(*normalized, 0.0);
     normalized = SliderBehavior::Normalize(10.0, 30.0, 100.0);
@@ -111,8 +109,7 @@ TEST(UiSliderMathTests, OutOfRangeAndConstantSpansClampNormalization){
 TEST(UiSliderMathTests, OppositeExtremeBoundsNormalizeAndInterpolateWithoutAnOverflowingSpan){
     const f64 maximum = Limit<f64>::s_Max;
     const f64 minimum = VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(maximum)));
-    Expected<f64> value = MakeUnexpected(Failure{});
-    value = SliderBehavior::Normalize(minimum, maximum, 0.0);
+    Expected<f64> value = SliderBehavior::Normalize(minimum, maximum, 0.0);
     ASSERT_TRUE(value);
     EXPECT_DOUBLE_EQ(*value, 0.5);
     value = SliderBehavior::Normalize(minimum, maximum, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(maximum), VectorDoubleReplicate(0.5))));
@@ -135,14 +132,12 @@ TEST(UiSliderMathTests, SameSignExtremeBoundsUseABoundedDifference){
     for(const b8 negative : { false, true }){
         const f64 minimum = negative ? VectorDoubleGetY(bounds) : VectorDoubleGetX(threeQuarters);
         const f64 upper = negative ? VectorDoubleGetY(threeQuarters) : maximum;
-        Expected<f64> value = MakeUnexpected(Failure{});
-        value = SliderBehavior::Interpolate(minimum, upper, 0.5);
+        const Expected<f64> value = SliderBehavior::Interpolate(minimum, upper, 0.5);
         ASSERT_TRUE(value);
         EXPECT_TRUE(IsFinite(*value));
         EXPECT_GE(*value, minimum);
         EXPECT_LE(*value, upper);
-        Expected<f64> normalized = MakeUnexpected(Failure{});
-        normalized = SliderBehavior::Normalize(minimum, upper, *value);
+        const Expected<f64> normalized = SliderBehavior::Normalize(minimum, upper, *value);
         ASSERT_TRUE(normalized);
         EXPECT_NEAR(*normalized, 0.5, 1.0e-15);
     }
@@ -150,8 +145,7 @@ TEST(UiSliderMathTests, SameSignExtremeBoundsUseABoundedDifference){
 
 TEST(UiSliderMathTests, TinyAndAdjacentSpansStayInTheOrdinaryNormalizationPath){
     const f64 tiny = BitCast<f64>(1ull);
-    Expected<f64> normalized = MakeUnexpected(Failure{});
-    normalized = SliderBehavior::Normalize(VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(tiny))), tiny, 0.0);
+    Expected<f64> normalized = SliderBehavior::Normalize(VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(tiny))), tiny, 0.0);
     ASSERT_TRUE(normalized);
     EXPECT_DOUBLE_EQ(*normalized, 0.5);
     normalized = SliderBehavior::Normalize(tiny, BitCast<f64>(2ull), tiny);
@@ -162,15 +156,13 @@ TEST(UiSliderMathTests, TinyAndAdjacentSpansStayInTheOrdinaryNormalizationPath){
     normalized = SliderBehavior::Normalize(lower, upper, upper);
     ASSERT_TRUE(normalized);
     EXPECT_DOUBLE_EQ(*normalized, 1.0);
-    Expected<f64> value = MakeUnexpected(Failure{});
-    value = SliderBehavior::Interpolate(lower, upper, 1.0);
+    const Expected<f64> value = SliderBehavior::Interpolate(lower, upper, 1.0);
     ASSERT_TRUE(value);
     EXPECT_EQ(BitCast<u64>(*value), BitCast<u64>(upper));
 }
 
 TEST(UiSliderMathTests, InterpolationPreservesExactEndpointAndSignedZeroBits){
-    Expected<f64> value = MakeUnexpected(Failure{});
-    value = SliderBehavior::Interpolate(-0.0, 1.0, 0.0);
+    Expected<f64> value = SliderBehavior::Interpolate(-0.0, 1.0, 0.0);
     ASSERT_TRUE(value);
     EXPECT_EQ(BitCast<u64>(*value), 0x8000000000000000ull);
     value = SliderBehavior::Interpolate(-1.0, 0.0, 1.0);

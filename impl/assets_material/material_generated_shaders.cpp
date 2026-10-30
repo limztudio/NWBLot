@@ -65,14 +65,109 @@ static void AssignGeneratedMaterialShaderSource(CookString& outSource, ScratchAr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
+// Shared body for the three AVBOIT pass-PS generators; opaque materials are skipped.
+static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPassPixelShadersImpl(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const Name& sharedMeshShaderName,
+    const AStringView generatedDirectoryLeaf,
+    const AStringView authoringHeaderInclude,
+    const AStringView passLabel,
+    const AStringView generatedNamePrefix,
+    MaterialCookString MaterialCookEntry::* entryShaderNameField,
     CookArena& arena,
     ScratchArena& scratchArena,
     const Span<MaterialCookEntry> materialEntries
 ){
+    CookVector<GeneratedMaterialPixelShader> generatedShaders(arena);
+    usize generatedShaderCount = 0u;
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(entry.transparent && !entry.surfaceSource.empty())
+            ++generatedShaderCount;
+    }
+    generatedShaders.reserve(generatedShaderCount);
+
+    const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / s_GeneratedCacheDirectory / generatedDirectoryLeaf;
+    auto removeAllIfExistsResult2 = RemoveAllIfExists(generatedRoot);
+    if(!removeAllIfExistsResult2){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to clear generated directory '{}': {}"), ConvertString(passLabel), PathToString<tchar>(generatedRoot), ConvertString(removeAllIfExistsResult2.error().message()));
+        return MakeUnexpected(Failure{});
+    }
+
+    for(MaterialCookEntry& entry : materialEntries){
+        if(!entry.transparent)
+            continue;
+        if(entry.surfaceSource.empty())
+            continue;
+        if(entry.materialInterface.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: transparent material '{}' needs an interface to generate its AVBOIT {} pixel shader"), ConvertString(AStringView(entry.virtualPath)), ConvertString(passLabel));
+            return MakeUnexpected(Failure{});
+        }
+
+        // Same .bind + .surface pair as the G-buffer PS.
+        ScratchString generatedSource(scratchArena);
+        generatedSource += "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n";
+        generatedSource += s_GeneratedPixelShaderBindHookLine;
+        generatedSource += s_GeneratedPixelShaderCookCacheLine;
+        AppendGeneratedMaterialShaderIncludes(generatedSource, authoringHeaderInclude, entry);
+
+        ScratchString relativeFile(scratchArena);
+        relativeFile += entry.virtualPath;
+        relativeFile += s_GeneratedShaderSourceExtension;
+        const ScratchPath outputPath = generatedRoot / AStringView(relativeFile);
+        auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
+        if(!ensureDirectoriesResult2){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}"),
+                ConvertString(passLabel),
+                PathToString<tchar>(outputPath.parentPathView()),
+                ConvertString(ensureDirectoriesResult2.error().message())
+            );
+            return MakeUnexpected(Failure{});
+        }
+        if(!WriteTextFile(outputPath, AStringView(generatedSource))){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to write generated pixel shader '{}'"), ConvertString(passLabel), PathToString<tchar>(outputPath));
+            return MakeUnexpected(Failure{});
+        }
+
+        GeneratedMaterialPixelShader generated(arena);
+        generated.name += generatedNamePrefix;
+        generated.name += entry.virtualPath;
+        AssignGeneratedMaterialShaderSource(generated.source, scratchArena, outputPath);
+
+        const auto pixelShaderName = ToName(AStringView(generated.name));
+        if(!pixelShaderName || !*pixelShaderName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated AVBOIT {} pixel shader name is invalid for material '{}'"), ConvertString(passLabel), ConvertString(AStringView(entry.virtualPath)));
+            return MakeUnexpected(Failure{});
+        }
+
+        // Record the PS identity so the clip collector and the transparent draw share the SAME key.
+        (entry.*entryShaderNameField).assign(AStringView(generated.name));
+
+        generatedShaders.push_back(Move(generated));
+    }
+
+    return generatedShaders;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShaders(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const Name& sharedMeshShaderName,
+    MaterialCookArena& arena,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Span<MaterialCookEntry> materialEntries
+){
+    using namespace MaterialCookDetail;
     CookVector<GeneratedMaterialPixelShader> generatedShaders(arena);
     usize generatedShaderCount = 0u;
     for(const MaterialCookEntry& entry : materialEntries){
@@ -163,101 +258,14 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared body for the three AVBOIT pass-PS generators; opaque materials are skipped.
-static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPassPixelShadersImpl(
+Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAccumulatePixelShaders(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const AStringView generatedDirectoryLeaf,
-    const AStringView authoringHeaderInclude,
-    const AStringView passLabel,
-    const AStringView generatedNamePrefix,
-    MaterialCookString MaterialCookEntry::* entryShaderNameField,
-    CookArena& arena,
-    ScratchArena& scratchArena,
+    MaterialCookArena& arena,
+    Core::Alloc::ScratchArena& scratchArena,
     const Span<MaterialCookEntry> materialEntries
 ){
-    CookVector<GeneratedMaterialPixelShader> generatedShaders(arena);
-    usize generatedShaderCount = 0u;
-    for(const MaterialCookEntry& entry : materialEntries){
-        if(entry.transparent && !entry.surfaceSource.empty())
-            ++generatedShaderCount;
-    }
-    generatedShaders.reserve(generatedShaderCount);
-
-    const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / s_GeneratedCacheDirectory / generatedDirectoryLeaf;
-    auto removeAllIfExistsResult2 = RemoveAllIfExists(generatedRoot);
-    if(!removeAllIfExistsResult2){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to clear generated directory '{}': {}"), ConvertString(passLabel), PathToString<tchar>(generatedRoot), ConvertString(removeAllIfExistsResult2.error().message()));
-        return MakeUnexpected(Failure{});
-    }
-
-    for(MaterialCookEntry& entry : materialEntries){
-        if(!entry.transparent)
-            continue;
-        if(entry.surfaceSource.empty())
-            continue;
-        if(entry.materialInterface.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: transparent material '{}' needs an interface to generate its AVBOIT {} pixel shader"), ConvertString(AStringView(entry.virtualPath)), ConvertString(passLabel));
-            return MakeUnexpected(Failure{});
-        }
-
-        // Same .bind + .surface pair as the G-buffer PS.
-        ScratchString generatedSource(scratchArena);
-        generatedSource += "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n";
-        generatedSource += s_GeneratedPixelShaderBindHookLine;
-        generatedSource += s_GeneratedPixelShaderCookCacheLine;
-        AppendGeneratedMaterialShaderIncludes(generatedSource, authoringHeaderInclude, entry);
-
-        ScratchString relativeFile(scratchArena);
-        relativeFile += entry.virtualPath;
-        relativeFile += s_GeneratedShaderSourceExtension;
-        const ScratchPath outputPath = generatedRoot / AStringView(relativeFile);
-        auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
-        if(!ensureDirectoriesResult2){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}"),
-                ConvertString(passLabel),
-                PathToString<tchar>(outputPath.parentPathView()),
-                ConvertString(ensureDirectoriesResult2.error().message())
-            );
-            return MakeUnexpected(Failure{});
-        }
-        if(!WriteTextFile(outputPath, AStringView(generatedSource))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to write generated pixel shader '{}'"), ConvertString(passLabel), PathToString<tchar>(outputPath));
-            return MakeUnexpected(Failure{});
-        }
-
-        GeneratedMaterialPixelShader generated(arena);
-        generated.name += generatedNamePrefix;
-        generated.name += entry.virtualPath;
-        AssignGeneratedMaterialShaderSource(generated.source, scratchArena, outputPath);
-
-        const auto pixelShaderName = ToName(AStringView(generated.name));
-        if(!pixelShaderName || !*pixelShaderName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated AVBOIT {} pixel shader name is invalid for material '{}'"), ConvertString(passLabel), ConvertString(AStringView(entry.virtualPath)));
-            return MakeUnexpected(Failure{});
-        }
-
-        // Record the PS identity so the clip collector and the transparent draw share the SAME key.
-        (entry.*entryShaderNameField).assign(AStringView(generated.name));
-
-        generatedShaders.push_back(Move(generated));
-    }
-
-    return generatedShaders;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAccumulatePixelShadersImpl(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    CookArena& arena,
-    ScratchArena& scratchArena,
-    const Span<MaterialCookEntry> materialEntries
-){
+    using namespace MaterialCookDetail;
     return EmitMaterialAvboitPassPixelShadersImpl(
         cacheDirectory,
         configurationSafeName,
@@ -276,13 +284,14 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAcc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOccupancyPixelShadersImpl(
+Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOccupancyPixelShaders(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    CookArena& arena,
-    ScratchArena& scratchArena,
+    MaterialCookArena& arena,
+    Core::Alloc::ScratchArena& scratchArena,
     const Span<MaterialCookEntry> materialEntries
 ){
+    using namespace MaterialCookDetail;
     return EmitMaterialAvboitPassPixelShadersImpl(
         cacheDirectory,
         configurationSafeName,
@@ -301,13 +310,14 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOcc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExtinctionPixelShadersImpl(
+Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExtinctionPixelShaders(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    CookArena& arena,
-    ScratchArena& scratchArena,
+    MaterialCookArena& arena,
+    Core::Alloc::ScratchArena& scratchArena,
     const Span<MaterialCookEntry> materialEntries
 ){
+    using namespace MaterialCookDetail;
     return EmitMaterialAvboitPassPixelShadersImpl(
         cacheDirectory,
         configurationSafeName,
@@ -321,12 +331,6 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExt
         materialEntries
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

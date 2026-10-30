@@ -183,9 +183,9 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
 
     static constexpr MStringView s_Source =
         "enum<u8> Mode {\r\n"
-        "    enum Idle,\r\n"
-        "    enum Active,\r\n"
-        "    enum kCount,\r\n"
+        "    Idle,\r\n"
+        "    Active,\r\n"
+        "    kCount,\r\n"
         "}\r\n"
         "\r\n"
         "class Box<T> {\r\n"
@@ -200,7 +200,7 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
         "[reflect]\r\n"
         "class Payload {\r\n"
         "    public i32 count = DEFAULT_COUNT;\r\n"
-        "    public Mode mode = Mode.Idle;\r\n"
+        "    public Mode mode = Mode::Idle;\r\n"
         "    public Optional<Mode> optMode;\r\n"
         "}\r\n"
         "\r\n"
@@ -213,7 +213,6 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
 
     NWB::Core::Metascript::MVector<MString> defines(arena.arena);
     defines.push_back(MString("DEFAULT_COUNT=42", 16u, arena.arena));
-    defines.push_back(MString("FEATURE_ENABLED", 15u, arena.arena));
 
     CompileResult res(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/named_enum_spec.adhd", arena.arena, res, nullptr, {}, defines));
@@ -271,8 +270,8 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
 
     static constexpr MStringView s_BadEnumCountSource =
         "enum<u8> BadMode {\r\n"
-        "    enum Idle,\r\n"
-        "    enum Count,\r\n"
+        "    Idle,\r\n"
+        "    Count,\r\n"
         "}\r\n";
     CompileResult badEnumCountRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_BadEnumCountSource, "impl/sim/bad_enum_count.adhd", arena.arena, badEnumCountRes));

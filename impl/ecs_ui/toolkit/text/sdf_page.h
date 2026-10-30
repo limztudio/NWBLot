@@ -22,7 +22,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SdfDistanceEncodingFreeTypeU8 = s_FontAtlasDistanceEncoding;
 inline constexpr u32 s_SdfMaxChannelCount = 4u;
 
 
@@ -41,7 +40,7 @@ struct SdfAtlasPageBinding{
     u32 height = 0u;
     u32 channelCount = s_SdfMaxChannelCount;
     u32 spreadPixels = 0u;
-    u32 distanceEncoding = s_SdfDistanceEncodingFreeTypeU8;
+    u32 distanceEncoding = s_FontAtlasDistanceEncoding;
 };
 
 [[nodiscard]] inline b8 SameSdfAtlasPageKey(const SdfAtlasPageBinding& first, const SdfAtlasPageBinding& second)noexcept{

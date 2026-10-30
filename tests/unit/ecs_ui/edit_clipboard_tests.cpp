@@ -45,7 +45,7 @@ protected:
     virtual void startNativeRequest(ClipboardRequestToken, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)noexcept override{}
 };
 
-inline constexpr UiTextEditOwner s_Owner{ { 51u }, 2u, 3u };
+inline constexpr Ui::UiTextEditOwner s_Owner{ { 51u }, 2u, 3u };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,7 +81,7 @@ TEST(UiEditClipboard, CopiedOwnerGenerationsRejectReplacedWidgetDeclarationAndMo
     UiEditClipboardController controller(arena.arena, service);
     Ui::EditModel model(arena.arena);
     ASSERT_TRUE(model.setText("base"));
-    const UiTextEditOwner replacements[]{ { { 52u }, 2u, 3u }, { { 51u }, 4u, 3u }, { { 51u }, 2u, 5u } };
+    const Ui::UiTextEditOwner replacements[]{ { { 52u }, 2u, 3u }, { { 51u }, 4u, 3u }, { { 51u }, 2u, 5u } };
     for(const auto& owner : replacements){
         ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
         ASSERT_TRUE(service.pump());

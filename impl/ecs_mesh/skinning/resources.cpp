@@ -30,10 +30,10 @@ namespace __hidden_resources{
 
 
 template<typename PayloadT>
-static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupStructuredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const TStringView label){
+static Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupStructuredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const TStringView label){
     if(MultiplyOverflows<usize>(payload.size(), sizeof(PayloadT))){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
-        return MakeUnexpected(RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow);
+        return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
     }
 
     return RuntimeMeshBufferUpload::SetupBuffer<PayloadT>(graphics, debugName, payload, { false, false, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });

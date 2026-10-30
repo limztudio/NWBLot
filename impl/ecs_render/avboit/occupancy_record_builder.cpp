@@ -4,7 +4,6 @@
 
 #include "occupancy_record_builder.h"
 
-#include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
@@ -32,12 +31,6 @@ namespace __hidden_avboit_occupancy_record_builder{
 
 
 static constexpr usize s_ResourceBaseCount = 13u;
-static constexpr usize s_StreamUseCount = 7u;
-static constexpr usize s_CsgIntervalUseCount = 4u;
-static constexpr usize s_EmulationBaseCount = 4u;
-static constexpr usize s_EmulationPlanUseCount = 8u;
-static constexpr usize s_MaterialResourceSetUseCapacity = 3u;
-static constexpr usize s_ComputeEmulationResourceSetUseCapacity = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -133,8 +126,8 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ scratchArena };
     avboitPreResourceUses.reserve(
         __hidden_avboit_occupancy_record_builder::s_ResourceBaseCount
-        + (occupancyPayload.occupancyStreamsUploaded ? __hidden_avboit_occupancy_record_builder::s_StreamUseCount : 0u)
-        + (hasCsgIntervalReads ? __hidden_avboit_occupancy_record_builder::s_CsgIntervalUseCount : 0u)
+        + (occupancyPayload.occupancyStreamsUploaded ? AvboitRecordInputsBase::s_StreamUseCount : 0u)
+        + (hasCsgIntervalReads ? AvboitRecordInputsBase::s_CsgIntervalUseCount : 0u)
     );
     avboitPreResourceUses.push_back(ReadUse(inputs.albedo));
     avboitPreResourceUses.push_back(ReadUse(inputs.normal, Core::ResourceStates::ShaderResource));
@@ -174,7 +167,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    Core::GpuTaskResourceSetUse occupancyMaterialResourceSetUses[__hidden_avboit_occupancy_record_builder::s_MaterialResourceSetUseCapacity] = {};
+    Core::GpuTaskResourceSetUse occupancyMaterialResourceSetUses[AvboitRecordInputsBase::s_MaterialResourceSetUseCapacity] = {};
     usize occupancyMaterialResourceSetUseCount = 0u;
     if(occupancyPayload.occupancyMaterialGeometryStatesGraphOwned)
         occupancyMaterialResourceSetUses[occupancyMaterialResourceSetUseCount++] = occupancyMaterialGeometrySetUse;
@@ -213,13 +206,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         computeEmulationPayload.materialFrameStatesGraphOwned = occupancyPayload.occupancyMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned = occupancyPayload.occupancyMaterialGeometryStatesGraphOwned;
 
-        Core::GpuTaskResourceUse occupancyComputeEmulationResourceUses[__hidden_avboit_occupancy_record_builder::s_EmulationBaseCount + __hidden_avboit_occupancy_record_builder::s_EmulationPlanUseCount] = {
+        Core::GpuTaskResourceUse occupancyComputeEmulationResourceUses[AvboitRecordInputsBase::s_EmulationBaseCount + AvboitRecordInputsBase::s_EmulationPlanUseCount] = {
             ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer),
             ReadBufferUse(inputs.materialInstances, occupancyInstanceRange),
             ReadBufferUse(inputs.materialTyped, occupancyMaterialTypedRange),
             ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
         };
-        usize occupancyComputeEmulationResourceUseCount = __hidden_avboit_occupancy_record_builder::s_EmulationBaseCount;
+        usize occupancyComputeEmulationResourceUseCount = AvboitRecordInputsBase::s_EmulationBaseCount;
         if(inputs.csgComputeEmulationPlanCaptured){
             occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgReceiverRanges, occupancyReceiverRange);
             occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgCutters, occupancyCutterRange);
@@ -230,7 +223,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalData, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
             occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalCount, inputs.csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess);
         }
-        Core::GpuTaskResourceSetUse occupancyComputeEmulationResourceSetUses[__hidden_avboit_occupancy_record_builder::s_ComputeEmulationResourceSetUseCapacity] = {};
+        Core::GpuTaskResourceSetUse occupancyComputeEmulationResourceSetUses[AvboitRecordInputsBase::s_ComputeEmulationResourceSetUseCapacity] = {};
         usize occupancyComputeEmulationResourceSetUseCount = 0u;
         occupancyComputeEmulationResourceSetUses[occupancyComputeEmulationResourceSetUseCount++] = occupancyMaterialGeometrySetUse;
         if(inputs.materialSampledTextureSet.valid())
@@ -305,7 +298,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             const Name identity,
             const AStringView markerLabel,
             const Core::GpuTaskId& dependency,
-            const AvboitOccupancySharedComputeEmulationGraphTask::Phase::Enum phase,
+            const AvboitSharedComputeEmulationPhase::Enum phase,
             const usize drawIndex,
             const b8 beginTiming,
             const b8 finishTiming,
@@ -334,7 +327,6 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             payload.phase = phase;
             return m_graph.addTask<AvboitOccupancySharedComputeEmulationGraphTask>(desc, Move(payload));
         };
-        using OccupancySharedPhase = AvboitOccupancySharedComputeEmulationGraphTask::Phase::Enum;
         const Name occupancySharedComputeEmulationPhaseIdentities[] = {
             Name("render.avboit.occupancy.shared_compute_emulation_generate_a"),
             Name("render.avboit.occupancy.shared_compute_emulation_raster_a"),
@@ -359,19 +351,19 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             "AVBOIT Occupancy Shared Compute Emulation Generate E",
             "AVBOIT Occupancy Shared Compute Emulation Raster E",
         };
-        const usize occupancySharedComputeEmulationPhaseCount = ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(occupancySharedComputeEmulationPlan.drawCount);
-        NWB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(occupancySharedComputeEmulationPlan.drawCount));
+        const usize occupancySharedComputeEmulationPhaseCount = SharedComputeEmulationPhaseCountForDrawCount(occupancySharedComputeEmulationPlan.drawCount);
+        NWB_ASSERT(IsSupportedSharedComputeEmulationDrawCount(occupancySharedComputeEmulationPlan.drawCount));
         NWB_ASSERT(occupancySharedComputeEmulationPhaseCount <= LengthOf(occupancySharedComputeEmulationPhaseIdentities));
         Core::GpuTaskId occupancySharedComputeEmulationDependency = occupancyDependency;
         const Span<const Core::GpuTaskResourceSetUse> occupancyMaterialResourceSetUseSpan(occupancyMaterialResourceSetUses, occupancyMaterialResourceSetUseCount);
         for(usize phaseIndex = 0u; phaseIndex < occupancySharedComputeEmulationPhaseCount; ++phaseIndex){
-            const b8 isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
+            const b8 isRasterPhase = phaseIndex % s_SharedComputeEmulationPhasesPerDraw != 0u;
             const auto occupancySharedComputeEmulationTaskResult = addOccupancySharedComputeEmulationPhase(
                 occupancySharedComputeEmulationPhaseIdentities[phaseIndex],
                 occupancySharedComputeEmulationPhaseMarkers[phaseIndex],
                 occupancySharedComputeEmulationDependency,
-                isRasterPhase ? OccupancySharedPhase::Raster : OccupancySharedPhase::Generate,
-                phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
+                isRasterPhase ? AvboitSharedComputeEmulationPhase::Raster : AvboitSharedComputeEmulationPhase::Generate,
+                phaseIndex / s_SharedComputeEmulationPhasesPerDraw,
                 phaseIndex == 0u,
                 phaseIndex + 1u == occupancySharedComputeEmulationPhaseCount,
                 isRasterPhase ? Span<const Core::GpuTaskResourceUse>(occupancySharedRasterResourceUses) : Span<const Core::GpuTaskResourceUse>(occupancySharedGenerateResourceUses),

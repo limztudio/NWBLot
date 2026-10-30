@@ -15,9 +15,9 @@ class ModelComponent{
 
 [reflect]
 enum<u32> ModelObjectKind{
-    enum Skeleton,
-    enum StaticMesh,
-    enum SkinnedMesh
+    Skeleton,
+    StaticMesh,
+    SkinnedMesh
 }
 
 [reflect]
@@ -32,7 +32,7 @@ class ModelObjectComponent{
     public Name object = s_NameNone;
     public f32x3x4 localTransform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     public EntityID owner = s_InvalidEntityId;
-    public ModelObjectKind kind = ModelObjectKind::Enum::StaticMesh;
+    public ModelObjectKind kind = ModelObjectKind::StaticMesh;
 }
 
 [reflect]

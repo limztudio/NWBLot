@@ -124,6 +124,20 @@ void CppTypeEmitter::emitParamTypeCpp(MString& out, const ParamPassingMode::Enum
     out.push_back('&');
 }
 
+void CppTypeEmitter::emitParamListCpp(MString& out, const Span<const ParamDecl> params)const{
+    out.push_back('(');
+    for(usize i = 0u; i < params.size(); ++i){
+        if(i > 0u)
+            out.append(", ");
+        const ParamDecl& p = params[i];
+        if(p.type)
+            emitParamTypeCpp(out, p.mode, *p.type);
+        out.push_back(' ');
+        out.append(p.name.data(), p.name.size());
+    }
+    out.push_back(')');
+}
+
 void CppTypeEmitter::emitTemplateHeaderCpp(MString& out, const Span<const TemplateParamDecl> params)const{
     if(params.empty())
         return;
@@ -177,17 +191,7 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
         out.append("operator");
     out.append(method.name.data(), method.name.size());
 
-    out.push_back('(');
-    for(usize i = 0u; i < method.params.size(); ++i){
-        if(i > 0u)
-            out.append(", ");
-        const ParamDecl& p = method.params[i];
-        if(p.type)
-            emitParamTypeCpp(out, p.mode, *p.type);
-        out.push_back(' ');
-        out.append(p.name.data(), p.name.size());
-    }
-    out.push_back(')');
+    emitParamListCpp(out, method.params);
 
     if(method.isConst)
         out.append("const noexcept");

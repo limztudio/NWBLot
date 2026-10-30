@@ -10,7 +10,6 @@
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
-#include <impl/assets/graphics/caustic/photon_push_constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

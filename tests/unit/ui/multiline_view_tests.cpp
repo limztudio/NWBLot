@@ -60,13 +60,9 @@ TEST_F(UiMultilineViewTests, NewSnapshotRequiresMatchingLayoutBeforePlacementOrH
     EXPECT_FALSE(place());
     ExpectPlacement(m_placement, previous);
     EXPECT_FALSE(m_view.hitTest({ 10.0f, 20.0f }, previous));
-    TextLayout layout(m_arena);
-    {
-        auto layoutResult = m_layoutBuilder.layout({ m_view.displayText() });
-        ASSERT_TRUE(layoutResult);
-        layout = Move(*layoutResult);
-    }
-    ASSERT_TRUE(m_view.adoptLayout(Move(layout)));
+    auto layout = m_layoutBuilder.layout({ m_view.displayText() });
+    ASSERT_TRUE(layout);
+    ASSERT_TRUE(m_view.adoptLayout(Move(*layout)));
     EXPECT_TRUE(m_view.ready());
     ASSERT_TRUE(place());
     EXPECT_EQ(m_view.layout().lines().size(), 3u);
@@ -97,8 +93,7 @@ TEST_F(UiMultilineViewTests, HitTestingUsesYAndClampsOutsideTheFirstAndLastLine)
     ASSERT_TRUE(m_model.setText("ab\ncd\n"));
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(place());
-    Expected<usize> hit = MakeUnexpected(Failure{});
-    hit = m_view.hitTest({ 21.0f, 26.0f }, m_placement);
+    Expected<usize> hit = m_view.hitTest({ 21.0f, 26.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 1u);
     hit = m_view.hitTest({ 21.0f, 50.0f }, m_placement);
@@ -125,8 +120,7 @@ TEST_F(UiMultilineViewTests, LigatureStopsRetainTheirHardLineAndCommittedOffsets
     EXPECT_FLOAT_EQ(m_view.caretStops()[5u].x, 10.0f);
     ASSERT_TRUE(place());
     ExpectRect(m_placement.caret, { 30.0f, 32.0f, 1.0f, 12.0f });
-    Expected<usize> hit = MakeUnexpected(Failure{});
-    hit = m_view.hitTest({ 21.0f, 38.0f }, m_placement);
+    const Expected<usize> hit = m_view.hitTest({ 21.0f, 38.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 5u);
 }
@@ -148,8 +142,7 @@ TEST_F(UiMultilineViewTests, CrossLinePreeditKeepsNativeScalarCaretInsideItsGrap
     EXPECT_EQ(m_view.displayCaret(), 7u);
     ASSERT_TRUE(place());
     ExpectRect(m_placement.caret, { 14.0f, 44.0f, 1.0f, 12.0f });
-    Expected<usize> hit = MakeUnexpected(Failure{});
-    hit = m_view.hitTest({ 20.0f, 62.0f }, m_placement);
+    const Expected<usize> hit = m_view.hitTest({ 20.0f, 62.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 5u);
     m_model.cancelComposition();
@@ -167,8 +160,7 @@ TEST_F(UiMultilineViewTests, BothScrollAxesRevealCaretAndClampAfterDocumentHomeO
     EXPECT_FLOAT_EQ(m_placement.scroll, 51.0f);
     EXPECT_FLOAT_EQ(m_placement.scrollY, 24.0f);
     ExpectRect(m_placement.caret, { 29.0f, 20.0f, 1.0f, 12.0f });
-    Expected<usize> hit = MakeUnexpected(Failure{});
-    hit = m_view.hitTest({ m_placement.caret.x, VectorGetX(VectorAdd(VectorReplicate(m_placement.caret.y), VectorReplicate(6.0f))) }, m_placement);
+    const Expected<usize> hit = m_view.hitTest({ m_placement.caret.x, VectorGetX(VectorAdd(VectorReplicate(m_placement.caret.y), VectorReplicate(6.0f))) }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, m_model.caret());
     const Point previous{ m_placement.scroll, m_placement.scrollY };
@@ -235,22 +227,14 @@ TEST_F(UiMultilineViewTests, FailedLayoutAdoptionRetainsMultilineGeometryAndPlac
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(place());
     const EditBoxPlacement previous = m_placement;
-    TextLayout wrong(m_arena);
-    {
-        auto layoutResult = m_layoutBuilder.layout({ "other\ntext" });
-        ASSERT_TRUE(layoutResult);
-        wrong = Move(*layoutResult);
-    }
-    EXPECT_FALSE(m_view.adoptLayout(Move(wrong)));
-    TextLayout rtl(m_arena);
+    auto wrong = m_layoutBuilder.layout({ "other\ntext" });
+    ASSERT_TRUE(wrong);
+    EXPECT_FALSE(m_view.adoptLayout(Move(*wrong)));
     ShapeRequest request{ m_view.displayText() };
     request.direction = TextDirection::RightToLeft;
-    {
-        auto layoutResult = m_layoutBuilder.layout(request);
-        ASSERT_TRUE(layoutResult);
-        rtl = Move(*layoutResult);
-    }
-    EXPECT_FALSE(m_view.adoptLayout(Move(rtl)));
+    auto rtl = m_layoutBuilder.layout(request);
+    ASSERT_TRUE(rtl);
+    EXPECT_FALSE(m_view.adoptLayout(Move(*rtl)));
     EXPECT_EQ(m_view.layout().utf8(), "ab\ncd");
     EXPECT_EQ(m_view.caretGeometry().lines().size(), 2u);
     EXPECT_TRUE(m_view.ready());
@@ -282,8 +266,7 @@ TEST_F(UiMultilineViewTests, MovingTheViewRetainsOwnedPreeditLineMappingsAndRead
     ASSERT_TRUE(arranged);
     m_placement = *arranged;
     ExpectPlacement(m_placement, previous);
-    Expected<usize> hit = MakeUnexpected(Failure{});
-    hit = assigned.hitTest({ 30.0f, 38.0f }, m_placement);
+    const Expected<usize> hit = assigned.hitTest({ 30.0f, 38.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 5u);
 }
@@ -353,13 +336,9 @@ TEST_F(UiMultilineViewTests, SingleLineCenteringRejectsVerticalScrollInfluence){
     EditModel single(m_arena);
     ASSERT_TRUE(single.setText("abc"));
     ASSERT_TRUE(m_view.snapshot(single));
-    TextLayout layout(m_arena);
-    {
-        auto layoutResult = m_layoutBuilder.layout({ m_view.displayText() });
-        ASSERT_TRUE(layoutResult);
-        layout = Move(*layoutResult);
-    }
-    ASSERT_TRUE(m_view.adoptLayout(Move(layout)));
+    auto layout = m_layoutBuilder.layout({ m_view.displayText() });
+    ASSERT_TRUE(layout);
+    ASSERT_TRUE(m_view.adoptLayout(Move(*layout)));
     ASSERT_TRUE(place(100.0f, 40.0f, { 0.0f, 20.0f }));
     EXPECT_FLOAT_EQ(m_placement.scrollY, 0.0f);
     EXPECT_FLOAT_EQ(m_placement.textOrigin.y, 34.0f);

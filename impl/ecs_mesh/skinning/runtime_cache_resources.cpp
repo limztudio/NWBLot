@@ -160,7 +160,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
 }
 
 template<typename PayloadT>
-[[nodiscard]] Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupRuntimeBuffer(
+[[nodiscard]] Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRuntimeBuffer(
     Core::GraphicsRuntime& graphics,
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
@@ -175,20 +175,20 @@ template<typename PayloadT>
     const auto bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.entity.id, instance.editRevision, suffix);
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'"), label, instance.handle.value);
-        return MakeUnexpected(RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed);
+        return MakeUnexpected(BufferSetupFailure::CreateFailed);
     }
 
     auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(graphics, *bufferName, payload, { canHaveUavs, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer });
     if(buffer)
         return Move(*buffer);
     switch(buffer.error()){
-    case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
+    case BufferSetupFailure::EmptyPayload:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
         return MakeUnexpected(buffer.error());
-    case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
+    case BufferSetupFailure::ByteSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
         return MakeUnexpected(buffer.error());
-    case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
+    case BufferSetupFailure::CreateFailed:
         break;
     }
     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"), label, instance.handle.value);
@@ -243,13 +243,13 @@ template<typename PayloadT>
         return true;
     }
     switch(buffer.error()){
-    case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
+    case BufferSetupFailure::EmptyPayload:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
         return false;
-    case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
+    case BufferSetupFailure::ByteSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
         return false;
-    case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
+    case BufferSetupFailure::CreateFailed:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"), label, instance.handle.value);
         return false;
     }

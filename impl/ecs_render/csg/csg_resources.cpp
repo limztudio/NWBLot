@@ -7,7 +7,6 @@
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/ecs_render/csg/renderer_csg_state.h>
-#include <impl/assets/graphics/csg/constants.h>
 #include <impl/ecs_csg/module.h>
 
 #include <core/common/log.h>
@@ -123,7 +122,7 @@ b8 RendererCsgSystem::createCsgClipResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel);
         // Push-only layout for the cap-fill path.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShaderDrivenPushConstants)));
 
         auto clipBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
         if(clipBindingLayoutResult)

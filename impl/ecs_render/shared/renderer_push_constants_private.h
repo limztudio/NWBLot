@@ -9,7 +9,6 @@
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
-#include <impl/ecs_scene/components.adhd.h>
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection.h>
@@ -30,13 +29,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using NWB::Impl::MeshFrameHeapSlots;
-using NWB::Impl::ShaderDrivenPushConstants;
-using NWB::Impl::TransparentDrawPushConstants;
-using NWB::Impl::EmulatedVertex;
-using NWB::Impl::SceneShadingGpuData;
-using NWB::Impl::SceneLightGpuData;
-
 static_assert(sizeof(MeshFrameHeapSlots) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_COUNT, "Mesh frame heap-slot payload must stay a uint4");
 static_assert(offsetof(MeshFrameHeapSlots, instance) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_INSTANCE, "Instance heap slot must map to frame heap lane x");
 static_assert(offsetof(MeshFrameHeapSlots, materialTyped) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED, "Material heap slot must map to frame heap lane y");
@@ -48,6 +40,9 @@ static_assert(offsetof(ShaderDrivenPushConstants, instanceIndex) == sizeof(u32) 
 static_assert(offsetof(ShaderDrivenPushConstants, materialConstantByteOffset) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET, "ShaderDrivenPushConstants dispatch.z must be material constant byte offset");
 static_assert(offsetof(ShaderDrivenPushConstants, dispatchFlags) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_FLAGS, "ShaderDrivenPushConstants dispatch.w must be dispatch flags");
 static_assert(offsetof(ShaderDrivenPushConstants, frameHeapSlots) == sizeof(u32) * NWB_MESH_PUSH_FRAME_HEAP_SLOT_WORD_OFFSET, "ShaderDrivenPushConstants frame heap slots must follow the viewport lanes");
+static_assert(sizeof(MeshComputePushConstants) == NWB_MESH_COMPUTE_PUSH_CONSTANT_BYTE_SIZE);
+static_assert(offsetof(MeshComputePushConstants, generatedIndexByteOffset) == NWB_MESH_COMPUTE_INDEX_BYTE_OFFSET);
+static_assert(sizeof(MeshComputePushConstants) <= Core::s_MaxPushConstantSize);
 static_assert(sizeof(TransparentDrawPushConstants) == NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE, "TransparentDrawPushConstants layout must stay stable");
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");

@@ -296,7 +296,15 @@ static u32 ComputeMaterialBindBlockStorageByteBegin(const MaterialBindTypedLayou
 }
 
 
-static b8 AppendMaterialBindLayoutConstants(const AStringView includePath, const MaterialBindEntry& entry, const Name& interfaceName, const MaterialBindTypedLayout& layout, ScratchArena& scratchArena, ScratchHashSet<ScratchString>& inOutSymbols, CookString& inOutSource){
+static b8 AppendMaterialBindLayoutConstants(
+    const AStringView includePath,
+    const MaterialBindEntry& entry,
+    const Name& interfaceName,
+    const MaterialBindTypedLayout& layout,
+    ScratchArena& scratchArena,
+    ScratchHashSet<ScratchString>& inOutSymbols,
+    CookString& inOutSource
+){
     const auto storageByteSizes = ComputeMaterialBindStorageByteSizes(includePath, layout);
     if(!storageByteSizes)
         return false;
@@ -501,7 +509,17 @@ static b8 AppendMaterialBindGeneratedInstance(
 }
 
 
-Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const MaterialBindEntry& entry, ScratchArena& scratchArena){
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<MaterialCookString> BuildMaterialBindIncludeSource(MaterialCookArena& arena, const MaterialBindEntry& entry, Core::Alloc::ScratchArena& scratchArena){
+    using namespace MaterialCookDetail;
     CookString source(arena);
 
     auto includePathResult = BuildMaterialBindIncludeVirtualPathImpl(scratchArena, entry);
@@ -592,7 +610,8 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const 
 }
 
 
-Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena){
+Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena){
+    using namespace MaterialCookDetail;
     Path includeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Material bind include generation"))
         return MakeUnexpected(Failure{});
@@ -612,7 +631,7 @@ Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirec
             return MakeUnexpected(Failure{});
         }
 
-        auto generatedSourceResult = BuildMaterialBindIncludeSourceImpl(arena, bindEntry, scratchArena);
+        auto generatedSourceResult = BuildMaterialBindIncludeSource(arena, bindEntry, scratchArena);
         if(!generatedSourceResult)
             return MakeUnexpected(Failure{});
         const CookString& generatedSource = *generatedSourceResult;
@@ -632,12 +651,6 @@ Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirec
 
     return includeRoot;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

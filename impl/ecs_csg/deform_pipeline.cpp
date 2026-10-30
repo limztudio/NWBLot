@@ -44,12 +44,12 @@ Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialC
         return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::EmptyInput, stats));
     if(inputVertexCount > s_MaxDeformVertices || inputTriangleCount > s_MaxDeformTriangles)
         return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::TooLarge, stats));
-    if(!CsgDeformValidator::ValidOptions(options))
+    if(!CsgDeformValidOptions(options))
         return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidCutter, stats));
     const auto finiteInput = CsgDeformValidator::FiniteInput(inputVertices, inputVertexCount);
     if(!finiteInput)
         return MakeUnexpected(MakeCsgDeformFailure(finiteInput.error(), stats));
-    if(!CsgDeformValidator::ValidTopology(inputTriangles, inputTriangleCount, inputVertexCount))
+    if(!CsgDeformValidTopology(Span<const CsgDeformTriangle>(inputTriangles.get(), inputTriangleCount), inputVertexCount))
         return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidTopology, stats));
 
     const SIMDVectorSingle epsilon = CsgDeformValidator::ShapeEpsilon(VectorReplicate(options.distanceEpsilon));

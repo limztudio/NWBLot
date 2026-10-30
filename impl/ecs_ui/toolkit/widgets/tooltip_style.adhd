@@ -20,7 +20,7 @@ class TooltipStyle{
 
 class TooltipOptions{
     public b8 enabled = true;
-    public PopupPlacementSide side = PopupPlacementSide::Enum::Below;
+    public PopupPlacementSide side = PopupPlacementSide::Below;
     public f32 delaySeconds = s_TooltipDefaultDelaySeconds;
     public f32 maximumWidth = s_TooltipDefaultMaximumWidth;
     public f32 gap = s_StyleSpacingSmall;

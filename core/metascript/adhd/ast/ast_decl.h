@@ -21,7 +21,6 @@ struct EnumEntry{
     MStringView name;
     Expr* valueExpr = nullptr;
     SourceSpan span;
-    b8 isFlag = false;
 };
 
 
@@ -35,6 +34,7 @@ struct EnumDecl{
     SourceSpan span;
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
+    b8 isFlag = false;
     b8 isImported = false;
 
 

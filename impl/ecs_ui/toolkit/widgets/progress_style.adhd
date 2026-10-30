@@ -9,7 +9,7 @@
 
 
 class ProgressOptions{
-    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public f32 height = s_StyleControlHeight;
 }
 

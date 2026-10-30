@@ -39,6 +39,7 @@ public:
 
 private:
     void emitIndent(MString& out, u32 indent)const;
+    void emitScratchArenaPrologue(MString& out, u32 indent, MStringView arenaName)const;
     void emitStatementList(MString& out, Span<const Stmt* const> statements, u32 indent)const;
     void emitSwitchIfChainStatements(MString& out, Span<const Stmt* const> statements, u32 indent)const;
     void emitLoopBodyStatements(MString& out, Span<const Stmt* const> statements, u32 indent)const;
@@ -53,7 +54,6 @@ private:
     void emitSimdBindingInitialDecl(MString& out, const SimdVarBinding& binding, b8 loadFromStorage, b8 qualifyThisMember, u32 indent)const;
     void emitSimdStoreForBinding(MString& out, const SimdVarBinding& binding, u32 indent)const;
     void emitSimdLoadReloadForBinding(MString& out, const SimdVarBinding& binding, u32 indent)const;
-    void emitSimdLoopElementLoad(MString& out, const SimdVarBinding& loopBinding, u32 indent)const;
     void emitSimdMutCallReloads(MString& out, const Expr& expr, u32 indent)const;
     void emitSimdBlockStores(MString& out, u32 indent)const;
     void emitScopedSimdBody(MString& out, Span<const Stmt* const> statements, u32 indent)const;

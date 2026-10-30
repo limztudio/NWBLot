@@ -67,28 +67,28 @@ class CsgDeformBuildOptions{
 }
 
 enum<u8> CsgDeformShapeKind{
-    enum Invalid,
-    enum Plane,
-    enum Box,
-    enum Sphere,
-    enum Capsule,
+    Invalid,
+    Plane,
+    Box,
+    Sphere,
+    Capsule,
 }
 
 enum<u8> CsgDeformViabilityReason{
-    enum Ok,
-    enum EmptyInput,
-    enum NonFiniteInput,
-    enum InvalidTopology,
-    enum InvalidCutter,
-    enum CapLoopFailed,
-    enum NoKeptGeometry,
-    enum TooLarge,
-    enum InvalidOutputArena,
+    Ok,
+    EmptyInput,
+    NonFiniteInput,
+    InvalidTopology,
+    InvalidCutter,
+    CapLoopFailed,
+    NoKeptGeometry,
+    TooLarge,
+    InvalidOutputArena,
 }
 
 class CsgDeformViability{
     public b8 viable = false;
-    public CsgDeformViabilityReason reason = CsgDeformViabilityReason::Enum::Ok;
+    public CsgDeformViabilityReason reason = CsgDeformViabilityReason::Ok;
 }
 
 class CsgDeformStats{
@@ -101,7 +101,7 @@ class CsgDeformStats{
 }
 
 class CsgDeformFailure{
-    public CsgDeformViabilityReason reason = CsgDeformViabilityReason::Enum::Ok;
+    public CsgDeformViabilityReason reason = CsgDeformViabilityReason::Ok;
     public CsgDeformStats stats;
 }
 
@@ -147,14 +147,14 @@ b8 CsgDeformValidTopology(in Span<CsgDeformTriangle> triangles, in usize vertexC
 
 CsgDeformShapeKind ClassifyCsgDeformShape(in Name shapeType){
     if(shapeType == s_CsgPlaneShapeName)
-        return CsgDeformShapeKind::Enum::Plane;
+        return CsgDeformShapeKind::Plane;
     if(shapeType == s_CsgBoxShapeName)
-        return CsgDeformShapeKind::Enum::Box;
+        return CsgDeformShapeKind::Box;
     if(shapeType == s_CsgSphereShapeName)
-        return CsgDeformShapeKind::Enum::Sphere;
+        return CsgDeformShapeKind::Sphere;
     if(shapeType == s_CsgCapsuleShapeName)
-        return CsgDeformShapeKind::Enum::Capsule;
-    return CsgDeformShapeKind::Enum::Invalid;
+        return CsgDeformShapeKind::Capsule;
+    return CsgDeformShapeKind::Invalid;
 }
 
 

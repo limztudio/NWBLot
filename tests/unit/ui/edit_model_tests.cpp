@@ -126,8 +126,7 @@ TEST_F(UiEditModelTests, WordRangeRejectsInteriorGraphemeAndKeepsHardLinesSepara
     EXPECT_EQ(empty->end, 0u);
     ASSERT_TRUE(m_model.setText("a\xCC\x81" "b,  z"));
     EXPECT_FALSE(m_model.wordRangeAt(1u));
-    Expected<EditWordRange> range = MakeUnexpected(Failure{});
-    range = m_model.wordRangeAt(3u);
+    Expected<EditWordRange> range = m_model.wordRangeAt(3u);
     ASSERT_TRUE(range);
     EXPECT_EQ(range->begin, 0u);
     EXPECT_EQ(range->end, 4u);

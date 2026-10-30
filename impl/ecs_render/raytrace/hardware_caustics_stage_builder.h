@@ -35,7 +35,7 @@ struct HardwareCausticsStageInputs{
     const DeferredLightingGraphResources* lightingResources = nullptr;
     const ECSRenderDetail::MeshViewBufferSnapshot* meshViewSnapshot = nullptr;
     const RayTracingDeferredGraphResourceSnapshot* rayTracingResources = nullptr;
-    const ECSRenderDetail::RendererFrameGraphFeatures* features = nullptr;
+    const RendererFrameGraphFeatures* features = nullptr;
     Core::GpuGraphResourceId worldPosition;
     Core::GpuGraphResourceId depth;
     Core::GpuGraphResourceId currentCausticIrradiance;

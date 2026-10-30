@@ -5,7 +5,6 @@
 #include "widget_fixture.h"
 
 #include <impl/ecs_ui/toolkit/widgets/radio_group.h>
-#include <impl/ecs_ui/toolkit/widgets/radio_group_style.adhd.h>
 
 #include <gtest/gtest.h>
 

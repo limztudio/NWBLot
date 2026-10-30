@@ -114,10 +114,10 @@ b8 MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID entit
     MeshSkinningGraphDispatchPlan plan;
     plan.handle = instance->handle;
     plan.submissionCommit.editRevision = instance->editRevision;
-    plan.submissionCommit.handledDirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
+    plan.submissionCommit.handledDirtyFlags =
         (skinningInputDirty ? RuntimeMeshDirtyFlag::SkinningInputDirty : RuntimeMeshDirtyFlag::None)
         | (meshletBoundsDirty ? RuntimeMeshDirtyFlag::MeshletBoundsDirty : RuntimeMeshDirtyFlag::None)
-    );
+    ;
     plan.hasActiveSkin = hasActiveSkin;
     plan.copiedRestStreams = copiesRestStreams;
     plan.updatesMeshletBounds = updatesMeshletBounds;

@@ -81,15 +81,15 @@ b8 BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
         frame.frameParam() = m_platformFrameParam;
 
         switch(frame.backend()){
-        case Common::LinuxFrameBackend::Enum::X11:
+        case Common::LinuxFrameBackend::X11:
             m_enabledExtensions.instance.emplace(VK_KHR_XLIB_SURFACE_EXTENSION_NAME, m_arena);
             break;
 #if defined(NWB_WITH_WAYLAND)
-        case Common::LinuxFrameBackend::Enum::Wayland:
+        case Common::LinuxFrameBackend::Wayland:
             m_enabledExtensions.instance.emplace(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME, m_arena);
             break;
 #endif
-        case Common::LinuxFrameBackend::Enum::None:
+        case Common::LinuxFrameBackend::None:
         default:
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot create a Linux surface without a valid native window backend."));
             return false;

@@ -3,7 +3,6 @@
 
 
 #include <impl/assets_model/asset.h>
-#include <impl/assets_model/types.adhd.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>

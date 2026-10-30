@@ -4,7 +4,6 @@
 
 #include "extinction_record_builder.h"
 
-#include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
@@ -32,12 +31,6 @@ namespace __hidden_avboit_extinction_record_builder{
 
 
 static constexpr usize s_ResourceBaseCount = 16u;
-static constexpr usize s_StreamUseCount = 7u;
-static constexpr usize s_CsgIntervalUseCount = 4u;
-static constexpr usize s_EmulationBaseCount = 4u;
-static constexpr usize s_EmulationPlanUseCount = 8u;
-static constexpr usize s_MaterialResourceSetUseCapacity = 3u;
-static constexpr usize s_ComputeEmulationResourceSetUseCapacity = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -134,8 +127,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ scratchArena };
     extinctionResourceUses.reserve(
         __hidden_avboit_extinction_record_builder::s_ResourceBaseCount
-        + (inputs.streamsUploaded ? __hidden_avboit_extinction_record_builder::s_StreamUseCount : 0u)
-        + (hasCsgIntervalReads ? __hidden_avboit_extinction_record_builder::s_CsgIntervalUseCount : 0u)
+        + (inputs.streamsUploaded ? AvboitRecordInputsBase::s_StreamUseCount : 0u)
+        + (hasCsgIntervalReads ? AvboitRecordInputsBase::s_CsgIntervalUseCount : 0u)
     );
     // Keep the full raster contract on every route so crossings retain hazards and lowering.
     extinctionResourceUses.push_back(ReadUse(inputs.albedo));
@@ -180,7 +173,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    Core::GpuTaskResourceSetUse extinctionMaterialResourceSetUses[__hidden_avboit_extinction_record_builder::s_MaterialResourceSetUseCapacity] = {};
+    Core::GpuTaskResourceSetUse extinctionMaterialResourceSetUses[AvboitRecordInputsBase::s_MaterialResourceSetUseCapacity] = {};
     usize extinctionMaterialResourceSetUseCount = 0u;
     if(extinctionPayload.extinctionMaterialGeometryStatesGraphOwned)
         extinctionMaterialResourceSetUses[extinctionMaterialResourceSetUseCount++] = extinctionMaterialGeometrySetUse;
@@ -218,13 +211,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         computeEmulationPayload.materialFrameStatesGraphOwned = extinctionPayload.extinctionMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned = extinctionPayload.extinctionMaterialGeometryStatesGraphOwned;
 
-        Core::GpuTaskResourceUse extinctionComputeEmulationResourceUses[__hidden_avboit_extinction_record_builder::s_EmulationBaseCount + __hidden_avboit_extinction_record_builder::s_EmulationPlanUseCount] = {
+        Core::GpuTaskResourceUse extinctionComputeEmulationResourceUses[AvboitRecordInputsBase::s_EmulationBaseCount + AvboitRecordInputsBase::s_EmulationPlanUseCount] = {
             ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer),
             ReadBufferUse(inputs.materialInstances, extinctionInstanceRange),
             ReadBufferUse(inputs.materialTyped, extinctionMaterialTypedRange),
             ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
         };
-        usize extinctionComputeEmulationResourceUseCount = __hidden_avboit_extinction_record_builder::s_EmulationBaseCount;
+        usize extinctionComputeEmulationResourceUseCount = AvboitRecordInputsBase::s_EmulationBaseCount;
         if(inputs.csgComputeEmulationPlanCaptured){
             extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgReceiverRanges, extinctionReceiverRange);
             extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgCutters, extinctionCutterRange);
@@ -235,7 +228,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
             extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalData, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
             extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalCount, inputs.csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess);
         }
-        Core::GpuTaskResourceSetUse extinctionComputeEmulationResourceSetUses[__hidden_avboit_extinction_record_builder::s_ComputeEmulationResourceSetUseCapacity] = {};
+        Core::GpuTaskResourceSetUse extinctionComputeEmulationResourceSetUses[AvboitRecordInputsBase::s_ComputeEmulationResourceSetUseCapacity] = {};
         usize extinctionComputeEmulationResourceSetUseCount = 0u;
         extinctionComputeEmulationResourceSetUses[extinctionComputeEmulationResourceSetUseCount++] = extinctionMaterialGeometrySetUse;
         if(inputs.materialSampledTextureSet.valid())
@@ -310,7 +303,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
             const Name identity,
             const AStringView markerLabel,
             const Core::GpuTaskId& dependency,
-            const AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Enum phase,
+            const AvboitSharedComputeEmulationPhase::Enum phase,
             const usize drawIndex,
             const b8 beginTiming,
             const b8 finishTiming,
@@ -339,7 +332,6 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
             payload.phase = phase;
             return graphAlias->addTask<AvboitExtinctionSharedComputeEmulationGraphTask>(desc, Move(payload));
         };
-        using ExtinctionSharedPhase = AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Enum;
         const Name extinctionSharedComputeEmulationPhaseIdentities[] = {
             Name("render.avboit.extinction.shared_compute_emulation_generate_a"),
             Name("render.avboit.extinction.shared_compute_emulation_raster_a"),
@@ -364,19 +356,19 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
             "AVBOIT Extinction Shared Compute Emulation Generate E",
             "AVBOIT Extinction Shared Compute Emulation Raster E",
         };
-        const usize extinctionSharedComputeEmulationPhaseCount = ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(inputs.sharedComputeEmulationPlan.drawCount);
-        NWB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(inputs.sharedComputeEmulationPlan.drawCount));
+        const usize extinctionSharedComputeEmulationPhaseCount = SharedComputeEmulationPhaseCountForDrawCount(inputs.sharedComputeEmulationPlan.drawCount);
+        NWB_ASSERT(IsSupportedSharedComputeEmulationDrawCount(inputs.sharedComputeEmulationPlan.drawCount));
         NWB_ASSERT(extinctionSharedComputeEmulationPhaseCount <= LengthOf(extinctionSharedComputeEmulationPhaseIdentities));
         Core::GpuTaskId extinctionSharedComputeEmulationDependency = extinctionDependency;
         const Span<const Core::GpuTaskResourceSetUse> extinctionMaterialResourceSetUseSpan(extinctionMaterialResourceSetUses, extinctionMaterialResourceSetUseCount);
         for(usize phaseIndex = 0u; phaseIndex < extinctionSharedComputeEmulationPhaseCount; ++phaseIndex){
-            const b8 isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
+            const b8 isRasterPhase = phaseIndex % s_SharedComputeEmulationPhasesPerDraw != 0u;
             const auto extinctionSharedComputeEmulationTaskResult = addExtinctionSharedComputeEmulationPhase(
                 extinctionSharedComputeEmulationPhaseIdentities[phaseIndex],
                 extinctionSharedComputeEmulationPhaseMarkers[phaseIndex],
                 extinctionSharedComputeEmulationDependency,
-                isRasterPhase ? ExtinctionSharedPhase::Raster : ExtinctionSharedPhase::Generate,
-                phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
+                isRasterPhase ? AvboitSharedComputeEmulationPhase::Raster : AvboitSharedComputeEmulationPhase::Generate,
+                phaseIndex / s_SharedComputeEmulationPhasesPerDraw,
                 phaseIndex == 0u,
                 phaseIndex + 1u == extinctionSharedComputeEmulationPhaseCount,
                 isRasterPhase ? Span<const Core::GpuTaskResourceUse>(extinctionSharedRasterResourceUses) : Span<const Core::GpuTaskResourceUse>(extinctionSharedGenerateResourceUses),

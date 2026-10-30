@@ -39,9 +39,7 @@ namespace __hidden_assets_graphics_mesh_acceptance_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AString = AssetsGraphicsFixture::AString;
 using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
-using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
 
 

@@ -11,48 +11,48 @@ const usize s_AssetPayloadHeaderBytes = 8u;
 
 [reflect]
 enum<u8> BytecodeValidationFailure{
-    enum None,
-    enum InvalidSize,
-    enum InvalidMagic
+    None,
+    InvalidSize,
+    InvalidMagic
 }
 
 [reflect]
 enum<u8> AssetPayloadEncodeFailure{
-    enum None,
-    enum InvalidEntryPoint,
-    enum InvalidBytecode,
-    enum OutputSizeOverflow
+    None,
+    InvalidEntryPoint,
+    InvalidBytecode,
+    OutputSizeOverflow
 }
 
 [reflect]
 enum<u8> AssetPayloadDecodeFailure{
-    enum InvalidHeader,
-    enum UnsupportedVersion,
-    enum InvalidEntryPoint,
-    enum InvalidBytecode
+    InvalidHeader,
+    UnsupportedVersion,
+    InvalidEntryPoint,
+    InvalidBytecode
 }
 
 [reflect]
 enum<u8> ShaderOptimizationLevel{
-    enum None,
-    enum Default,
-    enum High,
-    enum Maximal,
-    enum kCount
+    None,
+    Default,
+    High,
+    Maximal,
+    kCount
 }
 
 [reflect]
 enum<u8> IncludeKind{
-    enum Relative,
-    enum Standard,
-    enum Macro,
-    enum Unsupported
+    Relative,
+    Standard,
+    Macro,
+    Unsupported
 }
 
 [reflect]
 class IncludeDirective{
     public StringView name = "";
-    public IncludeKind kind = IncludeKind::Enum::Relative;
+    public IncludeKind kind = IncludeKind::Relative;
 }
 
 [reflect]

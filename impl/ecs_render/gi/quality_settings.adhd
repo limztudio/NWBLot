@@ -4,13 +4,13 @@
 
 [reflect]
 enum<u8> SurfelGiResolveResolution{
-    enum Half = 2u,
-    enum Quarter = 4u
+    Half = 2u,
+    Quarter = 4u
 }
 
 [reflect]
 class SurfelGiQualitySettings{
-    public SurfelGiResolveResolution resolveResolution = SurfelGiResolveResolution::Enum::Half;
+    public SurfelGiResolveResolution resolveResolution = SurfelGiResolveResolution::Half;
 }
 
 [reflect]
@@ -20,11 +20,11 @@ class SurfelGiResolveSize{
 }
 
 b8 ValidateSurfelGiQualitySettings(in SurfelGiQualitySettings settings){
-    return settings.resolveResolution == SurfelGiResolveResolution::Enum::Half || settings.resolveResolution == SurfelGiResolveResolution::Enum::Quarter;
+    return settings.resolveResolution == SurfelGiResolveResolution::Half || settings.resolveResolution == SurfelGiResolveResolution::Quarter;
 }
 
 SurfelGiResolveSize MakeSurfelGiResolveSize(in u32 width, in u32 height, in u32 factor){
-    assert(factor == cast<u32>(SurfelGiResolveResolution::Enum::Half) || factor == cast<u32>(SurfelGiResolveResolution::Enum::Quarter));
+    assert(factor == cast<u32>(SurfelGiResolveResolution::Half) || factor == cast<u32>(SurfelGiResolveResolution::Quarter));
     SurfelGiResolveSize size;
     size.width = divideUp(width, factor);
     size.height = divideUp(height, factor);

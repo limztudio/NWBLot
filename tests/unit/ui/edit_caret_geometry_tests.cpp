@@ -64,8 +64,7 @@ TEST_F(EditCaretFixture, LineBreakCaretBelongsToItsPrecedingLineAndFollowingByte
 
 TEST_F(EditCaretFixture, MultilineHitTestingChoosesYBeforeXAndKeepsExactMidpointTies){
     ASSERT_TRUE(adoptText("ab\n\nc\n"));
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.hitTest({ 5.0f, 0.0f });
+    Expected<usize> byte = m_geometry.hitTest({ 5.0f, 0.0f });
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 0u);
     byte = m_geometry.hitTest({ 5.01f, 0.0f });
@@ -92,8 +91,7 @@ TEST_F(EditCaretFixture, SingleLineLigatureInterpolationAndTieBehaviorRemainUnch
     ASSERT_TRUE(adoptText("ffi", EditTextMode::SingleLine));
     ASSERT_EQ(m_geometry.layout().clusters().size(), 1u);
     ASSERT_EQ(m_geometry.caretStops().size(), 4u);
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.hitTest({ 15.0f, -999.0f });
+    Expected<usize> byte = m_geometry.hitTest({ 15.0f, -999.0f });
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 1u);
     byte = m_geometry.hitTest({ 15.01f, 999.0f });
@@ -107,8 +105,7 @@ TEST_F(EditCaretFixture, CombiningHitsStayOnGraphemesWhileScalarCaretQueriesRema
     EXPECT_EQ(m_geometry.caretStops()[1u].committedByte, 3u);
     expectCaret(1u, 5.0f, 0.0f);
     expectCaret(3u, 10.0f, 0.0f);
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.hitTest({ 5.0f, 0.0f });
+    Expected<usize> byte = m_geometry.hitTest({ 5.0f, 0.0f });
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 0u);
     byte = m_geometry.hitTest({ 5.01f, 0.0f });
@@ -128,8 +125,7 @@ TEST_F(EditCaretFixture, CollapsedPreeditRetainsBothMappedEdgesAndHangulScalarIn
     EXPECT_EQ(m_geometry.caretStops()[1u].displayByte, 9u);
     expectCaret(3u, 4.0f, 0.0f);
     expectCaret(6u, 8.0f, 0.0f);
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.hitTest({ 11.0f, 0.0f });
+    const Expected<usize> byte = m_geometry.hitTest({ 11.0f, 0.0f });
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 0u);
 }
@@ -141,8 +137,7 @@ TEST_F(EditCaretFixture, PreeditOnlyLinesFallBackToTheClosestCommittedReplacemen
     ASSERT_EQ(m_geometry.lines().size(), 3u);
     EXPECT_EQ(m_geometry.lines()[1u].stopCount, 0u);
     EXPECT_EQ(m_geometry.lines()[1u].firstStop, 1u);
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.hitTest({ 100.0f, 13.0f });
+    Expected<usize> byte = m_geometry.hitTest({ 100.0f, 13.0f });
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 0u);
     byte = m_geometry.hitTest({ -100.0f, 23.0f });
@@ -161,8 +156,7 @@ TEST_F(EditCaretFixture, PreeditOnlyFallbackCannotSelectUnrelatedCommittedPrefix
     m_mapping.assign(entries, entries + 7u);
     ASSERT_TRUE(adopt("ABCX\nY\nZEF", 6u));
     ASSERT_EQ(m_geometry.lines()[1u].stopCount, 0u);
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.hitTest({ 0.0f, 13.0f });
+    Expected<usize> byte = m_geometry.hitTest({ 0.0f, 13.0f });
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 3u);
     byte = m_geometry.hitTest({ 999.0f, 13.0f });
@@ -187,8 +181,7 @@ TEST_F(EditCaretFixture, PreeditOnlyFallbackCannotSelectUnrelatedCommittedPrefix
 
 TEST_F(EditCaretFixture, VerticalTargetsRetainTheCallerPreferredColumnAcrossShortLines){
     ASSERT_TRUE(adoptText("abcdef\nx\nabcd"));
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.verticalTarget(5u, true, 50.0f);
+    Expected<usize> byte = m_geometry.verticalTarget(5u, true, 50.0f);
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 8u);
     byte = m_geometry.verticalTarget(*byte, true, 50.0f);
@@ -210,8 +203,7 @@ TEST_F(EditCaretFixture, VerticalTargetsRetainTheCallerPreferredColumnAcrossShor
 
 TEST_F(EditCaretFixture, VerticalDocumentBoundaryKeepsTheActiveCaretRatherThanReapplyingPreferredX){
     ASSERT_TRUE(adoptText("abc\nx"));
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.verticalTarget(1u, false, 999.0f);
+    Expected<usize> byte = m_geometry.verticalTarget(1u, false, 999.0f);
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 1u);
     byte = m_geometry.verticalTarget(5u, true, 0.0f);
@@ -225,8 +217,7 @@ TEST_F(EditCaretFixture, VerticalDocumentBoundaryKeepsTheActiveCaretRatherThanRe
 
 TEST_F(EditCaretFixture, VerticalMovementCanTargetEmptyAndTrailingLines){
     ASSERT_TRUE(adoptText("ab\n\nc\n"));
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.verticalTarget(1u, true, 10.0f);
+    Expected<usize> byte = m_geometry.verticalTarget(1u, true, 10.0f);
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 3u);
     byte = m_geometry.verticalTarget(*byte, true, 10.0f);
@@ -245,20 +236,16 @@ TEST_F(EditCaretFixture, EmptyTextAndEmptyCollapsedPreeditHaveValidOwnedGeometry
     m_mapping.push_back({ 0u, 0u });
     ASSERT_TRUE(adopt("", 0u, EditTextMode::SingleLine));
     ASSERT_EQ(m_geometry.caretStops().size(), 2u);
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.hitTest({ 20.0f, 20.0f });
+    const Expected<usize> byte = m_geometry.hitTest({ 20.0f, 20.0f });
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 0u);
 }
 
 TEST_F(EditCaretFixture, MismatchedSourceFailurePreservesBothPriorGeometryAndCandidateOwnership){
     ASSERT_TRUE(adoptText("old\ntext"));
-    TextLayout candidate(m_arena);
-    {
-        auto layoutResult = layout("new");
-        ASSERT_TRUE(layoutResult);
-        candidate = Move(*layoutResult);
-    }
+    auto layoutResult = layout("new");
+    ASSERT_TRUE(layoutResult);
+    TextLayout& candidate = *layoutResult;
     ASSERT_TRUE(identityMapping("new"));
     EXPECT_FALSE(m_geometry.adoptLayout(Move(candidate), "wrong", m_mapping, 3u, EditTextMode::SingleLine));
     EXPECT_EQ(candidate.utf8(), "new");
@@ -311,25 +298,17 @@ TEST_F(EditCaretFixture, MultilineRequiresCanonicalLfAndSingleLineRejectsHardBre
 TEST_F(EditCaretFixture, RtlAndMalformedClusterCoverageCannotReplaceReadyLtrGeometry){
     constexpr AStringView s_Text = "abc";
     ASSERT_TRUE(adoptText("base", EditTextMode::SingleLine));
-    TextLayout rtl(m_arena);
-    {
-        auto layoutResult = layout(s_Text, TextDirection::RightToLeft);
-        ASSERT_TRUE(layoutResult);
-        rtl = Move(*layoutResult);
-    }
+    auto rtl = layout(s_Text, TextDirection::RightToLeft);
+    ASSERT_TRUE(rtl);
     ASSERT_TRUE(identityMapping(s_Text));
-    EXPECT_FALSE(m_geometry.adoptLayout(Move(rtl), s_Text, m_mapping, 3u, EditTextMode::SingleLine));
+    EXPECT_FALSE(m_geometry.adoptLayout(Move(*rtl), s_Text, m_mapping, 3u, EditTextMode::SingleLine));
     const ShaperFault::Enum faults[]{ ShaperFault::LeadingGap, ShaperFault::TrailingGap, ShaperFault::Overlap, ShaperFault::InconsistentGlyphEnd };
     for(const auto fault : faults){
         SCOPED_TRACE(fault);
         m_shaper.fault = fault;
-        TextLayout malformed(m_arena);
-        {
-            auto layoutResult = layout(s_Text);
-            ASSERT_TRUE(layoutResult);
-            malformed = Move(*layoutResult);
-        }
-        EXPECT_FALSE(m_geometry.adoptLayout(Move(malformed), s_Text, m_mapping, 3u, EditTextMode::SingleLine));
+        auto malformed = layout(s_Text);
+        ASSERT_TRUE(malformed);
+        EXPECT_FALSE(m_geometry.adoptLayout(Move(*malformed), s_Text, m_mapping, 3u, EditTextMode::SingleLine));
         EXPECT_EQ(m_geometry.layout().utf8(), "base");
         expectCaret(1u, 10.0f, 0.0f);
     }
@@ -342,12 +321,9 @@ TEST_F(EditCaretFixture, NonfiniteDerivedGlyphPlacementCannotReplaceReadyGeometr
     EXPECT_EQ(m_geometry.layout().utf8(), "base");
     expectCaret(1u, 10.0f, 0.0f);
     m_shaper.fault = ShaperFault::None;
-    TextLayout malformed(m_arena);
-    {
-        auto layoutResult = layout("ab");
-        ASSERT_TRUE(layoutResult);
-        malformed = Move(*layoutResult);
-    }
+    auto malformedResult = layout("ab");
+    ASSERT_TRUE(malformedResult);
+    TextLayout& malformed = *malformedResult;
     ASSERT_EQ(malformed.glyphs().size(), 2u);
     const_cast<PlacedGlyph&>(malformed.glyphs()[1u]).position.x = Limit<f32>::s_Infinity;
     ASSERT_TRUE(identityMapping("ab"));
@@ -360,12 +336,9 @@ TEST_F(EditCaretFixture, MalformedLineRecordsCannotReplaceReadyGeometry){
     ASSERT_TRUE(identityMapping("a\nb"));
     for(u32 mutation = 0u; mutation < 14u; ++mutation){
         SCOPED_TRACE(mutation);
-        TextLayout malformed(m_arena);
-        {
-            auto layoutResult = layout("a\nb");
-            ASSERT_TRUE(layoutResult);
-            malformed = Move(*layoutResult);
-        }
+        auto malformedResult = layout("a\nb");
+        ASSERT_TRUE(malformedResult);
+        TextLayout& malformed = *malformedResult;
         TextLine& line = const_cast<TextLine&>(malformed.lines()[1u]);
         switch(mutation){
         case 0u: line.byteBegin = 0u; break;
@@ -405,8 +378,7 @@ TEST_F(EditCaretFixture, OwnedGeometrySurvivesSourceAndMappingChangesAndMoves){
     EXPECT_FLOAT_EQ(rectangle->y, 12.0f);
     EditCaretGeometry assigned(m_arena);
     assigned = Move(moved);
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = assigned.hitTest({ 10.0f, 14.0f });
+    const Expected<usize> byte = assigned.hitTest({ 10.0f, 14.0f });
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 4u);
 }
@@ -414,8 +386,7 @@ TEST_F(EditCaretFixture, OwnedGeometrySurvivesSourceAndMappingChangesAndMoves){
 TEST_F(EditCaretFixture, ZeroAdvanceStopsKeepTheFirstExactTieAndFiniteExtremesStayQueryable){
     m_shaper.zeroAdvance = true;
     ASSERT_TRUE(adoptText("abc", EditTextMode::SingleLine));
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.hitTest({ 0.0f, 0.0f });
+    Expected<usize> byte = m_geometry.hitTest({ 0.0f, 0.0f });
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 0u);
     byte = m_geometry.hitTest({ Limit<f32>::s_Max, 0.0f });
@@ -439,8 +410,7 @@ TEST_F(EditCaretFixture, VariableLineHeightsDetermineCaretAndHitBoundaries){
     ASSERT_TRUE(adoptText("a\nTALL\nb"));
     expectCaret(2u, 0.0f, 12.0f, 20.0f);
     expectCaret(7u, 0.0f, 32.0f);
-    Expected<usize> byte = MakeUnexpected(Failure{});
-    byte = m_geometry.hitTest({ 0.0f, 31.9f });
+    Expected<usize> byte = m_geometry.hitTest({ 0.0f, 31.9f });
     ASSERT_TRUE(byte);
     EXPECT_EQ(*byte, 2u);
     byte = m_geometry.hitTest({ 0.0f, 32.0f });

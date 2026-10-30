@@ -27,7 +27,7 @@ void CountReflectedFields(const Span<const FieldDecl* const> fields, const Symbo
         if(!field || !IsFieldReflected(*field))
             continue;
         ++outNonTransientCount;
-        if(IsAssetDependencyField(*field, symbols))
+        if(IsAssetDependencyType(field->type, symbols))
             ++outAssetRefCount;
     }
 }
@@ -59,51 +59,86 @@ void EmitReflectedCountMethod(MString& out, const MStringView methodName, const 
     out.append("u; }\r\n");
 }
 
+struct BinaryFieldClassInfo{
+    MStringView elemName;
+    const TypeRef* elemType = nullptr;
+    b8 isNameOrAssetRef = false;
+    b8 isAssetRef = false;
+    b8 isSerializeSubObject = false;
+    b8 isArray = false;
+};
+
+[[nodiscard]] BinaryFieldClassInfo ClassifyBinarySerializedField(const FieldDecl& field, const SymbolTable& symbols)noexcept{
+    BinaryFieldClassInfo info;
+    const TypeRef* resolved = symbols.unwrapTypeAlias(field.type);
+    const MStringView tname = resolved ? resolved->name : field.type->name;
+    if(tname == "Name" || tname == "AssetRef"){
+        info.isNameOrAssetRef = true;
+        info.isAssetRef = (tname == "AssetRef");
+        return info;
+    }
+    if(const ClassDecl* subCls = symbols.findClass(tname); subCls && subCls->isSerialize){
+        info.isSerializeSubObject = true;
+        return info;
+    }
+    if(tname == "Array" && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+        info.elemType = symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
+        info.elemName = info.elemType ? info.elemType->name : resolved->templateArgs[0].type->name;
+        if(info.elemName == "Name" || info.elemName == "AssetRef"){
+            info.isArray = true;
+            info.isNameOrAssetRef = true;
+            info.isAssetRef = (info.elemName == "AssetRef");
+            return info;
+        }
+        if(const ClassDecl* elemCls = symbols.findClass(info.elemName); elemCls && elemCls->isSerialize){
+            info.isArray = true;
+            info.isSerializeSubObject = true;
+            return info;
+        }
+    }
+    return info;
+}
+
 void EmitSerializedBinarySizeMethod(MString& out, const Span<const FieldDecl* const> fields, const SymbolTable& symbols){
     out.append("    [[nodiscard]] static constexpr usize serializedBinarySize()noexcept{ return 0u");
     for(const FieldDecl* field : fields){
         if(!field || field->isTransient || !field->type)
             continue;
-        const TypeRef* resolved = symbols.unwrapTypeAlias(field->type);
-        const MStringView tname = resolved ? resolved->name : field->type->name;
-        if(tname == "Name" || tname == "AssetRef"){
+        const BinaryFieldClassInfo info = ClassifyBinarySerializedField(*field, symbols);
+        if(!info.isArray && info.isNameOrAssetRef){
             out.append(" + sizeof(::NameHash)");
             continue;
         }
-        if(const ClassDecl* subCls = symbols.findClass(tname); subCls && subCls->isSerialize){
+        if(!info.isArray && info.isSerializeSubObject){
             out.append(" + decltype(");
             out.append(field->name.data(), field->name.size());
             out.append(")::serializedBinarySize()");
             continue;
         }
-        if(tname == "Array" && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-            const TypeRef* elemType = symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
-            const MStringView elemName = elemType ? elemType->name : resolved->templateArgs[0].type->name;
-            if(elemName == "Name" || elemName == "AssetRef"){
-                out.append(" + (sizeof(");
+        if(info.isArray && info.isNameOrAssetRef){
+            out.append(" + (sizeof(");
+            out.append(field->name.data(), field->name.size());
+            out.append(") / sizeof(");
+            out.append(field->name.data(), field->name.size());
+            out.append("[0])) * sizeof(::NameHash)");
+            continue;
+        }
+        if(info.isArray && info.isSerializeSubObject){
+            out.append(" + (sizeof(");
+            out.append(field->name.data(), field->name.size());
+            out.append(") / sizeof(");
+            out.append(field->name.data(), field->name.size());
+            out.append("[0])) * ");
+            if(info.elemType && !info.elemType->templateArgs.empty()){
+                out.append("::RemoveCvRef_T<decltype(");
                 out.append(field->name.data(), field->name.size());
-                out.append(") / sizeof(");
-                out.append(field->name.data(), field->name.size());
-                out.append("[0])) * sizeof(::NameHash)");
-                continue;
+                out.append("[0])>::serializedBinarySize()");
             }
-            if(const ClassDecl* elemCls = symbols.findClass(elemName); elemCls && elemCls->isSerialize){
-                out.append(" + (sizeof(");
-                out.append(field->name.data(), field->name.size());
-                out.append(") / sizeof(");
-                out.append(field->name.data(), field->name.size());
-                out.append("[0])) * ");
-                if(elemType && !elemType->templateArgs.empty()){
-                    out.append("::RemoveCvRef_T<decltype(");
-                    out.append(field->name.data(), field->name.size());
-                    out.append("[0])>::serializedBinarySize()");
-                }
-                else{
-                    out.append(elemName.data(), elemName.size());
-                    out.append("::serializedBinarySize()");
-                }
-                continue;
+            else{
+                out.append(info.elemName.data(), info.elemName.size());
+                out.append("::serializedBinarySize()");
             }
+            continue;
         }
         out.append(" + sizeof(");
         out.append(field->name.data(), field->name.size());
@@ -226,39 +261,27 @@ void EmitSerializeBinaryBody(MString& out, const Span<const FieldDecl* const> fi
     for(const FieldDecl* field : fields){
         if(!field || field->isTransient || !field->type)
             continue;
-        const TypeRef* resolved = symbols.unwrapTypeAlias(field->type);
-        const MStringView tname = resolved ? resolved->name : field->type->name;
-        if(tname == "Name" || tname == "AssetRef"){
-            EmitSerializeNameOrAssetRefStep(out, indent, "this->", field->name, tname == "AssetRef", false);
+        const BinaryFieldClassInfo info = ClassifyBinarySerializedField(*field, symbols);
+        if(!info.isArray && info.isNameOrAssetRef){
+            EmitSerializeNameOrAssetRefStep(out, indent, "this->", field->name, info.isAssetRef, false);
             continue;
         }
-        if(const ClassDecl* subCls = symbols.findClass(tname); subCls && subCls->isSerialize){
+        if(!info.isArray && info.isSerializeSubObject){
             EmitSerializeSubObjectStep(out, indent, "this->", field->name, false);
             continue;
         }
-        if(tname == "Array" && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-            const TypeRef* elemType = symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
-            const MStringView elemName = elemType ? elemType->name : resolved->templateArgs[0].type->name;
-            if(elemName == "Name" || elemName == "AssetRef"){
-                out.append(indent.data(), indent.size());
-                out.append("for(const auto& __elem : this->");
-                out.append(field->name.data(), field->name.size());
-                out.append("){\r\n");
-                EmitSerializeNameOrAssetRefStep(out, innerIndentView, "", "__elem", elemName == "AssetRef", true);
-                out.append(indent.data(), indent.size());
-                out.append("}\r\n");
-                continue;
-            }
-            if(const ClassDecl* elemCls = symbols.findClass(elemName); elemCls && elemCls->isSerialize){
-                out.append(indent.data(), indent.size());
-                out.append("for(const auto& __elem : this->");
-                out.append(field->name.data(), field->name.size());
-                out.append("){\r\n");
+        if(info.isArray && (info.isNameOrAssetRef || info.isSerializeSubObject)){
+            out.append(indent.data(), indent.size());
+            out.append("for(const auto& __elem : this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("){\r\n");
+            if(info.isNameOrAssetRef)
+                EmitSerializeNameOrAssetRefStep(out, innerIndentView, "", "__elem", info.isAssetRef, true);
+            else
                 EmitSerializeSubObjectStep(out, innerIndentView, "", "__elem", true);
-                out.append(indent.data(), indent.size());
-                out.append("}\r\n");
-                continue;
-            }
+            out.append(indent.data(), indent.size());
+            out.append("}\r\n");
+            continue;
         }
         out.append(indent.data(), indent.size());
         out.append("if(offset + sizeof(this->");
@@ -292,39 +315,27 @@ void EmitDeserializeBinaryBody(MString& out, const Span<const FieldDecl* const> 
     for(const FieldDecl* field : fields){
         if(!field || field->isTransient || !field->type)
             continue;
-        const TypeRef* resolved = symbols.unwrapTypeAlias(field->type);
-        const MStringView tname = resolved ? resolved->name : field->type->name;
-        if(tname == "Name" || tname == "AssetRef"){
-            EmitDeserializeNameOrAssetRefStep(out, indent, "this->", field->name, tname == "AssetRef", false);
+        const BinaryFieldClassInfo info = ClassifyBinarySerializedField(*field, symbols);
+        if(!info.isArray && info.isNameOrAssetRef){
+            EmitDeserializeNameOrAssetRefStep(out, indent, "this->", field->name, info.isAssetRef, false);
             continue;
         }
-        if(const ClassDecl* subCls = symbols.findClass(tname); subCls && subCls->isSerialize){
+        if(!info.isArray && info.isSerializeSubObject){
             EmitDeserializeSubObjectStep(out, indent, "this->", field->name, false);
             continue;
         }
-        if(tname == "Array" && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-            const TypeRef* elemType = symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
-            const MStringView elemName = elemType ? elemType->name : resolved->templateArgs[0].type->name;
-            if(elemName == "Name" || elemName == "AssetRef"){
-                out.append(indent.data(), indent.size());
-                out.append("for(auto& __elem : this->");
-                out.append(field->name.data(), field->name.size());
-                out.append("){\r\n");
-                EmitDeserializeNameOrAssetRefStep(out, innerIndentView, "", "__elem", elemName == "AssetRef", true);
-                out.append(indent.data(), indent.size());
-                out.append("}\r\n");
-                continue;
-            }
-            if(const ClassDecl* elemCls = symbols.findClass(elemName); elemCls && elemCls->isSerialize){
-                out.append(indent.data(), indent.size());
-                out.append("for(auto& __elem : this->");
-                out.append(field->name.data(), field->name.size());
-                out.append("){\r\n");
+        if(info.isArray && (info.isNameOrAssetRef || info.isSerializeSubObject)){
+            out.append(indent.data(), indent.size());
+            out.append("for(auto& __elem : this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("){\r\n");
+            if(info.isNameOrAssetRef)
+                EmitDeserializeNameOrAssetRefStep(out, innerIndentView, "", "__elem", info.isAssetRef, true);
+            else
                 EmitDeserializeSubObjectStep(out, innerIndentView, "", "__elem", true);
-                out.append(indent.data(), indent.size());
-                out.append("}\r\n");
-                continue;
-            }
+            out.append(indent.data(), indent.size());
+            out.append("}\r\n");
+            continue;
         }
         out.append(indent.data(), indent.size());
         out.append("if(offset + sizeof(this->");
@@ -354,7 +365,7 @@ void EmitFieldNameLookupBody(MString& out, const Span<const FieldDecl* const> fi
     for(const FieldDecl* field : fields){
         if(!field || !IsFieldReflected(*field))
             continue;
-        if(assetDepOnly && !IsAssetDependencyField(*field, symbols))
+        if(assetDepOnly && !IsAssetDependencyType(field->type, symbols))
             continue;
         out.append(indent.data(), indent.size());
         out.append("if(index == ");
@@ -550,18 +561,11 @@ void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const Span<cons
     out.append("    template<typename DependencyCallback>\r\n");
     out.append("    void forEachAssetDependency([[maybe_unused]] DependencyCallback&& callback)const noexcept{\r\n");
     for(const FieldDecl* field : fields){
-        if(!field || !IsFieldReflected(*field) || !field->type || !IsAssetDependencyField(*field, m_symbols))
+        if(!field || !IsFieldReflected(*field) || !field->type || !IsAssetDependencyType(field->type, m_symbols))
             continue;
-        const TypeRef* resolvedFieldType = m_symbols.unwrapTypeAlias(field->type);
-        const MStringView outerName = resolvedFieldType ? resolvedFieldType->name : field->type->name;
-        const b8 isOptional = (outerName == "Optional"
-            && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type);
-        const TypeRef* effectiveTypeRef = isOptional
-            ? m_symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[0].type)
-            : resolvedFieldType;
-        const MStringView tname = effectiveTypeRef
-            ? m_symbols.resolveBaseTypeName(effectiveTypeRef->name)
-            : (isOptional ? m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name) : outerName);
+        b8 isOptional = false;
+        MStringView tname;
+        [[maybe_unused]] const TypeRef* effectiveTypeRef = UnwrapOptionalFieldType(field->type, m_symbols, isOptional, tname);
         const MStringView memberDotOrArrow = isOptional ? "->" : ".";
         const MStringView containerDerefPrefix = isOptional ? "*this->" : "this->";
 

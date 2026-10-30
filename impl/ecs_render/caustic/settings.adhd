@@ -7,6 +7,7 @@ const u32 s_CausticReducedBaseGridSide = 128u;
 const u32 s_CausticFullBaseGridSide = 512u;
 const u32 s_CausticTemporalDisabledPhaseCount = 1u;
 const u32 s_CausticTemporalPhaseCount = 2u;
+const f32 s_DefaultCausticTemporalDecay = 0.85f;
 
 [reflect]
 class CausticQualitySettings{

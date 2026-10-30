@@ -44,119 +44,119 @@ b8 IsAllowedMaterialAssetField(in StringView fieldName){
 }
 
 [reflect]
-enum<u32> MaterialFlag{
-    flag None = 0u,
-    flag Transparent,
-    flag TwoSided,
-    flag Refractive,
-    flag All = Transparent | TwoSided | Refractive
+flag<u32> MaterialFlag{
+    None = 0u,
+    Transparent,
+    TwoSided,
+    Refractive,
+    All = Transparent | TwoSided | Refractive
 }
 
 [reflect]
 enum<u32> MaterialParameterValueType{
-    enum None = 0u,
-    enum b8,
-    enum i8,
-    enum u8,
-    enum i16,
-    enum u16,
-    enum i32,
-    enum u32,
-    enum f16,
-    enum f32
+    None = 0u,
+    b8,
+    i8,
+    u8,
+    i16,
+    u16,
+    i32,
+    u32,
+    f16,
+    f32
 }
 
 [reflect]
 enum<u32> MaterialBlockClass{
-    enum None = 0u,
-    enum MaterialConstant,
-    enum MaterialMutable
+    None = 0u,
+    MaterialConstant,
+    MaterialMutable
 }
 
 b8 IsValidMaterialBlockClass(in MaterialBlockClass blockClass){
-    return blockClass == MaterialBlockClass::Enum::MaterialConstant || blockClass == MaterialBlockClass::Enum::MaterialMutable;
+    return blockClass == MaterialBlockClass::MaterialConstant || blockClass == MaterialBlockClass::MaterialMutable;
 }
 
 [reflect]
 enum<u32> MaterialResourceKind{
-    enum None = 0u,
-    enum SampledImage2D,
-    enum Sampler
+    None = 0u,
+    SampledImage2D,
+    Sampler
 }
 
 b8 IsValidMaterialResourceKind(in MaterialResourceKind resourceKind){
-    return resourceKind == MaterialResourceKind::Enum::SampledImage2D || resourceKind == MaterialResourceKind::Enum::Sampler;
+    return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler;
 }
 
 [reflect]
 enum<u32> MaterialLayoutFieldType{
-    enum None = 0u,
-    enum b8,
-    enum b8x2,
-    enum b8x3,
-    enum b8x4,
-    enum i8,
-    enum i8x2,
-    enum i8x3,
-    enum i8x4,
-    enum u8,
-    enum u8x2,
-    enum u8x3,
-    enum u8x4,
-    enum i16,
-    enum i16x2,
-    enum i16x3,
-    enum i16x4,
-    enum u16,
-    enum u16x2,
-    enum u16x3,
-    enum u16x4,
-    enum i32,
-    enum i32x2,
-    enum i32x3,
-    enum i32x4,
-    enum u32,
-    enum u32x2,
-    enum u32x3,
-    enum u32x4,
-    enum f16,
-    enum f16x2,
-    enum f16x3,
-    enum f16x4,
-    enum f32,
-    enum f32x2,
-    enum f32x3,
-    enum f32x4,
+    None = 0u,
+    b8,
+    b8x2,
+    b8x3,
+    b8x4,
+    i8,
+    i8x2,
+    i8x3,
+    i8x4,
+    u8,
+    u8x2,
+    u8x3,
+    u8x4,
+    i16,
+    i16x2,
+    i16x3,
+    i16x4,
+    u16,
+    u16x2,
+    u16x3,
+    u16x4,
+    i32,
+    i32x2,
+    i32x3,
+    i32x4,
+    u32,
+    u32x2,
+    u32x3,
+    u32x4,
+    f16,
+    f16x2,
+    f16x3,
+    f16x4,
+    f32,
+    f32x2,
+    f32x3,
+    f32x4,
     // Resource fields occupy one patched uint heap slot in the typed-byte payload.
     // They intentionally live after the contiguous numeric range so a resource can never be mistaken for an authored uint parameter.
-    enum SampledImage2D = 37u,
-    enum Sampler
+    SampledImage2D = 37u,
+    Sampler
 }
 
 const u32 s_MaterialLayoutFieldComponentsPerValueType = 4u;
-const u32 s_MaterialLayoutFieldFirstTypeId = cast<u32>(MaterialLayoutFieldType::Enum::b8);
-const u32 s_MaterialParameterFirstValueTypeId = cast<u32>(MaterialParameterValueType::Enum::b8);
+const u32 s_MaterialLayoutFieldFirstTypeId = cast<u32>(MaterialLayoutFieldType::b8);
+const u32 s_MaterialParameterFirstValueTypeId = cast<u32>(MaterialParameterValueType::b8);
 
 b8 IsValidMaterialLayoutFieldType(in MaterialLayoutFieldType fieldType){
-    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::Enum::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Enum::Sampler);
+    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Sampler);
 }
 
 b8 IsMaterialLayoutNumericFieldType(in MaterialLayoutFieldType fieldType){
-    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::Enum::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Enum::f32x4);
+    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::f32x4);
 }
 
 b8 IsMaterialLayoutResourceFieldType(in MaterialLayoutFieldType fieldType){
-    return fieldType == MaterialLayoutFieldType::Enum::SampledImage2D || fieldType == MaterialLayoutFieldType::Enum::Sampler;
+    return fieldType == MaterialLayoutFieldType::SampledImage2D || fieldType == MaterialLayoutFieldType::Sampler;
 }
 
 MaterialResourceKind MaterialLayoutFieldResourceKind(in MaterialLayoutFieldType fieldType){
     switch(fieldType){
-        case MaterialLayoutFieldType::Enum::SampledImage2D:
-            return MaterialResourceKind::Enum::SampledImage2D;
-        case MaterialLayoutFieldType::Enum::Sampler:
-            return MaterialResourceKind::Enum::Sampler;
+        case MaterialLayoutFieldType::SampledImage2D:
+            return MaterialResourceKind::SampledImage2D;
+        case MaterialLayoutFieldType::Sampler:
+            return MaterialResourceKind::Sampler;
         default:
-            return MaterialResourceKind::Enum::None;
+            return MaterialResourceKind::None;
     }
 }
 
@@ -169,7 +169,7 @@ u32 MaterialLayoutFieldComponentCount(in MaterialLayoutFieldType fieldType){
 
 MaterialParameterValueType MaterialLayoutFieldValueType(in MaterialLayoutFieldType fieldType){
     if(!IsMaterialLayoutNumericFieldType(fieldType))
-        return MaterialParameterValueType::Enum::None;
+        return MaterialParameterValueType::None;
 
     const u32 valueTypeOffset = (cast<u32>(fieldType) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType;
     return cast<MaterialParameterValueType>(s_MaterialParameterFirstValueTypeId + valueTypeOffset);
@@ -177,20 +177,20 @@ MaterialParameterValueType MaterialLayoutFieldValueType(in MaterialLayoutFieldTy
 
 MaterialLayoutFieldType MaterialLayoutFieldTypeFromParameterType(in MaterialParameterValueType valueType, in u32 componentCount){
     if(componentCount == 0u || componentCount > s_MaterialLayoutFieldComponentsPerValueType)
-        return MaterialLayoutFieldType::Enum::None;
+        return MaterialLayoutFieldType::None;
 
     u32 firstFieldType = 0u;
     switch(valueType){
-        case MaterialParameterValueType::Enum::b8: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::b8); break;
-        case MaterialParameterValueType::Enum::i8: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::i8); break;
-        case MaterialParameterValueType::Enum::u8: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::u8); break;
-        case MaterialParameterValueType::Enum::i16: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::i16); break;
-        case MaterialParameterValueType::Enum::u16: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::u16); break;
-        case MaterialParameterValueType::Enum::i32: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::i32); break;
-        case MaterialParameterValueType::Enum::u32: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::u32); break;
-        case MaterialParameterValueType::Enum::f16: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::f16); break;
-        case MaterialParameterValueType::Enum::f32: firstFieldType = cast<u32>(MaterialLayoutFieldType::Enum::f32); break;
-        default: return MaterialLayoutFieldType::Enum::None;
+        case MaterialParameterValueType::b8: firstFieldType = cast<u32>(MaterialLayoutFieldType::b8); break;
+        case MaterialParameterValueType::i8: firstFieldType = cast<u32>(MaterialLayoutFieldType::i8); break;
+        case MaterialParameterValueType::u8: firstFieldType = cast<u32>(MaterialLayoutFieldType::u8); break;
+        case MaterialParameterValueType::i16: firstFieldType = cast<u32>(MaterialLayoutFieldType::i16); break;
+        case MaterialParameterValueType::u16: firstFieldType = cast<u32>(MaterialLayoutFieldType::u16); break;
+        case MaterialParameterValueType::i32: firstFieldType = cast<u32>(MaterialLayoutFieldType::i32); break;
+        case MaterialParameterValueType::u32: firstFieldType = cast<u32>(MaterialLayoutFieldType::u32); break;
+        case MaterialParameterValueType::f16: firstFieldType = cast<u32>(MaterialLayoutFieldType::f16); break;
+        case MaterialParameterValueType::f32: firstFieldType = cast<u32>(MaterialLayoutFieldType::f32); break;
+        default: return MaterialLayoutFieldType::None;
     }
 
     return cast<MaterialLayoutFieldType>(firstFieldType + componentCount - 1u);
@@ -198,17 +198,17 @@ MaterialLayoutFieldType MaterialLayoutFieldTypeFromParameterType(in MaterialPara
 
 u32 MaterialParameterValueTypeByteSize(in MaterialParameterValueType valueType){
     switch(valueType){
-        case MaterialParameterValueType::Enum::b8:
-        case MaterialParameterValueType::Enum::i8:
-        case MaterialParameterValueType::Enum::u8:
+        case MaterialParameterValueType::b8:
+        case MaterialParameterValueType::i8:
+        case MaterialParameterValueType::u8:
             return 1u;
-        case MaterialParameterValueType::Enum::i16:
-        case MaterialParameterValueType::Enum::u16:
-        case MaterialParameterValueType::Enum::f16:
+        case MaterialParameterValueType::i16:
+        case MaterialParameterValueType::u16:
+        case MaterialParameterValueType::f16:
             return 2u;
-        case MaterialParameterValueType::Enum::i32:
-        case MaterialParameterValueType::Enum::u32:
-        case MaterialParameterValueType::Enum::f32:
+        case MaterialParameterValueType::i32:
+        case MaterialParameterValueType::u32:
+        case MaterialParameterValueType::f32:
             return 4u;
         default:
             return 0u;
@@ -232,7 +232,7 @@ u32 MaterialLayoutFieldAlignment(in MaterialLayoutFieldType fieldType){
 [reflect]
 class MaterialTypedLayoutBlock{
     public Name blockName = s_NameNone;
-    public MaterialBlockClass blockClass = MaterialBlockClass::Enum::None;
+    public MaterialBlockClass blockClass = MaterialBlockClass::None;
     public u32 fieldBegin = 0u;
     public u32 fieldCount = 0u;
     public u32 byteSize = 0u;
@@ -241,7 +241,7 @@ class MaterialTypedLayoutBlock{
 [reflect]
 class MaterialTypedLayoutField{
     public Name fieldName = s_NameNone;
-    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::Enum::None;
+    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::None;
     public u32 offset = 0u;
     public u32x4u defaultValue;
 }
@@ -255,7 +255,7 @@ class MaterialResourceReference{
     public Name fieldName = s_NameNone;
     public AssetRef<Texture> textureAsset;
     public AssetRef<Sampler> samplerAsset;
-    public MaterialResourceKind resourceKind = MaterialResourceKind::Enum::None;
+    public MaterialResourceKind resourceKind = MaterialResourceKind::None;
     public u32 constantByteOffset = 0u;
 }
 
@@ -316,7 +316,7 @@ b8 ValidateMaterialResourceReferences(in Span<MaterialTypedLayoutBlock> blocks, 
                 continue;
 
             // Descriptor slots are resolved during material preparation; instance overrides cannot replace them.
-            if(block.blockClass != MaterialBlockClass::Enum::MaterialConstant)
+            if(block.blockClass != MaterialBlockClass::MaterialConstant)
                 return false;
             if(field.offset > 0xFFFFFFFFu - constantByteBegin)
                 return false;
@@ -335,11 +335,11 @@ b8 ValidateMaterialResourceReferences(in Span<MaterialTypedLayoutBlock> blocks, 
                     return false;
 
                 switch(expectedKind){
-                    case MaterialResourceKind::Enum::SampledImage2D:
+                    case MaterialResourceKind::SampledImage2D:
                         if(!resourceReference.textureAsset.valid() || resourceReference.samplerAsset.valid())
                             return false;
                         break;
-                    case MaterialResourceKind::Enum::Sampler:
+                    case MaterialResourceKind::Sampler:
                         if(!resourceReference.samplerAsset.valid() || resourceReference.textureAsset.valid())
                             return false;
                         break;
@@ -353,7 +353,7 @@ b8 ValidateMaterialResourceReferences(in Span<MaterialTypedLayoutBlock> blocks, 
                 return false;
         }
 
-        if(block.blockClass == MaterialBlockClass::Enum::MaterialConstant){
+        if(block.blockClass == MaterialBlockClass::MaterialConstant){
             if(block.byteSize > 0xFFFFFFFFu - constantByteBegin)
                 return false;
             constantByteBegin += block.byteSize;

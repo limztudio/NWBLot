@@ -37,7 +37,7 @@ NWB_IMPL_BEGIN
 
 void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Core::Alloc::ScratchArena& scratchArena,
-    const ECSRenderDetail::RendererFrameGraphFeatures& features,
+    const RendererFrameGraphFeatures& features,
     const CsgFrameState& csgFrameState,
     const b8 clearAvboitTargets,
     const b8 hasTransparentRenderers,

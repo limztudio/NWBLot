@@ -59,7 +59,7 @@ TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const Templa
             for(usize p = 0u; p < count; ++p){
                 if(templateParams[p].constValueType && arg.type->name == templateParams[p].name){
                     subArg.type = nullptr;
-                    subArg.constantText = templateArgs[p].type ? templateArgs[p].type->name : templateArgs[p].constantText;
+                    subArg.constantText = templateArgs[p].constantOrTypeName();
                     matchedConstParam = true;
                     break;
                 }
@@ -70,7 +70,7 @@ TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const Templa
         else if(!arg.constantText.empty()){
             for(usize p = 0u; p < count; ++p){
                 if(templateParams[p].constValueType && arg.constantText == templateParams[p].name){
-                    subArg.constantText = templateArgs[p].type ? templateArgs[p].type->name : templateArgs[p].constantText;
+                    subArg.constantText = templateArgs[p].constantOrTypeName();
                     break;
                 }
             }
@@ -105,7 +105,15 @@ TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const Templa
     return score;
 }
 
-[[nodiscard]] b8 ConsiderScoredCallableCandidate(const SymbolTable& symbols, MethodDecl* candidate, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut, MethodDecl*& inOutBestMatch, i32& inOutBestScore)noexcept{
+[[nodiscard]] b8 ConsiderScoredCallableCandidate(
+    const SymbolTable& symbols,
+    MethodDecl* candidate,
+    const usize* preferredArgCount,
+    const Span<const MStringView> argTypeNames,
+    const Span<const u8> argIsMut,
+    MethodDecl*& inOutBestMatch,
+    i32& inOutBestScore
+)noexcept{
     if(argTypeNames.empty() && argIsMut.empty()){
         if(!preferredArgCount || candidate->params.size() == *preferredArgCount){
             inOutBestMatch = candidate;
@@ -123,7 +131,17 @@ TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const Templa
     return false;
 }
 
-[[nodiscard]] const MethodDecl* FindScoredClassCallable(const SymbolTable& symbols, const ClassDecl& classDecl, const MStringView name, const b8 isOperator, const usize* preferredArgCount, const b8 preferConst, const b8 requirePublic, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
+[[nodiscard]] const MethodDecl* FindScoredClassCallable(
+    const SymbolTable& symbols,
+    const ClassDecl& classDecl,
+    const MStringView name,
+    const b8 isOperator,
+    const usize* preferredArgCount,
+    const b8 preferConst,
+    const b8 requirePublic,
+    const Span<const MStringView> argTypeNames,
+    const Span<const u8> argIsMut
+)noexcept{
     const MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
     for(const MethodDecl* m : classDecl.methods){
@@ -309,11 +327,27 @@ Stmt* SymbolTable::findGlobalConstant(const MStringView name)const noexcept{
     return nullptr;
 }
 
-const MethodDecl* SymbolTable::findClassMethod(const ClassDecl& classDecl, const MStringView name, const usize* preferredArgCount, const b8 preferConst, const b8 requirePublic, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
+const MethodDecl* SymbolTable::findClassMethod(
+    const ClassDecl& classDecl,
+    const MStringView name,
+    const usize* preferredArgCount,
+    const b8 preferConst,
+    const b8 requirePublic,
+    const Span<const MStringView> argTypeNames,
+    const Span<const u8> argIsMut
+)const noexcept{
     return __hidden_adhd_symbol_table::FindScoredClassCallable(*this, classDecl, name, false, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
 }
 
-const MethodDecl* SymbolTable::findClassOperator(const ClassDecl& classDecl, const MStringView opName, const usize* preferredArgCount, const b8 preferConst, const b8 requirePublic, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
+const MethodDecl* SymbolTable::findClassOperator(
+    const ClassDecl& classDecl,
+    const MStringView opName,
+    const usize* preferredArgCount,
+    const b8 preferConst,
+    const b8 requirePublic,
+    const Span<const MStringView> argTypeNames,
+    const Span<const u8> argIsMut
+)const noexcept{
     return __hidden_adhd_symbol_table::FindScoredClassCallable(*this, classDecl, opName, true, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
 }
 

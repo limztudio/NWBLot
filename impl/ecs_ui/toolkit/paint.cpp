@@ -33,10 +33,6 @@ inline constexpr u32 s_NineSliceAxisCells = 3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 HasArea(const Rect& rectangle)noexcept{
-    return IsValidUiRect(rectangle) && rectangle.width > 0.0f && rectangle.height > 0.0f;
-}
-
 b8 EqualClip(const Rect& lhs, const Rect& rhs)noexcept{
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.width == rhs.width && lhs.height == rhs.height;
 }
@@ -111,7 +107,7 @@ void PaintBuilder::pushClip(const Rect& clip){
     NWB_ASSERT(m_recording);
     const Rect& parent = m_clips.back();
     Rect next;
-    if(__hidden_ui_paint::HasArea(parent) && __hidden_ui_paint::HasArea(clip)){
+    if(HasUiRectArea(parent) && HasUiRectArea(clip)){
         const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(parent.x, parent.y, parent.width, parent.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
         next = { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
     }
@@ -172,11 +168,11 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
     NWB_ASSERT(IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a));
     NWB_ASSERT(color.a >= 0.0f && color.a <= 1.0f);
     const Rect clip = m_clips.back();
-    if(!__hidden_ui_paint::HasArea(rectangle) || !__hidden_ui_paint::HasArea(clip))
+    if(!HasUiRectArea(rectangle) || !HasUiRectArea(clip))
         return;
     const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
     const Rect visible{ VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
-    if(!__hidden_ui_paint::HasArea(visible) || color.a <= 0.0f)
+    if(!HasUiRectArea(visible) || color.a <= 0.0f)
         return;
     if(m_snapshot.m_vertices.size() > Limit<u32>::s_Max - __hidden_ui_paint::s_QuadVertexCount || m_snapshot.m_indices.size() > Limit<u32>::s_Max - __hidden_ui_paint::s_QuadIndexCount){
         NWB_ASSERT(false);
@@ -235,7 +231,7 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
 }
 
 void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint){
-    if(!__hidden_ui_paint::HasArea(rectangle))
+    if(!HasUiRectArea(rectangle))
         return;
     const auto& binding = m_snapshot.m_skinBinding;
     const auto& pixels = region.rectangle;

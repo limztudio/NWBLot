@@ -8,7 +8,6 @@
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
 #include <impl/ecs_render/material/compute_emulation_output_index.h>
-#include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/generated_geometry_validation.h>
 
 
@@ -259,9 +258,6 @@ public:
         return { receiverRanges, cutters, workRegion };
     }
 };
-
-
-// Transparent CSG exposes surface->span before combine; occupancy uploads depend on Combine.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

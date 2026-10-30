@@ -7,7 +7,6 @@
 #include <impl/ecs_render/raytrace/task_graph_float_clear_tasks.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/surfel_gi_lifecycle_builder.h>
@@ -181,15 +180,30 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
     Core::GpuGraphResourceId sceneInstances;
     Core::GpuGraphResourceId tlas;
     const auto importOptionalResources = [&]() -> Expected<void>{
-        const auto shadowInstanceMaterialsResult = appendOptionalReadBuffer(rayTracingResources.shadowInstanceMaterialBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName), RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel, Core::ResourceStates::ShaderResource);
+        const auto shadowInstanceMaterialsResult = appendOptionalReadBuffer(
+            rayTracingResources.shadowInstanceMaterialBuffer,
+            Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName),
+            RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel,
+            Core::ResourceStates::ShaderResource
+        );
         if(!shadowInstanceMaterialsResult)
             return MakeUnexpected(Failure{});
         shadowInstanceMaterials = *shadowInstanceMaterialsResult;
-        const auto shadowMaterialTypedResult = appendOptionalReadBuffer(rayTracingResources.shadowMaterialTypedBuffer, Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName), RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel, Core::ResourceStates::ShaderResource);
+        const auto shadowMaterialTypedResult = appendOptionalReadBuffer(
+            rayTracingResources.shadowMaterialTypedBuffer,
+            Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName),
+            RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel,
+            Core::ResourceStates::ShaderResource
+        );
         if(!shadowMaterialTypedResult)
             return MakeUnexpected(Failure{});
         shadowMaterialTyped = *shadowMaterialTypedResult;
-        const auto shadowInstancesResult = appendOptionalReadBuffer(rayTracingResources.shadowInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstancesName), RendererFramePipelineDetail::s_SceneShadowInstancesLabel, Core::ResourceStates::ShaderResource);
+        const auto shadowInstancesResult = appendOptionalReadBuffer(
+            rayTracingResources.shadowInstanceBuffer,
+            Name(RendererFramePipelineDetail::s_SceneShadowInstancesName),
+            RendererFramePipelineDetail::s_SceneShadowInstancesLabel,
+            Core::ResourceStates::ShaderResource
+        );
         if(!shadowInstancesResult)
             return MakeUnexpected(Failure{});
         shadowInstances = *shadowInstancesResult;

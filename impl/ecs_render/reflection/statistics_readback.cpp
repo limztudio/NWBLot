@@ -52,7 +52,6 @@ void ReflectionStatisticsState::accept(const StatisticsReservationKey& key, cons
         slot->metadata.feedbackReset = feedback->reset;
         slot->metadata.feedbackResetReason = feedback->resetReason;
     }
-    // Never recycle memory whose GPU completion is unproved.
 }
 
 void ReflectionStatisticsState::complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept{

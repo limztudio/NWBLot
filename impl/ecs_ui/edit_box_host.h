@@ -8,7 +8,6 @@
 #include "text_edit_session.h"
 #include "edit_clipboard_controller.h"
 #include "clipboard_publications.h"
-#include "edit_click_tracker.h"
 
 #include <impl/ecs_ui/toolkit/context.h>
 #include <impl/ecs_ui/toolkit/widgets/edit_box_state.h>
@@ -51,7 +50,7 @@ private:
 
     struct Entry{
         Ui::WidgetState widget;
-        UiTextEditOwner owner;
+        Ui::UiTextEditOwner owner;
         Ui::PopupToken popup;
         Ui::EditModelSnapshot expected;
         UiEditBoxGeometry candidate;
@@ -79,7 +78,7 @@ private:
     };
 
     struct Event{
-        UiTextEditOwner owner;
+        Ui::UiTextEditOwner owner;
         Core::TextInputEvent native;
         Ui::EditCommandRequest command;
         Ui::EditNavigationDirection::Enum navigationDirection = Ui::EditNavigationDirection::Up;
@@ -144,7 +143,7 @@ private:
     [[nodiscard]] const Entry* find(Ui::WidgetId widget)const noexcept;
     [[nodiscard]] b8 append(Event&& event);
     [[nodiscard]] b8 compositionActive(const Entry& entry)const noexcept;
-    void discard(const UiTextEditOwner& owner)noexcept;
+    void discard(const Ui::UiTextEditOwner& owner)noexcept;
     [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model, Ui::IEditActionSink* actions, NavigationBorrow* navigation = nullptr);
     [[nodiscard]] b8 apply(const Ui::EditBoxOptions& options, Event& event, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);
     [[nodiscard]] b8 applyNavigation(const Event& event, Ui::EditNavigationDirection::Enum direction, Ui::EditModel& model, NavigationBorrow& navigation);
@@ -168,12 +167,12 @@ private:
     UiEditClipboardController m_clipboard;
     UiEditClipboardController m_primary;
     UiClipboardPublications m_publications;
-    UiEditClickTracker m_clickTracker;
+    Ui::UiEditClickTracker m_clickTracker;
     Ui::PaintVector<Entry> m_entries;
     Ui::PaintVector<Event> m_events;
     Ui::EditModelSnapshot m_nativePublished;
-    UiTextEditOwner m_clipboardOwner;
-    UiTextEditOwner m_primaryOwner;
+    Ui::UiTextEditOwner m_clipboardOwner;
+    Ui::UiTextEditOwner m_primaryOwner;
     Ui::DisplayMetrics m_display;
     u64 m_generation = 0u;
     u64 m_lastNativeSequence = 0u;

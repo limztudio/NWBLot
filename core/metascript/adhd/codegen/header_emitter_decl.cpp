@@ -26,7 +26,6 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     out.append("{\r\n");
 
     usize flagBitIndex = 0u;
-    b8 hasFlags = false;
     for(const EnumEntry& entry : decl.entries){
         out.append("        ");
         out.append(entry.name.data(), entry.name.size());
@@ -34,7 +33,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
             out.append(" = ");
             m_sourceEmitter.emitExpr(out, *entry.valueExpr);
         }
-        else if(entry.isFlag){
+        else if(decl.isFlag){
             out.append(" = (static_cast<::");
             out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
             out.append(">(1) << ");
@@ -42,13 +41,10 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
             out.push_back(')');
         }
         out.append(",\r\n");
-        if(entry.isFlag)
-            hasFlags = true;
     }
 
     out.append("    };\r\n");
-    if(hasFlags){
-        out.append("    using Flag = Enum;\r\n");
+    if(decl.isFlag){
         out.append("    [[nodiscard]] constexpr Enum operator|(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<::");
         out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
         out.append(">(a) | static_cast<::");
@@ -179,10 +175,6 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
     }
 }
 
-void HeaderEmitter::emitFreeFunctionDecl(MString& out, const MethodDecl& fn)const{
-    const b8 emitInlineBody = (fn.isInline || !fn.templateParams.empty()) && fn.hasBody;
-    m_sourceEmitter.emitOutOfClassCallable(out, nullptr, fn, emitInlineBody, true);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

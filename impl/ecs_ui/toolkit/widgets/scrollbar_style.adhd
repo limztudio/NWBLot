@@ -27,8 +27,8 @@ class ScrollbarStyle{
 }
 
 enum<u8> ScrollAxis{
-    enum Horizontal,
-    enum Vertical,
+    Horizontal,
+    Vertical,
 }
 
 const u32 s_ScrollAxisCount = 2u;

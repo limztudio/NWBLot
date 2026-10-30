@@ -22,7 +22,7 @@ namespace DeletionMutation{
 
 class UiSelectionDeletionTests : public UiEditBoxHostTests{
 protected:
-    [[nodiscard]] UiTextEditOwner owner()const noexcept;
+    [[nodiscard]] Ui::UiTextEditOwner owner()const noexcept;
     [[nodiscard]] b8 seed(b8 reverse = false);
     [[nodiscard]] b8 mutate(DeletionMutation::Enum mutation);
     void expectBaseline(u64 revision, u64 externalRevision, u64 selectionGeneration)const;
@@ -35,7 +35,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiTextEditOwner UiSelectionDeletionTests::owner()const noexcept{
+Ui::UiTextEditOwner UiSelectionDeletionTests::owner()const noexcept{
     return { { 371u }, 3u, m_model.instanceGeneration() };
 }
 
@@ -337,7 +337,7 @@ TEST_F(UiSelectionDeletionTests, OrderedHostFencesApplicationTextSelectionAndExt
 TEST_F(UiSelectionDeletionTests, RejectedCommitPreservesStandaloneDeletionPrefixAndDropsFollowingEvents){
     Ui::EditModel model(m_arena, { 10u });
     UiTextEditSession session(m_arena, m_textInput);
-    const UiTextEditOwner owner{ { 371u }, 3u, model.instanceGeneration() };
+    const Ui::UiTextEditOwner owner{ { 371u }, 3u, model.instanceGeneration() };
     ASSERT_TRUE(model.setText("abcDEFghi"));
     ASSERT_TRUE(model.setSelection(6u, 3u));
     ASSERT_EQ(session.begin(owner, model, { 30, 40, 1, 18 }), TextInputAdmission::Accepted);

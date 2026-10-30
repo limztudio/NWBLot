@@ -147,13 +147,9 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
     out.push_back('(');
 }
 
-[[nodiscard]] b8 IsSimdAssignmentOp(const TokenType::Enum op)noexcept{
-    return IsCompoundOrSimpleAssignment(op);
-}
-
 [[nodiscard]] TokenType::Enum MapSimdAssignToBinaryOp(const TokenType::Enum op)noexcept{
     switch(op){
-#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol, floatIntrinsic, doubleIntrinsic, int128Intrinsic, int256Intrinsic) \
+#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol) \
     case assignToken: return binaryToken;
 #include "../export_operators.h"
 #undef NWB_ADHD_EXPORT_SIMD_BINARY_OP
@@ -163,16 +159,12 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
 
 [[nodiscard]] MStringView SimdBinaryScalarOpSymbol(const TokenType::Enum binaryOp)noexcept{
     switch(binaryOp){
-#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol, floatIntrinsic, doubleIntrinsic, int128Intrinsic, int256Intrinsic) \
+#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol) \
     case binaryToken: return paddedBinarySymbol;
 #include "../export_operators.h"
 #undef NWB_ADHD_EXPORT_SIMD_BINARY_OP
     default: return {};
     }
-}
-
-[[nodiscard]] MStringView SimdCompoundScalarOpSymbol(const TokenType::Enum op)noexcept{
-    return SimdBinaryScalarOpSymbol(MapSimdAssignToBinaryOp(op));
 }
 
 [[nodiscard]] b8 IsSingleSwizzleLane(const MStringView text, u32& outLane)noexcept{
@@ -233,7 +225,7 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
             return true;
     }
 
-    if(expr->kind == ExprKind::Binary && IsSimdAssignmentOp(expr->op) && expr->lhs){
+    if(expr->kind == ExprKind::Binary && IsCompoundOrSimpleAssignment(expr->op) && expr->lhs){
         u32 lane = 0u;
         if(expr->lhs->kind == ExprKind::MemberAccess && expr->lhs->lhs && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType) && IsSingleSwizzleLane(expr->lhs->text, lane))
             return true;

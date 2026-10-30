@@ -148,7 +148,7 @@ TEST(AssetsGraphics, TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAg
     const Path assetRoot = root / s_AssetsDirectory;
     const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureTestMetadata));
-    ASSERT_TRUE(WriteBinaryFile(assetRoot / "textures" / "checker.tex", original));
+    ASSERT_TRUE(WriteBinaryFile(assetRoot / s_TexturesDirectory / "checker.tex", original));
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(s_TextureTestMetadata));
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
@@ -240,7 +240,7 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectin
     const Path assetRoot = root / s_AssetsDirectory;
     const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureTestMetadata));
-    ASSERT_TRUE(WriteBinaryFile(assetRoot / "textures" / "another.tex", MakeTextureTestUastcPayload(testArena)));
+    ASSERT_TRUE(WriteBinaryFile(assetRoot / s_TexturesDirectory / "another.tex", MakeTextureTestUastcPayload(testArena)));
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(s_TextureTestMetadata));
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);

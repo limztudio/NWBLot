@@ -10,7 +10,6 @@
 #include <impl/ecs_render/optics/coincident_volumes.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
-#include <impl/ecs_csg/components.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 

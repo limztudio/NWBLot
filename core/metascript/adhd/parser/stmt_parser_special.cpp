@@ -179,7 +179,7 @@ Stmt* StmtParser::parseVarDeclWithType(TypeRef* varType, const SourceSpan span, 
     m_cursor.advance();
 
     if(!isConst && m_cursor.check(TokenType::LeftBracket)){
-        m_cursor.error(span.line, span.column, "C-style arrays ('T name[N]') are prohibited in adhd; use 'Array<T, N>' or 'Vector<T>'");
+        m_cursor.error(span.line, span.column, s_ProhibitedCStyleArrayError);
         return nullptr;
     }
 

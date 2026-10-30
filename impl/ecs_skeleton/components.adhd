@@ -10,12 +10,12 @@
 
 [reflect]
 enum<u32> SkeletonSkinningMode{
-    enum LinearBlend = 0u,
-    enum DualQuaternion = 1u
+    LinearBlend = 0u,
+    DualQuaternion = 1u
 }
 
 b8 ValidSkeletonSkinningMode(in u32 mode){
-    return mode == cast<u32>(SkeletonSkinningMode::Enum::LinearBlend) || mode == cast<u32>(SkeletonSkinningMode::Enum::DualQuaternion);
+    return mode == cast<u32>(SkeletonSkinningMode::LinearBlend) || mode == cast<u32>(SkeletonSkinningMode::DualQuaternion);
 }
 
 const u32 s_SkeletonRootParent = s_SkeletonInvalidJointIndex;
@@ -26,14 +26,14 @@ const f32 s_SkeletonRigidJointEpsilon = 0.001f;
 [reflect]
 class SkeletonJointPaletteComponent{
     public Vector<SkeletonJointMatrix> joints;
-    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::Enum::LinearBlend);
+    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
 }
 
 [reflect]
 class SkeletonPoseComponent{
     public Vector<u32> parentJoints;
     public Vector<SkeletonJointMatrix> localJoints;
-    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::Enum::LinearBlend);
+    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
 }
 
 b8 HasSkeletonPoseData(in SkeletonPoseComponent pose){

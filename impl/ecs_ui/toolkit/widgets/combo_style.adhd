@@ -26,7 +26,7 @@ class ComboStyle{
 }
 
 class ComboOptions{
-    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public LayoutSize height;
     public f32 popupHeight = s_ListDefaultHeight;
     public f32 wheelRows = s_StyleScrollWheelStep;

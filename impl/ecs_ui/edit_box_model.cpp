@@ -52,7 +52,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
     Ui::EditBoxResult result;
     result.valid = true;
     result.focused = options.enabled && m_context.input().focus() == widget.id;
-    const UiTextEditOwner owner{ widget.id, widget.declarationGeneration, model.instanceGeneration() };
+    const Ui::UiTextEditOwner owner{ widget.id, widget.declarationGeneration, model.instanceGeneration() };
     Entry* entry = find(widget.id);
     b8 abandon = false;
     if(!entry){

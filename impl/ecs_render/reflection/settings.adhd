@@ -4,17 +4,17 @@
 
 [reflect]
 enum<u8> ReflectionTraceMode{
-    enum Disabled,
-    enum ScreenSpace,
-    enum Hardware,
-    enum Hybrid
+    Disabled,
+    ScreenSpace,
+    Hardware,
+    Hybrid
 }
 
 [reflect]
 enum<u8> ReflectionDebugView{
-    enum None,
-    enum TraceSource,
-    enum Confidence
+    None,
+    TraceSource,
+    Confidence
 }
 
 const u32 s_ReflectionDefaultTemporalMaxSamples = 16u;
@@ -58,8 +58,8 @@ class ReflectionSettings{
     // Linear HDR radiance for ordinary exterior misses.
     public f32x3u environmentTop = s_ReflectionDefaultEnvironmentTop;
     public f32x3u environmentBottom = s_ReflectionDefaultEnvironmentBottom;
-    public ReflectionTraceMode traceMode = ReflectionTraceMode::Enum::Hybrid;
-    public ReflectionDebugView debugView = ReflectionDebugView::Enum::None;
+    public ReflectionTraceMode traceMode = ReflectionTraceMode::Hybrid;
+    public ReflectionDebugView debugView = ReflectionDebugView::None;
     public b8 diagnosticsEnabled = false;
     // Lets stable smooth Hybrid tiles bypass proven screen misses. Off until measured.
     public b8 screenFeedbackEnabled = false;
@@ -97,7 +97,7 @@ b8 ValidateReflectionSettings(in ReflectionSettings settings){
         return false;
     if(settings.maxOpticalQueries == 0u || settings.maxOpticalQueries > s_ReflectionDefaultMaxOpticalQueries)
         return false;
-    if(cast<u8>(settings.traceMode) > cast<u8>(ReflectionTraceMode::Enum::Hybrid) || cast<u8>(settings.debugView) > cast<u8>(ReflectionDebugView::Enum::Confidence))
+    if(cast<u8>(settings.traceMode) > cast<u8>(ReflectionTraceMode::Hybrid) || cast<u8>(settings.debugView) > cast<u8>(ReflectionDebugView::Confidence))
         return false;
     if(
         !isFinite(settings.maxRayDistance)
@@ -177,16 +177,16 @@ class ReflectionSceneContentStamp{
 }
 
 enum<u8> ReflectionFeedbackResetReason{
-    enum None,
-    enum FirstObservation,
-    enum ResourcesChanged,
-    enum SettingsChanged,
-    enum SceneChanged,
-    enum ViewChanged,
-    enum Disabled,
-    enum UntrustedScene,
-    enum HardwareChanged,
-    enum InvalidAcceptance
+    None,
+    FirstObservation,
+    ResourcesChanged,
+    SettingsChanged,
+    SceneChanged,
+    ViewChanged,
+    Disabled,
+    UntrustedScene,
+    HardwareChanged,
+    InvalidAcceptance
 }
 
 class ReflectionFeedbackPlan{
@@ -207,7 +207,7 @@ class ReflectionFeedbackPlan{
     public b8 reset = false;
     public b8 previousHardwareReady = false;
     public b8 quarantined = false;
-    public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::Enum::None;
+    public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::None;
 }
 
 class ReflectionFeedbackOutcome{
@@ -217,7 +217,7 @@ class ReflectionFeedbackOutcome{
     public b8 eligible = false;
     public b8 reused = false;
     public b8 reset = false;
-    public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::Enum::None;
+    public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::None;
 }
 
 ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(in ReflectionFeedbackPlan plan, in b8 hardwareReady){
@@ -237,22 +237,22 @@ ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(in ReflectionFeedback
     result.reused = result.eligible && plan.reused && !hardwareChanged;
     result.reset = plan.reset || hardwareChanged;
     if(hardwareChanged)
-        result.resetReason = ReflectionFeedbackResetReason::Enum::HardwareChanged;
+        result.resetReason = ReflectionFeedbackResetReason::HardwareChanged;
     else
         result.resetReason = plan.resetReason;
     return result;
 }
 
 enum<u8> ReflectionHistoryResetReason{
-    enum None,
-    enum FirstSample,
-    enum SceneChanged,
-    enum ViewChanged,
-    enum SettingsChanged,
-    enum HardwareChanged,
-    enum UntrustedScene,
-    enum Disabled,
-    enum ResourcesChanged
+    None,
+    FirstSample,
+    SceneChanged,
+    ViewChanged,
+    SettingsChanged,
+    HardwareChanged,
+    UntrustedScene,
+    Disabled,
+    ResourcesChanged
 }
 
 class ReflectionHistoryPlan{
@@ -272,7 +272,7 @@ class ReflectionHistoryPlan{
     public b8 reused = false;
     public b8 reset = false;
     public b8 previousHardwareReady = false;
-    public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::Enum::None;
+    public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::None;
 }
 
 class ReflectionHistoryOutcome{
@@ -283,7 +283,7 @@ class ReflectionHistoryOutcome{
     public b8 eligible = false;
     public b8 reused = false;
     public b8 reset = false;
-    public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::Enum::None;
+    public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::None;
 }
 
 ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(in ReflectionHistoryPlan plan, in b8 hardwareReady){
@@ -309,7 +309,7 @@ ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(in ReflectionHistoryPla
         result.historyStartGraphicsFrame = 0u;
     result.reset = plan.reset || hardwareChanged;
     if(hardwareChanged)
-        result.resetReason = ReflectionHistoryResetReason::Enum::HardwareChanged;
+        result.resetReason = ReflectionHistoryResetReason::HardwareChanged;
     else
         result.resetReason = plan.resetReason;
     if(result.eligible){
@@ -366,8 +366,8 @@ const u64 s_ReflectionFeedbackMaxCount = 0xffffffffull;
 b8 TryComputeReflectionFeedbackExtent(in u32 width, in u32 height, mut ReflectionFeedbackExtent outExtent){
     if(width == 0u || height == 0u)
         return false;
-    const u32 tilesX = (width - 1u) / s_ReflectionFeedbackGroupSize + 1u;
-    const u32 tilesY = (height - 1u) / s_ReflectionFeedbackGroupSize + 1u;
+    const u32 tilesX = divideUp(width, s_ReflectionFeedbackGroupSize);
+    const u32 tilesY = divideUp(height, s_ReflectionFeedbackGroupSize);
     const u64 entryCount = cast<u64>(tilesX) * cast<u64>(tilesY) * s_ReflectionFeedbackSurfaceCount;
     const u64 byteCount = s_ReflectionFeedbackHeaderBytes + entryCount * s_ReflectionFeedbackEntryBytes;
     if(entryCount > s_ReflectionFeedbackMaxCount || byteCount > s_ReflectionFeedbackMaxCount)

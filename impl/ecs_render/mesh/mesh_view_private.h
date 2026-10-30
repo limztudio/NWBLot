@@ -6,7 +6,6 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_scene/module.h>
 
@@ -49,12 +48,6 @@ struct MeshViewBufferUpload{
 
 static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT, "MeshViewGpuData layout must match the mesh shaders");
 static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using NWB::Impl::s_MeshViewBufferName;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

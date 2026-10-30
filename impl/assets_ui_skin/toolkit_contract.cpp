@@ -27,7 +27,7 @@ struct RequiredRegion{
     StringView text;
 };
 
-#define NWB_UI_SKIN_REQUIRED_REGION(Key, Text) { s_##Key##RegionName, s_##Key##RegionText },
+#define NWB_UI_SKIN_REQUIRED_REGION(Key, Text) { s_##Key##RegionName, Text },
 static constexpr RequiredRegion s_RequiredRegions[] = {
     NWB_UI_SKIN_REQUIRED_REGION(PanelNormal, "panel.normal")
     NWB_UI_SKIN_REQUIRED_REGION(WindowNormal, "window.normal")

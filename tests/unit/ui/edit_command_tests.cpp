@@ -31,7 +31,7 @@ public:
 protected:
     [[nodiscard]] EditCommandRequest translate(const i32 key, const b8 control = false, const b8 shift = false, const b8 alt = false, const b8 repeat = false)noexcept{
         const i32 modifiers = (control ? Core::InputModifier::Control : 0) | (shift ? Core::InputModifier::Shift : 0) | (alt ? Core::InputModifier::Alt : 0);
-        return TranslateEditCommand(m_bindings.resolve(key, modifiers), repeat);
+        return TranslateEditCommand(m_bindings.resolve(key, modifiers), repeat, EditTextMode::SingleLine);
     }
 
 
@@ -93,7 +93,7 @@ TEST_F(UiEditCommandTests, NonEditingMalformedAndUnrelatedIntentsCannotMutateOrM
         { static_cast<InputCommand::Enum>(255u), true }
     };
     for(const InputCommandIntent& intent : rejected){
-        const EditCommandResult result = ApplyEditCommand(m_model, TranslateEditCommand(intent, false));
+        const EditCommandResult result = ApplyEditCommand(m_model, TranslateEditCommand(intent, false, EditTextMode::SingleLine));
         EXPECT_FALSE(result.handled);
         EXPECT_EQ(result.clipboard, EditClipboardAction::None);
         EXPECT_FALSE(result.submitted);

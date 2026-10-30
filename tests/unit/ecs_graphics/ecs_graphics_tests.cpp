@@ -8,30 +8,18 @@
 #include <tests/common/test_context.h>
 
 #include <impl/ecs_mesh/skinning/skin_payload.h>
-#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
-#include <impl/ecs_skeleton/components.adhd.h>
 #include <impl/ecs_mesh/system.h>
-#include <impl/ecs_scene/module.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/avboit/avboit.h>
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
-#include <impl/ecs_render/mesh/mesh_view_private.h>
-#include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/assets_mesh/meshlet_ref_decode.h>
 #include <impl/assets_mesh/meshlet_ref_encode.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
-#include <impl/assets_mesh/skin_types.adhd.h>
-#include <impl/assets_mesh/asset.h>
 
-#include <core/common/module.h>
-#include <core/ecs/module.h>
-#include <core/graphics/rhi/device.h>
+#include <core/ecs/entity.h>
 #include <core/mesh/classification.h>
-#include <core/common/log.h>
 
-#include <global/binary.h>
 #include <global/compile.h>
 #include <global/limit.h>
 #include <global/span.h>
@@ -75,26 +63,26 @@ TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresent
 }
 
 TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending){
-    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
+    NWB::Impl::RuntimeMeshDirtyFlag::Enum dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty;
     b8 bindlessResourceSlotsUploaded = false;
     NWB::Impl::MeshSkinningSubmissionCommit commit;
     commit.editRevision = 17u;
-    commit.handledDirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
+    commit.handledDirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty;
     commit.bindlessResourceSlotsUploadRecorded = true;
 
     NWB::Impl::ApplyMeshSkinningSubmissionCommit(false, 17u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
 
-    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty));
+    EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
     EXPECT_FALSE(bindlessResourceSlotsUploaded);
 
     NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 17u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
 
-    EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty);
+    EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty);
     EXPECT_TRUE(bindlessResourceSlotsUploaded);
 }
 
 TEST(EcsGraphics, MeshSkinningSubmissionCommitPreservesNewerEditRevision){
-    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
+    NWB::Impl::RuntimeMeshDirtyFlag::Enum dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty;
     b8 bindlessResourceSlotsUploaded = false;
     NWB::Impl::MeshSkinningSubmissionCommit commit;
     commit.editRevision = 17u;
@@ -103,7 +91,7 @@ TEST(EcsGraphics, MeshSkinningSubmissionCommitPreservesNewerEditRevision){
 
     NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 18u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
 
-    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty));
+    EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
     EXPECT_FALSE(bindlessResourceSlotsUploaded);
 }
 
@@ -337,7 +325,7 @@ TEST(EcsGraphics, MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude){
 TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
     using ByteVector = ::Vector<u8, NWB::Core::Alloc::ScratchArena>;
     using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
-    using ByteRange = NWB::Impl::ECSRenderDetail::MaterialTypedByteRange;
+    using ByteRange = NWB::Impl::MaterialTypedByteRange;
 
     Array<u8, 4096> sourceBytes{};
     for(usize index = 0u; index < sourceBytes.size(); ++index)
@@ -387,7 +375,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
 TEST(EcsGraphics, MaterialTypedByteRangeHashCollisionRetainsOwnedBytes){
     using ByteKey = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKey;
     using ByteLookup = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentLookup;
-    using ByteRange = NWB::Impl::ECSRenderDetail::MaterialTypedByteRange;
+    using ByteRange = NWB::Impl::MaterialTypedByteRange;
     using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
 
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
@@ -419,7 +407,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeHashCollisionRetainsOwnedBytes){
 
 TEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation){
     using ByteVector = ::Vector<u8, NWB::Core::Alloc::ScratchArena>;
-    using ByteRange = NWB::Impl::ECSRenderDetail::MaterialTypedByteRange;
+    using ByteRange = NWB::Impl::MaterialTypedByteRange;
     using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
 
     Array<u8, 32> expectedBytes{};

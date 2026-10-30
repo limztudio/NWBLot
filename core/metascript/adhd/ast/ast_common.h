@@ -210,7 +210,7 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 }
 
 [[nodiscard]] constexpr b8 IsScalarType(const MStringView name)noexcept{
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
     if(name == adhdName) return true;
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SCALAR_TYPE
@@ -218,7 +218,7 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 }
 
 [[nodiscard]] constexpr b8 IsIntegerScalarType(const MStringView name)noexcept{
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
     if constexpr(isInteger){ \
         if(name == adhdName) return true; \
     }
@@ -228,7 +228,7 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 }
 
 [[nodiscard]] constexpr b8 IsFloatScalarType(const MStringView name)noexcept{
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
     if constexpr(isFloat){ \
         if(name == adhdName) return true; \
     }
@@ -238,7 +238,7 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 }
 
 [[nodiscard]] constexpr b8 ResolveFixedWidthIntScalar(const MStringView name, usize& outSize, usize& outAlign, b8* outIsSigned = nullptr)noexcept{
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
     if constexpr(isFixedWidthInt){ \
         if(name == adhdName){ \
             outSize = byteSize; \
@@ -255,11 +255,11 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 [[nodiscard]] constexpr b8 IsBuiltinTypeName(const MStringView name)noexcept{
     if(name == "void" || name == "Func")
         return true;
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
     if(name == adhdName) return true;
 #define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
     if(name == adhdName) return true;
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
     if(name == adhdName) return true;
 #define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, laneScalarType) \
     if(name == adhdName) return true;
@@ -278,7 +278,7 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 }
 
 [[nodiscard]] constexpr b8 IsOverloadableOperatorToken(const TokenType::Enum op)noexcept{
-#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, isCompoundAssignment) \
+#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment) \
     if constexpr(isOverloadable){ \
         if(op == tokenType) return true; \
     }
@@ -288,7 +288,7 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 }
 
 [[nodiscard]] constexpr b8 IsCompoundOrSimpleAssignment(const TokenType::Enum op)noexcept{
-#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, isCompoundAssignment) \
+#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment) \
     if constexpr(isAssignment){ \
         if(op == tokenType) return true; \
     }
@@ -298,7 +298,7 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 }
 
 [[nodiscard]] constexpr MStringView MapTokenTypeToOperatorSymbol(const TokenType::Enum op)noexcept{
-#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, isCompoundAssignment) \
+#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment) \
     if(op == tokenType) return symbol;
 #include "../export_operators.h"
 #undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
@@ -317,6 +317,8 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 #undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT
     return false;
 }
+
+inline constexpr MStringView s_ProhibitedCStyleArrayError = "C-style arrays ('T name[N]') are prohibited in adhd; use 'Array<T, N>' or 'Vector<T>'";
 
 inline void ReportAdhdDiagnostic(MetaArena& arena, MVector<ParseError>& errors, const SourceSpan span, const MStringView message){
     errors.push_back(ParseError{span.line, span.column, MString(message.data(), message.size(), arena)});

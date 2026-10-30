@@ -41,7 +41,7 @@ public:
     }
 };
 
-inline constexpr UiTextEditOwner s_Owner{ { 61u }, 1u, 2u };
+inline constexpr Ui::UiTextEditOwner s_Owner{ { 61u }, 1u, 2u };
 inline constexpr TextInputRect s_Caret{ 10, 20, 1, 18 };
 
 

@@ -35,13 +35,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using NWB::Impl::s_MaterialTypedWordBytes;
-using NWB::Impl::MaterialTypedByteRange;
-using NWB::Impl::MaterialTypedInstanceRanges;
-using NWB::Impl::MaterialTypedByteRangeKey;
-using NWB::Impl::MaterialTypedByteAppendRange;
-using NWB::Impl::MaterialTypedByteRangeEmptyOffsetValid;
-
 using MaterialTypedByteRangeKeyHasher = Hasher<MaterialTypedByteRangeKey>;
 using MaterialTypedConstantRangeMap = HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteRangeKeyHasher, EqualTo<MaterialTypedByteRangeKey>>;
 
@@ -170,7 +163,13 @@ template<typename DestinationByteVector>
 }
 
 template<typename DestinationByteVector>
-[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(const Name& materialName, const u64 typedLayoutHash, const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes, MaterialTypedConstantRangeMap& rangeMap){
+[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(
+    const Name& materialName,
+    const u64 typedLayoutHash,
+    const Span<const u8> typedBytes,
+    DestinationByteVector& materialTypedBytes,
+    MaterialTypedConstantRangeMap& rangeMap
+){
     MaterialTypedByteRangeKey key;
     key.materialName = materialName;
     key.typedLayoutHash = typedLayoutHash;

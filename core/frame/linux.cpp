@@ -47,9 +47,9 @@ inline constexpr StringView s_WaylandDisplayEnvName = "WAYLAND_DISPLAY";
 
 static StringView BackendName(Common::LinuxFrameBackend::Enum backend)noexcept{
     switch(backend){
-    case Common::LinuxFrameBackend::Enum::X11: return s_X11BackendName;
-    case Common::LinuxFrameBackend::Enum::Wayland: return s_WaylandBackendName;
-    case Common::LinuxFrameBackend::Enum::None:
+    case Common::LinuxFrameBackend::X11: return s_X11BackendName;
+    case Common::LinuxFrameBackend::Wayland: return s_WaylandBackendName;
+    case Common::LinuxFrameBackend::None:
     default:
         return s_NoneBackendName;
     }
@@ -83,17 +83,17 @@ static Expected<LinuxBackendOrder> BuildBackendOrder(Alloc::ScratchArena& scratc
     }
     if(*requestedBackend){
         if(**requestedBackend == s_X11BackendRequest){
-            AppendBackend(order, Common::LinuxFrameBackend::Enum::X11);
+            AppendBackend(order, Common::LinuxFrameBackend::X11);
 #if defined(NWB_WITH_WAYLAND)
-            AppendBackend(order, Common::LinuxFrameBackend::Enum::Wayland);
+            AppendBackend(order, Common::LinuxFrameBackend::Wayland);
 #endif
             return order;
         }
 
 #if defined(NWB_WITH_WAYLAND)
         if(**requestedBackend == s_WaylandBackendRequest){
-            AppendBackend(order, Common::LinuxFrameBackend::Enum::Wayland);
-            AppendBackend(order, Common::LinuxFrameBackend::Enum::X11);
+            AppendBackend(order, Common::LinuxFrameBackend::Wayland);
+            AppendBackend(order, Common::LinuxFrameBackend::X11);
             return order;
         }
 #endif
@@ -118,28 +118,28 @@ static Expected<LinuxBackendOrder> BuildBackendOrder(Alloc::ScratchArena& scratc
         preferWayland = *hasWaylandDisplay;
     }
     if(preferWayland){
-        AppendBackend(order, Common::LinuxFrameBackend::Enum::Wayland);
-        AppendBackend(order, Common::LinuxFrameBackend::Enum::X11);
+        AppendBackend(order, Common::LinuxFrameBackend::Wayland);
+        AppendBackend(order, Common::LinuxFrameBackend::X11);
         return order;
     }
 #endif
 
-    AppendBackend(order, Common::LinuxFrameBackend::Enum::X11);
+    AppendBackend(order, Common::LinuxFrameBackend::X11);
 #if defined(NWB_WITH_WAYLAND)
-    AppendBackend(order, Common::LinuxFrameBackend::Enum::Wayland);
+    AppendBackend(order, Common::LinuxFrameBackend::Wayland);
 #endif
     return order;
 }
 
 static b8 TryInitBackend(Frame& frame, Common::LinuxFrameBackend::Enum backend){
     switch(backend){
-    case Common::LinuxFrameBackend::Enum::X11:
+    case Common::LinuxFrameBackend::X11:
         return InitX11Frame(frame);
 #if defined(NWB_WITH_WAYLAND)
-    case Common::LinuxFrameBackend::Enum::Wayland:
+    case Common::LinuxFrameBackend::Wayland:
         return InitWaylandFrame(frame);
 #endif
-    case Common::LinuxFrameBackend::Enum::None:
+    case Common::LinuxFrameBackend::None:
     default:
         return false;
     }
@@ -147,14 +147,14 @@ static b8 TryInitBackend(Frame& frame, Common::LinuxFrameBackend::Enum backend){
 
 static b8 ShowBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend){
     switch(backend){
-    case Common::LinuxFrameBackend::Enum::X11:
+    case Common::LinuxFrameBackend::X11:
         ShowX11Frame(frame);
         return true;
 #if defined(NWB_WITH_WAYLAND)
-    case Common::LinuxFrameBackend::Enum::Wayland:
+    case Common::LinuxFrameBackend::Wayland:
         return ShowWaylandFrame(frame);
 #endif
-    case Common::LinuxFrameBackend::Enum::None:
+    case Common::LinuxFrameBackend::None:
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("Frame: No Linux window backend has been initialized."));
         return false;
@@ -163,13 +163,13 @@ static b8 ShowBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend
 
 static b8 RunBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend){
     switch(backend){
-    case Common::LinuxFrameBackend::Enum::X11:
+    case Common::LinuxFrameBackend::X11:
         return RunX11Frame(frame);
 #if defined(NWB_WITH_WAYLAND)
-    case Common::LinuxFrameBackend::Enum::Wayland:
+    case Common::LinuxFrameBackend::Wayland:
         return RunWaylandFrame(frame);
 #endif
-    case Common::LinuxFrameBackend::Enum::None:
+    case Common::LinuxFrameBackend::None:
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("Frame: No Linux window backend is available for the main loop."));
         return false;
@@ -178,15 +178,15 @@ static b8 RunBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend)
 
 static void CleanupBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend)noexcept{
     switch(backend){
-    case Common::LinuxFrameBackend::Enum::X11:
+    case Common::LinuxFrameBackend::X11:
         CleanupX11Frame(frame);
         break;
 #if defined(NWB_WITH_WAYLAND)
-    case Common::LinuxFrameBackend::Enum::Wayland:
+    case Common::LinuxFrameBackend::Wayland:
         CleanupWaylandFrame(frame);
         break;
 #endif
-    case Common::LinuxFrameBackend::Enum::None:
+    case Common::LinuxFrameBackend::None:
     default:
         break;
     }
@@ -270,7 +270,7 @@ void Frame::setupPlatform(void* inst)noexcept{
 
     auto& frameData = data<Common::LinuxFrame>();
     frameData.setActive(false);
-    frameData.setBackend(Common::LinuxFrameBackend::Enum::None);
+    frameData.setBackend(Common::LinuxFrameBackend::None);
     frameData.nativeDisplay() = nullptr;
     frameData.nativeWindowHandle() = 0;
     frameData.nativeState() = nullptr;
@@ -282,7 +282,7 @@ void Frame::cleanupPlatform()noexcept{
     FrameDetail::CleanupBackendFrame(*this, frameData.backend());
 
     frameData.setActive(false);
-    frameData.setBackend(Common::LinuxFrameBackend::Enum::None);
+    frameData.setBackend(Common::LinuxFrameBackend::None);
     frameData.nativeDisplay() = nullptr;
     frameData.nativeWindowHandle() = 0;
     frameData.nativeState() = nullptr;

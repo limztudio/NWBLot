@@ -32,13 +32,6 @@ namespace __hidden_runtime_cache_source{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
-    RuntimeMeshDirtyFlag::TopologyDirty
-    | RuntimeMeshDirtyFlag::AttributesDirty
-    | RuntimeMeshDirtyFlag::SkinningInputDirty
-    | RuntimeMeshDirtyFlag::GpuUploadDirty
-    | RuntimeMeshDirtyFlag::MeshletBoundsDirty
-;
 static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeCache");
 
 
@@ -199,7 +192,7 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
                     component.runtimeMesh.reset();
                     return false;
                 }
-                instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags & ~__hidden_runtime_cache_source::s_GpuUploadHandledDirtyFlags);
+                instance.dirtyFlags &= ~RuntimeMeshDirtyFlag::All;
             }
             return instance.valid();
         }
@@ -244,7 +237,7 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
         eraseUnusedSource(sourceName);
         return false;
     }
-    instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags & ~__hidden_runtime_cache_source::s_GpuUploadHandledDirtyFlags);
+    instance.dirtyFlags &= ~RuntimeMeshDirtyFlag::All;
 
     if(!instance.valid()){
         eraseUnusedSource(sourceName);

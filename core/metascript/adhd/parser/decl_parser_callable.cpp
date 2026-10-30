@@ -32,11 +32,17 @@ b8 DeclParser::parseCallableOwnerOrTemplateHeader(const b8 failOnInvalidTemplate
 
     m_cursor.restore(cp);
     m_typeParser.resetPendingRightAngles();
-    if(!m_typeParser.parseTemplateParamList(outTemplateParams))
+    MVector<TemplateParamDecl> parsedTemplateParams(m_cursor.arena());
+    if(!m_typeParser.parseTemplateParamList(parsedTemplateParams))
         return !failOnInvalidTemplateParams;
 
-    for(const TemplateParamDecl& tp : outTemplateParams)
-        outOwnerTemplateParams.push_back(tp.name);
+    if(m_cursor.check(TokenType::ColonColon)){
+        for(const TemplateParamDecl& tp : parsedTemplateParams)
+            outOwnerTemplateParams.push_back(tp.name);
+    }
+    else{
+        outTemplateParams = Move(parsedTemplateParams);
+    }
     return true;
 }
 
@@ -53,8 +59,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
         m_cursor.advance();
 
         MVector<MStringView> parsedOwnerTemplateParams(m_cursor.arena());
-        MVector<TemplateParamDecl> ownerTemplateParams(m_cursor.arena());
-        if(parseCallableOwnerOrTemplateHeader(false, parsedOwnerTemplateParams, ownerTemplateParams) && m_cursor.match(TokenType::ColonColon)){
+        if(parseCallableOwnerOrTemplateHeader(false, parsedOwnerTemplateParams, decl->templateParams) && m_cursor.match(TokenType::ColonColon)){
             if(m_cursor.match(TokenType::Tilde)){
                 if(!m_cursor.checkIdentifier(maybeClass)){
                     m_cursor.errorExpected("expected class name after '~' in out-of-line destructor");
@@ -113,7 +118,6 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
         return nullptr;
 
     if(m_cursor.match(TokenType::ColonColon)){
-        decl->templateParams.clear();
         decl->ownerClassName = firstName;
         decl->ownerTemplateParams = Move(parsedOwnerTemplateParams);
         if(m_cursor.matchIdentifier("operator")){

@@ -10,29 +10,29 @@
 
 [reflect]
 enum<u8> SoftwareShadowBackend{
-    enum Automatic,
-    enum SoftwareTrace,
-    enum LightSpace
+    Automatic,
+    SoftwareTrace,
+    LightSpace
 }
 
 [reflect]
 enum<u8> SoftwareShadowCoverage{
-    enum Reference,
-    enum FittedVolume
+    Reference,
+    FittedVolume
 }
 
 [reflect]
 enum<u8> SoftwareShadowBlockerSearch{
-    enum ReferenceGrid9,
-    enum CompactCross5,
-    enum Center1
+    ReferenceGrid9,
+    CompactCross5,
+    Center1
 }
 
 [reflect]
 enum<u8> SoftwareShadowCaptureCadence{
-    enum EveryFrame,
-    enum ReuseOneFrame,
-    enum ReuseTwoFrames
+    EveryFrame,
+    ReuseOneFrame,
+    ReuseTwoFrames
 }
 
 const u32 s_ShadowCaptureReuseLimitOneFrame = 1u;
@@ -46,10 +46,10 @@ const u64 s_ShadowMaxMemoryBudgetBytes = 4294967295ull;
 
 [reflect]
 class SoftwareShadowSettings{
-    public SoftwareShadowBackend backend = SoftwareShadowBackend::Enum::Automatic;
-    public SoftwareShadowCoverage coverage = SoftwareShadowCoverage::Enum::Reference;
-    public SoftwareShadowBlockerSearch blockerSearch = SoftwareShadowBlockerSearch::Enum::ReferenceGrid9;
-    public SoftwareShadowCaptureCadence captureCadence = SoftwareShadowCaptureCadence::Enum::EveryFrame;
+    public SoftwareShadowBackend backend = SoftwareShadowBackend::Automatic;
+    public SoftwareShadowCoverage coverage = SoftwareShadowCoverage::Reference;
+    public SoftwareShadowBlockerSearch blockerSearch = SoftwareShadowBlockerSearch::ReferenceGrid9;
+    public SoftwareShadowCaptureCadence captureCadence = SoftwareShadowCaptureCadence::EveryFrame;
     public u32 directionalResolution = s_ShadowDefaultDirectionalResolution;
     public u32 pointResolution = s_ShadowDefaultPointResolution;
     public u64 memoryBudgetBytes = s_ShadowDefaultMemoryBudgetBytes;
@@ -57,10 +57,10 @@ class SoftwareShadowSettings{
 
 b8 ValidateSoftwareShadowSettings(in SoftwareShadowSettings settings){
     return
-        cast<u8>(settings.backend) <= cast<u8>(SoftwareShadowBackend::Enum::LightSpace)
-        && cast<u8>(settings.coverage) <= cast<u8>(SoftwareShadowCoverage::Enum::FittedVolume)
-        && cast<u8>(settings.blockerSearch) <= cast<u8>(SoftwareShadowBlockerSearch::Enum::Center1)
-        && cast<u8>(settings.captureCadence) <= cast<u8>(SoftwareShadowCaptureCadence::Enum::ReuseTwoFrames)
+        cast<u8>(settings.backend) <= cast<u8>(SoftwareShadowBackend::LightSpace)
+        && cast<u8>(settings.coverage) <= cast<u8>(SoftwareShadowCoverage::FittedVolume)
+        && cast<u8>(settings.blockerSearch) <= cast<u8>(SoftwareShadowBlockerSearch::Center1)
+        && cast<u8>(settings.captureCadence) <= cast<u8>(SoftwareShadowCaptureCadence::ReuseTwoFrames)
         && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
         && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
         && settings.memoryBudgetBytes > 0ull && settings.memoryBudgetBytes <= s_ShadowMaxMemoryBudgetBytes
@@ -99,9 +99,9 @@ class LightSpaceCaptureHistory{
     }
 
     public LightSpaceCaptureTicket prepare(in LightSpaceCaptureIdentity identity, in SoftwareShadowCaptureCadence cadence){
-        if(cadence == SoftwareShadowCaptureCadence::Enum::ReuseTwoFrames)
+        if(cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames)
             this.m_pendingReuseLimit = cast<u8>(s_ShadowCaptureReuseLimitTwoFrames);
-        else if(cadence == SoftwareShadowCaptureCadence::Enum::ReuseOneFrame)
+        else if(cadence == SoftwareShadowCaptureCadence::ReuseOneFrame)
             this.m_pendingReuseLimit = cast<u8>(s_ShadowCaptureReuseLimitOneFrame);
         else
             this.m_pendingReuseLimit = 0u;
@@ -200,19 +200,19 @@ const u64 s_LightSpaceEventBytes = 20u;
 const u64 s_LightSpacePixelWordBytes = 4u;
 const u64 s_LightSpaceViewBytes = 128u;
 const u64 s_LightSpaceDrawArgumentBytes = 20u;
-const u32 s_LightSpaceFlagPoint = 1u << 0u;
-const u32 s_LightSpaceFlagEligible = 1u << 1u;
-const u32 s_LightSpaceFlagFittedCoverage = 1u << 2u;
-const u32 s_LightSpaceFlagCompactBlockers = 1u << 3u;
-const u32 s_LightSpaceFlagCenterBlocker = 1u << 4u;
-const usize s_LightSpaceViewGpuOriginOrDirectionOffset = 64u;
-const usize s_LightSpaceViewGpuDepthRangeOffset = 80u;
-const usize s_LightSpaceViewGpuMapOffset = 96u;
-const usize s_LightSpaceViewGpuLightOffset = 112u;
 const u8 s_LightSpaceLightTypeDirectional = 0u;
 const u8 s_LightSpaceLightTypePoint = 1u;
 const u8 s_LightSpaceLightTypeSpot = 2u;
 const u8 s_LightSpaceLightTypeCount = 3u;
+
+flag<u32> LightSpaceFlag{
+    None = 0u,
+    Point,
+    Eligible,
+    FittedCoverage,
+    CompactBlockers,
+    CenterBlocker
+}
 
 [serialize]
 class LightSpaceViewGpu{
@@ -231,7 +231,7 @@ class LightSpaceLightRequest{
 }
 
 class LightSpacePlan{
-    public Array<LightSpaceViewGpu, 48u> views;
+    public Array<LightSpaceViewGpu, s_LightSpaceMaxViews> views;
     public u64 eventByteSize = 0u;
     public u64 countByteSize = 0u;
     public u64 depthByteSize = 0u;
@@ -262,7 +262,7 @@ b8 TryBuildLightSpacePlan(in SoftwareShadowSettings settings, in Span<LightSpace
         seenSlots |= slotBit;
         seenLights |= lightBit;
     }
-    if(settings.backend == SoftwareShadowBackend::Enum::SoftwareTrace)
+    if(settings.backend == SoftwareShadowBackend::SoftwareTrace)
         return true;
     for(usize index = 0u; index < requestCount; ++index){
         const LightSpaceLightRequest request = requests[index];
@@ -291,18 +291,25 @@ b8 TryBuildLightSpacePlan(in SoftwareShadowSettings settings, in Span<LightSpace
         if(csgIntervalDepth)
             extraCountBytes = countBytes;
         const u64 totalBytes = eventBytes + countBytes + depthBytes + viewBytes + drawArgumentBytes + extraCountBytes;
-        if(totalBytes > settings.memoryBudgetBytes || eventBytes > s_ShadowMaxMemoryBudgetBytes || eventBytes > maxStorageBufferRange || viewBytes > maxStorageBufferRange || drawArgumentBytes > maxStorageBufferRange || drawArgumentBytes > s_ShadowMaxMemoryBudgetBytes)
+        if(
+            totalBytes > settings.memoryBudgetBytes
+            || eventBytes > s_ShadowMaxMemoryBudgetBytes
+            || eventBytes > maxStorageBufferRange
+            || viewBytes > maxStorageBufferRange
+            || drawArgumentBytes > maxStorageBufferRange
+            || drawArgumentBytes > s_ShadowMaxMemoryBudgetBytes
+        )
             continue;
         ++outPlan.lightCount;
-        u32 lightFlags = s_LightSpaceFlagEligible;
+        LightSpaceFlag lightFlags = LightSpaceFlag::Eligible;
         if(point)
-            lightFlags |= s_LightSpaceFlagPoint;
-        if(settings.coverage == SoftwareShadowCoverage::Enum::FittedVolume)
-            lightFlags |= s_LightSpaceFlagFittedCoverage;
-        if(settings.blockerSearch == SoftwareShadowBlockerSearch::Enum::CompactCross5)
-            lightFlags |= s_LightSpaceFlagCompactBlockers;
-        if(settings.blockerSearch == SoftwareShadowBlockerSearch::Enum::Center1)
-            lightFlags |= s_LightSpaceFlagCenterBlocker;
+            lightFlags |= LightSpaceFlag::Point;
+        if(settings.coverage == SoftwareShadowCoverage::FittedVolume)
+            lightFlags |= LightSpaceFlag::FittedCoverage;
+        if(settings.blockerSearch == SoftwareShadowBlockerSearch::CompactCross5)
+            lightFlags |= LightSpaceFlag::CompactBlockers;
+        if(settings.blockerSearch == SoftwareShadowBlockerSearch::Center1)
+            lightFlags |= LightSpaceFlag::CenterBlocker;
         for(u32 face = 0u; face < viewCount; ++face){
             const u32 viewIndex = outPlan.viewCount + face;
             outPlan.views[viewIndex].map[0] = resolution;
@@ -312,7 +319,7 @@ b8 TryBuildLightSpacePlan(in SoftwareShadowSettings settings, in Span<LightSpace
             outPlan.views[viewIndex].light[0] = request.lightIndex;
             outPlan.views[viewIndex].light[1] = request.shadowSlot;
             outPlan.views[viewIndex].light[2] = face;
-            outPlan.views[viewIndex].light[3] = lightFlags;
+            outPlan.views[viewIndex].light[3] = cast<u32>(lightFlags);
         }
         outPlan.viewCount = newViewCount;
         outPlan.textureResolution = textureResolution;

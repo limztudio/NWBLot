@@ -83,7 +83,7 @@ public:
     u32 meshletPositionRefCount = 0u;
     u32 meshletAttributeRefCount = 0u;
     u32 editRevision = 0;
-    RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All;
+    RuntimeMeshDirtyFlag::Enum dirtyFlags = RuntimeMeshDirtyFlag::All;
 
 
 public:

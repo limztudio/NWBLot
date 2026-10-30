@@ -38,7 +38,7 @@ b8 BackendContext::createWindowSurface(){
     frame.frameParam() = m_platformFrameParam;
 
     switch(frame.backend()){
-    case Common::LinuxFrameBackend::Enum::X11:
+    case Common::LinuxFrameBackend::X11:
     {
         VkXlibSurfaceCreateInfoKHR createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
@@ -53,7 +53,7 @@ b8 BackendContext::createWindowSurface(){
         return true;
     }
 #if defined(NWB_WITH_WAYLAND)
-    case Common::LinuxFrameBackend::Enum::Wayland:
+    case Common::LinuxFrameBackend::Wayland:
     {
         VkWaylandSurfaceCreateInfoKHR createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
@@ -68,7 +68,7 @@ b8 BackendContext::createWindowSurface(){
         return true;
     }
 #endif
-    case Common::LinuxFrameBackend::Enum::None:
+    case Common::LinuxFrameBackend::None:
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Unsupported Linux window backend for surface creation."));
         return false;

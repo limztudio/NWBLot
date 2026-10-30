@@ -4,6 +4,10 @@
 
 #include "compiler.h"
 
+#include "codegen/header_emitter.h"
+#include "parser/decl_parser.h"
+#include "sema/type_checker.h"
+
 #include <core/metascript/arena_names.h>
 
 
@@ -27,9 +31,9 @@ void AppendPascalCaseSegment(MString& out, const MStringView segment){
     b8 emittedAny = false;
     for(usize i = 0u; i < segment.size(); ++i){
         const MChar c = segment[i];
-        const b8 isLower = (c >= 'a' && c <= 'z');
-        const b8 isUpper = (c >= 'A' && c <= 'Z');
-        const b8 isDigit = (c >= '0' && c <= '9');
+        const b8 isLower = IsAsciiLower(c);
+        const b8 isUpper = IsAsciiUpper(c);
+        const b8 isDigit = IsAsciiDigit(c);
         if(!isLower && !isUpper && !isDigit){
             capitalizeNext = true;
             continue;

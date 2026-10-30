@@ -102,8 +102,8 @@ TEST(AdhdCompiler, SupportsTemplateSpecializationArenaReflectionAndScalarMathLow
     AdhdTestArena arena;
 
     static constexpr MStringView s_Source =
-        "enum<u8> ModeFlag {\r\n"
-        "    flag Fast\r\n"
+        "flag<u8> ModeFlag {\r\n"
+        "    Fast\r\n"
         "}\r\n"
         "interface IStore<T> {\r\n"
         "    void put(in T item);\r\n"
@@ -174,8 +174,8 @@ TEST(AdhdCompiler, SupportsGlobalConstAndContainerIndexInferenceLambdaSyncAndOrd
 
     static constexpr MStringView s_Source =
         "enum<u8> QualityLevel {\r\n"
-        "    enum Low = 0,\r\n"
-        "    enum High = 1,\r\n"
+        "    Low = 0,\r\n"
+        "    High = 1,\r\n"
         "}\r\n"
         "type Vec4Alias = f32x4;\r\n"
         "const f32x4 kGravity = f32x4(0.0f, -9.8f, 0.0f, 0.0f);\r\n"

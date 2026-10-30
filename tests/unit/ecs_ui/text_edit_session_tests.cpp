@@ -20,6 +20,7 @@ namespace __hidden_ui_text_edit_session_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using namespace NWB;
 using namespace NWB::Core;
 using namespace NWB::Impl;
 
@@ -44,7 +45,7 @@ public:
     }
 };
 
-inline constexpr UiTextEditOwner s_Owner{ { 17u }, 1u, 1u };
+inline constexpr Ui::UiTextEditOwner s_Owner{ { 17u }, 1u, 1u };
 inline constexpr TextInputRect s_Caret{ 100, 32, 1, 18 };
 
 
@@ -52,7 +53,7 @@ inline constexpr TextInputRect s_Caret{ 100, 32, 1, 18 };
 
 
 TEST(UiTextEditSession, TrailingPreeditClearPreservesCommittedSelectedReplacementAndSingleUndo){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
@@ -80,7 +81,7 @@ TEST(UiTextEditSession, TrailingPreeditClearPreservesCommittedSelectedReplacemen
 }
 
 TEST(UiTextEditSession, EmptyPreeditCancelsWithoutChangingCommittedText){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
@@ -96,7 +97,7 @@ TEST(UiTextEditSession, EmptyPreeditCancelsWithoutChangingCommittedText){
 }
 
 TEST(UiTextEditSession, FocusLossDiscardsQueuedCommitAndClearsOnlyTransientPreedit){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
@@ -114,7 +115,7 @@ TEST(UiTextEditSession, FocusLossDiscardsQueuedCommitAndClearsOnlyTransientPreed
 }
 
 TEST(UiTextEditSession, ReplacedOwnerCannotReceiveOldQueuedCommit){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel oldModel(arena.arena);
     Ui::EditModel newModel(arena.arena);
@@ -123,7 +124,7 @@ TEST(UiTextEditSession, ReplacedOwnerCannotReceiveOldQueuedCommit){
     ASSERT_TRUE(newModel.setText("replacement"));
     ASSERT_EQ(session.begin(s_Owner, oldModel, s_Caret), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("old"), TextInputAdmission::Accepted);
-    const UiTextEditOwner replacement{ s_Owner.widget, s_Owner.declarationGeneration, 2u };
+    const Ui::UiTextEditOwner replacement{ s_Owner.widget, s_Owner.declarationGeneration, 2u };
     EXPECT_EQ(session.drain(replacement, newModel).status, UiTextEditStatus::StaleOwner);
     EXPECT_EQ(newModel.text(), "replacement");
     EXPECT_FALSE(service.activeSession().valid());
@@ -131,7 +132,7 @@ TEST(UiTextEditSession, ReplacedOwnerCannotReceiveOldQueuedCommit){
 }
 
 TEST(UiTextEditSession, ExternalTextAndSelectionChangesFenceOldNativeEvents){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
@@ -153,7 +154,7 @@ TEST(UiTextEditSession, ExternalTextAndSelectionChangesFenceOldNativeEvents){
 }
 
 TEST(UiTextEditSession, DeleteAddressesPublishedUtf8BytesThenCommitUsesUpdatedSelection){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
@@ -170,7 +171,7 @@ TEST(UiTextEditSession, DeleteAddressesPublishedUtf8BytesThenCommitUsesUpdatedSe
 }
 
 TEST(UiTextEditSession, PreeditClearBeforeCommitPreservesTheOriginalReplacementSelection){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
@@ -191,7 +192,7 @@ TEST(UiTextEditSession, PreeditClearBeforeCommitPreservesTheOriginalReplacementS
 }
 
 TEST(UiTextEditSession, DeleteAfterUnpublishedCommitCannotDeleteDifferentText){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
@@ -206,7 +207,7 @@ TEST(UiTextEditSession, DeleteAfterUnpublishedCommitCannotDeleteDifferentText){
 }
 
 TEST(UiTextEditSession, NativeByteDeleteCannotSplitAGrapheme){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
@@ -220,7 +221,7 @@ TEST(UiTextEditSession, NativeByteDeleteCannotSplitAGrapheme){
 }
 
 TEST(UiTextEditSession, RejectedCommitPreservesCommittedTextAndCancelsNativeSession){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena, { 2u, 4u, 128u });
     UiTextEditSession session(arena.arena, service);
@@ -235,7 +236,7 @@ TEST(UiTextEditSession, RejectedCommitPreservesCommittedTextAndCancelsNativeSess
 }
 
 TEST(UiTextEditSession, ExplicitEndClearsCompositionAndInvalidatesOldToken){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
@@ -254,7 +255,7 @@ TEST(UiTextEditSession, ExplicitEndClearsCompositionAndInvalidatesOldToken){
 }
 
 TEST(UiTextEditSession, DestructionReleasesServiceWithoutBorrowingTheDestroyedModel){
-    NWB::Tests::TestArena arena;
+    Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
     {

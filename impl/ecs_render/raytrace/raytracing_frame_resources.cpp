@@ -52,7 +52,7 @@ RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLighting
     return { .refractiveInstanceCount = m_rayTracingState.m_causticRefractiveInstanceCount, };
 }
 
-void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const Span<const ECSRenderDetail::SceneLightGpuData> lights){
+void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const Span<const SceneLightGpuData> lights){
     m_rayTracingState.m_causticLightCount = classification.causticLightCount;
     if(m_shadowVisibilityTraceResourcesPreflighted && classification.causticLightCount != 0u && m_unsupportedCausticVolumeCount != 0u && (!m_unsupportedCausticVolumeReported || m_reportedUnsupportedCausticVolumeHash != m_unsupportedCausticVolumeHash)){
         m_reportedUnsupportedCausticVolumeHash = m_unsupportedCausticVolumeHash;

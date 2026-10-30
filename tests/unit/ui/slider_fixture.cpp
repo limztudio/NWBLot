@@ -31,8 +31,7 @@ SliderCallbackSource::SliderCallbackSource()noexcept{
     generation = 2501u;
 }
 
-StringView SliderCallbackSource::text(const u64 index)const{
-    static_cast<void>(index);
+StringView SliderCallbackSource::text(const u64)const{
     ++m_calls;
     if(m_mutation == SliderCallbackMutation::None)
         return s_LaterCallbackText;

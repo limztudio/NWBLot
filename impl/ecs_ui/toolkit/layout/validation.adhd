@@ -37,6 +37,10 @@ b8 IsValidUiRect(in Rect rectangle){
     return isFinite(right) && isFinite(bottom);
 }
 
+b8 HasUiRectArea(in Rect rectangle){
+    return IsValidUiRect(rectangle) && rectangle.width > 0.0f && rectangle.height > 0.0f;
+}
+
 // Controls with travel geometry additionally reject positive extents lost to coordinate precision.
 b8 IsPreciseUiRect(in Rect rectangle){
     return HasValidUiRectDimensions(rectangle) && HasPreciseUiRectEndpoints(rectangle);

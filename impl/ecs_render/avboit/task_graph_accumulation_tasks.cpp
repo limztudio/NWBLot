@@ -28,8 +28,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 AvboitAccumulationComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
+[[nodiscard]] b8 AvboitAccumulationComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
 
     return RecordAvboitComputeEmulationFromPayload(payload, commandList, trait, payload.accumulationTiming);
@@ -39,20 +38,17 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 AvboitAccumulationSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
-    const AvboitSharedComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
+[[nodiscard]] b8 AvboitAccumulationSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
 
-    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, payload.phase == AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Raster, trait, payload.accumulationTiming);
+    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, trait, payload.accumulationTiming);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 AvboitAccumulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
-
+[[nodiscard]] b8 AvboitAccumulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
     return RecordAvboitRasterPassFromPayload(
         payload,
         commandList,
@@ -86,10 +82,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 AvboitAccumulationFinalizeGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
-    static_cast<void>(payload);
-    static_cast<void>(commandList);
-    static_cast<void>(context);
+[[nodiscard]] b8 AvboitAccumulationFinalizeGraphTask::Record(const Payload&, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept{
     return true;
 }
 

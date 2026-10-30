@@ -149,7 +149,17 @@ b8 DeclParser::parseMethodParamsAndValidateArity(MethodDecl& method, const Sourc
     return true;
 }
 
-b8 DeclParser::parseClassMethodOrOperatorTail(ClassDecl& classDecl, const AccessSpecifier::Enum access, TypeRef* returnType, const MStringView name, const b8 isOperator, MVector<TemplateParamDecl>&& templateParams, const Span<const ParsedAttribute> attributes, const SourceSpan span, const MStringView missingTerminatorMessage){
+b8 DeclParser::parseClassMethodOrOperatorTail(
+    ClassDecl& classDecl,
+    const AccessSpecifier::Enum access,
+    TypeRef* returnType,
+    const MStringView name,
+    const b8 isOperator,
+    MVector<TemplateParamDecl>&& templateParams,
+    const Span<const ParsedAttribute> attributes,
+    const SourceSpan span,
+    const MStringView missingTerminatorMessage
+){
     MethodDecl* method = AllocateAstNode<MethodDecl>(m_cursor.arena());
     method->access = access;
     method->ownerClassName = classDecl.name;
@@ -285,11 +295,11 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     m_cursor.advance();
 
     if(m_cursor.check(TokenType::Colon)){
-        m_cursor.error("C-style bitfields are prohibited in adhd; use 'enum<SizeType>' with 'flag'");
+        m_cursor.error("C-style bitfields are prohibited in adhd; use 'flag<SizeType> Name'");
         return false;
     }
     if(m_cursor.check(TokenType::LeftBracket)){
-        m_cursor.error("C-style arrays ('T name[N]') are prohibited in adhd; use 'Array<T, N>' or 'Vector<T>'");
+        m_cursor.error(s_ProhibitedCStyleArrayError);
         return false;
     }
 

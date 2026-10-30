@@ -75,7 +75,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait){
+[[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
     const b8 generatePhase = inputs.phase == AvboitSharedComputeEmulationPhase::Generate;
     if(!trait.framebuffer || !(inputs.targets.avboit.*(trait.framebuffer)) || !inputs.plan.captured || inputs.drawIndex >= inputs.plan.drawCount)
         return false;

@@ -6,7 +6,6 @@
 
 
 #include <impl/ecs_render/csg/types.adhd.h>
-#include <impl/ecs_render/components.adhd.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/ecs_csg/frame_state.h>
 #include <impl/ecs_csg/shape_registry.h>
@@ -37,6 +36,7 @@ static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 12u + sizeof(Floa
 static_assert(sizeof(CsgCutterGpuData) == sizeof(Float4) + sizeof(Float34) + sizeof(Float4) * 2u, "CsgCutterGpuData layout must match the CSG shader");
 static_assert(sizeof(CsgClipContextSlots) == sizeof(u32) * 8u, "CSG clip context slots must stay two uint4 lanes");
 static_assert(sizeof(CsgIntervalSampleStateGpuData) == sizeof(u32) * 8u, "CSG interval sample state must match shader layout");
+static_assert(sizeof(CsgIntervalDispatchPushConstants) == NWB_CSG_INTERVAL_DISPATCH_PUSH_CONSTANT_BYTE_SIZE, "CSG interval dispatch push constants must match shader layout");
 static_assert(alignof(CsgReceiverRangeGpuData) >= alignof(Float4), "CsgReceiverRangeGpuData must stay SIMD-aligned");
 static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData must stay SIMD-aligned");
 static_assert(alignof(CsgReceiverCpuBounds) >= alignof(Float4), "CsgReceiverCpuBounds must stay SIMD-friendly");

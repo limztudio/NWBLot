@@ -79,7 +79,7 @@ class FontSfntDirectory{
     }
 
     public u32 signature()const{
-        return this.readU32(this.m_bytes, 0u);
+        return ReadFontSfntU32BigEndian(this.m_bytes, 0u);
     }
 
     public usize directoryBytes()const{
@@ -94,11 +94,11 @@ class FontSfntDirectory{
         Span<u8> rec;
         if(!this.record(index, rec))
             return false;
-        const u32 offset = this.readU32(rec, s_FontSfntRecordOffsetFieldOffset);
-        const u32 length = this.readU32(rec, s_FontSfntRecordLengthFieldOffset);
+        const u32 offset = ReadFontSfntU32BigEndian(rec, s_FontSfntRecordOffsetFieldOffset);
+        const u32 length = ReadFontSfntU32BigEndian(rec, s_FontSfntRecordLengthFieldOffset);
         if(cast<usize>(offset) > this.m_bytes.size() || cast<usize>(length) > this.m_bytes.size() - cast<usize>(offset))
             return false;
-        outTable.tag = this.readU32(rec, 0u);
+        outTable.tag = ReadFontSfntU32BigEndian(rec, 0u);
         outTable.offset = offset;
         outTable.bytes = this.m_bytes.subspan(cast<usize>(offset), cast<usize>(length));
         return true;
@@ -108,20 +108,8 @@ class FontSfntDirectory{
         Span<u8> rec;
         if(!this.record(index, rec))
             return false;
-        outTag = this.readU32(rec, 0u);
+        outTag = ReadFontSfntU32BigEndian(rec, 0u);
         return true;
-    }
-
-    private u16 readU16(in Span<u8> bytes, in usize offset)const{
-        const u16 hi = cast<u16>(bytes[offset]) << s_FontSfntBitsPerByte;
-        const u16 lo = cast<u16>(bytes[offset + 1u]);
-        return hi | lo;
-    }
-
-    private u32 readU32(in Span<u8> bytes, in usize offset)const{
-        const u32 hi = cast<u32>(this.readU16(bytes, offset)) << s_FontSfntU16Bits;
-        const u32 lo = cast<u32>(this.readU16(bytes, offset + s_FontSfntU16Bytes));
-        return hi | lo;
     }
 
     private b8 record(in usize index, mut Span<u8> outRecord)const{

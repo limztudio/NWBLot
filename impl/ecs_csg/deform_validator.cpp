@@ -14,10 +14,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CsgDeformValidator::FiniteFloat(const f32 value)noexcept{
-    return IsFinite(value);
-}
-
 b8 CsgDeformValidator::FiniteVertexVec(const SIMDVectorSingle position, const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle uv0, const SIMDVectorSingle color)noexcept{
     return
         VectorIsFinite(position, VectorComponentMask::s_XYZ)
@@ -30,14 +26,6 @@ b8 CsgDeformValidator::FiniteVertexVec(const SIMDVectorSingle position, const SI
 
 SIMDVectorSingle CsgDeformValidator::ShapeEpsilon(const SIMDVectorSingle distanceEpsilon)noexcept{
     return VectorMax(distanceEpsilon, VectorReplicate(s_MinEpsilon));
-}
-
-b8 CsgDeformValidator::ValidOptions(const CsgDeformBuildOptions& options)noexcept{
-    return CsgDeformValidOptions(options);
-}
-
-b8 CsgDeformValidator::ValidTopology(NotNull<const CsgDeformTriangle*> triangles, const usize triangleCount, const usize vertexCount)noexcept{
-    return CsgDeformValidTopology(Span<const CsgDeformTriangle>(triangles.get(), triangleCount), vertexCount);
 }
 
 Expected<void, CsgDeformViabilityReason::Enum> CsgDeformValidator::FiniteInput(NotNull<const CsgDeformVertex*> vertices, const usize vertexCount)noexcept{

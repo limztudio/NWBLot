@@ -255,8 +255,8 @@ TEST(AdhdCompiler, SupportsTemplatedInterfacesArenaCtorExprsAndStatefulFuncPropa
 
     static constexpr MStringView s_Source =
         "enum<u8> ChannelState {\r\n"
-        "    enum Closed = 0,\r\n"
-        "    enum Open = 1,\r\n"
+        "    Closed = 0,\r\n"
+        "    Open = 1,\r\n"
         "}\r\n"
         "interface ISink<T> {\r\n"
         "    void send(in T item);\r\n"
@@ -281,8 +281,8 @@ TEST(AdhdCompiler, SupportsTemplatedInterfacesArenaCtorExprsAndStatefulFuncPropa
         "            return x + bias;\r\n"
         "        };\r\n"
         "        auto boxed = cast<Optional<u32>>(0u);\r\n"
-        "        auto stateCopy = ChannelState::Enum::Open;\r\n"
-        "        u8 rawState = stateCopy::Enum::Open;\r\n"
+        "        auto stateCopy = ChannelState::Open;\r\n"
+        "        u8 rawState = stateCopy::Open;\r\n"
         "    }\r\n"
         "}\r\n";
 
@@ -301,7 +301,7 @@ TEST(AdhdCompiler, SupportsTemplatedInterfacesArenaCtorExprsAndStatefulFuncPropa
     EXPECT_NE(cppView.find("auto scratchVec = Vector<i32>(8, __adhd_scratch);"), MStringView::npos);
     EXPECT_NE(cppView.find("(this->history = Vector<i32>(16, s_ClassArena));"), MStringView::npos);
     EXPECT_NE(cppView.find("static_cast<Optional<u32>>(0u)"), MStringView::npos);
-    EXPECT_NE(cppView.find("ChannelState::Enum::Open"), MStringView::npos);
+    EXPECT_NE(cppView.find("ChannelState::Open"), MStringView::npos);
 
     static constexpr MStringView s_MismatchedTemplatedInterfaceSource =
         "interface ISink<T> {\r\n"

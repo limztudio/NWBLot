@@ -71,14 +71,10 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
         break;
     }
     case ExprKind::ThisMember:{
-        if(!ownerClass){
-            reportError(errors, expr.span, "'this' cannot be used in a free function");
+        if(!validateThisAccess(ownerClass, expr.span, scope, errors)){
             ok = false;
-            break;
-        }
-        if(m_inLambda && !FindScopedVar(scope, "this")){
-            reportError(errors, expr.span, "accessing 'this' inside a lambda requires capturing 'in this' or 'mut this'");
-            ok = false;
+            if(!ownerClass)
+                break;
         }
         const b8 isConstThis = isThisConstInScope(method, scope);
         const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text);
@@ -115,14 +111,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
         }
         if(!expr.scopeChain.empty()){
             if(expr.text == "this"){
-                if(!ownerClass){
-                    reportError(errors, expr.span, "'this' cannot be used in a free function");
+                if(!validateThisAccess(ownerClass, expr.span, scope, errors))
                     ok = false;
-                }
-                else if(m_inLambda && !FindScopedVar(scope, "this")){
-                    reportError(errors, expr.span, "accessing 'this' inside a lambda requires capturing 'in this' or 'mut this'");
-                    ok = false;
-                }
             }
             else if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, false, errors)){
                 ok = false;
@@ -140,12 +130,12 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
             expr.lhs = nullptr;
 
             if(const EnumDecl* enumDecl = m_symbols.findEnum(expr.scopeChain[0])){
-                if(expr.scopeChain.size() < 2u || expr.scopeChain.size() > 3u){
-                    reportError(errors, expr.span, "invalid enum scope access; expected 'EnumName::Entry', 'EnumName::Enum::Entry', or 'EnumName::Flag::Entry'");
+                if(expr.scopeChain.size() != 2u){
+                    reportError(errors, expr.span, "invalid enum/flag scope access; expected 'TypeName::Entry'");
                     ok = false;
                 }
                 else{
-                    const MStringView entryName = expr.scopeChain.back();
+                    const MStringView entryName = expr.scopeChain[1];
                     const EnumEntry* matchedEntry = nullptr;
                     for(const EnumEntry& entry : enumDecl->entries){
                         if(entry.name == entryName){
@@ -154,28 +144,13 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
                         }
                     }
                     if(!matchedEntry){
-                        reportError(errors, expr.span, "unknown enumerator in enum scope access");
+                        reportError(errors, expr.span, "unknown enumerator in enum/flag scope access");
                         ok = false;
-                    }
-                    else if(expr.scopeChain.size() == 3u){
-                        const MStringView qualifier = expr.scopeChain[1];
-                        if(qualifier != "Enum" && qualifier != "Flag"){
-                            reportError(errors, expr.span, "invalid enum scope qualifier; expected '::Enum::' or '::Flag::'");
-                            ok = false;
-                        }
-                        else if(qualifier == "Enum" && matchedEntry->isFlag){
-                            reportError(errors, expr.span, "enumerator declared with 'flag' must be accessed via '::Flag::', not '::Enum::'");
-                            ok = false;
-                        }
-                        else if(qualifier == "Flag" && !matchedEntry->isFlag){
-                            reportError(errors, expr.span, "enumerator declared with 'enum' must be accessed via '::Enum::', not '::Flag::'");
-                            ok = false;
-                        }
                     }
                 }
             }
             else{
-                reportError(errors, expr.span, "invalid scope resolution '::'; only 'enum' types and 'enum' variables support '::' access in adhd");
+                reportError(errors, expr.span, "invalid scope resolution '::'; only 'enum' and 'flag' types and variables support '::' access in adhd");
                 ok = false;
             }
         }
@@ -186,6 +161,12 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
             ok = false;
 
         if(expr.lhs){
+            if(expr.lhs->kind == ExprKind::Identifier && !FindScopedVar(scope, expr.lhs->text) && !m_symbols.findGlobalConstant(expr.lhs->text)){
+                if(m_symbols.hasTypeSymbol(m_symbols.resolveBaseTypeName(expr.lhs->text))){
+                    reportError(errors, expr.span, "cannot use '.' member access on a type name; use 'TypeName::Entry' for enum/flag values or an instance variable");
+                    ok = false;
+                }
+            }
             if(expr.lhs->derefNotNull){
                 expr.lhs->derefNotNull = false;
                 expr.isPointerMemberAccess = true;
@@ -317,6 +298,12 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
             const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
             const ClassDecl* opDeclCls = nullptr;
             const MethodDecl* opMethod = resolveCustomOperator(ownerClass, &method, lhsTypeRef, lhsType, opSym, 0u, recvIsConst, &opDeclCls);
+            if(expr.op == TokenType::Tilde){
+                if(const EnumDecl* lhsEnum = m_symbols.findEnum(lhsType); lhsEnum && !lhsEnum->isFlag){
+                    reportError(errors, expr.span, "bitwise '~' is only supported on 'flag' types, not 'enum' types");
+                    ok = false;
+                }
+            }
             if(opDeclCls && !opMethod){
                 reportError(errors, expr.span, "unary operator is not defined on custom class");
                 ok = false;
@@ -473,11 +460,15 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
                 rhsNeedsMut = true;
         }
     }
+    const FieldDecl* lhsThisField = nullptr;
+    const ScopedVarInfo* lhsLocal = nullptr;
+    const TypeRef* lhsMemberOrIndexTypeRef = nullptr;
     if(expr.op == TokenType::Equal && expr.lhs){
         if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
-            if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.lhs->text); field && field->type){
-                const MStringView baseFieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
-                const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(field->type);
+            lhsThisField = SymbolTable::FindClassField(*ownerClass, expr.lhs->text);
+            if(lhsThisField && lhsThisField->type){
+                const MStringView baseFieldTypeName = m_symbols.resolveBaseTypeName(lhsThisField->type->name);
+                const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(lhsThisField->type);
                 if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_symbols.findInterface(baseFieldTypeName))){
                     if(isThisConstInScope(method, scope)){
                         reportError(errors, expr.lhs->span, "cannot mutate 'this.member' inside a 'const' method or 'in this' lambda");
@@ -488,17 +479,18 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
             }
         }
         else if(expr.lhs->kind == ExprKind::Identifier){
-            if(const ScopedVarInfo* local = FindScopedVar(scope, expr.lhs->text); local && local->type && !local->isParam){
-                const MStringView baseLocalTypeName = m_symbols.resolveBaseTypeName(local->type->name);
-                const ParamPassingMode::Enum localRefMode = (local->mode != ParamPassingMode::None) ? local->mode : m_symbols.resolveRefMode(local->type);
+            lhsLocal = FindScopedVar(scope, expr.lhs->text);
+            if(lhsLocal && lhsLocal->type && !lhsLocal->isParam){
+                const MStringView baseLocalTypeName = m_symbols.resolveBaseTypeName(lhsLocal->type->name);
+                const ParamPassingMode::Enum localRefMode = (lhsLocal->mode != ParamPassingMode::None) ? lhsLocal->mode : m_symbols.resolveRefMode(lhsLocal->type);
                 if(localRefMode != ParamPassingMode::None && m_symbols.findInterface(baseLocalTypeName))
                     lhsNeedsMut = false;
             }
         }
         else if(expr.lhs->kind == ExprKind::MemberAccess || expr.lhs->kind == ExprKind::Index){
-            const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
-            const ParamPassingMode::Enum lhsRefMode = m_symbols.resolveRefMode(lhsTypeRef);
-            const MStringView baseLhsTypeName = lhsTypeRef ? m_symbols.resolveBaseTypeName(lhsTypeRef->name) : MStringView{};
+            lhsMemberOrIndexTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
+            const ParamPassingMode::Enum lhsRefMode = m_symbols.resolveRefMode(lhsMemberOrIndexTypeRef);
+            const MStringView baseLhsTypeName = lhsMemberOrIndexTypeRef ? m_symbols.resolveBaseTypeName(lhsMemberOrIndexTypeRef->name) : MStringView{};
             if(lhsRefMode != ParamPassingMode::None && m_symbols.findInterface(baseLhsTypeName)){
                 lhsNeedsMut = false;
                 if(expr.lhs->lhs){
@@ -513,80 +505,73 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
     if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, lhsNeedsMut, errors))
         ok = false;
     b8 rhsInClassArenaCtx = false;
-    if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::ThisMember && ownerClass){
-        if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.lhs->text)){
-            const MStringView baseFieldTypeName = field->type ? m_symbols.resolveBaseTypeName(field->type->name) : MStringView{};
-            if(field->type && SymbolTable::IsArenaBackedContainer(baseFieldTypeName))
-                rhsInClassArenaCtx = true;
-            const ParamPassingMode::Enum fieldRefMode = field->type ? m_symbols.resolveRefMode(field->type) : ParamPassingMode::None;
-            if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_symbols.findInterface(baseFieldTypeName))){
-                if(!applyInterfaceRefRebind(
-                    ownerClass,
-                    method,
-                    expr,
-                    field->type,
-                    fieldRefMode,
-                    scope,
-                    "cannot bind interface reference member to concrete class that does not implement the interface",
-                    rhsNeedsMut,
-                    errors
-                )){
-                    ok = false;
-                }
+    if(lhsThisField){
+        const MStringView baseFieldTypeName = lhsThisField->type ? m_symbols.resolveBaseTypeName(lhsThisField->type->name) : MStringView{};
+        if(lhsThisField->type && SymbolTable::IsArenaBackedContainer(baseFieldTypeName))
+            rhsInClassArenaCtx = true;
+        const ParamPassingMode::Enum fieldRefMode = lhsThisField->type ? m_symbols.resolveRefMode(lhsThisField->type) : ParamPassingMode::None;
+        if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_symbols.findInterface(baseFieldTypeName))){
+            if(!applyInterfaceRefRebind(
+                ownerClass,
+                method,
+                expr,
+                lhsThisField->type,
+                fieldRefMode,
+                scope,
+                "cannot bind interface reference member to concrete class that does not implement the interface",
+                rhsNeedsMut,
+                errors
+            )){
+                ok = false;
             }
-            PropagateFuncCaptureBytes(field->type, expr.rhs, scope, m_symbols);
         }
+        PropagateFuncCaptureBytes(lhsThisField->type, expr.rhs, scope, m_symbols);
     }
-    if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
-        const ScopedVarInfo* local = FindScopedVar(scope, expr.lhs->text);
-        if(local && local->type){
-            const MStringView baseLocalTypeName = m_symbols.resolveBaseTypeName(local->type->name);
-            if(expr.lhs->derefNotNull && m_symbols.findInterface(baseLocalTypeName)){
-                const ParamPassingMode::Enum localRefMode = (local->mode == ParamPassingMode::Mut || m_symbols.resolveRefMode(local->type) == ParamPassingMode::Mut)
-                    ? ParamPassingMode::Mut
-                    : ParamPassingMode::In;
-                if(!applyInterfaceRefRebind(
-                    ownerClass,
-                    method,
-                    expr,
-                    local->type,
-                    localRefMode,
-                    scope,
-                    "cannot rebind interface reference to concrete class that does not implement the interface",
-                    rhsNeedsMut,
-                    errors
-                )){
-                    ok = false;
-                }
+    else if(lhsLocal && lhsLocal->type){
+        const MStringView baseLocalTypeName = m_symbols.resolveBaseTypeName(lhsLocal->type->name);
+        if(expr.lhs->derefNotNull && m_symbols.findInterface(baseLocalTypeName)){
+            const ParamPassingMode::Enum localRefMode = (lhsLocal->mode == ParamPassingMode::Mut || m_symbols.resolveRefMode(lhsLocal->type) == ParamPassingMode::Mut)
+                ? ParamPassingMode::Mut
+                : ParamPassingMode::In;
+            if(!applyInterfaceRefRebind(
+                ownerClass,
+                method,
+                expr,
+                lhsLocal->type,
+                localRefMode,
+                scope,
+                "cannot rebind interface reference to concrete class that does not implement the interface",
+                rhsNeedsMut,
+                errors
+            )){
+                ok = false;
             }
-            PropagateFuncCaptureBytes(local->type, expr.rhs, scope, m_symbols);
-            if(expr.rhs){
-                ScopedVarInfo* mutableLocal = const_cast<ScopedVarInfo*>(local);
-                if(expr.rhs->kind == ExprKind::Lambda){
-                    mutableLocal->lambdaExpr = expr.rhs;
-                }
-                else if(expr.rhs->kind == ExprKind::Identifier){
-                    const ScopedVarInfo* rhsLocal = FindScopedVar(scope, expr.rhs->text);
-                    mutableLocal->lambdaExpr = rhsLocal ? rhsLocal->lambdaExpr : nullptr;
-                }
-                else{
-                    mutableLocal->lambdaExpr = nullptr;
-                }
+        }
+        PropagateFuncCaptureBytes(lhsLocal->type, expr.rhs, scope, m_symbols);
+        if(expr.rhs){
+            ScopedVarInfo* mutableLocal = const_cast<ScopedVarInfo*>(lhsLocal);
+            if(expr.rhs->kind == ExprKind::Lambda){
+                mutableLocal->lambdaExpr = expr.rhs;
+            }
+            else if(expr.rhs->kind == ExprKind::Identifier){
+                const ScopedVarInfo* rhsLocal = FindScopedVar(scope, expr.rhs->text);
+                mutableLocal->lambdaExpr = rhsLocal ? rhsLocal->lambdaExpr : nullptr;
+            }
+            else{
+                mutableLocal->lambdaExpr = nullptr;
             }
         }
     }
-    if(expr.op == TokenType::Equal && expr.lhs && (expr.lhs->kind == ExprKind::MemberAccess || expr.lhs->kind == ExprKind::Index)){
-        const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
-        if(lhsTypeRef)
-            PropagateFuncCaptureBytes(const_cast<TypeRef*>(lhsTypeRef), expr.rhs, scope, m_symbols);
-        const ParamPassingMode::Enum lhsRefMode = m_symbols.resolveRefMode(lhsTypeRef);
-        const MStringView baseLhsTypeName = lhsTypeRef ? m_symbols.resolveBaseTypeName(lhsTypeRef->name) : MStringView{};
+    else if(lhsMemberOrIndexTypeRef){
+        PropagateFuncCaptureBytes(const_cast<TypeRef*>(lhsMemberOrIndexTypeRef), expr.rhs, scope, m_symbols);
+        const ParamPassingMode::Enum lhsRefMode = m_symbols.resolveRefMode(lhsMemberOrIndexTypeRef);
+        const MStringView baseLhsTypeName = m_symbols.resolveBaseTypeName(lhsMemberOrIndexTypeRef->name);
         if(lhsRefMode != ParamPassingMode::None && m_symbols.findInterface(baseLhsTypeName)){
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,
                 expr,
-                lhsTypeRef,
+                lhsMemberOrIndexTypeRef,
                 lhsRefMode,
                 scope,
                 "cannot rebind interface reference to concrete class that does not implement the interface",
@@ -613,6 +598,22 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
     }
     if(expr.lhs && expr.rhs){
         const MStringView lhsType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
+        const MStringView rhsType = inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
+        if(
+            expr.op == TokenType::Pipe
+            || expr.op == TokenType::Ampersand
+            || expr.op == TokenType::Caret
+            || expr.op == TokenType::PipeEqual
+            || expr.op == TokenType::AmpersandEqual
+            || expr.op == TokenType::CaretEqual
+        ){
+            const EnumDecl* lhsEnum = m_symbols.findEnum(lhsType);
+            const EnumDecl* rhsEnum = m_symbols.findEnum(rhsType);
+            if((lhsEnum && !lhsEnum->isFlag) || (!m_symbols.findClass(lhsType) && rhsEnum && !rhsEnum->isFlag)){
+                reportError(errors, expr.span, "bitwise operators are only supported on 'flag' types, not 'enum' types");
+                ok = false;
+            }
+        }
         if(lhsType == "Path")
             markStringToPathAdaptation(ownerClass, &method, *expr.rhs, scope);
     }

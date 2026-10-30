@@ -314,26 +314,16 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
         NWB::Impl::MaterialAssetCodec codec;
         material.setTransparent(true);
 
-#if defined(NWB_FINAL)
         NWB::Core::Assets::AssetBytes invalidBinary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
         EXPECT_FALSE(codec.serialize(material, invalidBinary));
         EXPECT_TRUE(invalidBinary.empty());
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("AVBOIT pixel shaders must be present if and only if the material is transparent")));
-#endif
 
         SetGeneratedMaterialAvboitPixelShaders(material);
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        auto loadedAssetResult = RoundTripMaterialAssetCodec(testArena, codec, material);
-        ASSERT_TRUE(loadedAssetResult);
-        loadedAsset = Move(*loadedAssetResult);
-#if defined(NWB_FINAL)
+        ASSERT_TRUE(RoundTripMaterialAssetCodec(testArena, codec, material));
         EXPECT_EQ(logger.errorCount(), 1u);
-#else
-        EXPECT_EQ(logger.errorCount(), 0u);
-#endif
     }
 
-#if defined(NWB_FINAL)
     {
         CapturingLogger logger;
         NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -374,7 +364,6 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("typed block byte count does not match typed layout")));
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("AVBOIT pixel shaders must be present if and only if the material is transparent")));
     }
-#endif
 #endif
 }
 

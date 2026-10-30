@@ -5,7 +5,6 @@
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
-#include <impl/ecs_scene/components.adhd.h>
 
 #include <core/task/gpu/output_layer_contributor.h>
 
@@ -19,8 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererFramePipeline::validateResources(const u32 width, const u32 height, const u32 sampleCount){
-    static_cast<void>(sampleCount);
+b8 RendererFramePipeline::validateResources(const u32 width, const u32 height, const u32){
     m_raytracingSystem.logCapabilityOnce();
     if(width == 0 || height == 0)
         return true;
@@ -394,7 +392,13 @@ b8 RendererFramePipeline::prepareGpuTimingScopes(){
 void RendererFramePipeline::commitFrameTargets(DeferredFrameTargets&& targets){
     m_frameTargets = Move(targets);
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT(
+            "RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, "
+            "CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, "
+            "receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, "
+            "AVBOIT color {}, extinction {}, transmittance {})"
+        )
         , m_frameTargets.width
         , m_frameTargets.height
         , ConvertString(Core::GetFormatInfo(m_frameTargets.albedoFormat).getName())

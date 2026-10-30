@@ -11,7 +11,6 @@
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
@@ -58,7 +57,16 @@ b8 RendererFramePipeline::declareDeferredShadowPrepareTask(
 
     ShadowPrepareUploadChain uploads;
     ShadowPrepareUploadChainBuilder uploadChainBuilder(m_deferredLightingTaskGraph, m_graphics, m_raytracingSystem);
-    const b8 uploadsDeclared = uploadChainBuilder.declare(scratchArena, ShadowPrepareUploadInputs{ .targets = deferredTargets, .rayTracingResources = rayTracingResources, .currentBindlessSlots = currentBindlessSlots, .materialContextSlots = materialContextSlots, }, uploads);
+    const b8 uploadsDeclared = uploadChainBuilder.declare(
+        scratchArena,
+        ShadowPrepareUploadInputs{
+            .targets = deferredTargets,
+            .rayTracingResources = rayTracingResources,
+            .currentBindlessSlots = currentBindlessSlots,
+            .materialContextSlots = materialContextSlots,
+        },
+        uploads
+    );
     m_deferredBindlessSlotsUploadTask = uploads.tasks.bindlessSlots;
     m_rayTraceMaterialContextSlotsUploadTask = uploads.tasks.rayTraceMaterialContextSlots;
     m_csgTraceContextUploadTask = uploads.tasks.csgTraceContext;

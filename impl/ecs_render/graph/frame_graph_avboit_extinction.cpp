@@ -30,14 +30,14 @@ FrameGraphAvboitExtinctionUploadChain::FrameGraphAvboitExtinctionUploadChain(Cor
     , m_csgSystem(csgSystem)
 {}
 
-Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploadChain::declare(
+Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitExtinctionUploadChain::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const FrameGraphAvboitExtinctionUploadInputs& inputs,
     RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& extinctionPayload,
     RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& computeEmulationPayload,
     AvboitGeneratedGeometryReuse& generatedGeometry
 ){
-    FrameGraphAvboitExtinctionUploadResult result{};
+    FrameGraphAvboitMaterialUploadResult result{};
     RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& avboitExtinctionPayload = extinctionPayload;
     RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& avboitExtinctionComputeEmulationPayload = computeEmulationPayload;
     DeferredFrameTargets& deferredTargets = inputs.targets;

@@ -29,26 +29,26 @@ const f64 s_NumericEditMinF64 = -s_NumericEditMaxF64;
 
 
 enum<u8> EditAction{
-    enum Submit,
-    enum Cancel,
-    enum Blur,
-    enum Abandon,
+    Submit,
+    Cancel,
+    Blur,
+    Abandon,
 }
 
 enum<u8> EditTextMode{
-    enum SingleLine,
-    enum Multiline,
+    SingleLine,
+    Multiline,
 }
 
 enum<u8> EditMove{
-    enum Left,
-    enum Right,
-    enum Home,
-    enum End,
-    enum WordLeft,
-    enum WordRight,
-    enum DocumentHome,
-    enum DocumentEnd,
+    Left,
+    Right,
+    Home,
+    End,
+    WordLeft,
+    WordRight,
+    DocumentHome,
+    DocumentEnd,
 }
 
 class EditLimits{
@@ -72,46 +72,46 @@ class EditCompositionView{
 }
 
 enum<u8> EditCommand{
-    enum None,
-    enum Left,
-    enum Right,
-    enum Home,
-    enum End,
-    enum WordLeft,
-    enum WordRight,
-    enum Backspace,
-    enum Delete,
-    enum WordBackspace,
-    enum WordDelete,
-    enum SelectAll,
-    enum Copy,
-    enum Cut,
-    enum Paste,
-    enum Undo,
-    enum Redo,
-    enum Submit,
-    enum Cancel,
-    enum DocumentHome,
-    enum DocumentEnd,
-    enum Newline,
+    None,
+    Left,
+    Right,
+    Home,
+    End,
+    WordLeft,
+    WordRight,
+    Backspace,
+    Delete,
+    WordBackspace,
+    WordDelete,
+    SelectAll,
+    Copy,
+    Cut,
+    Paste,
+    Undo,
+    Redo,
+    Submit,
+    Cancel,
+    DocumentHome,
+    DocumentEnd,
+    Newline,
 }
 
 enum<u8> EditClipboardAction{
-    enum None,
-    enum Copy,
-    enum Cut,
-    enum Paste,
-    enum PublishSelection,
+    None,
+    Copy,
+    Cut,
+    Paste,
+    PublishSelection,
 }
 
 class EditCommandRequest{
-    public EditCommand command = EditCommand::Enum::None;
+    public EditCommand command = EditCommand::None;
     public b8 extend = false;
     public b8 repeat = false;
 }
 
 class EditCommandResult{
-    public EditClipboardAction clipboard = EditClipboardAction::Enum::None;
+    public EditClipboardAction clipboard = EditClipboardAction::None;
     public b8 handled = false;
     public b8 textChanged = false;
     public b8 selectionChanged = false;
@@ -121,10 +121,10 @@ class EditCommandResult{
 }
 
 enum<u8> EditNavigationDirection{
-    enum Up,
-    enum Down,
-    enum PageUp,
-    enum PageDown,
+    Up,
+    Down,
+    PageUp,
+    PageDown,
 }
 
 class EditNavigationSnapshot{
@@ -140,27 +140,27 @@ class EditNavigationResult{
 }
 
 enum<u8> NumericParseStatus{
-    enum Complete,
-    enum Incomplete,
-    enum Invalid,
-    enum OutOfRange,
+    Complete,
+    Incomplete,
+    Invalid,
+    OutOfRange,
 }
 
 enum<u8> NumericBoundsPolicy{
-    enum Reject,
-    enum Clamp,
+    Reject,
+    Clamp,
 }
 
 class IntegerBounds{
     public i64 minimum = s_NumericEditMinI64;
     public i64 maximum = s_NumericEditMaxI64;
-    public NumericBoundsPolicy policy = NumericBoundsPolicy::Enum::Reject;
+    public NumericBoundsPolicy policy = NumericBoundsPolicy::Reject;
 }
 
 class FloatBounds{
     public f64 minimum = s_NumericEditMinF64;
     public f64 maximum = s_NumericEditMaxF64;
-    public NumericBoundsPolicy policy = NumericBoundsPolicy::Enum::Reject;
+    public NumericBoundsPolicy policy = NumericBoundsPolicy::Reject;
 }
 
 class NumericEditResult{
@@ -174,9 +174,8 @@ class NumericEditResult{
 }
 
 enum<u8> EditTextStatus{
-    enum Accepted,
-    enum InvalidText,
-    enum TooLarge,
+    InvalidText = 0u,
+    TooLarge,
 }
 
 
@@ -187,64 +186,60 @@ enum<u8> EditTextStatus{
 // Accept inserts LF in multiline mode and submits in single-line mode; Submit always submits.
 EditCommandRequest TranslateEditCommand(in InputCommandIntent intent, in b8 repeat, in EditTextMode mode){
     EditCommandRequest request;
-    request.command = EditCommand::Enum::None;
+    request.command = EditCommand::None;
     request.extend = intent.extend;
     request.repeat = repeat;
-    if(!intent.edit || cast<u8>(mode) > cast<u8>(EditTextMode::Enum::Multiline))
+    if(!intent.edit || cast<u8>(mode) > cast<u8>(EditTextMode::Multiline))
         return request;
     switch(intent.command){
-        case InputCommand::Enum::Left: request.command = EditCommand::Enum::Left; break;
-        case InputCommand::Enum::Right: request.command = EditCommand::Enum::Right; break;
-        case InputCommand::Enum::Home: request.command = EditCommand::Enum::Home; break;
-        case InputCommand::Enum::End: request.command = EditCommand::Enum::End; break;
-        case InputCommand::Enum::WordLeft: request.command = EditCommand::Enum::WordLeft; break;
-        case InputCommand::Enum::WordRight: request.command = EditCommand::Enum::WordRight; break;
-        case InputCommand::Enum::DocumentHome:
-            if(mode == EditTextMode::Enum::Multiline)
-                request.command = EditCommand::Enum::DocumentHome;
+        case InputCommand::Left: request.command = EditCommand::Left; break;
+        case InputCommand::Right: request.command = EditCommand::Right; break;
+        case InputCommand::Home: request.command = EditCommand::Home; break;
+        case InputCommand::End: request.command = EditCommand::End; break;
+        case InputCommand::WordLeft: request.command = EditCommand::WordLeft; break;
+        case InputCommand::WordRight: request.command = EditCommand::WordRight; break;
+        case InputCommand::DocumentHome:
+            if(mode == EditTextMode::Multiline)
+                request.command = EditCommand::DocumentHome;
             else
-                request.command = EditCommand::Enum::Home;
+                request.command = EditCommand::Home;
             break;
-        case InputCommand::Enum::DocumentEnd:
-            if(mode == EditTextMode::Enum::Multiline)
-                request.command = EditCommand::Enum::DocumentEnd;
+        case InputCommand::DocumentEnd:
+            if(mode == EditTextMode::Multiline)
+                request.command = EditCommand::DocumentEnd;
             else
-                request.command = EditCommand::Enum::End;
+                request.command = EditCommand::End;
             break;
-        case InputCommand::Enum::Backspace: request.command = EditCommand::Enum::Backspace; break;
-        case InputCommand::Enum::Delete: request.command = EditCommand::Enum::Delete; break;
-        case InputCommand::Enum::WordBackspace: request.command = EditCommand::Enum::WordBackspace; break;
-        case InputCommand::Enum::WordDelete: request.command = EditCommand::Enum::WordDelete; break;
-        case InputCommand::Enum::SelectAll: request.command = EditCommand::Enum::SelectAll; break;
-        case InputCommand::Enum::Copy: request.command = EditCommand::Enum::Copy; break;
-        case InputCommand::Enum::Cut: request.command = EditCommand::Enum::Cut; break;
-        case InputCommand::Enum::Paste: request.command = EditCommand::Enum::Paste; break;
-        case InputCommand::Enum::Undo: request.command = EditCommand::Enum::Undo; break;
-        case InputCommand::Enum::Redo: request.command = EditCommand::Enum::Redo; break;
-        case InputCommand::Enum::Accept:
-            if(mode == EditTextMode::Enum::Multiline)
-                request.command = EditCommand::Enum::Newline;
+        case InputCommand::Backspace: request.command = EditCommand::Backspace; break;
+        case InputCommand::Delete: request.command = EditCommand::Delete; break;
+        case InputCommand::WordBackspace: request.command = EditCommand::WordBackspace; break;
+        case InputCommand::WordDelete: request.command = EditCommand::WordDelete; break;
+        case InputCommand::SelectAll: request.command = EditCommand::SelectAll; break;
+        case InputCommand::Copy: request.command = EditCommand::Copy; break;
+        case InputCommand::Cut: request.command = EditCommand::Cut; break;
+        case InputCommand::Paste: request.command = EditCommand::Paste; break;
+        case InputCommand::Undo: request.command = EditCommand::Undo; break;
+        case InputCommand::Redo: request.command = EditCommand::Redo; break;
+        case InputCommand::Accept:
+            if(mode == EditTextMode::Multiline)
+                request.command = EditCommand::Newline;
             else
-                request.command = EditCommand::Enum::Submit;
+                request.command = EditCommand::Submit;
             break;
-        case InputCommand::Enum::Submit: request.command = EditCommand::Enum::Submit; break;
-        case InputCommand::Enum::Cancel: request.command = EditCommand::Enum::Cancel; break;
-        case InputCommand::Enum::Newline: request.command = EditCommand::Enum::Newline; break;
+        case InputCommand::Submit: request.command = EditCommand::Submit; break;
+        case InputCommand::Cancel: request.command = EditCommand::Cancel; break;
+        case InputCommand::Newline: request.command = EditCommand::Newline; break;
         default: break;
     }
     return request;
 }
 
-EditCommandRequest TranslateEditCommand(in InputCommandIntent intent, in b8 repeat){
-    return TranslateEditCommand(intent, repeat, EditTextMode::Enum::SingleLine);
-}
-
 b8 ValidateIntegerBounds(in IntegerBounds bounds){
-    return bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Enum::Reject || bounds.policy == NumericBoundsPolicy::Enum::Clamp);
+    return bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
 }
 
 b8 ValidateFloatBounds(in FloatBounds bounds){
-    return isFinite(bounds.minimum) && isFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Enum::Reject || bounds.policy == NumericBoundsPolicy::Enum::Clamp);
+    return isFinite(bounds.minimum) && isFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
 }
 
 

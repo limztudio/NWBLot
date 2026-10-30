@@ -56,7 +56,7 @@ static_assert(static_cast<u32>(PaintMaterial::Skin) == NWB_UI_MATERIAL_SKIN);
 static_assert(static_cast<u32>(PaintMaterial::Glyph) == NWB_UI_MATERIAL_GLYPH);
 static_assert(static_cast<u32>(PaintMaterial::SdfGlyph) == NWB_UI_MATERIAL_SDF_GLYPH);
 static_assert(static_cast<u32>(PaintMaterial::Image) == NWB_UI_MATERIAL_IMAGE);
-static_assert(s_SdfDistanceEncodingFreeTypeU8 == NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8);
+static_assert(s_FontAtlasDistanceEncoding == NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8);
 
 inline constexpr TStringView s_GpuRendererContext = NWB_TEXT("GpuRenderer");
 

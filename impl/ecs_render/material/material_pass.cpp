@@ -81,12 +81,12 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
 
 struct MaterialInstanceAppend{
     u32 instanceIndex = 0u;
-    ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
+    MaterialTypedInstanceRanges typedRanges;
 };
 
 struct MaterialTypedByteRangeCache{
-    ECSRenderDetail::MaterialTypedByteRange constantRange;
-    ECSRenderDetail::MaterialTypedByteRange defaultMutableRange;
+    MaterialTypedByteRange constantRange;
+    MaterialTypedByteRange defaultMutableRange;
     b8 constantRangeCached = false;
     b8 defaultMutableRangeCached = false;
 };
@@ -293,8 +293,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     materialTypedBytes.reserve(materialTypedByteReserve);
 
     using MaterialTypedByteRangeMap =
-        HashMap<ECSRenderDetail::MaterialTypedByteRangeKey, __hidden_material_pass::MaterialTypedByteRangeCache, Core::Alloc::ScratchArena, ECSRenderDetail::MaterialTypedByteRangeKeyHasher, EqualTo<ECSRenderDetail::MaterialTypedByteRangeKey>>;
-    MaterialTypedByteRangeMap materialTypedRangeCache(0, ECSRenderDetail::MaterialTypedByteRangeKeyHasher(), EqualTo<ECSRenderDetail::MaterialTypedByteRangeKey>(), materialTypedBytes.get_allocator().arena());
+        HashMap<MaterialTypedByteRangeKey, __hidden_material_pass::MaterialTypedByteRangeCache, Core::Alloc::ScratchArena, ECSRenderDetail::MaterialTypedByteRangeKeyHasher, EqualTo<MaterialTypedByteRangeKey>>;
+    MaterialTypedByteRangeMap materialTypedRangeCache(0, ECSRenderDetail::MaterialTypedByteRangeKeyHasher(), EqualTo<MaterialTypedByteRangeKey>(), materialTypedBytes.get_allocator().arena());
     materialTypedRangeCache.reserve(rendererCapacity);
 
     ECSRenderDetail::MaterialTypedByteContentRangeMap mutableMaterialTypedRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), materialTypedBytes.get_allocator().arena());
@@ -313,8 +313,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         }
     }
 
-    auto appendConstantMaterialTypedBytes = [&](const MaterialSurfaceInfo& materialInfo) -> Expected<ECSRenderDetail::MaterialTypedByteRange>{
-        const ECSRenderDetail::MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
+    auto appendConstantMaterialTypedBytes = [&](const MaterialSurfaceInfo& materialInfo) -> Expected<MaterialTypedByteRange>{
+        const MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
         auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
         __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
         if(cache.constantRangeCached)
@@ -329,8 +329,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         return range;
     };
 
-    auto appendDefaultMutableMaterialTypedBytes = [&](const MaterialSurfaceInfo& materialInfo) -> Expected<ECSRenderDetail::MaterialTypedByteRange>{
-        const ECSRenderDetail::MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
+    auto appendDefaultMutableMaterialTypedBytes = [&](const MaterialSurfaceInfo& materialInfo) -> Expected<MaterialTypedByteRange>{
+        const MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
         auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
         __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
         if(cache.defaultMutableRangeCached)
@@ -345,7 +345,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         return range;
     };
 
-    auto appendMutableInstanceTypedBytes = [&](const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo) -> Expected<ECSRenderDetail::MaterialTypedByteRange>{
+    auto appendMutableInstanceTypedBytes = [&](const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo) -> Expected<MaterialTypedByteRange>{
         const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
         if(!materialInstance || materialInstance->overrides.empty())
             return appendDefaultMutableMaterialTypedBytes(materialInfo);
@@ -402,7 +402,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             const auto mutableRange = appendMutableInstanceTypedBytes(entity, *materialInfo);
             if(!mutableRange)
                 return MakeUnexpected(Failure{});
-            const ECSRenderDetail::MaterialTypedInstanceRanges typedRanges{ *constantRange, *mutableRange };
+            const MaterialTypedInstanceRanges typedRanges{ *constantRange, *mutableRange };
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
             InstanceGpuData instance = ECSRenderDetail::BuildInstanceGpuData(entity, transform, typedRanges);

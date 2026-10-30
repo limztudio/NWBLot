@@ -46,8 +46,7 @@ TEST_F(UiTextAreaViewTests, SuppressedCaretRevealPreservesBothRequestedAxesAndHi
     const SIMDVectorSingle clipEnd = VectorAdd(VectorSet(m_placement.clip.x, m_placement.clip.y, 0.0f, 0.0f), VectorSet(m_placement.clip.width, m_placement.clip.height, 0.0f, 0.0f));
     EXPECT_GT(m_placement.caret.x, VectorGetX(clipEnd));
     EXPECT_GT(m_placement.caret.y, VectorGetY(clipEnd));
-    Expected<usize> hit = MakeUnexpected(Failure{});
-    hit = m_view.hitTest({ 15.0f, 20.0f }, m_placement);
+    const Expected<usize> hit = m_view.hitTest({ 15.0f, 20.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 1u);
 }

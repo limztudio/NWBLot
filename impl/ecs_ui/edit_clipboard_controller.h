@@ -33,8 +33,8 @@ public:
 
 
 public:
-    [[nodiscard]] UiEditClipboardResult request(const UiTextEditOwner& owner, const Ui::EditModel& model, Ui::EditClipboardAction::Enum action, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard, b8 readOnly = false);
-    [[nodiscard]] UiEditClipboardResult drain(const UiTextEditOwner& owner, Ui::EditModel& model, b8 readOnly = false);
+    [[nodiscard]] UiEditClipboardResult request(const Ui::UiTextEditOwner& owner, const Ui::EditModel& model, Ui::EditClipboardAction::Enum action, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard, b8 readOnly = false);
+    [[nodiscard]] UiEditClipboardResult drain(const Ui::UiTextEditOwner& owner, Ui::EditModel& model, b8 readOnly = false);
     [[nodiscard]] b8 cancel();
     [[nodiscard]] b8 pending()const noexcept{ return m_token.valid(); }
 
@@ -53,7 +53,7 @@ private:
     Core::ClipboardCompletion m_completion;
     Ui::EditModelSnapshot m_expectedModel;
     AString<Core::Alloc::GlobalArena> m_insertText;
-    UiTextEditOwner m_owner;
+    Ui::UiTextEditOwner m_owner;
     Core::ClipboardRequestToken m_token;
     Core::ClipboardChannel::Enum m_channel = Core::ClipboardChannel::Clipboard;
     Ui::EditClipboardAction::Enum m_action = Ui::EditClipboardAction::None;

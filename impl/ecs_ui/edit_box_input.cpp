@@ -166,7 +166,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         event.completed = input.type == Ui::InputEventType::PrimaryUp;
         if(input.type == Ui::InputEventType::PrimaryDown){
             const u64 clickTimestampMs = input.hoverCapable ? input.timestampMs : 0u;
-            event.wordSelect = m_clickTracker.press(entry->owner, entry->popup, entry->displayed.revision, entry->displayed.externalRevision, input.position, clickTimestampMs, input.extend) == UiEditClickKind::Word;
+            event.wordSelect = m_clickTracker.press(entry->owner, entry->popup, entry->displayed.revision, entry->displayed.externalRevision, input.position, clickTimestampMs, input.extend) == Ui::UiEditClickKind::Word;
         }
         else if(input.type == Ui::InputEventType::PrimaryUp)
             m_clickTracker.release(entry->owner);

@@ -34,7 +34,7 @@ namespace __hidden_ui_gpu_sdf_resources{
         && binding.width <= s_FontAtlasMaxExtent && binding.height <= s_FontAtlasMaxExtent
         && binding.channelCount != 0u && binding.channelCount <= s_SdfMaxChannelCount
         && binding.spreadPixels >= s_FontAtlasMinSpreadPixels && binding.spreadPixels <= s_FontAtlasMaxSpreadPixels
-        && binding.distanceEncoding == s_SdfDistanceEncodingFreeTypeU8
+        && binding.distanceEncoding == s_FontAtlasDistanceEncoding
         && page->pixels().size() == static_cast<usize>(binding.width) * binding.height * binding.channelCount
     ;
 }

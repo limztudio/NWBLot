@@ -7,8 +7,6 @@
 
 #include "global.h"
 
-#include <impl/ecs_ui/toolkit/paint_types.adhd.h>
-
 #include <global/simd/vector_arithmetic.h>
 
 

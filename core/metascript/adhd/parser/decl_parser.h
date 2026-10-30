@@ -45,7 +45,7 @@ private:
     [[nodiscard]] b8 isCurrentTokenImported()const noexcept;
     [[nodiscard]] b8 parseTopLevelDeclaration(TranslationUnit& outUnit);
     [[nodiscard]] TypeAliasDecl* parseTypeAlias(SourceSpan span, Span<const ParsedAttribute> attributes);
-    [[nodiscard]] EnumDecl* parseEnumDecl(SourceSpan span, Span<const ParsedAttribute> attributes);
+    [[nodiscard]] EnumDecl* parseEnumDecl(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isFlag);
     [[nodiscard]] InterfaceDecl* parseInterfaceDecl(SourceSpan span, Span<const ParsedAttribute> attributes);
     [[nodiscard]] ClassDecl* parseClassDecl(SourceSpan span, Span<const ParsedAttribute> attributes);
     void parseClassMethodQualifiers(MethodDecl& method);
@@ -53,7 +53,17 @@ private:
     [[nodiscard]] b8 parseDestructorEmptyParams(MStringView missingLeftParenMessage);
     [[nodiscard]] b8 parseConstructorParamsAndRejectInitList(MVector<ParamDecl>& outParams);
     [[nodiscard]] b8 parseMethodParamsAndValidateArity(MethodDecl& method, SourceSpan span);
-    [[nodiscard]] b8 parseClassMethodOrOperatorTail(ClassDecl& classDecl, AccessSpecifier::Enum access, TypeRef* returnType, MStringView name, b8 isOperator, MVector<TemplateParamDecl>&& templateParams, Span<const ParsedAttribute> attributes, SourceSpan span, MStringView missingTerminatorMessage);
+    [[nodiscard]] b8 parseClassMethodOrOperatorTail(
+        ClassDecl& classDecl,
+        AccessSpecifier::Enum access,
+        TypeRef* returnType,
+        MStringView name,
+        b8 isOperator,
+        MVector<TemplateParamDecl>&& templateParams,
+        Span<const ParsedAttribute> attributes,
+        SourceSpan span,
+        MStringView missingTerminatorMessage
+    );
     [[nodiscard]] b8 parseClassMember(ClassDecl& classDecl);
     [[nodiscard]] b8 parseCallableOwnerOrTemplateHeader(b8 failOnInvalidTemplateParams, MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outTemplateParams);
     [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, Span<const ParsedAttribute> attributes);

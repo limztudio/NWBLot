@@ -22,11 +22,11 @@ inline constexpr MStringView s_AdhdGeneratedFileBanner = "// Compiled by ADHD Co
 inline void AppendCamelToSnakeCase(MString& out, const MStringView text){
     for(usize i = 0u; i < text.size(); ++i){
         const char ch = text[i];
-        if(ch >= 'A' && ch <= 'Z'){
+        if(IsAsciiUpper(ch)){
             if(i > 0u){
                 const char prev = text[i - 1u];
-                const b8 prevLowerOrDigit = (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9');
-                const b8 nextLower = (i + 1u < text.size()) && (text[i + 1u] >= 'a' && text[i + 1u] <= 'z');
+                const b8 prevLowerOrDigit = IsAsciiLower(prev) || IsAsciiDigit(prev);
+                const b8 nextLower = (i + 1u < text.size()) && IsAsciiLower(text[i + 1u]);
                 if(prevLowerOrDigit || nextLower)
                     out.push_back('_');
             }
@@ -69,6 +69,7 @@ public:
     void emitTypeCpp(MString& out, const TypeRef& type)const;
     void emitTypeArgListCpp(MString& out, Span<const TypeArg> args)const;
     void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, b8 topLevelConst = true)const;
+    void emitParamListCpp(MString& out, Span<const ParamDecl> params)const;
     void emitTemplateHeaderCpp(MString& out, Span<const TemplateParamDecl> params)const;
     void emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, b8 isDeclarationInClass)const;
 

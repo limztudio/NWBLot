@@ -271,11 +271,11 @@ TEST(Metascript, EmptyAndStructOnlyDocumentsHaveNoImplicitVariables){
     ASSERT_TRUE(document.parse(LiteralView("")));
     EXPECT_TRUE(document.declarations().empty());
     EXPECT_TRUE(document.structs().empty());
-    EXPECT_EQ(document.findVariable("asset"), nullptr);
+    EXPECT_EQ(document.findVariable(s_AssetVariable), nullptr);
 
     ASSERT_TRUE(document.parse(LiteralView("[custom(\"argument\")] struct Description{ [field] float value; };")));
     EXPECT_TRUE(document.declarations().empty());
-    EXPECT_EQ(document.findVariable("asset"), nullptr);
+    EXPECT_EQ(document.findVariable(s_AssetVariable), nullptr);
     EXPECT_EQ(document.findVariable("Description"), nullptr);
     ASSERT_EQ(document.structs().size(), 1u);
     EXPECT_NE(document.structs().find(LiteralView("Description")), document.structs().end());
@@ -296,7 +296,7 @@ TEST(Metascript, StructNamesAndVariablesUseSeparateNamespaces){
     ASSERT_NE(runtime, nullptr);
     ASSERT_TRUE(runtime->isMap());
     EXPECT_EQ(runtime->findField("value")->asInteger(), 4);
-    EXPECT_EQ(document.findVariable("asset"), nullptr);
+    EXPECT_EQ(document.findVariable(s_AssetVariable), nullptr);
     EXPECT_EQ(document.findVariable("structs"), nullptr);
     EXPECT_EQ(document.findVariable("instances"), nullptr);
 }

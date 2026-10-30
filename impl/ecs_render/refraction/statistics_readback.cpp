@@ -33,7 +33,6 @@ void RefractionStatisticsState::accept(const StatisticsReservationKey& key, cons
     slot->metadata.acceptedToken = token;
     slot->metadata.hardwareReady = hardwareReady;
     slot->metadata.csgHardwareEnabled = slot->metadata.csgHardwareEnabled && hardwareReady;
-    // Never recycle memory whose GPU completion is unproved.
 }
 
 void RefractionStatisticsState::complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept{

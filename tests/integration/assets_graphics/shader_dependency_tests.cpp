@@ -4,7 +4,6 @@
 
 #include "assets_graphics_fixture.h"
 
-#include <impl/assets_shader/binary_payload.h>
 #include <impl/assets_shader/source_dependencies.h>
 
 #include <gtest/gtest.h>

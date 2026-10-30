@@ -197,9 +197,9 @@ TEST(AssetsUiSkinRegionIndex, FailedBinaryLoadPreservesLookupAndAuthoredOrder){
     const usize secondHash = firstHash + sizeof(UiSkinRegionBinary);
     NWB_MEMCPY(binary.data() + secondHash, sizeof(NameHash), binary.data() + firstHash, sizeof(NameHash));
     EXPECT_FALSE(loaded.loadBinary(binary));
-    EXPECT_EQ(loaded.findRegion(Name("last")), retained);
+    EXPECT_EQ(loaded.findRegion(Name(s_LastRegionName)), retained);
     EXPECT_EQ(loaded.findRegion(Name("first")), &loaded.regions()[1u]);
-    EXPECT_EQ(loaded.regions()[0u].name, Name("last"));
+    EXPECT_EQ(loaded.regions()[0u].name, Name(s_LastRegionName));
 }
 
 TEST(AssetsUiSkinRegionIndex, OversizedInvalidSkinRemainsInspectableWithoutIndexedAdmission){

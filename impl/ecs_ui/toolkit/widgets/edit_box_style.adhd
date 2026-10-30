@@ -86,7 +86,7 @@ class EditBoxPaintFlags{
 }
 
 class EditBoxOptions{
-    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public LayoutSize height;
     public b8 enabled = true;
     public b8 readOnly = false;
@@ -133,8 +133,8 @@ class NumericEditBoxResult{
 }
 
 class TextAreaOptions{
-    public LayoutSize width = LayoutSize(LayoutSizePolicy::Enum::Stretch, 1.0f);
-    public LayoutSize height = LayoutSize(LayoutSizePolicy::Enum::Fixed, s_TextAreaDefaultHeight);
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Fixed, s_TextAreaDefaultHeight);
     public b8 enabled = true;
     public b8 readOnly = false;
     public f32 wheelLines = s_StyleScrollWheelStep;

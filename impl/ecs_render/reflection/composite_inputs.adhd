@@ -12,7 +12,7 @@
 class ReflectionCompositeInputs{
     public u32 opaqueRadianceSlot = 0xffffffffu;
     public u32 glassRadianceSlot = 0xffffffffu;
-    public ReflectionDebugView debugView = ReflectionDebugView::Enum::None;
+    public ReflectionDebugView debugView = ReflectionDebugView::None;
 }
 
 

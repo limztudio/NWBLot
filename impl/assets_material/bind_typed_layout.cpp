@@ -390,7 +390,14 @@ b8 ApplyMaterialBindTypedLayoutParameterValue(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, ScratchArena& scratchArena){
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    using namespace MaterialBindDetail;
     MaterialBindTypedLayout layout(arena);
     layout.bindEntry = &bindEntry;
 
@@ -541,7 +548,7 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayoutImpl(const Name& materialInterface, const MaterialBindEntry& bindEntry, ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache){
+Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, Core::Alloc::ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache){
     const auto cacheIt = inOutCache.lookup.find(materialInterface);
     if(cacheIt != inOutCache.lookup.end()){
         const usize cacheIndex = cacheIt.value();
@@ -550,7 +557,7 @@ Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLa
     }
 
     const usize cacheIndex = inOutCache.entries.size();
-    auto layout = BuildMaterialBindTypedLayoutImpl(bindEntry, materialInterface, inOutCache.entries.get_allocator().arena(), scratchArena);
+    auto layout = BuildMaterialBindTypedLayout(bindEntry, materialInterface, inOutCache.entries.get_allocator().arena(), scratchArena);
     if(!layout)
         return MakeUnexpected(Failure{});
 
@@ -563,12 +570,6 @@ Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLa
     inOutCache.entries.push_back(Move(*layout));
     return MakeNotNull(&inOutCache.entries.back());
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

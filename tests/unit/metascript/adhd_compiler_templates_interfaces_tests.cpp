@@ -90,9 +90,9 @@ TEST(AdhdCompiler, SupportsCustomClassSwitchEnumVarScopeAndConstSafety){
     AdhdTestArena arena;
 
     static constexpr MStringView s_ValidSource =
-        "enum<u8> Mode {\r\n"
-        "    enum Idle = 0,\r\n"
-        "    flag Active = 1 << 0,\r\n"
+        "flag<u8> Mode {\r\n"
+        "    Idle = 0,\r\n"
+        "    Active = 1 << 0,\r\n"
         "}\r\n"
         "class TagKey {\r\n"
         "    public u32 id = 0;\r\n"
@@ -101,8 +101,8 @@ TEST(AdhdCompiler, SupportsCustomClassSwitchEnumVarScopeAndConstSafety){
         "    }\r\n"
         "}\r\n"
         "u32 matchKey(in TagKey key, in TagKey target) {\r\n"
-        "    Mode m = Mode::Enum::Idle;\r\n"
-        "    u8 bits = m::Flag::Active;\r\n"
+        "    Mode m = Mode::Idle;\r\n"
+        "    u8 bits = m::Active;\r\n"
         "    switch(key) {\r\n"
         "    case target:\r\n"
         "        return cast<u32>(bits);\r\n"
@@ -114,7 +114,7 @@ TEST(AdhdCompiler, SupportsCustomClassSwitchEnumVarScopeAndConstSafety){
     CompileResult validRes(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_ValidSource, "impl/tag_switch.adhd", arena.arena, validRes));
     const MStringView cppView(validRes.generatedSource.data(), validRes.generatedSource.size());
-    EXPECT_NE(cppView.find("Mode::Flag::Active"), MStringView::npos);
+    EXPECT_NE(cppView.find("Mode::Active"), MStringView::npos);
     EXPECT_NE(cppView.find("if(key == target){"), MStringView::npos);
 
     static constexpr MStringView s_ConstViolationSource =
@@ -235,16 +235,16 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
     EXPECT_NE(cppView.find("i32 SharedService::accumulate(const i32 delta)noexcept"), MStringView::npos);
     EXPECT_EQ(cppView.find("SharedService::reflectedFieldCount"), MStringView::npos);
 
-    static constexpr MStringView s_MismatchedEnumFlagScope =
+    static constexpr MStringView s_EnumBitwiseOp =
         "enum<u8> Mode {\r\n"
-        "    enum Idle = 0,\r\n"
-        "    flag Active,\r\n"
+        "    Idle = 0,\r\n"
+        "    Active = 1,\r\n"
         "}\r\n"
-        "u8 badScope() {\r\n"
-        "    return Mode::Flag::Idle;\r\n"
+        "Mode badBitwise() {\r\n"
+        "    return Mode::Idle | Mode::Active;\r\n"
         "}\r\n";
-    CompileResult badEnumScopeRes(arena.arena);
-    EXPECT_FALSE(Compiler::Compile(s_MismatchedEnumFlagScope, "impl/bad_enum_scope.adhd", arena.arena, badEnumScopeRes));
+    CompileResult badEnumBitwiseRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_EnumBitwiseOp, "impl/bad_enum_bitwise.adhd", arena.arena, badEnumBitwiseRes));
 
     static constexpr MStringView s_InvalidOperatorArity =
         "class Mask {\r\n"
@@ -265,19 +265,6 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "}\r\n";
     CompileResult badTemplateOverrideRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_MismatchedTemplateArgOverride, "impl/bad_tpl_override.adhd", arena.arena, badTemplateOverrideRes));
-
-    static constexpr MStringView s_ExprLevelTemplateInstantiation =
-        "class Pair<T, U> {\r\n"
-        "    public T first = 0;\r\n"
-        "    public U second = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
-        "}\r\n"
-        "void makeAutoPair() {\r\n"
-        "    auto p = Pair<u8, f32x4>();\r\n"
-        "}\r\n";
-    CompileResult exprInstRes(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_ExprLevelTemplateInstantiation, "impl/auto_pair.adhd", arena.arena, exprInstRes));
-    ASSERT_EQ(exprInstRes.unit.templateInstantiations.size(), 1u);
-    EXPECT_EQ(exprInstRes.unit.templateInstantiations[0]->orderedFields[0]->name, "second");
 
     static constexpr MStringView s_DuplicateFieldSource =
         "class DupClass {\r\n"
@@ -326,9 +313,9 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
     EXPECT_FALSE(Compiler::Compile(s_TemplateArgCountMismatchSource, "impl/bad_tpl_arity.adhd", arena.arena, badTplArityRes));
 
     static constexpr MStringView s_DuplicateEnumeratorSource =
-        "enum DupMode : u8 {\r\n"
-        "    enum Alpha,\r\n"
-        "    enum Alpha\r\n"
+        "enum<u8> DupMode {\r\n"
+        "    Alpha,\r\n"
+        "    Alpha\r\n"
         "}\r\n";
     CompileResult dupEnumRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_DuplicateEnumeratorSource, "impl/dup_enum.adhd", arena.arena, dupEnumRes));

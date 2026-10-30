@@ -35,13 +35,23 @@ template<typename CharT>
 
 
 template<typename CharT>
+[[nodiscard]] inline constexpr b8 IsAsciiUpper(CharT ch)noexcept(IsArithmetic_V<CharT>){
+    return ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z');
+}
+
+template<typename CharT>
+[[nodiscard]] inline constexpr b8 IsAsciiLower(CharT ch)noexcept(IsArithmetic_V<CharT>){
+    return ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z');
+}
+
+template<typename CharT>
 inline constexpr CharT ToAsciiLower(CharT c)noexcept(IsArithmetic_V<CharT>){
-    return (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z')) ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A'))) : c;
+    return IsAsciiUpper(c) ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A'))) : c;
 }
 
 template<typename CharT>
 inline constexpr CharT ToAsciiUpper(CharT c)noexcept(IsArithmetic_V<CharT>){
-    return (c >= static_cast<CharT>('a') && c <= static_cast<CharT>('z')) ? static_cast<CharT>(c - (static_cast<CharT>('a') - static_cast<CharT>('A'))) : c;
+    return IsAsciiLower(c) ? static_cast<CharT>(c - (static_cast<CharT>('a') - static_cast<CharT>('A'))) : c;
 }
 
 template<typename StringT>
@@ -88,7 +98,7 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline constexpr b8 IsAsciiAlpha(CharT ch)noexcept(IsArithmetic_V<CharT>){
-    return (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z')) || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z'));
+    return IsAsciiUpper(ch) || IsAsciiLower(ch);
 }
 
 template<typename CharT>

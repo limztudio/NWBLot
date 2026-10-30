@@ -157,7 +157,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const b8 requestsLaggedLightingHistoryCapture = laggedAsyncLightingRequested;
     m_shadowPreparationOutcome.ready = false;
     // Compile graphs first; the prefix records its five tasks natively.
-    const ECSRenderDetail::RendererFrameGraphFeatures frameGraphFeatures{
+    const RendererFrameGraphFeatures frameGraphFeatures{
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
         .laggedLightingHistoryReady = laggedLightingHistoryResourcesReady,
         .laggedLightingHistoryReadReady = priorLaggedLightingHistoryReadReadyToken.valid(),
@@ -294,7 +294,15 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Core::GpuTaskId graphicsPrefixTimingTasks[GraphicsPrefixTimingResolver::s_TimingTaskCount];
     GraphicsPrefixTimingResolver graphicsPrefixTimingResolver(MakeNotNull(this));
     GraphicsPrefixTimingResolutionResult graphicsPrefixTimingResolution;
-    graphicsPrefixTimingResolver.resolve(deferredCompiledPlan, timing.graphicsPrefixOwnedTimingTickets, FrameExecuteTimingState::s_GraphicsPrefixTimingTicketCount, timing.graphicsPrefixTimingTickets, graphicsPrefixTimingTasks, timing.asyncPrefixTimingSpansOnePacket, graphicsPrefixTimingResolution);
+    graphicsPrefixTimingResolver.resolve(
+        deferredCompiledPlan,
+        timing.graphicsPrefixOwnedTimingTickets,
+        FrameExecuteTimingState::s_GraphicsPrefixTimingTicketCount,
+        timing.graphicsPrefixTimingTickets,
+        graphicsPrefixTimingTasks,
+        timing.asyncPrefixTimingSpansOnePacket,
+        graphicsPrefixTimingResolution
+    );
     const b8 graphicsPrefixTimingBindingsValid = graphicsPrefixTimingResolution.bindingsValid;
     const usize graphicsPrefixUniquePacketCount = graphicsPrefixTimingResolution.uniquePacketCount;
     ShadowVisibilityMergeValidator shadowVisibilityMergeValidator(MakeNotNull(this));
@@ -637,7 +645,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         && deferredPresentSubmissionToken.valid()
         && finalPresentationSubmissionToken.valid()
     ;
-    const b8 normalStateReady = lifecycles.shadowPrepareStateLifecycle.stateReady && lifecycles.shadowVisibilityStateLifecycle.stateReady && selectedCausticsStateReady && lifecycles.surfelGiStateLifecycle.stateReady && lifecycles.deferredLightingStateLifecycle.stateReady;
+    const b8 normalStateReady =
+        lifecycles.shadowPrepareStateLifecycle.stateReady
+        && lifecycles.shadowVisibilityStateLifecycle.stateReady
+        && selectedCausticsStateReady
+        && lifecycles.surfelGiStateLifecycle.stateReady
+        && lifecycles.deferredLightingStateLifecycle.stateReady;
     const b8 acceptedStateLost =
         (shadowPrepareSubmissionToken.valid() && !lifecycles.shadowPrepareStateLifecycle.stateReady)
         || (shadowVisibilitySubmissionToken.valid() && !lifecycles.shadowVisibilityStateLifecycle.stateReady)

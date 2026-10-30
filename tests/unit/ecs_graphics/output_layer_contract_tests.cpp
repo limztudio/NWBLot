@@ -20,13 +20,11 @@ using namespace NWB;
 
 class RecordingLayerContributor final : public Core::IGpuTaskGraphOutputLayerContributor{
 public:
-    virtual b8 prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame)noexcept override{
-        static_cast<void>(frame);
+    virtual b8 prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame&)noexcept override{
         return true;
     }
 
-    virtual Expected<Core::GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph)noexcept override{
-        static_cast<void>(graph);
+    virtual Expected<Core::GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(Core::GpuTaskGraph&)noexcept override{
         return Core::GpuTaskGraphOutputLayer{};
     }
 

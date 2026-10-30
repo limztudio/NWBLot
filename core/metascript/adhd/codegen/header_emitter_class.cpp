@@ -16,6 +16,31 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_header_emitter_class{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void EmitAccessSpecifier(MString& out, const AccessSpecifier::Enum access, const b8 maybeUnusedPrivate){
+    if(access == AccessSpecifier::Public)
+        out.append("public:\r\n    ");
+    else if(access == AccessSpecifier::Protected)
+        out.append("protected:\r\n    ");
+    else
+        out.append(maybeUnusedPrivate ? "private:\r\n    [[maybe_unused]] " : "private:\r\n    ");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     if(!decl.subsystemTypeName.empty()){
         out.append("class ");
@@ -243,7 +268,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
             const TemplateParamDecl& param = decl.templateParams[i];
             const TypeArg& arg = inst.templateArgs[i];
             if(param.constValueType){
-                const MStringView valText = arg.type ? arg.type->name : arg.constantText;
+                const MStringView valText = arg.constantOrTypeName();
                 out.append("    static constexpr ");
                 m_typeEmitter.emitTypeCpp(out, *param.constValueType);
                 out.push_back(' ');
@@ -290,12 +315,7 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
     for(const MethodDecl* method : decl.methods){
         if(!method)
             continue;
-        if(method->access == AccessSpecifier::Public)
-            out.append("public:\r\n    ");
-        else if(method->access == AccessSpecifier::Protected)
-            out.append("protected:\r\n    ");
-        else
-            out.append("private:\r\n    ");
+        __hidden_adhd_header_emitter_class::EmitAccessSpecifier(out, method->access, false);
 
         if(!method->templateParams.empty()){
             m_typeEmitter.emitTemplateHeaderCpp(out, method->templateParams);
@@ -326,12 +346,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
     for(const FieldDecl* field : orderedFields){
         if(!field || !field->type)
             continue;
-        if(field->access == AccessSpecifier::Public)
-            out.append("public:\r\n    ");
-        else if(field->access == AccessSpecifier::Protected)
-            out.append("protected:\r\n    ");
-        else
-            out.append("private:\r\n    [[maybe_unused]] ");
+        __hidden_adhd_header_emitter_class::EmitAccessSpecifier(out, field->access, true);
 
         m_typeEmitter.emitTypeCpp(out, *field->type);
         out.push_back(' ');

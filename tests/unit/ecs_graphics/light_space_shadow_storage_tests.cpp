@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/shadow/light_space_shadow.h>
+#include <impl/ecs_scene/components.adhd.h>
 
 #include <global/limit.h>
 

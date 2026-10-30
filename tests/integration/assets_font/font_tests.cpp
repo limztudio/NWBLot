@@ -5,7 +5,6 @@
 #include <impl/assets_font/asset.h>
 #include <impl/assets_font/binary_payload.h>
 #include <impl/assets_font/font_validation.h>
-#include <impl/assets_font/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 

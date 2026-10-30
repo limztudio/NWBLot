@@ -167,7 +167,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
             return true;
         }
         if(
-            !ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
+            !IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
             || taskGraphStage.m_occupancyComputeEmulationTask.valid()
             || !taskGraphStage.m_occupancyStreamTask.valid()
             || !taskGraphStage.m_clearTask.valid()
@@ -235,7 +235,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
             return true;
         }
         if(
-            !ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
+            !IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
             || taskGraphStage.m_extinctionComputeEmulationTask.valid()
             || !taskGraphStage.m_extinctionStreamTask.valid()
             || !taskIsCompiled(taskGraphStage.m_extinctionTask)
@@ -294,7 +294,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
             return true;
         }
         if(
-            !ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
+            !IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
             || taskGraphStage.m_accumulationComputeEmulationTask.valid()
             || !taskGraphStage.m_accumulationStreamTask.valid()
             || !taskIsCompiled(taskGraphStage.m_accumulationTask)

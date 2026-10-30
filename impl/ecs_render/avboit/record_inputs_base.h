@@ -29,6 +29,13 @@ struct DeferredFrameTargets;
 
 
 struct AvboitRecordInputsBase{
+    static constexpr usize s_StreamUseCount = 7u;
+    static constexpr usize s_CsgIntervalUseCount = 4u;
+    static constexpr usize s_EmulationBaseCount = 4u;
+    static constexpr usize s_EmulationPlanUseCount = 8u;
+    static constexpr usize s_MaterialResourceSetUseCapacity = 3u;
+    static constexpr usize s_ComputeEmulationResourceSetUseCapacity = 3u;
+
     DeferredFrameTargets& targets;
     Core::GpuGraphResourceId albedo;
     Core::GpuGraphResourceId normal;

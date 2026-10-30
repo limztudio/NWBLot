@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "cpp_type_emitter.h"
 #include "source_emitter.h"
 
 
@@ -38,7 +37,6 @@ private:
     void emitTypeAliasDecl(MString& out, const TypeAliasDecl& decl)const;
     void emitInterfaceDecl(MString& out, const InterfaceDecl& decl)const;
     void emitGlobalConstDecl(MString& out, const Stmt& decl)const;
-    void emitFreeFunctionDecl(MString& out, const MethodDecl& fn)const;
     void emitClassDecl(MString& out, const ClassDecl& decl)const;
     void emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const;
     void emitClassMethodsCpp(MString& out, const ClassDecl& decl, Span<const FieldDecl* const> orderedFields, b8 forceInlineBody)const;

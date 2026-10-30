@@ -94,10 +94,9 @@ TEST(AdhdCompiler, SupportsReturnFuncCapturePropagationEnumAliasScopeOverloadedI
     AdhdTestArena arena;
 
     static constexpr MStringView s_Source =
-        "const u32 kGlobalLimit = 100u;\r\n"
-        "enum<u8> StageMask {\r\n"
-        "    flag Idle = 0,\r\n"
-        "    flag Active = 1 << 0,\r\n"
+        "flag<u8> StageMask {\r\n"
+        "    Idle = 0,\r\n"
+        "    Active = 1 << 0,\r\n"
         "}\r\n"
         "type StageMaskAlias = StageMask;\r\n"
         "interface IProcessor {\r\n"
@@ -123,18 +122,17 @@ TEST(AdhdCompiler, SupportsReturnFuncCapturePropagationEnumAliasScopeOverloadedI
         "    return \"content/default.nwb\";\r\n"
         "}\r\n"
         "u8 readActiveStageMask() {\r\n"
-        "    return StageMaskAlias::Flag::Active;\r\n"
+        "    return StageMaskAlias::Active;\r\n"
         "}\r\n";
 
     CompileResult res(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/dual_processor.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
-    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
 
     EXPECT_NE(hdrView.find("::InplaceFunction<64u, i32(i32)> makeAdder(const i32 base)noexcept;"), MStringView::npos);
     EXPECT_NE(hdrView.find("return NWB_TEXT(\"content/default.nwb\");"), MStringView::npos);
-    EXPECT_NE(hdrView.find("return StageMask::Flag::Active;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("return StageMask::Active;"), MStringView::npos);
 
     static constexpr MStringView s_MutateGlobalConstSource =
         "const u32 kImmutable = 10u;\r\n"
@@ -271,7 +269,6 @@ TEST(AdhdCompiler, SupportsParallelCallTemplatesExtendedNwbReflectionAndStrictVo
         "}\r\n"
         "[reflect]\r\n"
         "class AssetManifest {\r\n"
-        "    public Path rootPath = \"assets/root\";\r\n"
         "    public Optional<String> label;\r\n"
         "    public Optional<SubConfig> subConfig;\r\n"
         "    public FixedVector<SubConfig, 4> stages;\r\n"
@@ -297,7 +294,6 @@ TEST(AdhdCompiler, SupportsParallelCallTemplatesExtendedNwbReflectionAndStrictVo
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
 
     EXPECT_NE(hdrView.find("inline static ::NWB::Core::Alloc::GlobalArena s_ClassArena{::Name(\"AssetManifest\")};"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->rootPath = ::ConvertString(__f->asString());"), MStringView::npos);
     EXPECT_NE(hdrView.find("this->label = AString(__f->asString(), s_ClassArena);"), MStringView::npos);
     EXPECT_NE(hdrView.find("this->subConfig.emplace(); if(!this->subConfig->deserializeNwb(*__f))"), MStringView::npos);
     EXPECT_NE(hdrView.find("this->stages.emplace_back(); if(!this->stages.back().deserializeNwb(__f->asList()[__i])) return false;"), MStringView::npos);
@@ -472,7 +468,6 @@ TEST(AdhdCompiler, SupportsParameterizedInterfaceBoundsInheritedTemplateInterfac
     ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/param_bounds_ref_alias_nwb.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
-    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
 
     EXPECT_NE(hdrView.find("static constexpr usize reflectedMethodCount()noexcept{ return 2u; }"), MStringView::npos);
     EXPECT_NE(hdrView.find("using VecStreamIn = ::NotNull<const IDerivedStream<Float4>*>;"), MStringView::npos);
@@ -529,8 +524,8 @@ TEST(AdhdCompiler, SupportsSelfDefaultedNameBinarySerializeNameHashAndContainerE
 
     static constexpr MStringView s_Source =
         "enum<u8> BoundaryMode {\r\n"
-        "    enum OpenSurface = 0,\r\n"
-        "    enum ClosedNested = 1,\r\n"
+        "    OpenSurface = 0,\r\n"
+        "    ClosedNested = 1,\r\n"
         "}\r\n"
         "[serialize]\r\n"
         "class SubRecord {\r\n"

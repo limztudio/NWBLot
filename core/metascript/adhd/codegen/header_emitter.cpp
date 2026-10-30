@@ -41,14 +41,6 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     b8 hasSubsystemDecl = false;
     b8 hasComponentAssetDecl = false;
     b8 hasHeaderTaskScope = false;
-    MVector<MStringView> subsystemAssetIncludes(m_arena);
-    const auto addSubsystemInclude = [&](const MStringView includeDirective){
-        for(const MStringView existing : subsystemAssetIncludes){
-            if(existing == includeDirective)
-                return;
-        }
-        subsystemAssetIncludes.push_back(includeDirective);
-    };
     for(const ClassDecl* classDecl : unit.classes){
         if(!classDecl)
             continue;
@@ -62,35 +54,13 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         }
         if(classDecl->isImported)
             continue;
-        if(!classDecl->subsystemTypeName.empty()){
+        if(!classDecl->subsystemTypeName.empty())
             hasSubsystemDecl = true;
-            for(const FieldDecl* field : classDecl->fields){
-                if(!field)
-                    continue;
-                MStringView assetName;
-                b8 isVectorField = false;
-                if(!tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField))
-                    continue;
-#define NWB_ADHD_EXPORT_ASSET_INCLUDE(assetTypeName, includeDirective) \
-                if(assetName == assetTypeName) addSubsystemInclude(includeDirective);
-#define NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE(assetTypeSuffix, includeDirective) \
-                if(assetName.size() >= sizeof(assetTypeSuffix) - 1u && assetName.substr(assetName.size() - (sizeof(assetTypeSuffix) - 1u)) == assetTypeSuffix) \
-                    addSubsystemInclude(includeDirective);
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE
-#undef NWB_ADHD_EXPORT_ASSET_INCLUDE
-            }
-        }
         if(!classDecl->componentAssetTypeName.empty())
             hasComponentAssetDecl = true;
     }
-    if(hasSubsystemDecl){
-        for(const MStringView inc : subsystemAssetIncludes){
-            out.append(inc.data(), inc.size());
-            out.append("\r\n");
-        }
+    if(hasSubsystemDecl)
         out.append("#include <impl/assets_subsystem/asset.h>\r\n");
-    }
     if(hasComponentAssetDecl)
         out.append("#include <impl/assets_scene/components.h>\r\n");
     if(!hasHeaderTaskScope){
@@ -384,13 +354,18 @@ b8 HeaderEmitter::tryResolveSubsystemFieldAssetType(const FieldDecl& field, MStr
     if(resolved->name == "Vector" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
         outIsVector = true;
         const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
-        if(elemType && !elemType->templateArgs.empty() && elemType->templateArgs[0].type)
-            outAssetTypeName = elemType->templateArgs[0].type->name;
-        return true;
+        if(elemType && elemType->name == "AssetRef" && !elemType->templateArgs.empty() && elemType->templateArgs[0].type){
+            const TypeRef* targetType = m_symbols.unwrapTypeAlias(elemType->templateArgs[0].type);
+            if(targetType)
+                outAssetTypeName = targetType->name;
+        }
+        return !outAssetTypeName.empty();
     }
     if(resolved->name == "AssetRef" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-        outAssetTypeName = resolved->templateArgs[0].type->name;
-        return true;
+        const TypeRef* targetType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
+        if(targetType)
+            outAssetTypeName = targetType->name;
+        return !outAssetTypeName.empty();
     }
     return false;
 }

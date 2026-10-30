@@ -100,11 +100,10 @@ struct SubsystemFieldDescriptor{
 };
 
 template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> SubsystemT::* Member>
-[[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(const AStringView fieldName)noexcept{
-    static_assert(!TAsset::s_AssetTypeText.empty(), "Subsystem field asset type must define a non-empty s_AssetTypeText");
+[[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(const AStringView fieldName, const Name& expectedAssetType)noexcept{
     return SubsystemFieldDescriptor<SubsystemT>{
         fieldName,
-        TAsset::AssetTypeName(),
+        expectedAssetType,
         false,
         [](const SubsystemT&)noexcept -> usize{
             return 1u;
@@ -123,12 +122,17 @@ template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> Su
     };
 }
 
-template<typename SubsystemT, typename TAsset, SubsystemAssetRefVector<TAsset> SubsystemT::* Member>
+template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> SubsystemT::* Member>
 [[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(const AStringView fieldName)noexcept{
     static_assert(!TAsset::s_AssetTypeText.empty(), "Subsystem field asset type must define a non-empty s_AssetTypeText");
+    return MakeSubsystemFieldDescriptor<SubsystemT, TAsset, Member>(fieldName, TAsset::AssetTypeName());
+}
+
+template<typename SubsystemT, typename TAsset, SubsystemAssetRefVector<TAsset> SubsystemT::* Member>
+[[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(const AStringView fieldName, const Name& expectedAssetType)noexcept{
     return SubsystemFieldDescriptor<SubsystemT>{
         fieldName,
-        TAsset::AssetTypeName(),
+        expectedAssetType,
         true,
         [](const SubsystemT& subsystem)noexcept -> usize{
             return (subsystem.*Member).size();
@@ -144,6 +148,12 @@ template<typename SubsystemT, typename TAsset, SubsystemAssetRefVector<TAsset> S
             (subsystem.*Member).push_back(Core::Assets::AssetRef<TAsset>(value));
         }
     };
+}
+
+template<typename SubsystemT, typename TAsset, SubsystemAssetRefVector<TAsset> SubsystemT::* Member>
+[[nodiscard]] constexpr SubsystemFieldDescriptor<SubsystemT> MakeSubsystemFieldDescriptor(const AStringView fieldName)noexcept{
+    static_assert(!TAsset::s_AssetTypeText.empty(), "Subsystem field asset type must define a non-empty s_AssetTypeText");
+    return MakeSubsystemFieldDescriptor<SubsystemT, TAsset, Member>(fieldName, TAsset::AssetTypeName());
 }
 
 

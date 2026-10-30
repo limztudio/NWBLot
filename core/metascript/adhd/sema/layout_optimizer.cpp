@@ -268,7 +268,15 @@ void SortClassesTopologically(const Span<const ClassDecl* const> classes, const 
         __hidden_adhd_layout_optimizer::VisitClassTopo(i, classes, symbols, state, outSorted);
 }
 
-void CollectExternalForwardDeclClasses(const TypeRef& type, const SymbolTable& symbols, const Span<const TemplateParamDecl> outerTemplateParams, const Span<const TemplateParamDecl> innerTemplateParams, const b8 inRefOrAssetContext, const u32 depth, MVector<MStringView>& outNames){
+void CollectExternalForwardDeclClasses(
+    const TypeRef& type,
+    const SymbolTable& symbols,
+    const Span<const TemplateParamDecl> outerTemplateParams,
+    const Span<const TemplateParamDecl> innerTemplateParams,
+    const b8 inRefOrAssetContext,
+    const u32 depth,
+    MVector<MStringView>& outNames
+){
     if(depth > 16u || type.isAuto)
         return;
 
@@ -302,7 +310,7 @@ void CollectExternalForwardDeclClasses(const TypeRef& type, const SymbolTable& s
             outNames.push_back(type.name);
     }
 
-    const b8 childInAssetContext = (type.name == "AssetRef");
+    const b8 childInAssetContext = (symbols.resolveBaseTypeName(type.name) == "AssetRef");
     for(const TypeArg& targ : type.templateArgs){
         if(targ.type)
             CollectExternalForwardDeclClasses(*targ.type, symbols, outerTemplateParams, innerTemplateParams, childInAssetContext || (targ.type->refMode != ParamPassingMode::None), depth + 1u, outNames);
@@ -320,7 +328,9 @@ void LayoutOptimizer::SortAndPackFields(const b8 isSerialize, const b8 packSeria
             usize j = i;
             while(j > 0u){
                 const FieldDecl* prev = orderedFields[j - 1u];
-                const b8 keyBeforePrev = (key->resolvedAlign > prev->resolvedAlign) || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize > prev->resolvedSize) || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize == prev->resolvedSize && key->originalIndex < prev->originalIndex);
+                const b8 keyBeforePrev = (key->resolvedAlign > prev->resolvedAlign)
+                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize > prev->resolvedSize)
+                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize == prev->resolvedSize && key->originalIndex < prev->originalIndex);
                 if(!keyBeforePrev)
                     break;
                 orderedFields[j] = orderedFields[j - 1u];

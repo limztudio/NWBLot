@@ -37,16 +37,6 @@
 #define NWB_ADHD_EXPORT_SWIZZLE_COMPONENT_AUTO_UNDEF
 #endif
 
-#ifndef NWB_ADHD_EXPORT_ASSET_INCLUDE
-#define NWB_ADHD_EXPORT_ASSET_INCLUDE(assetTypeName, includeDirective)
-#define NWB_ADHD_EXPORT_ASSET_INCLUDE_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE
-#define NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE(assetTypeSuffix, includeDirective)
-#define NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE_AUTO_UNDEF
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -141,26 +131,8 @@ NWB_ADHD_EXPORT_SWIZZLE_COMPONENT('y', 'g', 1u)
 NWB_ADHD_EXPORT_SWIZZLE_COMPONENT('z', 'b', 2u)
 NWB_ADHD_EXPORT_SWIZZLE_COMPONENT('w', 'a', 3u)
 
-NWB_ADHD_EXPORT_ASSET_INCLUDE("CsgShape",  "#include <impl/assets_csg/asset.h>\r\n")
-NWB_ADHD_EXPORT_ASSET_INCLUDE("FontAtlas", "#include <impl/assets_font_atlas/asset.h>\r\n")
-NWB_ADHD_EXPORT_ASSET_INCLUDE("Sampler",   "#include <impl/assets_sampler/asset.h>\r\n")
-NWB_ADHD_EXPORT_ASSET_INCLUDE("UiSkin",    "#include <impl/assets_ui_skin/asset.h>\r\n")
-
-NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE("Shader", "#include <impl/assets_shader/asset.h>\r\n")
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#ifdef NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE
-#endif
-
-#ifdef NWB_ADHD_EXPORT_ASSET_INCLUDE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_ASSET_INCLUDE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_ASSET_INCLUDE
-#endif
 
 #ifdef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT_AUTO_UNDEF

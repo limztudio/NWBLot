@@ -110,7 +110,13 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
             out.append(field->name.data(), field->name.size());
             out.append(">(\"");
             AppendCamelToSnakeCase(out, field->name);
-            out.append("\"),\r\n");
+            out.append("\", ::Name(\"");
+            const ClassDecl* assetCls = m_symbols.findClass(assetName);
+            if(assetCls && !assetCls->assetTypeName.empty())
+                out.append(assetCls->assetTypeName.data(), assetCls->assetTypeName.size());
+            else
+                AppendCamelToSnakeCase(out, assetName);
+            out.append("\")),\r\n");
         }
         out.append("    };\r\n");
         out.append("};\r\n\r\n");

@@ -618,6 +618,26 @@ TEST(AdhdCompiler, SupportsBuiltInEntityIdUnalignedVectorsSizedFuncAndExternalFo
     EXPECT_NE(hdrView.find("Float2U uv{0.25f, 0.75f};"), MStringView::npos);
     EXPECT_NE(hdrView.find("this->owner = ::NWB::Core::ECS::EntityID(static_cast<u32>(__f->asInteger()));"), MStringView::npos);
     EXPECT_NE(hdrView.find("this->packedValue = UInt4U(static_cast<u32>(__f->asList()[0].asInteger())"), MStringView::npos);
+
+    static constexpr MStringView s_SubsystemSource =
+        "[asset(\"custom_tagged_asset\")]\r\n"
+        "class CustomTaggedAsset {\r\n"
+        "    public u32 version = 1u;\r\n"
+        "}\r\n"
+        "[subsystem(\"custom_project_subsystem\")]\r\n"
+        "class CustomProjectSubsystem {\r\n"
+        "    public AssetRef<CustomProjectAsset> primaryAsset;\r\n"
+        "    public Vector<AssetRef<CustomTaggedAsset>> taggedAssets;\r\n"
+        "}\r\n";
+
+    CompileResult subRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_SubsystemSource, "project/custom/subsystem.adhd", arena.arena, subRes, nullptr, "Project::Custom"));
+
+    const MStringView subHdrView(subRes.generatedHeader.data(), subRes.generatedHeader.size());
+    EXPECT_NE(subHdrView.find("#include <impl/assets_subsystem/asset.h>\r\n"), MStringView::npos);
+    EXPECT_NE(subHdrView.find("class CustomProjectAsset;\r\n"), MStringView::npos);
+    EXPECT_NE(subHdrView.find("::NWB::Impl::MakeSubsystemFieldDescriptor<CustomProjectSubsystem, CustomProjectAsset, &CustomProjectSubsystem::primaryAsset>(\"primary_asset\", ::Name(\"custom_project_asset\")),"), MStringView::npos);
+    EXPECT_NE(subHdrView.find("::NWB::Impl::MakeSubsystemFieldDescriptor<CustomProjectSubsystem, CustomTaggedAsset, &CustomProjectSubsystem::taggedAssets>(\"tagged_assets\", ::Name(\"custom_tagged_asset\")),"), MStringView::npos);
 }
 
 

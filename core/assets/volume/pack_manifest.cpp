@@ -75,26 +75,6 @@ b8 ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, const u64 p
     return true;
 }
 
-b8 AppendObjectFilePayloadToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Path& objectPath, const AssetVolumePayloadIdentity& identity){
-    if(!ValidateManifestVirtualPath(virtualPath))
-        return false;
-    if(!ValidatePayloadIdentity(virtualPath, identity))
-        return false;
-    if(objectPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object manifest entry '{}' has an empty cache path"), ConvertString(virtualPath.resolvedText()));
-        return false;
-    }
-
-    Core::Assets::AssetArena& arena = manifest.entries.get_allocator().arena();
-    manifest.entries.emplace_back(arena);
-    AssetVolumePackEntry& entry = manifest.entries.back();
-    entry.virtualPath = virtualPath;
-    entry.source = AssetVolumePackEntrySource::ObjectFilePayload;
-    entry.identity = identity;
-    entry.objectPath = objectPath;
-    return true;
-}
-
 b8 AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const void* payloadBytes, const usize payloadByteCount, const u64 cookKeyHash){
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
@@ -111,7 +91,6 @@ b8 AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& v
     manifest.entries.emplace_back(arena);
     AssetVolumePackEntry& entry = manifest.entries.back();
     entry.virtualPath = virtualPath;
-    entry.source = AssetVolumePackEntrySource::PayloadBytes;
     entry.identity = identity;
     entry.payloadBytes.reserve(payloadByteCount);
     AppendBytesNoReserveUnchecked(entry.payloadBytes, payloadBytes, payloadByteCount);

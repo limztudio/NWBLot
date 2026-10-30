@@ -25,6 +25,7 @@ NWB_ASSET_BUILDER_BEGIN
 namespace Assets = Core::Assets;
 
 static constexpr AStringView s_DefaultCacheDirectory = "__build_obj/asset_cache";
+static constexpr AStringView s_AssetCacheDirectory = "__asset_cache";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,6 +86,13 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
     const auto created = EnsureDirectories(paths.cacheDirectory);
     if(!created){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}"), PathToString<tchar>(paths.cacheDirectory), ConvertString(created.error().message()));
+        return MakeUnexpected(Failure{});
+    }
+
+    paths.assetCacheDirectory = paths.repoRoot / s_AssetCacheDirectory;
+    const auto assetCacheCreated = EnsureDirectories(paths.assetCacheDirectory);
+    if(!assetCacheCreated){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create asset cache directory '{}': {}"), PathToString<tchar>(paths.assetCacheDirectory), ConvertString(assetCacheCreated.error().message()));
         return MakeUnexpected(Failure{});
     }
     return paths;

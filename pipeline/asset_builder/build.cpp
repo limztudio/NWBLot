@@ -66,7 +66,7 @@ b8 BuildAssets(const AssetBuildOptions& options){
     Assets::ParsedAssetMetadata parsedMetadata(arena);
     if(!Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry, scratchArena))
         return false;
-    if(!Assets::ParseAssetMetadata(arena, nwbFiles, options.services.cpuScheduler, scratchArena, parsedMetadata))
+    if(!Assets::ParseAssetMetadata(arena, nwbFiles, options.services.cpuScheduler, scratchArena, parsedMetadata, resolvedPaths.repoRoot, resolvedPaths.assetCacheDirectory))
         return false;
 
     Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(arena, options.configuration.view());
@@ -93,7 +93,7 @@ b8 BuildAssets(const AssetBuildOptions& options){
         if(!manifestCooker(manifest, seenVirtualPathHashes, scratchArena))
             return false;
     }
-    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(arena, options.services.cpuScheduler, resolvedPaths, configurationSafeName, scratchArena, parsedMetadata, manifest, seenVirtualPathHashes))
+    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(arena, options.services.cpuScheduler, configurationSafeName, scratchArena, parsedMetadata, manifest, seenVirtualPathHashes))
         return false;
 
     if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest, scratchArena))

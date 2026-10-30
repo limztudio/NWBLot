@@ -3,7 +3,6 @@
 
 
 #include "built_asset.h"
-#include "cooked_object_cache.h"
 
 #include <core/common/log.h>
 
@@ -41,6 +40,7 @@ inline constexpr AStringView s_TemporaryNamePrefix = ".nwb_";
 inline constexpr char s_TemporaryNameSeparator = '_';
 inline constexpr AStringView s_TemporaryNameExtension = ".tmp";
 inline constexpr u64 s_TemporarySequenceStep = 1u;
+inline constexpr u32 s_MaxRenameAttempts = 16u;
 inline constexpr usize s_FilenameHexFieldCount = 3u;
 inline constexpr StringView s_WarningEventName = "warning";
 Atomic<u64> g_TemporarySequence{0u};
@@ -51,34 +51,6 @@ Atomic<u64> g_TemporarySequence{0u};
 
 [[nodiscard]] static b8 BytesMatch(const Span<const u8> existing, const Span<const u8> bytes)noexcept{
     return existing.size() == bytes.size() && (bytes.empty() || NWB_MEMCMP(existing.data(), bytes.data(), bytes.size()) == 0);
-}
-
-static b8 WriteIfChanged(ScratchBytes& existing, const ScratchPath& path, const Span<const u8> bytes, const b8 replaceDifferent = true){
-    const auto read = ReadBinaryFile(path, existing);
-    if(read && BytesMatch(existing, bytes))
-        return true;
-    if(!replaceDifferent && (read || !IsMissingPathError(read.error()))){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: cannot publish built asset without replacing existing data '{}'"), PathToString<tchar>(path));
-        return false;
-    }
-
-    ScratchString temporaryName(s_TemporaryNamePrefix, path.arena());
-    AppendHexU64(CurrentProcessId(), temporaryName);
-    temporaryName += s_TemporaryNameSeparator;
-    AppendHexU64(g_TemporarySequence.fetch_add(s_TemporarySequenceStep, MemoryOrder::relaxed), temporaryName);
-    temporaryName += s_TemporaryNameExtension;
-    const ScratchPath temporary = path.parentPath() / temporaryName;
-    ScopeExit removeTemporary([&temporary]()noexcept{
-        if(!RemoveFile(temporary)){
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = "built_asset_temporary_cleanup", .message = "AssetVolume: failed to remove temporary output", });
-        }
-    });
-    if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing) || !BytesMatch(existing, bytes) || !RenamePath(temporary, path)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
-        return false;
-    }
-    removeTemporary.release();
-    return true;
 }
 
 
@@ -97,13 +69,48 @@ namespace BuiltAssetDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 WriteBinaryFileIfChanged(__hidden_built_asset::ScratchBytes& existing, const __hidden_built_asset::ScratchPath& path, const Span<const u8> bytes, const b8 replaceDifferent){
+    const auto read = ReadBinaryFile(path, existing);
+    if(read && __hidden_built_asset::BytesMatch(existing, bytes))
+        return true;
+    if(!replaceDifferent && (read || !IsMissingPathError(read.error()))){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: cannot publish built asset without replacing existing data '{}'"), PathToString<tchar>(path));
+        return false;
+    }
+
+    __hidden_built_asset::ScratchString temporaryName(__hidden_built_asset::s_TemporaryNamePrefix, path.arena());
+    AppendHexU64(CurrentProcessId(), temporaryName);
+    temporaryName += __hidden_built_asset::s_TemporaryNameSeparator;
+    AppendHexU64(__hidden_built_asset::g_TemporarySequence.fetch_add(__hidden_built_asset::s_TemporarySequenceStep, MemoryOrder::relaxed), temporaryName);
+    temporaryName += __hidden_built_asset::s_TemporaryNameExtension;
+    const __hidden_built_asset::ScratchPath temporary = path.parentPath() / temporaryName;
+    ScopeExit removeTemporary([&temporary]()noexcept{
+        if(!RemoveFile(temporary)){
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_built_asset::s_WarningEventName, .category = "built_asset_temporary_cleanup", .message = "AssetVolume: failed to remove temporary output", });
+        }
+    });
+    if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing) || !__hidden_built_asset::BytesMatch(existing, bytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
+        return false;
+    }
+    for(u32 attempt = 0u; attempt < __hidden_built_asset::s_MaxRenameAttempts; ++attempt){
+        if(RenamePath(temporary, path)){
+            removeTemporary.release();
+            return true;
+        }
+        if(replaceDifferent && ReadBinaryFile(path, existing) && __hidden_built_asset::BytesMatch(existing, bytes))
+            return true;
+    }
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
+    return false;
+}
+
 b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Alloc::ScratchArena& scratchArena){
     if(manifest.entries.size() != manifest.plannedFileCount || !EnsureDirectories(outputDirectory)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid build manifest or output directory '{}'"), PathToString<tchar>(outputDirectory));
         return false;
     }
 
-    __hidden_built_asset::ScratchBytes objectBytes(scratchArena);
     __hidden_built_asset::ScratchBytes artifactBytes(scratchArena);
     __hidden_built_asset::ScratchBytes existingBytes(scratchArena);
     __hidden_built_asset::ScratchString manifestText(scratchArena);
@@ -117,20 +124,9 @@ b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::A
         manifestText.reserve(manifestReserveBytes);
     u64 artifactIndex = 0u;
     for(const auto& entry : manifest.entries){
-        const u8* payloadData = entry.payloadBytes.data();
-        usize payloadSize = entry.payloadBytes.size();
-        if(entry.source == AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload){
-            const auto payload = AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes);
-            if(!payload)
-                return false;
-            if(payload->identity.payloadSize != entry.identity.payloadSize || payload->identity.payloadHash != entry.identity.payloadHash || payload->identity.cookKeyHash != entry.identity.cookKeyHash){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), ConvertString(entry.virtualPath.resolvedText()));
-                return false;
-            }
-            payloadData = payload->data.get();
-            payloadSize = payload->size;
-        }
-        if(entry.identity.payloadSize != payloadSize || (entry.source != AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload && entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize))){
+        const u8* const payloadData = entry.payloadBytes.data();
+        const usize payloadSize = entry.payloadBytes.size();
+        if(entry.identity.cookKeyHash == 0u || entry.identity.payloadSize != payloadSize || entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid payload identity '{}'"), ConvertString(entry.virtualPath.resolvedText()));
             return false;
         }
@@ -171,7 +167,7 @@ b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::A
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to inspect built asset '{}'"), PathToString<tchar>(path));
                 return false;
             }
-            if(!__hidden_built_asset::WriteIfChanged(existingBytes, path, artifactBytes, false))
+            if(!WriteBinaryFileIfChanged(existingBytes, path, artifactBytes, false))
                 return false;
             break;
         }
@@ -181,7 +177,7 @@ b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::A
 
     path = scratchOutputDirectory;
     path /= s_ManifestFilename;
-    return __hidden_built_asset::WriteIfChanged(existingBytes, path, Span<const u8>(reinterpret_cast<const u8*>(manifestText.data()), manifestText.size()));
+    return WriteBinaryFileIfChanged(existingBytes, path, Span<const u8>(reinterpret_cast<const u8*>(manifestText.data()), manifestText.size()));
 }
 
 Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBytes){

@@ -31,23 +31,15 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CookedObjectPayloadView{
-    NotNull<const u8*> data;
-    usize size = 0u;
-    AssetVolumePayloadIdentity identity;
-};
-
 [[nodiscard]] b8 BuildRegistryObjectManifestEntries(
     Core::Alloc::GlobalArena& arena,
     Core::CpuTaskScheduler& cpuScheduler,
-    const ResolvedCookPaths& resolvedPaths,
     AStringView configurationSafeName,
     ScratchArena& scratchArena,
     ParsedAssetMetadata& parsedMetadata,
     AssetVolumePackManifest& manifest,
     VirtualPathHashSet& seenVirtualPathHashes
 );
-[[nodiscard]] Expected<CookedObjectPayloadView> ReadCookedObjectPayload(const Path& objectPath, const Name& expectedVirtualPath, Vector<u8, ScratchArena>& inOutObjectBytes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

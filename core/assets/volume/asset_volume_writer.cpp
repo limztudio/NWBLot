@@ -10,7 +10,6 @@
 
 #include "asset_volume_writer.h"
 
-#include "cooked_object_cache.h"
 #include "cook_paths.h"
 
 #include <core/filesystem/volume_build.h>
@@ -35,7 +34,6 @@ namespace __hidden_asset_volume_writer{
 
 
 using ScratchArena = AssetsVolumeCookDetail::ScratchArena;
-using ScratchBytes = Vector<u8, ScratchArena>;
 
 static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
@@ -85,48 +83,21 @@ static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const
     return config;
 }
 
-static b8 PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem, ScratchBytes& objectBytes){
-    const auto payload = AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes);
-    if(!payload)
-        return false;
-    if(payload->identity.payloadSize != entry.identity.payloadSize || payload->identity.payloadHash != entry.identity.payloadHash || payload->identity.cookKeyHash != entry.identity.cookKeyHash){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), ConvertString(entry.virtualPath.resolvedText()));
+static b8 PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem){
+    if(entry.identity.cookKeyHash == 0u || entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest payload identity mismatch '{}'"), ConvertString(entry.virtualPath.resolvedText()));
         return false;
     }
-
-    if(filesystem.writeFileDeferred(entry.virtualPath, payload->data.get(), payload->size))
+    if(filesystem.writeFileDeferred(entry.virtualPath, entry.payloadBytes))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to push cached asset '{}'"), ConvertString(entry.virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to push manifest payload '{}'"), ConvertString(entry.virtualPath.resolvedText()));
     return false;
 }
 
-static b8 PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem, ScratchBytes& objectBytes){
-    switch(entry.source){
-    case AssetsVolumeCookDetail::AssetVolumePackEntrySource::PayloadBytes:
-        if(entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest payload identity mismatch '{}'"), ConvertString(entry.virtualPath.resolvedText()));
-            return false;
-        }
-        if(filesystem.writeFileDeferred(entry.virtualPath, entry.payloadBytes))
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to push manifest payload '{}'"), ConvertString(entry.virtualPath.resolvedText()));
-        return false;
-    case AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload:
-        return PushManifestObjectFilePayloadToVolume(entry, filesystem, objectBytes);
-    default:
-        break;
-    }
-
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest entry '{}' has an unknown source"), ConvertString(entry.virtualPath.resolvedText()));
-    return false;
-}
-
-static b8 PushManifestToVolume(ScratchArena& scratchArena, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Filesystem::IFilesystem& filesystem){
-    ScratchBytes objectBytes(scratchArena);
+static b8 PushManifestToVolume(const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Filesystem::IFilesystem& filesystem){
     for(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry : manifest.entries){
-        if(!PushManifestEntryToVolume(entry, filesystem, objectBytes))
+        if(!PushManifestEntryToVolume(entry, filesystem))
             return false;
     }
 
@@ -191,7 +162,7 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(Core::Alloc::GlobalArena& aren
             return MakeUnexpected(Failure{});
         }
 
-        if(!__hidden_asset_volume_writer::PushManifestToVolume(scratchArena, manifest, filesystem))
+        if(!__hidden_asset_volume_writer::PushManifestToVolume(manifest, filesystem))
             return MakeUnexpected(Failure{});
         if(!filesystem.flush()){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to flush staged volume metadata"));

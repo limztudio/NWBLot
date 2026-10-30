@@ -18,6 +18,7 @@
 #include <core/assets/paths.h>
 #include <core/task/cpu/scheduler.h>
 
+#include <global/sha256.h>
 #include <global/span.h>
 
 
@@ -70,10 +71,44 @@ public:
 
 using DiscoveredNwbFileVector = CookVector<DiscoveredNwbFile>;
 
+inline constexpr u32 s_NwbAssetCacheMagic = 0x4341574eu; // NWAC
+inline constexpr u16 s_NwbAssetCacheVersion = 1u;
+inline constexpr u32 s_NwbAssetCacheFlagStandalone = 1u << 0u;
+
+struct NwbAssetCacheFileHeader{
+    u32 magic = s_NwbAssetCacheMagic;
+    u16 version = s_NwbAssetCacheVersion;
+    u16 headerSize = sizeof(NwbAssetCacheFileHeader);
+    u32 flags = 0u;
+    u32 entryCount = 0u;
+    Sha256Digest paramSha256 = {};
+    u64 payloadSectionSize = 0u;
+    u64 payloadSectionHashFnv64 = 0u;
+};
+
+struct NwbFileAssetCacheRecord{
+    Path cacheFilePath;
+    CookString relativePathText;
+    Sha256Digest paramSha256 = {};
+    b8 standalone = false;
+    b8 loadedFromCache = false;
+    b8 canWriteCache = false;
+
+
+public:
+    explicit NwbFileAssetCacheRecord(CookArena& arena)noexcept
+        : cacheFilePath(arena)
+        , relativePathText(arena)
+    {}
+};
+
+using NwbFileAssetCacheRecordVector = CookVector<NwbFileAssetCacheRecord>;
+
 struct ParsedAssetMetadata{
     CookArena& arena;
     CookEntryRegistry entryRegistry;
     ParsedMetadataExtensionMap extensions;
+    NwbFileAssetCacheRecordVector fileCacheRecords;
 
 
 public:
@@ -81,6 +116,7 @@ public:
         : arena(arena)
         , entryRegistry(arena)
         , extensions(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , fileCacheRecords(arena)
     {}
 };
 
@@ -189,7 +225,7 @@ void RegisterCompositeRootAssetType(const Name& assetType);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
 [[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context);
-[[nodiscard]] b8 ParseAssetMetadata(CookArena& cookArena, Span<const DiscoveredNwbFile> nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata);
+[[nodiscard]] b8 ParseAssetMetadata(CookArena& cookArena, Span<const DiscoveredNwbFile> nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata, const Path& repoRoot, const Path& assetCacheDirectory);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

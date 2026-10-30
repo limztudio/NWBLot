@@ -31,7 +31,7 @@ struct Sha256Digest{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Sha256Detail{
+namespace ShaBe32Detail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,20 +40,81 @@ namespace Sha256Detail{
 inline constexpr u32 s_WordBits = 32u;
 inline constexpr u32 s_WordByteCount = 4u;
 inline constexpr u32 s_LastByteInWord = 3u;
-inline constexpr u32 s_StateWordCount = 8u;
 inline constexpr u32 s_BlockByteCount = 64u;
 inline constexpr u32 s_BlockWordCount = 16u;
-inline constexpr u32 s_RoundCount = 64u;
 inline constexpr u32 s_LengthFieldByteCount = 8u;
 inline constexpr u32 s_LengthFieldOffset = s_BlockByteCount - s_LengthFieldByteCount;
 inline constexpr u8 s_PaddingMarker = 0x80u;
-inline constexpr u32 s_HexRadix = 16u;
-inline constexpr u32 s_HexLetterBase = 10u;
 inline constexpr u32 s_HexDigitsPerByte = 2u;
-inline constexpr u32 s_HexTextLength = s_HexDigitsPerByte * Sha256Digest::s_ByteCount;
 inline constexpr u32 s_FirstByteShift = 24u;
 inline constexpr u32 s_SecondByteShift = 16u;
 inline constexpr u32 s_ThirdByteShift = 8u;
+
+inline void UnpackBlockWords(const u8 (&block)[s_BlockByteCount], u32* const outWords)noexcept{
+    for(u32 index = 0u; index < s_BlockWordCount; ++index){
+        const auto bytes = MakeNotNull(block + index * s_WordByteCount);
+        outWords[index] = (static_cast<u32>(bytes.get()[0u]) << s_FirstByteShift) | (static_cast<u32>(bytes.get()[1u]) << s_SecondByteShift) | (static_cast<u32>(bytes.get()[2u]) << s_ThirdByteShift) | static_cast<u32>(bytes.get()[3u]);
+    }
+}
+
+template<typename DigestT, u32 StateWordCount, void (*CompressFn)(u32 (&)[StateWordCount], const u8 (&)[s_BlockByteCount])>
+[[nodiscard]] inline DigestT ComputeDigest(const BinaryByteView input, const u32 (&initialState)[StateWordCount])noexcept{
+    static_assert(DigestT::s_ByteCount == StateWordCount * s_WordByteCount);
+
+    u32 state[StateWordCount];
+    NWB_MEMCPY(state, sizeof(state), initialState, sizeof(state));
+    u8 block[s_BlockByteCount];
+    usize offset = 0u;
+    while(input.size() - offset >= sizeof(block)){
+        NWB_MEMCPY(block, sizeof(block), input.data() + offset, sizeof(block));
+        CompressFn(state, block);
+        offset += sizeof(block);
+    }
+    const usize remainder = input.size() - offset;
+    NWB_MEMSET(block, 0, sizeof(block));
+    if(remainder > 0u)
+        NWB_MEMCPY(block, sizeof(block), input.data() + offset, remainder);
+    block[remainder] = s_PaddingMarker;
+    if(remainder >= s_LengthFieldOffset){
+        CompressFn(state, block);
+        NWB_MEMSET(block, 0, sizeof(block));
+    }
+    const u64 bitCount = static_cast<u64>(input.size()) * s_BitsPerByte;
+    for(u32 index = 0u; index < s_LengthFieldByteCount; ++index)
+        block[s_BlockByteCount - 1u - index] = static_cast<u8>(bitCount >> (index * s_BitsPerByte));
+    CompressFn(state, block);
+    DigestT digest;
+    for(u32 index = 0u; index < DigestT::s_ByteCount; ++index)
+        digest.bytes[index] = static_cast<u8>(state[index / s_WordByteCount] >> ((s_LastByteInWord - index % s_WordByteCount) * s_BitsPerByte));
+    return digest;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Sha256Detail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using ShaBe32Detail::s_WordBits;
+using ShaBe32Detail::s_BlockByteCount;
+using ShaBe32Detail::s_BlockWordCount;
+using ShaBe32Detail::s_HexDigitsPerByte;
+
+inline constexpr u32 s_StateWordCount = 8u;
+inline constexpr u32 s_RoundCount = 64u;
+inline constexpr u32 s_HexRadix = 16u;
+inline constexpr u32 s_HexLetterBase = 10u;
+inline constexpr u32 s_HexTextLength = s_HexDigitsPerByte * Sha256Digest::s_ByteCount;
 inline constexpr u32 s_ScheduleLagSigma0 = 15u;
 inline constexpr u32 s_ScheduleLagSigma1 = 2u;
 inline constexpr u32 s_ScheduleLagPrevious = 16u;
@@ -98,10 +159,7 @@ inline constexpr u32 s_InitialState[s_StateWordCount] = { 0x6a09e667u, 0xbb67ae8
 
 inline void Compress(u32 (&state)[s_StateWordCount], const u8 (&block)[s_BlockByteCount])noexcept{
     u32 words[s_RoundCount];
-    for(u32 index = 0u; index < s_BlockWordCount; ++index){
-        const auto bytes = MakeNotNull(block + index * s_WordByteCount);
-        words[index] = (static_cast<u32>(bytes.get()[0u]) << s_FirstByteShift) | (static_cast<u32>(bytes.get()[1u]) << s_SecondByteShift) | (static_cast<u32>(bytes.get()[2u]) << s_ThirdByteShift) | static_cast<u32>(bytes.get()[3u]);
-    }
+    ShaBe32Detail::UnpackBlockWords(block, words);
     for(u32 index = s_BlockWordCount; index < s_RoundCount; ++index){
         const u32 a = words[index - s_ScheduleLagSigma0];
         const u32 b = words[index - s_ScheduleLagSigma1];
@@ -130,32 +188,7 @@ inline void Compress(u32 (&state)[s_StateWordCount], const u8 (&block)[s_BlockBy
 
 // Byte-oriented SHA-256 content identity; no host byte-order or allocator dependency.
 [[nodiscard]] inline Sha256Digest ComputeSha256(const BinaryByteView input)noexcept{
-    u32 state[Sha256Detail::s_StateWordCount];
-    NWB_MEMCPY(state, sizeof(state), Sha256Detail::s_InitialState, sizeof(state));
-    u8 block[Sha256Detail::s_BlockByteCount];
-    usize offset = 0u;
-    while(input.size() - offset >= sizeof(block)){
-        NWB_MEMCPY(block, sizeof(block), input.data() + offset, sizeof(block));
-        Sha256Detail::Compress(state, block);
-        offset += sizeof(block);
-    }
-    const usize remainder = input.size() - offset;
-    NWB_MEMSET(block, 0, sizeof(block));
-    if(remainder > 0u)
-        NWB_MEMCPY(block, sizeof(block), input.data() + offset, remainder);
-    block[remainder] = Sha256Detail::s_PaddingMarker;
-    if(remainder >= Sha256Detail::s_LengthFieldOffset){
-        Sha256Detail::Compress(state, block);
-        NWB_MEMSET(block, 0, sizeof(block));
-    }
-    const u64 bitCount = static_cast<u64>(input.size()) * s_BitsPerByte;
-    for(u32 index = 0u; index < Sha256Detail::s_LengthFieldByteCount; ++index)
-        block[Sha256Detail::s_BlockByteCount - 1u - index] = static_cast<u8>(bitCount >> (index * s_BitsPerByte));
-    Sha256Detail::Compress(state, block);
-    Sha256Digest digest;
-    for(u32 index = 0u; index < Sha256Digest::s_ByteCount; ++index)
-        digest.bytes[index] = static_cast<u8>(state[index / Sha256Detail::s_WordByteCount] >> ((Sha256Detail::s_LastByteInWord - index % Sha256Detail::s_WordByteCount) * s_BitsPerByte));
-    return digest;
+    return ShaBe32Detail::ComputeDigest<Sha256Digest, Sha256Detail::s_StateWordCount, &Sha256Detail::Compress>(input, Sha256Detail::s_InitialState);
 }
 
 [[nodiscard]] inline Expected<Sha256Digest> ParseSha256(const AStringView text)noexcept{

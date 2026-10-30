@@ -173,6 +173,8 @@ public:
 
     virtual b8 parseValue(Name, const NWB::Path&, const Metascript::Value&, CookEntryParseContext&)noexcept override{ return false; }
 
+    virtual b8 appendCachedEntry(const CookEntrySourceLocation&, const Name&, Span<const u8>, CookEntryParseContext&)noexcept override{ return false; }
+
     virtual b8 writeCookedAssets(CookEntryWriteContext&)noexcept override{ return false; }
 };
 
@@ -571,7 +573,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
             ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratchArena));
             auto& samplers = metadata.entryRegistry.entries<Impl::SamplerCookEntry>(Impl::Sampler::AssetTypeName());
             auto& models = metadata.entryRegistry.entries<Impl::ModelCookEntry>(Impl::Model::AssetTypeName());
-            EXPECT_EQ(ParseAssetMetadata(parseArena, files, cpuScheduler, scratchArena, metadata), !rejectDuplicate);
+            EXPECT_EQ(ParseAssetMetadata(parseArena, files, cpuScheduler, scratchArena, metadata, root, NWB::Path(fixtureArena)), !rejectDuplicate);
             ASSERT_EQ(samplers.size(), s_SamplerCount);
             EXPECT_GE(samplers.capacity(), s_SamplerCount);
             EXPECT_TRUE(models.empty());

@@ -10,7 +10,7 @@
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/assets_graphics/csg/subsystem.adhd.h>
 #include <impl/assets_graphics/mesh/subsystem.adhd.h>
-#include <impl/assets_material/shader_stage_names.h>
+#include <impl/assets_material/types.adhd.h>
 #include <impl/ecs_csg/shape_registry.h>
 
 #include <core/common/log.h>
@@ -329,7 +329,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         NWB_ASSERT(m_materialState.m_computeBindingLayout);
         NWB_ASSERT(m_materialState.m_emulationVertexShader);
         NWB_ASSERT(m_materialState.m_emulationInputLayout);
-        const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
+        const Name& meshComputeArchiveStageName = s_MeshComputeArchiveStageName;
         if(!m_shaderSystem.loadShader<ComputeShader>(resources.computeShader, materialInfo.meshShader.name(), meshShaderVariant, "ECSRender_RendererCS", &meshComputeArchiveStageName))
             return false;
         if(!loadPassPixelShader())
@@ -485,4 +485,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

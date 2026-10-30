@@ -9,8 +9,6 @@
 
 
 #include "cook.h"
-#include "arena_names.h"
-#include "binary_payload.h"
 
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/paths.h>
@@ -29,7 +27,7 @@ NWB_IMPL_BEGIN
 
 
 b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary){
-    Core::Alloc::ScratchArena scratchArena(AssetsSubsystemArenaScope::s_SerializeArena);
+    Core::Alloc::ScratchArena scratchArena(s_SubsystemSerializeArena);
     if(!subsystem.validatePayload())
         return false;
 
@@ -67,7 +65,7 @@ b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Ass
             assetHashes.push_back(subsystem.fieldValue(i, elementIndex).hash());
     }
 
-    usize reserveBytes = sizeof(SubsystemBinaryPayload::SubsystemHeaderBinary);
+    usize reserveBytes = sizeof(SubsystemHeaderBinary);
     const b8 canReserve =
         AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes)
         && AddBinaryVectorReserveBytes(reserveBytes, fieldCounts)
@@ -78,7 +76,7 @@ b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Ass
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    SubsystemBinaryPayload::SubsystemHeaderBinary header;
+    SubsystemHeaderBinary header;
     header.subsystemTypeHash = subsystem.assetType().hash();
     header.subsystemCount = static_cast<u64>(subsystemHashes.size());
     header.fieldCount = static_cast<u64>(fieldCounts.size());
@@ -86,9 +84,9 @@ b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Ass
     AppendPOD(outBinary, header);
 
     return
-        Core::Assets::AppendVectorPayload(outBinary, subsystemHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_SubsystemsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, fieldCounts, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_FieldCountsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, assetHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_AssetsPayloadLabel)
+        Core::Assets::AppendVectorPayload(outBinary, subsystemHashes, s_SubsystemSerializeContext, s_SubsystemDepsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, fieldCounts, s_SubsystemSerializeContext, s_SubsystemFieldCountsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, assetHashes, s_SubsystemSerializeContext, s_SubsystemAssetsPayloadLabel)
     ;
 }
 
@@ -97,7 +95,7 @@ b8 SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     if(!subsystem){
         NWB_LOGGER_ERROR(
             NWB_TEXT("{} failed: invalid asset type '{}'"),
-            SubsystemBinaryPayload::s_SubsystemSerializeContext,
+            s_SubsystemSerializeContext,
             ConvertString(asset.assetType().resolvedText())
         );
         return false;
@@ -129,16 +127,16 @@ template<typename TAsset>
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!itemValue.isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a string"), ConvertString(AssetsSubsystemCook::s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a string"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
     const AStringView text(itemValue.asString().data(), itemValue.asString().size());
-    return Core::Assets::ParseMetadataReservedAssetRefText<TAsset>(nwbFilePath, AssetsSubsystemCook::s_SubsystemDiagnosticPrefix, fieldLabel, text, scratchArena);
+    return Core::Assets::ParseMetadataReservedAssetRefText<TAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, fieldLabel, text, scratchArena);
 }
 
 [[nodiscard]] static b8 ValidateSubsystemMetadataFields(const ISubsystem& subsystem, const Path& nwbFilePath, const Value& asset){
     const usize count = subsystem.fieldCount();
-    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, AssetsSubsystemCook::s_SubsystemDiagnosticPrefix, [&subsystem, count](const AStringView fieldName)noexcept{
+    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SubsystemDiagnosticPrefix, [&subsystem, count](const AStringView fieldName)noexcept{
         if(fieldName == s_SubsystemsFieldName)
             return true;
         for(usize i = 0u; i < count; ++i){
@@ -273,4 +271,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

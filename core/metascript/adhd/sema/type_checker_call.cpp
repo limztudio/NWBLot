@@ -127,7 +127,7 @@ b8 TypeChecker::checkCallableArguments(
                 propagateFuncCaptureBytes(expectedParamTypeRef, arg, scope, m_symbols);
             }
         }
-        arg->isMutArg = paramIsMut;
+        arg->isMutArg = paramIsMut || expectedParamType == "Span" || expectedParamType == "StringView";
         if(expectedParamType == "Path")
             markStringToPathAdaptation(ownerClass, &method, *arg, scope);
         if(!checkExpr(ownerClass, method, *arg, scope, paramIsMut, errors))

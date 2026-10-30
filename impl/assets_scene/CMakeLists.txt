@@ -4,7 +4,7 @@ nwb_target_adhd_sources(nwb_assets_scene_types
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
-target_link_libraries(nwb_assets_scene_types PUBLIC nwb_assets nwb_ecs nwb_ecs_scene)
+target_link_libraries(nwb_assets_scene_types PUBLIC nwb_assets nwb_assets_subsystem_types nwb_ecs nwb_ecs_scene)
 
 nwb_declare_static_library(nwb_assets_scene)
 target_sources(nwb_assets_scene PRIVATE

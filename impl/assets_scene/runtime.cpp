@@ -3,8 +3,6 @@
 
 
 #include "asset.h"
-#include "arena_names.h"
-#include "binary_payload.h"
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
@@ -101,27 +99,27 @@ b8 EntityAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 }
 
 b8 EntityAsset::loadBinary(const Span<const u8> binary){
-    Core::Alloc::ScratchArena scratchArena(AssetsSceneArenaScope::s_EntityLoadBinaryArena);
+    Core::Alloc::ScratchArena scratchArena(s_EntityLoadBinaryArena);
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<EntityBinaryPayload::EntityHeaderBinary>(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<EntityHeaderBinary>(
         binary,
-        EntityBinaryPayload::s_EntityMagic,
-        EntityBinaryPayload::s_EntityLoadBinaryContext,
-        EntityBinaryPayload::s_EntityAssetKindLabel,
+        s_EntityMagic,
+        s_EntityLoadBinaryContext,
+        s_EntityAssetKindLabel,
         cursor
     );
     if(!headerResult)
         return false;
-    const EntityBinaryPayload::EntityHeaderBinary& header = *headerResult;
-    if(header.version != EntityBinaryPayload::s_EntityVersion){
+    const EntityHeaderBinary& header = *headerResult;
+    if(header.version != s_EntityVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("EntityAsset::loadBinary failed: unsupported version {}"), header.version);
         return false;
     }
 
     Vector<NameHash, Core::Alloc::ScratchArena> componentHashes(scratchArena);
-    if(!Core::Assets::ReadVectorPayload(binary, header.componentCount, EntityBinaryPayload::s_EntityLoadBinaryContext, EntityBinaryPayload::s_ComponentsPayloadLabel, cursor, componentHashes))
+    if(!Core::Assets::ReadVectorPayload(binary, header.componentCount, s_EntityLoadBinaryContext, s_EntityComponentsPayloadLabel, cursor, componentHashes))
         return false;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, EntityBinaryPayload::s_EntityLoadBinaryContext))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_EntityLoadBinaryContext))
         return false;
 
     auto& assetArena = m_components.get_allocator().arena();
@@ -150,21 +148,21 @@ b8 ProjectAsset::validatePayload()const{
 
 b8 ProjectAsset::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ProjectBinaryPayload::ProjectHeaderBinary>(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ProjectHeaderBinary>(
         binary,
-        ProjectBinaryPayload::s_ProjectMagic,
-        ProjectBinaryPayload::s_ProjectLoadBinaryContext,
-        ProjectBinaryPayload::s_ProjectAssetKindLabel,
+        s_ProjectMagic,
+        s_ProjectLoadBinaryContext,
+        s_ProjectAssetKindLabel,
         cursor
     );
     if(!headerResult)
         return false;
-    const ProjectBinaryPayload::ProjectHeaderBinary& header = *headerResult;
-    if(header.version != ProjectBinaryPayload::s_ProjectVersion){
+    const ProjectHeaderBinary& header = *headerResult;
+    if(header.version != s_ProjectVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("ProjectAsset::loadBinary failed: unsupported version {}"), header.version);
         return false;
     }
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, ProjectBinaryPayload::s_ProjectLoadBinaryContext))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_ProjectLoadBinaryContext))
         return false;
 
     m_startScene.virtualPath = Name(header.startSceneHash);
@@ -199,34 +197,34 @@ b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 }
 
 b8 SceneAsset::loadBinary(const Span<const u8> binary){
-    Core::Alloc::ScratchArena scratchArena(AssetsSceneArenaScope::s_SceneLoadBinaryArena);
+    Core::Alloc::ScratchArena scratchArena(s_SceneLoadBinaryArena);
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SceneBinaryPayload::SceneHeaderBinary>(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SceneHeaderBinary>(
         binary,
-        SceneBinaryPayload::s_SceneMagic,
-        SceneBinaryPayload::s_SceneLoadBinaryContext,
-        SceneBinaryPayload::s_SceneAssetKindLabel,
+        s_SceneMagic,
+        s_SceneLoadBinaryContext,
+        s_SceneAssetKindLabel,
         cursor
     );
     if(!headerResult)
         return false;
-    const SceneBinaryPayload::SceneHeaderBinary& header = *headerResult;
-    if(header.version != SceneBinaryPayload::s_SceneVersion){
+    const SceneHeaderBinary& header = *headerResult;
+    if(header.version != s_SceneVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::loadBinary failed: unsupported version {}"), header.version);
         return false;
     }
 
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> entityHashes(scratchArena);
-    Vector<SceneBinaryPayload::SceneAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
+    Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
 
-    if(!Core::Assets::ReadVectorPayload(binary, header.subsystemCount, SceneBinaryPayload::s_SceneLoadBinaryContext, SceneBinaryPayload::s_SubsystemsPayloadLabel, cursor, subsystemHashes))
+    if(!Core::Assets::ReadVectorPayload(binary, header.subsystemCount, s_SceneLoadBinaryContext, s_SceneSubsystemsPayloadLabel, cursor, subsystemHashes))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.entityCount, SceneBinaryPayload::s_SceneLoadBinaryContext, SceneBinaryPayload::s_EntitiesPayloadLabel, cursor, entityHashes))
+    if(!Core::Assets::ReadVectorPayload(binary, header.entityCount, s_SceneLoadBinaryContext, s_SceneEntitiesPayloadLabel, cursor, entityHashes))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, SceneBinaryPayload::s_SceneLoadBinaryContext, SceneBinaryPayload::s_AssetsPayloadLabel, cursor, assetEntries))
+    if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, s_SceneLoadBinaryContext, s_SceneAssetsPayloadLabel, cursor, assetEntries))
         return false;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, SceneBinaryPayload::s_SceneLoadBinaryContext))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_SceneLoadBinaryContext))
         return false;
 
     auto& assetArena = m_subsystems.get_allocator().arena();
@@ -239,7 +237,7 @@ b8 SceneAsset::loadBinary(const Span<const u8> binary){
 
     candidate.m_assets.reserve(assetEntries.size());
     for(usize i = 0u; i < assetEntries.size(); ++i){
-        const SceneBinaryPayload::SceneAssetEntryBinary& entry = assetEntries[i];
+        const SceneAssetEntryBinary& entry = assetEntries[i];
         const Name nickname(entry.nicknameHash);
         AssetRef ref;
         ref.virtualPath = Name(entry.assetHash);

@@ -177,7 +177,7 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
 static Expected<MaterialCookEntry::StageShaderMap> ParseMaterialStageShaders(const Path& nwbFilePath, const Core::Metascript::Value& asset, CookArena& arena, ScratchArena& scratchArena){
     MaterialCookEntry::StageShaderMap stageShaders(0u, Hasher<Core::ShaderType::Enum>(), EqualTo<Core::ShaderType::Enum>(), arena);
 
-    const auto* shadersValue = asset.findField(MaterialAssetMetadataSchema::s_ShadersField);
+    const auto* shadersValue = asset.findField(s_MaterialMetaShadersField);
     // Omitted shaders are generated from the surface hook during cross-asset preparation.
     if(!shadersValue)
         return stageShaders;
@@ -251,7 +251,7 @@ static b8 ValidateMaterialOpticalStageContract(const Path& nwbFilePath, const Ma
 static Expected<MaterialCookEntry::ParameterMap> ParseMaterialParameters(const Path& nwbFilePath, const Core::Metascript::Value& asset, CookArena& arena){
     MaterialCookEntry::ParameterMap parameters(0u, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena);
 
-    const auto* parametersValue = asset.findField(MaterialAssetMetadataSchema::s_ParametersField);
+    const auto* parametersValue = asset.findField(s_MaterialMetaParametersField);
     if(!parametersValue)
         return parameters;
     if(!parametersValue->isMap()){
@@ -328,7 +328,7 @@ static Expected<MaterialCookEntry::ParameterMap> ParseMaterialParameters(const P
 
 
 static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, const Core::Metascript::Value& asset, CookArena& arena, ScratchArena& scratchArena){
-    const auto* interfaceValue = asset.findField(MaterialAssetMetadataSchema::s_InterfaceField);
+    const auto* interfaceValue = asset.findField(s_MaterialMetaInterfaceField);
     if(!interfaceValue){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface is required"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
@@ -463,10 +463,10 @@ Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStri
         return MakeUnexpected(Failure{});
     }
     entry.virtualPath = Move(*derivedVirtualPath);
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_MaterialMetaDiagnosticPrefix, MaterialAssetMetadataSchema::IsAllowedAssetField))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_MaterialMetaDiagnosticPrefix, IsAllowedMaterialAssetField))
         return MakeUnexpected(Failure{});
 
-    auto shaderVariant = ParseVariantField(nwbFilePath, asset, MaterialAssetMetadataSchema::s_ShaderVariantField, arena, scratchArena);
+    auto shaderVariant = ParseVariantField(nwbFilePath, asset, s_MaterialMetaShaderVariantField, arena, scratchArena);
     if(!shaderVariant)
         return MakeUnexpected(Failure{});
     entry.shaderVariant = Move(*shaderVariant);
@@ -474,23 +474,23 @@ Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStri
     if(!materialInterface)
         return MakeUnexpected(Failure{});
     entry.materialInterface = Move(*materialInterface);
-    auto bxdfSource = ParseMaterialVirtualAssetField(nwbFilePath, asset, MaterialAssetMetadataSchema::s_BxdfField, ".bxdf", arena, scratchArena);
+    auto bxdfSource = ParseMaterialVirtualAssetField(nwbFilePath, asset, s_MaterialMetaBxdfField, ".bxdf", arena, scratchArena);
     if(!bxdfSource)
         return MakeUnexpected(Failure{});
     entry.bxdfSource = Move(*bxdfSource);
-    auto surfaceSource = ParseMaterialVirtualAssetField(nwbFilePath, asset, MaterialAssetMetadataSchema::s_SurfaceField, ".surface", arena, scratchArena);
+    auto surfaceSource = ParseMaterialVirtualAssetField(nwbFilePath, asset, s_MaterialMetaSurfaceField, ".surface", arena, scratchArena);
     if(!surfaceSource)
         return MakeUnexpected(Failure{});
     entry.surfaceSource = Move(*surfaceSource);
-    const auto transparent = ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_TransparentField);
+    const auto transparent = ParseMaterialBoolProperty(nwbFilePath, asset, s_MaterialMetaTransparentField);
     if(!transparent)
         return MakeUnexpected(Failure{});
     entry.transparent = *transparent;
-    const auto twoSided = ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_TwoSidedField);
+    const auto twoSided = ParseMaterialBoolProperty(nwbFilePath, asset, s_MaterialMetaTwoSidedField);
     if(!twoSided)
         return MakeUnexpected(Failure{});
     entry.twoSided = *twoSided;
-    const auto refractive = ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_RefractiveField);
+    const auto refractive = ParseMaterialBoolProperty(nwbFilePath, asset, s_MaterialMetaRefractiveField);
     if(!refractive)
         return MakeUnexpected(Failure{});
     entry.refractive = *refractive;
@@ -528,4 +528,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

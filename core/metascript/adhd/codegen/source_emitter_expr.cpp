@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
+void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterBinaryParens)const{
     if(expr.adaptToTChar && expr.kind != ExprKind::StringLiteral){
         out.append("::ConvertString(");
         Expr unwrapped = expr;
@@ -273,16 +273,18 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
     }
     case ExprKind::Binary:{
         if(expr.isNotNullRebind){
-            out.push_back('(');
+            if(!omitOuterBinaryParens)
+                out.push_back('(');
             if(expr.lhs)
                 emitExpr(out, *expr.lhs);
             out.append(" = ::MakeNotNull(&(");
             if(expr.rhs)
                 emitExpr(out, *expr.rhs);
-            out.append(")))");
+            out.append(omitOuterBinaryParens ? "))" : ")))");
             break;
         }
-        out.push_back('(');
+        if(!omitOuterBinaryParens)
+            out.push_back('(');
         if(expr.lhs)
             emitExpr(out, *expr.lhs);
         out.push_back(' ');
@@ -290,7 +292,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         out.push_back(' ');
         if(expr.rhs)
             emitExpr(out, *expr.rhs);
-        out.push_back(')');
+        if(!omitOuterBinaryParens)
+            out.push_back(')');
         break;
     }
     case ExprKind::Cast:{

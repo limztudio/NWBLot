@@ -7,6 +7,7 @@
 
 #include "optical_scene.h"
 
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>
 
 #include <core/alloc/global.h>
@@ -45,12 +46,6 @@ NWB_IMPL_BEGIN
 
 class RendererShaderSystem;
 
-struct RayTracingOpticalRuntimeInputGpu{
-    Float34 objectToWorld = {};
-    u32 localBoundsSlot = Limit<u32>::s_Max;
-    u32 instanceIndex = 0u;
-    u32 reserved[2] = {};
-};
 static_assert(alignof(RayTracingOpticalRuntimeInputGpu) >= 16u);
 static_assert(sizeof(RayTracingOpticalRuntimeInputGpu) == NWB_OPTICAL_BOUNDS_RUNTIME_INPUT_BYTES);
 static_assert(offsetof(RayTracingOpticalRuntimeInputGpu, localBoundsSlot) == NWB_OPTICAL_BOUNDS_RUNTIME_SLOT_OFFSET);
@@ -112,4 +107,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -40,12 +40,6 @@ public:
     explicit UiEditBoxGeometry(Core::Alloc::GlobalArena& arena)noexcept : stops(arena), lines(arena){}
 };
 
-namespace UiEditBoxEventKind{
-    enum Enum : u8{ Command, Character, Native, Selection, PastePrimary, Blur, Focus };
-};
-
-inline constexpr usize s_UiEditBoxMaxEntries = 256u;
-
 // The event-thread bridge owns snapshots and events. Application models are lent only by the current declaration.
 class UiEditBoxHost final : public Ui::IEditBoxHost{
 private:

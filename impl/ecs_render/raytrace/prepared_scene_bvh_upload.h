@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 
 #include <core/task/gpu/task_graph.h>
@@ -29,22 +30,7 @@ class RendererRayTracingState;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CPU mirror of the shader BVH node.
-struct NwbBvhNodeGpu{
-    Float3UInt aabbMinLeftChild;
-    Float3UInt aabbMaxRightChild;
-};
-static constexpr usize s_NwbBvhNodeGpuByteSize = 32u;
 static_assert(sizeof(NwbBvhNodeGpu) == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
-
-// CPU mirror of the software scene-BVH instance ABI.
-struct SceneSwBvhInstanceGpu{
-    Float34 worldToObject{};
-    u32 reservedMeshIndex = 0u;
-    u32 primitiveCount = 0u;
-    u32 pad0 = 0u;
-    u32 pad1 = 0u;
-};
 static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
 
 // Scene hierarchy and leaf instances share topology/indices; preflight freezes one batch per storage generation.
@@ -105,4 +91,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

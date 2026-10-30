@@ -12,7 +12,6 @@
 
 
 #include "asset.h"
-#include "binary_payload.h"
 
 #include <core/alloc/scratch.h>
 #include <core/assets/cook_dependency_registry.h>
@@ -84,17 +83,6 @@ public:
 
 
 namespace SceneAssetCook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_TransformDiagnosticPrefix = "Transform component meta";
-inline constexpr AStringView s_CameraDiagnosticPrefix = "Camera component meta";
-inline constexpr AStringView s_LightDiagnosticPrefix = "Light component meta";
-inline constexpr AStringView s_EntityDiagnosticPrefix = "Entity meta";
-inline constexpr AStringView s_ProjectDiagnosticPrefix = "Project meta";
-inline constexpr AStringView s_SceneDiagnosticPrefix = "Scene meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -215,7 +203,7 @@ template<typename EntryT, typename AssetT, ParseMetadataValueFn<EntryT> ParseVal
 [[nodiscard]] b8 RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<EntryT, AssetT, TypedComponentAssetCodec<AssetT>>(
         registry,
-        ComponentBinaryPayload::s_ComponentAssetKindLabel,
+        s_ComponentAssetKindLabel,
         &ParseCookEntryDocument<EntryT, ParseValFn, DiagnosticPrefix>,
         &ParseCookEntryValue<EntryT, ParseValFn>,
         &BuildComponentCookAsset<AssetT, EntryT>

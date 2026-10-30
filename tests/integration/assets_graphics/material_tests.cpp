@@ -407,7 +407,7 @@ TEST(AssetsGraphics, MaterialFailedReloadPreservesTypedLayoutStagesFlagsAndAvboi
     const auto layoutOffsets = AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(binary);
     ASSERT_TRUE(layoutOffsets);
     // The first stage entry follows the block bytes, resource references, and stage count.
-    const usize firstStageOffset = layoutOffsets->blockByteCountOffset + sizeof(u32) + material.typedBlockBytes().size() + sizeof(u32) + material.resourceReferences().size() * NWB::Impl::MaterialBinaryPayload::s_ResourceReferenceBytes + sizeof(u32);
+    const usize firstStageOffset = layoutOffsets->blockByteCountOffset + sizeof(u32) + material.typedBlockBytes().size() + sizeof(u32) + material.resourceReferences().size() * NWB::Impl::s_MaterialResourceReferenceBytes + sizeof(u32);
     for(u32 invalidCase = 0u; invalidCase < 5u; ++invalidCase){
         NWB::Core::Assets::AssetBytes malformed(binary);
         switch(invalidCase){
@@ -452,4 +452,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

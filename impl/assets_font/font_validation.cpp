@@ -3,7 +3,6 @@
 
 
 #include "font_validation.h"
-#include "source_directory.h"
 
 #include <core/common/log.h>
 
@@ -55,10 +54,9 @@ static constexpr AStringView s_NativeCleanupFailedFormat = "Font native cleanup 
 
 
 [[nodiscard]] static b8 ValidateSfntDirectory(const Span<const u8> bytes)noexcept{
-    const auto directoryResult = FontSfntDirectory::Read(bytes);
-    if(!directoryResult)
+    FontSfntDirectory directory;
+    if(!ReadFontSfntDirectory(bytes, directory))
         return false;
-    const FontSfntDirectory& directory = *directoryResult;
     const u32 signature = directory.signature();
     if(signature != s_TrueTypeSignature && signature != s_CffSignature)
         return false;
@@ -73,11 +71,11 @@ static constexpr AStringView s_NativeCleanupFailedFormat = "Font native cleanup 
     b8 hasLoca = false;
     b8 hasCff = false;
     for(u16 index = 0u; index < directory.tableCount(); ++index){
-        const auto tableResult = directory.table(index);
-        if(!tableResult || tableResult->offset < directory.directoryBytes())
+        FontSfntTable tableResult;
+        if(!directory.table(index, tableResult) || tableResult.offset < directory.directoryBytes())
             return false;
-        const u32 tag = tableResult->tag;
-        const usize length = tableResult->bytes.size();
+        const u32 tag = tableResult.tag;
+        const usize length = tableResult.bytes.size();
         if(tag == s_FvarTag || tag == s_Cff2Tag)
             return false;
         tags[index] = tag;

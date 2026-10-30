@@ -41,7 +41,7 @@ static constexpr AStringView s_IntervalSampleEnabledImplicitDefineValue = "1";
 static void InsertShaderKey(ShaderStageKeySet& outShaderKeys, const Name& shaderName, const Name& stageName){
     if(!shaderName || !stageName)
         return;
-    const AssetsGraphicsCookDetail::ShaderStageKey key{ shaderName, stageName };
+    const ShaderStageKey key(shaderName, stageName);
     if(outShaderKeys.contains(key))
         return;
     if(!outShaderKeys.insert(key).second){
@@ -62,7 +62,7 @@ static void CollectMaterialMeshShaderKeys(const Span<const MaterialCookEntry> ma
 }
 
 ShaderStageKeySet CollectMaterialClipShaderKeys(const Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
-    ShaderStageKeySet shaderKeys{ 0, AssetsGraphicsCookDetail::ShaderStageKeyHasher(), EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(), scratchArena };
+    ShaderStageKeySet shaderKeys{ 0, Hasher<ShaderStageKey>(), EqualTo<ShaderStageKey>(), scratchArena };
     shaderKeys.reserve(materialEntries.size());
 
     const Name& pixelStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::PixelStage);
@@ -77,7 +77,7 @@ ShaderStageKeySet CollectMaterialClipShaderKeys(const Span<const MaterialCookEnt
 }
 
 Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(const Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
-    ShaderStageKeySet shaderKeys{ 0, AssetsGraphicsCookDetail::ShaderStageKeyHasher(), EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(), scratchArena };
+    ShaderStageKeySet shaderKeys{ 0, Hasher<ShaderStageKey>(), EqualTo<ShaderStageKey>(), scratchArena };
     shaderKeys.reserve(materialEntries.size());
 
     CollectMaterialMeshShaderKeys(materialEntries, shaderKeys);
@@ -114,7 +114,7 @@ Expected<b8, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& s
         return MakeUnexpected(shaderName.error());
     if(!stageName)
         return MakeUnexpected(stageName.error());
-    const AssetsGraphicsCookDetail::ShaderStageKey shaderKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
+    const ShaderStageKey shaderKey(*shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone);
     return shaderKeys.find(shaderKey) != shaderKeys.end();
 }
 
@@ -176,4 +176,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

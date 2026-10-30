@@ -12,6 +12,7 @@
 
 
 #include "../global.h"
+#include <impl/assets_shader/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/rhi/shader.h>
@@ -30,16 +31,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ShaderOptimizationLevel{
-    enum Enum : u8{
-        None,
-        Default,
-        High,
-        Maximal,
-
-        Count,
-    };
-};
+namespace ShaderOptimizationLevel = ::NWB::Impl::ShaderBinaryPayload::ShaderOptimizationLevel;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,10 +79,8 @@ public:
 
 
 public:
-    struct ShaderMacroDefinition{
-        AStringView name;
-        AStringView value;
-    };
+    using ShaderMacroDefinition = ::NWB::Impl::ShaderBinaryPayload::ShaderMacroDefinition;
+    using DependencyChecksum = ::NWB::Impl::ShaderBinaryPayload::DependencyChecksum;
 
     struct ShaderCompilerRequest{
         AStringView shaderName;
@@ -199,13 +189,6 @@ private:
 
 
 public:
-    struct DependencyChecksum{
-        u64 checksum = 0u;
-        b8 compilerInputsHaveBom = false;
-    };
-
-
-public:
     explicit ShaderCook(CookArena& memoryArena)noexcept
         : m_memoryArena(memoryArena)
     {}
@@ -259,4 +242,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

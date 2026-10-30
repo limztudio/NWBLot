@@ -58,21 +58,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace RendererResourceLookupMode{
-    enum Enum : u8{
-        CreateMissing,
-        PreparedOnly,
-    };
-};
-
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot;
     struct MeshViewGpuData;
-};
-
-struct ShadowOccluderMaterialContext{
-    InstanceGpuData instance;
-    u32 constantByteOffset = 0u;
 };
 
 struct MaterialInstanceOverrideField{
@@ -225,7 +213,7 @@ public:
     [[nodiscard]] b8 recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem);
     // Graph-only producer half. The graph owns generated output UAV states; this method records only the dispatch.
     void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
-    // Graph-only raster half. The graph provides each output Combined; this records state, heap, push constants, draws.
+    // Graph-only raster half. The graph provides each output Combined; this method records state, heap, push constants, draws.
     void renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
     // Per-draw generation and rasterization retain the local UAV-to-vertex/index handoff when outputs alias.
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
@@ -265,4 +253,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

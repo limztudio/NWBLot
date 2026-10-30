@@ -3,8 +3,6 @@
 
 
 #include "skin_asset.h"
-#include "skin_binary_payload.h"
-#include "skin_validation.h"
 #include <impl/assets_mesh/subsystem.adhd.h>
 
 #include <core/assets/auto_registration.h>
@@ -42,10 +40,10 @@ NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_SkinningSubsystemAssetAutoRegistrar, Skin
 
 b8 Skin::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, s_SkinBinaryMagic, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_SkinAssetKindLabel, cursor);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinHeaderBinary>(binary, s_SkinBinaryMagic, s_SkinLoadBinaryContext, s_SkinAssetKindLabel, cursor);
     if(!headerResult)
         return false;
-    const SkinBinaryPayload::HeaderBinary& header = *headerResult;
+    const SkinHeaderBinary& header = *headerResult;
 
     if(header.padding0 != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin::loadBinary failed: reserved header fields must be zero"));
@@ -55,12 +53,12 @@ b8 Skin::loadBinary(const Span<const u8> binary){
     candidate.m_mesh.virtualPath = Name(header.meshNameHash);
     candidate.m_skeleton.virtualPath = Name(header.skeletonNameHash);
 
-    if(!Core::Assets::ReadVectorPayload(binary, header.influenceCount, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_InfluencesPayloadLabel, cursor, candidate.m_influences))
+    if(!Core::Assets::ReadVectorPayload(binary, header.influenceCount, s_SkinLoadBinaryContext, s_SkinInfluencesPayloadLabel, cursor, candidate.m_influences))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.inverseBindMatrixCount, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_InverseBindMatricesPayloadLabel, cursor, candidate.m_inverseBindMatrices))
+    if(!Core::Assets::ReadVectorPayload(binary, header.inverseBindMatrixCount, s_SkinLoadBinaryContext, s_SkinInverseBindMatricesPayloadLabel, cursor, candidate.m_inverseBindMatrices))
         return false;
 
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, SkinBinaryPayload::s_SkinLoadBinaryContext)|| !candidate.validatePayload())
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_SkinLoadBinaryContext) || !candidate.validatePayload())
         return false;
     *this = Move(candidate);
     return true;
@@ -92,13 +90,13 @@ b8 Skin::validatePayload()const{
     const u32 jointCount = static_cast<u32>(m_inverseBindMatrices.size());
     for(usize index = 0u; index < m_influences.size(); ++index){
         const SkinInfluence4& influence = m_influences[index];
-        if(!SkinValidation::ValidSkinInfluenceWeights(LoadFloat(influence.weight)) || !SkinValidation::SkinInfluenceFitsSkeleton(influence, jointCount)){
+        if(!ValidSkinInfluenceWeights(influence.weight) || !SkinInfluenceFitsSkeleton(influence, jointCount)){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: influence {} has invalid weights or joint indices"), index);
             return false;
         }
     }
     for(usize index = 0u; index < m_inverseBindMatrices.size(); ++index){
-        if(!MatrixIsInvertibleAffine(LoadFloat(m_inverseBindMatrices[index]), SkinValidation::s_Epsilon, SkinValidation::s_Epsilon)){
+        if(!MatrixIsInvertibleAffine(LoadFloat(m_inverseBindMatrices[index]), s_SkinValidationEpsilon, s_SkinValidationEpsilon)){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: inverse bind matrix {} is not a finite invertible affine matrix"), index);
             return false;
         }
@@ -114,4 +112,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

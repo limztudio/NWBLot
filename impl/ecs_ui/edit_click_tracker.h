@@ -19,27 +19,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Editor-local policy: a released second press within 500 ms and four logical units selects a word run.
-class UiEditClickTracker final{
-public:
-    [[nodiscard]] UiEditClickKind::Enum press(const UiTextEditOwner& owner, const Ui::PopupToken& popup, u64 revision, u64 externalRevision, Ui::Point position, u64 timestampMs, b8 shift)noexcept;
-    void move(Ui::Point position)noexcept;
-    void release(const UiTextEditOwner& owner)noexcept;
-    void retainFocus(const UiTextEditOwner* owner)noexcept;
-    void cancel()noexcept;
-
-
-private:
-    UiTextEditOwner m_owner;
-    Ui::PopupToken m_popup;
-    Ui::Point m_position;
-    u64 m_revision = 0u;
-    u64 m_externalRevision = 0u;
-    u64 m_pressTimestampMs = 0u;
-    u8 m_clickCount = 0u;
-    b8 m_down = false;
-    b8 m_released = false;
-};
+namespace UiEditClickKind = Ui::UiEditClickKind;
+using Ui::UiEditClickTracker;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,4 +30,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

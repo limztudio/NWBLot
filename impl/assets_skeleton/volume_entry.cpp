@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "binary_payload.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -29,6 +28,8 @@ namespace __hidden_assets_skeleton_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr TStringView s_SkeletonAssetKindLabel = NWB_TEXT("skeleton");
+
 static Expected<SkeletonCookEntry> ParseSkeletonDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
     return ParseSkeletonCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
@@ -42,7 +43,7 @@ static Expected<Skeleton> BuildSkeletonCookedAsset(SkeletonCookEntry& entry, Cor
 }
 
 static b8 RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(registry, SkeletonBinaryPayload::s_SkeletonAssetKindLabel, &ParseSkeletonDocument, &ParseSkeletonValue, &BuildSkeletonCookedAsset);
+    return Core::Assets::RegisterDocumentValueCookEntry<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(registry, s_SkeletonAssetKindLabel, &ParseSkeletonDocument, &ParseSkeletonValue, &BuildSkeletonCookedAsset);
 }
 
 
@@ -71,4 +72,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

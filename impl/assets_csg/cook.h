@@ -12,6 +12,7 @@
 
 
 #include "asset.h"
+#include <impl/assets_csg/shape_id.adhd.h>
 
 #include <core/metascript/parser.h>
 
@@ -31,8 +32,8 @@ namespace AssetsCsgCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_DefaultGeneratedIncludeDirectory = "engine/csg/generated";
-inline constexpr AStringView s_GeneratedIncludeCacheDirectory = "csg_modules";
+using ::NWB::Impl::s_DefaultGeneratedIncludeDirectory;
+using ::NWB::Impl::s_GeneratedIncludeCacheDirectory;
 
 using CookArena = Core::Alloc::GlobalArena;
 using CookString = AString<CookArena>;
@@ -87,4 +88,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

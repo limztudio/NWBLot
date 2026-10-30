@@ -9,10 +9,13 @@ const CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
 const u32 s_CsgShapeHashFoldShiftBits = 32u;
 
 // Built-in cutter names shared by cooker, registry, and CPU rebuild; one copy, no drift.
-const Name s_CsgPlaneShapeName("engine/csg/plane");
-const Name s_CsgBoxShapeName("engine/csg/box");
-const Name s_CsgSphereShapeName("engine/csg/sphere");
-const Name s_CsgCapsuleShapeName("engine/csg/capsule");
+const Name s_CsgPlaneShapeName = "engine/csg/plane";
+const Name s_CsgBoxShapeName = "engine/csg/box";
+const Name s_CsgSphereShapeName = "engine/csg/sphere";
+const Name s_CsgCapsuleShapeName = "engine/csg/capsule";
+
+const StringView s_DefaultGeneratedIncludeDirectory = "engine/csg/generated";
+const StringView s_GeneratedIncludeCacheDirectory = "csg_modules";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

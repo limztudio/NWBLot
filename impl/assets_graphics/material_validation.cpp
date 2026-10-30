@@ -63,7 +63,7 @@ namespace AssetsGraphicsCookDetail{
 
 
 b8 ValidateMaterials(ShaderCook& shaderCook, const Span<const PreparedShaderEntry> preparedEntries, const Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena){
-    HashMap<ShaderStageKey, NotNull<const PreparedShaderEntry*>, ScratchArena, ShaderStageKeyHasher, EqualTo<ShaderStageKey>> preparedShaderLookup(0, ShaderStageKeyHasher(), EqualTo<ShaderStageKey>(), scratchArena);
+    HashMap<ShaderStageKey, NotNull<const PreparedShaderEntry*>, ScratchArena, Hasher<ShaderStageKey>, EqualTo<ShaderStageKey>> preparedShaderLookup(0, Hasher<ShaderStageKey>(), EqualTo<ShaderStageKey>(), scratchArena);
     preparedShaderLookup.reserve(preparedEntries.size());
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         const auto shaderName = ToName(preparedEntry.entry.name);
@@ -76,7 +76,7 @@ b8 ValidateMaterials(ShaderCook& shaderCook, const Span<const PreparedShaderEntr
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: prepared shader stage has invalid text for entry '{}' (failure {})"), ConvertString(preparedEntry.entry.name), static_cast<u32>(stageName.error()));
             return false;
         }
-        const ShaderStageKey shaderKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
+        const ShaderStageKey shaderKey(*shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone);
         if(!preparedShaderLookup.emplace(shaderKey, MakeNotNull(&preparedEntry)).second){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate prepared shader key '{}' stage '{}'"), ConvertString(preparedEntry.entry.name), ConvertString(preparedEntry.entry.archiveStage));
             return false;
@@ -90,7 +90,7 @@ b8 ValidateMaterials(ShaderCook& shaderCook, const Span<const PreparedShaderEntr
         for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
             hasShaderStage = true;
             const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
-            const ShaderStageKey shaderLookupKey{ shaderAsset.name(), stageName };
+            const ShaderStageKey shaderLookupKey(shaderAsset.name(), stageName);
             const auto foundShader = preparedShaderLookup.find(shaderLookupKey);
             if(foundShader == preparedShaderLookup.end()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' references unknown shader '{}' for stage '{}'"), ConvertString(AStringView(materialEntry.virtualPath)), ConvertString(shaderAsset.name().resolvedText()), ConvertString(stageName.resolvedText()));
@@ -164,4 +164,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -1,0 +1,28 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_SubsystemLoadBinaryArena = "impl/assets_subsystem/load_binary";
+const Name s_SubsystemSerializeArena = "impl/assets_subsystem/serialize";
+
+const StringView s_SubsystemDiagnosticPrefix = "Subsystem meta";
+
+const u32 s_SubsystemMagic = 0x53554231u; // SUB1
+const u32 s_SubsystemVersion = 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class SubsystemHeaderBinary{
+    public u32 magic = s_SubsystemMagic;
+    public u32 version = s_SubsystemVersion;
+    public NameHash subsystemTypeHash;
+    public u64 subsystemCount = 0u;
+    public u64 fieldCount = 0u;
+    public u64 assetCount = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

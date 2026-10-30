@@ -22,7 +22,6 @@
 #include <impl/assets_graphics/gather.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/cook.h>
-#include <impl/assets_material/binary_payload.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/cook.h>
 #include <impl/assets_texture/asset.h>
@@ -252,4 +251,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

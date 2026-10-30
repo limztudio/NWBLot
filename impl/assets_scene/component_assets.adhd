@@ -8,6 +8,104 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_EntityLoadBinaryArena = "impl/assets_scene/entity_load_binary";
+const Name s_EntitySerializeArena = "impl/assets_scene/entity_serialize";
+const Name s_SceneLoadBinaryArena = "impl/assets_scene/scene_load_binary";
+const Name s_SceneSerializeArena = "impl/assets_scene/scene_serialize";
+const Name s_ActiveSceneLoadArena = "impl/assets_scene/active_scene_load";
+
+const StringView s_DefaultProjectVirtualPathText = "project/project";
+const Name s_DefaultProjectVirtualPath = "project/project";
+
+const StringView s_TransformDiagnosticPrefix = "Transform component meta";
+const StringView s_CameraDiagnosticPrefix = "Camera component meta";
+const StringView s_LightDiagnosticPrefix = "Light component meta";
+const StringView s_EntityDiagnosticPrefix = "Entity meta";
+const StringView s_ProjectDiagnosticPrefix = "Project meta";
+const StringView s_SceneDiagnosticPrefix = "Scene meta";
+
+const u32 s_ProjectMagic = 0x50524A31u; // PRJ1
+const u32 s_ProjectVersion = 1u;
+
+const u32 s_ComponentMagic = 0x434D5031u; // CMP1
+const u32 s_ComponentVersion = 1u;
+
+const u32 s_EntityMagic = 0x454E5431u; // ENT1
+const u32 s_EntityVersion = 1u;
+
+const u32 s_SceneMagic = 0x53434E31u; // SCN1
+const u32 s_SceneVersion = 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class ProjectHeaderBinary{
+    public u32 magic = s_ProjectMagic;
+    public u32 version = s_ProjectVersion;
+    public NameHash startSceneHash;
+}
+
+[serialize]
+class ComponentHeaderBinary{
+    public u32 magic = s_ComponentMagic;
+    public u32 version = s_ComponentVersion;
+    public NameHash componentTypeHash;
+    public u64 payloadByteCount = 0u;
+}
+
+[serialize]
+class TransformComponentPayloadBinary{
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 scale(1.0f, 1.0f, 1.0f, 0.0f);
+}
+
+[serialize]
+class CameraComponentPayloadBinary{
+    public f32x4 projection(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class LightComponentPayloadBinary{
+    public f32x4 colorIntensity(1.0f, 1.0f, 1.0f, 1.0f);
+    public f32 range = 10.0f;
+    public f32 innerConeCos = 0.95f;
+    public f32 outerConeCos = 0.90f;
+    public f32 angularRadius = 0.00465f;
+    public f32 sourceRadius = 0.1f;
+    public u8 type = 0u;
+    public u8 enableCaustics = 1u;
+    public u16 reserved = 0u;
+}
+
+[serialize]
+class EntityHeaderBinary{
+    public u32 magic = s_EntityMagic;
+    public u32 version = s_EntityVersion;
+    public u64 componentCount = 0u;
+}
+
+[serialize]
+class SceneHeaderBinary{
+    public u32 magic = s_SceneMagic;
+    public u32 version = s_SceneVersion;
+    public u64 subsystemCount = 0u;
+    public u64 entityCount = 0u;
+    public u64 assetCount = 0u;
+}
+
+[serialize]
+class SceneAssetEntryBinary{
+    public NameHash nicknameHash;
+    public NameHash assetHash;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [component_asset("transform_component")]
 class TransformComponentAsset{
     public TransformComponent component;

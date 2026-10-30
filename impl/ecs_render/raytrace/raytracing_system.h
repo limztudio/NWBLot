@@ -74,7 +74,7 @@ struct MaterialSurfaceInfo;
 namespace ECSRenderDetail{
     struct MeshRayTracingResourceSnapshot;
     struct MeshViewBufferSnapshot;
-    struct SceneLightGpuData;
+    using NWB::Impl::SceneLightGpuData;
 };
 
 

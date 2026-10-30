@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
 
 #include <core/task/gpu/task_graph.h>
@@ -21,13 +22,6 @@ NWB_IMPL_BEGIN
 
 
 class RendererMaterialSystem;
-
-
-namespace AvboitGeometryPhase{ enum Enum : u8{
-    Occupancy,
-    Extinction,
-    Accumulation,
-}; };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,4 +67,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

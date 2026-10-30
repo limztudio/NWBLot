@@ -23,6 +23,16 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr TStringView s_SkinAssetKindLabel = NWB_TEXT("skin");
+inline constexpr TStringView s_SkinLoadBinaryContext = NWB_TEXT("Skin::loadBinary");
+inline constexpr TStringView s_SkinSerializeContext = NWB_TEXT("SkinAssetCodec::serialize");
+inline constexpr TStringView s_SkinInfluencesPayloadLabel = NWB_TEXT("influences");
+inline constexpr TStringView s_SkinInverseBindMatricesPayloadLabel = NWB_TEXT("inverse bind matrices");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class Skin final : public Core::Assets::TypedAsset<Skin>{
 public:
     using InfluenceVector = Core::Assets::AssetVector<SkinInfluence4>;
@@ -90,4 +100,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

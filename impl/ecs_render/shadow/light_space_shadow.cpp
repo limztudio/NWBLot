@@ -22,21 +22,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 LightSpaceShadowStorageFits(const LightSpacePlan& plan, const LightSpaceShadowStorageCapacity& capacity)noexcept{
-    return
-        plan.viewCount != 0u && plan.textureResolution != 0u
-        && plan.countByteSize != 0u && plan.eventByteSize != 0u && plan.viewByteSize != 0u && plan.drawArgumentByteSize != 0u
-        && plan.countByteSize <= capacity.countBytes && plan.eventByteSize <= capacity.eventBytes
-        && plan.viewByteSize <= capacity.viewBytes && plan.drawArgumentByteSize <= capacity.drawArgumentBytes
-        && plan.textureResolution <= capacity.textureResolution
-        && plan.viewCount <= capacity.arrayLayers
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<u32> LightSpaceShadowDrawCount(const Span<const LightSpaceShadowCaster> casters)noexcept{
     u64 drawCount = 0u;
     for(const LightSpaceShadowCaster& caster : casters){
@@ -291,4 +276,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

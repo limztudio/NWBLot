@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
 #include <impl/ecs_render/raytrace/instance_material.h>
@@ -29,15 +30,6 @@ namespace ECSRenderDetail{
     struct MeshRayTracingResourceSnapshot;
 };
 
-struct LightSpaceCsgInstanceGpu{
-    Float34 worldToObject{};
-    u32 runtimeBoundsSlot = Core::GpuDescriptorHandle::s_Invalid;
-    u32 primitiveCount = 0u;
-    u32 meshRootSlot = Core::GpuDescriptorHandle::s_Invalid;
-    u32 padding = 0u;
-    Float4 localMin{};
-    Float4 localMax{};
-};
 static_assert(sizeof(LightSpaceCsgInstanceGpu) == NWB_CSG_RAY_INSTANCE_BYTES);
 static_assert(offsetof(LightSpaceCsgInstanceGpu, runtimeBoundsSlot) == sizeof(Float34));
 static_assert(offsetof(LightSpaceCsgInstanceGpu, localMin) == sizeof(Float34) + sizeof(u32) * 4u);
@@ -90,4 +82,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

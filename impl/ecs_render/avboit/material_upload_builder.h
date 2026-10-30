@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/material/material_typed_private.h>
@@ -29,13 +30,6 @@ NWB_IMPL_BEGIN
 
 class RendererCsgSystem;
 struct DeferredFrameTargets;
-
-
-namespace AvboitMaterialUploadPhase{ enum Enum : u8{
-    Occupancy,
-    Extinction,
-    Accumulation,
-}; };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,4 +82,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

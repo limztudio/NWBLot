@@ -6,9 +6,7 @@
 
 
 #include <impl/assets_scene/asset.h>
-#include <impl/assets_scene/binary_payload.h>
 #include <impl/assets_subsystem/asset.h>
-#include <impl/assets_subsystem/binary_payload.h>
 
 #include <core/assets/manager.h>
 
@@ -37,7 +35,7 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
 
 
 [[nodiscard]] inline AssetBytes MakeProjectBinary(AssetArena& arena, const Name& startScene){
-    ProjectBinaryPayload::ProjectHeaderBinary header;
+    ProjectHeaderBinary header;
     header.startSceneHash = startScene.hash();
 
     AssetBytes binary(arena);
@@ -52,7 +50,7 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
     const SceneAsset::AssetMap& assets,
     const Span<const SceneAsset::EntityRef> entities = {}
 ){
-    SceneBinaryPayload::SceneHeaderBinary header;
+    SceneHeaderBinary header;
     header.subsystemCount = static_cast<u64>(subsystems.size());
     header.entityCount = static_cast<u64>(entities.size());
     header.assetCount = static_cast<u64>(assets.size());
@@ -62,7 +60,7 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
         sizeof(header)
         + subsystems.size() * sizeof(NameHash)
         + entities.size() * sizeof(NameHash)
-        + assets.size() * sizeof(SceneBinaryPayload::SceneAssetEntryBinary)
+        + assets.size() * sizeof(SceneAssetEntryBinary)
     );
     AppendPOD(binary, header);
     for(const SceneAsset::SubsystemRef& ref : subsystems)
@@ -70,7 +68,7 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
     for(const SceneAsset::EntityRef& ref : entities)
         AppendPOD(binary, ref.name().hash());
     for(const auto& [nickname, ref] : assets){
-        SceneBinaryPayload::SceneAssetEntryBinary entry;
+        SceneAssetEntryBinary entry;
         entry.nicknameHash = nickname.hash();
         entry.assetHash = ref.name().hash();
         AppendPOD(binary, entry);
@@ -79,7 +77,7 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
 }
 
 [[nodiscard]] inline AssetBytes MakeEntityBinary(AssetArena& arena, const Span<const EntityAsset::ComponentRef> components){
-    EntityBinaryPayload::EntityHeaderBinary header;
+    EntityHeaderBinary header;
     header.componentCount = static_cast<u64>(components.size());
 
     AssetBytes binary(arena);
@@ -92,7 +90,7 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
 
 template<typename ComponentT, typename PayloadT>
 [[nodiscard]] inline AssetBytes MakeComponentBinary(AssetArena& arena, const PayloadT& payload){
-    ComponentBinaryPayload::ComponentHeaderBinary header;
+    ComponentHeaderBinary header;
     header.componentTypeHash = ComponentT::AssetTypeName().hash();
     header.payloadByteCount = sizeof(PayloadT);
 
@@ -125,7 +123,7 @@ template<typename SubsystemT>
     for(usize i = 0u; i < fieldCount; ++i)
         totalAssetCount += static_cast<u64>(subsystem.fieldValueCount(i));
 
-    SubsystemBinaryPayload::SubsystemHeaderBinary header;
+    SubsystemHeaderBinary header;
     header.subsystemTypeHash = SubsystemT::AssetTypeName().hash();
     header.subsystemCount = static_cast<u64>(subsystemCount);
     header.fieldCount = static_cast<u64>(fieldCount);

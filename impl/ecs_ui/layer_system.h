@@ -30,12 +30,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace UiLayerPresentation{
-    enum Enum : u8{ Scene, Standalone };
-};
-
 inline constexpr TStringView s_UiLayerSystemOwnerName = NWB_TEXT("UiLayerSystem");
-inline constexpr usize s_UiNativeKeySlotCount = 512u;
 
 
 // ECS owns callback execution; the independent GPU renderer receives only frozen paint snapshots.

@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/material/pipeline_types.adhd.h>
 
 #include <core/task/gpu/task_graph.h>
 
@@ -18,14 +19,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace SampledTextureImportFailure{
-    enum Enum : u8{
-        GraphUnavailable,
-        MissingIdentity,
-        ImportFailed
-    };
-};
 
 // The result preserves texture order; imports already published to the graph remain on failure.
 [[nodiscard]] Expected<Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>, SampledTextureImportFailure::Enum> ImportMaterialSampledTextureResources(
@@ -43,4 +36,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

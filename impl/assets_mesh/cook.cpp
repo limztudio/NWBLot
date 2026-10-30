@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "arena_names.h"
 #include "cook_metadata.h"
 #include "cook_source_streams.h"
 #include "cook_stream_reorder.h"
@@ -226,7 +225,7 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!checkSerializeAssetType(asset, MeshBinaryPayload::s_MeshSerializeContext))
         return false;
 
-    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_ValidatePayloadArena);
+    Core::Alloc::ScratchArena scratchArena(s_MeshValidatePayloadArena);
     const Mesh& mesh = static_cast<const Mesh&>(asset);
     if(!mesh.validatePayload(scratchArena))
         return false;
@@ -262,4 +261,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

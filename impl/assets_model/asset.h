@@ -26,6 +26,17 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr TStringView s_ModelAssetKindLabel = NWB_TEXT("model");
+inline constexpr TStringView s_ModelLoadBinaryContext = NWB_TEXT("Model::loadBinary");
+inline constexpr TStringView s_ModelSerializeContext = NWB_TEXT("ModelAssetCodec::serialize");
+inline constexpr TStringView s_ModelSkeletonObjectsPayloadLabel = NWB_TEXT("skeleton objects");
+inline constexpr TStringView s_ModelStaticMeshObjectsPayloadLabel = NWB_TEXT("static mesh objects");
+inline constexpr TStringView s_ModelSkinnedMeshObjectsPayloadLabel = NWB_TEXT("skinned mesh objects");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class Model final : public Core::Assets::TypedAsset<Model>{
 public:
     using SkeletonObjectVector = Core::Assets::AssetVector<ModelSkeletonObject>;

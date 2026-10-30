@@ -31,5 +31,21 @@ SurfelGiResolveSize MakeSurfelGiResolveSize(in u32 width, in u32 height, in u32 
     return size;
 }
 
+// Offset trace and gather points to avoid self-intersection.
+const f32 s_SurfelNormalBias = 0.05f;
+
+// Delayed counter readback avoids stalling on the asynchronous copy.
+const u32 s_SurfelCountLogInterval = 120u;
+const u32 s_SurfelCountLogDelay = 3u;
+
+// CPU/shader ABI mirror for surfel constants.
+[serialize]
+class NwbSurfelConstantsGpu{
+    public f32x4 hashPoolFrameDivisor(0.0f, 0.0f, 0.0f, 0.0f);    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
+    public f32x4 cellSizeRadiusBiasAccum(0.0f, 0.0f, 0.0f, 0.0f); // x = hash cell size, y = default radius, z = normal bias, w = accumulation cap
+    public f32x4 ageRaysTileScreen(0.0f, 0.0f, 0.0f, 0.0f);       // x = max age, y = maximum rays/surfel, z = spawn tile (px), w = screen width
+    public f32x4 screenHeightPad(0.0f, 0.0f, 0.0f, 0.0f);         // x = screen height, y = resolve factor, zw = pad
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

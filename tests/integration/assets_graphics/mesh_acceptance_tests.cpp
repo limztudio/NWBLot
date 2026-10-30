@@ -4,9 +4,9 @@
 
 #include "assets_graphics_fixture.h"
 
-#include <impl/assets_mesh/skin_binary_payload.h>
-#include <impl/assets_model/binary_payload.h>
-#include <impl/assets_skeleton/binary_payload.h>
+#include <impl/assets_mesh/skin_asset.h>
+#include <impl/assets_model/asset.h>
+#include <impl/assets_skeleton/asset.h>
 
 #include <gtest/gtest.h>
 
@@ -303,7 +303,7 @@ TEST(AssetsGraphics, SkinBinaryRejectsInvalidWeightsJointsMatricesAndReservedFie
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
-    SkinBinaryPayload::HeaderBinary header;
+    SkinHeaderBinary header;
     header.meshNameHash = Name("project/meshes/original").hash();
     header.skeletonNameHash = Name("project/skeletons/original").hash();
     header.influenceCount = 1u;
@@ -319,7 +319,7 @@ TEST(AssetsGraphics, SkinBinaryRejectsInvalidWeightsJointsMatricesAndReservedFie
     ASSERT_TRUE(skin.loadBinary(original));
     SkinAssetCodec codec;
     for(u32 invalidCase = 0u; invalidCase < 8u; ++invalidCase){
-        SkinBinaryPayload::HeaderBinary malformedHeader = header;
+        SkinHeaderBinary malformedHeader = header;
         malformedHeader.meshNameHash = Name("project/meshes/replacement").hash();
         SkinInfluence4 malformedInfluence = influence;
         SkeletonJointMatrix matrix = originalMatrix;
@@ -350,19 +350,19 @@ TEST(AssetsGraphics, ModelBinaryRejectsNonFiniteTransformsAndReservedFieldsWitho
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
-    ModelBinaryPayload::ModelHeaderBinary header;
+    ModelHeaderBinary header;
     header.skeletonObjectCount = 1u;
     header.staticMeshObjectCount = 1u;
     header.skinnedMeshObjectCount = 1u;
-    ModelBinaryPayload::ModelSkeletonObjectBinary skeleton;
+    ModelSkeletonObjectBinary skeleton;
     skeleton.nameHash = Name("rig").hash();
     skeleton.skeletonNameHash = Name("project/skeletons/original").hash();
     skeleton.transform = MatrixIdentity<Float34>();
-    ModelBinaryPayload::ModelStaticMeshObjectBinary staticMesh;
+    ModelStaticMeshObjectBinary staticMesh;
     staticMesh.nameHash = Name("prop").hash();
     staticMesh.meshNameHash = Name("project/meshes/prop").hash();
     staticMesh.transform = MatrixIdentity<Float34>();
-    ModelBinaryPayload::ModelSkinnedMeshObjectBinary skinnedMesh;
+    ModelSkinnedMeshObjectBinary skinnedMesh;
     skinnedMesh.nameHash = Name("body").hash();
     skinnedMesh.skinNameHash = Name("project/skins/body").hash();
     skinnedMesh.skeletonObjectNameHash = skeleton.nameHash;
@@ -407,9 +407,9 @@ TEST(AssetsGraphics, SkeletonBinaryRejectsNonFinitePosesInvalidParentsAndReserve
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
-    SkeletonBinaryPayload::HeaderBinary header;
+    SkeletonHeaderBinary header;
     header.jointCount = 1u;
-    SkeletonBinaryPayload::JointBinary joint;
+    SkeletonJointBinary joint;
     joint.nameHash = Name("root").hash();
     joint.parentIndex = s_SkeletonInvalidJointIndex;
     joint.localBindPose = MatrixIdentity<Float34>();
@@ -465,4 +465,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -9,6 +9,7 @@
 
 #include <impl/ecs_mesh/components.adhd.h>
 #include <impl/ecs_mesh/runtime/mesh_requests.h>
+#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 
 #include <core/ecs/world.h>
 
@@ -21,11 +22,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct SkinnedRuntimeMeshIdentity{
-    Name meshKey = s_NameNone;
-    u64 version = 0u;
-};
 
 // Caller resolves instances from binding handles; queries retain no GPU buffers.
 [[nodiscard]] Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(Core::ECS::EntityID entity, RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* instance);
@@ -81,4 +77,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

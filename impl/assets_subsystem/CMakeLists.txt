@@ -1,3 +1,11 @@
+nwb_declare_static_library(nwb_assets_subsystem_types)
+nwb_target_adhd_sources(nwb_assets_subsystem_types
+    NAMESPACE "NWB::Impl"
+    SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
+)
+target_link_libraries(nwb_assets_subsystem_types PUBLIC nwb_assets)
+
 nwb_declare_static_library(nwb_assets_subsystem)
 target_sources(nwb_assets_subsystem PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
@@ -8,7 +16,7 @@ target_sources(nwb_assets_subsystem PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
-target_link_libraries(nwb_assets_subsystem PUBLIC nwb_assets)
+target_link_libraries(nwb_assets_subsystem PUBLIC nwb_assets nwb_assets_subsystem_types)
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_subsystem_cook)
@@ -25,6 +33,6 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
         "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
     )
-    target_link_libraries(nwb_assets_subsystem_cook PUBLIC nwb_assets nwb_assets_cook nwb_metascript)
+    target_link_libraries(nwb_assets_subsystem_cook PUBLIC nwb_assets nwb_assets_cook nwb_assets_subsystem_types nwb_metascript)
     target_compile_definitions(nwb_assets_subsystem_cook PRIVATE NWB_COOK=1)
 endif()

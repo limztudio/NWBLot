@@ -38,7 +38,12 @@ public:
     [[nodiscard]] b8 matches(const CausticResolveActivitySnapshot& other)const noexcept;
 };
 
-[[nodiscard]] Expected<CausticResolveActivityLayout> ResolveCausticActivityLayout(u32 halfWidth, u32 halfHeight)noexcept;
+[[nodiscard]] inline Expected<CausticResolveActivityLayout> ResolveCausticActivityLayout(const u32 halfWidth, const u32 halfHeight)noexcept{
+    CausticResolveActivityLayout layout{};
+    if(!TryResolveCausticActivityLayout(halfWidth, halfHeight, layout))
+        return MakeUnexpected(Failure{});
+    return layout;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,4 +53,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -8,6 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_MeshValidatePayloadArena = "impl/assets_mesh/validate_payload";
+
 const u32 s_MeshMissingStreamIndex = 0xffffffffu;
 const u32 s_MeshMaxMeshletVertices = 96u;
 const u32 s_MeshMaxMeshletTriangles = 126u;
@@ -15,6 +17,39 @@ const u32 s_MeshletTriangleIndexCount = 3u;
 const u32 s_MeshletSolidTriangleWordBits = 32u;
 const u32 s_MeshletSolidTriangleWordRoundUp = 31u;
 const u32 s_MeshletConeFlagEnabled = 1u;
+const u32 s_MeshletCountMask = 0xffu;
+const u32 s_MeshletPrimitiveCountShift = 8u;
+const u32 s_MeshletPositionCountShift = 16u;
+const u32 s_MeshletAttributeCountShift = 24u;
+const u32 s_MeshletConeAxisXShift = 0u;
+const u32 s_MeshletConeAxisYShift = 8u;
+const u32 s_MeshletConeCutoffShift = 16u;
+const u32 s_MeshletConeFlagShift = 24u;
+const u32 s_MeshletPackedByteBits = 8u;
+const u32 s_MeshletPackedByteMask = 0xffu;
+const u32 s_MeshletConeAxisFallback = 0x8080u;
+const f32 s_MeshletOctEncodeBias = 0.5f;
+const f32 s_MeshletOctDecodeScale = 2.0f;
+const f32 s_MeshletOctDecodeBias = 1.0f;
+const f32 s_MeshletConeAxisLengthEpsilon = 0.000001f;
+const f32 s_MeshletConeAxisLengthSquaredEpsilon = 0.00000001f;
+const f32 s_MeshletUnorm8Max = 255.0f;
+const f32 s_MeshletUnorm8RoundingBias = 0.5f;
+const u32 s_MeshletRefEncodingWidthMask = 0x3u;
+const u32 s_MeshletRefEncodingPositionShift = 0u;
+const u32 s_MeshletRefEncodingSkinShift = 2u;
+const u32 s_MeshletRefEncodingNormalShift = 4u;
+const u32 s_MeshletRefEncodingTangentShift = 6u;
+const u32 s_MeshletRefEncodingUv0Shift = 8u;
+const u32 s_MeshletRefEncodingColorShift = 10u;
+const usize s_AttribGpuByteSize = 16u;
+
+[reflect]
+enum<u32> MeshletRefDeltaWidth{
+    enum U8 = 0u,
+    enum U16 = 1u,
+    enum U32 = 2u
+}
 
 class MeshletDesc{
     public u32 localVertexOffset = 0u;
@@ -31,11 +66,13 @@ class MeshletDesc{
     public u32 encoding = 0u;
 }
 
+[serialize]
 class MeshletBounds{
     public f32x4u sphere(0.0f);
     public u32 conePacked = 0u;
 }
 
+[serialize]
 class MeshletPositionStreamRef{
     public u32 position = s_MeshMissingStreamIndex;
     public u32 skin = s_MeshMissingStreamIndex;
@@ -48,9 +85,167 @@ class MeshletAttributeStreamRef{
     public u32 color = s_MeshMissingStreamIndex;
 }
 
+[serialize]
 class MeshletLocalVertexRef{
     public u16 localDeformedPosition = 0u;
     public u16 localAttribute = 0u;
+}
+
+[serialize]
+class AttribGpu{
+    public f16x4u normal;
+    public f32x2u uv0;
+}
+
+[serialize]
+class MeshVertexRef{
+    public u32 position = s_MeshMissingStreamIndex;
+    public u32 normal = s_MeshMissingStreamIndex;
+    public u32 tangent = s_MeshMissingStreamIndex;
+    public u32 uv0 = s_MeshMissingStreamIndex;
+    public u32 color = s_MeshMissingStreamIndex;
+}
+
+class MeshletCookMetrics{
+    public u64 primitiveCountSum = 0u;
+    public u64 vertexCountSum = 0u;
+    public u64 positionCountSum = 0u;
+    public u64 attributeCountSum = 0u;
+    public f64 radiusSum = 0.0;
+    public f64 coneCutoffSum = 0.0;
+    public u32 meshletCount = 0u;
+    public u32 minPrimitiveCount = 0xffffffffu;
+    public u32 maxPrimitiveCount = 0u;
+    public u32 minVertexCount = 0xffffffffu;
+    public u32 maxVertexCount = 0u;
+    public f32 worstConeCutoff = 1.0f;
+    public u32 coneDisabledCount = 0u;
+    public u32 coneEnabledCount = 0u;
+}
+
+class MeshletPositionRefEncodingLayout{
+    public usize positionByteOffset = 0u;
+    public usize skinByteOffset = 0u;
+    public usize byteCount = 0u;
+    public MeshletRefDeltaWidth positionWidth = MeshletRefDeltaWidth::Enum::U8;
+    public MeshletRefDeltaWidth skinWidth = MeshletRefDeltaWidth::Enum::U8;
+}
+
+class MeshletAttributeRefEncodingLayout{
+    public usize normalByteOffset = 0u;
+    public usize tangentByteOffset = 0u;
+    public usize uv0ByteOffset = 0u;
+    public usize colorByteOffset = 0u;
+    public usize byteCount = 0u;
+    public MeshletRefDeltaWidth normalWidth = MeshletRefDeltaWidth::Enum::U8;
+    public MeshletRefDeltaWidth tangentWidth = MeshletRefDeltaWidth::Enum::U8;
+    public MeshletRefDeltaWidth uv0Width = MeshletRefDeltaWidth::Enum::U8;
+    public MeshletRefDeltaWidth colorWidth = MeshletRefDeltaWidth::Enum::U8;
+}
+
+u32 PackMeshletCounts(in u32 vertexCount, in u32 primitiveCount, in u32 positionCount, in u32 attributeCount){
+    return
+        (vertexCount & s_MeshletCountMask)
+        | ((primitiveCount & s_MeshletCountMask) << s_MeshletPrimitiveCountShift)
+        | ((positionCount & s_MeshletCountMask) << s_MeshletPositionCountShift)
+        | ((attributeCount & s_MeshletCountMask) << s_MeshletAttributeCountShift)
+    ;
+}
+
+u32 MeshletVertexCount(in MeshletDesc meshlet){
+    return meshlet.counts & s_MeshletCountMask;
+}
+
+u32 MeshletPrimitiveCount(in MeshletDesc meshlet){
+    return (meshlet.counts >> s_MeshletPrimitiveCountShift) & s_MeshletCountMask;
+}
+
+u32 MeshletPositionCount(in MeshletDesc meshlet){
+    return (meshlet.counts >> s_MeshletPositionCountShift) & s_MeshletCountMask;
+}
+
+u32 MeshletAttributeCount(in MeshletDesc meshlet){
+    return meshlet.counts >> s_MeshletAttributeCountShift;
+}
+
+MeshletRefDeltaWidth MeshletRefDeltaWidthForMaxDelta(in u32 maxDelta){
+    if(maxDelta <= 0xffu){
+        return MeshletRefDeltaWidth::Enum::U8;
+    }
+    if(maxDelta <= 0xffffu){
+        return MeshletRefDeltaWidth::Enum::U16;
+    }
+    return MeshletRefDeltaWidth::Enum::U32;
+}
+
+u32 PackMeshletRefEncodingWidth(in MeshletRefDeltaWidth width, in u32 shift){
+    return (cast<u32>(width) & s_MeshletRefEncodingWidthMask) << shift;
+}
+
+u32 PackMeshletRefEncoding(
+    in MeshletRefDeltaWidth positionWidth,
+    in MeshletRefDeltaWidth skinWidth,
+    in MeshletRefDeltaWidth normalWidth,
+    in MeshletRefDeltaWidth tangentWidth,
+    in MeshletRefDeltaWidth uv0Width,
+    in MeshletRefDeltaWidth colorWidth
+){
+    return
+        PackMeshletRefEncodingWidth(positionWidth, s_MeshletRefEncodingPositionShift)
+        | PackMeshletRefEncodingWidth(skinWidth, s_MeshletRefEncodingSkinShift)
+        | PackMeshletRefEncodingWidth(normalWidth, s_MeshletRefEncodingNormalShift)
+        | PackMeshletRefEncodingWidth(tangentWidth, s_MeshletRefEncodingTangentShift)
+        | PackMeshletRefEncodingWidth(uv0Width, s_MeshletRefEncodingUv0Shift)
+        | PackMeshletRefEncodingWidth(colorWidth, s_MeshletRefEncodingColorShift)
+    ;
+}
+
+MeshletRefDeltaWidth MeshletRefEncodingWidth(in u32 encoding, in u32 shift){
+    return cast<MeshletRefDeltaWidth>((encoding >> shift) & s_MeshletRefEncodingWidthMask);
+}
+
+b8 MeshletRefDeltaFitsWidth(in u32 delta, in MeshletRefDeltaWidth width){
+    return width == MeshletRefDeltaWidth::Enum::U32 || (width == MeshletRefDeltaWidth::Enum::U16 && delta <= 0xffffu) || (width == MeshletRefDeltaWidth::Enum::U8 && delta <= 0xffu);
+}
+
+u32 MeshletConeFlags(in MeshletBounds bounds){
+    return bounds.conePacked >> s_MeshletConeFlagShift;
+}
+
+u32 MeshletConePackedCutoff(in MeshletBounds bounds){
+    return (bounds.conePacked >> s_MeshletConeCutoffShift) & s_MeshletPackedByteMask;
+}
+
+b8 MeshletConeEnabled(in MeshletBounds bounds){
+    return (MeshletConeFlags(bounds) & s_MeshletConeFlagEnabled) != 0u;
+}
+
+b8 MeshletRefDeltaWidthValid(in MeshletRefDeltaWidth width){
+    return width == MeshletRefDeltaWidth::Enum::U8 || width == MeshletRefDeltaWidth::Enum::U16 || width == MeshletRefDeltaWidth::Enum::U32;
+}
+
+u32 MeshletRefDeltaByteWidth(in MeshletRefDeltaWidth width){
+    if(width == MeshletRefDeltaWidth::Enum::U8){
+        return 1u;
+    }
+    if(width == MeshletRefDeltaWidth::Enum::U16){
+        return 2u;
+    }
+    return 4u;
+}
+
+b8 MeshletPositionRefInRange(in MeshletPositionStreamRef streamRef, in usize positionCount, in usize skinCount, in b8 skinRequired){
+    if(cast<usize>(streamRef.position) >= positionCount){
+        return false;
+    }
+    if(skinRequired){
+        return cast<usize>(streamRef.skin) < skinCount;
+    }
+    return streamRef.skin == s_MeshMissingStreamIndex;
+}
+
+b8 MeshletAttributeRefInRange(in MeshletAttributeStreamRef streamRef, in usize normalCount, in usize tangentCount, in usize uv0Count, in usize colorCount){
+    return cast<usize>(streamRef.normal) < normalCount && cast<usize>(streamRef.tangent) < tangentCount && cast<usize>(streamRef.uv0) < uv0Count && cast<usize>(streamRef.color) < colorCount;
 }
 
 

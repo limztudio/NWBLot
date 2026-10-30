@@ -32,14 +32,8 @@ namespace ShaderSourceDependencies{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace IncludeKind{
-    enum Enum : u8{
-        Relative,
-        Standard,
-        Macro,
-        Unsupported,
-    };
-};
+namespace IncludeKind = ::NWB::Impl::ShaderBinaryPayload::IncludeKind;
+using IncludeDirective = ::NWB::Impl::ShaderBinaryPayload::IncludeDirective;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,10 +41,6 @@ namespace IncludeKind{
 
 void SpliceSourceLines(AString<Core::Alloc::ScratchArena>& inOutSource)noexcept;
 void MaskSourceComments(AString<Core::Alloc::ScratchArena>& inOutSource)noexcept;
-struct IncludeDirective{
-    AStringView name;
-    IncludeKind::Enum kind = IncludeKind::Relative;
-};
 
 [[nodiscard]] Expected<IncludeDirective> ExtractIncludeDirective(AStringView line)noexcept;
 [[nodiscard]] Expected<::Path<Core::Alloc::ScratchArena>> ResolveIncludeFile(
@@ -171,4 +161,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

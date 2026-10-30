@@ -79,7 +79,7 @@ static b8 RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
     Core::Assets::RegisterCompositeRootAssetType(EntityAsset::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<EntityCookEntry, EntityAsset, EntityAssetCodec>(
         registry,
-        EntityBinaryPayload::s_EntityAssetKindLabel,
+        s_EntityAssetKindLabel,
         &ParseCookEntryDocument<EntityCookEntry, &ParseEntityCookMetadata, s_EntityDiagnosticPrefix>,
         &ParseCookEntryValue<EntityCookEntry, &ParseEntityCookMetadata>,
         &BuildEntityAsset
@@ -100,7 +100,7 @@ static b8 ExtractProjectDependencies(const Core::Assets::CookDependencyItemConte
 static b8 RegisterProjectCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<ProjectCookEntry, ProjectAsset, ProjectAssetCodec>(
         registry,
-        ProjectBinaryPayload::s_ProjectAssetKindLabel,
+        s_ProjectAssetKindLabel,
         &ParseCookEntryDocument<ProjectCookEntry, &ParseProjectCookMetadata, s_ProjectDiagnosticPrefix>,
         &ParseCookEntryValue<ProjectCookEntry, &ParseProjectCookMetadata>,
         &BuildProjectAsset
@@ -146,7 +146,7 @@ static b8 RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
     Core::Assets::RegisterCompositeRootAssetType(SceneAsset::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<SceneCookEntry, SceneAsset, SceneAssetCodec>(
         registry,
-        SceneBinaryPayload::s_SceneAssetKindLabel,
+        s_SceneAssetKindLabel,
         &ParseCookEntryDocument<SceneCookEntry, &ParseSceneCookMetadata, s_SceneDiagnosticPrefix>,
         &ParseCookEntryValue<SceneCookEntry, &ParseSceneCookMetadata>,
         &BuildSceneAsset
@@ -158,9 +158,9 @@ static b8 RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& re
     Core::Assets::RegisterCompositeRootAssetType(SceneAsset::AssetTypeName());
     return
         registry.registerDefaultEntryAsset(
-            ProjectAssetDefaults::s_DefaultProjectVirtualPath,
+            s_DefaultProjectVirtualPath,
             ProjectAsset::AssetTypeName(),
-            ProjectAssetDefaults::s_DefaultProjectVirtualPathText
+            s_DefaultProjectVirtualPathText
         )
         && registry.registerType(
             TransformComponentAsset::AssetTypeName(),

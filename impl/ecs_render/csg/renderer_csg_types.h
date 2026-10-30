@@ -33,33 +33,6 @@ static_assert(s_CsgBoundsFiniteFlag == NWB_CSG_BOUNDS_FINITE_FLAG, "s_CsgBoundsF
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CsgReceiverRangeGpuData{
-    // The CSG shaders pack these four scalars as a single uint4 (rangeInfo):
-    //   x = firstCutter, y = cutterCount, z = flags, w = shadingModelId.
-    u32 firstCutter = 0u;
-    u32 cutterCount = 0u;
-    u32 flags = 0u;
-    u32 shadingModelId = 0u;
-    Float34 worldToReceiver = ::MatrixIdentity<Float34>();
-    CsgBoundsGpuData localBounds;
-    // Cap-fill context packs as uint4: dispatch id, byte offset, instance index.
-    u32 surfaceDispatchId = Limit<u32>::s_Max;
-    u32 materialConstantByteOffset = 0u;
-    u32 meshInstanceIndex = 0u;
-    u32 materialContextPadding = 0u;
-    UInt4 screenWorkRect = { { { 0u, 0u, Limit<u32>::s_Max, Limit<u32>::s_Max } } };
-};
-
-struct CsgCutterGpuData{
-    u32 shapeType = 0u;
-    f32 worldToShapeScaleBound = 1.f;
-    u32 padding0 = 0u;
-    u32 padding1 = 0u;
-    Float34 worldToShape = ::MatrixIdentity<Float34>();
-    Float4 parameter0 = Float4(0.f, 0.f, 0.f, 0.f);
-    Float4 parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
-};
-
 static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 12u + sizeof(Float34) + sizeof(CsgBoundsGpuData), "CsgReceiverRangeGpuData layout must match the CSG shader");
 static_assert(sizeof(CsgCutterGpuData) == sizeof(Float4) + sizeof(Float34) + sizeof(Float4) * 2u, "CsgCutterGpuData layout must match the CSG shader");
 static_assert(sizeof(CsgClipContextSlots) == sizeof(u32) * 8u, "CSG clip context slots must stay two uint4 lanes");

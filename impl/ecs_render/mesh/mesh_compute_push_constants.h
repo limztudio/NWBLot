@@ -23,12 +23,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Only the compute producer reads this tail; raster and custom geometry use the base mesh push ABI.
-struct MeshComputePushConstants{
-    ShaderDrivenPushConstants mesh;
-    u32 generatedIndexByteOffset = 0u;
-    u32 reserved[3] = {};
-};
+using NWB::Impl::MeshComputePushConstants;
 
 static_assert(sizeof(MeshComputePushConstants) == NWB_MESH_COMPUTE_PUSH_CONSTANT_BYTE_SIZE);
 static_assert(offsetof(MeshComputePushConstants, generatedIndexByteOffset) == NWB_MESH_COMPUTE_INDEX_BYTE_OFFSET);
@@ -48,4 +43,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

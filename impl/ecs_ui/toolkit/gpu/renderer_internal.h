@@ -34,18 +34,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct GpuPaintPushConstants{
-#define NWB_UI_FLOAT2_FIELD(name) Point name;
-#define NWB_UI_UINT_FIELD(name, value) u32 name = value;
-    NWB_UI_PUSH_CONSTANTS_FIELDS(NWB_UI_FLOAT2_FIELD, NWB_UI_UINT_FIELD)
-#undef NWB_UI_UINT_FIELD
-#undef NWB_UI_FLOAT2_FIELD
-};
-struct GpuOutputPushConstants{
-#define NWB_UI_UINT_FIELD(name, value) u32 name = value;
-    NWB_UI_OUTPUT_PUSH_CONSTANTS_FIELDS(NWB_UI_UINT_FIELD)
-#undef NWB_UI_UINT_FIELD
-};
+
 static_assert(sizeof(Vertex) == NWB_UI_VERTEX_BYTE_SIZE);
 static_assert(offsetof(Vertex, position) == NWB_UI_VERTEX_POSITION_BYTE_OFFSET);
 static_assert(offsetof(Vertex, texCoord) == NWB_UI_VERTEX_UV_BYTE_OFFSET);
@@ -70,20 +59,7 @@ static_assert(static_cast<u32>(PaintMaterial::SdfGlyph) == NWB_UI_MATERIAL_SDF_G
 static_assert(static_cast<u32>(PaintMaterial::Image) == NWB_UI_MATERIAL_IMAGE);
 static_assert(s_SdfDistanceEncodingFreeTypeU8 == NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8);
 
-inline constexpr usize s_GpuMaxGlyphPages = s_PaintMaxImages;
-inline constexpr usize s_GpuMaxSdfPages = s_PaintMaxImages;
-inline constexpr usize s_GpuMaxTextureImages = s_PaintMaxImages;
-inline constexpr usize s_GpuTargetSlotCount = 3u;
-inline constexpr usize s_GpuFrameCount = 4u;
-// Raster uses outside the page lists: color target, skin atlas, vertex buffer, and index buffer.
-inline constexpr usize s_GpuRasterFixedResourceUses = 4u;
-inline constexpr u32 s_GpuFullscreenTriangleVertexCount = 3u;
-inline constexpr u32 s_GpuTimingHeightShift = 16u;
 inline constexpr TStringView s_GpuRendererContext = NWB_TEXT("GpuRenderer");
-inline constexpr Name s_GpuLayerTextureName("ui.layer");
-inline constexpr Name s_GpuAtlasTextureName("ui.atlas");
-inline constexpr Name s_GpuVertexBufferName("ui.vertices");
-inline constexpr Name s_GpuIndexBufferName("ui.indices");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

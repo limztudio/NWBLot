@@ -7,6 +7,7 @@
 
 #include "../assets_font/asset.h"
 #include <impl/assets_font_atlas/types.adhd.h>
+#include <impl/assets_font_atlas/positioning_validation.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/ref.h>
@@ -85,7 +86,9 @@ public:
 [[nodiscard]] b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font);
 [[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Font& font, u32 sourceGlyphCount, Core::Assets::AssetArena& arena);
-[[nodiscard]] b8 ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, u32 glyphCount);
+[[nodiscard]] inline b8 ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, const u32 glyphCount)noexcept{
+    return ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, glyphCount);
+}
 [[nodiscard]] Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayload& payload, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontAtlasPayload> DeserializeFontAtlasPayload(Span<const u8> binary, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 

@@ -112,14 +112,14 @@ TEST(SceneSubsystemAssets, ProjectAndSceneBinaryDecodeAndValidation){
     const AssetBytes projectBinary = MakeProjectBinary(arena, Name("project/scenes/main"));
 
     ProjectAssetCodec projectCodec;
-    auto decodedProjectResult = projectCodec.deserialize(arena, ProjectAssetDefaults::s_DefaultProjectVirtualPath, projectBinary);
+    auto decodedProjectResult = projectCodec.deserialize(arena, s_DefaultProjectVirtualPath, projectBinary);
     ASSERT_TRUE(decodedProjectResult.has_value());
     const auto* decodedProject = static_cast<const ProjectAsset*>(decodedProjectResult->get());
     ASSERT_NE(decodedProject, nullptr);
     EXPECT_EQ(decodedProject->startScene().name(), Name("project/scenes/main"));
 
     const AssetBytes invalidProjectBinary = MakeProjectBinary(arena, s_NameNone);
-    EXPECT_FALSE(projectCodec.deserialize(arena, ProjectAssetDefaults::s_DefaultProjectVirtualPath, invalidProjectBinary).has_value());
+    EXPECT_FALSE(projectCodec.deserialize(arena, s_DefaultProjectVirtualPath, invalidProjectBinary).has_value());
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("start_scene must not be empty")));
 
     SceneAsset::SubsystemRefVector sceneSubsystems(arena);
@@ -199,7 +199,7 @@ TEST(SceneSubsystemAssets, ActiveSceneSubsystemsLoadsFocusedSubsystemsAndTypedFi
     source.setBinary(s_SkinningSubsystemPath, MakeSubsystemBinary(arena, skinningSubsystem));
     source.setBinary(s_TransparentSubsystemPath, MakeSubsystemBinary(arena, transparentSubsystem));
     source.setBinary(s_UiSubsystemPath, MakeSubsystemBinary(arena, uiSubsystem));
-    source.setBinary(ProjectAssetDefaults::s_DefaultProjectVirtualPath, MakeProjectBinary(arena, Name("project/scenes/main")));
+    source.setBinary(s_DefaultProjectVirtualPath, MakeProjectBinary(arena, Name("project/scenes/main")));
     source.setBinary(Name("project/scenes/main"), MakeSceneBinary(arena, sceneSubsystems, sceneAssets));
 
     ActiveSceneSubsystems active(globalArena);

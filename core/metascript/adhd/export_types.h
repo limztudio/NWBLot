@@ -84,6 +84,8 @@ NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f64x3x3", "Double33", 3u, 3u, 9u,  96u,  32u, 
 NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f64x3x4", "Double34", 3u, 4u, 12u, 96u,  32u, "f64", true,  "::SIMDMatrixDouble", "::LoadDouble", "::StoreDouble")
 NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE("f64x4x4", "Double44", 4u, 4u, 16u, 128u, 32u, "f64", true,  "::SIMDMatrixDouble", "::LoadDouble", "::StoreDouble")
 
+NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("f16x2u", "Half2U",    2u, 4u,  4u, "u16")
+NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("f16x4u", "Half4U",    4u, 8u,  4u, "u16")
 NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("f32x2u", "Float2U",   2u, 8u,  4u, "f32")
 NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("f32x3u", "Float3U",   3u, 12u, 4u, "f32")
 NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("f32x4u", "Float4U",   4u, 16u, 4u, "f32")
@@ -108,6 +110,7 @@ NWB_ADHD_EXPORT_OBJECT_TYPE("StringView",    "AStringView",                16u, 
 NWB_ADHD_EXPORT_OBJECT_TYPE("CompactString", "ACompactString",             256u, 1u, false, true,  false, true,  false, true)
 NWB_ADHD_EXPORT_OBJECT_TYPE("Name",          "",                           8u,   8u, false, true,  true,  true,  false, true)
 NWB_ADHD_EXPORT_OBJECT_TYPE("Path",          "",                           32u,  8u, false, true,  false, false, false, true)
+NWB_ADHD_EXPORT_OBJECT_TYPE("NameHash",      "::NameHash",                 64u,  8u, false, true,  false, false, false, false)
 NWB_ADHD_EXPORT_OBJECT_TYPE("EntityID",      "::NWB::Core::ECS::EntityID", 4u,   4u, false, true,  true,  false, false, false)
 
 NWB_ADHD_EXPORT_GENERIC_TYPE("Vector",             "",                              SingleType,   32u, 8u, true,  true,  false, true,  false, true,  true,  false)
@@ -126,7 +129,7 @@ NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelQueue",      "",                          
 NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelBlockQueue", "",                              TypeAndCount, 32u, 8u, true,  true,  false, false, false, false, false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("Array",              "",                              TypeAndCount, 0u,  0u, false, true,  false, false, false, true,  true,  false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("FixedVector",        "",                              TypeAndCount, 0u,  0u, false, true,  false, true,  false, true,  true,  false)
-NWB_ADHD_EXPORT_GENERIC_TYPE("Span",               "",                              SingleType,   16u, 8u, false, false, false, false, false, true,  false, false)
+NWB_ADHD_EXPORT_GENERIC_TYPE("Span",               "",                              SingleType,   16u, 8u, false, true,  true,  false, false, true,  false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("Optional",           "",                              SingleType,   0u,  0u, false, true,  false, false, false, false, false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("AssetRef",           "::NWB::Core::Assets::AssetRef", SingleType,   8u,  8u, false, true,  false, false, false, false, false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("Atomic",             "",                              SingleType,   0u,  0u, false, false, false, false, false, false, false, false)

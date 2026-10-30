@@ -36,6 +36,26 @@ enum<u8> InputCommand{
     enum ContextMenu,
 }
 
+enum<u8> InputSelectionPolicy{
+    enum None,
+    enum Always,
+    enum Shift,
+}
+
+const i32 s_InputKeyUnknown = -1;
+const usize s_InputMaxBindings = 256u;
+
+class InputKeyBinding{
+    public i32 key = s_InputKeyUnknown;
+    public i32 modifiers = 0;
+    public i32 ignoredModifiers = 0;
+    public InputCommand command = InputCommand::Enum::None;
+    public InputSelectionPolicy selection = InputSelectionPolicy::Enum::None;
+    public b8 edit = true;
+    // Allow this command's ordinary native character to reach the editor as well.
+    public b8 allowText = false;
+}
+
 // Adapters assign device and control identities; control zero is invalid.
 class InputSource{
     public u64 device = 0u;

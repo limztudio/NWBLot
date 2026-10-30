@@ -21,15 +21,10 @@ NWB_IMPL_BEGIN
 
 
 Expected<ReflectionFeedbackExtent> ComputeReflectionFeedbackExtent(const u32 width, const u32 height)noexcept{
-    if(width == 0u || height == 0u)
+    ReflectionFeedbackExtent extent;
+    if(!TryComputeReflectionFeedbackExtent(width, height, extent))
         return MakeUnexpected(Failure{});
-    const u32 tilesX = (width - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE + 1u;
-    const u32 tilesY = (height - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE + 1u;
-    const u64 entryCount = static_cast<u64>(tilesX) * tilesY * NWB_REFLECTION_FEEDBACK_SURFACE_COUNT;
-    const u64 byteCount = NWB_REFLECTION_FEEDBACK_HEADER_BYTES + entryCount * NWB_REFLECTION_FEEDBACK_ENTRY_BYTES;
-    if(entryCount > Limit<u32>::s_Max || byteCount > Limit<u32>::s_Max)
-        return MakeUnexpected(Failure{});
-    return ReflectionFeedbackExtent{width, height, tilesX, tilesY, static_cast<u32>(entryCount), static_cast<u32>(byteCount)};
+    return extent;
 }
 
 
@@ -152,4 +147,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

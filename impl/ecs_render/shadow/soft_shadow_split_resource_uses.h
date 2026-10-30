@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
@@ -22,21 +23,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// Crossings, overflow list, and overflow arguments.
-inline constexpr usize s_HardwareTransparentShadowScratchCount = 3u;
-
-// Frozen prepared soft-transparent route shared by the split resource declarations and the split task chain.
-struct SoftShadowSplitRoute{
-    b8 hardwareShadowSupported = false;
-    b8 hardwareCsgShadow = false;
-    b8 csgShadow = false;
-    b8 traceGeometryStatesGraphOwned = false;
-    b8 combinedSoftUpsample = false;
-    b8 combinedSoftWavelet = false;
-    b8 combinedSoftTemporal = false;
-    b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
-};
 
 struct SoftShadowSplitResourceInputs{
     const DeferredFrameTargets& targets;
@@ -116,4 +102,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

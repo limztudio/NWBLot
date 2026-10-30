@@ -42,5 +42,17 @@ enum<u8> RenderableMeshResolution{
     enum Unavailable
 }
 
+enum<u8> BufferSetupFailure{
+    enum EmptyPayload,
+    enum ByteSizeOverflow,
+    enum CreateFailed
+}
+
+// ByteAddress loads whole words; zero-fill tails so terminal u8 decodes stay in range.
+const usize s_RawByteLoadAlignmentBytes = 4u;
+
+const StringView s_RtTriangleIndicesBufferName = ":rt_triangle_indices";
+const StringView s_RtTriangleAttributesBufferName = ":rt_triangle_attributes";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

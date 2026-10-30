@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/gi/quality_settings.adhd.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -20,17 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CPU/shader ABI mirror for surfel constants.
-struct NwbSurfelConstantsGpu{
-    Float4 hashPoolFrameDivisor;    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
-    Float4 cellSizeRadiusBiasAccum;  // x = hash cell size, y = default radius, z = normal bias, w = accumulation cap
-    Float4 ageRaysTileScreen;       // x = max age, y = maximum rays/surfel, z = spawn tile (px), w = screen width
-    Float4 screenHeightPad;         // x = screen height, y = resolve factor, zw = pad
-};
 static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(Float4) * NWB_SURFEL_CONSTANTS_FLOAT4_COUNT, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
-
-// Offset trace and gather points to avoid self-intersection.
-inline constexpr f32 s_SurfelNormalBias = 0.05f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,10 +45,6 @@ template<typename StateT>
     params.screenHeightPad = Float4(static_cast<f32>(targets.height), static_cast<f32>(targets.surfelResolveFactor), 0.0f, 0.0f);
     return params;
 }
-
-// Delayed counter readback avoids stalling on the asynchronous copy.
-inline constexpr u32 s_SurfelCountLogInterval = 120u;
-inline constexpr u32 s_SurfelCountLogDelay = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -356,4 +343,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

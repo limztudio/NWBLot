@@ -10,6 +10,44 @@
 
 const u32 s_ModelBinaryMagic = 0x4D444C32u; // MDL2
 
+const Name s_AssetsModelLoadBinaryArena = "impl/assets_model/load_binary";
+const Name s_AssetsModelSerializeArena = "impl/assets_model/serialize";
+
+[serialize]
+class ModelHeaderBinary{
+    public u32 magic = s_ModelBinaryMagic;
+    public u32 padding0 = 0u;
+    public u64 skeletonObjectCount = 0u;
+    public u64 staticMeshObjectCount = 0u;
+    public u64 skinnedMeshObjectCount = 0u;
+}
+
+[serialize]
+class ModelSkeletonObjectBinary{
+    public NameHash nameHash;
+    public NameHash skeletonNameHash;
+    public SkeletonJointMatrix transform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+}
+
+[serialize]
+class ModelStaticMeshObjectBinary{
+    public NameHash nameHash;
+    public NameHash meshNameHash;
+    public NameHash materialNameHash;
+    public NameHash parentObjectNameHash;
+    public NameHash parentJointNameHash;
+    public SkeletonJointMatrix transform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+}
+
+[serialize]
+class ModelSkinnedMeshObjectBinary{
+    public NameHash nameHash;
+    public NameHash skinNameHash;
+    public NameHash materialNameHash;
+    public NameHash skeletonObjectNameHash;
+    public SkeletonJointMatrix transform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+}
+
 [reflect]
 class ModelSkeletonObject{
     public SkeletonJointMatrix transform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);

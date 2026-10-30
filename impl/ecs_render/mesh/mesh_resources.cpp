@@ -13,7 +13,7 @@
 #include <impl/assets_mesh/meshlet_vertex_attributes.h>
 #include <impl/ecs_mesh/system.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
-#include <impl/ecs_mesh/runtime/resource_names.h>
+#include <impl/ecs_mesh/runtime/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/manager.h>
@@ -339,7 +339,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
             return MakeUnexpected(Failure{});
         }
 
-        const auto indexBufferName = DeriveName(meshPath, MeshResourceNames::s_RtTriangleIndicesBufferName);
+        const auto indexBufferName = DeriveName(meshPath, s_RtTriangleIndicesBufferName);
         if(!indexBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace index buffer name for mesh '{}'"), ConvertString(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
@@ -378,7 +378,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
             return MakeUnexpected(Failure{});
         }
 
-        const auto attributeBufferName = DeriveName(meshPath, MeshResourceNames::s_RtTriangleAttributesBufferName);
+        const auto attributeBufferName = DeriveName(meshPath, s_RtTriangleAttributesBufferName);
         if(!attributeBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace attribute buffer name for mesh '{}'"), ConvertString(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});

@@ -17,6 +17,14 @@ const u32 s_ScriptTagByte0Shift = 24u;
 const u32 s_ScriptTagByte1Shift = 16u;
 const u32 s_ScriptTagByte2Shift = 8u;
 const u32 s_TextDefaultScriptTag = 0x4c61746eu;
+const u32 s_ScriptTagLetterCount = 4u;
+const u32 s_ScriptTagLetterMask = 0xffu;
+const u32 s_ScriptTagBitsPerByte = 8u;
+const u32 s_TextUnicodeSpace = 0x20u;
+const u32 s_TextUnicodeDelete = 0x7fu;
+const u32 s_TextUnicodeC1Last = 0x9fu;
+const u32 s_TextUnicodeLineSeparator = 0x2028u;
+const u32 s_TextUnicodeParagraphSeparator = 0x2029u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,6 +61,75 @@ class FontMetrics{
     public f32 ascender = 0.0f;
     public f32 descender = 0.0f;
     public f32 lineGap = 0.0f;
+}
+
+b8 IsTextAsciiAlpha(in u32 codePoint){
+    return (codePoint >= 0x41u && codePoint <= 0x5au) || (codePoint >= 0x61u && codePoint <= 0x7au);
+}
+
+b8 IsTextAsciiAlphaNumericOrHyphen(in u32 codePoint){
+    return IsTextAsciiAlpha(codePoint) || (codePoint >= 0x30u && codePoint <= 0x39u) || codePoint == 0x2du;
+}
+
+// This validates scalar UTF-8 and admitted label controls, not Unicode grapheme or paragraph segmentation.
+TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBreaks){
+    if(
+        request.text.size() > s_TextMaxBytes || !isFinite(request.fontSize) || request.fontSize < 1.0f / s_TextFixedPointScale
+        || request.fontSize > s_TextMaxFontSize || request.scriptTag == 0u || request.language.empty() || request.language.size() > s_TextMaxLanguageBytes
+        || (request.direction != TextDirection::Enum::LeftToRight && request.direction != TextDirection::Enum::RightToLeft)
+    ){
+        return TextLayoutStatus::Enum::InvalidParameters;
+    }
+    for(u32 byte = 0u; byte < s_ScriptTagLetterCount; ++byte){
+        const u32 letter = (request.scriptTag >> (byte * s_ScriptTagBitsPerByte)) & s_ScriptTagLetterMask;
+        if(!IsTextAsciiAlpha(letter)){
+            return TextLayoutStatus::Enum::InvalidParameters;
+        }
+    }
+    b8 validLanguage = true;
+    const StringView language = request.language;
+    native(in language, mut validLanguage){
+        for(const char character : language){
+            if(!IsTextAsciiAlphaNumericOrHyphen(static_cast<u8>(character))){
+                validLanguage = false;
+                break;
+            }
+        }
+    }
+    if(!validLanguage){
+        return TextLayoutStatus::Enum::InvalidParameters;
+    }
+    TextLayoutStatus utf8Status = TextLayoutStatus::Enum::Success;
+    const StringView text = request.text;
+    native(in text, in allowLineBreaks, mut utf8Status){
+        usize offset = 0u;
+        while(offset < text.size()){
+            const auto decoded = DecodeUtf8Scalar(text.substr(offset));
+            if(!decoded || decoded->codePoint == 0u){
+                utf8Status = TextLayoutStatus::InvalidUtf8;
+                break;
+            }
+            const u32 scalar = decoded->codePoint;
+            offset += static_cast<usize>(decoded->byteCount);
+            if(scalar == '\r'){
+                if(!allowLineBreaks || offset == text.size() || text[offset] != '\n'){
+                    utf8Status = TextLayoutStatus::UnsupportedControl;
+                    break;
+                }
+            }
+            else if(scalar == '\n'){
+                if(!allowLineBreaks){
+                    utf8Status = TextLayoutStatus::UnsupportedControl;
+                    break;
+                }
+            }
+            else if(scalar < s_TextUnicodeSpace || (scalar >= s_TextUnicodeDelete && scalar <= s_TextUnicodeC1Last) || scalar == s_TextUnicodeLineSeparator || scalar == s_TextUnicodeParagraphSeparator){
+                utf8Status = TextLayoutStatus::UnsupportedControl;
+                break;
+            }
+        }
+    }
+    return utf8Status;
 }
 
 

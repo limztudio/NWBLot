@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/runtime/runtime.h>
@@ -20,26 +21,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// Summarizes one owner-serialized ledger drain at the compiler boundary.
-struct RendererTaskTimingFeedbackDrainResult{
-    usize acceptedAssignmentCount = 0u;
-    usize recordedSampleCount = 0u;
-    usize retiredSampleCount = 0u;
-    usize rejectedAssignmentCount = 0u;
-    usize rejectedSampleCount = 0u;
-};
-
-
-namespace RendererTaskTimingFeedbackCollectionAction{
-    enum Enum : u8{
-        None,
-        Enable,
-        Disable,
-
-        Count,
-    };
-};
 
 struct RendererTaskTimingFeedbackPolicyTransition{
     Core::GpuTaskTimingFeedbackPolicy previousPolicy;
@@ -149,4 +130,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

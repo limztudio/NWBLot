@@ -30,55 +30,12 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct MeshFrameHeapSlots{
-    u32 instance = 0u;
-    u32 materialTyped = 0u;
-    u32 view = 0u;
-    // Emulation writable vertex buffer; mesh-shader draws leave this lane zero.
-    u32 generatedVertex = 0u;
-};
-
-struct ShaderDrivenPushConstants{
-    u32 meshletCount = 0;
-    u32 instanceIndex = 0;
-    u32 materialConstantByteOffset = 0;
-    u32 dispatchFlags = 0;
-    Float4 viewportRect = Float4(0.f, 0.f, 0.f, 0.f);
-    Float4 scissorRect = Float4(0.f, 0.f, 0.f, 0.f);
-    MeshFrameHeapSlots frameHeapSlots;
-};
-
-struct TransparentDrawPushConstants{
-    ShaderDrivenPushConstants mesh;
-    RendererAvboitPushConstants avboit;
-};
-
-struct EmulatedVertex{
-    Float4 position;
-    Half4U normal;
-    Half4U tangent;
-    Float2U uv0;
-    Half4U color;
-    Float4 worldPosition;
-};
-
-struct SceneShadingGpuData{
-    // xyz = camera world position, w = active light count.
-    Float4 cameraPositionLightCount = Float4(0.f, 0.f, 0.f, 0.f);
-};
-
-struct SceneLightGpuData{
-    // xyz = world position (point/spot), w = spot inner cone cosine.
-    Float4 position = Float4(0.f, 0.f, 0.f, 1.f);
-    // directional: toward-light; spot: emission axis. w = spot outer cone cosine.
-    Float4 direction = Float4(0.f, 0.f, -1.f, 1.f);
-    // xyz = color, w = intensity.
-    Float4 colorIntensity = Float4(1.f, 1.f, 1.f, 1.f);
-    // x = range, y = light type, z = shadow slot (negative = no slot), w = caustic slot (negative = no slot).
-    Float4 params = Float4(0.f, 0.f, -1.f, -1.f);
-    // Soft-shadow source size: x = angular radius, y = punctual radius; z/w reserved.
-    Float4 params2 = Float4(NWB::Impl::Scene::s_LightDirectionalAngularRadius, NWB::Impl::Scene::s_LightPunctualSourceRadius, 0.f, 0.f);
-};
+using NWB::Impl::MeshFrameHeapSlots;
+using NWB::Impl::ShaderDrivenPushConstants;
+using NWB::Impl::TransparentDrawPushConstants;
+using NWB::Impl::EmulatedVertex;
+using NWB::Impl::SceneShadingGpuData;
+using NWB::Impl::SceneLightGpuData;
 
 static_assert(sizeof(MeshFrameHeapSlots) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_COUNT, "Mesh frame heap-slot payload must stay a uint4");
 static_assert(offsetof(MeshFrameHeapSlots, instance) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_INSTANCE, "Instance heap slot must map to frame heap lane x");
@@ -209,4 +166,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

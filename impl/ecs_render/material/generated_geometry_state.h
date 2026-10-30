@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/material/pipeline_types.adhd.h>
 
 #include <core/graphics/rhi/resource.h>
 
@@ -25,18 +26,7 @@ namespace ECSRenderDetail{
 // Generated geometry stores compact vertices and indices in one allocation; non-indexed draws use only its vertex region.
 inline constexpr Core::ResourceStates::Mask s_GeneratedGeometryRasterState = Core::ResourceStates::VertexBuffer | Core::ResourceStates::IndexBuffer;
 
-
-// Buffer identity alone does not describe which regions a retained draw generates and consumes.
-struct GeneratedGeometryOutputLayout{
-    u32 m_indexByteOffset = 0u;
-    b8 m_indexed = false;
-
-
-public:
-    [[nodiscard]] constexpr b8 matches(const u32 indexByteOffset, const b8 indexed)const noexcept{
-        return m_indexByteOffset == indexByteOffset && m_indexed == indexed;
-    }
-};
+using NWB::Impl::GeneratedGeometryOutputLayout;
 
 
 };
@@ -49,4 +39,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

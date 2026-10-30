@@ -122,7 +122,7 @@ void SourceEmitter::emitSwitchIfChainStatements(
             emitIndent(out, indent);
             out.append("if(");
             if(child->condition)
-                emitExpr(out, *child->condition);
+                emitExpr(out, *child->condition, true);
             out.append("){\r\n");
             if(isLastInCase)
                 emitSwitchIfChainStatements(out, child->statements, indent + 1u);
@@ -303,7 +303,7 @@ void SourceEmitter::emitStmt(
         emitIndent(out, indent);
         out.append("if(");
         if(stmt.condition)
-            emitExpr(out, *stmt.condition);
+            emitExpr(out, *stmt.condition, true);
         out.append("){\r\n");
         emitStatementList(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
@@ -542,7 +542,7 @@ void SourceEmitter::emitStmt(
         }
         out.append("; ");
         if(stmt.condition)
-            emitExpr(out, *stmt.condition);
+            emitExpr(out, *stmt.condition, true);
         out.append("; ");
         if(stmt.stepExpr)
             emitExpr(out, *stmt.stepExpr);
@@ -556,7 +556,7 @@ void SourceEmitter::emitStmt(
         emitIndent(out, indent);
         out.append("while(");
         if(stmt.condition)
-            emitExpr(out, *stmt.condition);
+            emitExpr(out, *stmt.condition, true);
         out.append("){\r\n");
         emitLoopBodyStatements(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
@@ -570,7 +570,7 @@ void SourceEmitter::emitStmt(
         emitIndent(out, indent);
         out.append("}while(");
         if(stmt.condition)
-            emitExpr(out, *stmt.condition);
+            emitExpr(out, *stmt.condition, true);
         out.append(");\r\n");
         break;
     }

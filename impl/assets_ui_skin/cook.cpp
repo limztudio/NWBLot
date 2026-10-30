@@ -10,7 +10,6 @@
 
 #include "cook.h"
 #include "toolkit_contract.h"
-#include "binary_payload.h"
 
 #include <core/common/log.h>
 
@@ -33,8 +32,8 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     if(!skin.validatePayload())
         return false;
 
-    usize reserveBytes = sizeof(UiSkinBinaryPayload::HeaderBinary);
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, skin.regions().size(), sizeof(UiSkinBinaryPayload::RegionBinary))){
+    usize reserveBytes = sizeof(UiSkinHeaderBinary);
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, skin.regions().size(), sizeof(UiSkinRegionBinary))){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: payload size overflows"));
         return false;
     }
@@ -47,7 +46,7 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         return false;
     }
 
-    UiSkinBinaryPayload::HeaderBinary header;
+    UiSkinHeaderBinary header;
     header.textureNameHash = skin.texture().name().hash();
     header.atlasWidth = skin.atlasWidth();
     header.atlasHeight = skin.atlasHeight();
@@ -58,7 +57,7 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     outBinary.reserve(reserveBytes);
     AppendPOD(outBinary, header);
     for(const UiSkinRegion& region : skin.regions()){
-        UiSkinBinaryPayload::RegionBinary packed;
+        UiSkinRegionBinary packed;
         packed.nameHash = region.name.hash();
         packed.x = region.rectangle.x;
         packed.y = region.rectangle.y;
@@ -124,4 +123,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -3,6 +3,45 @@
 
 
 const u32 s_MaterialBinaryMagic = 0x4D544C41u; // MTLA
+const usize s_MaterialShaderEntryBytes = 65u;
+const usize s_MaterialTypedLayoutBlockBytes = 80u;
+const usize s_MaterialTypedLayoutFieldBytes = 88u;
+const usize s_MaterialResourceReferenceBytes = 200u;
+
+const StringView s_MaterialAvboitAccumulatePassLabel = "accumulate";
+const StringView s_MaterialAvboitOccupancyPassLabel = "occupancy";
+const StringView s_MaterialAvboitExtinctionPassLabel = "extinction";
+
+const StringView s_MeshComputeArchiveStageText = "mesh_compute";
+const StringView s_MeshComputeImplicitDefineText = "NWB_MESH_SHADER_EMULATION_COMPUTE";
+const Name s_MeshComputeArchiveStageName = "mesh_compute";
+
+const StringView s_MaterialMetaInterfaceField = "interface";
+const StringView s_MaterialMetaSurfaceField = "surface";
+const StringView s_MaterialMetaShadersField = "shaders";
+const StringView s_MaterialMetaShaderVariantField = "shader_variant";
+const StringView s_MaterialMetaParametersField = "parameters";
+const StringView s_MaterialMetaTransparentField = "transparent";
+const StringView s_MaterialMetaTwoSidedField = "two_sided";
+const StringView s_MaterialMetaRefractiveField = "refractive";
+const StringView s_MaterialMetaBxdfField = "bxdf";
+
+b8 IsAllowedMaterialAssetField(in StringView fieldName){
+    switch(fieldName){
+        case "interface":
+        case "surface":
+        case "shaders":
+        case "shader_variant":
+        case "parameters":
+        case "transparent":
+        case "two_sided":
+        case "refractive":
+        case "bxdf":
+            return true;
+        default:
+            return false;
+    }
+}
 
 [reflect]
 enum<u32> MaterialFlag{
@@ -223,6 +262,127 @@ class MaterialResourceReference{
     public AssetRef<Sampler> samplerAsset;
     public MaterialResourceKind resourceKind = MaterialResourceKind::Enum::None;
     public u32 constantByteOffset = 0u;
+}
+
+[serialize]
+class MaterialTypedLayoutBlockBinary{
+    public NameHash blockNameHash;
+    public u32 blockClass = 0u;
+    public u32 fieldBegin = 0u;
+    public u32 fieldCount = 0u;
+    public u32 byteSize = 0u;
+}
+
+[serialize]
+class MaterialTypedLayoutFieldBinary{
+    public NameHash fieldNameHash;
+    public u32 fieldType = 0u;
+    public u32 offset = 0u;
+    public u32x4u defaultValue;
+}
+
+// Deserialization initializes the typed asset reference; runtime patches its resolved heap slot at constantByteOffset.
+[serialize]
+class MaterialResourceReferenceBinary{
+    public NameHash blockNameHash;
+    public NameHash fieldNameHash;
+    public NameHash resourceNameHash;
+    public u32 resourceKind = 0u;
+    public u32 constantByteOffset = 0u;
+}
+
+b8 ComputeMaterialTypedBlockByteSize(in Span<MaterialTypedLayoutBlock> blocks, mut usize outByteSize){
+    usize byteSize = 0u;
+    for(usize b = 0u; b < blocks.size(); ++b){
+        const usize blockBytes = cast<usize>(blocks[b].byteSize);
+        if(blockBytes > 0xFFFFFFFFFFFFFFFFul - byteSize){
+            outByteSize = 0u;
+            return false;
+        }
+        byteSize += blockBytes;
+    }
+    outByteSize = byteSize;
+    return true;
+}
+
+b8 ValidateMaterialResourceReferences(
+    in Span<MaterialTypedLayoutBlock> blocks,
+    in Span<MaterialTypedLayoutField> fields,
+    in Span<MaterialResourceReference> resourceReferences
+){
+    usize resourceFieldCount = 0u;
+    u32 constantByteBegin = 0u;
+    for(usize b = 0u; b < blocks.size(); ++b){
+        const MaterialTypedLayoutBlock block = blocks[b];
+        if(!IsValidMaterialBlockClass(block.blockClass)){
+            return false;
+        }
+        if(cast<usize>(block.fieldBegin) > fields.size() || cast<usize>(block.fieldCount) > fields.size() - cast<usize>(block.fieldBegin)){
+            return false;
+        }
+
+        for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
+            const MaterialTypedLayoutField field = fields[cast<usize>(block.fieldBegin) + cast<usize>(fieldOffset)];
+            if(!IsMaterialLayoutResourceFieldType(field.fieldType)){
+                continue;
+            }
+
+            // Descriptor slots are resolved during material preparation; instance overrides cannot replace them.
+            if(block.blockClass != MaterialBlockClass::Enum::MaterialConstant){
+                return false;
+            }
+            if(field.offset > 0xFFFFFFFFu - constantByteBegin){
+                return false;
+            }
+
+            ++resourceFieldCount;
+            const MaterialResourceKind expectedKind = MaterialLayoutFieldResourceKind(field.fieldType);
+            const u32 expectedByteOffset = constantByteBegin + field.offset;
+            b8 foundReference = false;
+            for(usize r = 0u; r < resourceReferences.size(); ++r){
+                const MaterialResourceReference resourceReference = resourceReferences[r];
+                if(resourceReference.blockName != block.blockName || resourceReference.fieldName != field.fieldName){
+                    continue;
+                }
+                if(foundReference){
+                    return false;
+                }
+                if(resourceReference.resourceKind != expectedKind || resourceReference.constantByteOffset != expectedByteOffset){
+                    return false;
+                }
+
+                switch(expectedKind){
+                    case MaterialResourceKind::Enum::SampledImage2D:
+                        if(!resourceReference.textureAsset.valid() || resourceReference.samplerAsset.valid()){
+                            return false;
+                        }
+                        break;
+                    case MaterialResourceKind::Enum::Sampler:
+                        if(!resourceReference.samplerAsset.valid() || resourceReference.textureAsset.valid()){
+                            return false;
+                        }
+                        break;
+                    default:
+                        return false;
+                }
+
+                foundReference = true;
+            }
+            if(!foundReference){
+                return false;
+            }
+        }
+
+        if(block.blockClass == MaterialBlockClass::Enum::MaterialConstant){
+            if(block.byteSize > 0xFFFFFFFFu - constantByteBegin){
+                return false;
+            }
+            constantByteBegin += block.byteSize;
+        }
+    }
+
+    // Each record maps to one resource field. Dup rejects above also block stray numeric/mutable refs.
+    return resourceFieldCount == resourceReferences.size();
 }
 
 

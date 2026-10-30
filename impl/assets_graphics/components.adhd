@@ -25,5 +25,47 @@ class RendererComponentAsset{
     public RendererComponent component;
 }
 
+[serialize]
+class SingleAssetRefComponentPayloadBinary{
+    public NameHash assetHash;
+}
+
+[serialize]
+class RendererComponentPayloadBinary{
+    public NameHash materialHash;
+    public NameHash opticalVolumeGroupHash;
+    public i32 opticalVolumePriority = 0;
+    public i32 opticalMediumPriority = 0;
+    public u8 visible = 1u;
+    public u8 opticalVolumeCoincidence = 0u;
+    public u8 opticalBoundaryMode = 0u;
+    public u8 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+}
+
+class ShaderStageKey{
+    public Name shaderName;
+    public Name stageName;
+
+    public ShaderStageKey(){
+        this.shaderName = s_NameNone;
+        this.stageName = s_NameNone;
+    }
+
+    public ShaderStageKey(in Name inShaderName, in Name inStageName){
+        this.shaderName = inShaderName;
+        this.stageName = inStageName;
+    }
+
+    public usize hash()const{
+        usize seed = hashValue(this.shaderName);
+        return hashCombineValue(seed, this.stageName);
+    }
+
+    public b8 operator==(in ShaderStageKey rhs)const{
+        return this.shaderName == rhs.shaderName && this.stageName == rhs.stageName;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

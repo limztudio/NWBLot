@@ -23,27 +23,8 @@ NWB_IMPL_BEGIN
 
 class Texture;
 
-struct UiSkinPalette{
-    Array<UiSkinColor, UiSkinColorRole::kCount> colors{{
-        s_DefaultTextNormalColor, // TextNormal
-        s_DefaultTextDisabledColor, // TextDisabled
-        s_DefaultTextTooltipColor, // TextTooltip
-        s_DefaultEditBackgroundColor, // EditBackground
-        s_DefaultEditSelectionColor, // EditSelection
-        s_DefaultEditInactiveSelectionColor, // EditInactiveSelection
-        s_DefaultEditCaretColor, // EditCaret
-        s_DefaultEditPreeditColor, // EditPreedit
-        s_DefaultScrollbarTrackColor, // ScrollbarTrack
-        s_DefaultScrollbarThumbColor, // ScrollbarThumb
-        s_DefaultScrollbarDisabledColor, // ScrollbarDisabled
-        s_DefaultPopupBackdropColor, // PopupBackdrop
-        s_DefaultControlHoverTintColor, // ControlHoverTint
-        s_DefaultControlPressedTintColor, // ControlPressedTint
-        s_DefaultControlDisabledTintColor, // ControlDisabledTint
-        s_DefaultProgressTrackTintColor, // ProgressTrackTint
-        s_DefaultProgressFillTintColor, // ProgressFillTint
-    }};
-};
+inline constexpr TStringView s_UiSkinAssetKindLabel = NWB_TEXT("UI skin");
+inline constexpr TStringView s_UiSkinLoadBinaryContext = NWB_TEXT("UiSkin::loadBinary");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,4 +108,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

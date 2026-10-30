@@ -121,11 +121,11 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
     asset.setMaterialInterface(*materialInterface);
     asset.setShadingModelId(materialEntry.shadingModelId);
     asset.setSurfaceDispatchId(materialEntry.surfaceDispatchId);
-    if(!SetOptionalAvboitPixelShader<&Material::setAvboitAccumulatePixelShader>(materialEntry, materialEntry.avboitAccumulatePixelShaderName, MaterialBinaryPayload::s_AvboitAccumulatePassLabel, asset))
+    if(!SetOptionalAvboitPixelShader<&Material::setAvboitAccumulatePixelShader>(materialEntry, materialEntry.avboitAccumulatePixelShaderName, s_MaterialAvboitAccumulatePassLabel, asset))
         return MakeUnexpected(Failure{});
-    if(!SetOptionalAvboitPixelShader<&Material::setAvboitOccupancyPixelShader>(materialEntry, materialEntry.avboitOccupancyPixelShaderName, MaterialBinaryPayload::s_AvboitOccupancyPassLabel, asset))
+    if(!SetOptionalAvboitPixelShader<&Material::setAvboitOccupancyPixelShader>(materialEntry, materialEntry.avboitOccupancyPixelShaderName, s_MaterialAvboitOccupancyPassLabel, asset))
         return MakeUnexpected(Failure{});
-    if(!SetOptionalAvboitPixelShader<&Material::setAvboitExtinctionPixelShader>(materialEntry, materialEntry.avboitExtinctionPixelShaderName, MaterialBinaryPayload::s_AvboitExtinctionPassLabel, asset))
+    if(!SetOptionalAvboitPixelShader<&Material::setAvboitExtinctionPixelShader>(materialEntry, materialEntry.avboitExtinctionPixelShaderName, s_MaterialAvboitExtinctionPassLabel, asset))
         return MakeUnexpected(Failure{});
     asset.setTransparent(materialEntry.transparent);
     asset.setTwoSided(materialEntry.twoSided);
@@ -279,20 +279,20 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material resource reference count exceeds u32 range"));
         return false;
     }
-    if(MaterialBinaryPayload::ComputeMaterialTypedLayoutHash(material.typedLayoutBlocks(), material.typedLayoutFields()) != material.typedLayoutHash()){
+    if(ComputeMaterialTypedLayoutHash(material.typedLayoutBlocks(), material.typedLayoutFields()) != material.typedLayoutHash()){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed layout hash mismatch"));
         return false;
     }
-    const auto expectedTypedBlockByteSize = MaterialBinaryPayload::ComputeMaterialTypedBlockByteSize(material.typedLayoutBlocks());
-    if(!expectedTypedBlockByteSize){
+    usize expectedTypedBlockByteSize = 0u;
+    if(!ComputeMaterialTypedBlockByteSize(material.typedLayoutBlocks(), expectedTypedBlockByteSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block bytes do not match typed layout"));
         return false;
     }
-    if(*expectedTypedBlockByteSize != material.typedBlockBytes().size()){
+    if(expectedTypedBlockByteSize != material.typedBlockBytes().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block bytes do not match typed layout"));
         return false;
     }
-    if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(material.typedLayoutBlocks(), material.typedLayoutFields(), material.resourceReferences())){
+    if(!ValidateMaterialResourceReferences(material.typedLayoutBlocks(), material.typedLayoutFields(), material.resourceReferences())){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material resource references do not match typed layout"));
         return false;
     }
@@ -302,14 +302,14 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         && AddBinaryReserveBytes(reserveBytes, sizeof(u64))
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryRepeatedReserveBytes(reserveBytes, material.typedLayoutBlocks().size(), MaterialBinaryPayload::s_TypedLayoutBlockBytes)
-        && AddBinaryRepeatedReserveBytes(reserveBytes, material.typedLayoutFields().size(), MaterialBinaryPayload::s_TypedLayoutFieldBytes)
+        && AddBinaryRepeatedReserveBytes(reserveBytes, material.typedLayoutBlocks().size(), s_MaterialTypedLayoutBlockBytes)
+        && AddBinaryRepeatedReserveBytes(reserveBytes, material.typedLayoutFields().size(), s_MaterialTypedLayoutFieldBytes)
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
         && AddBinaryReserveBytes(reserveBytes, material.typedBlockBytes().size())
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryRepeatedReserveBytes(reserveBytes, material.resourceReferences().size(), MaterialBinaryPayload::s_ResourceReferenceBytes)
+        && AddBinaryRepeatedReserveBytes(reserveBytes, material.resourceReferences().size(), s_MaterialResourceReferenceBytes)
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), MaterialBinaryPayload::s_ShaderEntryBytes)
+        && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), s_MaterialShaderEntryBytes)
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
@@ -335,7 +335,7 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     AppendPOD(outBinary, static_cast<u32>(material.typedLayoutBlocks().size()));
     AppendPOD(outBinary, static_cast<u32>(material.typedLayoutFields().size()));
     for(const MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
-        MaterialBinaryPayload::MaterialTypedLayoutBlockBinary blockBinary;
+        MaterialTypedLayoutBlockBinary blockBinary;
         blockBinary.blockNameHash = block.blockName.hash();
         blockBinary.blockClass = static_cast<u32>(block.blockClass);
         blockBinary.fieldBegin = block.fieldBegin;
@@ -344,7 +344,7 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         AppendPOD(outBinary, blockBinary);
     }
     for(const MaterialTypedLayoutField& field : material.typedLayoutFields()){
-        MaterialBinaryPayload::MaterialTypedLayoutFieldBinary fieldBinary;
+        MaterialTypedLayoutFieldBinary fieldBinary;
         fieldBinary.fieldNameHash = field.fieldName.hash();
         fieldBinary.fieldType = static_cast<u32>(field.fieldType);
         fieldBinary.offset = field.offset;
@@ -356,7 +356,7 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     AppendPOD(outBinary, static_cast<u32>(material.resourceReferences().size()));
     for(const MaterialResourceReference& resourceReference : material.resourceReferences()){
         const Name& resourceName = resourceReference.resourceKind == MaterialResourceKind::SampledImage2D ? resourceReference.textureAsset.name() : resourceReference.samplerAsset.name();
-        MaterialBinaryPayload::MaterialResourceReferenceBinary resourceReferenceBinary;
+        MaterialResourceReferenceBinary resourceReferenceBinary;
         resourceReferenceBinary.blockNameHash = resourceReference.blockName.hash();
         resourceReferenceBinary.fieldNameHash = resourceReference.fieldName.hash();
         resourceReferenceBinary.resourceNameHash = resourceName.hash();
@@ -421,4 +421,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

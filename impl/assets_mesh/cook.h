@@ -27,14 +27,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct MeshVertexRef{
-    u32 position = s_MeshMissingStreamIndex;
-    u32 normal = s_MeshMissingStreamIndex;
-    u32 tangent = s_MeshMissingStreamIndex;
-    u32 uv0 = s_MeshMissingStreamIndex;
-    u32 color = s_MeshMissingStreamIndex;
-};
-
 struct MeshCookEntry{
     Name virtualPath = s_NameNone;
     Core::Assets::AssetVector<Float3U> positions;
@@ -99,4 +91,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

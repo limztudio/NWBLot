@@ -6,8 +6,8 @@
 
 
 #include "light_space_plan.h"
-#include "light_space_capture_history.h"
 #include "light_space_csg.h"
+#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
 #include <impl/ecs_render/shadow/quality_settings.adhd.h>
 
 #include <core/alloc/global.h>
@@ -43,35 +43,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct LightSpaceShadowPush{
-    u32 viewSlot = 0u;
-    u32 viewIndex = 0u;
-    u32 materialContextSlot = 0u;
-    u32 countsSlot = 0u;
-    u32 eventsSlot = 0u;
-    u32 depthSlot = 0u;
-    u32 instanceIndex = 0u;
-    u32 instanceCount = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 frameIndex = 0u;
-    u32 sampleCount = 0u;
-    u32 deferredResourcesSlot = 0u;
-    u32 outputSlot = 0u;
-    u32 sceneRootSlot = 0u;
-    u32 viewCount = 0u;
-    u32 csgContextSlot = 0u;
-    u32 csgOpaqueDepthSlot = 0u;
-    u32 csgFlags = 0u;
-    u32 receiverFactor = s_ShadowReceiverFactorHalf;
-    u32 captureDrawCount = 0u;
-    u32 casterDrawOffset = 0u;
-    u32 meshletDescSlot = 0u;
-    u32 meshletBoundsSlot = 0u;
-    u32 meshletCount = 0u;
-    u32 receiverViewSlot = 0u;
-    u32 receiverCsgSampleStateSlot = 0u;
-};
 static_assert(sizeof(LightSpaceShadowPush) == NWB_LIGHT_SPACE_PUSH_BYTES);
 static_assert(offsetof(LightSpaceShadowPush, receiverFactor) == 76u);
 static_assert(offsetof(LightSpaceShadowPush, captureDrawCount) == 80u);
@@ -81,17 +52,6 @@ static_assert(offsetof(LightSpaceShadowPush, meshletBoundsSlot) == 92u);
 static_assert(offsetof(LightSpaceShadowPush, meshletCount) == 96u);
 static_assert(offsetof(LightSpaceShadowPush, receiverViewSlot) == 100u);
 static_assert(offsetof(LightSpaceShadowPush, receiverCsgSampleStateSlot) == 104u);
-
-struct LightSpaceShadowStorageCapacity{
-    u64 countBytes = 0u;
-    u64 eventBytes = 0u;
-    u64 viewBytes = 0u;
-    u64 drawArgumentBytes = 0u;
-    u32 textureResolution = 0u;
-    u32 arrayLayers = 0u;
-};
-
-[[nodiscard]] b8 LightSpaceShadowStorageFits(const LightSpacePlan& plan, const LightSpaceShadowStorageCapacity& capacity)noexcept;
 
 struct LightSpaceShadowCaster{
     Core::BufferHandle triangleIndexBuffer;
@@ -223,4 +183,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

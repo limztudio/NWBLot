@@ -255,6 +255,8 @@ MStringView TypeChecker::inferExprTypeName(
             if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
                 if(fnInfo->returnRule == BuiltinFunctionReturnRule::Bool)
                     return "b8";
+                if(fnInfo->returnRule == BuiltinFunctionReturnRule::Usize)
+                    return "usize";
                 if(fnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar){
                     const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
                     if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(argType))
@@ -447,6 +449,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                         return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
                     if(memberInfo->returnRule == BuiltinMemberReturnRule::AtomicValue && lhsType == "Atomic")
                         return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
+                    if(mName == "subspan" && lhsType == "Span")
+                        return m_symbols.unwrapTypeAlias(recvTypeRef);
                 }
             }
             if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
@@ -579,4 +583,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

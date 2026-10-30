@@ -9,7 +9,6 @@ target_link_libraries(nwb_assets_font_types PUBLIC nwb_assets)
 set(_nwb_font_runtime_sources
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/font_validation.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/source_directory.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/prepared_source.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"

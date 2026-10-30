@@ -29,6 +29,13 @@ class Color{
     public f32 a = 1.0f;
 }
 
+[serialize]
+class Vertex{
+    public Point position;
+    public Point texCoord;
+    public Color color;
+}
+
 class DisplayMetrics{
     public f32 logicalWidth = 0.0f;
     public f32 logicalHeight = 0.0f;
@@ -67,6 +74,52 @@ enum<u8> UiRectPrecision{
     enum PreciseExtents,
     enum EmptyPaint,
 }
+
+const u32 s_GlyphAtlasPageExtent = 512u;
+const u32 s_GlyphAtlasGlyphGutter = 2u;
+const usize s_GlyphAtlasMaxPages = 16u;
+const usize s_PaintMaxGlyphPages = 64u;
+const usize s_PaintMaxImages = s_PaintMaxGlyphPages;
+const usize s_PaintMaxOverlayDepth = 16u;
+const usize s_PaintDefaultClipDepth = 8u;
+
+enum<u8> GpuCommandRecordingMode{
+    enum Direct,
+    enum CommandIrReplay,
+}
+
+[serialize]
+class GpuPaintPushConstants{
+    public Point scale;
+    public Point translate;
+    public u32 textureSlot = 0xffffffffu;
+    public u32 samplerSlot = 0xffffffffu;
+    public u32 material = 0u;
+    public u32 sdfChannel = 0u;
+    public f32 sdfSpreadPixels = 1.0f;
+    public u32 sdfDistanceEncoding = 0u;
+}
+
+[serialize]
+class GpuOutputPushConstants{
+    public u32 textureSlot = 0xffffffffu;
+    public u32 samplerSlot = 0xffffffffu;
+    public u32 presentationMode = 0u;
+}
+
+const usize s_GpuMaxGlyphPages = s_PaintMaxImages;
+const usize s_GpuMaxSdfPages = s_PaintMaxImages;
+const usize s_GpuMaxTextureImages = s_PaintMaxImages;
+const usize s_GpuTargetSlotCount = 3u;
+const usize s_GpuFrameCount = 4u;
+// Raster uses outside the page lists: color target, skin atlas, vertex buffer, and index buffer.
+const usize s_GpuRasterFixedResourceUses = 4u;
+const u32 s_GpuFullscreenTriangleVertexCount = 3u;
+const u32 s_GpuTimingHeightShift = 16u;
+const Name s_GpuLayerTextureName = "ui.layer";
+const Name s_GpuAtlasTextureName = "ui.atlas";
+const Name s_GpuVertexBufferName = "ui.vertices";
+const Name s_GpuIndexBufferName = "ui.indices";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

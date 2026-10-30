@@ -332,9 +332,9 @@ TEST(PreparedFontSource, InvalidSerializationInputsRejectWithoutAllocating){
         case 12u: views[0u].channelCount = 0u; break;
         case 13u: views[0u].channelCount = 5u; break;
         case 14u: views[0u].channelCount = Limit<u32>::s_Max; break;
-        case 15u: views[0u].pixels.bytes = nullptr; break;
-        case 16u: --views[0u].pixels.byteCount; break;
-        case 17u: ++views[0u].pixels.byteCount; break;
+        case 15u: views[0u].pixels = Span<const u8>(); break;
+        case 16u: views[0u].pixels = views[0u].pixels.first(views[0u].pixels.size() - 1u); break;
+        case 17u: views[0u].pixels = fixture.views[1u].pixels.first(views[0u].pixels.size() + 1u); break;
         }
         const ArenaMemoryStats before = outputArena.memoryStats();
         EXPECT_FALSE(SerializePreparedFontSource(sfnt, faceIndex, Span<const PreparedFontImageView>(views, groupCount), outputArena)) << variant;

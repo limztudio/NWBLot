@@ -15,7 +15,7 @@
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_graphics/mesh/subsystem.adhd.h>
 #include <impl/assets_material/cook.h>
-#include <impl/assets_material/shader_stage_names.h>
+#include <impl/assets_material/types.adhd.h>
 #include <impl/assets_shader/shader_types.h>
 #include <impl/assets_shader/cook.h>
 #include <impl/assets_subsystem/cook.h>
@@ -61,7 +61,7 @@ struct GraphicsVolumeMetadata{
     MaterialBindEntryVector materialBindEntries;
     CsgShapeEntryVector csgShapeEntries;
     AssetsGraphicsCookDetail::PreparedShaderPlan preparedPlan;
-    HashSet<AssetsGraphicsCookDetail::ShaderStageKey, ShaderCook::CookArena, AssetsGraphicsCookDetail::ShaderStageKeyHasher, EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>> seenShaderIdentityKeys;
+    HashSet<ShaderStageKey, ShaderCook::CookArena, Hasher<ShaderStageKey>, EqualTo<ShaderStageKey>> seenShaderIdentityKeys;
 
 
 public:
@@ -72,7 +72,7 @@ public:
         , materialBindEntries(arena)
         , csgShapeEntries(arena)
         , preparedPlan(arena)
-        , seenShaderIdentityKeys(0, AssetsGraphicsCookDetail::ShaderStageKeyHasher(), EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(), arena)
+        , seenShaderIdentityKeys(0, Hasher<ShaderStageKey>(), EqualTo<ShaderStageKey>(), arena)
     {}
 };
 
@@ -94,7 +94,7 @@ static b8 AppendUniqueShaderEntry(const Path& nwbFilePath, ShaderCook::ShaderEnt
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: invalid shader stage in meta '{}' (failure {})"), PathToString<tchar>(nwbFilePath), static_cast<u32>(stageName.error()));
         return false;
     }
-    const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
+    const ShaderStageKey shaderIdentityKey(*shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone);
     if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate shader identity '{}' for stage '{}' from meta '{}'"), ConvertString(shaderEntry.name), ConvertString(shaderEntry.archiveStage), PathToString<tchar>(nwbFilePath));
         return false;
@@ -353,7 +353,7 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: generated shader stage has invalid text (failure {})"), static_cast<u32>(stageName.error()));
             return false;
         }
-        const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
+        const ShaderStageKey shaderIdentityKey(*shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone);
         if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate generated pixel shader identity '{}'"), ConvertString(pixelShaderEntry.name));
             return false;

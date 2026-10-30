@@ -3,12 +3,91 @@
 
 
 const u32 s_MeshInstanceGeometrySlotCount = 12u;
+const u64 s_MeshletLocalVertexRefByteSize = 4ull;
+const u64 s_MeshEmulationVertexByteSize = 64ull;
+const u64 s_MeshEmulationFirstVertexIndex = 1ull;
+const u64 s_MeshObjectVertexByteSize = 48ull;
+const u64 s_MeshObjectFirstVertexIndex = 1ull;
+const u64 s_MeshMaxU32Value = 4294967295ull;
+const u64 s_MeshAddressableBytes = 4294967296ull;
+const Name s_MeshViewBufferName = "ecs_render/mesh_view_data";
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
 class InstanceGpuData{
     public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x3_u32 translation(0.0f, 0.0f, 0.0f, 0u);
     public f32x3_u32 scale(1.0f, 1.0f, 1.0f, 0xffffffffu);
     public Array<u32, s_MeshInstanceGeometrySlotCount> geometryHeapSlots;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ComputeEmulationLayout{
+    public u64 bufferByteSize = 0u;
+    public u32 indexByteOffset = 0u;
+}
+
+b8 TryResolveComputeEmulationLayout(in u64 localVertexRefByteSize, in u32 primitiveIndexCount, mut ComputeEmulationLayout outLayout){
+    outLayout = ComputeEmulationLayout();
+    if(localVertexRefByteSize == 0u || localVertexRefByteSize % s_MeshletLocalVertexRefByteSize != 0u || primitiveIndexCount == 0u){
+        return false;
+    }
+    const u64 vertexCount = localVertexRefByteSize / s_MeshletLocalVertexRefByteSize + s_MeshEmulationFirstVertexIndex;
+    if(vertexCount >= s_MeshAddressableBytes / s_MeshEmulationVertexByteSize){
+        return false;
+    }
+    const u64 indexByteOffset = vertexCount * s_MeshEmulationVertexByteSize;
+    const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
+    // Every raw index store must fit its uint byte address, including the final four-byte element.
+    if(indexedByteSize > s_MeshAddressableBytes){
+        return false;
+    }
+    const u64 alignedIndexedByteSize = alignUp(indexedByteSize, s_MeshEmulationVertexByteSize);
+    const u64 expandedByteSize = cast<u64>(primitiveIndexCount) * s_MeshEmulationVertexByteSize;
+    outLayout.bufferByteSize = max(expandedByteSize, alignedIndexedByteSize);
+    outLayout.indexByteOffset = cast<u32>(indexByteOffset);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ObjectGeometryCacheLayout{
+    public u64 bufferByteSize = 0u;
+    public u32 indexByteOffset = 0u;
+    public u32 indexCount = 0u;
+}
+
+b8 TryResolveObjectGeometryCacheLayout(in u64 localVertexRefByteSize, in u32 primitiveIndexCount, mut ObjectGeometryCacheLayout outLayout){
+    outLayout = ObjectGeometryCacheLayout();
+    if(localVertexRefByteSize == 0u || localVertexRefByteSize % s_MeshletLocalVertexRefByteSize != 0u || primitiveIndexCount == 0u){
+        return false;
+    }
+    const u64 vertexCount = localVertexRefByteSize / s_MeshletLocalVertexRefByteSize + s_MeshObjectFirstVertexIndex;
+    if(vertexCount > s_MeshMaxU32Value / s_MeshObjectVertexByteSize){
+        return false;
+    }
+    const u64 indexByteOffset = vertexCount * s_MeshObjectVertexByteSize;
+    const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
+    if(indexedByteSize > s_MeshAddressableBytes){
+        return false;
+    }
+    // The structured vertex view includes the allocation; raw index stores address the disjoint trailing region.
+    const u64 bufferByteSize = alignUp(indexedByteSize, s_MeshObjectVertexByteSize);
+    if(bufferByteSize > s_MeshAddressableBytes){
+        return false;
+    }
+    outLayout.bufferByteSize = bufferByteSize;
+    outLayout.indexByteOffset = cast<u32>(indexByteOffset);
+    outLayout.indexCount = primitiveIndexCount;
+    return true;
 }
 
 

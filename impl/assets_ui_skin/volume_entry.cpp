@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "binary_payload.h"
 #include <impl/assets_ui_skin/subsystem.adhd.h>
 
 #include <impl/assets_subsystem/cook.h>
@@ -51,7 +50,7 @@ static b8 RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
     return
         Core::Assets::RegisterSingleDocumentCookEntry<UiSkinCookEntry, UiSkin, UiSkinAssetCodec>(
             registry,
-            UiSkinBinaryPayload::s_UiSkinAssetKindLabel,
+            s_UiSkinAssetKindLabel,
             &ParseUiSkinDocument,
             [](UiSkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildUiSkinAsset(entry, arena); },
             false
@@ -94,4 +93,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

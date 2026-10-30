@@ -480,6 +480,22 @@ b8 TypeContainsArenaBackedContainer(
     return false;
 }
 
+b8 ShouldPackSerializeClass(const Span<const FieldDecl* const> fields, const SymbolTable& symbols)noexcept{
+    for(const FieldDecl* field : fields){
+        if(!field || !field->type)
+            continue;
+        const TypeRef* resolved = symbols.unwrapTypeAlias(field->type);
+        const MStringView baseName = resolved ? resolved->name : field->type->name;
+        if(SymbolTable::isSimdType(baseName) || (symbols.findClass(baseName) && !ShouldPackSerializeClass(symbols.findClass(baseName)->fields, symbols)))
+            return false;
+        if(baseName == "Array" && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+            if(SymbolTable::isSimdType(symbols.resolveBaseTypeName(resolved->templateArgs[0].type->name)))
+                return false;
+        }
+    }
+    return true;
+}
+
 i32 ScoreCallableParams(
     const SymbolTable& symbols,
     const Span<const ParamDecl> params,
@@ -501,7 +517,8 @@ i32 ScoreCallableParams(
                 score += 16;
             }
             else if((paramBase == "StringView" && (argBase == "String" || argBase == "CompactString"))
-                || (paramBase == "Path" && argBase == "StringView"))
+                || (paramBase == "Path" && argBase == "StringView")
+                || (paramBase == "Span" && (argBase == "Vector" || argBase == "ParallelVector" || argBase == "Array" || argBase == "FixedVector")))
             {
                 score += 8;
             }
@@ -565,4 +582,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

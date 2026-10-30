@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
+#include <impl/ecs_render/material/pipeline_types.adhd.h>
 #include <impl/assets_material/material_typed_constants.h>
 #include <impl/ecs_scene/components.adhd.h>
 
@@ -34,45 +35,15 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_MaterialTypedWordBytes = static_cast<usize>(NWB_MATERIAL_TYPED_WORD_BYTES);
+using NWB::Impl::s_MaterialTypedWordBytes;
+using NWB::Impl::MaterialTypedByteRange;
+using NWB::Impl::MaterialTypedInstanceRanges;
+using NWB::Impl::MaterialTypedByteRangeKey;
+using NWB::Impl::MaterialTypedByteAppendRange;
+using NWB::Impl::MaterialTypedByteRangeEmptyOffsetValid;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MaterialTypedByteRange{
-    u32 byteOffset = 0;
-    u32 byteCount = 0;
-};
-
-struct MaterialTypedInstanceRanges{
-    MaterialTypedByteRange constantRange;
-    MaterialTypedByteRange mutableRange;
-};
-
-struct MaterialTypedByteRangeKey{
-    friend b8 operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs)noexcept{ return lhs.materialName == rhs.materialName && lhs.typedLayoutHash == rhs.typedLayoutHash; }
-
-
-public:
-    Name materialName = s_NameNone;
-    u64 typedLayoutHash = 0u;
-};
-
-struct MaterialTypedByteRangeKeyHasher{
-    usize operator()(const MaterialTypedByteRangeKey& key)const noexcept{
-        usize seed = Hasher<Name>{}(key.materialName);
-        ::HashCombine(seed, key.typedLayoutHash);
-        return seed;
-    }
-};
-
+using MaterialTypedByteRangeKeyHasher = Hasher<MaterialTypedByteRangeKey>;
 using MaterialTypedConstantRangeMap = HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteRangeKeyHasher, EqualTo<MaterialTypedByteRangeKey>>;
-
-struct MaterialTypedByteAppendRange{
-    MaterialTypedByteRange byteRange;
-    usize alignedByteEnd = 0u;
-};
 
 struct MaterialTypedByteContentLookup{
     u64 byteHash = 0u;
@@ -200,7 +171,9 @@ template<typename DestinationByteVector>
 
 template<typename DestinationByteVector>
 [[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(const Name& materialName, const u64 typedLayoutHash, const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes, MaterialTypedConstantRangeMap& rangeMap){
-    const MaterialTypedByteRangeKey key{ materialName, typedLayoutHash };
+    MaterialTypedByteRangeKey key;
+    key.materialName = materialName;
+    key.typedLayoutHash = typedLayoutHash;
     const auto foundRange = rangeMap.find(key);
     if(foundRange != rangeMap.end())
         return foundRange.value();
@@ -238,10 +211,6 @@ template<typename DestinationByteVector, typename MaterialTypedByteRangeMap>
         return MakeUnexpected(Failure{});
     }
     return range;
-}
-
-[[nodiscard]] inline b8 MaterialTypedByteRangeEmptyOffsetValid(const MaterialTypedByteRange& range)noexcept{
-    return range.byteCount != 0u || range.byteOffset == 0u;
 }
 
 inline InstanceGpuData BuildInstanceGpuData(const Core::ECS::EntityID entity, const NWB::Impl::Scene::TransformComponent* transform, const MaterialTypedInstanceRanges& materialTypedRanges)noexcept{
@@ -332,4 +301,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

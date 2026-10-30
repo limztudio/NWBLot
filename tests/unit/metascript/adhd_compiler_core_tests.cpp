@@ -136,6 +136,26 @@ TEST(AdhdCompiler, SerializeClassPacksTightlyInSourceOrder){
     EXPECT_EQ(cls->orderedFields[1]->resolvedOffset, 1u);
     EXPECT_EQ(cls->orderedFields[2]->name, "flags");
     EXPECT_EQ(cls->orderedFields[2]->resolvedOffset, 5u);
+
+    static constexpr MStringView s_SimdOrderSource =
+        "[serialize]\r\n"
+        "class SimdPayload {\r\n"
+        "    public u32 header = 1u;\r\n"
+        "    public Array<u32, 3> pad;\r\n"
+        "    public f32x4 vector(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "    public u32 trailer = 2u;\r\n"
+        "}\r\n";
+
+    CompileResult simdResult(arena.arena);
+    ASSERT_TRUE(Compiler::compile(s_SimdOrderSource, "impl/assets/simd_payload.adhd", arena.arena, simdResult));
+    ASSERT_EQ(simdResult.unit.classes.size(), 1u);
+
+    const auto* simdCls = simdResult.unit.classes[0];
+    ASSERT_EQ(simdCls->orderedFields.size(), 4u);
+    EXPECT_EQ(simdCls->orderedFields[0]->name, "header");
+    EXPECT_EQ(simdCls->orderedFields[1]->name, "pad");
+    EXPECT_EQ(simdCls->orderedFields[2]->name, "vector");
+    EXPECT_EQ(simdCls->orderedFields[3]->name, "trailer");
 }
 
 TEST(AdhdCompiler, EnforcesInterfaceOverrideAndFinalClasses){

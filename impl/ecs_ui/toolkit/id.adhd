@@ -12,6 +12,8 @@ const StringView s_WidgetPartScrollHorizontalThumb = "scroll.x.thumb";
 const StringView s_WidgetPartScrollVerticalThumb = "scroll.y.thumb";
 
 const u64 s_WidgetMaxStates = 4096u;
+const u64 s_WidgetFnv64OffsetBasis = 14695981039346656037ull;
+const u64 s_WidgetFnv64Prime = 1099511628211ull;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,6 +94,72 @@ class WidgetState{
         this.lastSeenFrame = lastSeenFrame;
         this.kind = kind;
     }
+}
+
+u64 UpdateWidgetFnv64Byte(in u64 hash, in u8 byteValue){
+    return (hash ^ cast<u64>(byteValue)) * s_WidgetFnv64Prime;
+}
+
+u64 UpdateWidgetFnv64U64LittleEndian(in u64 hash, in u64 value){
+    u64 result = hash;
+    for(u32 byteIndex = 0u; byteIndex < 8u; ++byteIndex){
+        const u8 byteValue = cast<u8>((value >> (byteIndex * 8u)) & 0xffull);
+        result = UpdateWidgetFnv64Byte(result, byteValue);
+    }
+    return result;
+}
+
+b8 TryMakeRootId(in WidgetRoot root, mut WidgetId outId){
+    outId = WidgetId();
+    if(root.generation == 0u){
+        return false;
+    }
+    u64 hash = UpdateWidgetFnv64U64LittleEndian(s_WidgetFnv64OffsetBasis, root.value);
+    hash = UpdateWidgetFnv64U64LittleEndian(hash, root.generation);
+    if(hash == 0u){
+        outId.value = 1u;
+    }
+    else{
+        outId.value = hash;
+    }
+    return true;
+}
+
+b8 TryMakeWidgetPartId(in WidgetId parent, in u64 stableKey, mut WidgetId outId){
+    outId = WidgetId();
+    if(!parent.valid() || stableKey == 0u){
+        return false;
+    }
+    u64 hash = UpdateWidgetFnv64U64LittleEndian(s_WidgetFnv64OffsetBasis, parent.value);
+    hash = UpdateWidgetFnv64U64LittleEndian(hash, 0u);
+    hash = UpdateWidgetFnv64U64LittleEndian(hash, stableKey);
+    if(hash == 0u){
+        outId.value = 1u;
+    }
+    else{
+        outId.value = hash;
+    }
+    return true;
+}
+
+b8 TryMakeWidgetId(in WidgetId parent, in StringView stableKey, mut WidgetId outId){
+    outId = WidgetId();
+    if(!parent.valid() || stableKey.empty()){
+        return false;
+    }
+    u64 hash = UpdateWidgetFnv64U64LittleEndian(s_WidgetFnv64OffsetBasis, parent.value);
+    hash = UpdateWidgetFnv64U64LittleEndian(hash, cast<u64>(stableKey.size()));
+    native(in stableKey, mut hash){
+        for(const char byte : stableKey)
+            hash = UpdateWidgetFnv64Byte(hash, static_cast<u8>(byte));
+    }
+    if(hash == 0u){
+        outId.value = 1u;
+    }
+    else{
+        outId.value = hash;
+    }
+    return true;
 }
 
 

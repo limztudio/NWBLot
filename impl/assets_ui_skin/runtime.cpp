@@ -3,7 +3,6 @@
 
 
 #include "asset.h"
-#include "binary_payload.h"
 #include <impl/assets_ui_skin/subsystem.adhd.h>
 
 #include <impl/assets_texture/asset.h>
@@ -82,10 +81,10 @@ static_assert(UiSkinColorRole::kCount == s_UiSkinPaletteColorCount, "UI skin pal
 
 b8 UiSkin::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(binary, s_UiSkinBinaryMagic, UiSkinBinaryPayload::s_UiSkinLoadBinaryContext, UiSkinBinaryPayload::s_UiSkinAssetKindLabel, cursor);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinHeaderBinary>(binary, s_UiSkinBinaryMagic, s_UiSkinLoadBinaryContext, s_UiSkinAssetKindLabel, cursor);
     if(!headerResult)
         return false;
-    const UiSkinBinaryPayload::HeaderBinary& header = *headerResult;
+    const UiSkinHeaderBinary& header = *headerResult;
     if(header.version != s_UiSkinBinaryVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required"), header.version);
         return false;
@@ -98,7 +97,7 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: region count {} exceeds schema limit {}"), header.regionCount, s_UiSkinMaxRegionCount);
         return false;
     }
-    if(header.regionCount == 0u || header.regionCount > (binary.size() - cursor) / sizeof(UiSkinBinaryPayload::RegionBinary)){
+    if(header.regionCount == 0u || header.regionCount > (binary.size() - cursor) / sizeof(UiSkinRegionBinary)){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: region count is empty or exceeds the payload"));
         return false;
     }
@@ -110,8 +109,8 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
     candidate.m_referenceDensity = header.referenceDensity;
     candidate.m_regions.reserve(header.regionCount);
     for(u32 index = 0u; index < header.regionCount; ++index){
-        UiSkinBinaryPayload::RegionBinary packed;
-        const auto packedResult = ReadPOD<UiSkinBinaryPayload::RegionBinary>(binary, cursor);
+        UiSkinRegionBinary packed;
+        const auto packedResult = ReadPOD<UiSkinRegionBinary>(binary, cursor);
         if(!packedResult){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed region {}"), index);
             return false;
@@ -152,7 +151,7 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
     }
     typography = *typographyResult;
     candidate.setTypography({ typography.defaultFontSize });
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, UiSkinBinaryPayload::s_UiSkinLoadBinaryContext))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_UiSkinLoadBinaryContext))
         return false;
     candidate.rebuildRegionIndex();
     if(!candidate.validatePayload())
@@ -225,4 +224,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

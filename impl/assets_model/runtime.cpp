@@ -3,8 +3,6 @@
 
 
 #include "asset.h"
-#include "arena_names.h"
-#include "binary_payload.h"
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
@@ -175,31 +173,31 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 }
 
 b8 Model::loadBinary(const Span<const u8> binary){
-    Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_LoadBinaryArena);
+    Core::Alloc::ScratchArena scratchArena(s_AssetsModelLoadBinaryArena);
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelBinaryPayload::ModelHeaderBinary>(binary, s_ModelBinaryMagic, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_ModelAssetKindLabel, cursor);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelHeaderBinary>(binary, s_ModelBinaryMagic, s_ModelLoadBinaryContext, s_ModelAssetKindLabel, cursor);
     if(!headerResult)
         return false;
-    const ModelBinaryPayload::ModelHeaderBinary& header = *headerResult;
+    const ModelHeaderBinary& header = *headerResult;
 
     if(header.padding0 != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Model::loadBinary failed: reserved header fields must be zero"));
         return false;
     }
     Model candidate(m_skeletonObjects.get_allocator().arena(), virtualPath());
-    Vector<ModelBinaryPayload::ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
-    Vector<ModelBinaryPayload::ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
-    Vector<ModelBinaryPayload::ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
+    Vector<ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
+    Vector<ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
+    Vector<ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
 
-    if(!Core::Assets::ReadVectorPayload(binary, header.skeletonObjectCount, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_SkeletonObjectsPayloadLabel, cursor, skeletonObjectBinaries))
+    if(!Core::Assets::ReadVectorPayload(binary, header.skeletonObjectCount, s_ModelLoadBinaryContext, s_ModelSkeletonObjectsPayloadLabel, cursor, skeletonObjectBinaries))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.staticMeshObjectCount, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_StaticMeshObjectsPayloadLabel, cursor, staticMeshObjectBinaries))
+    if(!Core::Assets::ReadVectorPayload(binary, header.staticMeshObjectCount, s_ModelLoadBinaryContext, s_ModelStaticMeshObjectsPayloadLabel, cursor, staticMeshObjectBinaries))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.skinnedMeshObjectCount, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_SkinnedMeshObjectsPayloadLabel, cursor, skinnedMeshObjectBinaries))
+    if(!Core::Assets::ReadVectorPayload(binary, header.skinnedMeshObjectCount, s_ModelLoadBinaryContext, s_ModelSkinnedMeshObjectsPayloadLabel, cursor, skinnedMeshObjectBinaries))
         return false;
 
     candidate.m_skeletonObjects.reserve(skeletonObjectBinaries.size());
-    for(const ModelBinaryPayload::ModelSkeletonObjectBinary& objectBinary : skeletonObjectBinaries){
+    for(const ModelSkeletonObjectBinary& objectBinary : skeletonObjectBinaries){
         ModelSkeletonObject object;
         object.name = Name(objectBinary.nameHash);
         object.skeleton.virtualPath = Name(objectBinary.skeletonNameHash);
@@ -208,7 +206,7 @@ b8 Model::loadBinary(const Span<const u8> binary){
     }
 
     candidate.m_staticMeshObjects.reserve(staticMeshObjectBinaries.size());
-    for(const ModelBinaryPayload::ModelStaticMeshObjectBinary& objectBinary : staticMeshObjectBinaries){
+    for(const ModelStaticMeshObjectBinary& objectBinary : staticMeshObjectBinaries){
         ModelStaticMeshObject object;
         object.name = Name(objectBinary.nameHash);
         object.mesh.virtualPath = Name(objectBinary.meshNameHash);
@@ -220,7 +218,7 @@ b8 Model::loadBinary(const Span<const u8> binary){
     }
 
     candidate.m_skinnedMeshObjects.reserve(skinnedMeshObjectBinaries.size());
-    for(const ModelBinaryPayload::ModelSkinnedMeshObjectBinary& objectBinary : skinnedMeshObjectBinaries){
+    for(const ModelSkinnedMeshObjectBinary& objectBinary : skinnedMeshObjectBinaries){
         ModelSkinnedMeshObject object;
         object.name = Name(objectBinary.nameHash);
         object.skin.virtualPath = Name(objectBinary.skinNameHash);
@@ -230,7 +228,7 @@ b8 Model::loadBinary(const Span<const u8> binary){
         candidate.m_skinnedMeshObjects.push_back(object);
     }
 
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, ModelBinaryPayload::s_ModelLoadBinaryContext) || !candidate.validatePayload(scratchArena))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_ModelLoadBinaryContext) || !candidate.validatePayload(scratchArena))
         return false;
     *this = Move(candidate);
     return true;

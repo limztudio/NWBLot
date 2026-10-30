@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/raytrace/instance_material.h>
 
@@ -29,14 +30,6 @@ class RendererRayTracingState;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace PreparedShadowMaterialContextRoute{
-    enum Enum : u8{
-        None,
-        Hardware,
-        Software,
-    };
-};
 
 // The material table, instance stream, and typed bytes share indices and offsets, so preflight freezes them against one storage generation.
 // A fresh context retains all three ABI-coupled byte streams until Shadow Preparation accepts.
@@ -115,4 +108,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

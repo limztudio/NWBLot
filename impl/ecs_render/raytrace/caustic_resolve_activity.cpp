@@ -24,21 +24,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CausticResolveActivityLayout> ResolveCausticActivityLayout(const u32 halfWidth, const u32 halfHeight)noexcept{
-    if(halfWidth == 0u || halfHeight == 0u || halfWidth > Limit<i32>::s_Max || halfHeight > Limit<i32>::s_Max)
-        return MakeUnexpected(Failure{});
-    const u32 tilesX = DivideUp(halfWidth, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
-    const u32 tilesY = DivideUp(halfHeight, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
-    const u64 byteSize = static_cast<u64>(tilesX) * tilesY * sizeof(u32);
-    if(byteSize > static_cast<u64>(Limit<u32>::s_Max) + 1u)
-        return MakeUnexpected(Failure{});
-    return CausticResolveActivityLayout{ byteSize, tilesX, tilesY };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 CausticResolveActivitySnapshot::valid()const noexcept{
     if(halfWidth == 0u || halfHeight == 0u)
         return false;
@@ -127,4 +112,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

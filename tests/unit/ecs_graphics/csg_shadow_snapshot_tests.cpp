@@ -5,7 +5,7 @@
 #include <impl/ecs_render/csg/frame_state_cache.h>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
 #include <impl/ecs_render/shadow/light_space_csg.h>
-#include <impl/ecs_render/shadow/light_space_capture_history.h>
+#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
 #include <impl/ecs_render/raytrace/instance_material.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/components.adhd.h>

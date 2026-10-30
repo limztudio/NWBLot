@@ -5,7 +5,7 @@
 #include <impl/assets_font/asset.h>
 #include <impl/assets_font/binary_payload.h>
 #include <impl/assets_font/font_validation.h>
-#include <impl/assets_font/source_directory.h>
+#include <impl/assets_font/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 
@@ -120,21 +120,22 @@ TEST(AssetsFont, SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCounts){
     u8 bytes[s_OneTableDirectoryBytes] = {};
     WriteBigU32(MakeNotNull(bytes), s_TrueTypeSignature);
     bytes[s_SfntTableCountLowByte] = 1u;
+    FontSfntDirectory directory;
     for(usize size = 0u; size < sizeof(bytes); ++size)
-        EXPECT_FALSE(FontSfntDirectory::Read({ bytes, size })) << size;
-    ASSERT_TRUE(FontSfntDirectory::Read({ bytes, sizeof(bytes) }));
+        EXPECT_FALSE(ReadFontSfntDirectory({ bytes, size }, directory)) << size;
+    ASSERT_TRUE(ReadFontSfntDirectory({ bytes, sizeof(bytes) }, directory));
     bytes[s_SfntTableCountLowByte] = 0u;
-    EXPECT_FALSE(FontSfntDirectory::Read({ bytes, sizeof(bytes) }));
+    EXPECT_FALSE(ReadFontSfntDirectory({ bytes, sizeof(bytes) }, directory));
     bytes[s_SfntTableCountHighByte] = 1u;
     bytes[s_SfntTableCountLowByte] = 1u;
-    EXPECT_FALSE(FontSfntDirectory::Read({ bytes, sizeof(bytes) }));
+    EXPECT_FALSE(ReadFontSfntDirectory({ bytes, sizeof(bytes) }, directory));
     bytes[s_SfntTableCountLowByte] = 0u;
-    EXPECT_FALSE(FontSfntDirectory::Read({ bytes, sizeof(bytes) }));
+    EXPECT_FALSE(ReadFontSfntDirectory({ bytes, sizeof(bytes) }, directory));
     u8 maximumDirectory[s_FontSfntHeaderBytes + s_FontMaxTableCount * s_SfntTableRecordBytes] = {};
     maximumDirectory[s_SfntTableCountHighByte] = 1u;
-    const auto maximumResult = FontSfntDirectory::Read({ maximumDirectory, sizeof(maximumDirectory) });
-    ASSERT_TRUE(maximumResult);
-    EXPECT_EQ(maximumResult->tableCount(), s_FontMaxTableCount);
+    FontSfntDirectory maximumResult;
+    ASSERT_TRUE(ReadFontSfntDirectory({ maximumDirectory, sizeof(maximumDirectory) }, maximumResult));
+    EXPECT_EQ(maximumResult.tableCount(), s_FontMaxTableCount);
 }
 
 TEST(AssetsFont, SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords){
@@ -151,29 +152,30 @@ TEST(AssetsFont, SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords){
     WriteBigU32(MakeNotNull(bytes + s_SecondRecordOffsetField), Limit<u32>::s_Max);
     WriteBigU32(MakeNotNull(bytes + s_SecondRecordLengthField), 2u);
     WriteBigU32(MakeNotNull(bytes + s_TableDataOffset), 0x12345678u);
-    const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
-    ASSERT_TRUE(directoryResult);
-    const FontSfntDirectory& directory = *directoryResult;
+    FontSfntDirectory directory;
+    ASSERT_TRUE(ReadFontSfntDirectory({ bytes, sizeof(bytes) }, directory));
     EXPECT_EQ(directory.signature(), s_TrueTypeSignature);
     EXPECT_EQ(directory.directoryBytes(), s_TableDataOffset);
     EXPECT_EQ(directory.tableCount(), 2u);
-    const auto tableResult = directory.table(0u);
-    ASSERT_TRUE(tableResult);
-    EXPECT_EQ(tableResult->tag, s_FontSfntHeadTag);
-    EXPECT_EQ(tableResult->offset, s_TableDataOffset);
-    EXPECT_EQ(tableResult->bytes.data(), bytes + s_TableDataOffset);
-    EXPECT_EQ(tableResult->bytes.size(), s_TableDataBytes);
-    const auto valueResult = ReadU16BigEndian(tableResult->bytes, 0u);
+    FontSfntTable tableResult;
+    ASSERT_TRUE(directory.table(0u, tableResult));
+    EXPECT_EQ(tableResult.tag, s_FontSfntHeadTag);
+    EXPECT_EQ(tableResult.offset, s_TableDataOffset);
+    EXPECT_EQ(tableResult.bytes.data(), bytes + s_TableDataOffset);
+    EXPECT_EQ(tableResult.bytes.size(), s_TableDataBytes);
+    const auto valueResult = ReadU16BigEndian(BinaryByteView{ tableResult.bytes.data(), tableResult.bytes.size() }, 0u);
     ASSERT_TRUE(valueResult);
     EXPECT_EQ(*valueResult, 0x1234u);
-    EXPECT_FALSE(directory.table(1u));
-    const auto secondTagResult = directory.tableTag(1u);
-    ASSERT_TRUE(secondTagResult);
-    EXPECT_EQ(*secondTagResult, s_FontSfntMaxpTag);
-    EXPECT_FALSE(directory.table(2u));
-    EXPECT_FALSE(directory.tableTag(Limit<usize>::s_Max));
-    EXPECT_FALSE(ReadU16BigEndian(tableResult->bytes, 3u));
-    EXPECT_FALSE(ReadU16BigEndian(tableResult->bytes, Limit<usize>::s_Max));
+    FontSfntTable unusedTable;
+    EXPECT_FALSE(directory.table(1u, unusedTable));
+    u32 secondTagResult = 0u;
+    ASSERT_TRUE(directory.tableTag(1u, secondTagResult));
+    EXPECT_EQ(secondTagResult, s_FontSfntMaxpTag);
+    EXPECT_FALSE(directory.table(2u, unusedTable));
+    u32 unusedTag = 0u;
+    EXPECT_FALSE(directory.tableTag(Limit<usize>::s_Max, unusedTag));
+    EXPECT_FALSE(ReadU16BigEndian(BinaryByteView{ tableResult.bytes.data(), tableResult.bytes.size() }, 3u));
+    EXPECT_FALSE(ReadU16BigEndian(BinaryByteView{ tableResult.bytes.data(), tableResult.bytes.size() }, Limit<usize>::s_Max));
 }
 
 TEST(AssetsFont, SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAddingFontPolicy){
@@ -184,35 +186,37 @@ TEST(AssetsFont, SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAddingFontP
     WriteBigU32(MakeNotNull(bytes + s_FirstRecordOffsetField), s_OneTableDirectoryBytes);
     WriteBigU32(MakeNotNull(bytes + s_FirstRecordLengthField), Limit<u32>::s_Max);
     {
-        const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
-        ASSERT_TRUE(directoryResult);
-        EXPECT_EQ(directoryResult->signature(), s_CollectionSignature);
-        EXPECT_FALSE(directoryResult->table(0u));
+        FontSfntDirectory directoryResult;
+        ASSERT_TRUE(ReadFontSfntDirectory({ bytes, sizeof(bytes) }, directoryResult));
+        EXPECT_EQ(directoryResult.signature(), s_CollectionSignature);
+        FontSfntTable unusedTable;
+        EXPECT_FALSE(directoryResult.table(0u, unusedTable));
     }
     WriteBigU32(MakeNotNull(bytes + s_FirstRecordLengthField), 5u);
     {
-        const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
-        ASSERT_TRUE(directoryResult);
-        EXPECT_FALSE(directoryResult->table(0u));
+        FontSfntDirectory directoryResult;
+        ASSERT_TRUE(ReadFontSfntDirectory({ bytes, sizeof(bytes) }, directoryResult));
+        FontSfntTable unusedTable;
+        EXPECT_FALSE(directoryResult.table(0u, unusedTable));
     }
     WriteBigU32(MakeNotNull(bytes + s_FirstRecordOffsetField), sizeof(bytes));
     WriteBigU32(MakeNotNull(bytes + s_FirstRecordLengthField), 0u);
     {
-        const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
-        ASSERT_TRUE(directoryResult);
-        const auto emptyTableResult = directoryResult->table(0u);
-        ASSERT_TRUE(emptyTableResult);
-        EXPECT_TRUE(emptyTableResult->bytes.empty());
-        EXPECT_EQ(emptyTableResult->bytes.data(), bytes + sizeof(bytes));
+        FontSfntDirectory directoryResult;
+        ASSERT_TRUE(ReadFontSfntDirectory({ bytes, sizeof(bytes) }, directoryResult));
+        FontSfntTable emptyTableResult;
+        ASSERT_TRUE(directoryResult.table(0u, emptyTableResult));
+        EXPECT_TRUE(emptyTableResult.bytes.empty());
+        EXPECT_EQ(emptyTableResult.bytes.data(), bytes + sizeof(bytes));
     }
     WriteBigU32(MakeNotNull(bytes + s_FirstRecordOffsetField), 0u); // Directory-overlap admission remains with Font validation.
     WriteBigU32(MakeNotNull(bytes + s_FirstRecordLengthField), 4u);
     {
-        const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
-        ASSERT_TRUE(directoryResult);
-        const auto tableResult = directoryResult->table(0u);
-        ASSERT_TRUE(tableResult);
-        EXPECT_EQ(tableResult->bytes.data(), bytes);
+        FontSfntDirectory directoryResult;
+        ASSERT_TRUE(ReadFontSfntDirectory({ bytes, sizeof(bytes) }, directoryResult));
+        FontSfntTable tableResult;
+        ASSERT_TRUE(directoryResult.table(0u, tableResult));
+        EXPECT_EQ(tableResult.bytes.data(), bytes);
     }
 }
 
@@ -426,4 +430,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

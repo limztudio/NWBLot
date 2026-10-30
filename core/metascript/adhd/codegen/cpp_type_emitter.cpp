@@ -67,6 +67,12 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     }
 
     const MStringView name = type.name;
+    if(name == "Span" && type.templateArgs.size() == 1u && type.templateArgs[0].type){
+        out.append("Span<const ");
+        emitTypeCpp(out, *type.templateArgs[0].type);
+        out.push_back('>');
+        return;
+    }
     if(const MStringView mappedBuiltin = mapBuiltinCppType(name); !mappedBuiltin.empty()){
         out.append(mappedBuiltin.data(), mappedBuiltin.size());
         if(!type.templateArgs.empty())
@@ -111,7 +117,7 @@ void CppTypeEmitter::emitParamTypeCpp(
         return;
     }
 
-    if(m_symbols.isSmallValueType(type.name) && type.templateArgs.empty() && !type.isFuncType){
+    if(m_symbols.isSmallValueType(type.name) && (type.templateArgs.empty() || m_symbols.resolveBaseTypeName(type.name) == "Span") && !type.isFuncType){
         if(topLevelConst)
             out.append("const ");
         emitTypeCpp(out, type);

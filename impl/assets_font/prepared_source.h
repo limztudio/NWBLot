@@ -24,13 +24,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PreparedFontImageView{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 channelCount = 0u;
-    BinaryByteView pixels;
-};
-
 struct PreparedFontImageGroup{
     u32 width = 0u;
     u32 height = 0u;

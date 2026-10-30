@@ -229,8 +229,8 @@ void CheckPageBoundary(){
 TEST(Math, StorageEqualityPreservesRawHalfAndIntegralBoundaryBits){
     const Half4U halfBits(0x7C01u, 0xFC01u, 0x8000u, 0xFFFFu);
     EXPECT_TRUE(halfBits == halfBits);
-    const Int4 signedBits{ .raw = { Limit<i32>::s_Min, Limit<i32>::s_Max, -1, 0 } };
-    const UInt4 unsignedBits{ .raw = { Limit<u32>::s_Max, 0x80000000u, 0x7FFFFFFFu, 0u } };
+    const Int4 signedBits(Limit<i32>::s_Min, Limit<i32>::s_Max, -1, 0);
+    const UInt4 unsignedBits(Limit<u32>::s_Max, 0x80000000u, 0x7FFFFFFFu, 0u);
     EXPECT_TRUE(signedBits == signedBits);
     EXPECT_TRUE(unsignedBits == unsignedBits);
 }

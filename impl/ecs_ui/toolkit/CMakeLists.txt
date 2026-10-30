@@ -1,6 +1,5 @@
 nwb_declare_static_library(nwb_ui)
 target_sources(nwb_ui PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/id.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/context*.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/paint*.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text/*_page.cpp"

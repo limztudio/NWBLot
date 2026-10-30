@@ -35,7 +35,7 @@ void ResolveRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedba
     if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
         return;
 
-    NWB_ASSERT(transition.action < RendererTaskTimingFeedbackCollectionAction::Count);
+    NWB_ASSERT(transition.action < RendererTaskTimingFeedbackCollectionAction::kCount);
     currentPolicy = collectionUpdated ? transition.requestedPolicy : transition.previousPolicy;
 }
 

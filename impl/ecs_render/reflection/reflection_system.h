@@ -50,14 +50,6 @@ NWB_IMPL_BEGIN
 class RendererShaderSystem;
 struct DeferredFrameTargets;
 
-struct ReflectionFrameParameters{
-#define NWB_REFLECTION_CPU_UINT_FIELD(name, value) u32 name = value;
-    NWB_REFLECTION_FRAME_UINT_FIELDS(NWB_REFLECTION_CPU_UINT_FIELD)
-#undef NWB_REFLECTION_CPU_UINT_FIELD
-#define NWB_REFLECTION_CPU_FLOAT_FIELD(name, value) f32 name = value;
-    NWB_REFLECTION_FRAME_FLOAT_FIELDS(NWB_REFLECTION_CPU_FLOAT_FIELD)
-#undef NWB_REFLECTION_CPU_FLOAT_FIELD
-};
 static_assert(sizeof(ReflectionFrameParameters) == 176u);
 static_assert(offsetof(ReflectionFrameParameters, opaqueSpecularSlot) == 16u);
 static_assert(offsetof(ReflectionFrameParameters, maxRayDistance) == 128u);
@@ -201,4 +193,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

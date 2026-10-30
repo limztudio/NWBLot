@@ -3,7 +3,7 @@
 
 
 #include <impl/assets_model/asset.h>
-#include <impl/assets_model/binary_payload.h>
+#include <impl/assets_model/types.adhd.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
@@ -201,10 +201,10 @@ TEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPaylo
     ASSERT_TRUE(codec.serialize(inputs.model, binary));
     Model loaded(inputs.arena, inputs.model.virtualPath());
     ASSERT_TRUE(loaded.loadBinary(binary));
-    const usize staticOffset = sizeof(ModelBinaryPayload::ModelHeaderBinary) + sizeof(ModelBinaryPayload::ModelSkeletonObjectBinary);
-    const usize skinnedOffset = staticOffset + sizeof(ModelBinaryPayload::ModelStaticMeshObjectBinary);
+    const usize staticOffset = sizeof(ModelHeaderBinary) + sizeof(ModelSkeletonObjectBinary);
+    const usize skinnedOffset = staticOffset + sizeof(ModelStaticMeshObjectBinary);
     Core::Assets::AssetBytes malformed(binary);
-    ModelBinaryPayload::ModelSkinnedMeshObjectBinary skinnedObject;
+    ModelSkinnedMeshObjectBinary skinnedObject;
     NWB_MEMCPY(&skinnedObject, sizeof(skinnedObject), malformed.data() + skinnedOffset, sizeof(skinnedObject));
     skinnedObject.nameHash = Name(s_Prop).hash();
     NWB_MEMCPY(malformed.data() + skinnedOffset, malformed.size() - skinnedOffset, &skinnedObject, sizeof(skinnedObject));
@@ -212,7 +212,7 @@ TEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPaylo
     EXPECT_TRUE(loaded.loadBinary(binary));
 
     malformed = binary;
-    ModelBinaryPayload::ModelStaticMeshObjectBinary staticObject;
+    ModelStaticMeshObjectBinary staticObject;
     NWB_MEMCPY(&staticObject, sizeof(staticObject), malformed.data() + staticOffset, sizeof(staticObject));
     staticObject.parentObjectNameHash = Name(s_Body).hash();
     NWB_MEMCPY(malformed.data() + staticOffset, malformed.size() - staticOffset, &staticObject, sizeof(staticObject));
@@ -233,7 +233,7 @@ TEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloads
     ModelAssetCodec codec;
     Core::Assets::AssetBytes binary(inputs.arena);
     ASSERT_TRUE(codec.serialize(inputs.model, binary));
-    const usize expectedBytes = sizeof(ModelBinaryPayload::ModelHeaderBinary) + sizeof(ModelBinaryPayload::ModelSkeletonObjectBinary) + sizeof(ModelBinaryPayload::ModelStaticMeshObjectBinary) + sizeof(ModelBinaryPayload::ModelSkinnedMeshObjectBinary);
+    const usize expectedBytes = sizeof(ModelHeaderBinary) + sizeof(ModelSkeletonObjectBinary) + sizeof(ModelStaticMeshObjectBinary) + sizeof(ModelSkinnedMeshObjectBinary);
     ASSERT_EQ(binary.size(), expectedBytes);
     Model loaded(inputs.arena, inputs.model.virtualPath());
     ASSERT_TRUE(loaded.loadBinary(binary));

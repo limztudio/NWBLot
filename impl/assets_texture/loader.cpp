@@ -5,7 +5,7 @@
 #include "loader.h"
 
 #include "texture_mip_decoder.h"
-#include "arena_names.h"
+#include <impl/assets_texture/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -228,7 +228,7 @@ b8 TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& te
 
     __hidden_texture_loader::InitializeBasisTranscoder();
 
-    Core::Alloc::ScratchArena scratchArena(AssetsTextureArenaScope::s_UploadScratchArena);
+    Core::Alloc::ScratchArena scratchArena(s_TextureUploadScratchArena);
     TextureMipDecoder mipDecoder;
     Vector<TextureDecodedMipUpload, Core::Alloc::ScratchArena> decodedMips{scratchArena};
     decodedMips.reserve(textureAsset.mipLevels().size());

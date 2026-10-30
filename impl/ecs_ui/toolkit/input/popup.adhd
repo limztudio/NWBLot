@@ -68,3 +68,122 @@ class PopupDismissal{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> UiEditClickKind{
+    enum Caret,
+    enum Word,
+}
+
+// The host advances the corresponding generation when a declaration or its backing model is replaced.
+class UiTextEditOwner{
+    public WidgetId widget;
+    public u64 declarationGeneration = 0u;
+    public u64 modelGeneration = 0u;
+
+    public b8 valid()const{
+        return this.widget.valid() && this.declarationGeneration != 0u && this.modelGeneration != 0u;
+    }
+
+    public b8 operator==(in UiTextEditOwner rhs)const{
+        return this.widget == rhs.widget && this.declarationGeneration == rhs.declarationGeneration && this.modelGeneration == rhs.modelGeneration;
+    }
+
+    public b8 operator!=(in UiTextEditOwner rhs)const{
+        return this.widget != rhs.widget || this.declarationGeneration != rhs.declarationGeneration || this.modelGeneration != rhs.modelGeneration;
+    }
+}
+
+const u64 s_UiDoubleClickMaxIntervalMs = 500u;
+const f64 s_UiDoubleClickMaxDistanceSquared = 16.0;
+const u8 s_UiDoubleClickCount = 2u;
+
+// Editor-local policy: a released second press within 500 ms and four logical units selects a word run.
+class UiEditClickTracker{
+    private UiTextEditOwner m_owner;
+    private PopupToken m_popup;
+    private Point m_position;
+    private u64 m_revision = 0u;
+    private u64 m_externalRevision = 0u;
+    private u64 m_pressTimestampMs = 0u;
+    private u8 m_clickCount = 0u;
+    private b8 m_down = false;
+    private b8 m_released = false;
+
+    public void cancel(){
+        this.m_owner = UiTextEditOwner();
+        this.m_popup = PopupToken();
+        this.m_position = Point();
+        this.m_revision = 0u;
+        this.m_externalRevision = 0u;
+        this.m_pressTimestampMs = 0u;
+        this.m_clickCount = 0u;
+        this.m_down = false;
+        this.m_released = false;
+    }
+
+    public UiEditClickKind press(in UiTextEditOwner owner, in PopupToken popup, in u64 revision, in u64 externalRevision, in Point position, in u64 timestampMs, in b8 shift){
+        if(!owner.valid() || timestampMs == 0u || shift || !isFinite(position.x) || !isFinite(position.y)){
+            this.cancel();
+            return UiEditClickKind::Enum::Caret;
+        }
+        const f64x2 delta = f64x2(cast<f64>(position.x), cast<f64>(position.y)) - f64x2(cast<f64>(this.m_position.x), cast<f64>(this.m_position.y));
+        const f64 distanceSquared = lengthSq(delta);
+        const b8 second = this.m_released && this.m_clickCount == 1u && owner == this.m_owner && popup == this.m_popup
+            && revision == this.m_revision && externalRevision == this.m_externalRevision
+            && timestampMs >= this.m_pressTimestampMs && timestampMs - this.m_pressTimestampMs <= s_UiDoubleClickMaxIntervalMs
+            && distanceSquared <= s_UiDoubleClickMaxDistanceSquared;
+        this.m_owner = owner;
+        this.m_popup = popup;
+        this.m_position = position;
+        this.m_revision = revision;
+        this.m_externalRevision = externalRevision;
+        this.m_pressTimestampMs = timestampMs;
+        if(second){
+            this.m_clickCount = s_UiDoubleClickCount;
+        }
+        else{
+            this.m_clickCount = 1u;
+        }
+        this.m_down = true;
+        this.m_released = false;
+        if(second){
+            return UiEditClickKind::Enum::Word;
+        }
+        return UiEditClickKind::Enum::Caret;
+    }
+
+    public void move(in Point position){
+        if(!this.m_down){
+            return;
+        }
+        if(!isFinite(position.x) || !isFinite(position.y)){
+            this.cancel();
+            return;
+        }
+        const f64x2 delta = f64x2(cast<f64>(position.x), cast<f64>(position.y)) - f64x2(cast<f64>(this.m_position.x), cast<f64>(this.m_position.y));
+        const f64 distanceSquared = lengthSq(delta);
+        if(distanceSquared > s_UiDoubleClickMaxDistanceSquared){
+            this.cancel();
+        }
+    }
+
+    public void release(in UiTextEditOwner owner){
+        if(this.m_down && this.m_owner == owner){
+            this.m_down = false;
+            this.m_released = true;
+        }
+        else{
+            this.cancel();
+        }
+    }
+
+    public void retainFocus(in UiTextEditOwner owner){
+        if(this.m_clickCount != 0u && (!owner.valid() || owner != this.m_owner)){
+            this.cancel();
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

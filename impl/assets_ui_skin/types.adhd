@@ -12,6 +12,110 @@ const u32 s_UiSkinBinaryMagic = 0x55495331u; // UIS1
 const u32 s_UiSkinBinaryVersion = 3u;
 const u32 s_UiSkinPaletteColorCount = 17u;
 
+const Name s_PanelNormalRegionName = "panel.normal";
+const Name s_WindowNormalRegionName = "window.normal";
+const Name s_WindowTitleRegionName = "window.title";
+const Name s_WindowCollapseRegionName = "window.collapse";
+const Name s_WindowResizeRegionName = "window.resize";
+const Name s_SeparatorRegionName = "separator";
+const Name s_WhiteRegionName = "white";
+const Name s_ButtonNormalRegionName = "button.normal";
+const Name s_ButtonHoverRegionName = "button.hover";
+const Name s_ButtonPressedRegionName = "button.pressed";
+const Name s_ButtonDisabledRegionName = "button.disabled";
+const Name s_CheckboxNormalRegionName = "checkbox.normal";
+const Name s_CheckboxHoverRegionName = "checkbox.hover";
+const Name s_CheckboxCheckedRegionName = "checkbox.checked";
+const Name s_CheckboxDisabledRegionName = "checkbox.disabled";
+const Name s_CheckboxMarkRegionName = "checkbox.mark";
+const Name s_EditNormalRegionName = "edit.normal";
+const Name s_EditHoverRegionName = "edit.hover";
+const Name s_EditFocusedRegionName = "edit.focused";
+const Name s_EditDisabledRegionName = "edit.disabled";
+const Name s_ListBackgroundRegionName = "list.background";
+const Name s_ListRowNormalRegionName = "list.row.normal";
+const Name s_ListRowHoverRegionName = "list.row.hover";
+const Name s_ListRowSelectedRegionName = "list.row.selected";
+const Name s_ListRowDisabledRegionName = "list.row.disabled";
+const Name s_ScrollTrackRegionName = "scroll.track";
+const Name s_ScrollThumbRegionName = "scroll.thumb";
+const Name s_ScrollbarTrackRegionName = "scrollbar.track";
+const Name s_ScrollbarThumbNormalRegionName = "scrollbar.thumb.normal";
+const Name s_PopupNormalRegionName = "popup.normal";
+const Name s_TooltipNormalRegionName = "tooltip.normal";
+const Name s_ComboNormalRegionName = "combo.normal";
+const Name s_ComboHoverRegionName = "combo.hover";
+const Name s_ComboOpenRegionName = "combo.open";
+const Name s_ComboFocusedRegionName = "combo.focused";
+const Name s_ComboDisabledRegionName = "combo.disabled";
+const Name s_ComboArrowRegionName = "combo.arrow";
+const Name s_RadioNormalRegionName = "radio.normal";
+const Name s_RadioHoverRegionName = "radio.hover";
+const Name s_RadioPressedRegionName = "radio.pressed";
+const Name s_RadioCheckedRegionName = "radio.checked";
+const Name s_RadioDisabledRegionName = "radio.disabled";
+const Name s_RadioMarkRegionName = "radio.mark";
+const Name s_SliderTrackRegionName = "slider.track";
+const Name s_SliderThumbNormalRegionName = "slider.thumb.normal";
+const Name s_SliderThumbHoverRegionName = "slider.thumb.hover";
+const Name s_SliderThumbPressedRegionName = "slider.thumb.pressed";
+const Name s_SliderThumbDisabledRegionName = "slider.thumb.disabled";
+const Name s_ProgressTrackRegionName = "progress.track";
+const Name s_ProgressFillRegionName = "progress.fill";
+const Name s_FocusOverlayRegionName = "focus.overlay";
+
+const StringView s_PanelNormalRegionText = "panel.normal";
+const StringView s_WindowNormalRegionText = "window.normal";
+const StringView s_WindowTitleRegionText = "window.title";
+const StringView s_WindowCollapseRegionText = "window.collapse";
+const StringView s_WindowResizeRegionText = "window.resize";
+const StringView s_SeparatorRegionText = "separator";
+const StringView s_WhiteRegionText = "white";
+const StringView s_ButtonNormalRegionText = "button.normal";
+const StringView s_ButtonHoverRegionText = "button.hover";
+const StringView s_ButtonPressedRegionText = "button.pressed";
+const StringView s_ButtonDisabledRegionText = "button.disabled";
+const StringView s_CheckboxNormalRegionText = "checkbox.normal";
+const StringView s_CheckboxHoverRegionText = "checkbox.hover";
+const StringView s_CheckboxCheckedRegionText = "checkbox.checked";
+const StringView s_CheckboxDisabledRegionText = "checkbox.disabled";
+const StringView s_CheckboxMarkRegionText = "checkbox.mark";
+const StringView s_EditNormalRegionText = "edit.normal";
+const StringView s_EditHoverRegionText = "edit.hover";
+const StringView s_EditFocusedRegionText = "edit.focused";
+const StringView s_EditDisabledRegionText = "edit.disabled";
+const StringView s_ListBackgroundRegionText = "list.background";
+const StringView s_ListRowNormalRegionText = "list.row.normal";
+const StringView s_ListRowHoverRegionText = "list.row.hover";
+const StringView s_ListRowSelectedRegionText = "list.row.selected";
+const StringView s_ListRowDisabledRegionText = "list.row.disabled";
+const StringView s_ScrollTrackRegionText = "scroll.track";
+const StringView s_ScrollThumbRegionText = "scroll.thumb";
+const StringView s_ScrollbarTrackRegionText = "scrollbar.track";
+const StringView s_ScrollbarThumbNormalRegionText = "scrollbar.thumb.normal";
+const StringView s_PopupNormalRegionText = "popup.normal";
+const StringView s_TooltipNormalRegionText = "tooltip.normal";
+const StringView s_ComboNormalRegionText = "combo.normal";
+const StringView s_ComboHoverRegionText = "combo.hover";
+const StringView s_ComboOpenRegionText = "combo.open";
+const StringView s_ComboFocusedRegionText = "combo.focused";
+const StringView s_ComboDisabledRegionText = "combo.disabled";
+const StringView s_ComboArrowRegionText = "combo.arrow";
+const StringView s_RadioNormalRegionText = "radio.normal";
+const StringView s_RadioHoverRegionText = "radio.hover";
+const StringView s_RadioPressedRegionText = "radio.pressed";
+const StringView s_RadioCheckedRegionText = "radio.checked";
+const StringView s_RadioDisabledRegionText = "radio.disabled";
+const StringView s_RadioMarkRegionText = "radio.mark";
+const StringView s_SliderTrackRegionText = "slider.track";
+const StringView s_SliderThumbNormalRegionText = "slider.thumb.normal";
+const StringView s_SliderThumbHoverRegionText = "slider.thumb.hover";
+const StringView s_SliderThumbPressedRegionText = "slider.thumb.pressed";
+const StringView s_SliderThumbDisabledRegionText = "slider.thumb.disabled";
+const StringView s_ProgressTrackRegionText = "progress.track";
+const StringView s_ProgressFillRegionText = "progress.fill";
+const StringView s_FocusOverlayRegionText = "focus.overlay";
+
 [reflect]
 enum<u8> UiSkinDrawMode{
     enum Sprite = 0u,
@@ -90,6 +194,40 @@ class UiSkinTypography{
 }
 
 [serialize]
+class UiSkinHeaderBinary{
+    public u32 magic = s_UiSkinBinaryMagic;
+    public u32 version = s_UiSkinBinaryVersion;
+    public NameHash textureNameHash;
+    public u32 atlasWidth = 0u;
+    public u32 atlasHeight = 0u;
+    public f32 referenceDensity = 1.0f;
+    public u32 regionCount = 0u;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+}
+
+[serialize]
+class UiSkinRegionBinary{
+    public NameHash nameHash;
+    public u32 x = 0u;
+    public u32 y = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 sliceLeft = 0u;
+    public u32 sliceTop = 0u;
+    public u32 sliceRight = 0u;
+    public u32 sliceBottom = 0u;
+    public f32 paddingLeft = 0.0f;
+    public f32 paddingTop = 0.0f;
+    public f32 paddingRight = 0.0f;
+    public f32 paddingBottom = 0.0f;
+    public f32 minimumWidth = 0.0f;
+    public f32 minimumHeight = 0.0f;
+    public u32 drawMode = 0u;
+    public u32 reserved = 0u;
+}
+
+[serialize]
 class UiSkinColorBinary{
     public f32 r = 0.0f;
     public f32 g = 0.0f;
@@ -119,6 +257,31 @@ const UiSkinColor s_DefaultControlPressedTintColor(0.85f, 0.85f, 0.85f, 1.0f);
 const UiSkinColor s_DefaultControlDisabledTintColor(0.55f, 0.55f, 0.55f, 0.6f);
 const UiSkinColor s_DefaultProgressTrackTintColor(1.0f, 1.0f, 1.0f, 1.0f);
 const UiSkinColor s_DefaultProgressFillTintColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+[reflect]
+class UiSkinPalette{
+    public Array<UiSkinColor, 17u> colors;
+
+    public UiSkinPalette(){
+        this.colors[0u] = s_DefaultTextNormalColor;
+        this.colors[1u] = s_DefaultTextDisabledColor;
+        this.colors[2u] = s_DefaultTextTooltipColor;
+        this.colors[3u] = s_DefaultEditBackgroundColor;
+        this.colors[4u] = s_DefaultEditSelectionColor;
+        this.colors[5u] = s_DefaultEditInactiveSelectionColor;
+        this.colors[6u] = s_DefaultEditCaretColor;
+        this.colors[7u] = s_DefaultEditPreeditColor;
+        this.colors[8u] = s_DefaultScrollbarTrackColor;
+        this.colors[9u] = s_DefaultScrollbarThumbColor;
+        this.colors[10u] = s_DefaultScrollbarDisabledColor;
+        this.colors[11u] = s_DefaultPopupBackdropColor;
+        this.colors[12u] = s_DefaultControlHoverTintColor;
+        this.colors[13u] = s_DefaultControlPressedTintColor;
+        this.colors[14u] = s_DefaultControlDisabledTintColor;
+        this.colors[15u] = s_DefaultProgressTrackTintColor;
+        this.colors[16u] = s_DefaultProgressFillTintColor;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

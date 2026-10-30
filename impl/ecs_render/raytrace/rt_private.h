@@ -8,6 +8,7 @@
 #include "instance_material.h"
 #include "caustic_photon_parameters.h"
 
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shadow/quality_settings.adhd.h>
@@ -46,7 +47,6 @@
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
 #include <impl/assets_material/asset.h>
-#include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
@@ -74,83 +74,16 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Finite infinity for CPU BVH bounds.
-inline constexpr f32 s_RayTracingFiniteInfinity = 1e30f;
-inline constexpr u32 s_RayTracingTriangleIndexCount = NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-inline constexpr u32 s_RayTracingAllInstanceMask = NWB_RAY_TRACING_ALL_INSTANCE_MASK;
-// Heap geometry buffers per mesh.
-inline constexpr u32 s_HardwareRayTracingMeshBufferCount = 3u;
-inline constexpr u32 s_SoftwareRayTracingMeshBufferCount = 4u;
 // Shader variant selectors for the NWB_RT_CSG_ENABLED define.
 inline constexpr AStringView s_RayTracingCsgDisabledVariant = "NWB_RT_CSG_ENABLED=0";
 inline constexpr AStringView s_RayTracingCsgEnabledVariant = "NWB_RT_CSG_ENABLED=1";
 
-
-// Limit skinned BLAS refits before rebuilding topology.
-inline constexpr u32 s_BlasMaxRefitsBeforeRebuild = 8u;
-
-// Scale rebuild cadence by mesh size, clamped to preserve quality.
-inline constexpr u32 s_BlasMinRefitsBeforeRebuild = 4u;
-inline constexpr u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
-inline constexpr u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Cube-root-scaled refit budget.
-[[nodiscard]] inline constexpr u32 AdaptiveRefitsBeforeRebuild(const u32 primitiveCount)noexcept{
-    u32 log2 = 0u;
-    u32 n = primitiveCount;
-    while(n > 1u){ n >>= 1u; ++log2; }
-    u32 budget = s_BlasMaxRefitsBeforeRebuild << (log2 / s_BlasRefitBudgetLog2ExponentStep);
-    if(budget < s_BlasMinRefitsBeforeRebuild)
-        budget = s_BlasMinRefitsBeforeRebuild;
-    if(budget > s_BlasMaxRefitsBeforeRebuildCap)
-        budget = s_BlasMaxRefitsBeforeRebuildCap;
-    return budget;
-}
-
-inline constexpr usize s_TlasInitialInstanceCapacity = 128u;
-
-inline constexpr usize s_BvhSortInitialCapacity = 1024u;
-
-// CPU mirror of NwbBvhBitonicSortPushConstants.
-struct BvhSortPushConstants{
-    u32 elementCount = 0u;
-    u32 compareDistance = 0u;
-    u32 sequenceSize = 0u;
-    u32 mode = NWB_BVH_SORT_MODE_LOCAL_TILE;
-    u32 keysHeapSlot = Limit<u32>::s_Max;
-    u32 payloadHeapSlot = Limit<u32>::s_Max;
-};
 static_assert(sizeof(BvhSortPushConstants) == sizeof(u32) * NWB_BVH_SORT_PUSH_CONSTANT_WORD_COUNT, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
 static_assert(offsetof(BvhSortPushConstants, mode) == 12u);
 static_assert(offsetof(BvhSortPushConstants, keysHeapSlot) == 16u);
 static_assert(offsetof(BvhSortPushConstants, payloadHeapSlot) == 20u);
 static_assert(IsStandardLayout_V<BvhSortPushConstants>);
 static_assert(IsTriviallyCopyable_V<BvhSortPushConstants>);
-
-inline constexpr usize s_BvhBuildInitialCapacity = 1024u;
-
-// Maximum per-mesh software BVH size; oversized meshes are skipped.
-inline constexpr u32 s_BvhMaxPrimitivesPerMesh = 262144u;
-
-// Scratch scene-BVH build records. They stay in memory during the build, so they use Float storage.
-struct SceneBvhPrimitiveCalculation{
-    Float4 aabbMin;
-    Float4 aabbMax;
-    Float4 centroid;
-    b8 transparentOccluder = false;
-};
-
-struct SceneBvhNodeCalculation{
-    Float4 aabbMin;
-    Float4 aabbMax;
-    u32 leftChild = 0u;
-    u32 rightChild = 0u;
-    b8 containsTransparentOccluder = false;
-};
 
 // CPU mirror of NwbBvhBuildPushConstants.
 struct alignas(16) BvhBuildPushConstants{
@@ -176,224 +109,36 @@ static_assert(offsetof(BvhBuildPushConstants, visitCounterHeapSlot) == 60u);
 static_assert(IsStandardLayout_V<BvhBuildPushConstants>);
 static_assert(IsTriviallyCopyable_V<BvhBuildPushConstants>);
 
-// Shader-mirrored BVH child encoding.
-namespace BvhNodeIndex{
-    enum Mask : u32{
-        LeafFlag = NWB_BVH_LEAF_FLAG,
-        // Reuses LeafFlag in rightChild to mark transparent subtrees.
-        TransparentSubtreeFlag = NWB_BVH_TRANSPARENT_SUBTREE_FLAG,
-        ChildIndexMask = NWB_BVH_CHILD_INDEX_MASK,
-        Invalid = NWB_BVH_INVALID,
-    };
-};
-
-inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
-
-// Fixed-grid binned SAH; leaf cost weights instance intersection cost.
-inline constexpr u32 s_SceneBvhAxisCount = 3u;
-inline constexpr u32 s_SceneBvhSahBinCount = 12u;
-inline constexpr f32 s_SceneBvhSahTraversalCost = 1.0f;
-
-inline constexpr usize s_CausticEmissionTargetInitialCapacity = 32u;
-
-// CPU/GPU refractive-instance AABB record.
-struct NwbCausticEmissionTargetGpu{
-    Float4 aabbMin = Float4(0.f, 0.f, 0.f, 0.f);
-    Float4 aabbMax = Float4(0.f, 0.f, 0.f, 0.f);
-};
 static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");
 
-static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset = 88u;
-static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset = 92u;
-static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 96u;
-static constexpr usize s_CausticResolvePushConstantsActivityInputSlotOffset = 52u;
-static constexpr usize s_CausticResolvePushConstantsActivityOutputSlotOffset = 56u;
-inline constexpr usize s_ShadowInstanceMaterialInitialCapacity = 128u;
-
-// CPU mirror of the heap-only software-shadow selector block.
-struct SwShadowHeapPushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 instanceCount = 0u;
-    u32 frameIndex = 0u;
-    u32 coarseWidth = 0u;
-    u32 coarseHeight = 0u;
-    f32 edgeThreshold = 0.1f;
-    u32 edgeCapacity = 0u;
-    u32 traceGroupSize = 0u;
-    u32 deferredResourcesHeapSlot = 0u;
-    u32 materialContextSlotsHeapSlot = 0u;
-    u32 visibilityStorageSlot = 0u;
-    u32 coarseStorageSlot = 0u;
-    u32 softHalfStorageSlot = 0u;
-    u32 transparentSoftHalfStorageSlot = 0u;
-    u32 edgeCounterStorageSlot = 0u;
-    u32 edgeListStorageSlot = 0u;
-    u32 indirectArgsStorageSlot = 0u;
-    u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
-    u32 receiverFactor = s_ShadowReceiverFactorHalf;
-};
 static_assert(NWB_SW_SHADOW_SOFT_TEMPORAL_SPP >= 1u && NWB_SW_SHADOW_SOFT_TEMPORAL_SPP <= NWB_SW_SHADOW_SOFT_SPP, "temporal soft-shadow sample budget must be within the bootstrap budget");
 static_assert(sizeof(SwShadowHeapPushConstants) == sizeof(u32) * 20u, "SwShadowHeapPushConstants must match the shader push-constant layout");
 static_assert(offsetof(SwShadowHeapPushConstants, receiverFactor) == 76u);
 
-// CPU mirror of hardware RayQuery shadow push constants.
-struct ShadowRqPushConstants{
-    u32 frameIndex = 0u;
-    u32 worldPositionSlot = 0u;
-    u32 normalSlot = 0u;
-    u32 depthSlot = 0u;
-    u32 deferredResourcesHeapSlot = 0u;
-    u32 visibilityStorageSlot = 0u;
-};
 static_assert(sizeof(ShadowRqPushConstants) == sizeof(u32) * 6u, "ShadowRqPushConstants must match the shader push-constant layout");
 
-// CPU mirror of half-resolution hardware soft-shadow push constants.
-struct ShadowRqSoftPushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 frameIndex = 0u;
-    u32 worldPositionSlot = 0u;
-    u32 normalSlot = 0u;
-    u32 depthSlot = 0u;
-    u32 deferredResourcesHeapSlot = 0u;
-    u32 visibilityStorageSlot = 0u;
-    u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
-    u32 receiverFactor = s_ShadowReceiverFactorHalf;
-};
 static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 10u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowRqSoftPushConstants, receiverFactor) == 36u);
 
-// CPU mirror of NwbShadowResolvePushConstants.
-struct ShadowResolvePushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 halfWidth = 0u;
-    u32 halfHeight = 0u;
-    u32 stepWidth = 1u;
-    u32 stage = NWB_SHADOW_RESOLVE_STAGE_WAVELET;
-    u32 lightSlotStart = 0u;
-    u32 lightSlotCount = 0u;
-    u32 momentsValid = 0u;
-    u32 upsampleFold = 0u;
-    u32 geometrySlot = 0u;
-    u32 depthSlot = 0u;
-    u32 worldPositionSlot = 0u;
-    u32 normalSlot = 0u;
-    u32 softHalfSlot = 0u;
-    u32 inputColorSlot = 0u;
-    u32 momentsSlot = 0u;
-    u32 outputStorageSlot = 0u;
-    u32 visibilityStorageSlot = 0u;
-    u32 sceneShadingSlot = 0u;
-    u32 opaqueInputColorSlot = 0u;
-    u32 receiverFactor = s_ShadowReceiverFactorHalf;
-};
 static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 22u, "ShadowResolvePushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowResolvePushConstants, receiverFactor) == 84u);
-
 static_assert(offsetof(ShadowResolvePushConstants, opaqueInputColorSlot) == sizeof(u32) * 20u);
 
-// The combined wavelet extends the shared resolve ABI with opaque moments and output.
-struct ShadowCombinedWaveletPushConstants{
-    ShadowResolvePushConstants resolve;
-    u32 opaqueMomentsSlot = 0u;
-    u32 opaqueMomentsValid = 0u;
-    u32 opaqueOutputStorageSlot = 0u;
-};
 static_assert(sizeof(ShadowCombinedWaveletPushConstants) == 100u);
 static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsSlot) == s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset);
 static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsValid) == s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset);
 static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueOutputStorageSlot) == s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset);
 
-// Shader-mirrored shadow resolve stages.
-namespace ShadowResolveStage{
-    enum Enum : u32{
-        Wavelet = NWB_SHADOW_RESOLVE_STAGE_WAVELET,
-        Upsample = NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE,
-    };
-};
-
-// CPU mirror of shadow geometry-downsample push constants.
-struct ShadowGeometryDownsamplePushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 halfWidth = 0u;
-    u32 halfHeight = 0u;
-    u32 worldPositionSlot = 0u;
-    u32 normalSlot = 0u;
-    u32 depthSlot = 0u;
-    u32 outputStorageSlot = 0u;
-    u32 sceneShadingSlot = 0u;
-    u32 receiverFactor = s_ShadowReceiverFactorHalf;
-};
 static_assert(sizeof(ShadowGeometryDownsamplePushConstants) == sizeof(u32) * 10u, "ShadowGeometryDownsamplePushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowGeometryDownsamplePushConstants, receiverFactor) == 36u);
 
-// CPU mirror of temporal shadow-reprojection push constants.
-struct ShadowReprojectMergePushConstants{
-    Float44U prevWorldToClip = {};
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 halfWidth = 0u;
-    u32 halfHeight = 0u;
-    u32 lightSlotStart = 0u;
-    u32 lightSlotCount = 0u;
-    u32 historyValid = 0u;
-    u32 softTraceSlot = 0u;
-    u32 historyInSlot = 0u;
-    u32 momentsInSlot = 0u;
-    u32 geometryCurrSlot = 0u;
-    u32 geometryPrevSlot = 0u;
-    u32 worldPositionSlot = 0u;
-    u32 historyOutputStorageSlot = 0u;
-    u32 momentsOutputStorageSlot = 0u;
-    u32 receiverFactor = s_ShadowReceiverFactorHalf;
-};
 static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + sizeof(u32) * 16u, "ShadowReprojectMergePushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowReprojectMergePushConstants, receiverFactor) == 124u);
 
-// CPU mirror of caustic resolve push constants.
-struct CausticResolvePushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 halfWidth = 0u;
-    u32 halfHeight = 0u;
-    f32 causticIntensity = 0.f;
-    u32 stepWidth = 1u;
-    u32 stage = NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE;
-    u32 worldPositionSlot = 0u;
-    u32 depthSlot = 0u;
-    u32 inputColorSlot = 0u;
-    u32 geometrySlot = 0u;
-    u32 accumulatorSlot = 0u;
-    u32 outputStorageSlot = 0u;
-    u32 activityInputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
-    u32 activityOutputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
-};
-static constexpr usize s_CausticResolvePushConstantsByteSize = 60u;
 static_assert(sizeof(CausticResolvePushConstants) == s_CausticResolvePushConstantsByteSize, "CausticResolvePushConstants must match the shader push-constant layout");
 static_assert(offsetof(CausticResolvePushConstants, activityInputSlot) == s_CausticResolvePushConstantsActivityInputSlotOffset);
 static_assert(offsetof(CausticResolvePushConstants, activityOutputSlot) == s_CausticResolvePushConstantsActivityOutputSlotOffset);
 
-// Heap-only selector ABI shared by every surfel GI pass.
-struct SurfelHeapPushConstants{
-    u32 constantsHeapSlot = 0u;
-    u32 poolHeapSlot = 0u;
-    u32 cellHeadHeapSlot = 0u;
-    u32 counterHeapSlot = 0u;
-    u32 freeListHeapSlot = 0u;
-    u32 snapshotPoolHeapSlot = 0u;
-    u32 snapshotCellHeadHeapSlot = 0u;
-    u32 traceIndirectArgsHeapSlot = 0u;
-    u32 deferredResourcesHeapSlot = 0u;
-    u32 materialContextSlotsHeapSlot = 0u;
-    u32 worldPositionSlot = 0u;
-    u32 normalSlot = 0u;
-    u32 outputStorageHeapSlot = 0u;
-    u32 halfIrradianceSlot = 0u;
-    u32 guidePoolHeapSlot = 0u;
-};
 static_assert(sizeof(SurfelHeapPushConstants) == sizeof(u32) * 15u, "SurfelHeapPushConstants must match NwbSurfelHeapPushConstants");
 static_assert(NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL >= 1u && NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL <= NWB_SURFEL_RAYS_PER_SURFEL);
 static_assert(NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL >= 1u && NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL <= NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL);
@@ -402,38 +147,10 @@ static_assert(NWB_SURFEL_GUIDE_BIN_COUNT == 16u && NWB_SURFEL_RECORD_SIZE == 96u
 static_assert(sizeof(Float4) == NWB_SURFEL_GUIDE_FLOAT4_STRIDE);
 static_assert(NWB_SURFEL_RAYS_PER_SURFEL >= NWB_SURFEL_GUIDE_BIN_COUNT);
 
-// Shader-mirrored caustic resolve stages.
-namespace CausticResolveStage{
-    enum Enum : u32{
-        PrepareDownsample = NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE,
-        Wavelet = NWB_CAUSTIC_RESOLVE_STAGE_WAVELET,
-        Upsample = NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE,
-    };
-};
-
-// CPU mirror of caustic geometry-downsample push constants.
-struct CausticGeometryDownsamplePushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 halfWidth = 0u;
-    u32 halfHeight = 0u;
-    u32 worldPositionSlot = 0u;
-    u32 depthSlot = 0u;
-    u32 outputStorageSlot = 0u;
-};
 static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 7u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
-
-// CPU mirror of caustic accumulator-decay push constants.
-struct CausticAccumulatorDecayPushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    f32 decayFactor = 0.f;
-    u32 accumulatorStorageSlot = 0u;
-};
 static_assert(sizeof(CausticAccumulatorDecayPushConstants) == sizeof(u32) * 4u, "CausticAccumulatorDecayPushConstants must match the shader push-constant layout");
 
 // Base grids retain full quality; the explicit quality divisor scales both dimensions before temporal phase selection.
-inline constexpr u32 s_CausticHwPhotonGridSide = 512u;
 #if defined(NWB_FINAL) || defined(NWB_OPTIMIZE)
 inline constexpr u32 s_CausticSwPhotonGridSide = 512u;
 #else
@@ -445,9 +162,6 @@ static_assert(s_CausticTemporalPhaseCount == 2u);
 static_assert(s_CausticTemporalPhaseCount > NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT);
 static_assert((s_CausticHwPhotonGridSide % s_CausticTemporalPhaseCount) == 0u);
 static_assert((s_CausticSwPhotonGridSide % s_CausticTemporalPhaseCount) == 0u);
-
-// Resolve exposure; photon-count changes preserve brightness.
-inline constexpr f32 s_CausticIntensity = 2.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -462,13 +176,6 @@ inline constexpr f32 s_CausticIntensity = 2.0f;
     return VectorSelect(intensityLanes, decayedLanes, gate);
 }
 
-// Runtime refractor bounds are inflated because emission uses bind-pose AABBs.
-inline constexpr f32 s_CausticRuntimeBoundsInflation = 1.25f;
-
-// Conservative top-level bounds for transparent-shadow rays.
-inline constexpr f32 s_SwShadowSceneBoundsMinPadding = 0.25f;
-inline constexpr f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -477,15 +184,10 @@ inline constexpr f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
 namespace RayTracingDetail{
 
 
-struct DispatchGroups{
-    u32 x;
-    u32 y;
-};
+using DispatchGroups = NWB::Impl::RayTracingDispatchGroups;
 
 [[nodiscard]] NWB_INLINE DispatchGroups ResolveDispatchGroups(const u32 width, const u32 height, const u32 receiverFactor, const u32 groupSize)noexcept{
-    const u32 receiverWidth = (width + receiverFactor - 1u) / receiverFactor;
-    const u32 receiverHeight = (height + receiverFactor - 1u) / receiverFactor;
-    return { DivideUp(receiverWidth, groupSize), DivideUp(receiverHeight, groupSize) };
+    return ResolveRayTracingDispatchGroups(width, height, receiverFactor, groupSize);
 }
 
 
@@ -521,4 +223,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

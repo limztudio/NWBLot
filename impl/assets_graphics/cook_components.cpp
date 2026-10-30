@@ -9,7 +9,6 @@
 
 
 #include "cook_components.h"
-#include "component_binary_payload.h"
 
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_material/asset.h>
@@ -57,7 +56,7 @@ using RendererComponentCookEntry = TypedComponentCookEntry<RendererComponent>;
     const Name& assetName,
     Core::Assets::AssetBytes& outPayload
 ){
-    ComponentBinaryPayload::SingleAssetRefComponentPayloadBinary binaryPayload;
+    SingleAssetRefComponentPayloadBinary binaryPayload;
     binaryPayload.assetHash = assetName.hash();
     return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
 }
@@ -278,7 +277,7 @@ b8 MeshComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPa
 }
 
 b8 RendererComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    ComponentBinaryPayload::RendererComponentPayloadBinary binaryPayload;
+    RendererComponentPayloadBinary binaryPayload;
     binaryPayload.materialHash = component.material.name().hash();
     binaryPayload.opticalVolumeGroupHash = component.opticalVolumeGroup.hash();
     binaryPayload.opticalVolumePriority = component.opticalVolumePriority;

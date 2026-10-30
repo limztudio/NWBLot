@@ -458,7 +458,7 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
     );
 
     const Core::Rect receiverRect = receiverWorkRegion.resolveRect(frameWidth, frameHeight);
-    range.screenWorkRect = { { { static_cast<u32>(receiverRect.minX), static_cast<u32>(receiverRect.minY), static_cast<u32>(receiverRect.maxX), static_cast<u32>(receiverRect.maxY) } } };
+    range.screenWorkRect = UInt4(static_cast<u32>(receiverRect.minX), static_cast<u32>(receiverRect.minY), static_cast<u32>(receiverRect.maxX), static_cast<u32>(receiverRect.maxY));
     if(receiverWorkRegion.fullFrame)
         csgFrameData.workRegion.expandFull();
     else if(receiverWorkRegion.bounded()){

@@ -17,27 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct MeshletCookMetrics{
-    u32 meshletCount = 0u;
-    u32 minPrimitiveCount = Limit<u32>::s_Max;
-    u32 maxPrimitiveCount = 0u;
-    u32 minVertexCount = Limit<u32>::s_Max;
-    u32 maxVertexCount = 0u;
-    f32 worstConeCutoff = 1.0f;
-    u64 primitiveCountSum = 0u;
-    u64 vertexCountSum = 0u;
-    u64 positionCountSum = 0u;
-    u64 attributeCountSum = 0u;
-    f64 radiusSum = 0.0;
-    u32 coneDisabledCount = 0u;
-    u32 coneEnabledCount = 0u;
-    f64 coneCutoffSum = 0.0;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Cook-time meshlet statistics and the source/runtime byte estimate logged after each build.
 class MeshletCookMetricsReport final : NoCopy{
 public:
@@ -70,4 +49,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -6,8 +6,6 @@
 
 #include "deform_validator.h"
 
-#include <impl/assets_csg/shape_id.h>
-
 #include <global/simd/vector.h>
 
 
@@ -28,15 +26,7 @@ using CsgDeformDistanceFunc = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSi
 
 
 CsgDeformShapeKind::Enum CsgDeformCutterField::ClassifyDeformShape(const Name& shapeType)noexcept{
-    if(shapeType == s_CsgPlaneShapeName)
-        return CsgDeformShapeKind::Plane;
-    if(shapeType == s_CsgBoxShapeName)
-        return CsgDeformShapeKind::Box;
-    if(shapeType == s_CsgSphereShapeName)
-        return CsgDeformShapeKind::Sphere;
-    if(shapeType == s_CsgCapsuleShapeName)
-        return CsgDeformShapeKind::Capsule;
-    return CsgDeformShapeKind::Invalid;
+    return ClassifyCsgDeformShape(shapeType);
 }
 
 SIMDVectorSingle CsgDeformCutterField::PlaneSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept{
@@ -120,4 +110,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

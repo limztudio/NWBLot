@@ -7,6 +7,8 @@
 
 #include "../../global.h"
 
+#include <impl/ecs_mesh/runtime/types.adhd.h>
+
 #include <core/alloc/scratch.h>
 #include <core/graphics/runtime/runtime.h>
 
@@ -36,16 +38,8 @@ struct BufferFlags{
     b8 isIndexBuffer = false;
 };
 
-namespace BufferSetupFailure{
-    enum Enum : u8{
-        EmptyPayload,
-        ByteSizeOverflow,
-        CreateFailed,
-    };
-};
-
-// ByteAddress loads whole words; zero-fill tails so terminal u8 decodes stay in range.
-inline constexpr usize s_RawByteLoadAlignmentBytes = sizeof(u32);
+namespace BufferSetupFailure = NWB::Impl::BufferSetupFailure;
+using NWB::Impl::s_RawByteLoadAlignmentBytes;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,4 +116,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

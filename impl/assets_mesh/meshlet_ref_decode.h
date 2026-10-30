@@ -17,14 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr NWB_INLINE b8 MeshletRefDeltaWidthValid(const MeshletRefDeltaWidth::Enum width)noexcept{
-    return width == MeshletRefDeltaWidth::U8 || width == MeshletRefDeltaWidth::U16 || width == MeshletRefDeltaWidth::U32;
-}
-
-[[nodiscard]] constexpr NWB_INLINE u32 MeshletRefDeltaByteWidth(const MeshletRefDeltaWidth::Enum width)noexcept{
-    return width == MeshletRefDeltaWidth::U8 ? 1u : width == MeshletRefDeltaWidth::U16 ? 2u : 4u;
-}
-
 [[nodiscard]] NWB_INLINE Expected<usize> MeshletRefDeltaByteCount(const u32 refCount, const MeshletRefDeltaWidth::Enum width)noexcept{
     if(!MeshletRefDeltaWidthValid(width))
         return MakeUnexpected(Failure{});
@@ -46,26 +38,6 @@ NWB_IMPL_BEGIN
     inOutByteCount += *channelBytes;
     return true;
 }
-
-struct MeshletPositionRefEncodingLayout{
-    MeshletRefDeltaWidth::Enum positionWidth = MeshletRefDeltaWidth::U8;
-    MeshletRefDeltaWidth::Enum skinWidth = MeshletRefDeltaWidth::U8;
-    usize positionByteOffset = 0u;
-    usize skinByteOffset = 0u;
-    usize byteCount = 0u;
-};
-
-struct MeshletAttributeRefEncodingLayout{
-    MeshletRefDeltaWidth::Enum normalWidth = MeshletRefDeltaWidth::U8;
-    MeshletRefDeltaWidth::Enum tangentWidth = MeshletRefDeltaWidth::U8;
-    MeshletRefDeltaWidth::Enum uv0Width = MeshletRefDeltaWidth::U8;
-    MeshletRefDeltaWidth::Enum colorWidth = MeshletRefDeltaWidth::U8;
-    usize normalByteOffset = 0u;
-    usize tangentByteOffset = 0u;
-    usize uv0ByteOffset = 0u;
-    usize colorByteOffset = 0u;
-    usize byteCount = 0u;
-};
 
 [[nodiscard]] NWB_INLINE Expected<usize> AddMeshletRefLayoutChannel(const usize baseOffset, const u32 refCount, const MeshletRefDeltaWidth::Enum width, usize& inOutRelativeOffset)noexcept{
     if(baseOffset > Limit<usize>::s_Max - inOutRelativeOffset)
@@ -252,4 +224,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

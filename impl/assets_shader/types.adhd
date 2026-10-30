@@ -32,6 +32,41 @@ enum<u8> AssetPayloadDecodeFailure{
     enum InvalidBytecode
 }
 
+[reflect]
+enum<u8> ShaderOptimizationLevel{
+    enum None,
+    enum Default,
+    enum High,
+    enum Maximal,
+    enum kCount
+}
+
+[reflect]
+enum<u8> IncludeKind{
+    enum Relative,
+    enum Standard,
+    enum Macro,
+    enum Unsupported
+}
+
+[reflect]
+class IncludeDirective{
+    public StringView name = "";
+    public IncludeKind kind = IncludeKind::Enum::Relative;
+}
+
+[reflect]
+class ShaderMacroDefinition{
+    public StringView name = "";
+    public StringView value = "";
+}
+
+[reflect]
+class DependencyChecksum{
+    public u64 checksum = 0u;
+    public b8 compilerInputsHaveBom = false;
+}
+
 b8 IsValidBytecodeSize(in usize byteSize){
     return byteSize >= s_SpvWordBytes && (byteSize % s_SpvWordBytes) == 0u;
 }

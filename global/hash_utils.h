@@ -93,8 +93,19 @@ inline constexpr void HashCombineHash(usize& seed, const usize hash)noexcept{
 }
 
 template<typename T>
+[[nodiscard]] inline usize HashValue(const T& value)noexcept(noexcept(Hasher<T>{}(value))){
+    return Hasher<T>{}(value);
+}
+
+template<typename T>
 inline void HashCombine(usize& seed, const T& value)noexcept(noexcept(HashCombineHash(seed, Hasher<T>{}(value)))){
     HashCombineHash(seed, Hasher<T>{}(value));
+}
+
+template<typename T>
+[[nodiscard]] inline usize HashCombineValue(usize seed, const T& value)noexcept(noexcept(HashCombine(seed, value))){
+    HashCombine(seed, value);
+    return seed;
 }
 
 template<typename T>
@@ -139,4 +150,3 @@ template<typename StringT>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

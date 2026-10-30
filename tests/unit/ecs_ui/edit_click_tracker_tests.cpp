@@ -58,7 +58,7 @@ TEST(UiEditClickTracker, PopupReopenModelReplacementFocusLossAndShiftFenceTheSeq
     tracker.release(s_Owner);
     EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 140u, false), UiEditClickKind::Caret);
     tracker.release(s_Owner);
-    tracker.retainFocus(&s_OtherOwner);
+    tracker.retainFocus(s_OtherOwner);
     EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 160u, false), UiEditClickKind::Caret);
     tracker.release(s_Owner);
     EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 180u, true), UiEditClickKind::Caret);

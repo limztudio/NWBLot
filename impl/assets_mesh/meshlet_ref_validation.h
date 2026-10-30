@@ -49,8 +49,12 @@ consteval b8 AttributeSkinsIsNothrow()noexcept{
 
 class MeshMeshletRefValidation final : NoCopy{
 public:
-    [[nodiscard]] static b8 MeshletPositionRefInRange(const MeshletPositionStreamRef& ref, const usize positionCount, const usize skinCount, const b8 skinRequired)noexcept;
-    [[nodiscard]] static b8 MeshletAttributeRefInRange(const MeshletAttributeStreamRef& ref, const usize normalCount, const usize tangentCount, const usize uv0Count, const usize colorCount)noexcept;
+    [[nodiscard]] static b8 MeshletPositionRefInRange(const MeshletPositionStreamRef& ref, const usize positionCount, const usize skinCount, const b8 skinRequired)noexcept{
+        return ::NWB::Impl::MeshletPositionRefInRange(ref, positionCount, skinCount, skinRequired);
+    }
+    [[nodiscard]] static b8 MeshletAttributeRefInRange(const MeshletAttributeStreamRef& ref, const usize normalCount, const usize tangentCount, const usize uv0Count, const usize colorCount)noexcept{
+        return ::NWB::Impl::MeshletAttributeRefInRange(ref, normalCount, tangentCount, uv0Count, colorCount);
+    }
     template<
         typename AttributeSkinContainer,
         typename ConflictHandler,
@@ -133,4 +137,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -7,6 +7,8 @@
 
 #include "scene_resources.h"
 
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/shadow/quality_settings.adhd.h>
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
 
@@ -26,7 +28,7 @@ NWB_IMPL_BEGIN
 
 
 namespace ECSRenderDetail{
-    struct SceneLightGpuData;
+    using NWB::Impl::SceneLightGpuData;
 };
 
 // Only accepted static scene/light identities can authorize a reduced per-pixel sampling budget.
@@ -56,26 +58,8 @@ struct SoftwareTransparentSamplingState{
     SoftwareTransparentSamplingHistory m_history;
 };
 
-// Dedicated transparent trace ABI leaves all opaque, hardware and coarse software kernels unchanged.
-struct SoftwareTransparentSamplingPush{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 instanceCount = 0u;
-    u32 frameIndex = 0u;
-    u32 deferredResourcesHeapSlot = 0u;
-    u32 materialContextSlotsHeapSlot = 0u;
-    u32 transparentSoftHalfStorageSlot = 0u;
-    u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
-    u32 historyValid = 0u;
-    u32 geometryCurrSlot = 0u;
-    u32 geometryPrevSlot = 0u;
-    u32 momentsInSlot = 0u;
-    Float44U prevWorldToClip = {};
-    u32 receiverFactor = s_ShadowReceiverFactorHalf;
-};
 static_assert(sizeof(SoftwareTransparentSamplingPush) == 116u);
 static_assert(offsetof(SoftwareTransparentSamplingPush, receiverFactor) == 112u);
-static constexpr usize s_SoftwareTransparentSamplingPushPrevWorldToClipOffset = 48u;
 static_assert(offsetof(SoftwareTransparentSamplingPush, prevWorldToClip) == s_SoftwareTransparentSamplingPushPrevWorldToClipOffset);
 
 
@@ -86,4 +70,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

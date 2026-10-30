@@ -33,6 +33,9 @@ const u32 s_FontAtlasBinaryGlyphBytes = 52u;
 const u32 s_FontAtlasBinaryGroupHeaderBytes = 48u;
 const u32 s_FontAtlasBinaryTableHeaderBytes = 40u;
 
+const Name s_AssetsFontAtlasLoadBinaryArena = "impl/assets_font_atlas/load_binary";
+const Name s_AssetsFontAtlasSerializeArena = "impl/assets_font_atlas/serialize";
+
 [reflect]
 enum<u32> FontAtlasRasterMode{
     enum Outline = 0u,

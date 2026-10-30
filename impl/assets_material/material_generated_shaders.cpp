@@ -263,7 +263,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAcc
         configurationSafeName,
         AStringView("material_avboit_accumulate_pixel_shaders"),
         AStringView("avboit/accumulate_ps_authoring.slangi"),
-        MaterialBinaryPayload::s_AvboitAccumulatePassLabel,
+        s_MaterialAvboitAccumulatePassLabel,
         s_AvboitAccumulatePixelShaderGeneratedPrefix,
         &MaterialCookEntry::avboitAccumulatePixelShaderName,
         arena,
@@ -288,7 +288,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOcc
         configurationSafeName,
         AStringView("material_avboit_occupancy_pixel_shaders"),
         AStringView("avboit/occupancy_ps_authoring.slangi"),
-        MaterialBinaryPayload::s_AvboitOccupancyPassLabel,
+        s_MaterialAvboitOccupancyPassLabel,
         s_AvboitOccupancyPixelShaderGeneratedPrefix,
         &MaterialCookEntry::avboitOccupancyPixelShaderName,
         arena,
@@ -313,7 +313,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExt
         configurationSafeName,
         AStringView("material_avboit_extinction_pixel_shaders"),
         AStringView("avboit/extinction_ps_authoring.slangi"),
-        MaterialBinaryPayload::s_AvboitExtinctionPassLabel,
+        s_MaterialAvboitExtinctionPassLabel,
         s_AvboitExtinctionPixelShaderGeneratedPrefix,
         &MaterialCookEntry::avboitExtinctionPixelShaderName,
         arena,
@@ -342,4 +342,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

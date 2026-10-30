@@ -30,13 +30,6 @@ struct CsgShadowReceiverInput{
     Float3U worldMax = Float3U(0.f, 0.f, 0.f);
 };
 
-struct CsgShadowReceiverRangeGpu{
-    u32 firstCutter = 0u;
-    u32 cutterCount = 0u;
-    u32 flags = 0u;
-    // Packed contexts assign the absolute byte offset of this receiver's cooked membership words.
-    u32 solidTriangleWordOffset = 0u;
-};
 static_assert(sizeof(CsgShadowReceiverRangeGpu) == NWB_CSG_RAY_RANGE_BYTES);
 static_assert(offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset) == sizeof(u32) * 3u);
 static_assert(IsStandardLayout_V<CsgShadowReceiverRangeGpu>);
@@ -70,4 +63,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

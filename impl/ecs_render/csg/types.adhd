@@ -4,11 +4,13 @@
 
 const i32 s_CsgBoundsValidFlag = 1;
 const i32 s_CsgBoundsFiniteFlag = 2;
+const u32 s_CsgInvalidIndex = 0xffffffffu;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[serialize]
 class CsgBoundsGpuData{
     public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
     public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
@@ -32,7 +34,50 @@ b8 CsgReceiverBoundsCanCull(in CsgReceiverCpuBounds bounds){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[serialize]
+class CsgReceiverRangeGpuData{
+    // The CSG shaders pack these four scalars as a single uint4 (rangeInfo):
+    //   x = firstCutter, y = cutterCount, z = flags, w = shadingModelId.
+    public u32 firstCutter = 0u;
+    public u32 cutterCount = 0u;
+    public u32 flags = 0u;
+    public u32 shadingModelId = 0u;
+    public f32x3x4 worldToReceiver(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public CsgBoundsGpuData localBounds;
+    // Cap-fill context packs as uint4: dispatch id, byte offset, instance index.
+    public u32 surfaceDispatchId = s_CsgInvalidIndex;
+    public u32 materialConstantByteOffset = 0u;
+    public u32 meshInstanceIndex = 0u;
+    public u32 materialContextPadding = 0u;
+    public u32x4 screenWorkRect(0u, 0u, s_CsgInvalidIndex, s_CsgInvalidIndex);
+}
+
+[serialize]
+class CsgCutterGpuData{
+    public u32 shapeType = 0u;
+    public f32 worldToShapeScaleBound = 1.0f;
+    public u32 padding0 = 0u;
+    public u32 padding1 = 0u;
+    public f32x3x4 worldToShape(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public f32x4 parameter0(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 parameter1(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class CsgShadowReceiverRangeGpu{
+    public u32 firstCutter = 0u;
+    public u32 cutterCount = 0u;
+    public u32 flags = 0u;
+    // Packed contexts assign the absolute byte offset of this receiver's cooked membership words.
+    public u32 solidTriangleWordOffset = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // CSG context is one global UniformBuffer entry; no pass binds it locally.
+[serialize]
 class CsgClipContextSlots{
     public u32 receiverRanges = 0u;
     public u32 cutters = 0u;
@@ -45,6 +90,7 @@ class CsgClipContextSlots{
 }
 
 // Interval-sampling payload via CsgClipContextSlots; immutable frame blob when active.
+[serialize]
 class CsgIntervalSampleStateGpuData{
     public u32 workMinX = 0u;
     public u32 workMinY = 0u;
@@ -52,6 +98,22 @@ class CsgIntervalSampleStateGpuData{
     public u32 workMaxY = 0u;
     public u32 meshViewHeapSlot = 0u;
     public u32 resourceSlotPadding0 = 0u;
+    public u32 resourceSlotPadding1 = 0u;
+    public u32 resourceSlotPadding2 = 0u;
+}
+
+[serialize]
+class CsgIntervalDispatchPushConstants{
+    public u32 frameWidth = 0u;
+    public u32 frameHeight = 0u;
+    public u32 receiverCount = 0u;
+    public u32 layerCount = 0u;
+    public u32 workOffsetX = 0u;
+    public u32 workOffsetY = 0u;
+    public u32 workExtentX = 0u;
+    public u32 workExtentY = 0u;
+    public u32 meshViewHeapSlot = 0u;
+    public u32 csgContextHeapSlot = 0u;
     public u32 resourceSlotPadding1 = 0u;
     public u32 resourceSlotPadding2 = 0u;
 }

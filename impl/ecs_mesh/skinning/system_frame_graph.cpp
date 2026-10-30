@@ -3,7 +3,7 @@
 
 
 #include "system.h"
-#include "arena_names.h"
+#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include "frame_graph_tasks.h"
 #include "frame_plan_builder.h"
 #include "graph_resource_uses.h"
@@ -38,7 +38,7 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     // Compiler artifacts are reused member storage reset per submission; render() never constructs graph objects.
     resetFrameTaskGraph();
     Core::GpuTaskGraph& graph = m_frameTaskGraph;
-    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_FrameUploadArena);
+    Core::Alloc::ScratchArena scratchArena(s_FrameUploadArena);
     // Dispatch plans are reused member storage; only capacity growth may allocate, never per-frame creation.
     Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& dispatchPlans = m_frameDispatchPlans;
     dispatchPlans.clear();

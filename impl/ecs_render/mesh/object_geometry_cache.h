@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/global.h>
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/pipeline.h>
@@ -36,11 +36,7 @@ namespace ECSRenderDetail{
 
 inline constexpr Core::ResourceStates::Mask s_ObjectGeometryRasterState = Core::ResourceStates::VertexBuffer | Core::ResourceStates::IndexBuffer;
 
-struct ObjectGeometryCacheLayout{
-    u64 bufferByteSize = 0u;
-    u32 indexByteOffset = 0u;
-    u32 indexCount = 0u;
-};
+using NWB::Impl::ObjectGeometryCacheLayout;
 
 struct ObjectGeometryCacheState{
     Core::BufferHandle buffer;
@@ -69,7 +65,13 @@ public:
     [[nodiscard]] b8 valid()const noexcept;
 };
 
-[[nodiscard]] Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(u64 localVertexRefByteSize, u32 primitiveIndexCount)noexcept;
+[[nodiscard]] inline Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(const u64 localVertexRefByteSize, const u32 primitiveIndexCount)noexcept{
+    ObjectGeometryCacheLayout layout{};
+    if(!TryResolveObjectGeometryCacheLayout(localVertexRefByteSize, primitiveIndexCount, layout))
+        return MakeUnexpected(Failure{});
+    return layout;
+}
+
 [[nodiscard]] b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, b8 runtimeMesh)noexcept;
 
 
@@ -86,4 +88,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -3,7 +3,6 @@
 
 
 #include <impl/assets_graphics/components.adhd.h>
-#include "component_binary_payload.h"
 
 #include <core/common/log.h>
 
@@ -35,7 +34,7 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, Rend
     const TStringView context,
     Name& outVirtualPath
 ){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::SingleAssetRefComponentPayloadBinary>(payload, context);
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<SingleAssetRefComponentPayloadBinary>(payload, context);
     if(!binaryPayload)
         return false;
     outVirtualPath = Name(binaryPayload->assetHash);
@@ -103,7 +102,7 @@ b8 MeshComponentAsset::validatePayload()const{
 
 
 b8 RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::RendererComponentPayloadBinary>(
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<RendererComponentPayloadBinary>(
         payload,
         NWB_TEXT("RendererComponentAsset::loadComponentPayload")
     );

@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/components.adhd.h>
+#include <impl/ecs_render/material/pipeline_types.adhd.h>
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
@@ -21,14 +22,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr usize s_MaterialInstanceVectorComponentCount = 4u;
-
-struct MaterialInstanceParameterNames{
-    Name parameterName = s_NameNone;
-    Name blockName = s_NameNone;
-    Name fieldName = s_NameNone;
-};
 
 [[nodiscard]] inline Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(const AStringView parameterName){
     const usize dotIndex = parameterName.find('.');
@@ -48,7 +41,11 @@ struct MaterialInstanceParameterNames{
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' contains an embedded null"), ConvertString(parameterName));
         return MakeUnexpected(Failure{});
     }
-    return MaterialInstanceParameterNames{ *name, *blockName, *fieldName };
+    MaterialInstanceParameterNames result;
+    result.parameterName = *name;
+    result.blockName = *blockName;
+    result.fieldName = *fieldName;
+    return result;
 }
 
 [[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const void* bytes, const usize byteCount)noexcept{
@@ -190,4 +187,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

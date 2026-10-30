@@ -4,8 +4,6 @@
 
 #include "model.h"
 
-#include <impl/assets_font/source_directory.h>
-
 #include <global/binary_big_endian.h>
 
 
@@ -24,18 +22,16 @@ b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& fon
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: font identity, source hash, or face index differs"));
         return false;
     }
-    const auto directoryResult = FontSfntDirectory::Read({ source.data(), source.size() });
-    if(!directoryResult)
+    FontSfntDirectory directory;
+    if(!ReadFontSfntDirectory({ source.data(), source.size() }, directory))
         return false;
-    const FontSfntDirectory& directory = *directoryResult;
     usize matched = 0u;
     b8 hasHead = false;
     b8 hasMaxp = false;
     for(u16 index = 0u; index < directory.tableCount(); ++index){
-        const auto sourceTableResult = directory.table(index);
-        if(!sourceTableResult)
+        FontSfntTable sourceTable;
+        if(!directory.table(index, sourceTable))
             return false;
-        const FontSfntTable& sourceTable = *sourceTableResult;
         const u32 tag = sourceTable.tag;
         if(tag == s_FontSfntHeadTag){
             hasHead = true;

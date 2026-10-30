@@ -20,9 +20,9 @@ namespace __hidden_scene_view{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_DefaultSceneViewYaw = 0.82f;
-static constexpr f32 s_DefaultSceneViewPitch = 0.94f;
-static constexpr f32 s_DefaultSceneViewDepthOffset = 2.2f;
+
+
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +63,7 @@ SIMDMatrix BuildDefaultSceneViewBasis()noexcept{
     SIMDVectorSingle up;
     SIMDVectorSingle forward;
     __hidden_scene_view::BuildDefaultSceneViewBasisVectors(right, up, forward);
-    return SIMDMatrix{ .v = { right, up, forward, VectorSet(0.0f, 0.0f, 0.0f, __hidden_scene_view::s_DefaultSceneViewDepthOffset) } };
+    return SIMDMatrix{ .v = { right, up, forward, VectorSet(0.0f, 0.0f, 0.0f, s_DefaultSceneViewDepthOffset) } };
 }
 
 SIMDMatrix BuildSceneViewBasis(const SIMDVectorSingle position, const SIMDVectorSingle rotation)noexcept{

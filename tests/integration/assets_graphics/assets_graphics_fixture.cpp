@@ -523,13 +523,13 @@ Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphics
     if(!fieldCount)
         return MakeUnexpected(Failure{});
 
-    if(*blockCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes)
+    if(*blockCount > (binary.size() - cursor) / NWB::Impl::s_MaterialTypedLayoutBlockBytes)
         return MakeUnexpected(Failure{});
-    cursor += static_cast<usize>(*blockCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes;
+    cursor += static_cast<usize>(*blockCount) * NWB::Impl::s_MaterialTypedLayoutBlockBytes;
 
-    if(*fieldCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes)
+    if(*fieldCount > (binary.size() - cursor) / NWB::Impl::s_MaterialTypedLayoutFieldBytes)
         return MakeUnexpected(Failure{});
-    const usize fieldBytes = static_cast<usize>(*fieldCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes;
+    const usize fieldBytes = static_cast<usize>(*fieldCount) * NWB::Impl::s_MaterialTypedLayoutFieldBytes;
     if(!SkipBytes(binary, fieldBytes, cursor))
         return MakeUnexpected(Failure{});
 
@@ -563,4 +563,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

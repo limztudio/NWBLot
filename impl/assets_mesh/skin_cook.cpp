@@ -9,8 +9,6 @@
 
 
 #include "skin_cook.h"
-#include "skin_binary_payload.h"
-#include "skin_validation.h"
 
 #include <impl/assets_skeleton/cook_matrix.h>
 
@@ -33,21 +31,21 @@ NWB_IMPL_BEGIN
 
 
 b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, SkinBinaryPayload::s_SkinSerializeContext))
+    if(!checkSerializeAssetType(asset, s_SkinSerializeContext))
         return false;
 
     const Skin& skin = static_cast<const Skin&>(asset);
     if(!skin.validatePayload())
         return false;
 
-    usize reserveBytes = sizeof(SkinBinaryPayload::HeaderBinary);
+    usize reserveBytes = sizeof(SkinHeaderBinary);
     const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, skin.influences()) && AddBinaryVectorReserveBytes(reserveBytes, skin.inverseBindMatrices());
 
     outBinary.clear();
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    SkinBinaryPayload::HeaderBinary header;
+    SkinHeaderBinary header;
     header.meshNameHash = skin.mesh().name().hash();
     header.skeletonNameHash = skin.skeleton().name().hash();
     header.influenceCount = static_cast<u64>(skin.influences().size());
@@ -55,8 +53,8 @@ b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     AppendPOD(outBinary, header);
 
     return
-        Core::Assets::AppendVectorPayload(outBinary, skin.influences(), SkinBinaryPayload::s_SkinSerializeContext, SkinBinaryPayload::s_InfluencesPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, skin.inverseBindMatrices(), SkinBinaryPayload::s_SkinSerializeContext, SkinBinaryPayload::s_InverseBindMatricesPayloadLabel)
+        Core::Assets::AppendVectorPayload(outBinary, skin.influences(), s_SkinSerializeContext, s_SkinInfluencesPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, skin.inverseBindMatrices(), s_SkinSerializeContext, s_SkinInverseBindMatricesPayloadLabel)
     ;
 }
 
@@ -159,13 +157,15 @@ template<usize ComponentCount>
     }
 
     const SIMDVectorSingle weightSum = Vector4Dot(weights, s_SIMDOne);
-    if(!VectorIsFinite(weightSum, VectorComponentMask::s_XYZW) || !Vector4Greater(weightSum, VectorReplicate(SkinValidation::s_Epsilon))){
+    if(!VectorIsFinite(weightSum, VectorComponentMask::s_XYZW) || !Vector4Greater(weightSum, VectorReplicate(s_SkinValidationEpsilon))){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must contain a positive total"), PathToString<tchar>(nwbFilePath), influenceIndex);
         return MakeUnexpected(Failure{});
     }
 
     const SIMDVectorSingle normalizedWeights = VectorDivide(weights, weightSum);
-    if(!SkinValidation::ValidSkinInfluenceWeights(normalizedWeights))
+    Float4U storedWeights;
+    StoreFloat(normalizedWeights, storedWeights);
+    if(!ValidSkinInfluenceWeights(storedWeights))
         return MakeUnexpected(Failure{});
     return SIMDVectorSingleResult{ normalizedWeights };
 }
@@ -245,7 +245,7 @@ template<usize ComponentCount>
         if(!matrix)
             return MakeUnexpected(Failure{});
 
-        if(!MatrixIsInvertibleAffine(LoadFloat(*matrix), SkinValidation::s_Epsilon, SkinValidation::s_Epsilon)){
+        if(!MatrixIsInvertibleAffine(LoadFloat(*matrix), s_SkinValidationEpsilon, s_SkinValidationEpsilon)){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix"), PathToString<tchar>(nwbFilePath), matrixIndex);
             return MakeUnexpected(Failure{});
         }
@@ -359,4 +359,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

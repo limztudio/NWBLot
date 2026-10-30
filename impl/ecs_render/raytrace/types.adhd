@@ -8,6 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u32 s_RtInvalidSlot = 0xffffffffu;
+const u64 s_RtMaxU32Value = 4294967295ull;
+const u64 s_RtAddressableBytes = 4294967296ull;
+const u32 s_RtMaxI32AsU32 = 2147483647u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Semantic identities selected by the current scene preflight, including direct transform and material edits.
 // Runtime deformation is unstamped.
 // Static mesh, texture and shader resources remain immutable until invalidation.
@@ -30,17 +39,18 @@ class RayTracingSceneContentStamp{
 }
 
 // CPU mirror of trace material ABI; HW and SW share instance IDs.
+[serialize]
 class NwbRtInstanceMaterialGpu{
-    public u32 surfaceDispatchId = 4294967295u;
+    public u32 surfaceDispatchId = s_RtInvalidSlot;
     public u32 flags = 0u;
     public u32 shadingModelId = 0u;
     public u32 materialConstantByteOffset = 0u;
     public u32 meshInstanceIndex = 0u;
     // Global-heap geometry slots; nodeSlot is software-only.
-    public u32 indexSlot = 4294967295u;
-    public u32 attributeSlot = 4294967295u;
-    public u32 positionSlot = 4294967295u;
-    public u32 nodeSlot = 4294967295u;
+    public u32 indexSlot = s_RtInvalidSlot;
+    public u32 attributeSlot = s_RtInvalidSlot;
+    public u32 positionSlot = s_RtInvalidSlot;
+    public u32 nodeSlot = s_RtInvalidSlot;
 }
 
 const usize s_NwbRtInstanceMaterialGpuByteSize = 36u;
@@ -54,8 +64,13 @@ enum<u32> RtInstanceMaterialFlag{
     flag RefractionEntryCertified = 1u << 3u
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The caustic resolve chain works on targets reduced by this factor in each axis.
 const u32 s_CausticResolveDownscaleFactor = 2u;
+const u32 s_CausticResolveGroupSize = 8u;
 
 class CausticResolveActivityLayout{
     public u64 bufferByteSize = 0u;
@@ -63,6 +78,28 @@ class CausticResolveActivityLayout{
     public u32 tilesY = 0u;
 }
 
+b8 TryResolveCausticActivityLayout(in u32 halfWidth, in u32 halfHeight, mut CausticResolveActivityLayout outLayout){
+    outLayout = CausticResolveActivityLayout();
+    if(halfWidth == 0u || halfHeight == 0u || halfWidth > s_RtMaxI32AsU32 || halfHeight > s_RtMaxI32AsU32){
+        return false;
+    }
+    const u32 tilesX = divideUp(halfWidth, s_CausticResolveGroupSize);
+    const u32 tilesY = divideUp(halfHeight, s_CausticResolveGroupSize);
+    const u64 byteSize = cast<u64>(tilesX) * cast<u64>(tilesY) * 4ull;
+    if(byteSize > s_RtAddressableBytes){
+        return false;
+    }
+    outLayout.bufferByteSize = byteSize;
+    outLayout.tilesX = tilesX;
+    outLayout.tilesY = tilesY;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
 class ShadowCombinedTemporalPushConstants{
     public f32x4x4 prevWorldToClip(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
@@ -97,6 +134,440 @@ enum<u32> SoftShadowUpsampleFold{
 
 b8 CanCombineSoftShadowWavelets(in b8 combinedUpsample, in b8 pipelineReady, in b8 opaqueTemporalReady, in b8 transparentTemporalReady, in u32 opaquePassCount, in u32 transparentPassCount){
     return combinedUpsample && pipelineReady && opaqueTemporalReady && transparentTemporalReady && opaquePassCount == 1u && transparentPassCount == 1u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GraphOwnedAdaptiveShadowPlan{
+    public b8 enabled = false;
+    public b8 compact = false;
+}
+
+class ShadowPreparationOutcome{
+    public b8 resourcesValid = false;
+    public b8 ready = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_RtOpticalSceneFlagBoundsValid = 1u;
+const u32 s_RtOpticalBoundaryUnspecified = 0u;
+
+[serialize]
+class RayTracingOpticalRuntimeInputGpu{
+    public f32x3x4 objectToWorld(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 localBoundsSlot = s_RtInvalidSlot;
+    public u32 instanceIndex = 0u;
+    public Array<u32, 2u> reserved;
+}
+
+[serialize]
+class RayTracingOpticalSceneHeaderGpu{
+    public f32x3u boundsMin(0.0f, 0.0f, 0.0f);
+    public u32 transparentCount = 0u;
+    public f32x3u boundsMax(0.0f, 0.0f, 0.0f);
+    public u32 flags = s_RtOpticalSceneFlagBoundsValid;
+}
+
+[serialize]
+class RayTracingOpticalInstanceGpu{
+    public u32 entityId = 0u;
+    public i32 mediumPriority = 0;
+    public u32 boundaryMode = s_RtOpticalBoundaryUnspecified;
+    public u32 flags = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// CPU mirror of the shader BVH node.
+[serialize]
+class NwbBvhNodeGpu{
+    public f32x3_u32 aabbMinLeftChild(0.0f, 0.0f, 0.0f, 0u);
+    public f32x3_u32 aabbMaxRightChild(0.0f, 0.0f, 0.0f, 0u);
+}
+
+const usize s_NwbBvhNodeGpuByteSize = 32u;
+
+// CPU mirror of the software scene-BVH instance ABI.
+[serialize]
+class SceneSwBvhInstanceGpu{
+    public f32x3x4 worldToObject(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 reservedMeshIndex = 0u;
+    public u32 primitiveCount = 0u;
+    public u32 pad0 = 0u;
+    public u32 pad1 = 0u;
+}
+
+enum<u8> PreparedShadowMaterialContextRoute{
+    enum None = 0u,
+    enum Hardware = 1u,
+    enum Software = 2u
+}
+
+[serialize]
+class SoftwareSceneRefitInstanceGpu{
+    public f32x3x4 objectToWorld(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 meshNodeSlot = s_RtInvalidSlot;
+    public Array<u32, 3u> reserved;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_SwShadowSoftSpp = 3u;
+const usize s_SoftwareTransparentSamplingPushPrevWorldToClipOffset = 48u;
+
+// Dedicated transparent trace ABI leaves all opaque, hardware and coarse software kernels unchanged.
+[serialize]
+class SoftwareTransparentSamplingPush{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 instanceCount = 0u;
+    public u32 frameIndex = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public u32 transparentSoftHalfStorageSlot = 0u;
+    public u32 softSampleCount = s_SwShadowSoftSpp;
+    public u32 historyValid = 0u;
+    public u32 geometryCurrSlot = 0u;
+    public u32 geometryPrevSlot = 0u;
+    public u32 momentsInSlot = 0u;
+    public Array<f32, 16u> prevWorldToClip;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Finite infinity for CPU BVH bounds.
+const f32 s_RayTracingFiniteInfinity = 1e30f;
+const u32 s_RayTracingTriangleIndexCount = 3u;
+const u32 s_RayTracingAllInstanceMask = 0xFFu;
+// Heap geometry buffers per mesh.
+const u32 s_HardwareRayTracingMeshBufferCount = 3u;
+const u32 s_SoftwareRayTracingMeshBufferCount = 4u;
+
+// Limit skinned BLAS refits before rebuilding topology.
+const u32 s_BlasMaxRefitsBeforeRebuild = 8u;
+// Scale rebuild cadence by mesh size, clamped to preserve quality.
+const u32 s_BlasMinRefitsBeforeRebuild = 4u;
+const u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
+const u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
+
+// Cube-root-scaled refit budget.
+u32 AdaptiveRefitsBeforeRebuild(in u32 primitiveCount){
+    u32 log2Val = 0u;
+    u32 n = primitiveCount;
+    while(n > 1u){
+        n >>= 1u;
+        ++log2Val;
+    }
+    u32 budget = s_BlasMaxRefitsBeforeRebuild << (log2Val / s_BlasRefitBudgetLog2ExponentStep);
+    if(budget < s_BlasMinRefitsBeforeRebuild){
+        budget = s_BlasMinRefitsBeforeRebuild;
+    }
+    if(budget > s_BlasMaxRefitsBeforeRebuildCap){
+        budget = s_BlasMaxRefitsBeforeRebuildCap;
+    }
+    return budget;
+}
+
+const usize s_TlasInitialInstanceCapacity = 128u;
+const usize s_BvhSortInitialCapacity = 1024u;
+const u32 s_BvhSortModeLocalTile = 0u;
+
+// CPU mirror of NwbBvhBitonicSortPushConstants.
+[serialize]
+class BvhSortPushConstants{
+    public u32 elementCount = 0u;
+    public u32 compareDistance = 0u;
+    public u32 sequenceSize = 0u;
+    public u32 mode = s_BvhSortModeLocalTile;
+    public u32 keysHeapSlot = s_RtInvalidSlot;
+    public u32 payloadHeapSlot = s_RtInvalidSlot;
+}
+
+const usize s_BvhBuildInitialCapacity = 1024u;
+// Maximum per-mesh software BVH size; oversized meshes are skipped.
+const u32 s_BvhMaxPrimitivesPerMesh = 262144u;
+
+// Scratch scene-BVH build records. They stay in memory during the build, so they use Float storage.
+[serialize]
+class SceneBvhPrimitiveCalculation{
+    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 centroid(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 transparentOccluder = false;
+}
+
+[serialize]
+class SceneBvhNodeCalculation{
+    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 leftChild = 0u;
+    public u32 rightChild = 0u;
+    public b8 containsTransparentOccluder = false;
+}
+
+// Shader-mirrored BVH child encoding.
+enum<u32> BvhNodeIndex{
+    flag LeafFlag = 0x80000000u,
+    // Reuses LeafFlag in rightChild to mark transparent subtrees.
+    flag TransparentSubtreeFlag = 0x80000000u,
+    flag ChildIndexMask = 0x7fffffffu,
+    flag Invalid = 0xffffffffu
+}
+
+const usize s_SceneBvhInitialInstanceCapacity = 64u;
+// Fixed-grid binned SAH; leaf cost weights instance intersection cost.
+const u32 s_SceneBvhAxisCount = 3u;
+const u32 s_SceneBvhSahBinCount = 12u;
+const f32 s_SceneBvhSahTraversalCost = 1.0f;
+const usize s_CausticEmissionTargetInitialCapacity = 32u;
+
+// CPU/GPU refractive-instance AABB record.
+[serialize]
+class NwbCausticEmissionTargetGpu{
+    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+const usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset = 88u;
+const usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset = 92u;
+const usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 96u;
+const usize s_CausticResolvePushConstantsActivityInputSlotOffset = 52u;
+const usize s_CausticResolvePushConstantsActivityOutputSlotOffset = 56u;
+const usize s_ShadowInstanceMaterialInitialCapacity = 128u;
+
+// CPU mirror of the heap-only software-shadow selector block.
+[serialize]
+class SwShadowHeapPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 instanceCount = 0u;
+    public u32 frameIndex = 0u;
+    public u32 coarseWidth = 0u;
+    public u32 coarseHeight = 0u;
+    public f32 edgeThreshold = 0.1f;
+    public u32 edgeCapacity = 0u;
+    public u32 traceGroupSize = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public u32 visibilityStorageSlot = 0u;
+    public u32 coarseStorageSlot = 0u;
+    public u32 softHalfStorageSlot = 0u;
+    public u32 transparentSoftHalfStorageSlot = 0u;
+    public u32 edgeCounterStorageSlot = 0u;
+    public u32 edgeListStorageSlot = 0u;
+    public u32 indirectArgsStorageSlot = 0u;
+    public u32 softSampleCount = s_SwShadowSoftSpp;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+// CPU mirror of hardware RayQuery shadow push constants.
+[serialize]
+class ShadowRqPushConstants{
+    public u32 frameIndex = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 normalSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 visibilityStorageSlot = 0u;
+}
+
+// CPU mirror of half-resolution hardware soft-shadow push constants.
+[serialize]
+class ShadowRqSoftPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 frameIndex = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 normalSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 visibilityStorageSlot = 0u;
+    public u32 softSampleCount = s_SwShadowSoftSpp;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+// Shader-mirrored shadow resolve stages.
+enum<u32> ShadowResolveStage{
+    enum Wavelet = 1u,
+    enum Upsample = 2u
+}
+
+// CPU mirror of NwbShadowResolvePushConstants.
+[serialize]
+class ShadowResolvePushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+    public u32 stepWidth = 1u;
+    public u32 stage = 1u;
+    public u32 lightSlotStart = 0u;
+    public u32 lightSlotCount = 0u;
+    public u32 momentsValid = 0u;
+    public u32 upsampleFold = 0u;
+    public u32 geometrySlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 normalSlot = 0u;
+    public u32 softHalfSlot = 0u;
+    public u32 inputColorSlot = 0u;
+    public u32 momentsSlot = 0u;
+    public u32 outputStorageSlot = 0u;
+    public u32 visibilityStorageSlot = 0u;
+    public u32 sceneShadingSlot = 0u;
+    public u32 opaqueInputColorSlot = 0u;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+// The combined wavelet extends the shared resolve ABI with opaque moments and output.
+[serialize]
+class ShadowCombinedWaveletPushConstants{
+    public ShadowResolvePushConstants resolve;
+    public u32 opaqueMomentsSlot = 0u;
+    public u32 opaqueMomentsValid = 0u;
+    public u32 opaqueOutputStorageSlot = 0u;
+}
+
+// CPU mirror of shadow geometry-downsample push constants.
+[serialize]
+class ShadowGeometryDownsamplePushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 normalSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 outputStorageSlot = 0u;
+    public u32 sceneShadingSlot = 0u;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+// CPU mirror of temporal shadow-reprojection push constants.
+[serialize]
+class ShadowReprojectMergePushConstants{
+    public Array<f32, 16u> prevWorldToClip;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+    public u32 lightSlotStart = 0u;
+    public u32 lightSlotCount = 0u;
+    public u32 historyValid = 0u;
+    public u32 softTraceSlot = 0u;
+    public u32 historyInSlot = 0u;
+    public u32 momentsInSlot = 0u;
+    public u32 geometryCurrSlot = 0u;
+    public u32 geometryPrevSlot = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 historyOutputStorageSlot = 0u;
+    public u32 momentsOutputStorageSlot = 0u;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+// Shader-mirrored caustic resolve stages.
+enum<u32> CausticResolveStage{
+    enum PrepareDownsample = 0u,
+    enum Wavelet = 1u,
+    enum Upsample = 2u
+}
+
+// CPU mirror of caustic resolve push constants.
+[serialize]
+class CausticResolvePushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+    public f32 causticIntensity = 0.0f;
+    public u32 stepWidth = 1u;
+    public u32 stage = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 inputColorSlot = 0u;
+    public u32 geometrySlot = 0u;
+    public u32 accumulatorSlot = 0u;
+    public u32 outputStorageSlot = 0u;
+    public u32 activityInputSlot = s_RtInvalidSlot;
+    public u32 activityOutputSlot = s_RtInvalidSlot;
+}
+
+const usize s_CausticResolvePushConstantsByteSize = 60u;
+
+// Heap-only selector ABI shared by every surfel GI pass.
+[serialize]
+class SurfelHeapPushConstants{
+    public u32 constantsHeapSlot = 0u;
+    public u32 poolHeapSlot = 0u;
+    public u32 cellHeadHeapSlot = 0u;
+    public u32 counterHeapSlot = 0u;
+    public u32 freeListHeapSlot = 0u;
+    public u32 snapshotPoolHeapSlot = 0u;
+    public u32 snapshotCellHeadHeapSlot = 0u;
+    public u32 traceIndirectArgsHeapSlot = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 normalSlot = 0u;
+    public u32 outputStorageHeapSlot = 0u;
+    public u32 halfIrradianceSlot = 0u;
+    public u32 guidePoolHeapSlot = 0u;
+}
+
+// CPU mirror of caustic geometry-downsample push constants.
+[serialize]
+class CausticGeometryDownsamplePushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 outputStorageSlot = 0u;
+}
+
+// CPU mirror of caustic accumulator-decay push constants.
+[serialize]
+class CausticAccumulatorDecayPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public f32 decayFactor = 0.0f;
+    public u32 accumulatorStorageSlot = 0u;
+}
+
+const u32 s_CausticHwPhotonGridSide = 512u;
+// Resolve exposure; photon-count changes preserve brightness.
+const f32 s_CausticIntensity = 2.0f;
+// Runtime refractor bounds are inflated because emission uses bind-pose AABBs.
+const f32 s_CausticRuntimeBoundsInflation = 1.25f;
+// Conservative top-level bounds for transparent-shadow rays.
+const f32 s_SwShadowSceneBoundsMinPadding = 0.25f;
+const f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
+
+class RayTracingDispatchGroups{
+    public u32 x = 0u;
+    public u32 y = 0u;
+}
+
+RayTracingDispatchGroups ResolveRayTracingDispatchGroups(in u32 width, in u32 height, in u32 receiverFactor, in u32 groupSize){
+    const u32 receiverWidth = (width + receiverFactor - 1u) / receiverFactor;
+    const u32 receiverHeight = (height + receiverFactor - 1u) / receiverFactor;
+    RayTracingDispatchGroups groups;
+    groups.x = divideUp(receiverWidth, groupSize);
+    groups.y = divideUp(receiverHeight, groupSize);
+    return groups;
 }
 
 

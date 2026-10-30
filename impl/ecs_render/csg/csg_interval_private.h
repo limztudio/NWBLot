@@ -25,20 +25,7 @@ namespace CsgIntervalDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CsgIntervalDispatchPushConstants{
-    u32 frameWidth = 0u;
-    u32 frameHeight = 0u;
-    u32 receiverCount = 0u;
-    u32 layerCount = 0u;
-    u32 workOffsetX = 0u;
-    u32 workOffsetY = 0u;
-    u32 workExtentX = 0u;
-    u32 workExtentY = 0u;
-    u32 meshViewHeapSlot = 0u;
-    u32 csgContextHeapSlot = 0u;
-    u32 resourceSlotPadding1 = 0u;
-    u32 resourceSlotPadding2 = 0u;
-};
+using NWB::Impl::CsgIntervalDispatchPushConstants;
 
 static_assert(sizeof(CsgIntervalDispatchPushConstants) == NWB_CSG_INTERVAL_DISPATCH_PUSH_CONSTANT_BYTE_SIZE, "CSG interval dispatch push constants must match shader layout");
 
@@ -56,4 +43,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

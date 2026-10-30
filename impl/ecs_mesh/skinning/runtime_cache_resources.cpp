@@ -6,11 +6,10 @@
 #include "local_bounds.h"
 #include "resource_names.h"
 
-#include <impl/ecs_mesh/runtime/resource_names.h>
+#include <impl/ecs_mesh/runtime/types.adhd.h>
 #include <impl/assets_mesh/meshlet_ref_decode.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.h>
 #include <impl/assets_mesh/meshlet_vertex_attributes.h>
-#include <impl/assets_mesh/skin_validation.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 #include <impl/assets_mesh/meshlet_ref_validation.h>
 
@@ -117,12 +116,12 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
     }
     // Skin::loadBinary already admitted the copied skin and inverse bind data.
     NWB_ASSERT(instance.skeletonJointCount > 0u && instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
-    NWB_ASSERT(SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
+    NWB_ASSERT(ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
 #if defined(NWB_DEBUG)
     for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices)
-        NWB_ASSERT(MatrixIsInvertibleAffine(LoadFloat(storedInverseBind), SkinValidation::s_Epsilon, SkinValidation::s_Epsilon));
+        NWB_ASSERT(MatrixIsInvertibleAffine(LoadFloat(storedInverseBind), s_SkinValidationEpsilon, s_SkinValidationEpsilon));
     for(const SkinInfluence4& skin : instance.skin)
-        NWB_ASSERT(SkinValidation::ValidSkinInfluenceWeights(LoadFloat(skin.weight)) && SkinValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
+        NWB_ASSERT(ValidSkinInfluenceWeights(skin.weight) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
 #endif
 
     usize logicalAttributeRefIndex = 0u;
@@ -421,7 +420,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
             instance.triangleIndexBuffer,
             m_graphics,
             instance,
-            MeshResourceNames::s_RtTriangleIndicesBufferName,
+            s_RtTriangleIndicesBufferName,
             *triangleIndices,
             false,
             __hidden_runtime_cache_resources::s_RtTriangleIndexLabel,
@@ -444,7 +443,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
             instance.attributeBuffer,
             m_graphics,
             instance,
-            MeshResourceNames::s_RtTriangleAttributesBufferName,
+            s_RtTriangleAttributesBufferName,
             *triangleAttributes,
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
             __hidden_runtime_cache_resources::s_RtTriangleAttributeLabel, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute
@@ -462,4 +461,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

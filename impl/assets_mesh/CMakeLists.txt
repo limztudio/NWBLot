@@ -4,12 +4,11 @@ nwb_target_adhd_sources(nwb_assets_mesh_types
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
-target_link_libraries(nwb_assets_mesh_types PUBLIC nwb_assets nwb_assets_skeleton_types)
+target_link_libraries(nwb_assets_mesh_types PUBLIC nwb_assets nwb_assets_subsystem_types nwb_assets_skeleton_types)
 
 set(NWB_ASSETS_MESH_RUNTIME_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/skin_runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime*.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_validation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"
     "${CMAKE_CURRENT_LIST_DIR}/*.hxx"

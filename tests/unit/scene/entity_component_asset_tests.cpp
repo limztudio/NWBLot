@@ -5,9 +5,8 @@
 #include "scene_asset_test_helpers.h"
 
 #include <impl/assets_graphics/components.adhd.h>
-#include <impl/assets_scene/component_assets.adhd.h>
-#include <impl/assets_graphics/component_binary_payload.h>
 #include <impl/assets_graphics/renderer/subsystem.adhd.h>
+#include <impl/assets_scene/component_assets.adhd.h>
 
 #include <core/alloc/general.h>
 #include <core/assets/registry.h>
@@ -57,7 +56,7 @@ TEST(SceneSubsystemAssets, EntityAndComponentAssetsDecodeAndInstantiate){
     PopulateRequiredSubsystemFields(rendererSubsystem);
     source.setBinary(s_RendererSubsystemPath, MakeSubsystemBinary(arena, rendererSubsystem));
 
-    ComponentBinaryPayload::TransformComponentPayloadBinary transformPayload;
+    TransformComponentPayloadBinary transformPayload;
     transformPayload.position = Float4(1.0f, 2.0f, 3.0f, 0.0f);
     transformPayload.rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
     transformPayload.scale = Float4(2.0f, 2.0f, 2.0f, 0.0f);
@@ -66,14 +65,14 @@ TEST(SceneSubsystemAssets, EntityAndComponentAssetsDecodeAndInstantiate){
         MakeComponentBinary<TransformComponentAsset>(arena, transformPayload)
     );
 
-    ComponentBinaryPayload::SingleAssetRefComponentPayloadBinary modelPayload;
+    SingleAssetRefComponentPayloadBinary modelPayload;
     modelPayload.assetHash = Name("project/characters/female/model").hash();
     source.setBinary(
         Name("project/entities/hero/model"),
         MakeComponentBinary<ModelComponentAsset>(arena, modelPayload)
     );
 
-    ComponentBinaryPayload::RendererComponentPayloadBinary rendererPayload;
+    RendererComponentPayloadBinary rendererPayload;
     rendererPayload.materialHash = Name("project/materials/mat_skinned_uv").hash();
     rendererPayload.opticalVolumeGroupHash = Name("glass_prism").hash();
     rendererPayload.opticalVolumePriority = 3;
@@ -129,7 +128,7 @@ TEST(SceneSubsystemAssets, EntityAndComponentAssetsDecodeAndInstantiate){
     }
     EXPECT_EQ(entityCount, 1u);
 
-    ComponentBinaryPayload::RendererComponentPayloadBinary invalidRendererPayload = rendererPayload;
+    RendererComponentPayloadBinary invalidRendererPayload = rendererPayload;
     invalidRendererPayload.opticalVolumeGroupHash = {};
     ComponentAssetCodec componentCodec;
     EXPECT_FALSE(
@@ -165,4 +164,3 @@ TEST(SceneSubsystemAssets, EntityAndComponentAssetsDecodeAndInstantiate){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

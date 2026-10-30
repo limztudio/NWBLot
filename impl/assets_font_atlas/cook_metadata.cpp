@@ -12,7 +12,7 @@
 #include "cook_glyph_metadata.h"
 
 #include <impl/assets_font/prepared_source.h>
-#include <impl/assets_font/source_directory.h>
+#include <impl/assets_font/types.adhd.h>
 
 #include <core/assets/paths.h>
 
@@ -61,23 +61,25 @@ static constexpr AStringView s_RasterModeOutline = "outline";
 
 [[nodiscard]] static b8 ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload)noexcept{
     const Core::Assets::AssetBytes& bytes = font.fontBytes();
-    const auto directoryResult = FontSfntDirectory::Read({ bytes.data(), bytes.size() });
+    FontSfntDirectory directory;
+    const b8 directoryResult = ReadFontSfntDirectory({ bytes.data(), bytes.size() }, directory);
     if(!directoryResult)
         return false;
-    const FontSfntDirectory& directory = *directoryResult;
+
     payload.faceIndex = font.faceIndex();
     for(u16 index = 0u; index < directory.tableCount(); ++index){
-        const auto tableResult = directory.table(index);
+        FontSfntTable table;
+        const b8 tableResult = directory.table(index, table);
         if(!tableResult)
             return false;
-        if(tableResult->tag == s_FontSfntHeadTag){
-            const auto unitsPerEmResult = ReadU16BigEndian(tableResult->bytes, s_FontSfntHeadUnitsPerEmOffset);
+        if(table.tag == s_FontSfntHeadTag){
+            const auto unitsPerEmResult = ReadU16BigEndian(BinaryByteView{ table.bytes.data(), table.bytes.size() }, s_FontSfntHeadUnitsPerEmOffset);
             if(!unitsPerEmResult)
                 return false;
             payload.unitsPerEm = *unitsPerEmResult;
         }
-        else if(tableResult->tag == s_FontSfntMaxpTag){
-            const auto glyphCountResult = ReadU16BigEndian(tableResult->bytes, s_FontSfntMaxpGlyphCountOffset);
+        else if(table.tag == s_FontSfntMaxpTag){
+            const auto glyphCountResult = ReadU16BigEndian(BinaryByteView{ table.bytes.data(), table.bytes.size() }, s_FontSfntMaxpGlyphCountOffset);
             if(!glyphCountResult)
                 return false;
             payload.sourceGlyphCount = *glyphCountResult;

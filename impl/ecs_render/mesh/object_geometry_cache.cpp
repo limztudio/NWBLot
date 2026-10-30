@@ -15,8 +15,6 @@
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
 
-#include <global/algorithm.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,25 +38,6 @@ b8 ObjectGeometryCacheSnapshot::valid()const noexcept{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(const u64 localVertexRefByteSize, const u32 primitiveIndexCount)noexcept{
-    if(localVertexRefByteSize == 0u || localVertexRefByteSize % sizeof(MeshletLocalVertexRef) != 0u || primitiveIndexCount == 0u)
-        return MakeUnexpected(Failure{});
-    constexpr u64 s_Stride = NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
-    constexpr u64 s_AddressableBytes = static_cast<u64>(Limit<u32>::s_Max) + 1u;
-    const u64 vertexCount = localVertexRefByteSize / sizeof(MeshletLocalVertexRef) + NWB_MESH_OBJECT_FIRST_VERTEX_INDEX;
-    if(vertexCount > static_cast<u64>(Limit<u32>::s_Max) / s_Stride)
-        return MakeUnexpected(Failure{});
-    const u64 indexByteOffset = vertexCount * s_Stride;
-    const u64 indexedByteSize = indexByteOffset + static_cast<u64>(primitiveIndexCount) * sizeof(u32);
-    if(indexedByteSize > s_AddressableBytes)
-        return MakeUnexpected(Failure{});
-    // The structured vertex view includes the allocation; raw index stores address the disjoint trailing region.
-    const u64 bufferByteSize = AlignUp(indexedByteSize, s_Stride);
-    if(bufferByteSize > s_AddressableBytes)
-        return MakeUnexpected(Failure{});
-    return ObjectGeometryCacheLayout{ bufferByteSize, static_cast<u32>(indexByteOffset), primitiveIndexCount };
-}
 
 b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, const b8 runtimeMesh)noexcept{
     ObjectGeometryCacheState& cache = mesh.objectGeometryCache;
@@ -189,4 +168,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

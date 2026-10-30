@@ -22,9 +22,6 @@ NWB_IMPL_UI_BEGIN
     return (static_cast<u32>(a) << s_ScriptTagByte0Shift) | (static_cast<u32>(b) << s_ScriptTagByte1Shift) | (static_cast<u32>(c) << s_ScriptTagByte2Shift) | static_cast<u32>(d);
 }
 
-// This validates scalar UTF-8 and admitted label controls, not Unicode grapheme or paragraph segmentation.
-[[nodiscard]] TextLayoutStatus::Enum ValidateTextRequest(const ShapeRequest& request, b8 allowLineBreaks)noexcept;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

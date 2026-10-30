@@ -131,7 +131,7 @@ void UiEditBoxHost::synchronizeFocus(){
         return;
     const Entry* entry = find(m_context.input().focus());
     const b8 focused = hasTextFocus() && entry;
-    m_clickTracker.retainFocus(focused ? &entry->owner : nullptr);
+    m_clickTracker.retainFocus(focused ? entry->owner : UiTextEditOwner{});
     for(auto& candidate : m_entries){
         const b8 active = focused && candidate.owner == entry->owner;
         if(candidate.actionCapable){

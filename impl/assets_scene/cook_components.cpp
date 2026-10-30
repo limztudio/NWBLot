@@ -140,7 +140,7 @@ b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
     if(!component.serializeComponentPayload(payload))
         return false;
 
-    ComponentBinaryPayload::ComponentHeaderBinary header;
+    ComponentHeaderBinary header;
     header.componentTypeHash = component.assetType().hash();
     header.payloadByteCount = static_cast<u64>(payload.size());
 
@@ -167,7 +167,7 @@ b8 ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     if(!component){
         NWB_LOGGER_ERROR(
             NWB_TEXT("{}: unexpected asset type '{}'"),
-            ComponentBinaryPayload::s_ComponentSerializeContext,
+            ConvertString(s_ComponentSerializeContext),
             ConvertString(asset.assetType().resolvedText())
         );
         return false;
@@ -176,7 +176,7 @@ b8 ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
 }
 
 b8 TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    ComponentBinaryPayload::TransformComponentPayloadBinary binaryPayload;
+    TransformComponentPayloadBinary binaryPayload;
     binaryPayload.position = component.position;
     binaryPayload.rotation = component.rotation;
     binaryPayload.scale = component.scale;
@@ -184,13 +184,13 @@ b8 TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& 
 }
 
 b8 CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    ComponentBinaryPayload::CameraComponentPayloadBinary binaryPayload;
+    CameraComponentPayloadBinary binaryPayload;
     binaryPayload.projection = component.projection;
     return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
 }
 
 b8 LightComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    ComponentBinaryPayload::LightComponentPayloadBinary binaryPayload;
+    LightComponentPayloadBinary binaryPayload;
     binaryPayload.colorIntensity = component.colorIntensity;
     binaryPayload.range = component.range;
     binaryPayload.innerConeCos = component.innerConeCos;

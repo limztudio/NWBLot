@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shadow/quality_settings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [reflect]
 enum<u8> SoftwareShadowBackend{
     enum Automatic,
@@ -58,6 +64,376 @@ b8 ValidateSoftwareShadowSettings(in SoftwareShadowSettings settings){
         && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
         && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
         && settings.memoryBudgetBytes > 0ull && settings.memoryBudgetBytes <= s_ShadowMaxMemoryBudgetBytes;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class LightSpaceCaptureIdentity{
+    public u64 scene = 0u;
+    public u64 lighting = 0u;
+    public u64 layout = 0u;
+    public b8 trusted = false;
+}
+
+class LightSpaceCaptureTicket{
+    public u64 sequence = 0u;
+    public b8 reuse = false;
+
+    public b8 valid()const{
+        return this.sequence != 0u;
+    }
+}
+
+// A capture publishes only after its complete native packet and retained resource states are accepted.
+class LightSpaceCaptureHistory{
+    private LightSpaceCaptureIdentity m_acceptedIdentity;
+    private LightSpaceCaptureIdentity m_pendingIdentity;
+    private LightSpaceCaptureTicket m_pendingTicket;
+    private u64 m_sequence = 0u;
+    private u64 m_acceptedCaptures = 0u;
+    private u64 m_acceptedReuses = 0u;
+    private u8 m_acceptedReuseCount = 0u;
+    private u8 m_pendingReuseLimit = 0u;
+    private b8 m_accepted = false;
+    private b8 m_captureRecorded = false;
+    private b8 m_frameAccepted = false;
+
+    public void beginFrame(){
+        // A skipped or rejected frame cannot extend the lifetime of the prior map generation.
+        if(!this.m_frameAccepted){
+            this.m_accepted = false;
+        }
+        this.m_pendingTicket = LightSpaceCaptureTicket();
+        this.m_captureRecorded = false;
+        this.m_frameAccepted = false;
+    }
+
+    public LightSpaceCaptureTicket prepare(in LightSpaceCaptureIdentity identity, in SoftwareShadowCaptureCadence cadence){
+        if(cadence == SoftwareShadowCaptureCadence::Enum::ReuseTwoFrames){
+            this.m_pendingReuseLimit = cast<u8>(s_ShadowCaptureReuseLimitTwoFrames);
+        }
+        else if(cadence == SoftwareShadowCaptureCadence::Enum::ReuseOneFrame){
+            this.m_pendingReuseLimit = cast<u8>(s_ShadowCaptureReuseLimitOneFrame);
+        }
+        else{
+            this.m_pendingReuseLimit = 0u;
+        }
+        const b8 reuse = this.m_acceptedReuseCount < this.m_pendingReuseLimit
+            && this.m_accepted && identity.trusted && this.m_acceptedIdentity.trusted
+            && identity.scene == this.m_acceptedIdentity.scene && identity.lighting == this.m_acceptedIdentity.lighting
+            && identity.layout == this.m_acceptedIdentity.layout;
+        ++this.m_sequence;
+        if(this.m_sequence == 0u){
+            ++this.m_sequence;
+        }
+        this.m_pendingIdentity = identity;
+        this.m_pendingTicket.sequence = this.m_sequence;
+        this.m_pendingTicket.reuse = reuse;
+        this.m_captureRecorded = false;
+        // Refresh writes the maps in place. Their old identity must be unavailable even if recording or submission fails.
+        if(!reuse){
+            this.m_accepted = false;
+        }
+        return this.m_pendingTicket;
+    }
+
+    public void recordCapture(in LightSpaceCaptureTicket ticket){
+        if(ticket.valid() && ticket.sequence == this.m_pendingTicket.sequence && !ticket.reuse && !this.m_pendingTicket.reuse){
+            this.m_captureRecorded = true;
+        }
+    }
+
+    public b8 accept(in LightSpaceCaptureTicket ticket){
+        if(!ticket.valid() || ticket.sequence != this.m_pendingTicket.sequence || ticket.reuse != this.m_pendingTicket.reuse){
+            return false;
+        }
+        if(ticket.reuse){
+            if(!this.m_accepted || this.m_acceptedReuseCount >= this.m_pendingReuseLimit){
+                return false;
+            }
+            ++this.m_acceptedReuseCount;
+            ++this.m_acceptedReuses;
+        }
+        else{
+            if(!this.m_captureRecorded){
+                return false;
+            }
+            this.m_acceptedIdentity = this.m_pendingIdentity;
+            this.m_accepted = this.m_pendingIdentity.trusted;
+            this.m_acceptedReuseCount = 0u;
+            ++this.m_acceptedCaptures;
+        }
+        this.m_pendingTicket = LightSpaceCaptureTicket();
+        this.m_frameAccepted = true;
+        return true;
+    }
+
+    public void invalidate(){
+        this.m_accepted = false;
+        this.m_pendingTicket = LightSpaceCaptureTicket();
+        this.m_captureRecorded = false;
+        this.m_frameAccepted = false;
+    }
+
+    public u64 acceptedCaptures()const{
+        return this.m_acceptedCaptures;
+    }
+
+    public u64 acceptedReuses()const{
+        return this.m_acceptedReuses;
+    }
+
+    public u32 acceptedReuseAge()const{
+        return cast<u32>(this.m_acceptedReuseCount);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A point light renders one view per cube face.
+const u32 s_PointLightViewCount = 6u;
+const u32 s_LightSpaceSceneMaxLights = 64u;
+const u32 s_LightSpaceSceneShadowSlotCount = 8u;
+const usize s_LightSpaceMaxViews = 48u;
+const u64 s_LightSpaceEventsPerTexel = 16u;
+const u64 s_LightSpaceEventBytes = 20u;
+const u64 s_LightSpacePixelWordBytes = 4u;
+const u64 s_LightSpaceViewBytes = 128u;
+const u64 s_LightSpaceDrawArgumentBytes = 20u;
+const u32 s_LightSpaceFlagPoint = 1u << 0u;
+const u32 s_LightSpaceFlagEligible = 1u << 1u;
+const u32 s_LightSpaceFlagFittedCoverage = 1u << 2u;
+const u32 s_LightSpaceFlagCompactBlockers = 1u << 3u;
+const u32 s_LightSpaceFlagCenterBlocker = 1u << 4u;
+const usize s_LightSpaceViewGpuOriginOrDirectionOffset = 64u;
+const usize s_LightSpaceViewGpuDepthRangeOffset = 80u;
+const usize s_LightSpaceViewGpuMapOffset = 96u;
+const usize s_LightSpaceViewGpuLightOffset = 112u;
+const u8 s_LightSpaceLightTypeDirectional = 0u;
+const u8 s_LightSpaceLightTypePoint = 1u;
+const u8 s_LightSpaceLightTypeSpot = 2u;
+const u8 s_LightSpaceLightTypeCount = 3u;
+
+[serialize]
+class LightSpaceViewGpu{
+    public Array<f32x4, 4u> worldToClipRows;
+    public f32x4 originOrDirection(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 depthRange(0.0f, 0.0f, 0.0f, 0.0f);
+    public Array<u32, 4u> map;
+    public Array<u32, 4u> light;
+}
+
+class LightSpaceLightRequest{
+    public u32 lightIndex = 0u;
+    public u32 shadowSlot = 0u;
+    public u8 type = s_LightSpaceLightTypeDirectional;
+    public b8 eligible = true;
+}
+
+class LightSpacePlan{
+    public Array<LightSpaceViewGpu, 48u> views;
+    public u64 eventByteSize = 0u;
+    public u64 countByteSize = 0u;
+    public u64 depthByteSize = 0u;
+    public u64 viewByteSize = 0u;
+    public u64 drawArgumentByteSize = 0u;
+    public u64 totalByteSize = 0u;
+    public u32 lightCount = 0u;
+    public u32 viewCount = 0u;
+    public u32 textureResolution = 0u;
+    public u32 totalPixels = 0u;
+}
+
+b8 TryBuildLightSpacePlan(
+    in SoftwareShadowSettings settings,
+    in Span<LightSpaceLightRequest> requests,
+    in u64 maxStorageBufferRange,
+    in u32 drawCount,
+    in b8 csgIntervalDepth,
+    mut LightSpacePlan outPlan
+){
+    outPlan = LightSpacePlan();
+    const usize requestCount = requests.size();
+    if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > s_LightSpaceSceneShadowSlotCount){
+        return false;
+    }
+    u32 seenSlots = 0u;
+    u64 seenLights = 0u;
+    for(usize index = 0u; index < requestCount; ++index){
+        const LightSpaceLightRequest request = requests[index];
+        if(request.lightIndex >= s_LightSpaceSceneMaxLights || request.shadowSlot >= s_LightSpaceSceneShadowSlotCount || request.type >= s_LightSpaceLightTypeCount){
+            return false;
+        }
+        const u32 slotBit = 1u << request.shadowSlot;
+        const u64 lightBit = 1ull << request.lightIndex;
+        if((seenSlots & slotBit) != 0u || (seenLights & lightBit) != 0u){
+            return false;
+        }
+        seenSlots |= slotBit;
+        seenLights |= lightBit;
+    }
+    if(settings.backend == SoftwareShadowBackend::Enum::SoftwareTrace){
+        return true;
+    }
+    for(usize index = 0u; index < requestCount; ++index){
+        const LightSpaceLightRequest request = requests[index];
+        if(!request.eligible || request.type == s_LightSpaceLightTypeSpot){
+            continue;
+        }
+        if(drawCount == 0u){
+            return false;
+        }
+        const b8 point = request.type == s_LightSpaceLightTypePoint;
+        u32 resolution = settings.directionalResolution;
+        u32 viewCount = 1u;
+        if(point){
+            resolution = settings.pointResolution;
+            viewCount = s_PointLightViewCount;
+        }
+        const u64 pixelsPerView = cast<u64>(resolution) * cast<u64>(resolution);
+        const u64 pixels = cast<u64>(outPlan.totalPixels) + pixelsPerView * cast<u64>(viewCount);
+        const u32 newViewCount = outPlan.viewCount + viewCount;
+        const u32 textureResolution = max(outPlan.textureResolution, resolution);
+        const u64 eventBytes = pixels * s_LightSpaceEventsPerTexel * s_LightSpaceEventBytes;
+        const u64 countBytes = pixels * s_LightSpacePixelWordBytes;
+        // Every D32 array layer uses the largest selected extent, even when its viewport is smaller.
+        const u64 depthBytes = cast<u64>(textureResolution) * cast<u64>(textureResolution) * cast<u64>(newViewCount) * s_LightSpacePixelWordBytes;
+        const u64 viewBytes = cast<u64>(newViewCount) * s_LightSpaceViewBytes;
+        const u64 drawArgumentBytes = cast<u64>(newViewCount) * cast<u64>(drawCount) * s_LightSpaceDrawArgumentBytes;
+        u64 extraCountBytes = 0u;
+        if(csgIntervalDepth){
+            extraCountBytes = countBytes;
+        }
+        const u64 totalBytes = eventBytes + countBytes + depthBytes + viewBytes + drawArgumentBytes + extraCountBytes;
+        if(
+            totalBytes > settings.memoryBudgetBytes || eventBytes > s_ShadowMaxMemoryBudgetBytes
+            || eventBytes > maxStorageBufferRange || viewBytes > maxStorageBufferRange
+            || drawArgumentBytes > maxStorageBufferRange || drawArgumentBytes > s_ShadowMaxMemoryBudgetBytes
+        ){
+            continue;
+        }
+        ++outPlan.lightCount;
+        u32 lightFlags = s_LightSpaceFlagEligible;
+        if(point){
+            lightFlags |= s_LightSpaceFlagPoint;
+        }
+        if(settings.coverage == SoftwareShadowCoverage::Enum::FittedVolume){
+            lightFlags |= s_LightSpaceFlagFittedCoverage;
+        }
+        if(settings.blockerSearch == SoftwareShadowBlockerSearch::Enum::CompactCross5){
+            lightFlags |= s_LightSpaceFlagCompactBlockers;
+        }
+        if(settings.blockerSearch == SoftwareShadowBlockerSearch::Enum::Center1){
+            lightFlags |= s_LightSpaceFlagCenterBlocker;
+        }
+        for(u32 face = 0u; face < viewCount; ++face){
+            const u32 viewIndex = outPlan.viewCount + face;
+            outPlan.views[viewIndex].map[0] = resolution;
+            outPlan.views[viewIndex].map[1] = resolution;
+            outPlan.views[viewIndex].map[2] = outPlan.totalPixels + cast<u32>(pixelsPerView) * face;
+            outPlan.views[viewIndex].map[3] = viewIndex;
+            outPlan.views[viewIndex].light[0] = request.lightIndex;
+            outPlan.views[viewIndex].light[1] = request.shadowSlot;
+            outPlan.views[viewIndex].light[2] = face;
+            outPlan.views[viewIndex].light[3] = lightFlags;
+        }
+        outPlan.viewCount = newViewCount;
+        outPlan.textureResolution = textureResolution;
+        outPlan.totalPixels = cast<u32>(pixels);
+        outPlan.eventByteSize = eventBytes;
+        outPlan.countByteSize = countBytes;
+        outPlan.depthByteSize = depthBytes;
+        outPlan.viewByteSize = viewBytes;
+        outPlan.drawArgumentByteSize = drawArgumentBytes;
+        outPlan.totalByteSize = totalBytes;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_LightSpaceInvalidGpuDescriptorSlot = 0xffffffffu;
+
+[serialize]
+class LightSpaceCsgInstanceGpu{
+    public f32x3x4 worldToObject(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public u32 runtimeBoundsSlot = s_LightSpaceInvalidGpuDescriptorSlot;
+    public u32 primitiveCount = 0u;
+    public u32 meshRootSlot = s_LightSpaceInvalidGpuDescriptorSlot;
+    public u32 padding = 0u;
+    public f32x4 localMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localMax(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class LightSpaceShadowPush{
+    public u32 viewSlot = 0u;
+    public u32 viewIndex = 0u;
+    public u32 materialContextSlot = 0u;
+    public u32 countsSlot = 0u;
+    public u32 eventsSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 instanceIndex = 0u;
+    public u32 instanceCount = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 frameIndex = 0u;
+    public u32 sampleCount = 0u;
+    public u32 deferredResourcesSlot = 0u;
+    public u32 outputSlot = 0u;
+    public u32 sceneRootSlot = 0u;
+    public u32 viewCount = 0u;
+    public u32 csgContextSlot = 0u;
+    public u32 csgOpaqueDepthSlot = 0u;
+    public u32 csgFlags = 0u;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+    public u32 captureDrawCount = 0u;
+    public u32 casterDrawOffset = 0u;
+    public u32 meshletDescSlot = 0u;
+    public u32 meshletBoundsSlot = 0u;
+    public u32 meshletCount = 0u;
+    public u32 receiverViewSlot = 0u;
+    public u32 receiverCsgSampleStateSlot = 0u;
+}
+
+class LightSpaceShadowStorageCapacity{
+    public u64 countBytes = 0u;
+    public u64 eventBytes = 0u;
+    public u64 viewBytes = 0u;
+    public u64 drawArgumentBytes = 0u;
+    public u32 textureResolution = 0u;
+    public u32 arrayLayers = 0u;
+}
+
+b8 LightSpaceShadowStorageFits(in LightSpacePlan plan, in LightSpaceShadowStorageCapacity capacity){
+    return
+        plan.viewCount != 0u && plan.textureResolution != 0u
+        && plan.countByteSize != 0u && plan.eventByteSize != 0u && plan.viewByteSize != 0u && plan.drawArgumentByteSize != 0u
+        && plan.countByteSize <= capacity.countBytes && plan.eventByteSize <= capacity.eventBytes
+        && plan.viewByteSize <= capacity.viewBytes && plan.drawArgumentByteSize <= capacity.drawArgumentBytes
+        && plan.textureResolution <= capacity.textureResolution
+        && plan.viewCount <= capacity.arrayLayers;
+}
+
+// Crossings, overflow list, and overflow arguments.
+const usize s_HardwareTransparentShadowScratchCount = 3u;
+
+// Frozen prepared soft-transparent route shared by the split resource declarations and the split task chain.
+class SoftShadowSplitRoute{
+    public b8 hardwareShadowSupported = false;
+    public b8 hardwareCsgShadow = false;
+    public b8 csgShadow = false;
+    public b8 traceGeometryStatesGraphOwned = false;
+    public b8 combinedSoftUpsample = false;
+    public b8 combinedSoftWavelet = false;
+    public b8 combinedSoftTemporal = false;
+    public b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
 }
 
 

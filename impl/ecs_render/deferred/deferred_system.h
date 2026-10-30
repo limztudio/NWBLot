@@ -82,8 +82,8 @@ NWB_IMPL_BEGIN
 
 
 namespace ECSRenderDetail{
-    struct SceneShadingGpuData;
-    struct SceneLightGpuData;
+    using NWB::Impl::SceneShadingGpuData;
+    using NWB::Impl::SceneLightGpuData;
 };
 
 class RendererDeferredState;

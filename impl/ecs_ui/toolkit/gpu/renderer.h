@@ -26,14 +26,6 @@ NWB_IMPL_UI_BEGIN
 struct GpuRendererState;
 
 
-namespace GpuCommandRecordingMode{
-    enum Enum : u8{
-        Direct,
-        CommandIrReplay,
-    };
-};
-
-
 // Main-thread owner. Resource invalidation follows the caller's joined GPU/graph teardown boundary.
 class GpuRenderer final : public Core::IGpuTaskGraphOutputLayerContributor, NoCopy{
 public:

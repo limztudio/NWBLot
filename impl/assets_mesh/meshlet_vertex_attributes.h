@@ -20,14 +20,7 @@ NWB_IMPL_BEGIN
 
 
 // Per-corner trace attributes parallel to the triangle index buffer; preserves smooth vs hard edges (no position-indexed normal collapse).
-struct AttribGpu{
-    Half4U normal;
-    Float2U uv0;
-};
-static_assert(IsStandardLayout_V<AttribGpu>, "AttribGpu must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<AttribGpu>, "AttribGpu must stay binary-serializable");
 static_assert(sizeof(AttribGpu) == sizeof(Half4U) + sizeof(Float2U), "AttribGpu layout drifted");
-static constexpr usize s_AttribGpuByteSize = 16u;
 static_assert(sizeof(AttribGpu) == s_AttribGpuByteSize, "AttribGpu must stay 16 bytes for the shadow trace attribute buffer");
 
 
@@ -83,4 +76,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

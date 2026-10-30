@@ -13,6 +13,7 @@ class RayTracingLightingClassification{
 }
 
 // Heap-slot indirection for the ray-tracing material context.
+[serialize]
 class RayTraceMaterialContextSlots{
     public u32 sceneBvhNodes = 0u;
     public u32 sceneInstances = 0u;
@@ -26,6 +27,7 @@ class RayTraceMaterialContextSlots{
 }
 
 // Eleven std140 uint4 lanes of ordinary-pass heap slots.
+[serialize]
 class DeferredBindlessResourceSlots{
     public u32 gbufferBaseColor = 0u;
     public u32 gbufferNormal = 0u;
@@ -104,6 +106,188 @@ class StatisticsReservationKey{
     public b8 valid()const{
         return this.sequence != 0u && this.generation != 0u;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class RendererAvboitPushConstants{
+    public Array<u32, 4u> frame;
+    public Array<u32, 4u> volume;
+    public f32x4 params(0.0f, 0.0f, 0.0f, 0.0f);
+    public Array<u32, 4u> heapSlots;
+}
+
+class AvboitPassUploadResult{
+    public b8 hasDrawItems = false;
+    public b8 hasCsgDrawItems = false;
+}
+
+enum<u8> AvboitSharedComputeEmulationPhase{
+    enum Generate = 0u,
+    enum Raster = 1u
+}
+
+enum<u8> AvboitGeometryPhase{
+    enum Occupancy = 0u,
+    enum Extinction = 1u,
+    enum Accumulation = 2u
+}
+
+enum<u8> AvboitMaterialUploadPhase{
+    enum Occupancy = 0u,
+    enum Extinction = 1u,
+    enum Accumulation = 2u
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_SceneDefaultDirectionalAngularRadius = 0.00465f;
+const f32 s_SceneDefaultPunctualSourceRadius = 0.05f;
+
+[serialize]
+class MeshFrameHeapSlots{
+    public u32 instance = 0u;
+    public u32 materialTyped = 0u;
+    public u32 view = 0u;
+    // Emulation writable vertex buffer; mesh-shader draws leave this lane zero.
+    public u32 generatedVertex = 0u;
+}
+
+[serialize]
+class ShaderDrivenPushConstants{
+    public u32 meshletCount = 0u;
+    public u32 instanceIndex = 0u;
+    public u32 materialConstantByteOffset = 0u;
+    public u32 dispatchFlags = 0u;
+    public f32x4 viewportRect(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 scissorRect(0.0f, 0.0f, 0.0f, 0.0f);
+    public MeshFrameHeapSlots frameHeapSlots;
+}
+
+[serialize]
+class TransparentDrawPushConstants{
+    public ShaderDrivenPushConstants mesh;
+    public RendererAvboitPushConstants avboit;
+}
+
+[serialize]
+class EmulatedVertex{
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f16x4u normal;
+    public f16x4u tangent;
+    public f32x2u uv0(0.0f, 0.0f);
+    public f16x4u color;
+    public f32x4 worldPosition(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class SceneShadingGpuData{
+    // xyz = camera world position, w = active light count.
+    public f32x4 cameraPositionLightCount(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class SceneLightGpuData{
+    // xyz = world position (point/spot), w = spot inner cone cosine.
+    public f32x4 position(0.0f, 0.0f, 0.0f, 1.0f);
+    // directional: toward-light; spot: emission axis. w = spot outer cone cosine.
+    public f32x4 direction(0.0f, 0.0f, -1.0f, 1.0f);
+    // xyz = color, w = intensity.
+    public f32x4 colorIntensity(1.0f, 1.0f, 1.0f, 1.0f);
+    // x = range, y = light type, z = shadow slot (negative = no slot), w = caustic slot (negative = no slot).
+    public f32x4 params(0.0f, 0.0f, -1.0f, -1.0f);
+    // Soft-shadow source size: x = angular radius, y = punctual radius; z/w reserved.
+    public f32x4 params2(s_SceneDefaultDirectionalAngularRadius, s_SceneDefaultPunctualSourceRadius, 0.0f, 0.0f);
+}
+
+void HashCombineF32x4(mut usize seed, in f32x4 value){
+    seed = hashCombineValue(seed, bit_cast<u32>(value.x));
+    seed = hashCombineValue(seed, bit_cast<u32>(value.y));
+    seed = hashCombineValue(seed, bit_cast<u32>(value.z));
+    seed = hashCombineValue(seed, bit_cast<u32>(value.w));
+}
+
+// Hashes the immutable upload payload, including edits and light order.
+u64 ComputeSceneLightingContentHash(in SceneShadingGpuData shading, in Span<SceneLightGpuData> lights){
+    const u32 lightCount = cast<u32>(lights.size());
+    usize seed = hashValue(lightCount);
+    HashCombineF32x4(seed, shading.cameraPositionLightCount);
+    for(usize i = 0u; i < lights.size(); ++i){
+        HashCombineF32x4(seed, lights[i].position);
+        HashCombineF32x4(seed, lights[i].direction);
+        HashCombineF32x4(seed, lights[i].colorIntensity);
+        HashCombineF32x4(seed, lights[i].params);
+        HashCombineF32x4(seed, lights[i].params2);
+    }
+    return cast<u64>(seed);
+}
+
+// Only the compute producer reads this tail; raster and custom geometry use the base mesh push ABI.
+[serialize]
+class MeshComputePushConstants{
+    public ShaderDrivenPushConstants mesh;
+    public u32 generatedIndexByteOffset = 0u;
+    public Array<u32, 3u> reserved;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared-output emulation alternates one generate and one raster phase per draw.
+// Keep supported range in contract; domains stay independent of RendererFramePipeline.
+const usize s_SharedComputeEmulationPhasesPerDraw = 2u;
+const usize s_SharedComputeEmulationMinimumDrawCount = 2u;
+const usize s_SharedComputeEmulationMaximumDrawCount = 5u;
+const usize s_SharedComputeEmulationMinimumPhaseCount = s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+const usize s_SharedComputeEmulationMaximumPhaseCount = s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+
+b8 IsSupportedSharedComputeEmulationDrawCount(in usize drawCount){
+    return drawCount >= s_SharedComputeEmulationMinimumDrawCount && drawCount <= s_SharedComputeEmulationMaximumDrawCount;
+}
+
+usize SharedComputeEmulationPhaseCountForDrawCount(in usize drawCount){
+    return drawCount * s_SharedComputeEmulationPhasesPerDraw;
+}
+
+b8 IsSupportedSharedComputeEmulationPhaseCount(in usize phaseCount){
+    return phaseCount >= s_SharedComputeEmulationMinimumPhaseCount && phaseCount <= s_SharedComputeEmulationMaximumPhaseCount && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
+}
+
+// Immutable frame facts for graph declaration; queue assignment stays a compiler result.
+class RendererFrameGraphFeatures{
+    public b8 frameLaggedAsyncLightingEnabled = false;
+    public b8 laggedLightingHistoryReady = false;
+    public b8 laggedLightingHistoryReadReady = false;
+    // A prior history-copy tail still reads live targets; next writers must wait for it.
+    public b8 laggedLightingHistoryWriterWaitPending = false;
+    public b8 hasTransparentRenderers = false;
+    public b8 hardwareCaustics = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Summarizes one owner-serialized ledger drain at the compiler boundary.
+class RendererTaskTimingFeedbackDrainResult{
+    public usize acceptedAssignmentCount = 0u;
+    public usize recordedSampleCount = 0u;
+    public usize retiredSampleCount = 0u;
+    public usize rejectedAssignmentCount = 0u;
+    public usize rejectedSampleCount = 0u;
+}
+
+enum<u8> RendererTaskTimingFeedbackCollectionAction{
+    enum None = 0u,
+    enum Enable = 1u,
+    enum Disable = 2u,
+    enum kCount = 3u
 }
 
 

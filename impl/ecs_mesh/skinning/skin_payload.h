@@ -8,7 +8,7 @@
 #include "runtime_instance.h"
 
 #include <impl/assets/graphics/skinned_mesh/constants.h>
-#include <impl/assets_mesh/skin_validation.h>
+#include <impl/assets_mesh/skin_types.adhd.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 
 #include <core/alloc/scratch.h>
@@ -77,8 +77,7 @@ namespace MeshSkinningPayload{
     influences.reserve(instance.skin.size());
     for(usize vertexIndex = 0u; vertexIndex < instance.skin.size(); ++vertexIndex){
         const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
-        const SIMDVectorSingle weights = LoadFloat(sourceSkin.weight);
-        if(!SkinValidation::ValidSkinInfluenceWeights(weights) || !SkinValidation::SkinInfluenceFitsSkeleton(sourceSkin, instance.skeletonJointCount)){
+        if(!ValidSkinInfluenceWeights(sourceSkin.weight) || !SkinInfluenceFitsSkeleton(sourceSkin, instance.skeletonJointCount)){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin influence {} is invalid"), instance.handle.value, vertexIndex);
             return MakeUnexpected(Failure{});
         }
@@ -117,7 +116,7 @@ template<typename JointPaletteVector>
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint payload counts are invalid"), instance.handle.value);
         return false;
     }
-    if(!SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount)){
+    if(!ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' inverse bind matrix count is invalid"), instance.handle.value);
         return false;
     }
@@ -138,7 +137,7 @@ template<typename JointPaletteVector>
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
         const SIMDMatrix inverseBindMatrix = hasInverseBindMatrices ? LoadFloat(instance.inverseBindMatrices[jointIndex]) : SIMDMatrix{};
 
-        const auto jointMatrix = SkeletonRuntime::ResolveSkinningJointMatrix(LoadFloat(sourceJoints[jointIndex]), hasInverseBindMatrices, inverseBindMatrix, SkinValidation::s_Epsilon);
+        const auto jointMatrix = SkeletonRuntime::ResolveSkinningJointMatrix(LoadFloat(sourceJoints[jointIndex]), hasInverseBindMatrices, inverseBindMatrix, s_SkinValidationEpsilon);
         if(!jointMatrix){
             outJointPalette.clear();
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix"), instance.handle.value, jointIndex);
@@ -211,4 +210,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

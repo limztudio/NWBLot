@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "binary_payload.h"
 
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
@@ -29,6 +28,8 @@ namespace __hidden_assets_model_volume_entry{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+inline constexpr TStringView s_ModelAssetKindLabel = NWB_TEXT("model");
 
 static Expected<ModelCookEntry> ParseModelDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
     return ParseModelCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
@@ -63,7 +64,7 @@ static b8 ExtractModelDependencies(const Core::Assets::CookDependencyItemContext
 }
 
 static b8 RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(registry, ModelBinaryPayload::s_ModelAssetKindLabel, &ParseModelDocument, &ParseModelValue, &BuildModelAsset);
+    return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(registry, s_ModelAssetKindLabel, &ParseModelDocument, &ParseModelValue, &BuildModelAsset);
 }
 
 static b8 RegisterModelCookDependency(Core::Assets::CookDependencyRegistry& registry){
@@ -71,7 +72,7 @@ static b8 RegisterModelCookDependency(Core::Assets::CookDependencyRegistry& regi
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_ModelCookEntryRegistrar, RegisterModelCookEntry);
@@ -97,4 +98,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

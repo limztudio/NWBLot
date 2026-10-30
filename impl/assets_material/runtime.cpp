@@ -3,7 +3,6 @@
 
 
 #include "asset.h"
-#include "binary_payload.h"
 
 #include <core/common/log.h>
 #include <core/assets/auto_registration.h>
@@ -23,6 +22,11 @@ namespace __hidden_assets_material_runtime{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+inline constexpr TStringView s_MaterialLoadBinaryContext = NWB_TEXT("Material::loadBinary");
+inline constexpr TStringView s_AvboitAccumulatePassText = NWB_TEXT("accumulate");
+inline constexpr TStringView s_AvboitOccupancyPassText = NWB_TEXT("occupancy");
+inline constexpr TStringView s_AvboitExtinctionPassText = NWB_TEXT("extinction");
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MaterialAssetCodecAutoRegistrar, MaterialAssetCodec);
 
@@ -114,18 +118,18 @@ static b8 ValidateMaterialTypedLayout(const u64 layoutHash, const Span<const Mat
         return false;
     }
 
-    const u64 computedHash = MaterialBinaryPayload::ComputeMaterialTypedLayoutHash(blocks, fields);
+    const u64 computedHash = ComputeMaterialTypedLayoutHash(blocks, fields);
     if(computedHash != layoutHash){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout hash mismatch"), failureContext);
         return false;
     }
 
-    const auto expectedBlockByteSize = MaterialBinaryPayload::ComputeMaterialTypedBlockByteSize(blocks);
-    if(!expectedBlockByteSize){
+    usize expectedBlockByteSize = 0u;
+    if(!ComputeMaterialTypedBlockByteSize(blocks, expectedBlockByteSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed block byte size overflows"), failureContext);
         return false;
     }
-    if(blockBytes.size() != *expectedBlockByteSize){
+    if(blockBytes.size() != expectedBlockByteSize){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed block byte count does not match typed layout"), failureContext);
         return false;
     }
@@ -173,14 +177,14 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
     const u32 fieldCount = *fieldCountResult;
 
     // Successful reads keep the cursor inside the binary.
-    if(blockCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_TypedLayoutBlockBytes){
+    if(blockCount > (binary.size() - inOutCursor) / s_MaterialTypedLayoutBlockBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: typed layout block count exceeds available data"));
         return MakeUnexpected(Failure{});
     }
     payload.blocks.reserve(blockCount);
     for(u32 i = 0u; i < blockCount; ++i){
-        MaterialBinaryPayload::MaterialTypedLayoutBlockBinary blockBinary;
-        const auto blockBinaryResult = ReadPOD<MaterialBinaryPayload::MaterialTypedLayoutBlockBinary>(binary, inOutCursor);
+        MaterialTypedLayoutBlockBinary blockBinary;
+        const auto blockBinaryResult = ReadPOD<MaterialTypedLayoutBlockBinary>(binary, inOutCursor);
         if(!blockBinaryResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed typed layout block at index {}"), i);
             return MakeUnexpected(Failure{});
@@ -196,14 +200,14 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
         payload.blocks.push_back(block);
     }
 
-    if(fieldCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_TypedLayoutFieldBytes){
+    if(fieldCount > (binary.size() - inOutCursor) / s_MaterialTypedLayoutFieldBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: typed layout field count exceeds available data"));
         return MakeUnexpected(Failure{});
     }
     payload.fields.reserve(fieldCount);
     for(u32 i = 0u; i < fieldCount; ++i){
-        MaterialBinaryPayload::MaterialTypedLayoutFieldBinary fieldBinary;
-        const auto fieldBinaryResult = ReadPOD<MaterialBinaryPayload::MaterialTypedLayoutFieldBinary>(binary, inOutCursor);
+        MaterialTypedLayoutFieldBinary fieldBinary;
+        const auto fieldBinaryResult = ReadPOD<MaterialTypedLayoutFieldBinary>(binary, inOutCursor);
         if(!fieldBinaryResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed typed layout field at index {}"), i);
             return MakeUnexpected(Failure{});
@@ -243,14 +247,14 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
         return MakeUnexpected(Failure{});
     }
     resourceReferenceCount = *resourceReferenceCountResult;
-    if(resourceReferenceCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_ResourceReferenceBytes){
+    if(resourceReferenceCount > (binary.size() - inOutCursor) / s_MaterialResourceReferenceBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference count exceeds available data"));
         return MakeUnexpected(Failure{});
     }
     payload.resourceReferences.reserve(resourceReferenceCount);
     for(u32 i = 0u; i < resourceReferenceCount; ++i){
-        MaterialBinaryPayload::MaterialResourceReferenceBinary resourceReferenceBinary;
-        const auto resourceReferenceBinaryResult = ReadPOD<MaterialBinaryPayload::MaterialResourceReferenceBinary>(binary, inOutCursor);
+        MaterialResourceReferenceBinary resourceReferenceBinary;
+        const auto resourceReferenceBinaryResult = ReadPOD<MaterialResourceReferenceBinary>(binary, inOutCursor);
         if(!resourceReferenceBinaryResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed material resource reference at index {}"), i);
             return MakeUnexpected(Failure{});
@@ -273,9 +277,9 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
         payload.resourceReferences.push_back(resourceReference);
     }
 
-    if(!ValidateMaterialTypedLayout(layoutHash, payload.blocks, payload.fields, payload.blockBytes, MaterialBinaryPayload::s_MaterialLoadBinaryContext))
+    if(!ValidateMaterialTypedLayout(layoutHash, payload.blocks, payload.fields, payload.blockBytes, s_MaterialLoadBinaryContext))
         return MakeUnexpected(Failure{});
-    if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(payload.blocks, payload.fields, payload.resourceReferences)){
+    if(!ValidateMaterialResourceReferences(payload.blocks, payload.fields, payload.resourceReferences)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource references do not match typed layout"));
         return MakeUnexpected(Failure{});
     }
@@ -295,7 +299,7 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
 
 
 b8 Material::loadBinary(const Span<const u8> binary){
-    if(!checkVirtualPath(MaterialBinaryPayload::s_MaterialLoadBinaryContext))
+    if(!checkVirtualPath(__hidden_assets_material_runtime::s_MaterialLoadBinaryContext))
         return false;
 
     usize cursor = 0;
@@ -361,7 +365,7 @@ b8 Material::loadBinary(const Span<const u8> binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader count exceeds supported shader stage count"));
         return false;
     }
-    if(shaderCount > (binary.size() - cursor) / MaterialBinaryPayload::s_ShaderEntryBytes){
+    if(shaderCount > (binary.size() - cursor) / s_MaterialShaderEntryBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader count exceeds available data"));
         return false;
     }
@@ -464,15 +468,15 @@ b8 Material::loadBinary(const Span<const u8> binary){
         }
         return Core::Assets::AssetRef<PixelShader>{};
     };
-    const auto accumulateShader = readOptionalAvboitPixelShader(MaterialBinaryPayload::s_AvboitAccumulatePassText);
+    const auto accumulateShader = readOptionalAvboitPixelShader(__hidden_assets_material_runtime::s_AvboitAccumulatePassText);
     if(!accumulateShader)
         return false;
     candidate.m_avboitAccumulatePixelShader = *accumulateShader;
-    const auto occupancyShader = readOptionalAvboitPixelShader(MaterialBinaryPayload::s_AvboitOccupancyPassText);
+    const auto occupancyShader = readOptionalAvboitPixelShader(__hidden_assets_material_runtime::s_AvboitOccupancyPassText);
     if(!occupancyShader)
         return false;
     candidate.m_avboitOccupancyPixelShader = *occupancyShader;
-    const auto extinctionShader = readOptionalAvboitPixelShader(MaterialBinaryPayload::s_AvboitExtinctionPassText);
+    const auto extinctionShader = readOptionalAvboitPixelShader(__hidden_assets_material_runtime::s_AvboitExtinctionPassText);
     if(!extinctionShader)
         return false;
     candidate.m_avboitExtinctionPixelShader = *extinctionShader;
@@ -525,4 +529,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

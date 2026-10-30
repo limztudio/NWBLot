@@ -9,8 +9,6 @@
 
 
 #include "cook.h"
-#include "arena_names.h"
-#include "binary_payload.h"
 #include "cook_matrix.h"
 #include "payload_validation.h"
 
@@ -37,12 +35,12 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         return false;
 
     const Skeleton& skeleton = *MakeNotNull(checked_cast<const Skeleton*>(&asset));
-    Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_SerializeArena);
+    Core::Alloc::ScratchArena scratchArena(s_AssetsSkeletonSerializeArena);
     if(!skeleton.validatePayload(scratchArena))
         return false;
 
-    usize reserveBytes = sizeof(SkeletonBinaryPayload::HeaderBinary);
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, skeleton.joints().size(), sizeof(SkeletonBinaryPayload::JointBinary)) || !CanStoreValueCount(outBinary, reserveBytes)){
+    usize reserveBytes = sizeof(SkeletonHeaderBinary);
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, skeleton.joints().size(), sizeof(SkeletonJointBinary)) || !CanStoreValueCount(outBinary, reserveBytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkeletonAssetCodec::serialize failed: cooked payload size overflows"));
         return false;
     }
@@ -55,12 +53,12 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     outBinary.clear();
     outBinary.reserve(reserveBytes);
 
-    SkeletonBinaryPayload::HeaderBinary header;
+    SkeletonHeaderBinary header;
     header.jointCount = static_cast<u64>(skeleton.joints().size());
     AppendPOD(outBinary, header);
     for(usize jointIndex = 0u; jointIndex < skeleton.joints().size(); ++jointIndex){
         const SkeletonJoint& joint = skeleton.joints()[jointIndex];
-        SkeletonBinaryPayload::JointBinary jointBinary = {};
+        SkeletonJointBinary jointBinary = {};
         jointBinary.nameHash = jointNameHashes[jointIndex];
         jointBinary.parentIndex = joint.parentIndex;
         jointBinary.localBindPose = joint.localBindPose;
@@ -273,4 +271,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

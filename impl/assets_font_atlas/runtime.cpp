@@ -3,7 +3,6 @@
 
 
 #include "asset.h"
-#include "arena_names.h"
 
 #include <core/assets/auto_registration.h>
 
@@ -38,7 +37,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAtlasAssetCodecAutoRegistrar, FontAtlasAs
 b8 FontAtlas::loadBinary(const Span<const u8> binary){
     if(!checkVirtualPath(NWB_TEXT("FontAtlas::loadBinary")))
         return false;
-    Core::Alloc::ScratchArena scratchArena(AssetsFontAtlasArenaScope::s_LoadBinaryArena);
+    Core::Alloc::ScratchArena scratchArena(s_AssetsFontAtlasLoadBinaryArena);
     auto payload = DeserializeFontAtlasPayload(binary, m_payload.glyphs.get_allocator().arena(), scratchArena);
     if(!payload)
         return false;

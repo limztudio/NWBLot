@@ -14,7 +14,7 @@
 
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_material/cook.h>
-#include <impl/assets_material/shader_stage_names.h>
+#include <impl/assets_material/types.adhd.h>
 #include <impl/assets_shader/source_dependencies.h>
 
 #include <core/assets/paths.h>
@@ -145,10 +145,10 @@ static b8 SetShaderImplicitDefine(ShaderCook::ShaderEntry& entry, const AStringV
 
 static Expected<ShaderCook::ShaderEntry> BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEntry){
     ShaderCook::ShaderEntry entry = sourceEntry;
-    entry.archiveStage = MaterialShaderStageNames::s_MeshComputeArchiveStageText;
+    entry.archiveStage = s_MeshComputeArchiveStageText;
     entry.stage = Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage);
 
-    if(!SetShaderImplicitDefine(entry, MaterialShaderStageNames::s_MeshComputeImplicitDefineText, s_EnabledImplicitDefineValue))
+    if(!SetShaderImplicitDefine(entry, s_MeshComputeImplicitDefineText, s_EnabledImplicitDefineValue))
         return MakeUnexpected(Failure{});
     return entry;
 }
@@ -514,4 +514,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

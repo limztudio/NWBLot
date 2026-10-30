@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "arena_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +26,7 @@ b8 FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     const FontAtlas& atlas = *MakeNotNull(checked_cast<const FontAtlas*>(&asset));
     if(!atlas.checkVirtualPath(s_FontAtlasValidatePayloadContext))
         return false;
-    Core::Alloc::ScratchArena scratchArena(AssetsFontAtlasArenaScope::s_SerializeArena);
+    Core::Alloc::ScratchArena scratchArena(s_AssetsFontAtlasSerializeArena);
     auto binary = SerializeFontAtlasPayload(atlas.payload(), outBinary.get_allocator().arena(), scratchArena);
     if(!binary)
         return false;

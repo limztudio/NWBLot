@@ -12,7 +12,6 @@
 
 
 #include "asset.h"
-#include "binary_payload.h"
 
 #include <core/alloc/scratch.h>
 #include <core/assets/cook_dependency_registry.h>
@@ -52,12 +51,6 @@ public:
 
 
 namespace AssetsSubsystemCook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_SubsystemDiagnosticPrefix = "Subsystem meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -163,7 +156,7 @@ template<typename SubsystemT>
     Core::Assets::RegisterCompositeRootAssetType(SubsystemT::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<SubsystemCookEntry<SubsystemT>, SubsystemT, TypedSubsystemAssetCodec<SubsystemT>>(
         registry,
-        SubsystemBinaryPayload::s_SubsystemAssetKindLabel,
+        s_SubsystemAssetKindLabel,
         &ParseSubsystemDocument<SubsystemT>,
         &ParseSubsystemValue<SubsystemT>,
         &BuildSubsystemAsset<SubsystemT>
@@ -196,4 +189,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

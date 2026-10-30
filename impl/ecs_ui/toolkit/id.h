@@ -21,10 +21,27 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<WidgetId> MakeRootId(const WidgetRoot& root)noexcept;
-[[nodiscard]] Expected<WidgetId> MakeWidgetId(WidgetId parent, AStringView stableKey)noexcept;
+[[nodiscard]] inline Expected<WidgetId> MakeRootId(const WidgetRoot& root)noexcept{
+    WidgetId outId;
+    if(!TryMakeRootId(root, outId))
+        return MakeUnexpected(Failure{});
+    return outId;
+}
+
+[[nodiscard]] inline Expected<WidgetId> MakeWidgetId(const WidgetId parent, const AStringView stableKey)noexcept{
+    WidgetId outId;
+    if(!TryMakeWidgetId(parent, stableKey, outId))
+        return MakeUnexpected(Failure{});
+    return outId;
+}
+
 // Numeric parts occupy a separate identity domain from nonempty textual declarations.
-[[nodiscard]] Expected<WidgetId> MakeWidgetPartId(WidgetId parent, u64 stableKey)noexcept;
+[[nodiscard]] inline Expected<WidgetId> MakeWidgetPartId(const WidgetId parent, const u64 stableKey)noexcept{
+    WidgetId outId;
+    if(!TryMakeWidgetPartId(parent, stableKey, outId))
+        return MakeUnexpected(Failure{});
+    return outId;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

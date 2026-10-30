@@ -520,13 +520,14 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
         }
     }
 
-    layout.layoutHash = MaterialBinaryPayload::ComputeMaterialTypedLayoutHash(layout.typedLayoutBlocks, layout.typedLayoutFields);
+    layout.layoutHash = ComputeMaterialTypedLayoutHash(layout.typedLayoutBlocks, layout.typedLayoutFields);
     if(layout.layoutHash == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' produced an empty layout for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(contextName.resolvedText()));
         return MakeUnexpected(Failure{});
     }
 
-    NWB_ASSERT(MaterialBinaryPayload::ComputeMaterialTypedBlockByteSize(layout.typedLayoutBlocks) == layout.typedBlockBytes.size());
+    usize expectedBlockByteSize = 0u;
+    NWB_ASSERT(ComputeMaterialTypedBlockByteSize(layout.typedLayoutBlocks, expectedBlockByteSize) && expectedBlockByteSize == layout.typedBlockBytes.size());
 
     if(!BuildMaterialBindTypedLayoutBlockLookup(contextName.resolvedText(), layout))
         return MakeUnexpected(Failure{});
@@ -583,4 +584,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -9,8 +9,6 @@
 
 
 #include "cook.h"
-#include "arena_names.h"
-#include "binary_payload.h"
 
 #include <impl/assets_skeleton/cook_matrix.h>
 
@@ -32,21 +30,21 @@ NWB_IMPL_BEGIN
 
 
 b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, ModelBinaryPayload::s_ModelSerializeContext))
+    if(!checkSerializeAssetType(asset, s_ModelSerializeContext))
         return false;
 
     const Model& model = static_cast<const Model&>(asset);
-    Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_SerializeArena);
+    Core::Alloc::ScratchArena scratchArena(s_AssetsModelSerializeArena);
     if(!model.validatePayload(scratchArena))
         return false;
 
-    Vector<ModelBinaryPayload::ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
-    Vector<ModelBinaryPayload::ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
-    Vector<ModelBinaryPayload::ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
+    Vector<ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
+    Vector<ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
+    Vector<ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
 
     skeletonObjectBinaries.reserve(model.skeletonObjects().size());
     for(const ModelSkeletonObject& object : model.skeletonObjects()){
-        ModelBinaryPayload::ModelSkeletonObjectBinary objectBinary;
+        ModelSkeletonObjectBinary objectBinary;
         objectBinary.nameHash = object.name.hash();
         objectBinary.skeletonNameHash = object.skeleton.name().hash();
         objectBinary.transform = object.transform;
@@ -55,7 +53,7 @@ b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
 
     staticMeshObjectBinaries.reserve(model.staticMeshObjects().size());
     for(const ModelStaticMeshObject& object : model.staticMeshObjects()){
-        ModelBinaryPayload::ModelStaticMeshObjectBinary objectBinary;
+        ModelStaticMeshObjectBinary objectBinary;
         objectBinary.nameHash = object.name.hash();
         objectBinary.meshNameHash = object.mesh.name().hash();
         objectBinary.materialNameHash = object.material.name().hash();
@@ -67,7 +65,7 @@ b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
 
     skinnedMeshObjectBinaries.reserve(model.skinnedMeshObjects().size());
     for(const ModelSkinnedMeshObject& object : model.skinnedMeshObjects()){
-        ModelBinaryPayload::ModelSkinnedMeshObjectBinary objectBinary;
+        ModelSkinnedMeshObjectBinary objectBinary;
         objectBinary.nameHash = object.name.hash();
         objectBinary.skinNameHash = object.skin.name().hash();
         objectBinary.materialNameHash = object.material.name().hash();
@@ -76,23 +74,23 @@ b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
         skinnedMeshObjectBinaries.push_back(objectBinary);
     }
 
-    usize reserveBytes = sizeof(ModelBinaryPayload::ModelHeaderBinary);
+    usize reserveBytes = sizeof(ModelHeaderBinary);
     const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, skeletonObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, staticMeshObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, skinnedMeshObjectBinaries);
 
     outBinary.clear();
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    ModelBinaryPayload::ModelHeaderBinary header;
+    ModelHeaderBinary header;
     header.skeletonObjectCount = static_cast<u64>(skeletonObjectBinaries.size());
     header.staticMeshObjectCount = static_cast<u64>(staticMeshObjectBinaries.size());
     header.skinnedMeshObjectCount = static_cast<u64>(skinnedMeshObjectBinaries.size());
     AppendPOD(outBinary, header);
 
     return
-        Core::Assets::AppendVectorPayload(outBinary, skeletonObjectBinaries, ModelBinaryPayload::s_ModelSerializeContext, ModelBinaryPayload::s_SkeletonObjectsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, staticMeshObjectBinaries, ModelBinaryPayload::s_ModelSerializeContext, ModelBinaryPayload::s_StaticMeshObjectsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, skinnedMeshObjectBinaries, ModelBinaryPayload::s_ModelSerializeContext, ModelBinaryPayload::s_SkinnedMeshObjectsPayloadLabel)
+        Core::Assets::AppendVectorPayload(outBinary, skeletonObjectBinaries, s_ModelSerializeContext, s_ModelSkeletonObjectsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, staticMeshObjectBinaries, s_ModelSerializeContext, s_ModelStaticMeshObjectsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, skinnedMeshObjectBinaries, s_ModelSerializeContext, s_ModelSkinnedMeshObjectsPayloadLabel)
     ;
 }
 

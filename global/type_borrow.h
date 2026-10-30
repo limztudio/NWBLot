@@ -25,7 +25,19 @@ using StrongOrdering = std::strong_ordering;
 
 
 template<typename Key>
-using Hasher = std::hash<Key>;
+struct Hasher : std::hash<Key>{};
+
+template<typename Key>
+    requires requires(const Key& key){
+        static_cast<size_t>(key.hash());
+    } && (!requires(const Key& key){
+        std::hash<Key>{}(key);
+    })
+struct Hasher<Key>{
+    constexpr size_t operator()(const Key& key)const noexcept{
+        return static_cast<size_t>(key.hash());
+    }
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -397,4 +409,3 @@ template<class Pointer, class SizeType = std::size_t> using AllocationResult = s
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

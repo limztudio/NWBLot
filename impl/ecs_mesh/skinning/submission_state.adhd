@@ -12,8 +12,16 @@
 const usize s_MeshSkinningResourceBufferCount = 19u;
 const usize s_MeshSkinningGraphDispatchPlanByteSize = 520u;
 
+const Name s_PrepareRuntimeArena = "impl/ecs_mesh/skinning_prepare";
+const Name s_FrameUploadArena = "impl/ecs_mesh/skinning_frame_upload";
+
+class SkinnedRuntimeMeshIdentity{
+    public Name meshKey = s_NameNone;
+    public u64 version = 0u;
+}
+
 // Captures CPU state true only when the producing command list was accepted.
-[reflect]
+[serialize, reflect]
 class MeshSkinningSubmissionCommit{
     public u32 editRevision = 0u;
     public b8 bindlessResourceSlotsUploadRecorded = false;
@@ -42,7 +50,7 @@ void ApplyMeshSkinningSubmissionCommit(
 }
 
 // Mirrors bindless resources: five uint4 lanes; handles are StorageBuffer registrations.
-[reflect]
+[serialize, reflect]
 class MeshSkinningBindlessResourceSlots{
     public u32 restPosition = 0u;
     public u32 skinnedPosition = 0u;
@@ -94,7 +102,7 @@ class MeshSkinningBindlessResourceSlots{
     }
 }
 
-[reflect]
+[serialize, reflect]
 class MeshSkinningPushConstants{
     public u32 meshletCount = 0u;
     public u32 skinCount = 0u;
@@ -104,19 +112,19 @@ class MeshSkinningPushConstants{
     public u32 bindlessResourceSlots = 0u;
 }
 
-[reflect]
+[serialize, reflect]
 class MeshletBoundsPushConstants{
     public u32 meshletCount = 0u;
     public u32 bindlessResourceSlots = 0u;
 }
 
-[reflect]
+[serialize, reflect]
 class MeshletRepackPushConstants{
     public u32 meshletCount = 0u;
     public u32 bindlessResourceSlots = 0u;
 }
 
-[reflect]
+[serialize, reflect]
 class MeshSkinningRestToSkinnedCopyByteCounts{
     public usize positionBytes = 0u;
     public usize normalBytes = 0u;

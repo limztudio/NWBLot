@@ -21,22 +21,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace InputSelectionPolicy{
-    enum Enum : u8{ None, Always, Shift };
-};
-
-struct InputKeyBinding{
-    i32 key = Core::Key::Unknown;
-    i32 modifiers = 0;
-    i32 ignoredModifiers = 0;
-    InputCommand::Enum command = InputCommand::None;
-    InputSelectionPolicy::Enum selection = InputSelectionPolicy::None;
-    b8 edit = true;
-    // Allow this command's ordinary native character to reach the editor as well.
-    b8 allowText = false;
-};
-
-inline constexpr usize s_InputMaxBindings = 256u;
 inline constexpr i32 s_InputBindingModifierMask = Core::InputModifier::Shift | Core::InputModifier::Control | Core::InputModifier::Alt | Core::InputModifier::Super;
 
 class InputBindings final : NoCopy{

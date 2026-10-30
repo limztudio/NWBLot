@@ -13,6 +13,23 @@ class UiPaintComponent{
 }
 
 const usize s_UiClipboardMaxPublications = 16u;
+const usize s_UiEditBoxMaxEntries = 256u;
+const usize s_UiNativeKeySlotCount = 512u;
+
+enum<u8> UiLayerPresentation{
+    enum Scene,
+    enum Standalone,
+}
+
+enum<u8> UiEditBoxEventKind{
+    enum Command,
+    enum Character,
+    enum Native,
+    enum Selection,
+    enum PastePrimary,
+    enum Blur,
+    enum Focus,
+}
 
 enum<u8> UiSkinSelectionResult{
     enum Failed,
@@ -24,11 +41,6 @@ enum<u8> UiSkinChangeResult{
     enum Deferred,
     enum Applied,
     enum Failed,
-}
-
-enum<u8> UiEditClickKind{
-    enum Caret,
-    enum Word,
 }
 
 enum<u8> UiTextEditStatus{

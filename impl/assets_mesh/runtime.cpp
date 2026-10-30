@@ -3,7 +3,6 @@
 
 
 #include "asset.h"
-#include "arena_names.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"
 #include "runtime_validation.h"
@@ -60,7 +59,7 @@ b8 Mesh::loadBinary(const Span<const u8> binary){
     if(!Core::Assets::ReadCompletePayload(binary, cursor, loadFailureContext))
         return false;
 
-    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_ValidatePayloadArena);
+    Core::Alloc::ScratchArena scratchArena(s_MeshValidatePayloadArena);
     if(!candidate.validatePayload(scratchArena))
         return false;
     *this = Move(candidate);
@@ -96,4 +95,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

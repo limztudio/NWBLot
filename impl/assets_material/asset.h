@@ -14,6 +14,8 @@
 #include <core/assets/ref.h>
 #include <core/graphics/api.h>
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,6 +32,13 @@ class PixelShader;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(sizeof(Core::ShaderType::Enum) == sizeof(u8), "Material shader stage indices must stay byte-sized");
+static_assert(s_MaterialShaderEntryBytes == sizeof(Core::ShaderType::Enum) + sizeof(NameHash), "Material shader entry byte size drifted");
+static_assert(sizeof(MaterialTypedLayoutBlockBinary) == s_MaterialTypedLayoutBlockBytes, "MaterialTypedLayoutBlockBinary layout drifted");
+static_assert(sizeof(MaterialTypedLayoutFieldBinary) == s_MaterialTypedLayoutFieldBytes, "MaterialTypedLayoutFieldBinary layout drifted");
+static_assert(sizeof(MaterialResourceReferenceBinary) == s_MaterialResourceReferenceBytes, "MaterialResourceReferenceBinary layout drifted");
 
 
 // Transparent materials need all three pass shaders; opaque materials carry none.
@@ -121,6 +130,35 @@ static_assert(
         NWB_ASSERT(false);
         return false;
     }
+}
+
+[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashName(u64 hash, const Name& name){
+    return UpdateFnv64(hash, reinterpret_cast<const u8*>(&name.hash()), sizeof(NameHash));
+}
+
+[[nodiscard]] inline u64 ComputeMaterialTypedLayoutHash(const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields){
+    if(blocks.empty() && fields.empty())
+        return 0u;
+
+    u64 hash = UpdateFnv64TextExact(s_Fnv64OffsetBasis, AStringView("NWB_MATERIAL_TYPED_LAYOUT_V1"));
+    const u32 blockCount = static_cast<u32>(blocks.size());
+    const u32 fieldCount = static_cast<u32>(fields.size());
+    Fnv64AppendValue(hash, blockCount);
+    Fnv64AppendValue(hash, fieldCount);
+    for(const MaterialTypedLayoutBlock& block : blocks){
+        hash = UpdateMaterialTypedLayoutHashName(hash, block.blockName);
+        Fnv64AppendValue(hash, static_cast<u32>(block.blockClass));
+        Fnv64AppendValue(hash, block.fieldBegin);
+        Fnv64AppendValue(hash, block.fieldCount);
+        Fnv64AppendValue(hash, block.byteSize);
+    }
+    for(const MaterialTypedLayoutField& field : fields){
+        hash = UpdateMaterialTypedLayoutHashName(hash, field.fieldName);
+        Fnv64AppendValue(hash, static_cast<u32>(field.fieldType));
+        Fnv64AppendValue(hash, field.offset);
+        Fnv64AppendValue(hash, field.defaultValue);
+    }
+    return hash;
 }
 
 
@@ -270,4 +308,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

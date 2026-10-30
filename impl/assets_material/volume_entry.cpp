@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "binary_payload.h"
 
 #include <impl/assets_shader/shader_types.h>
 
@@ -34,6 +33,8 @@ namespace __hidden_assets_material_volume_entry{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+inline constexpr TStringView s_MaterialAssetKindLabel = NWB_TEXT("material");
 
 [[nodiscard]] static b8 IsMaterialResourceParameterValue(const AStringView valueText, Core::Alloc::ScratchArena& scratchArena){
     const AStringView trimmed = TrimView(valueText);
@@ -93,7 +94,7 @@ static b8 ExtractMaterialDependencies(const Core::Assets::CookDependencyItemCont
 static b8 RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<MaterialCookEntry, Material, MaterialAssetCodec>(
         registry,
-        MaterialBinaryPayload::s_MaterialAssetKindLabel,
+        s_MaterialAssetKindLabel,
         &ParseMaterialDocument,
         [](MaterialCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildMaterialAsset(entry, arena); },
         false
@@ -131,4 +132,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

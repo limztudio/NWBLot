@@ -8,6 +8,7 @@
 #include <impl/global.h>
 #include <impl/ecs_ui/components.adhd.h>
 #include <impl/ecs_ui/toolkit/id.h>
+#include <impl/ecs_ui/toolkit/input/popup.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/model_snapshot.h>
 
 #include <core/os/text_input.h>
@@ -22,22 +23,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The host advances the corresponding generation when a declaration or its backing model is replaced.
-struct UiTextEditOwner{
-    Ui::WidgetId widget;
-    u64 declarationGeneration = 0u;
-    u64 modelGeneration = 0u;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return widget.valid() && declarationGeneration != 0u && modelGeneration != 0u;
-    }
-};
-
-[[nodiscard]] inline b8 operator==(const UiTextEditOwner& lhs, const UiTextEditOwner& rhs)noexcept{
-    return lhs.widget == rhs.widget && lhs.declarationGeneration == rhs.declarationGeneration && lhs.modelGeneration == rhs.modelGeneration;
-}
+namespace UiEditClickKind = Ui::UiEditClickKind;
+using Ui::UiTextEditOwner;
 
 // The host validates token, sequence and owner before lending a model to a copied event.
 // Surrounding deletion additionally requires the exact native publication that the event addressed.

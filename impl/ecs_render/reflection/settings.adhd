@@ -28,8 +28,15 @@ const u32 s_ReflectionDefaultScreenMaxSteps = 96u;
 const f32 s_ReflectionDefaultScreenThickness = 0.03f;
 const f32 s_ReflectionDefaultScreenConfidenceThreshold = 0.8f;
 const f32 s_ReflectionDefaultScreenEdgeFade = 0.05f;
-const f32x3u s_ReflectionDefaultEnvironmentTop(0.15f, 0.2f, 0.3f);
-const f32x3u s_ReflectionDefaultEnvironmentBottom(0.04f, 0.04f, 0.04f);
+const f32 s_ReflectionDefaultEnvTopR = 0.15f;
+const f32 s_ReflectionDefaultEnvTopG = 0.2f;
+const f32 s_ReflectionDefaultEnvTopB = 0.3f;
+const f32 s_ReflectionDefaultEnvBottomRgb = 0.04f;
+const f32x3u s_ReflectionDefaultEnvironmentTop(s_ReflectionDefaultEnvTopR, s_ReflectionDefaultEnvTopG, s_ReflectionDefaultEnvTopB);
+const f32x3u s_ReflectionDefaultEnvironmentBottom(s_ReflectionDefaultEnvBottomRgb, s_ReflectionDefaultEnvBottomRgb, s_ReflectionDefaultEnvBottomRgb);
+
+// One timed range owns a begin and an end timestamp query.
+const u32 s_ReflectionGpuTimingQueriesPerRange = 2u;
 
 [reflect]
 class ReflectionSettings{
@@ -338,12 +345,81 @@ class ReflectionFeedbackExtent{
     }
 }
 
+const u32 s_ReflectionFeedbackGroupSize = 8u;
+const u64 s_ReflectionFeedbackSurfaceCount = 2u;
+const u64 s_ReflectionFeedbackHeaderBytes = 16u;
+const u64 s_ReflectionFeedbackEntryBytes = 4u;
+const u64 s_ReflectionFeedbackMaxCount = 0xffffffffull;
+
+b8 TryComputeReflectionFeedbackExtent(in u32 width, in u32 height, mut ReflectionFeedbackExtent outExtent){
+    if(width == 0u || height == 0u){
+        return false;
+    }
+    const u32 tilesX = (width - 1u) / s_ReflectionFeedbackGroupSize + 1u;
+    const u32 tilesY = (height - 1u) / s_ReflectionFeedbackGroupSize + 1u;
+    const u64 entryCount = cast<u64>(tilesX) * cast<u64>(tilesY) * s_ReflectionFeedbackSurfaceCount;
+    const u64 byteCount = s_ReflectionFeedbackHeaderBytes + entryCount * s_ReflectionFeedbackEntryBytes;
+    if(entryCount > s_ReflectionFeedbackMaxCount || byteCount > s_ReflectionFeedbackMaxCount){
+        return false;
+    }
+    outExtent = ReflectionFeedbackExtent(width, height, tilesX, tilesY, cast<u32>(entryCount), cast<u32>(byteCount));
+    return true;
+}
+
 class ReflectionDepthPyramidMip{
     public Name taskIdentity = s_NameNone;
     public u32 sampledSlot = 0u;
     public u32 storageSlot = 0u;
     public u32 width = 0u;
     public u32 height = 0u;
+}
+
+[serialize]
+class ReflectionFrameParameters{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 traceMode = 0u;
+    public u32 hardwareEnabled = 0u;
+    public u32 opaqueSpecularSlot = 0u;
+    public u32 glassSpecularSlot = 0u;
+    public u32 opaqueOutputSlot = 0u;
+    public u32 glassOutputSlot = 0u;
+    public u32 opaqueRadianceSlot = 0u;
+    public u32 glassRadianceSlot = 0u;
+    public u32 queueSlot = 0u;
+    public u32 counterSlot = 0u;
+    public u32 argsSlot = 0u;
+    public u32 queueCapacity = 0u;
+    public u32 maxHardwareRays = 0u;
+    public u32 sampleIndex = 0u;
+    public u32 deferredResourcesSlot = 0u;
+    public u32 viewSlot = 0u;
+    public u32 materialContextSlot = 0u;
+    public u32 debugView = 0u;
+    public u32 depthPyramidSlot = 0u;
+    public u32 depthMipCount = 0u;
+    public u32 screenMaxSteps = s_ReflectionDefaultScreenMaxSteps;
+    public u32 diagnosticsEnabled = 0u;
+    public u32 samplingSeed = 0u;
+    public u32 sampleBaseX = 0u;
+    public u32 sampleBaseY = 0u;
+    public u32 maxOpticalQueries = s_ReflectionDefaultMaxOpticalQueries;
+    public u32 feedbackReadSlot = 0u;
+    public u32 feedbackWriteSlot = 0u;
+    public u32 feedbackFlags = 0u;
+    public u32 feedbackProbeIndex = 0u;
+    public f32 maxRayDistance = s_ReflectionDefaultMaxRayDistance;
+    public f32 distanceFadeStart = s_ReflectionDefaultDistanceFadeStart;
+    public f32 roughnessCutoff = s_ReflectionDefaultRoughnessCutoff;
+    public f32 environmentTopR = s_ReflectionDefaultEnvTopR;
+    public f32 environmentTopG = s_ReflectionDefaultEnvTopG;
+    public f32 environmentTopB = s_ReflectionDefaultEnvTopB;
+    public f32 environmentBottomR = s_ReflectionDefaultEnvBottomRgb;
+    public f32 environmentBottomG = s_ReflectionDefaultEnvBottomRgb;
+    public f32 environmentBottomB = s_ReflectionDefaultEnvBottomRgb;
+    public f32 screenThickness = s_ReflectionDefaultScreenThickness;
+    public f32 screenConfidenceThreshold = s_ReflectionDefaultScreenConfidenceThreshold;
+    public f32 screenEdgeFade = s_ReflectionDefaultScreenEdgeFade;
 }
 
 const StringView s_ReflectionHwOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=0";

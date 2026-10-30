@@ -3,8 +3,6 @@
 
 
 #include "asset.h"
-#include "arena_names.h"
-#include "binary_payload.h"
 #include "payload_validation.h"
 
 #include <core/assets/auto_registration.h>
@@ -28,6 +26,9 @@ namespace __hidden_skeleton_runtime{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+inline constexpr TStringView s_SkeletonAssetKindLabel = NWB_TEXT("skeleton");
+inline constexpr TStringView s_SkeletonLoadBinaryContext = NWB_TEXT("Skeleton::loadBinary");
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkeletonAssetCodecAutoRegistrar, SkeletonAssetCodec);
 
@@ -60,18 +61,20 @@ b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 }
 
 b8 Skeleton::loadBinary(const Span<const u8> binary){
-    Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_LoadBinaryArena);
+    using namespace __hidden_skeleton_runtime;
+
+    Core::Alloc::ScratchArena scratchArena(s_AssetsSkeletonLoadBinaryArena);
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(binary, s_SkeletonBinaryMagic, SkeletonBinaryPayload::s_SkeletonLoadBinaryContext, SkeletonBinaryPayload::s_SkeletonAssetKindLabel, cursor);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonHeaderBinary>(binary, s_SkeletonBinaryMagic, s_SkeletonLoadBinaryContext, s_SkeletonAssetKindLabel, cursor);
     if(!headerResult)
         return false;
-    const SkeletonBinaryPayload::HeaderBinary& header = *headerResult;
+    const SkeletonHeaderBinary& header = *headerResult;
 
     if(header.padding0 != 0u || header.jointCount > Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: reserved header fields or joint count are invalid"));
         return false;
     }
-    const auto jointByteCount = ComputeBinaryVectorPayloadBytes<SkeletonBinaryPayload::JointBinary>(header.jointCount);
+    const auto jointByteCount = ComputeBinaryVectorPayloadBytes<SkeletonJointBinary>(header.jointCount);
     if(!jointByteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: joint payload byte size overflows"));
         return false;
@@ -90,12 +93,12 @@ b8 Skeleton::loadBinary(const Span<const u8> binary){
     candidate.m_joints.reserve(jointCount);
     candidate.m_jointIndices.reserve(jointCount);
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        const auto jointBinaryResult = ReadPOD<SkeletonBinaryPayload::JointBinary>(binary, cursor);
+        const auto jointBinaryResult = ReadPOD<SkeletonJointBinary>(binary, cursor);
         if(!jointBinaryResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: malformed joint {}"), jointIndex);
             return false;
         }
-        const SkeletonBinaryPayload::JointBinary& jointBinary = *jointBinaryResult;
+        const SkeletonJointBinary& jointBinary = *jointBinaryResult;
         if(jointBinary.padding0 != 0u || jointBinary.padding1[0u] != 0u || jointBinary.padding1[1u] != 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: reserved joint fields must be zero"));
             return false;
@@ -112,7 +115,7 @@ b8 Skeleton::loadBinary(const Span<const u8> binary){
         candidate.m_joints.push_back(joint);
     }
 
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, SkeletonBinaryPayload::s_SkeletonLoadBinaryContext) || !candidate.validatePayload(scratchArena))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_SkeletonLoadBinaryContext) || !candidate.validatePayload(scratchArena))
         return false;
     *this = Move(candidate);
     return true;
@@ -126,4 +129,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -7,6 +7,7 @@
 
 #include "components.h"
 
+#include <impl/assets_scene/component_assets.adhd.h>
 #include <impl/assets_subsystem/asset.h>
 
 #include <core/assets/manager.h>
@@ -25,6 +26,32 @@ NWB_IMPL_BEGIN
 class EntityAsset;
 class ProjectAsset;
 class SceneAsset;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr TStringView s_ProjectAssetKindLabel = NWB_TEXT("project");
+inline constexpr TStringView s_ProjectLoadBinaryContext = NWB_TEXT("ProjectAsset::loadBinary");
+inline constexpr TStringView s_ProjectSerializeContext = NWB_TEXT("ProjectAssetCodec::serialize");
+
+inline constexpr TStringView s_ComponentAssetKindLabel = NWB_TEXT("component");
+inline constexpr TStringView s_ComponentLoadBinaryContext = NWB_TEXT("IComponent::loadBinary");
+inline constexpr TStringView s_ComponentSerializeContext = NWB_TEXT("ComponentAssetCodec::serialize");
+
+inline constexpr TStringView s_EntityAssetKindLabel = NWB_TEXT("entity");
+inline constexpr TStringView s_EntityLoadBinaryContext = NWB_TEXT("EntityAsset::loadBinary");
+inline constexpr TStringView s_EntitySerializeContext = NWB_TEXT("EntityAssetCodec::serialize");
+inline constexpr TStringView s_EntityComponentsPayloadLabel = NWB_TEXT("entity components");
+
+inline constexpr TStringView s_SceneAssetKindLabel = NWB_TEXT("scene");
+inline constexpr TStringView s_SceneLoadBinaryContext = NWB_TEXT("SceneAsset::loadBinary");
+inline constexpr TStringView s_SceneSerializeContext = NWB_TEXT("SceneAssetCodec::serialize");
+inline constexpr TStringView s_SceneSubsystemsPayloadLabel = NWB_TEXT("scene subsystems");
+inline constexpr TStringView s_SceneEntitiesPayloadLabel = NWB_TEXT("scene entities");
+inline constexpr TStringView s_SceneAssetsPayloadLabel = NWB_TEXT("scene referenced assets");
+
+inline constexpr Core::Assets::AssetRef<ProjectAsset> s_DefaultProjectRef(s_DefaultProjectVirtualPathText);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,26 +94,6 @@ private:
 
 
 NWB_DEFINE_ASSET_CODEC(EntityAssetCodec, EntityAsset);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ProjectAssetDefaults{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_DefaultProjectVirtualPathText = "project/project";
-inline constexpr Name s_DefaultProjectVirtualPath(s_DefaultProjectVirtualPathText);
-inline constexpr Core::Assets::AssetRef<ProjectAsset> s_DefaultProjectRef(s_DefaultProjectVirtualPathText);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,7 +228,7 @@ public:
 
 
 public:
-    [[nodiscard]] b8 loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project = ProjectAssetDefaults::s_DefaultProjectRef);
+    [[nodiscard]] b8 loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project = s_DefaultProjectRef);
     [[nodiscard]] b8 loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene);
     [[nodiscard]] b8 instantiateEntities(Core::ECS::World& world)const;
 

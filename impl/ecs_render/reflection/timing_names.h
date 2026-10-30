@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/reflection/settings.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 
@@ -18,9 +19,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// One timed range owns a begin and an end timestamp query.
-inline constexpr u32 s_ReflectionGpuTimingQueriesPerRange = 2u;
 
 namespace ReflectionGpuTimingScope{
     inline constexpr Core::GpuTimingScopeDefinition s_DepthPyramid("render.reflection_depth_pyramid");
@@ -39,4 +37,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

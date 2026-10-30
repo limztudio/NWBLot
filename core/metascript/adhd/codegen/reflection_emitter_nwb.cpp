@@ -50,7 +50,7 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
     if(IsScalarType(typeName))
         return true;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
-        return objInfo->isSelfDefaulted;
+        return objInfo->isSelfDefaulted && typeName != "NameHash";
     return typeName == "AssetRef";
 }
 

@@ -45,14 +45,14 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 
 
 [[nodiscard]] inline Expected<SIMDVectorSingleResult> TryComputeCameraTanHalfVerticalFov(const SIMDVectorSingle verticalFovRadians)noexcept{
-    constexpr f32 s_CameraFovCosEpsilon = 0.000001f;
+
 
     if(!VectorIsFinite(verticalFovRadians, VectorComponentMask::s_XYZW) || !Vector4Greater(verticalFovRadians, s_SIMDZero) || !Vector4Less(verticalFovRadians, VectorReplicate(s_PI)))
         return MakeUnexpected(Failure{});
 
     SIMDVectorSingle sinHalfFovVector;
     SIMDVectorSingle cosHalfFovVector;
-    constexpr f32 s_HalfFovWeight = 0.5f;
+
     VectorSinCos(sinHalfFovVector, cosHalfFovVector, VectorScale(verticalFovRadians, s_HalfFovWeight));
     if(!VectorIsFinite(sinHalfFovVector, VectorComponentMask::s_XYZW) || !VectorIsFinite(cosHalfFovVector, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(VectorAbs(cosHalfFovVector), VectorReplicate(s_CameraFovCosEpsilon)))
         return MakeUnexpected(Failure{});

@@ -155,8 +155,9 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     }
 
     ReflectionEmitter reflectionEmitter(m_symbols);
+    const b8 packClass = decl.isSerialize && ShouldPackSerializeClass(decl.orderedFields, m_symbols);
 
-    if(decl.isSerialize)
+    if(packClass)
         out.append("#pragma pack(push, 1)\r\n");
 
     m_typeEmitter.emitTemplateHeaderCpp(out, decl.templateParams);
@@ -193,7 +194,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
 
     out.append("};\r\n");
 
-    if(decl.isSerialize)
+    if(packClass)
         out.append("#pragma pack(pop)\r\n");
 
     out.append("\r\n");
@@ -205,8 +206,9 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
 
     const ClassDecl& decl = *inst.templateDecl;
     ReflectionEmitter reflectionEmitter(m_symbols);
+    const b8 packClass = decl.isSerialize && ShouldPackSerializeClass(inst.orderedFields, m_symbols);
 
-    if(decl.isSerialize)
+    if(packClass)
         out.append("#pragma pack(push, 1)\r\n");
 
     out.append("template<>\r\nclass ");
@@ -272,7 +274,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
     reflectionEmitter.emitInlineClassReflection(out, decl, inst.orderedFields);
 
     out.append("};\r\n");
-    if(decl.isSerialize)
+    if(packClass)
         out.append("#pragma pack(pop)\r\n");
     out.append("\r\n");
 }
@@ -373,7 +375,9 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
         else if(fieldRefMode == ParamPassingMode::None){
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
             if(baseFieldType == "Array"
+                || baseFieldType == "Span"
                 || baseFieldType == "StringView"
+                || baseFieldType == "NameHash"
                 || SymbolTable::isUnalignedVectorType(baseFieldType)
                 || m_symbols.findEnum(baseFieldType) != nullptr
                 || m_symbols.findClass(baseFieldType) != nullptr)
@@ -393,4 +397,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/global.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 
 #include <global/span.h>
 
@@ -20,12 +20,9 @@ NWB_IMPL_BEGIN
 
 
 namespace ECSRenderDetail{
-    struct SceneShadingGpuData;
-    struct SceneLightGpuData;
+    using NWB::Impl::SceneShadingGpuData;
+    using NWB::Impl::SceneLightGpuData;
 };
-
-// Hashes the immutable upload payload, including edits and light order.
-[[nodiscard]] u64 ComputeSceneLightingContentHash(const ECSRenderDetail::SceneShadingGpuData& shading, Span<const ECSRenderDetail::SceneLightGpuData> lights)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,4 +32,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

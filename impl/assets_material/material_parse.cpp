@@ -99,7 +99,7 @@ b8 ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBi
             return false;
         if(!ApplyMaterialBindTypedLayoutParameters(layout, *materialName, materialEntry.parameters, materialEntry.typedBlockBytes, materialEntry.resourceReferences))
             return false;
-        if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(materialEntry.typedLayoutBlocks, materialEntry.typedLayoutFields, materialEntry.resourceReferences)){
+        if(!ValidateMaterialResourceReferences(materialEntry.typedLayoutBlocks, materialEntry.typedLayoutFields, materialEntry.resourceReferences)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}': resource fields must be assigned engine or project asset paths in parameters"), ConvertString(AStringView(materialEntry.virtualPath)));
             return false;
         }
@@ -128,4 +128,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

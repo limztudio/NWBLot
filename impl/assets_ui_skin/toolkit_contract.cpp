@@ -4,8 +4,6 @@
 
 #include "toolkit_contract.h"
 
-#include "region_names.h"
-
 #include <core/common/log.h>
 
 
@@ -29,7 +27,7 @@ struct RequiredRegion{
     StringView text;
 };
 
-#define NWB_UI_SKIN_REQUIRED_REGION(Key, Text) { UiSkinToolkitRegions::s_##Key##RegionName, UiSkinToolkitRegions::s_##Key##RegionText },
+#define NWB_UI_SKIN_REQUIRED_REGION(Key, Text) { s_##Key##RegionName, s_##Key##RegionText },
 static constexpr RequiredRegion s_RequiredRegions[] = {
     NWB_UI_SKIN_REQUIRED_REGION(PanelNormal, "panel.normal")
     NWB_UI_SKIN_REQUIRED_REGION(WindowNormal, "window.normal")
@@ -83,7 +81,7 @@ b8 ValidateUiSkinToolkitContract(const UiSkin& skin){
             return false;
         }
     }
-    if(!skin.findRegion(UiSkinToolkitRegions::s_WindowResizeRegionName) && !skin.findRegion(UiSkinToolkitRegions::s_WhiteRegionName)){
+    if(!skin.findRegion(s_WindowResizeRegionName) && !skin.findRegion(s_WhiteRegionName)){
         NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets' failed: window resizing requires 'window.resize' or 'white'"));
         return false;
     }
@@ -98,4 +96,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

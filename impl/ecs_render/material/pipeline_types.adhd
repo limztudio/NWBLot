@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 enum<u8> MaterialPipelinePass{
     enum Opaque,
     enum CsgReceiverSurface,
@@ -49,6 +55,84 @@ b8 MaterialPipelinePassUsesRendererCsgClip(in MaterialPipelinePass pass, in b8 t
         return true;
     }
     return transparent && MaterialPipelinePassUsesRendererAvboit(pass);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Buffer identity alone does not describe which regions a retained draw generates and consumes.
+class GeneratedGeometryOutputLayout{
+    public u32 m_indexByteOffset = 0u;
+    public b8 m_indexed = false;
+
+    public b8 matches(in u32 indexByteOffset, in b8 indexed)const{
+        return this.m_indexByteOffset == indexByteOffset && this.m_indexed == indexed;
+    }
+}
+
+const usize s_MaterialInstanceVectorComponentCount = 4u;
+
+class MaterialInstanceParameterNames{
+    public Name parameterName;
+    public Name blockName;
+    public Name fieldName;
+}
+
+enum<u8> RendererResourceLookupMode{
+    enum CreateMissing = 0u,
+    enum PreparedOnly = 1u
+}
+
+class ShadowOccluderMaterialContext{
+    public InstanceGpuData instance;
+    public u32 constantByteOffset = 0u;
+}
+
+enum<u8> SampledTextureImportFailure{
+    enum GraphUnavailable = 0u,
+    enum MissingIdentity = 1u,
+    enum ImportFailed = 2u
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_MaterialTypedWordBytes = 16u;
+
+class MaterialTypedByteRange{
+    public u32 byteOffset = 0u;
+    public u32 byteCount = 0u;
+}
+
+class MaterialTypedInstanceRanges{
+    public MaterialTypedByteRange constantRange;
+    public MaterialTypedByteRange mutableRange;
+}
+
+class MaterialTypedByteRangeKey{
+    public Name materialName;
+    public u64 typedLayoutHash = 0u;
+
+    public b8 operator==(in MaterialTypedByteRangeKey rhs)const{
+        return this.materialName == rhs.materialName && this.typedLayoutHash == rhs.typedLayoutHash;
+    }
+
+    public usize hash()const{
+        usize seed = hashValue(this.materialName);
+        seed = hashCombineValue(seed, this.typedLayoutHash);
+        return seed;
+    }
+}
+
+class MaterialTypedByteAppendRange{
+    public MaterialTypedByteRange byteRange;
+    public usize alignedByteEnd = 0u;
+}
+
+b8 MaterialTypedByteRangeEmptyOffsetValid(in MaterialTypedByteRange range){
+    return range.byteCount != 0u || range.byteOffset == 0u;
 }
 
 

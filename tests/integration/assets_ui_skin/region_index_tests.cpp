@@ -3,7 +3,6 @@
 
 
 #include <impl/assets_ui_skin/asset.h>
-#include <impl/assets_ui_skin/binary_payload.h>
 #include <impl/assets_texture/asset.h>
 
 #include <tests/common/capturing_logger.h>
@@ -194,8 +193,8 @@ TEST(AssetsUiSkinRegionIndex, FailedBinaryLoadPreservesLookupAndAuthoredOrder){
     ASSERT_TRUE(loaded.loadBinary(binary));
     ASSERT_EQ(loaded.findRegion(Name("first")), &loaded.regions()[1u]);
     const UiSkinRegion* retained = loaded.findRegion(Name(s_LastRegionName));
-    const usize firstHash = sizeof(UiSkinBinaryPayload::HeaderBinary);
-    const usize secondHash = firstHash + sizeof(UiSkinBinaryPayload::RegionBinary);
+    const usize firstHash = sizeof(UiSkinHeaderBinary);
+    const usize secondHash = firstHash + sizeof(UiSkinRegionBinary);
     NWB_MEMCPY(binary.data() + secondHash, sizeof(NameHash), binary.data() + firstHash, sizeof(NameHash));
     EXPECT_FALSE(loaded.loadBinary(binary));
     EXPECT_EQ(loaded.findRegion(Name("last")), retained);
@@ -233,4 +232,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

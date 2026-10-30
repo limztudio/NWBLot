@@ -409,6 +409,7 @@ void CollectExternalForwardDeclClasses(
 void LayoutOptimizer::sortAndPackFields(
     MVector<FieldDecl*>& orderedFields,
     const b8 isSerialize,
+    const b8 packSerialize,
     const b8 hasInterfaces,
     usize& outTotalSize,
     usize& outTotalAlign
@@ -432,9 +433,9 @@ void LayoutOptimizer::sortAndPackFields(
     }
 
     usize currentOffset = hasInterfaces ? 8u : 0u;
-    usize maxAlign = isSerialize ? 1u : (hasInterfaces ? 8u : 1u);
+    usize maxAlign = packSerialize ? 1u : (hasInterfaces ? 8u : 1u);
     for(FieldDecl* field : orderedFields){
-        const usize align = (isSerialize && !field->isTransient) ? 1u : field->resolvedAlign;
+        const usize align = (packSerialize && !field->isTransient) ? 1u : field->resolvedAlign;
         if(align > maxAlign)
             maxAlign = align;
         currentOffset = __hidden_adhd_layout_optimizer::AlignUp(currentOffset, align);
@@ -692,6 +693,7 @@ void LayoutOptimizer::finalizeClassFieldLayouts(
     usize& outTotalSize,
     usize& outTotalAlign
 )const noexcept{
+    const b8 packSerialize = isSerialize && ShouldPackSerializeClass(orderedFields, m_symbols);
     for(FieldDecl* field : orderedFields){
         if(!field || !field->type)
             continue;
@@ -699,9 +701,9 @@ void LayoutOptimizer::finalizeClassFieldLayouts(
         usize fieldAlign = 8u;
         resolveTypeSizeAndAlign(*field->type, fieldSize, fieldAlign);
         field->resolvedSize = fieldSize;
-        field->resolvedAlign = (isSerialize && !field->isTransient) ? 1u : fieldAlign;
+        field->resolvedAlign = (packSerialize && !field->isTransient) ? 1u : fieldAlign;
     }
-    sortAndPackFields(orderedFields, isSerialize, hasVtablePointer, outTotalSize, outTotalAlign);
+    sortAndPackFields(orderedFields, isSerialize, packSerialize, hasVtablePointer, outTotalSize, outTotalAlign);
 }
 
 
@@ -712,4 +714,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

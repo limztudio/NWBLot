@@ -22,16 +22,6 @@ namespace __hidden_lighting{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Length-squared epsilon for degenerate normalization inputs.
-inline constexpr f32 s_NormalizeLengthSquaredEpsilon = 0.0001f;
-// Cosine clamping bounds for valid light cone angles.
-inline constexpr f32 s_ConeCosineMin = -1.0f;
-inline constexpr f32 s_ConeCosineMax = 1.0f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static SIMDVectorSingle BuildDirectionalLightDirectionVector(const SIMDVectorSingle forward)noexcept{
     return Vector3NormalizeOr(VectorNegate(forward), VectorSet(0.0f, 0.0f, -1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
 }
@@ -47,10 +37,6 @@ static b8 IsValidLightRotation(const SIMDVectorSingle rotation)noexcept{
 
 static b8 IsValidLightColorIntensity(const SIMDVectorSingle colorIntensity)noexcept{
     return VectorIsFinite(colorIntensity, VectorComponentMask::s_XYZW) && Vector4Greater(VectorSplatW(colorIntensity), VectorZero());
-}
-
-static b8 IsValidLightCone(const f32 innerConeCos, const f32 outerConeCos)noexcept{
-    return IsFinite(innerConeCos) && IsFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
 }
 
 
@@ -155,7 +141,7 @@ namespace __hidden_lighting{
             return MakeUnexpected(Failure{});
         if(!IsFinite(range) || range <= 0.0f)
             return MakeUnexpected(Failure{});
-        if(!__hidden_lighting::IsValidLightCone(innerConeCos, outerConeCos))
+        if(!IsValidLightCone(innerConeCos, outerConeCos))
             return MakeUnexpected(Failure{});
 
         light.v[0] = VectorSetW(position, innerConeCos);
@@ -229,4 +215,3 @@ NWB_IMPL_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

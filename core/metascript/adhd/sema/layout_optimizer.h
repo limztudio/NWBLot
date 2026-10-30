@@ -65,6 +65,7 @@ private:
     static void sortAndPackFields(
         MVector<FieldDecl*>& orderedFields,
         b8 isSerialize,
+        b8 packSerialize,
         b8 hasVtablePointer,
         usize& outTotalSize,
         usize& outTotalAlign
@@ -116,4 +117,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

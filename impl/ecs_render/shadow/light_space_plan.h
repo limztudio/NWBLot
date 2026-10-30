@@ -25,50 +25,20 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct LightSpaceViewGpu{
-    Float4 worldToClipRows[4] = {};
-    Float4 originOrDirection = {};
-    Float4 depthRange = {};
-    u32 map[4] = {};
-    u32 light[4] = {};
-};
 static_assert(alignof(LightSpaceViewGpu) >= 16u);
 static_assert(sizeof(LightSpaceViewGpu) == NWB_LIGHT_SPACE_VIEW_BYTES);
-static constexpr usize s_LightSpaceViewGpuOriginOrDirectionOffset = 64u;
-static constexpr usize s_LightSpaceViewGpuDepthRangeOffset = 80u;
-static constexpr usize s_LightSpaceViewGpuMapOffset = 96u;
-static constexpr usize s_LightSpaceViewGpuLightOffset = 112u;
 static_assert(offsetof(LightSpaceViewGpu, originOrDirection) == s_LightSpaceViewGpuOriginOrDirectionOffset);
 static_assert(offsetof(LightSpaceViewGpu, depthRange) == s_LightSpaceViewGpuDepthRangeOffset);
 static_assert(offsetof(LightSpaceViewGpu, map) == s_LightSpaceViewGpuMapOffset);
 static_assert(offsetof(LightSpaceViewGpu, light) == s_LightSpaceViewGpuLightOffset);
 
-struct LightSpaceLightRequest{
-    u32 lightIndex = 0u;
-    u32 shadowSlot = 0u;
-    Scene::LightType::Enum type = Scene::LightType::Directional;
-    b8 eligible = true;
-};
-
-// A point light renders one view per cube face.
-static constexpr u32 s_PointLightViewCount = 6u;
-
-struct LightSpacePlan{
-    Array<LightSpaceViewGpu, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> views = {};
-    u32 lightCount = 0u;
-    u32 viewCount = 0u;
-    u32 textureResolution = 0u;
-    u32 totalPixels = 0u;
-    u64 eventByteSize = 0u;
-    u64 countByteSize = 0u;
-    u64 depthByteSize = 0u;
-    u64 viewByteSize = 0u;
-    u64 drawArgumentByteSize = 0u;
-    u64 totalByteSize = 0u;
-};
-
 // Invalid input is rejected. Valid but ineligible or over-budget lights retain software tracing.
-[[nodiscard]] Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& settings, Span<const LightSpaceLightRequest> requests, u64 maxStorageBufferRange, u32 drawCount, b8 csgIntervalDepth = false)noexcept;
+[[nodiscard]] inline Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& settings, const Span<const LightSpaceLightRequest> requests, const u64 maxStorageBufferRange, const u32 drawCount, const b8 csgIntervalDepth = false)noexcept{
+    LightSpacePlan plan;
+    if(!TryBuildLightSpacePlan(settings, requests, maxStorageBufferRange, drawCount, csgIntervalDepth, plan))
+        return MakeUnexpected(Failure{});
+    return plan;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,4 +48,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

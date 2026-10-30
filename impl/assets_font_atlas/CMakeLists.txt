@@ -11,7 +11,6 @@ set(_nwb_font_atlas_runtime_sources
     "${CMAKE_CURRENT_LIST_DIR}/binary.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/validation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/source_*.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/positioning_validation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"
     "${CMAKE_CURRENT_LIST_DIR}/*.hxx"

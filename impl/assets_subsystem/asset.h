@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <impl/assets_subsystem/types.adhd.h>
+
 #include <core/assets/auto_registration.h>
 #include <core/assets/module.h>
 #include <core/assets/ref.h>
@@ -16,6 +18,17 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr TStringView s_SubsystemAssetKindLabel = NWB_TEXT("subsystem");
+inline constexpr TStringView s_SubsystemLoadBinaryContext = NWB_TEXT("ISubsystem::loadBinary");
+inline constexpr TStringView s_SubsystemSerializeContext = NWB_TEXT("SubsystemAssetCodec::serialize");
+inline constexpr TStringView s_SubsystemDepsPayloadLabel = NWB_TEXT("subsystems");
+inline constexpr TStringView s_SubsystemFieldCountsPayloadLabel = NWB_TEXT("field_counts");
+inline constexpr TStringView s_SubsystemAssetsPayloadLabel = NWB_TEXT("assets");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -331,4 +344,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

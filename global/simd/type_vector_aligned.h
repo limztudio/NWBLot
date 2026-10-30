@@ -26,6 +26,10 @@ struct Half2U{
             Half x;
             Half y;
         };
+        struct{
+            Half r;
+            Half g;
+        };
         Half raw[2];
         u32 packed;
     };
@@ -55,6 +59,12 @@ struct Half4U{
             Half y;
             Half z;
             Half w;
+        };
+        struct{
+            Half r;
+            Half g;
+            Half b;
+            Half a;
         };
         Half raw[4];
         Half2U pair[2];
@@ -244,6 +254,16 @@ struct alignas(16) Int4{
         };
         i32 raw[4];
     };
+
+    constexpr Int4()noexcept = default;
+    constexpr Int4(i32 _x, i32 _y, i32 _z, i32 _w)noexcept
+        : x(_x), y(_y), z(_z), w(_w)
+    {
+    }
+    explicit constexpr Int4(const i32 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
+    {
+    }
 };
 
 struct alignas(32) Int64x4{
@@ -262,6 +282,16 @@ struct alignas(32) Int64x4{
         };
         i64 raw[4];
     };
+
+    constexpr Int64x4()noexcept = default;
+    constexpr Int64x4(i64 _x, i64 _y, i64 _z, i64 _w)noexcept
+        : x(_x), y(_y), z(_z), w(_w)
+    {
+    }
+    explicit constexpr Int64x4(const i64 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
+    {
+    }
 };
 
 struct alignas(16) UInt4{
@@ -280,6 +310,16 @@ struct alignas(16) UInt4{
         };
         u32 raw[4];
     };
+
+    constexpr UInt4()noexcept = default;
+    constexpr UInt4(u32 _x, u32 _y, u32 _z, u32 _w)noexcept
+        : x(_x), y(_y), z(_z), w(_w)
+    {
+    }
+    explicit constexpr UInt4(const u32 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
+    {
+    }
 };
 
 struct alignas(32) UInt64x4{
@@ -298,6 +338,16 @@ struct alignas(32) UInt64x4{
         };
         u64 raw[4];
     };
+
+    constexpr UInt64x4()noexcept = default;
+    constexpr UInt64x4(u64 _x, u64 _y, u64 _z, u64 _w)noexcept
+        : x(_x), y(_y), z(_z), w(_w)
+    {
+    }
+    explicit constexpr UInt64x4(const u64 (&values)[4])noexcept
+        : x(values[0]), y(values[1]), z(values[2]), w(values[3])
+    {
+    }
 };
 
 

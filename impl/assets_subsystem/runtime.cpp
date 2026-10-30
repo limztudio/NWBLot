@@ -3,8 +3,6 @@
 
 
 #include "asset.h"
-#include "arena_names.h"
-#include "binary_payload.h"
 
 #include <core/alloc/scratch.h>
 #include <core/assets/binary_payload_io.h>
@@ -186,19 +184,19 @@ b8 ValidatePayload(const ISubsystem& subsystem){
 }
 
 b8 LoadBinary(ISubsystem& subsystem, const Span<const u8> binary){
-    Core::Alloc::ScratchArena scratchArena(AssetsSubsystemArenaScope::s_LoadBinaryArena);
+    Core::Alloc::ScratchArena scratchArena(s_SubsystemLoadBinaryArena);
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemBinaryPayload::SubsystemHeaderBinary>(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemHeaderBinary>(
         binary,
-        SubsystemBinaryPayload::s_SubsystemMagic,
-        SubsystemBinaryPayload::s_SubsystemLoadBinaryContext,
-        SubsystemBinaryPayload::s_SubsystemAssetKindLabel,
+        s_SubsystemMagic,
+        s_SubsystemLoadBinaryContext,
+        s_SubsystemAssetKindLabel,
         cursor
     );
     if(!headerResult)
         return false;
-    const SubsystemBinaryPayload::SubsystemHeaderBinary& header = *headerResult;
-    if(header.version != SubsystemBinaryPayload::s_SubsystemVersion){
+    const SubsystemHeaderBinary& header = *headerResult;
+    if(header.version != s_SubsystemVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: unsupported version {}"), header.version);
         return false;
     }
@@ -223,13 +221,13 @@ b8 LoadBinary(ISubsystem& subsystem, const Span<const u8> binary){
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
-    if(!Core::Assets::ReadVectorPayload(binary, header.subsystemCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_SubsystemsPayloadLabel, cursor, subsystemHashes))
+    if(!Core::Assets::ReadVectorPayload(binary, header.subsystemCount, s_SubsystemLoadBinaryContext, s_SubsystemDepsPayloadLabel, cursor, subsystemHashes))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.fieldCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_FieldCountsPayloadLabel, cursor, fieldCounts))
+    if(!Core::Assets::ReadVectorPayload(binary, header.fieldCount, s_SubsystemLoadBinaryContext, s_SubsystemFieldCountsPayloadLabel, cursor, fieldCounts))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_AssetsPayloadLabel, cursor, assetHashes))
+    if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, s_SubsystemLoadBinaryContext, s_SubsystemAssetsPayloadLabel, cursor, assetHashes))
         return false;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_SubsystemLoadBinaryContext))
         return false;
 
     subsystem.subsystems.clear();
@@ -296,11 +294,11 @@ b8 LoadBinary(ISubsystem& subsystem, const Span<const u8> binary){
 
 Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const{
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemBinaryPayload::SubsystemHeaderBinary>(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemHeaderBinary>(
         binary,
-        SubsystemBinaryPayload::s_SubsystemMagic,
-        SubsystemBinaryPayload::s_SubsystemLoadBinaryContext,
-        SubsystemBinaryPayload::s_SubsystemAssetKindLabel,
+        s_SubsystemMagic,
+        s_SubsystemLoadBinaryContext,
+        s_SubsystemAssetKindLabel,
         cursor
     );
     if(!headerResult)
@@ -328,4 +326,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

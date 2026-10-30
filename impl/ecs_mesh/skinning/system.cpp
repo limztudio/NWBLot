@@ -3,7 +3,7 @@
 
 
 #include "system.h"
-#include "arena_names.h"
+#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include "runtime_mesh_liveness.h"
 #include "timing_names.h"
 
@@ -97,7 +97,7 @@ void MeshSkinningSystem::prepare(Core::ECS::World& world){
     }
     if(!m_skinningComputePipeline || !m_boundsComputePipeline || !m_localBoundsComputePipeline || !m_repackComputePipeline)
         return;
-    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
+    Core::Alloc::ScratchArena scratchArena(s_PrepareRuntimeArena);
     m_runtimeMeshCache.prepareResources(m_world, scratchArena);
     pruneRuntimeResources();
     b8 ready = true;
@@ -158,7 +158,7 @@ b8 MeshSkinningSystem::validateResources(const u32 width, const u32 height, cons
 
 b8 MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
-    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
+    Core::Alloc::ScratchArena scratchArena(s_PrepareRuntimeArena);
     // Frames may lack native submissions; filter retired buffers so handles pin nothing.
     if(m_acceptedSkinningState.valid() && !replaceAcceptedSkinningState(*m_acceptedSkinningState.source(), scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prune the accepted skinning state handoff"));

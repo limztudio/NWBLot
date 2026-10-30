@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_csg/shape_id.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const f32 s_DefaultDistanceEpsilon = 0.00001f;
 const f32x4 s_DefaultShapeParameter(0.0f, 1.0f, 0.0f, 0.0f);
 const f32 s_MinEpsilon = 0.0000001f;
@@ -123,6 +129,42 @@ CsgDeformFailure MakeCsgDeformFailure(in CsgDeformViabilityReason reason, in Csg
     out.reason = reason;
     out.stats = stats;
     return out;
+}
+
+b8 CsgDeformFiniteFloat(in f32 value){
+    return IsFinite(value);
+}
+
+b8 CsgDeformValidOptions(in CsgDeformBuildOptions options){
+    return options.distanceEpsilon > s_OptionEpsilonLow && options.distanceEpsilon < s_OptionEpsilonHigh;
+}
+
+b8 CsgDeformValidTopology(in Span<CsgDeformTriangle> triangles, in usize vertexCount){
+    for(usize triangleIndex = 0u; triangleIndex < triangles.size(); ++triangleIndex){
+        const CsgDeformTriangle triangle = triangles[triangleIndex];
+        for(usize corner = 0u; corner < s_TriangleCornerCount; ++corner){
+            if(triangle.indices[corner] >= vertexCount){
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+CsgDeformShapeKind ClassifyCsgDeformShape(in Name shapeType){
+    if(shapeType == s_CsgPlaneShapeName){
+        return CsgDeformShapeKind::Enum::Plane;
+    }
+    if(shapeType == s_CsgBoxShapeName){
+        return CsgDeformShapeKind::Enum::Box;
+    }
+    if(shapeType == s_CsgSphereShapeName){
+        return CsgDeformShapeKind::Enum::Sphere;
+    }
+    if(shapeType == s_CsgCapsuleShapeName){
+        return CsgDeformShapeKind::Enum::Capsule;
+    }
+    return CsgDeformShapeKind::Enum::Invalid;
 }
 
 

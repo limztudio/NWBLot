@@ -103,12 +103,12 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(cons
         AppendU32LittleEndian(binary, group.height);
         AppendU32LittleEndian(binary, group.channelCount);
         AppendU32LittleEndian(binary, static_cast<u32>(group.pixels.size()));
-        const Sha256Digest imageHash = ComputeSha256(group.pixels);
+        const Sha256Digest imageHash = ComputeSha256({ group.pixels.data(), group.pixels.size() });
         binary.insert(binary.end(), imageHash.bytes, imageHash.bytes + sizeof(imageHash.bytes));
     }
     binary.insert(binary.end(), sfnt.data(), sfnt.data() + sfnt.size());
     for(usize index = 0u; index < groups.size(); ++index){
-        const BinaryByteView pixels = groups[index].pixels;
+        const Span<const u8> pixels = groups[index].pixels;
         binary.insert(binary.end(), pixels.data(), pixels.data() + pixels.size());
     }
     return binary;

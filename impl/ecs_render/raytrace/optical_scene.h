@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/assets/graphics/raytrace/optical_scene_constants.h>
 
 #include <core/alloc/scratch.h>
@@ -29,22 +30,10 @@ class RendererComponent;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RayTracingOpticalSceneHeaderGpu{
-    Float3U boundsMin = {};
-    u32 transparentCount = 0u;
-    Float3U boundsMax = {};
-    u32 flags = NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID;
-};
 static_assert(sizeof(RayTracingOpticalSceneHeaderGpu) == NWB_RT_OPTICAL_SCENE_HEADER_BYTES);
 static_assert(offsetof(RayTracingOpticalSceneHeaderGpu, transparentCount) == NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET);
 static_assert(offsetof(RayTracingOpticalSceneHeaderGpu, flags) == NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
 
-struct RayTracingOpticalInstanceGpu{
-    u32 entityId = 0u;
-    i32 mediumPriority = 0;
-    u32 boundaryMode = NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED;
-    u32 flags = 0u;
-};
 static_assert(sizeof(RayTracingOpticalInstanceGpu) == NWB_RT_OPTICAL_INSTANCE_BYTES);
 static_assert(offsetof(RayTracingOpticalInstanceGpu, mediumPriority) == NWB_RT_OPTICAL_INSTANCE_PRIORITY_OFFSET);
 static_assert(offsetof(RayTracingOpticalInstanceGpu, boundaryMode) == NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET);
@@ -104,4 +93,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

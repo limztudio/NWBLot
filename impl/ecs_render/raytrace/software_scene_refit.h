@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/assets/graphics/bvh/scene_refit_constants.h>
 
 #include <core/alloc/global.h>
@@ -47,11 +48,6 @@ NWB_IMPL_BEGIN
 
 class RendererShaderSystem;
 
-struct SoftwareSceneRefitInstanceGpu{
-    Float34 objectToWorld = {};
-    u32 meshNodeSlot = Limit<u32>::s_Max;
-    u32 reserved[3] = {};
-};
 static_assert(alignof(SoftwareSceneRefitInstanceGpu) >= 16u);
 static_assert(sizeof(SoftwareSceneRefitInstanceGpu) == NWB_SCENE_BVH_REFIT_INSTANCE_BYTES);
 static_assert(offsetof(SoftwareSceneRefitInstanceGpu, meshNodeSlot) == NWB_SCENE_BVH_REFIT_MESH_SLOT_OFFSET);
@@ -112,4 +108,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

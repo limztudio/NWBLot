@@ -9,6 +9,9 @@ const f32 s_CameraNearPlane = 0.001f;
 const f32 s_CameraFarPlane = 10000.0f;
 const f32 s_CameraAutoAspectRatio = 0.0f;
 const f32 s_CameraFallbackAspectRatio = 1.0f;
+const f32 s_CameraFovCosEpsilon = 0.000001f;
+const f32 s_HalfFovWeight = 0.5f;
+const f32 s_CameraRotationUnitLengthSquaredTolerance = 0.001f;
 
 const f32 s_LightWhiteColorComponent = 1.0f;
 const f32 s_LightIntensity = 1.0f;
@@ -18,6 +21,21 @@ const f32 s_LightOuterConeCos = 0.90f;
 const f32 s_LightDirectionalAngularRadius = 0.00465f;
 const f32 s_LightPunctualSourceRadius = 0.1f;
 const b8 s_LightEnableCaustics = true;
+const f32 s_NormalizeLengthSquaredEpsilon = 0.0001f;
+const f32 s_ConeCosineMin = -1.0f;
+const f32 s_ConeCosineMax = 1.0f;
+
+const f32 s_DefaultSceneViewYaw = 0.82f;
+const f32 s_DefaultSceneViewPitch = 0.94f;
+const f32 s_DefaultSceneViewDepthOffset = 2.2f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidLightCone(in f32 innerConeCos, in f32 outerConeCos){
+    return IsFinite(innerConeCos) && IsFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

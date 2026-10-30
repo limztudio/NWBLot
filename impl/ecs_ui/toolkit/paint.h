@@ -23,12 +23,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct Vertex{
-    Point position;
-    Point texCoord;
-    Color color;
-};
-
 // Typed references identify assets; this copy captures atlas metadata, not loaded/GPU resource ownership.
 struct SkinBinding{
     Core::Assets::AssetRef<UiSkin> skin;
@@ -38,10 +32,6 @@ struct SkinBinding{
     u32 atlasHeight = 0u;
     f32 referenceDensity = 1.0f;
 };
-
-inline constexpr usize s_PaintMaxImages = s_PaintMaxGlyphPages;
-inline constexpr usize s_PaintMaxOverlayDepth = 16u;
-inline constexpr usize s_PaintDefaultClipDepth = 8u;
 
 template<typename T>
 using PaintVector = Vector<T, Core::Alloc::GlobalArena>;

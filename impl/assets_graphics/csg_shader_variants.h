@@ -11,8 +11,7 @@
 #pragma once
 
 
-#include "shader_stage_key.h"
-
+#include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_shader/cook.h>
 
@@ -32,7 +31,7 @@ namespace AssetsGraphicsCsgShaderVariants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ShaderStageKeySet = HashSet<AssetsGraphicsCookDetail::ShaderStageKey, Core::Alloc::ScratchArena, AssetsGraphicsCookDetail::ShaderStageKeyHasher, EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>>;
+using ShaderStageKeySet = HashSet<ShaderStageKey, Core::Alloc::ScratchArena, Hasher<ShaderStageKey>, EqualTo<ShaderStageKey>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,4 +67,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

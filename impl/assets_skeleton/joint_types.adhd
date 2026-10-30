@@ -10,10 +10,35 @@ const u32 s_SkeletonJointMatrixRowCount = 3u;
 const u32 s_SkeletonJointMatrixColumnCount = 4u;
 const u32 s_SkeletonBinaryMagic = 0x534B4C31u; // SKL1
 
+const Name s_AssetsSkeletonLoadBinaryArena = "impl/assets_skeleton/load_binary";
+const Name s_AssetsSkeletonSerializeArena = "impl/assets_skeleton/serialize";
+
 [reflect]
 class SkeletonJoint{
     public SkeletonJointMatrix localBindPose(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     public u32 parentIndex = s_SkeletonInvalidJointIndex;
+}
+
+class SkeletonCookJoint{
+    public Name name = s_NameNone;
+    public Name parent = s_NameNone;
+    public SkeletonJointMatrix localBindPose(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+}
+
+[serialize]
+class SkeletonHeaderBinary{
+    public u32 magic = s_SkeletonBinaryMagic;
+    public u32 padding0 = 0u;
+    public u64 jointCount = 0u;
+}
+
+[serialize]
+class SkeletonJointBinary{
+    public NameHash nameHash;
+    public u32 parentIndex = 0u;
+    public u32 padding0 = 0u;
+    public Array<u32, 2> padding1;
+    public SkeletonJointMatrix localBindPose(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 }
 
 

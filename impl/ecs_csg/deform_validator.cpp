@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 
 
 b8 CsgDeformValidator::FiniteFloat(const f32 value)noexcept{
-    return value == value && value != Limit<f32>::s_Infinity && value != -Limit<f32>::s_Infinity;
+    return CsgDeformFiniteFloat(value);
 }
 
 b8 CsgDeformValidator::FiniteVertexVec(const SIMDVectorSingle position, const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle uv0, const SIMDVectorSingle color)noexcept{
@@ -33,18 +33,11 @@ SIMDVectorSingle CsgDeformValidator::ShapeEpsilon(const SIMDVectorSingle distanc
 }
 
 b8 CsgDeformValidator::ValidOptions(const CsgDeformBuildOptions& options)noexcept{
-    return options.distanceEpsilon > s_OptionEpsilonLow && options.distanceEpsilon < s_OptionEpsilonHigh;
+    return CsgDeformValidOptions(options);
 }
 
 b8 CsgDeformValidator::ValidTopology(NotNull<const CsgDeformTriangle*> triangles, const usize triangleCount, const usize vertexCount)noexcept{
-    for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
-        const CsgDeformTriangle& triangle = triangles.get()[triangleIndex];
-        for(usize corner = 0u; corner < s_TriangleCornerCount; ++corner){
-            if(triangle.indices[corner] >= vertexCount)
-                return false;
-        }
-    }
-    return true;
+    return CsgDeformValidTopology(Span<const CsgDeformTriangle>(triangles.get(), triangleCount), vertexCount);
 }
 
 Expected<void, CsgDeformViabilityReason::Enum> CsgDeformValidator::FiniteInput(NotNull<const CsgDeformVertex*> vertices, const usize vertexCount)noexcept{
@@ -65,4 +58,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

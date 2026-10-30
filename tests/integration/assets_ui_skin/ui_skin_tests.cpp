@@ -3,7 +3,6 @@
 
 
 #include <impl/assets_ui_skin/asset.h>
-#include <impl/assets_ui_skin/binary_payload.h>
 #include <impl/assets_ui_skin/cook.h>
 #include <impl/assets_texture/cook.h>
 
@@ -84,7 +83,7 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::kCount, "UI skin 
     return ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena);
 }
 
-[[nodiscard]] static Core::Assets::AssetBytes MakeBinary(SkinTestArena& testArena, const UiSkinBinaryPayload::HeaderBinary& header, const UiSkinBinaryPayload::RegionBinary& region){
+[[nodiscard]] static Core::Assets::AssetBytes MakeBinary(SkinTestArena& testArena, const UiSkinHeaderBinary& header, const UiSkinRegionBinary& region){
     Core::Assets::AssetBytes binary(testArena.arena);
     binary.reserve(sizeof(header) + sizeof(region) + UiSkinColorRole::kCount * sizeof(UiSkinColorBinary) + sizeof(UiSkinTypographyBinary));
     AppendPOD(binary, header);
@@ -95,8 +94,8 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::kCount, "UI skin 
     return binary;
 }
 
-[[nodiscard]] static UiSkinBinaryPayload::HeaderBinary ValidHeader(){
-    UiSkinBinaryPayload::HeaderBinary header;
+[[nodiscard]] static UiSkinHeaderBinary ValidHeader(){
+    UiSkinHeaderBinary header;
     header.textureNameHash = Name(s_TexturePath).hash();
     header.atlasWidth = 64u;
     header.atlasHeight = 32u;
@@ -105,8 +104,8 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::kCount, "UI skin 
     return header;
 }
 
-[[nodiscard]] static UiSkinBinaryPayload::RegionBinary ValidRegion(){
-    UiSkinBinaryPayload::RegionBinary region;
+[[nodiscard]] static UiSkinRegionBinary ValidRegion(){
+    UiSkinRegionBinary region;
     region.nameHash = Name("panel.normal").hash();
     region.x = 2u;
     region.y = 4u;
@@ -151,9 +150,9 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::kCount, "UI skin 
 }
 
 [[nodiscard]] static Core::Assets::AssetBytes MakeTypographyBinary(SkinTestArena& testArena, const UiSkinColorBinary& color, const f32 defaultFontSize){
-    UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
+    UiSkinHeaderBinary header = ValidHeader();
     Core::Assets::AssetBytes binary = MakeBinary(testArena, header, ValidRegion());
-    binary.resize(sizeof(header) + sizeof(UiSkinBinaryPayload::RegionBinary));
+    binary.resize(sizeof(header) + sizeof(UiSkinRegionBinary));
     for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index)
         AppendPOD(binary, color);
     UiSkinTypographyBinary typography;
@@ -251,11 +250,11 @@ TEST(AssetsUiSkin, RejectsObsoleteBinaryVersionsWithoutReplacingCurrentSkin){
     UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeBinary(testArena, ValidHeader(), ValidRegion())));
     for(const u32 version : { 1u, 2u }){
-        UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
+        UiSkinHeaderBinary header = ValidHeader();
         header.version = version;
         Core::Assets::AssetBytes binary = MakeBinary(testArena, header, ValidRegion());
         EXPECT_FALSE(skin.loadBinary(binary)) << version;
-        binary.resize(sizeof(header) + sizeof(UiSkinBinaryPayload::RegionBinary) + (version == 2u ? UiSkinColorRole::kCount * sizeof(UiSkinColorBinary) : 0u));
+        binary.resize(sizeof(header) + sizeof(UiSkinRegionBinary) + (version == 2u ? UiSkinColorRole::kCount * sizeof(UiSkinColorBinary) : 0u));
         EXPECT_FALSE(skin.loadBinary(binary)) << version;
         EXPECT_EQ(skin.regions().size(), 1u);
         EXPECT_FLOAT_EQ(skin.typography().defaultFontSize, 16.0f);
@@ -267,13 +266,13 @@ TEST(AssetsUiSkin, LoadRejectsMalformedHeaderAndCountWithoutReplacingSkin){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    const UiSkinBinaryPayload::HeaderBinary validHeader = ValidHeader();
-    const UiSkinBinaryPayload::RegionBinary validRegion = ValidRegion();
+    const UiSkinHeaderBinary validHeader = ValidHeader();
+    const UiSkinRegionBinary validRegion = ValidRegion();
     UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeBinary(testArena, validHeader, validRegion)));
 
     for(u32 variant = 0u; variant < 10u; ++variant){
-        UiSkinBinaryPayload::HeaderBinary header = validHeader;
+        UiSkinHeaderBinary header = validHeader;
         switch(variant){
         case 0u: header.magic = 0u; break;
         case 1u: header.version = 4u; break;
@@ -295,7 +294,7 @@ TEST(AssetsUiSkin, LoadRejectsMalformedHeaderAndCountWithoutReplacingSkin){
     Core::Assets::AssetBytes binary = MakeBinary(testArena, validHeader, validRegion);
     binary.pop_back();
     EXPECT_FALSE(skin.loadBinary(binary));
-    binary.resize(sizeof(UiSkinBinaryPayload::HeaderBinary) - 1u);
+    binary.resize(sizeof(UiSkinHeaderBinary) - 1u);
     EXPECT_FALSE(skin.loadBinary(binary));
     binary = MakeBinary(testArena, validHeader, validRegion);
     binary.push_back(0u);
@@ -307,9 +306,9 @@ TEST(AssetsUiSkin, LoadRejectsInvalidRegionBoundsMetricsAndFlags){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    const UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
+    const UiSkinHeaderBinary header = ValidHeader();
     for(u32 variant = 0u; variant < 14u; ++variant){
-        UiSkinBinaryPayload::RegionBinary region = ValidRegion();
+        UiSkinRegionBinary region = ValidRegion();
         switch(variant){
         case 0u: region.nameHash = {}; break;
         case 1u: region.nameHash = Name("").hash(); break;
@@ -339,7 +338,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeBinary(testArena, ValidHeader(), ValidRegion())));
 
-    UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
+    UiSkinHeaderBinary header = ValidHeader();
     header.regionCount = s_UiSkinMaxRegionCount + 1u;
     Core::Assets::AssetBytes binary(testArena.arena);
     binary.reserve(sizeof(header));
@@ -503,4 +502,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

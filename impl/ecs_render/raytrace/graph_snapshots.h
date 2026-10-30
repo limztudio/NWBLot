@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/shadow/light_space_shadow.h>
 #include <impl/ecs_render/refraction/statistics_readback.h>
 
@@ -36,12 +37,6 @@ struct PreparedSceneBvhUploads{
 };
 
 
-struct GraphOwnedAdaptiveShadowPlan{
-    b8 enabled = false;
-    b8 compact = false;
-};
-
-
 // Shadow Visibility freezes its route policy before the coordinator declares topology. Handles stay in snapshots below.
 struct RayTracingShadowVisibilityGraphPlanSnapshot{
     LightSpaceShadowSnapshot lightSpace;
@@ -56,15 +51,6 @@ struct RayTracingShadowVisibilityGraphPlanSnapshot{
     b8 opaqueTemporalMergeReady = false;
     b8 transparentTemporalMergeReady = false;
     b8 historyFrontIsA = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShadowPreparationOutcome{
-    b8 resourcesValid = false;
-    b8 ready = false;
 };
 
 
@@ -178,4 +164,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

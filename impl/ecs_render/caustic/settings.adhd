@@ -39,5 +39,60 @@ CausticPhotonBudget MakeCausticPhotonBudget(in CausticQualitySettings settings, 
     return budget;
 }
 
+// Shared CPU mirror of SW/HW caustic photon push constants.
+[serialize]
+class CausticPhotonPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 instanceCount = 0u;
+    public u32 photonCount = 0u;
+    public u32 emissionTargetCount = 0u;
+    public u32 gridSide = 0u;
+    public u32 frameIndex = 0u;
+    public u32 depthSlot = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 emissionTargetSlot = 0u;
+    public u32 viewSlot = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public u32 accumulatorStorageSlot = 0u;
+    public u32 temporalPhaseCount = s_CausticTemporalDisabledPhaseCount;
+}
+
+CausticPhotonPushConstants ResolveCausticPhotonPushConstants(
+    in u32 width,
+    in u32 height,
+    in u32 instanceCount,
+    in CausticPhotonBudget photonBudget,
+    in u32 emissionTargetCount,
+    in u32 frameIndex,
+    in u32 depthSlot,
+    in u32 worldPositionSlot,
+    in u32 emissionTargetSlot,
+    in u32 viewSlot,
+    in u32 deferredResourcesHeapSlot,
+    in u32 materialContextSlotsHeapSlot,
+    in u32 accumulatorStorageSlot,
+    in u32 temporalPhaseCount
+){
+    CausticPhotonPushConstants pushConstants;
+    pushConstants.width = width;
+    pushConstants.height = height;
+    pushConstants.instanceCount = instanceCount;
+    pushConstants.photonCount = photonBudget.photonsPerFrame;
+    pushConstants.emissionTargetCount = emissionTargetCount;
+    pushConstants.gridSide = photonBudget.gridSide;
+    pushConstants.frameIndex = frameIndex;
+    pushConstants.depthSlot = depthSlot;
+    pushConstants.worldPositionSlot = worldPositionSlot;
+    pushConstants.emissionTargetSlot = emissionTargetSlot;
+    pushConstants.viewSlot = viewSlot;
+    pushConstants.deferredResourcesHeapSlot = deferredResourcesHeapSlot;
+    pushConstants.materialContextSlotsHeapSlot = materialContextSlotsHeapSlot;
+    pushConstants.accumulatorStorageSlot = accumulatorStorageSlot;
+    pushConstants.temporalPhaseCount = temporalPhaseCount;
+    return pushConstants;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

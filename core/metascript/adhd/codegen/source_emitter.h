@@ -51,7 +51,7 @@ public:
         b8 useBracesForList = false,
         b8 emptyUsesBraces = true
     )const;
-    void emitExpr(MString& out, const Expr& expr)const;
+    void emitExpr(MString& out, const Expr& expr, b8 omitOuterBinaryParens = false)const;
 
 
 private:

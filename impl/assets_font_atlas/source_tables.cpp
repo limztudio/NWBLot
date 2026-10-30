@@ -4,8 +4,6 @@
 
 #include "model.h"
 
-#include <impl/assets_font/source_directory.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,25 +18,24 @@ Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPosi
     if(!font.validatePayload())
         return MakeUnexpected(Failure{});
     const Core::Assets::AssetBytes& source = font.fontBytes();
-    const auto directoryResult = FontSfntDirectory::Read({ source.data(), source.size() });
-    if(!directoryResult)
+    FontSfntDirectory directory;
+    if(!ReadFontSfntDirectory({ source.data(), source.size() }, directory))
         return MakeUnexpected(Failure{});
-    const FontSfntDirectory& directory = *directoryResult;
     static constexpr u32 s_Tags[] = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
     Core::Assets::AssetVector<FontAtlasPositioningTable> tables(arena);
     tables.reserve(s_FontAtlasMaxPositioningTableCount);
     u64 totalBytes = 0u;
     for(const u32 tag : s_Tags){
         for(u16 index = 0u; index < directory.tableCount(); ++index){
-            const auto tagResult = directory.tableTag(index);
-            if(!tagResult)
+            u32 tableTag = 0u;
+            if(!directory.tableTag(index, tableTag))
                 return MakeUnexpected(Failure{});
-            if(*tagResult != tag)
+            if(tableTag != tag)
                 continue;
-            const auto sourceTableResult = directory.table(index);
-            if(!sourceTableResult)
+            FontSfntTable sourceTable;
+            if(!directory.table(index, sourceTable))
                 return MakeUnexpected(Failure{});
-            const Span<const u8> sourceBytes = sourceTableResult->bytes;
+            const Span<const u8> sourceBytes = sourceTable.bytes;
             const usize length = sourceBytes.size();
             if(length == 0u)
                 break;

@@ -2,9 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "components.h"
+#include "asset.h"
 #include <impl/assets_scene/component_assets.adhd.h>
-#include "binary_payload.h"
 
 #include <impl/ecs_scene/camera.h>
 
@@ -97,17 +96,17 @@ namespace ComponentAssetRuntime{
 
 b8 LoadBinary(IComponent& component, const Span<const u8> binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentBinaryPayload::ComponentHeaderBinary>(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentHeaderBinary>(
         binary,
-        ComponentBinaryPayload::s_ComponentMagic,
-        ComponentBinaryPayload::s_ComponentLoadBinaryContext,
-        ComponentBinaryPayload::s_ComponentAssetKindLabel,
+        s_ComponentMagic,
+        s_ComponentLoadBinaryContext,
+        s_ComponentAssetKindLabel,
         cursor
     );
     if(!headerResult)
         return false;
-    const ComponentBinaryPayload::ComponentHeaderBinary& header = *headerResult;
-    if(header.version != ComponentBinaryPayload::s_ComponentVersion){
+    const ComponentHeaderBinary& header = *headerResult;
+    if(header.version != s_ComponentVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("IComponent::loadBinary failed: unsupported version {}"), header.version);
         return false;
     }
@@ -126,7 +125,7 @@ b8 LoadBinary(IComponent& component, const Span<const u8> binary){
     const usize payloadByteCount = static_cast<usize>(header.payloadByteCount);
     const Span<const u8> payload = binary.subspan(cursor, payloadByteCount);
     cursor += payloadByteCount;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, ComponentBinaryPayload::s_ComponentLoadBinaryContext))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_ComponentLoadBinaryContext))
         return false;
     if(!component.loadComponentPayload(payload))
         return false;
@@ -145,11 +144,11 @@ b8 LoadBinary(IComponent& component, const Span<const u8> binary){
 
 Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const{
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentBinaryPayload::ComponentHeaderBinary>(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentHeaderBinary>(
         binary,
-        ComponentBinaryPayload::s_ComponentMagic,
-        ComponentBinaryPayload::s_ComponentLoadBinaryContext,
-        ComponentBinaryPayload::s_ComponentAssetKindLabel,
+        s_ComponentMagic,
+        s_ComponentLoadBinaryContext,
+        s_ComponentAssetKindLabel,
         cursor
     );
     if(!headerResult)
@@ -174,7 +173,7 @@ Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(Core:
 
 
 b8 TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::TransformComponentPayloadBinary>(
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<TransformComponentPayloadBinary>(
         payload,
         NWB_TEXT("TransformComponentAsset::loadComponentPayload")
     );
@@ -217,7 +216,7 @@ b8 TransformComponentAsset::validatePayload()const{
 
 
 b8 CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::CameraComponentPayloadBinary>(
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<CameraComponentPayloadBinary>(
         payload,
         NWB_TEXT("CameraComponentAsset::loadComponentPayload")
     );
@@ -254,7 +253,7 @@ b8 CameraComponentAsset::validatePayload()const{
 
 
 b8 LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<ComponentBinaryPayload::LightComponentPayloadBinary>(
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<LightComponentPayloadBinary>(
         payload,
         NWB_TEXT("LightComponentAsset::loadComponentPayload")
     );

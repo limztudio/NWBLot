@@ -3,7 +3,6 @@
 
 
 #include "asset.h"
-#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -57,7 +56,7 @@ b8 ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, co
     for(const auto& [nickname, asset] : sceneAsset.assets())
         nextSceneAssets.emplace(nickname, asset);
 
-    Core::Alloc::ScratchArena scratchArena(AssetsSceneArenaScope::s_ActiveSceneLoadArena);
+    Core::Alloc::ScratchArena scratchArena(s_ActiveSceneLoadArena);
     __hidden_active_scene_subsystems::NameHashSet seenSubsystems(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     Vector<SubsystemRef, Core::Alloc::ScratchArena> pendingSubsystems(scratchArena);
     pendingSubsystems.reserve(sceneAsset.subsystems().size());

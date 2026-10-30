@@ -199,7 +199,6 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
                 && prev->isOperator == m->isOperator
                 && prev->name == m->name
                 && prev->isConst == m->isConst
-                && prev->templateParams.size() == m->templateParams.size()
                 && DoParamListsMatch(prev->params, m->params, m_symbols))
             {
                 reportError(errors, m->span, "duplicate interface method declaration with identical signature");

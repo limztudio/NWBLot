@@ -5,7 +5,6 @@
 #include "ui_numeric_edit_gallery.h"
 #include "ui_gallery_constants.h"
 
-#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
 

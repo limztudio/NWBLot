@@ -23,7 +23,7 @@ int RunPipelineTool(const int argc, char** argv){
         gatherOptions.configuration = options.configuration;
         NWB::Core::Alloc::ScratchArena scratchArena(NWB::Core::Assets::AssetsArenaScope::s_GatherMergeQueryScratch);
         gatherOptions.mergePayloads = NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge(scratchArena);
-        return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions) ? 0 : 1;
+        return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions) ? s_PipelineExitSuccess : s_PipelineExitFailure;
     });
 }
 

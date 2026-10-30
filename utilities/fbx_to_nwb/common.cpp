@@ -102,15 +102,6 @@ static AStringView NormalModeText(const NormalMode::Enum normalMode)noexcept{
     }
 }
 
-static Expected<OutputAssetType::Enum> ParseNormalizedAssetTypeText(const AStringView value)noexcept{
-    return ParseOptionText(value, s_OutputAssetTypeValues, OutputAssetTypeText);
-}
-
-static Expected<NormalMode::Enum> ParseNormalizedNormalModeText(const AStringView value)noexcept{
-    return ParseOptionText(value, s_NormalModeValues, NormalModeText);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -133,11 +124,11 @@ ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena){
 }
 
 Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value)noexcept{
-    return __hidden_common::ParseNormalizedAssetTypeText(value);
+    return __hidden_common::ParseOptionText(value, __hidden_common::s_OutputAssetTypeValues, __hidden_common::OutputAssetTypeText);
 }
 
 b8 ValidateAssetTypeText(AString& inOutValue){
-    return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::OutputAssetTypeText, __hidden_common::ParseNormalizedAssetTypeText);
+    return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::OutputAssetTypeText, ParseAssetTypeText);
 }
 
 ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena){
@@ -153,11 +144,11 @@ ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena){
 }
 
 Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value)noexcept{
-    return __hidden_common::ParseNormalizedNormalModeText(value);
+    return __hidden_common::ParseOptionText(value, __hidden_common::s_NormalModeValues, __hidden_common::NormalModeText);
 }
 
 b8 ValidateNormalModeText(AString& inOutValue){
-    return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::NormalModeText, __hidden_common::ParseNormalizedNormalModeText);
+    return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::NormalModeText, ParseNormalModeText);
 }
 
 AStringView SourceTangentModeText(const SourceTangentMode::Enum mode)noexcept{

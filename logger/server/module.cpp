@@ -164,7 +164,6 @@ public:
 
 inline constexpr usize s_MaxLogMessageUploadBytes = s_MaxLogMessageUploadMebibytes * s_BytesPerMebibyte;
 inline constexpr usize s_MaxCrashPackageUploadBytes = s_MaxCrashPackageUploadMebibytes * s_BytesPerMebibyte;
-namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContext)noexcept;
 

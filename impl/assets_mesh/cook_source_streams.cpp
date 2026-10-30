@@ -64,7 +64,7 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
             __hidden_mesh_cook_source_streams::s_VertexRefUvName,
             __hidden_mesh_cook_source_streams::s_VertexRefColorName,
         };
-        const NotNull<u32*> componentValues[] = { MakeNotNull(&ref.position), MakeNotNull(&ref.normal), MakeNotNull(&ref.tangent), MakeNotNull(&ref.uv0), MakeNotNull(&ref.color), MakeNotNull(&ref.skin), };
+        const NotNull<u32*> componentValues[] = { MakeNotNull(&ref.position), MakeNotNull(&ref.normal), MakeNotNull(&ref.tangent), MakeNotNull(&ref.uv0), MakeNotNull(&ref.color), };
         for(usize componentIndex = 0u; componentIndex < expectedComponentCount; ++componentIndex){
             const auto component = MeshCookMetadata::ValidateMetadataU32Value(components[componentIndex]);
             if(!component){
@@ -127,12 +127,35 @@ b8 MeshCookSourceStreams::ValidateSourceVertexRefs(const Path& nwbFilePath, cons
             return false;
         if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_cook_source_streams::s_VertexRefColorName, ref.color, streams.colors.size()))
             return false;
-        if(ref.skin != s_MeshMissingStreamIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static vertex_ref cannot contain a skin index"), metaKind, PathToString<tchar>(nwbFilePath));
-            return false;
-        }
     }
     return true;
+}
+
+
+void MeshCookSourceStreams::CopySourceStreams(const SourceMeshStreams& streams, MeshCookEntry& outEntry){
+    outEntry.positions.clear();
+    outEntry.normals.clear();
+    outEntry.tangents.clear();
+    outEntry.uv0.clear();
+    outEntry.colors.clear();
+    outEntry.vertexRefs.clear();
+
+    outEntry.positions.reserve(streams.positions.size());
+    outEntry.normals.reserve(streams.normals.size());
+    outEntry.tangents.reserve(streams.tangents.size());
+    outEntry.uv0.reserve(streams.uv0.size());
+    outEntry.colors.reserve(streams.colors.size());
+    outEntry.vertexRefs.reserve(streams.vertexRefs.size());
+
+    outEntry.positions.insert(outEntry.positions.end(), streams.positions.begin(), streams.positions.end());
+    for(const Float3U& normal : streams.normals)
+        outEntry.normals.push_back(MakeHalf4U(normal.x, normal.y, normal.z, 0.0f));
+    for(const Float4U& tangent : streams.tangents)
+        outEntry.tangents.push_back(MakeHalf4U(tangent.x, tangent.y, tangent.z, tangent.w));
+    outEntry.uv0.insert(outEntry.uv0.end(), streams.uv0.begin(), streams.uv0.end());
+    for(const Float4U& color : streams.colors)
+        outEntry.colors.push_back(MakeHalf4U(color.x, color.y, color.z, color.w));
+    outEntry.vertexRefs.insert(outEntry.vertexRefs.end(), streams.vertexRefs.begin(), streams.vertexRefs.end());
 }
 
 

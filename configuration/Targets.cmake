@@ -123,7 +123,7 @@ function(target_sources target)
 endfunction()
 
 function(nwb_target_adhd_sources target_name)
-    cmake_parse_arguments(PARSE_ARGV 1 ADHD "" "NAMESPACE" "SOURCES;INCLUDES;DEFINES;DEPENDS")
+    cmake_parse_arguments(PARSE_ARGV 1 ADHD "" "NAMESPACE" "SOURCES")
 
     if(DEFINED ADHD_UNPARSED_ARGUMENTS AND NOT "${ADHD_UNPARSED_ARGUMENTS}" STREQUAL "")
         message(FATAL_ERROR "nwb_target_adhd_sources: unparsed arguments '${ADHD_UNPARSED_ARGUMENTS}'; pass files under SOURCES")
@@ -142,19 +142,6 @@ function(nwb_target_adhd_sources target_name)
         list(REMOVE_DUPLICATES adhd_sources)
     endif()
 
-    set(adhd_depends "")
-    foreach(dep_pattern IN LISTS ADHD_DEPENDS)
-        if(dep_pattern MATCHES "[*?]")
-            file(GLOB _matched CONFIGURE_DEPENDS LIST_DIRECTORIES false "${dep_pattern}")
-            list(APPEND adhd_depends ${_matched})
-        else()
-            list(APPEND adhd_depends "${dep_pattern}")
-        endif()
-    endforeach()
-    if(adhd_depends)
-        list(REMOVE_DUPLICATES adhd_depends)
-    endif()
-
     set(out_root "${CMAKE_BINARY_DIR}/adhd_gen/${target_name}")
     file(MAKE_DIRECTORY "${out_root}")
     target_include_directories(${target_name} PUBLIC "${out_root}")
@@ -163,12 +150,6 @@ function(nwb_target_adhd_sources target_name)
     if(DEFINED ADHD_NAMESPACE AND NOT "${ADHD_NAMESPACE}" STREQUAL "")
         list(APPEND extra_args --namespace "${ADHD_NAMESPACE}")
     endif()
-    foreach(inc_dir IN LISTS ADHD_INCLUDES)
-        list(APPEND extra_args -I "${inc_dir}")
-    endforeach()
-    foreach(def_val IN LISTS ADHD_DEFINES)
-        list(APPEND extra_args -D "${def_val}")
-    endforeach()
 
     set(gen_headers "")
     foreach(adhd_file IN LISTS adhd_sources)
@@ -186,14 +167,11 @@ function(nwb_target_adhd_sources target_name)
         set(gen_h "${out_dir}/${adhd_stem}.adhd.h")
         set(gen_cpp "${out_dir}/${adhd_stem}.adhd.cpp")
 
-        set(file_depends "${adhd_abs}" ${adhd_depends})
-        list(REMOVE_DUPLICATES file_depends)
-
         add_custom_command(
             OUTPUT "${gen_h}" "${gen_cpp}"
             COMMAND $<TARGET_FILE:nwb_adhd_compiler> --input "${adhd_abs}" -o "${out_dir}" --depfile "${gen_h}.d" -I "${CMAKE_CURRENT_LIST_DIR}" -I "${PROJECT_SOURCE_DIR}" ${extra_args}
             DEPFILE "${gen_h}.d"
-            DEPENDS nwb_adhd_compiler ${file_depends}
+            DEPENDS nwb_adhd_compiler "${adhd_abs}"
             COMMENT "Compiling adhd source ${adhd_file}"
             VERBATIM
         )

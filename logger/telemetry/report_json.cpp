@@ -4,13 +4,10 @@
 
 #include "report_json.h"
 
-#include "report.h"
+#include "memory_report.h"
 
 #include <global/binary.h>
-#include <global/diagnostics.h>
-#include <global/hash_utils.h>
 #include <global/json_text.h>
-#include <global/type_properties.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,6 +31,15 @@ namespace TelemetryReportDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr AStringView s_JsonNullText = "null";
+inline constexpr AStringView s_JsonQueueIndexFormat = "{{\"index\": {}, \"deviceGeneration\": {}}}";
+inline constexpr AStringView s_JsonInitialQueueKey = "{\"initialQueue\": ";
+inline constexpr AStringView s_JsonPlannedQueueKey = ", \"plannedQueue\": ";
+inline constexpr AStringView s_JsonAcceptedQueueKey = ", \"acceptedQueue\": ";
+inline constexpr AStringView s_JsonPreviousAcceptedQueueKey = ", \"previousAcceptedQueue\": ";
+inline constexpr AStringView s_JsonQueueClassKey = ", \"queueClass\": ";
+inline constexpr AStringView s_JsonReasonKey = ", \"reason\": ";
+inline constexpr AStringView s_JsonAcceptanceKey = ", \"acceptance\": ";
 static constexpr usize s_JsonReportReserveBytes = 1024u;
 static constexpr usize s_JsonReportBytesPerGraph = 128u;
 static constexpr usize s_JsonReportBytesPerNode = 896u;

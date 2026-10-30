@@ -26,19 +26,10 @@ b8 LayoutTree::IsValidDescription(const LayoutNodeDesc& description)noexcept{
     const Insets& padding = description.padding;
     return
         description.direction <= LayoutDirection::Overlay && validSize(description.width) && validSize(description.height)
-        && IsFinite(padding.left) && padding.left >= 0.0f && IsFinite(padding.top) && padding.top >= 0.0f
-        && IsFinite(padding.right) && padding.right >= 0.0f && IsFinite(padding.bottom) && padding.bottom >= 0.0f
+        && IsValidUiPadding(padding)
         && VectorIsFinite(VectorAdd(VectorSet(padding.left, padding.top, 0.0f, 0.0f), VectorSet(padding.right, padding.bottom, 0.0f, 0.0f)), VectorComponentMask::s_XY)
         && IsFinite(description.gap) && description.gap >= 0.0f
-        && IsFinite(description.intrinsicSize.x) && description.intrinsicSize.x >= 0.0f
-        && IsFinite(description.intrinsicSize.y) && description.intrinsicSize.y >= 0.0f
-    ;
-}
-
-b8 LayoutTree::IsValidRectangle(const Rect& rectangle)noexcept{
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width >= 0.0f && rectangle.height >= 0.0f
-        && VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
+        && IsValidUiExtent(description.intrinsicSize)
     ;
 }
 

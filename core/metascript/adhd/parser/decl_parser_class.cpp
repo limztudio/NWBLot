@@ -184,8 +184,6 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
         if(!applyCallableAttributes(attributes, *dtor))
             return false;
-        if(dtor->isReflect)
-            classDecl.isReflect = true;
 
         if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for destructor"))
             return false;
@@ -211,8 +209,6 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
             if(!applyCallableAttributes(attributes, *ctor))
                 return false;
-            if(ctor->isReflect)
-                classDecl.isReflect = true;
 
             if(!m_typeParser.parseParamList(ctor->params))
                 return false;

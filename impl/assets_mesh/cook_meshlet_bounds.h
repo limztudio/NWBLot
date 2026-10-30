@@ -68,13 +68,7 @@ public:
         && noexcept(visitFaceNormals(AreaNormalAccumulator{ DeclVal<SIMDVectorSingle&>(), DeclVal<u32&>() }))
         && noexcept(visitFaceNormals(ConeCutoffAccumulator{ DeclVal<SIMDVectorSingle&>(), DeclVal<SIMDVectorSingle&>() }))
     );
-    template<typename CookEntryT>
-    static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet)noexcept(
-        noexcept(DeclVal<void(*)(const MeshletPositionStreamRef&)noexcept>()(entry.meshletPositionStreamRefs[meshlet.positionRefOffset + DeclVal<u32&>()]))
-        && noexcept(MeshletTriangleGeometry::MakeMeshletPositionVector(LoadFloat(entry.positions[DeclVal<const MeshletPositionStreamRef&>().position])))
-        && noexcept(DeclVal<void(*)(const MeshletLocalVertexRef&)noexcept>()(entry.meshletLocalVertexRefs[meshlet.localVertexOffset + DeclVal<const u8&>()]))
-        && noexcept(DeclVal<void(*)(u8)noexcept>()(entry.meshletPrimitiveIndices[DeclVal<usize>()]))
-    );
+    [[nodiscard]] static MeshletBounds BuildMeshletBounds(const MeshCookEntry& entry, const MeshletDesc& meshlet)noexcept;
 
 
 public:
@@ -124,13 +118,7 @@ MeshletBoundsCalculation MeshletBoundsBuilder::CalculateMeshletBounds(const u32 
 }
 
 
-template<typename CookEntryT>
-MeshletBounds MeshletBoundsBuilder::BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet)noexcept(
-    noexcept(DeclVal<void(*)(const MeshletPositionStreamRef&)noexcept>()(entry.meshletPositionStreamRefs[meshlet.positionRefOffset + DeclVal<u32&>()]))
-    && noexcept(MeshletTriangleGeometry::MakeMeshletPositionVector(LoadFloat(entry.positions[DeclVal<const MeshletPositionStreamRef&>().position])))
-    && noexcept(DeclVal<void(*)(const MeshletLocalVertexRef&)noexcept>()(entry.meshletLocalVertexRefs[meshlet.localVertexOffset + DeclVal<const u8&>()]))
-    && noexcept(DeclVal<void(*)(u8)noexcept>()(entry.meshletPrimitiveIndices[DeclVal<usize>()]))
-){
+inline MeshletBounds MeshletBoundsBuilder::BuildMeshletBounds(const MeshCookEntry& entry, const MeshletDesc& meshlet)noexcept{
     const u32 positionCount = MeshletPositionCount(meshlet);
     NWB_ASSERT(positionCount <= s_MeshMaxMeshletVertices);
     SIMDVectorSingle positions[s_MeshMaxMeshletVertices];

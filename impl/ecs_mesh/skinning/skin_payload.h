@@ -150,7 +150,7 @@ template<typename JointPaletteVector>
             StoreFloat(*jointMatrix, storedJointMatrix);
         }
         else{
-            const auto dualQuaternion = MatrixTryBuildRigidDualQuaternion(*jointMatrix, SkeletonRuntime::s_AffineEpsilon, SkeletonRuntime::s_RigidJointEpsilon);
+            const auto dualQuaternion = MatrixTryBuildRigidDualQuaternion(*jointMatrix, s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon);
             if(dualQuaternion){
                 StoreFloat(dualQuaternion->real, storedJointMatrix.rows[0]);
                 StoreFloat(dualQuaternion->dual, storedJointMatrix.rows[1]);

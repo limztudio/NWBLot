@@ -41,10 +41,8 @@ Expected<Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>, SampledTex
             if(!identity)
                 return MakeUnexpected(SampledTextureImportFailure::MissingIdentity);
             const auto resourceResult = graph.importTexture(texture, RendererTaskGraphDetail::TextureResourceDesc(identity, markerLabel));
-            if(!resourceResult){
-                resource = {};
+            if(!resourceResult)
                 return MakeUnexpected(SampledTextureImportFailure::ImportFailed);
-            }
             resource = *resourceResult;
         }
         resources.push_back(resource);

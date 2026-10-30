@@ -78,15 +78,12 @@ using GraphTimingMap = HashMap<GraphTimingKey, f64, Core::Alloc::ScratchArena, G
 
 
 [[nodiscard]] AStringView FrameGraphNodeIdentityText(const Telemetry::FrameGraphNodePayload& node, char (&identityText)[NameDetail::s_DebugHashTextLength + 1u]);
-[[nodiscard]] AStringView FrameGraphNodeShape(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept;
 [[nodiscard]] AStringView FrameGraphNodeKindText(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept;
 [[nodiscard]] AStringView FrameGraphEdgeLabel(const Telemetry::FrameGraphEdgeKind::Enum kind)noexcept;
 [[nodiscard]] AStringView FrameGraphQueueClassText(const Telemetry::FrameGraphQueueClass::Enum queueClass)noexcept;
 [[nodiscard]] AStringView FrameGraphQueueAssignmentReasonText(const Telemetry::FrameGraphQueueAssignmentReason::Enum reason)noexcept;
 [[nodiscard]] AStringView FrameGraphQueueAssignmentAcceptanceText(const Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept;
 [[nodiscard]] AStringView FrameGraphTaskPacketizationDecisionText(const Telemetry::FrameGraphTaskPacketizationDecision::Enum decision)noexcept;
-[[nodiscard]] usize EstimateTimedGraphDotReserve(const Telemetry::FrameGraphPayload& graph)noexcept;
-[[nodiscard]] usize EstimateTimedGraphsDotReserve(Span<const FrameGraphReportRecord> graphs)noexcept;
 void BuildTimedGraphsDot(Core::Alloc::ScratchArena& scratchArena, Span<const FrameGraphReportRecord> graphs, const GraphTimingMap& timing, AString<TelemetryArena>& out);
 
 

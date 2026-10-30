@@ -11,7 +11,6 @@
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/reflection/settings.adhd.h>
-#include <impl/ecs_render/reflection/settings.adhd.h>
 #include <impl/ecs_render/reflection/reflection_system.h>
 #include <impl/ecs_render/reflection/composite_inputs.adhd.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>

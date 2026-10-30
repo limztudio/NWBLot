@@ -5,7 +5,6 @@
 #include "../builder.h"
 
 #include <global/bit.h>
-#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,11 +50,11 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
     placement = SliderLayout::Place(box.rectangle, clip, frame.m_metrics, *normalized);
     if(!placement)
         return false;
-    const auto trackIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_Track);
+    const auto trackIdResult = MakeWidgetId(item.state.id, s_WidgetPartTrack);
     if(!trackIdResult)
         return false;
     const WidgetId trackId = *trackIdResult;
-    const auto thumbIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_Thumb);
+    const auto thumbIdResult = MakeWidgetId(item.state.id, s_WidgetPartThumb);
     if(!thumbIdResult)
         return false;
     const WidgetId thumbId = *thumbIdResult;

@@ -111,7 +111,7 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 
     const SIMDMatrix rotation = MatrixRotationRollPitchYawFromVector(rotationAngles);
     const SIMDMatrix animated = MatrixMultiply(bindJoint, rotation);
-    if(!MatrixIsInvertibleAffine(animated, NWB::Impl::SkeletonRuntime::s_AffineEpsilon, NWB::Impl::SkeletonRuntime::s_JointDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(animated, NWB::Impl::s_SkeletonAffineEpsilon, NWB::Impl::s_SkeletonJointDeterminantEpsilon))
         return bindJoint;
 
     return animated;

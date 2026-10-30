@@ -118,13 +118,8 @@ Expected<RayTracingOpticalSceneGraphBuffer> DeclareRayTracingOpticalBoundsFinali
     const auto inputsResult = importCommon(finalize.inputBuffer, "Ray Optical Runtime Inputs");
     RayTracingOpticalSceneGraphBuffer result;
     const auto resourceResult = importCommon(finalize.outputBuffer, "Ray Optical Resolved Scene");
-    if(!inputsResult || !resourceResult){
-        if(resourceResult)
-            result.resource = *resourceResult;
-        else
-            result.resource = {};
+    if(!inputsResult || !resourceResult)
         return MakeUnexpected(Failure{});
-    }
     result.resource = *resourceResult;
     const Core::GpuGraphResourceId inputs = *inputsResult;
 

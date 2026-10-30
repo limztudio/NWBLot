@@ -25,18 +25,11 @@ namespace SamplerBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SamplerMagic = s_SamplerBinaryMagic; // SAM1
-inline constexpr u32 s_SamplerVersion = s_SamplerBinaryVersion;
 inline constexpr TStringView s_SamplerAssetKindLabel = NWB_TEXT("sampler");
 inline constexpr TStringView s_SamplerLoadBinaryContext = NWB_TEXT("Sampler::loadBinary");
 
-using HeaderBinary = SamplerBinaryHeader;
-static constexpr usize s_HeaderBinaryByteSize = s_SamplerHeaderBinaryByteSize;
-static_assert(sizeof(HeaderBinary) == s_HeaderBinaryByteSize, "Sampler header layout drifted");
-static constexpr usize s_PackedAlignBytes = s_SamplerPackedAlignBytes;
-static_assert(alignof(HeaderBinary) == s_PackedAlignBytes, "Sampler header must stay packed");
-static_assert(IsStandardLayout_V<HeaderBinary>, "Sampler header must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<HeaderBinary>, "Sampler header must stay binary-serializable");
+static_assert(sizeof(SamplerBinaryHeader) == s_SamplerHeaderBinaryByteSize, "Sampler header layout drifted");
+static_assert(alignof(SamplerBinaryHeader) == s_SamplerPackedAlignBytes, "Sampler header must stay packed");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

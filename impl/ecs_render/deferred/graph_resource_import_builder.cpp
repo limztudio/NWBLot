@@ -357,18 +357,14 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
     result.currentBindlessSlots = *currentBindlessSlotsResult;
     if(*materialContextSlotsResult)
         result.materialContextSlots = **materialContextSlotsResult;
-    if(capturesLaggedLightingHistory)
+    if(capturesLaggedLightingHistory){
         result.historyCopyShadowVisibility = *historyCopyShadowVisibilityResult;
-    if(capturesLaggedLightingHistory)
         result.historyCopyCausticIrradiance = *historyCopyCausticIrradianceResult;
-    if(capturesLaggedLightingHistory)
         result.historyCopySurfelIrradiance = *historyCopySurfelIrradianceResult;
-    if(capturesLaggedLightingHistory)
         result.historyCopyDestinationShadowVisibility = *historyCopyDestinationShadowVisibilityResult;
-    if(capturesLaggedLightingHistory)
         result.historyCopyDestinationCausticIrradiance = *historyCopyDestinationCausticIrradianceResult;
-    if(capturesLaggedLightingHistory)
         result.historyCopyDestinationSurfelIrradiance = *historyCopyDestinationSurfelIrradianceResult;
+    }
     result.avboitLowRaster = *avboitLowRasterResult;
     result.avboitAccumColor = *avboitAccumColorResult;
     result.avboitAccumExtinction = *avboitAccumExtinctionResult;

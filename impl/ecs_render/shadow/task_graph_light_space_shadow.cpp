@@ -310,25 +310,8 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     const auto viewsResult = importBuffer(snapshot.views, Name("render.light_space_shadow.views"), "Light-Space Views");
     // Opaque capture clears every layer. Unknown preserves fresh Undefined; accepted state sources retain native states.
     const auto depthResult = graph.importTexture(snapshot.depth, TextureResourceDesc(Name("render.light_space_shadow.depth"), "Light-Space Opaque Depth").setInitialState(Core::ResourceStates::Unknown).setExternalFinalState(Core::ResourceStates::Common));
-    if(!countsResult || !eventsResult || !viewsResult || !depthResult){
-        if(countsResult)
-            result.counts = *countsResult;
-        else
-            result.counts = {};
-        if(eventsResult)
-            result.events = *eventsResult;
-        else
-            result.events = {};
-        if(viewsResult)
-            result.views = *viewsResult;
-        else
-            result.views = {};
-        if(depthResult)
-            result.depth = *depthResult;
-        else
-            result.depth = {};
+    if(!countsResult || !eventsResult || !viewsResult || !depthResult)
         return MakeUnexpected(Failure{});
-    }
     result.counts = *countsResult;
     result.events = *eventsResult;
     result.views = *viewsResult;
@@ -337,17 +320,8 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     if(csg){
         const auto csgContextResult = importBuffer(snapshot.csgContext, Name("render.light_space_shadow.csg_context"), "CSG Shadow Context");
         const auto csgOpaqueDepthResult = importBuffer(snapshot.csgOpaqueDepth, Name("render.light_space_shadow.csg_depth"), "CSG Shadow Depth");
-        if(!csgContextResult || !csgOpaqueDepthResult){
-            if(csgContextResult)
-                result.csgContext = *csgContextResult;
-            else
-                result.csgContext = {};
-            if(csgOpaqueDepthResult)
-                result.csgOpaqueDepth = *csgOpaqueDepthResult;
-            else
-                result.csgOpaqueDepth = {};
+        if(!csgContextResult || !csgOpaqueDepthResult)
             return MakeUnexpected(Failure{});
-        }
         result.csgContext = *csgContextResult;
         result.csgOpaqueDepth = *csgOpaqueDepthResult;
     }
@@ -358,10 +332,8 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     }
     // A retained draw buffer is untouched during reuse; importing its final state would promise an unowned graph export.
     const auto drawArgumentsResult = importBuffer(snapshot.drawArguments, Name("render.light_space_shadow.draw_arguments"), "Light-Space Draw Arguments");
-    if(!drawArgumentsResult){
-        result.drawArguments = {};
+    if(!drawArgumentsResult)
         return MakeUnexpected(Failure{});
-    }
     result.drawArguments = *drawArgumentsResult;
     const auto uploadResult = graph.copyUploadData(snapshot.plan.views.data(), snapshot.plan.viewCount * sizeof(LightSpaceViewGpu), alignof(u32));
     if(!uploadResult)
@@ -389,10 +361,8 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
             .source = csgBytes, .destination = result.csgContext, .finalState = Core::ResourceStates::Common,
             .acceptedToken = initialize ? &snapshot.diagnostics->contextInitialized : nullptr,
         });
-        if(!csgUploadResult){
-            csgUpload = {};
+        if(!csgUploadResult)
             return MakeUnexpected(Failure{});
-        }
         csgUpload = *csgUploadResult;
         if(!initialize){
             // Retain accumulated failures across new captures until the bounded asynchronous readback observes them.
@@ -403,10 +373,8 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
             const Core::GpuUploadBlobId payload = *payloadResult;
             uploadDesc.setIdentity(Name("render.light_space_shadow.csg_payload_upload")).setMarkerLabel("CSG Shadow Payload Upload").setDependencies(&csgUpload, 1u);
             const auto csgUploadResult2 = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{ .source = payload, .destination = result.csgContext, .destinationOffsetBytes = s_PayloadOffset, .finalState = Core::ResourceStates::Common, });
-            if(!csgUploadResult2){
-                csgUpload = {};
+            if(!csgUploadResult2)
                 return MakeUnexpected(Failure{});
-            }
             csgUpload = *csgUploadResult2;
         }
         uploadDesc.setIdentity(__hidden_task_graph_light_space_shadow::s_ViewUploadIdentity).setMarkerLabel(__hidden_task_graph_light_space_shadow::s_ViewUploadLabel).setDependencies(&csgUpload, 1u);

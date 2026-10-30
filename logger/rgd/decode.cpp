@@ -7,9 +7,7 @@
 #include <core/alloc/scratch.h>
 
 #include <global/algorithm.h>
-#include <global/basic_string.h>
 #include <global/containers.h>
-#include <global/numeric_text.h>
 #include <global/sync.h>
 
 #include "rgd_data_types.h"

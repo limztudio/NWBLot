@@ -8,7 +8,6 @@
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
@@ -164,13 +163,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixSceneShadingSetupTask = prefixSceneUploadResult->sceneShadingSetupTask;
     const RayTracingLightingClassification rayTracingLightingClassification = prefixSceneUploadResult->lightingClassification;
     const u32 sceneLightCount = prefixSceneUploadResult->lightCount;
-    Core::GpuTaskSchedulingHint immutableUploadScheduling;
-    immutableUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
-    immutableUploadScheduling.forceSubmissionBoundary = false;
-    immutableUploadScheduling.allowPacketMerge = true;
-    immutableUploadScheduling.mergeWithPrevious = true;
-
-
     // G-buffer load clears stay in attachment storage and G-buffer timing.
     // Deferred-clear timing covers the opaque-color UAV clear before its Compute handoff.
     Core::GpuTaskSchedulingHint clearScheduling;
@@ -540,13 +532,13 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> objectGeometryReads{scratchArena};
     if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
         opaqueDrawItems.regular.indexedDrawItems,
-        frameBindings, deferredTargets, scratchArena, gbufferDependency, objectGeometryReads,
+        frameBindings, scratchArena, gbufferDependency, objectGeometryReads,
         nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
     ))
         return MakeUnexpected(Failure{});
     if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
         opaqueDrawItems.csgReceiverSurface.indexedDrawItems,
-        frameBindings, deferredTargets, scratchArena, gbufferDependency, objectGeometryReads,
+        frameBindings, scratchArena, gbufferDependency, objectGeometryReads,
         nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
     ))
         return MakeUnexpected(Failure{});

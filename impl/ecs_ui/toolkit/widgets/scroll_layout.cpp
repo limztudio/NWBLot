@@ -122,7 +122,6 @@ Expected<ScrollPlacement> ScrollLayout::Calculate(const Rect& bounds, const Rect
 }
 
 Expected<Rect> ScrollLayout::RowBounds(const u64 index, const ScrollPlacement& placement, const f32 rowHeight)noexcept{
-    using namespace __hidden_ui_scroll_layout;
     if(index < placement.firstRow || index >= placement.endRow || index >= placement.rowCount || !IsValidUiRect(placement.viewport) || !IsFinite(placement.offset) || placement.offset < 0.0 || !IsFinite(rowHeight) || rowHeight <= 0.0f)
         return MakeUnexpected(Failure{});
     const f64 y = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleSubtract(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleReplicate(rowHeight)), VectorDoubleReplicate(placement.offset)), VectorDoubleReplicate(placement.viewport.y)));

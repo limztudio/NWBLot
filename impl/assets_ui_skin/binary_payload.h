@@ -23,16 +23,13 @@ namespace UiSkinBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_UiSkinMagic = s_UiSkinBinaryMagic; // UIS1
-inline constexpr u32 s_UiSkinVersion = s_UiSkinBinaryVersion;
-using Impl::s_UiSkinPaletteColorCount;
 inline constexpr TStringView s_UiSkinAssetKindLabel = NWB_TEXT("UI skin");
 inline constexpr TStringView s_UiSkinLoadBinaryContext = NWB_TEXT("UiSkin::loadBinary");
 
 #pragma pack(push, 1)
 struct HeaderBinary{
-    u32 magic = s_UiSkinMagic;
-    u32 version = s_UiSkinVersion;
+    u32 magic = s_UiSkinBinaryMagic;
+    u32 version = s_UiSkinBinaryVersion;
     NameHash textureNameHash = {};
     u32 atlasWidth = 0u;
     u32 atlasHeight = 0u;
@@ -63,18 +60,13 @@ struct RegionBinary{
 };
 #pragma pack(pop)
 
-using ColorBinary = UiSkinColorBinary;
-using TypographyBinary = UiSkinTypographyBinary;
-
 static_assert(sizeof(HeaderBinary) == sizeof(NameHash) + 32u, "UI skin header layout drifted");
 static_assert(sizeof(RegionBinary) == sizeof(NameHash) + 64u, "UI skin region layout drifted");
-static_assert(sizeof(ColorBinary) == 16u, "UI skin palette color layout drifted");
-static_assert(sizeof(TypographyBinary) == 4u, "UI skin typography layout drifted");
-static_assert(alignof(HeaderBinary) == 1u && alignof(RegionBinary) == 1u && alignof(ColorBinary) == 1u && alignof(TypographyBinary) == 1u, "UI skin payload must stay packed");
+static_assert(sizeof(UiSkinColorBinary) == 16u, "UI skin palette color layout drifted");
+static_assert(sizeof(UiSkinTypographyBinary) == 4u, "UI skin typography layout drifted");
+static_assert(alignof(HeaderBinary) == 1u && alignof(RegionBinary) == 1u && alignof(UiSkinColorBinary) == 1u && alignof(UiSkinTypographyBinary) == 1u, "UI skin payload must stay packed");
 static_assert(IsStandardLayout_V<HeaderBinary> && IsTriviallyCopyable_V<HeaderBinary>, "UI skin header must stay binary-serializable");
 static_assert(IsStandardLayout_V<RegionBinary> && IsTriviallyCopyable_V<RegionBinary>, "UI skin region must stay binary-serializable");
-static_assert(IsStandardLayout_V<ColorBinary> && IsTriviallyCopyable_V<ColorBinary>, "UI skin color must stay binary-serializable");
-static_assert(IsStandardLayout_V<TypographyBinary> && IsTriviallyCopyable_V<TypographyBinary>, "UI skin typography must stay binary-serializable");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -84,7 +84,6 @@ class MeshSkinningSystem final
     , public IRuntimeMeshProvider
 {
 private:
-    using MeshSkinningPushConstants = Impl::MeshSkinningPushConstants;
     static_assert(sizeof(MeshSkinningPushConstants) == NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning push constants layout must match the shader ABI");
     static_assert(offsetof(MeshSkinningPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_MESHLET_COUNT, "MeshSkinning meshlet-count push offset drifted");
     static_assert(offsetof(MeshSkinningPushConstants, skinCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKIN_COUNT, "MeshSkinning skin-count push offset drifted");
@@ -92,12 +91,10 @@ private:
     static_assert(offsetof(MeshSkinningPushConstants, skinningMode) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKINNING_MODE, "MeshSkinning skinning-mode push offset drifted");
     static_assert(offsetof(MeshSkinningPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning bindless-resource slot push offset drifted");
 
-    using MeshletBoundsPushConstants = Impl::MeshletBoundsPushConstants;
     static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning bounds push constants layout must match the shader ABI");
     static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT, "MeshSkinning bounds meshlet-count push offset drifted");
     static_assert(offsetof(MeshletBoundsPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning bounds bindless-resource slot push offset drifted");
 
-    using MeshletRepackPushConstants = Impl::MeshletRepackPushConstants;
     static_assert(sizeof(MeshletRepackPushConstants) == NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning repack push constants layout must match the shader ABI");
     static_assert(offsetof(MeshletRepackPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT, "MeshSkinning repack meshlet-count push offset drifted");
     static_assert(offsetof(MeshletRepackPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning repack bindless-resource slot push offset drifted");
@@ -172,8 +169,6 @@ private:
         }
     };
 
-    using RestToSkinnedCopyByteCounts = MeshSkinningRestToSkinnedCopyByteCounts;
-
     struct TaskGraphSkinningDeformationTask;
     struct TaskGraphSkinningPostDispatchTask;
     struct TaskGraphSkinningFinalizerTask;
@@ -185,7 +180,7 @@ public:
 
 
 private:
-    [[nodiscard]] static Expected<RestToSkinnedCopyByteCounts> ResolveRestToSkinnedCopyByteCounts(const MeshSkinningRuntimeInstance& instance);
+    [[nodiscard]] static Expected<MeshSkinningRestToSkinnedCopyByteCounts> ResolveRestToSkinnedCopyByteCounts(const MeshSkinningRuntimeInstance& instance);
 
 
 public:

@@ -25,12 +25,11 @@ namespace SkeletonBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SkeletonMagic = s_SkeletonBinaryMagic; // SKL1
 inline constexpr TStringView s_SkeletonAssetKindLabel = NWB_TEXT("skeleton");
 inline constexpr TStringView s_SkeletonLoadBinaryContext = NWB_TEXT("Skeleton::loadBinary");
 
 struct HeaderBinary{
-    u32 magic = s_SkeletonMagic;
+    u32 magic = s_SkeletonBinaryMagic;
     u32 padding0 = 0u;
     u64 jointCount = 0u;
 };

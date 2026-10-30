@@ -8,7 +8,6 @@
 #include "timing_names.h"
 
 #include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
-#include <impl/assets/graphics/skinned_mesh/constants.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -22,30 +21,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_skinning_local_bounds{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct LocalBoundsPushConstants{
-    u32 meshletCount = 0u;
-    u32 bindlessResourceSlots = 0u;
-};
-static_assert(sizeof(LocalBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE);
-static_assert(offsetof(LocalBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT);
-static_assert(offsetof(LocalBoundsPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -113,7 +88,7 @@ b8 MeshSkinningLocalBoundsTask::Record(const Payload& payload, Core::CommandList
         state.setPipeline(pipeline);
         commandList.setComputeState(state);
         heap.bindCompute(commandList, *pipeline);
-        const __hidden_skinning_local_bounds::LocalBoundsPushConstants push{plan.meshletCount, plan.bindlessResourceSlots};
+        const MeshletBoundsPushConstants push{plan.meshletCount, plan.bindlessResourceSlots};
         commandList.setPushConstants(&push, sizeof(push));
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_LocalBounds, device, commandList);
 

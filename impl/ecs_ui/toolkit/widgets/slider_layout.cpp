@@ -5,7 +5,6 @@
 #include "slider_layout.h"
 
 #include "slider.h"
-#include <impl/ecs_ui/toolkit/widgets/slider_style.adhd.h>
 
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
 #include <impl/ecs_ui/toolkit/rect_math.h>

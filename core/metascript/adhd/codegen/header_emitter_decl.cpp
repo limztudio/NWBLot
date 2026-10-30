@@ -24,7 +24,6 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     out.append("{\r\n");
 
     usize flagBitIndex = 0u;
-    b8 hasFlags = false;
     for(const EnumEntry& entry : decl.entries){
         out.append("        ");
         out.append(entry.name.data(), entry.name.size());
@@ -33,7 +32,6 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
             m_sourceEmitter.emitExpr(out, *entry.valueExpr);
         }
         else if(entry.isFlag){
-            hasFlags = true;
             out.append(" = (static_cast<::");
             out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
             out.append(">(1) << ");
@@ -41,8 +39,6 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
             out.push_back(')');
         }
         out.append(",\r\n");
-        if(entry.isFlag)
-            hasFlags = true;
     }
 
     out.append("    };\r\n");
@@ -68,7 +64,6 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     out.append("    constexpr Enum& operator|=(Enum& a, const Enum b)noexcept{ a = (a | b); return a; }\r\n");
     out.append("    constexpr Enum& operator&=(Enum& a, const Enum b)noexcept{ a = (a & b); return a; }\r\n");
     out.append("    constexpr Enum& operator^=(Enum& a, const Enum b)noexcept{ a = (a ^ b); return a; }\r\n");
-    (void)hasFlags;
     usize reflectedEntryCount = 0u;
     for(const EnumEntry& entry : decl.entries){
         if(entry.name != "kCount")

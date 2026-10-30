@@ -27,27 +27,55 @@ namespace __hidden_memory_report{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr StringView s_ArenaSourceText = "arena";
+inline constexpr StringView s_HeapBackingSourceText = "heapBacking";
+inline constexpr StringView s_ExplicitScopeSourceText = "explicitScope";
+inline constexpr StringView s_LargestArenaPeakBasis = "largestArena";
+inline constexpr StringView s_SampledHeapPeakBasis = "sampledHeap";
+inline constexpr StringView s_ScopePeakBasis = "scope";
+inline constexpr StringView s_MemorySourcesSectionHeader = "    \"memorySources\": {\n";
+inline constexpr StringView s_MemorySourceEntryIndent = "      ";
+inline constexpr StringView s_PeakBasisKeyPrefix = ": {\"peakBasis\": ";
+inline constexpr StringView s_MemorySourceMetricsFormat = ", \"eventCount\": {}, \"maxUsedBytes\": {}, \"maxPeakUsedBytes\": {}, \"totalUsedDeltaBytes\": ";
+inline constexpr StringView s_MemorySourceDeltaFormat = "{}";
+inline constexpr StringView s_MemorySourcesSectionFooter = "    },\n";
+inline constexpr StringView s_JsonEntrySeparator = ",\n";
+inline constexpr StringView s_JsonEntryTerminator = "\n";
+inline constexpr StringView s_MemoryRecordSeparator = ",\n";
+inline constexpr StringView s_MemoryRecordOpen = "      {\"source\": ";
+inline constexpr StringView s_MemoryRecordPeakBasisKey = ", \"peakBasis\": ";
+inline constexpr StringView s_MemoryRecordScopeKey = ", \"scope\": ";
+inline constexpr StringView s_MemoryRecordIdentityKey = ", \"identity\": ";
+inline constexpr StringView s_MemoryRecordMetricsFormat = ", \"streamId\": {}, \"frameIndex\": {}, \"reservedBytes\": {}, \"usedBytes\": {}, " "\"peakUsedBytes\": {}, \"allocationCount\": {}, \"reallocationCount\": {}, \"deallocationCount\": {}, \"delta\": ";
+inline constexpr StringView s_MemoryDeltaMetricsFormat = "{{\"previousFrameIndex\": {}, \"reservedBytes\": {}, \"usedBytes\": {}, \"peakUsedBytes\": {}, " "\"allocationCount\": {}, \"reallocationCount\": {}, \"deallocationCount\": {}}}";
+inline constexpr StringView s_JsonNullText = "null";
+inline constexpr char s_JsonRecordClose = '}';
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] AStringView MemorySourceText(const Core::Perf::MemorySource::Enum source)noexcept{
     switch(source){
     case Core::Perf::MemorySource::Arena:
-        return TelemetryMemoryReportDetail::s_ArenaSourceText;
+        return s_ArenaSourceText;
     case Core::Perf::MemorySource::HeapBacking:
-        return TelemetryMemoryReportDetail::s_HeapBackingSourceText;
+        return s_HeapBackingSourceText;
     case Core::Perf::MemorySource::ExplicitScope:
     default:
-        return TelemetryMemoryReportDetail::s_ExplicitScopeSourceText;
+        return s_ExplicitScopeSourceText;
     }
 }
 
 [[nodiscard]] AStringView MemoryPeakBasisText(const Core::Perf::MemorySource::Enum source)noexcept{
     switch(source){
     case Core::Perf::MemorySource::Arena:
-        return TelemetryMemoryReportDetail::s_LargestArenaPeakBasis;
+        return s_LargestArenaPeakBasis;
     case Core::Perf::MemorySource::HeapBacking:
-        return TelemetryMemoryReportDetail::s_SampledHeapPeakBasis;
+        return s_SampledHeapPeakBasis;
     case Core::Perf::MemorySource::ExplicitScope:
     default:
-        return TelemetryMemoryReportDetail::s_ScopePeakBasis;
+        return s_ScopePeakBasis;
     }
 }
 
@@ -82,31 +110,31 @@ void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Tele
 }
 
 void AppendTelemetryMemorySourcesJson(AString<Core::Telemetry::TelemetryArena>& out, const TelemetryReportSummary& summary){
-    out += TelemetryMemoryReportDetail::s_MemorySourcesSectionHeader;
+    out += __hidden_memory_report::s_MemorySourcesSectionHeader;
     for(usize sourceIndex = 0u; sourceIndex < s_TelemetryMemorySourceCount; ++sourceIndex){
         const auto memorySource = static_cast<Core::Perf::MemorySource::Enum>(sourceIndex);
-        out += TelemetryMemoryReportDetail::s_MemorySourceEntryIndent;
+        out += __hidden_memory_report::s_MemorySourceEntryIndent;
         AppendJsonQuotedText(out, __hidden_memory_report::MemorySourceText(memorySource));
-        out += TelemetryMemoryReportDetail::s_PeakBasisKeyPrefix;
+        out += __hidden_memory_report::s_PeakBasisKeyPrefix;
         AppendJsonQuotedText(out, __hidden_memory_report::MemoryPeakBasisText(memorySource));
         const TelemetryMemorySummary& source = summary.memorySources[sourceIndex];
-        StringAppendFormat(out, TelemetryMemoryReportDetail::s_MemorySourceMetricsFormat, source.eventCount, source.maxUsedBytes, source.maxPeakUsedBytes);
+        StringAppendFormat(out, __hidden_memory_report::s_MemorySourceMetricsFormat, source.eventCount, source.maxUsedBytes, source.maxPeakUsedBytes);
         if(source.totalUsedDeltaValid)
-            StringAppendFormat(out, TelemetryMemoryReportDetail::s_MemorySourceDeltaFormat, source.totalUsedDeltaBytes);
+            StringAppendFormat(out, __hidden_memory_report::s_MemorySourceDeltaFormat, source.totalUsedDeltaBytes);
         else
-            out += TelemetryMemoryReportDetail::s_JsonNullText;
-        out += TelemetryMemoryReportDetail::s_JsonRecordClose;
-        out += sourceIndex + 1u == s_TelemetryMemorySourceCount ? TelemetryMemoryReportDetail::s_JsonEntryTerminator : TelemetryMemoryReportDetail::s_JsonEntrySeparator;
+            out += __hidden_memory_report::s_JsonNullText;
+        out += __hidden_memory_report::s_JsonRecordClose;
+        out += sourceIndex + 1u == s_TelemetryMemorySourceCount ? __hidden_memory_report::s_JsonEntryTerminator : __hidden_memory_report::s_JsonEntrySeparator;
     }
-    out += TelemetryMemoryReportDetail::s_MemorySourcesSectionFooter;
+    out += __hidden_memory_report::s_MemorySourcesSectionFooter;
 }
 
 void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, const Core::Telemetry::PerfMemoryPayload& payload, const u32 streamId){
     if(!out.empty())
-        out += TelemetryMemoryReportDetail::s_MemoryRecordSeparator;
-    out += TelemetryMemoryReportDetail::s_MemoryRecordOpen;
+        out += __hidden_memory_report::s_MemoryRecordSeparator;
+    out += __hidden_memory_report::s_MemoryRecordOpen;
     AppendJsonQuotedText(out, __hidden_memory_report::MemorySourceText(payload.snapshot.source));
-    out += TelemetryMemoryReportDetail::s_MemoryRecordPeakBasisKey;
+    out += __hidden_memory_report::s_MemoryRecordPeakBasisKey;
     AppendJsonQuotedText(out, __hidden_memory_report::MemoryPeakBasisText(payload.snapshot.source));
     char identityText[NameDetail::s_DebugHashTextLength + 1u];
     NameDetail::HashToDebugString(identityText, sizeof(identityText), payload.scopeName.hash());
@@ -115,13 +143,13 @@ void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, co
     AStringView scopeText = payload.scopeText;
     if(scopeText == identity && Core::Common::NameSymbols::Resolve(resolvedText, sizeof(resolvedText), payload.scopeName.hash()))
         scopeText = AStringView(resolvedText);
-    out += TelemetryMemoryReportDetail::s_MemoryRecordScopeKey;
+    out += __hidden_memory_report::s_MemoryRecordScopeKey;
     AppendJsonQuotedText(out, scopeText);
-    out += TelemetryMemoryReportDetail::s_MemoryRecordIdentityKey;
+    out += __hidden_memory_report::s_MemoryRecordIdentityKey;
     AppendJsonQuotedText(out, identity);
     StringAppendFormat(
         out,
-        TelemetryMemoryReportDetail::s_MemoryRecordMetricsFormat,
+        __hidden_memory_report::s_MemoryRecordMetricsFormat,
         streamId,
         payload.snapshot.frameIndex,
         payload.snapshot.reservedBytes,
@@ -134,7 +162,7 @@ void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, co
     if(payload.delta.hasSamples){
         StringAppendFormat(
             out,
-            TelemetryMemoryReportDetail::s_MemoryDeltaMetricsFormat,
+            __hidden_memory_report::s_MemoryDeltaMetricsFormat,
             payload.delta.previousFrameIndex,
             payload.delta.reservedBytes,
             payload.delta.usedBytes,
@@ -145,8 +173,8 @@ void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, co
         );
     }
     else
-        out += TelemetryMemoryReportDetail::s_JsonNullText;
-    out += TelemetryMemoryReportDetail::s_JsonRecordClose;
+        out += __hidden_memory_report::s_JsonNullText;
+    out += __hidden_memory_report::s_JsonRecordClose;
 }
 
 

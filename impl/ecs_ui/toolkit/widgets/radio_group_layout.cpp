@@ -5,7 +5,6 @@
 #include "radio_group_layout.h"
 
 #include "radio_group.h"
-#include <impl/ecs_ui/toolkit/widgets/radio_group_style.adhd.h>
 
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
 #include <impl/ecs_ui/toolkit/rect_math.h>

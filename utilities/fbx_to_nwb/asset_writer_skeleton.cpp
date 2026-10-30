@@ -267,6 +267,21 @@ u64 PositionSkinKey(const u32 position, const u32 skin)noexcept{
     return (static_cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | static_cast<u64>(skin);
 }
 
+b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
+    static constexpr AStringView s_Context = "Failed to write NWB model";
+    if(!ValidateMeshGeometry(mesh, s_Context))
+        return false;
+    if(mesh.skin.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model source mesh requires skin influences"));
+        return false;
+    }
+    for(const SourceVertexRef& ref : mesh.vertexRefs){
+        if(!ValidateStreamIndex(ref.skin, mesh.skin.size(), s_SkinStreamLabel, s_Context))
+            return false;
+    }
+    return true;
+}
+
 Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& scratchArena){
     PositionAlignedSkinnedMesh result;
     SourceMeshStreams& outMesh = result.mesh;
@@ -316,21 +331,6 @@ Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const Sourc
     }
 
     return result;
-}
-
-b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
-    static constexpr AStringView s_Context = "Failed to write NWB model";
-    if(!ValidateMeshGeometry(mesh, s_Context))
-        return false;
-    if(mesh.skin.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model source mesh requires skin influences"));
-        return false;
-    }
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!ValidateStreamIndex(ref.skin, mesh.skin.size(), s_SkinStreamLabel, s_Context))
-            return false;
-    }
-    return true;
 }
 
 

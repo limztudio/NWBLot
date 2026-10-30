@@ -48,7 +48,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     result.valid = true;
     result.selectionChanged = previousSelection != state.selectedKey();
     result.focused = options.enabled && m_context.input().focus() == (*widget)->id;
-    const auto thumbResult = MakeWidgetId((*widget)->id, WidgetPartKey::s_Scrollbar);
+    const auto thumbResult = MakeWidgetId((*widget)->id, s_WidgetPartScrollbar);
     if(!thumbResult){
         m_context.fail();
         result.valid = false;

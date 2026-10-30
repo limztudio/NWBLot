@@ -33,7 +33,6 @@ struct MeshVertexRef{
     u32 tangent = s_MeshMissingStreamIndex;
     u32 uv0 = s_MeshMissingStreamIndex;
     u32 color = s_MeshMissingStreamIndex;
-    u32 skin = s_MeshMissingStreamIndex;
 };
 
 struct MeshCookEntry{

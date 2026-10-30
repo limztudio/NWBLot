@@ -552,7 +552,7 @@ static NWB::Impl::SkeletonJointMatrix MakeIdentityJointMatrix()noexcept{
 
 
 TEST(EcsGraphics, NonUniformScaleCannotBecomeRigidJointRotation){
-    EXPECT_FALSE(MatrixTryBuildRigidRotationQuaternion(LoadFloat(MakeNonUniformScaleJointMatrix()), NWB::Impl::SkeletonRuntime::s_AffineEpsilon, NWB::Impl::SkeletonRuntime::s_RigidJointEpsilon));
+    EXPECT_FALSE(MatrixTryBuildRigidRotationQuaternion(LoadFloat(MakeNonUniformScaleJointMatrix()), NWB::Impl::s_SkeletonAffineEpsilon, NWB::Impl::s_SkeletonRigidJointEpsilon));
 }
 
 static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(const NWB::Impl::SkeletonJointMatrix& rootJoint, const NWB::Impl::SkeletonJointMatrix& childJoint){

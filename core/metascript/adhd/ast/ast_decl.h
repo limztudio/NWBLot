@@ -35,7 +35,6 @@ struct EnumDecl{
     SourceSpan span;
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
-    b8 isReflect = false;
     b8 isImported = false;
 
 
@@ -140,7 +139,6 @@ struct InterfaceDecl{
     MVector<MethodDecl*> methods;
     MStringView assetTypeName;
     SourceSpan span;
-    b8 isReflect = false;
     b8 isImported = false;
 
 

@@ -561,7 +561,6 @@ namespace __hidden_adhd_type_utils{
 #undef NWB_ADHD_EXPORT_SCALAR_TYPE
     return SymbolTable::isSimdType(name)
         || SymbolTable::isUnalignedVectorType(name)
-        || SymbolTable::isArenaBackedContainer(name)
         || symbols.findEnum(name) != nullptr
         || symbols.findInterface(name) != nullptr
         || symbols.findClass(name) != nullptr

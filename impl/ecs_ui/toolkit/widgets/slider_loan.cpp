@@ -27,8 +27,8 @@ void Builder::publishSliderResults(const b8 valid)noexcept{
             result.focused = frame.m_interactive && input.focus() == frame.m_widget.id;
             result.dragging = false;
             if(frame.m_interactive && input.primaryDown()){
-                const auto track = MakeWidgetId(frame.m_widget.id, WidgetPartKey::s_Track);
-                const auto thumb = MakeWidgetId(frame.m_widget.id, WidgetPartKey::s_Thumb);
+                const auto track = MakeWidgetId(frame.m_widget.id, s_WidgetPartTrack);
+                const auto thumb = MakeWidgetId(frame.m_widget.id, s_WidgetPartThumb);
                 if(!track || !thumb){
                     m_context.fail();
                     frame.m_state.m_result = {};

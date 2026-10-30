@@ -261,7 +261,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     Core::GpuTaskId csgIntervalSampleDependency = tasks.intervalCombineTask;
     if(m_intervalSamplePayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
         inputs.opaqueDrawItems.csg.indexedDrawItems,
-        inputs.frameBindings, inputs.targets, scratchArena, csgIntervalSampleDependency, csgIntervalSampleResourceUses,
+        inputs.frameBindings, scratchArena, csgIntervalSampleDependency, csgIntervalSampleResourceUses,
         nullptr, inputs.intervalSampleTimingTicket
     ))
         return MakeUnexpected(Failure{});

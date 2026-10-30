@@ -287,7 +287,7 @@ void SourceEmitter::emitStmt(
         break;
     }
     case StmtKind::Return:{
-        emitSimdBlockStores(out, indent, false);
+        emitSimdBlockStores(out, indent);
         if(tryEmitSimdReturnStmt(out, stmt, indent))
             break;
         emitIndent(out, indent);

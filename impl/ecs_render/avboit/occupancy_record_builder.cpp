@@ -197,12 +197,12 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     Core::GpuTaskId occupancyDependency = inputs.clearTask;
     if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
         occupancyPayload.occupancySnapshot.regularIndexedDrawItems,
-        frameBindings, inputs.targets, scratchArena, occupancyDependency, avboitPreResourceUses, &inputs.preTimingTicket
+        frameBindings, scratchArena, occupancyDependency, avboitPreResourceUses, &inputs.preTimingTicket
     ))
         return false;
     if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
         occupancyPayload.occupancySnapshot.csgIndexedDrawItems,
-        frameBindings, inputs.targets, scratchArena, occupancyDependency, avboitPreResourceUses, &inputs.preTimingTicket
+        frameBindings, scratchArena, occupancyDependency, avboitPreResourceUses, &inputs.preTimingTicket
     ))
         return false;
 

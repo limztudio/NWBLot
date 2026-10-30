@@ -48,8 +48,6 @@ Expected<usize> UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point posit
     const UiEditBoxGeometry& geometry = entry.displayed;
     const SIMDVectorSingle localPosition = VectorSubtract(VectorSet(position.x, position.y, position.x, position.y), VectorSet(geometry.placement.textOrigin.x, geometry.placement.textOrigin.y, geometry.placement.textOrigin.x, geometry.placement.textOrigin.y));
     const Ui::Point local{ VectorGetX(localPosition), VectorGetY(localPosition) };
-    if(!byte)
-        return MakeUnexpected(byte.error());
     u32 lineIndex = static_cast<u32>(geometry.lines.size() - 1u);
     for(u32 index = 0u; index < geometry.lines.size(); ++index){
         if(local.y < VectorGetX(VectorAdd(VectorReplicate(geometry.lines[index].top), VectorReplicate(geometry.lines[index].height)))){

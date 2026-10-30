@@ -87,7 +87,7 @@ static constexpr usize s_HeadUnitsPerEmEnd = 20u;
     return candidate;
 }
 
-[[nodiscard]] static Core::Assets::AssetBytes MakeBinary(FontTestArena& testArena, const FontBinaryPayload::HeaderBinary& header, const Span<const u8> source){
+[[nodiscard]] static Core::Assets::AssetBytes MakeBinary(FontTestArena& testArena, const FontBinaryHeader& header, const Span<const u8> source){
     Core::Assets::AssetBytes binary(testArena.arena);
     binary.reserve(sizeof(header) + source.size());
     AppendPOD(binary, header);
@@ -239,7 +239,7 @@ TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRunti
         FontAssetCodec codec;
         Core::Assets::AssetBytes binary(testArena.arena);
         ASSERT_TRUE(codec.serialize(font, binary));
-        EXPECT_EQ(binary.size(), sizeof(FontBinaryPayload::HeaderBinary) + source.size());
+        EXPECT_EQ(binary.size(), sizeof(FontBinaryHeader) + source.size());
         EXPECT_LT(binary.size(), prepared.size());
         EXPECT_FALSE(font.loadBinary(prepared));
         EXPECT_EQ(font.fontBytes(), source);
@@ -256,10 +256,10 @@ TEST(AssetsFont, MalformedBinaryPreservesThePreviouslyLoadedFont){
     ASSERT_TRUE(fontResult);
     Font& font = *fontResult;
     const Core::Assets::AssetBytes original(font.fontBytes().begin(), font.fontBytes().end(), testArena.arena);
-    FontBinaryPayload::HeaderBinary validHeader;
+    FontBinaryHeader validHeader;
     validHeader.byteCount = original.size();
     for(u32 variant = 0u; variant < 7u; ++variant){
-        FontBinaryPayload::HeaderBinary header = validHeader;
+        FontBinaryHeader header = validHeader;
         switch(variant){
         case 0u: header.magic = 0u; break;
         case 1u: header.version = 2u; break;
@@ -289,7 +289,7 @@ TEST(AssetsFont, OversizedCountIsRejectedBeforeSourceAllocation){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     FontTestArena testArena;
-    FontBinaryPayload::HeaderBinary header;
+    FontBinaryHeader header;
     header.byteCount = static_cast<u64>(s_FontMaxSourceBytes) + 1u;
     Core::Assets::AssetBytes binary(testArena.arena);
     AppendPOD(binary, header);

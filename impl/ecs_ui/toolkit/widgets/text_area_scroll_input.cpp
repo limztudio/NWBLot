@@ -74,11 +74,11 @@ namespace __hidden_text_area_scroll_input{
 b8 Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token){
     TextAreaState& state = *frame.state;
     const b8 enabled = item.editOptions.enabled;
-    const auto horizontalIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_ScrollHorizontalThumb);
+    const auto horizontalIdResult = MakeWidgetId(item.state.id, s_WidgetPartScrollHorizontalThumb);
     if(!horizontalIdResult)
         return false;
     const WidgetId horizontalId = *horizontalIdResult;
-    const auto verticalIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_ScrollVerticalThumb);
+    const auto verticalIdResult = MakeWidgetId(item.state.id, s_WidgetPartScrollVerticalThumb);
     if(!verticalIdResult)
         return false;
     const WidgetId verticalId = *verticalIdResult;
@@ -127,10 +127,10 @@ b8 Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fram
                 next = { nextX, static_cast<f32>(VectorDoubleGetX(y->value)) };
                 manual = true;
             }
-            else if(action->kind == ControlActionKind::Activate && action->value >= TextAreaScrollTarget::s_HorizontalBefore && action->value <= TextAreaScrollTarget::s_VerticalAfter){
+            else if(action->kind == ControlActionKind::Activate && action->value >= s_TextAreaScrollHorizontalBefore && action->value <= s_TextAreaScrollVerticalAfter){
                 const ScrollViewportPlacement& accepted = state.scrollbars();
-                const b8 x = action->value <= TextAreaScrollTarget::s_HorizontalAfter;
-                const f64 direction = action->value == TextAreaScrollTarget::s_HorizontalBefore || action->value == TextAreaScrollTarget::s_VerticalBefore ? -1.0 : 1.0;
+                const b8 x = action->value <= s_TextAreaScrollHorizontalAfter;
+                const f64 direction = action->value == s_TextAreaScrollHorizontalBefore || action->value == s_TextAreaScrollVerticalBefore ? -1.0 : 1.0;
                 const ScrollbarPlacement& bar = x ? accepted.horizontal : accepted.vertical;
                 const auto stepped = __hidden_text_area_scroll_input::Step(VectorDoubleReplicate(x ? scroll.x : scroll.y), VectorDoubleReplicate(direction), VectorDoubleReplicate(bar.viewportExtent), VectorDoubleReplicate(bar.maximum));
                 if(!stepped)

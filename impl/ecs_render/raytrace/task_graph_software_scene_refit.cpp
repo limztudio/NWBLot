@@ -130,10 +130,8 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(Core::GpuTaskGr
             // Retained storage restores Common; the refit read owns the following SRV transition.
             .finalState = Core::ResourceStates::Common, }
     );
-    if(!inputUploadResult){
-        result.inputUpload = {};
+    if(!inputUploadResult)
         return MakeUnexpected(Failure{});
-    }
     result.inputUpload = *inputUploadResult;
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name("render.shadow_prepare.scene_refit")).setMarkerLabel("Software Scene BVH Refit").setScheduling(scheduling).setDependencies(&result.inputUpload, 1u).setResourceUses(uses.data(), uses.size());

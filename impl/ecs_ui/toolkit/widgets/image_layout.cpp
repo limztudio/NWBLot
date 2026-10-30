@@ -77,7 +77,6 @@ Expected<ImageMetrics> ImageLayout::Measure(const ImageOptions& options, const I
 }
 
 Expected<ImagePlacement> ImageLayout::Place(const Rect& bounds, const Rect& clip)noexcept{
-    using namespace __hidden_ui_image_layout;
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))
         return MakeUnexpected(Failure{});
     const auto intersection = IntersectUiRects<UiRectPrecision::EmptyPaint>(bounds, clip);

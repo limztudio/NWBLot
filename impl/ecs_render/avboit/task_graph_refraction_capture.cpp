@@ -82,10 +82,8 @@ namespace __hidden_refraction_capture{
 }
 
 struct CaptureDrawTask{
-    // The material system and the frame targets are required: capture always draws against this frame's targets.
     struct Payload{
         RendererMaterialSystem& materialSystem;
-        const DeferredFrameTargets& deferredTargets;
         AvboitFrameTargets avboitTargets;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
@@ -99,9 +97,8 @@ struct CaptureDrawTask{
 
 
     public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, const DeferredFrameTargets& deferredTargetsIn)noexcept
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn)noexcept
             : materialSystem(materialSystemIn)
-            , deferredTargets(deferredTargetsIn)
             , drawItems(arena)
         {}
     };
@@ -406,9 +403,9 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         }
     }
 
-    if(!objectGeometry.prepare(drawItems.regular.indexedDrawItems, frameBindings, targets, scratchArena, dependency, commonUses))
+    if(!objectGeometry.prepare(drawItems.regular.indexedDrawItems, frameBindings, scratchArena, dependency, commonUses))
         return MakeUnexpected(Failure{});
-    if(!objectGeometry.prepare(drawItems.csg.indexedDrawItems, frameBindings, targets, scratchArena, dependency, commonUses))
+    if(!objectGeometry.prepare(drawItems.csg.indexedDrawItems, frameBindings, scratchArena, dependency, commonUses))
         return MakeUnexpected(Failure{});
 
     usize drawTaskIndex = 0u;
@@ -439,7 +436,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         }
         Core::GpuTaskDesc desc = TaskDesc(**identity, generate ? "Refraction Capture Generate" : "Refraction Capture Raster", dependency);
         desc.setResourceUses(uses.data(), uses.size()).setResourceSetUses(setUses, setUseCount);
-        CaptureDrawTask::Payload payload{arena, materialSystem, targets};
+        CaptureDrawTask::Payload payload{arena, materialSystem};
         payload.avboitTargets = targets.avboit;
         payload.frameBindings = frameBindings;
         payload.csgResources = csgResources;

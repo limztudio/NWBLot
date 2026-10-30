@@ -92,8 +92,7 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
 }
 
 
-template<typename MeshT>
-[[nodiscard]] b8 BuildRuntimeZippedPayload(const MeshT& mesh, const Span<const SkinInfluence4> skinStream, Core::Alloc::ScratchArena& scratchArena, MeshSkinningRuntimeInstance& instance){
+[[nodiscard]] b8 BuildRuntimeZippedPayload(const Mesh& mesh, const Span<const SkinInfluence4> skinStream, Core::Alloc::ScratchArena& scratchArena, MeshSkinningRuntimeInstance& instance){
     Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> runtimePositionRefs{scratchArena};
     Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> runtimeAttributeRefs{scratchArena};
     usize positionRefCount = 0u;

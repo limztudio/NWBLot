@@ -92,7 +92,7 @@ b8 Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, ComboRe
 b8 Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
     InputRouter& input = m_context.input();
     ComboState& state = *frame.state;
-    const auto thumbResult = MakeWidgetId(frame.rows.id, WidgetPartKey::s_Scrollbar);
+    const auto thumbResult = MakeWidgetId(frame.rows.id, s_WidgetPartScrollbar);
     if(!thumbResult)
         return false;
     const WidgetId thumb = *thumbResult;

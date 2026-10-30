@@ -5,14 +5,12 @@
 #include "project.h"
 
 #include <impl/ecs_scene/module.h>
-#include <impl/ecs_mesh/system.h>
 #include <impl/ecs_mesh/skinning/system.h>
 #include <impl/ecs_model/system.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_ui/layer_system.h>
 
 #include <core/common/log.h>
-#include <core/graphics/runtime/runtime.h>
 
 #include <global/simd/frame.h>
 #include <global/simd/vector.h>

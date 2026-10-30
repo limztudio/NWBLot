@@ -121,7 +121,7 @@ inline void AddSmokeSkinnedRenderSystems(Core::ECS::World& world, ProjectRuntime
     Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> bindJoints{arena};
     bindJoints.reserve(skeleton->joints().size());
     for(const Impl::SkeletonJoint& joint : skeleton->joints()){
-        if(requireInvertibleBindPose && !MatrixIsInvertibleAffine(LoadFloat(joint.localBindPose), Impl::SkeletonRuntime::s_AffineEpsilon, Impl::SkeletonRuntime::s_JointDeterminantEpsilon)){
+        if(requireInvertibleBindPose && !MatrixIsInvertibleAffine(LoadFloat(joint.localBindPose), Impl::s_SkeletonAffineEpsilon, Impl::s_SkeletonJointDeterminantEpsilon)){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: skeleton contains an invalid bind pose"), projectName);
             return MakeUnexpected(Failure{});
         }

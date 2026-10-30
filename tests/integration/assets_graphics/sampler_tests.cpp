@@ -74,13 +74,13 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     NWB::Impl::SamplerAssetCodec codec;
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(sampler, binary));
-    ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryPayload::HeaderBinary));
+    ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryHeader));
     const NWB::Core::Assets::AssetBytes validBinary(binary);
 
     for(const NWB::Core::SamplerReductionType::Enum reduction : { NWB::Core::SamplerReductionType::Minimum, NWB::Core::SamplerReductionType::Maximum }){
         binary = validBinary;
         const u32 reductionValue = static_cast<u32>(reduction);
-        NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
+        NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryHeader, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
         EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary));
 
         description.reductionType = reduction;
@@ -89,10 +89,10 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     }
 
     for(const usize borderOffset : {
-        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, borderColorR),
-        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, borderColorG),
-        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, borderColorB),
-        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, borderColorA)
+        offsetof(NWB::Impl::SamplerBinaryHeader, borderColorR),
+        offsetof(NWB::Impl::SamplerBinaryHeader, borderColorG),
+        offsetof(NWB::Impl::SamplerBinaryHeader, borderColorB),
+        offsetof(NWB::Impl::SamplerBinaryHeader, borderColorA)
     }){
         binary = validBinary;
         const f32 nonblack = 1.0f;
@@ -143,7 +143,7 @@ TEST(AssetsGraphics, SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAnd
         EXPECT_EQ(retained, binary) << prefix;
     }
     for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
-        NWB::Impl::SamplerBinaryPayload::HeaderBinary header;
+        NWB::Impl::SamplerBinaryHeader header;
         NWB_MEMCPY(&header, sizeof(header), binary.data(), binary.size());
         switch(invalidCase){
         case 0u: header.magic = 0u; break;
@@ -181,13 +181,13 @@ TEST(AssetsGraphics, SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreserv
     NWB::Impl::SamplerAssetCodec codec;
     NWB::Core::Assets::AssetBytes binary(testArena.arena);
     ASSERT_TRUE(codec.serialize(sampler, binary));
-    ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryPayload::HeaderBinary));
+    ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryHeader));
 
     for(const usize offset : {
-        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, addressU),
-        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, addressV),
-        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, addressW),
-        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, reductionType)
+        offsetof(NWB::Impl::SamplerBinaryHeader, addressU),
+        offsetof(NWB::Impl::SamplerBinaryHeader, addressV),
+        offsetof(NWB::Impl::SamplerBinaryHeader, addressW),
+        offsetof(NWB::Impl::SamplerBinaryHeader, reductionType)
     }){
         for(const u32 rawValue : { 0x100u, 0x101u }){
             NWB::Core::Assets::AssetBytes malformed(binary);

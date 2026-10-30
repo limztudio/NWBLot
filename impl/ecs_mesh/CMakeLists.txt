@@ -28,8 +28,6 @@ nwb_target_adhd_sources(nwb_ecs_mesh
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/runtime/*.adhd"
-    DEPENDS
-        "${CMAKE_CURRENT_LIST_DIR}/runtime/*.adhd"
 )
 target_link_libraries(nwb_ecs_mesh PUBLIC nwb_ecs nwb_assets nwb_graphics nwb_assets_skeleton_types nwb_assets_mesh_types)
 

@@ -319,25 +319,8 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     const auto countersResult = ImportReflectionBuffer(graph, resources.counters);
     const auto queueResult = ImportReflectionBuffer(graph, resources.queue);
     const auto argsResult = ImportReflectionBuffer(graph, resources.indirectArgs);
-    if(!opaqueRadianceResult || !glassRadianceResult || !frameParametersResult || !countersResult || !queueResult || !argsResult){
-        if(opaqueRadianceResult)
-            result.opaqueRadiance = *opaqueRadianceResult;
-        else
-            result.opaqueRadiance = {};
-        if(glassRadianceResult)
-            result.glassRadiance = *glassRadianceResult;
-        else
-            result.glassRadiance = {};
-        if(frameParametersResult)
-            result.frameParameters = *frameParametersResult;
-        else
-            result.frameParameters = {};
-        if(countersResult)
-            result.counters = *countersResult;
-        else
-            result.counters = {};
+    if(!opaqueRadianceResult || !glassRadianceResult || !frameParametersResult || !countersResult || !queueResult || !argsResult)
         return MakeUnexpected(Failure{});
-    }
     result.opaqueRadiance = *opaqueRadianceResult;
     result.glassRadiance = *glassRadianceResult;
     result.frameParameters = *frameParametersResult;
@@ -352,27 +335,21 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
         desc,
         UploadParametersTask::Payload{ resources.frameParameters, resources.parameters, resources.postprocess.history, resources.feedback.plan, feedbackReserved, inputs.hardwarePreparationReady, }
     );
-    if(!dependencyResult){
-        dependency = {};
+    if(!dependencyResult)
         return MakeUnexpected(Failure{});
-    }
     dependency = *dependencyResult;
 
     desc = ReflectionTaskDesc(Name("render.reflection.clear_counters"), "Reflection Clear Counters", dependency);
     const auto dependencyResult2 = graph.addClearBufferTask(desc, Core::GpuClearBufferTaskDesc{.destination = result.counters, .clearValue = 0u});
-    if(!dependencyResult2){
-        dependency = {};
+    if(!dependencyResult2)
         return MakeUnexpected(Failure{});
-    }
     dependency = *dependencyResult2;
 
     Core::GpuGraphResourceId depthPyramid;
     if(screen){
         const auto depthPyramidTaskResult = DeclareReflectionDepthPyramidTasks(graph, graphics, resources.depthPyramid, inputs.opaqueDepth, dependency, depthPyramid);
-        if(!depthPyramidTaskResult){
-            dependency = {};
+        if(!depthPyramidTaskResult)
             return MakeUnexpected(Failure{});
-        }
         dependency = *depthPyramidTaskResult;
     }
 
@@ -468,10 +445,8 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
                 sliceDesc.setResourceSetUses(inputs.hardwareSetReads.data(), inputs.hardwareSetReads.size());
                 sliceDesc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
                 const auto dependencyResult4 = graph.addTask<CsgHardwareSliceTask>(sliceDesc, CsgHardwareSliceTask::Payload{ graphics, inputs.raytracingSystem, dispatch, slice, sliceCount, inputs.hardwarePreparationReady, inputs.hardwareDispatchLogged, });
-                if(!dependencyResult4){
-                    dependency = {};
+                if(!dependencyResult4)
                     return MakeUnexpected(Failure{});
-                }
                 dependency = *dependencyResult4;
             }
         }
@@ -480,10 +455,8 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     }
 
     const auto dependencyResult5 = DeclareReflectionPostprocessTasks(graph, graphics, scratchArena, resources, inputs, dependency, result);
-    if(!dependencyResult5){
-        dependency = {};
+    if(!dependencyResult5)
         return MakeUnexpected(Failure{});
-    }
     dependency = *dependencyResult5;
 
     const auto completionResult = DeclareReflectionStatisticsAndFinalizeTasks(graph, resources, inputs, feedbackReserved, dependency, result);

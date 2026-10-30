@@ -5,7 +5,6 @@
 #include "renderer_internal.h"
 
 #include <core/common/log.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
 
 #include <global/text_utils.h>
 

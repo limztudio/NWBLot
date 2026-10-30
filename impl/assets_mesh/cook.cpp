@@ -22,8 +22,6 @@
 
 #include <core/alloc/scratch.h>
 #include <core/assets/paths.h>
-#include <core/metascript/parser.h>
-#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -171,6 +169,59 @@ Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace MeshAssetBinaryPayload{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void FillMeshBaseHeader(MeshBinaryHeader& header, const Mesh& mesh)noexcept{
+    header.meshClass = mesh.meshClass();
+    header.positionCount = static_cast<u64>(mesh.positionStream().size());
+    header.normalCount = static_cast<u64>(mesh.normalStream().size());
+    header.tangentCount = static_cast<u64>(mesh.tangentStream().size());
+    header.uv0Count = static_cast<u64>(mesh.uv0Stream().size());
+    header.colorCount = static_cast<u64>(mesh.colorStream().size());
+    header.meshletCount = static_cast<u64>(mesh.meshlets().size());
+    header.meshletBoundCount = static_cast<u64>(mesh.meshletBounds().size());
+    header.meshletPositionRefDeltaByteCount = static_cast<u64>(mesh.meshletPositionRefDeltas().size());
+    header.meshletAttributeRefDeltaByteCount = static_cast<u64>(mesh.meshletAttributeRefDeltas().size());
+    header.meshletLocalVertexRefCount = static_cast<u64>(mesh.meshletLocalVertexRefs().size());
+    header.meshletPrimitiveIndexCount = static_cast<u64>(mesh.meshletPrimitiveIndices().size());
+}
+
+[[nodiscard]] b8 AppendMeshAttributeStreams(Core::Assets::AssetBytes& outBinary, const Mesh& mesh, const TStringView failureContext){
+    return
+        Core::Assets::AppendVectorPayload(outBinary, mesh.positionStream(), failureContext, s_PositionsStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.normalStream(), failureContext, s_NormalsStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.tangentStream(), failureContext, s_TangentsStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.uv0Stream(), failureContext, s_Uv0StreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.colorStream(), failureContext, s_ColorsStreamLabel)
+    ;
+}
+
+[[nodiscard]] b8 AppendMeshletStreams(Core::Assets::AssetBytes& outBinary, const Mesh& mesh, const TStringView failureContext){
+    return
+        Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, s_MeshletsStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, s_MeshletBoundsStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPositionRefDeltas(), failureContext, s_MeshletPositionRefDeltasStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, s_MeshletAttributeRefDeltasStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletLocalVertexRefs(), failureContext, s_MeshletLocalVertexRefsStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPrimitiveIndices(), failureContext, s_MeshletPrimitiveIndicesStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.solidTriangleWords(), failureContext, s_SolidTriangleWordsStreamLabel)
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, MeshBinaryPayload::s_MeshSerializeContext))
         return false;
@@ -180,14 +231,14 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!mesh.validatePayload(scratchArena))
         return false;
 
-    usize reserveBytes = sizeof(MeshBinaryPayload::MeshHeaderBinary);
+    usize reserveBytes = sizeof(MeshBinaryHeader);
     const b8 canReserve = MeshAssetBinaryPayload::AddMeshBaseReserveBytes(reserveBytes, mesh);
 
     outBinary.clear();
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    MeshBinaryPayload::MeshHeaderBinary header;
+    MeshBinaryHeader header;
     MeshAssetBinaryPayload::FillMeshBaseHeader(header, mesh);
     AppendPOD(outBinary, header);
 

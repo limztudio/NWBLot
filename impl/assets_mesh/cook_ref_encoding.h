@@ -22,8 +22,7 @@ NWB_IMPL_BEGIN
 
 class MeshCookRefEncoding final : NoCopy{
 public:
-    template<typename CookEntryT>
-    [[nodiscard]] static b8 EncodeMeshletRefs(CookEntryT& entry, const TStringView metaKind);
+    [[nodiscard]] static b8 EncodeMeshletRefs(MeshCookEntry& entry, const TStringView metaKind);
 
 
 public:
@@ -34,8 +33,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename CookEntryT>
-b8 MeshCookRefEncoding::EncodeMeshletRefs(CookEntryT& entry, const TStringView metaKind){
+inline b8 MeshCookRefEncoding::EncodeMeshletRefs(MeshCookEntry& entry, const TStringView metaKind){
     return EncodeMeshletRefDeltas(entry.meshletPositionStreamRefs, entry.meshletAttributeStreamRefs, false, [&](const usize meshletIndex, const TStringView reason){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} {}"), metaKind, ConvertString(entry.virtualPath.resolvedText()), meshletIndex, reason);
         return false;

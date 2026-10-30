@@ -27,7 +27,6 @@ namespace VolumeUsage{
 };
 
 using VolumeArena = Alloc::GlobalArena;
-using VolumeString = AString<VolumeArena>;
 using VolumeBytes = Vector<u8, VolumeArena>;
 
 struct VolumeMountDesc{

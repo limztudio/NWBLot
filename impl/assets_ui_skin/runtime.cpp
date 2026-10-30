@@ -33,7 +33,7 @@ namespace __hidden_ui_skin_runtime{
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_UiSkinAssetCodecAutoRegistrar, UiSkinAssetCodec);
 NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_UiSubsystemAssetAutoRegistrar, UiSubsystem);
-static_assert(UiSkinColorRole::kCount == UiSkinBinaryPayload::s_UiSkinPaletteColorCount, "UI skin palette layout drifted");
+static_assert(UiSkinColorRole::kCount == s_UiSkinPaletteColorCount, "UI skin palette layout drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,11 +82,11 @@ static_assert(UiSkinColorRole::kCount == UiSkinBinaryPayload::s_UiSkinPaletteCol
 
 b8 UiSkin::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(binary, UiSkinBinaryPayload::s_UiSkinMagic, UiSkinBinaryPayload::s_UiSkinLoadBinaryContext, UiSkinBinaryPayload::s_UiSkinAssetKindLabel, cursor);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(binary, s_UiSkinBinaryMagic, UiSkinBinaryPayload::s_UiSkinLoadBinaryContext, UiSkinBinaryPayload::s_UiSkinAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const UiSkinBinaryPayload::HeaderBinary& header = *headerResult;
-    if(header.version != UiSkinBinaryPayload::s_UiSkinVersion){
+    if(header.version != s_UiSkinBinaryVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required"), header.version);
         return false;
     }
@@ -134,8 +134,8 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
     }
     UiSkinPalette palette;
     for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index){
-        UiSkinBinaryPayload::ColorBinary packed;
-        const auto packedResult = ReadPOD<UiSkinBinaryPayload::ColorBinary>(binary, cursor);
+        UiSkinColorBinary packed;
+        const auto packedResult = ReadPOD<UiSkinColorBinary>(binary, cursor);
         if(!packedResult){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed palette color {}"), index);
             return false;
@@ -144,8 +144,8 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
         palette.colors[index] = { packed.r, packed.g, packed.b, packed.a };
     }
     candidate.setPalette(palette);
-    UiSkinBinaryPayload::TypographyBinary typography;
-    const auto typographyResult = ReadPOD<UiSkinBinaryPayload::TypographyBinary>(binary, cursor);
+    UiSkinTypographyBinary typography;
+    const auto typographyResult = ReadPOD<UiSkinTypographyBinary>(binary, cursor);
     if(!typographyResult){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed typography payload"));
         return false;

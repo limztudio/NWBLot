@@ -24,14 +24,9 @@ namespace FontBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_FontMagic = s_FontBinaryMagic;
-inline constexpr u32 s_FontVersion = s_FontBinaryVersion;
 inline constexpr TStringView s_FontAssetKindLabel = NWB_TEXT("font");
 
-using HeaderBinary = FontBinaryHeader;
-
-static_assert(sizeof(HeaderBinary) == 24u && alignof(HeaderBinary) == 1u, "Font payload header layout drifted");
-static_assert(IsStandardLayout_V<HeaderBinary> && IsTriviallyCopyable_V<HeaderBinary>, "Font header must stay binary-serializable");
+static_assert(sizeof(FontBinaryHeader) == 24u && alignof(FontBinaryHeader) == 1u, "Font payload header layout drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

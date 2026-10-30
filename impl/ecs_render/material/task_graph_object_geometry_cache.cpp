@@ -10,8 +10,6 @@
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
-#include <core/common/log.h>
-
 #include <global/basic_string.h>
 
 
@@ -81,7 +79,6 @@ struct DecodeTask{
     struct Payload{
         RendererMaterialSystem& materialSystem;
         RendererMeshSystem& meshSystem;
-        const DeferredFrameTargets& targets;
         MaterialPassDrawItem draw;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
@@ -142,7 +139,6 @@ ObjectGeometryCacheGraph::ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, Re
 b8 ObjectGeometryCacheGraph::prepare(
     const Span<const MaterialPassDrawItem> draws,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    const DeferredFrameTargets& targets,
     Core::Alloc::ScratchArena& scratchArena,
     Core::GpuTaskId& dependency,
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& rasterUses,
@@ -204,7 +200,7 @@ b8 ObjectGeometryCacheGraph::prepare(
                     return false;
                 Core::GpuTaskDesc desc = TaskDesc(**identity, "Object Geometry Decode");
                 desc.setDependencies(&dependency, 1u).setResourceUses(uses.data(), uses.size());
-                const auto entryProducerResult = m_graph.addTask<DecodeTask>(desc, DecodeTask::Payload{ m_materialSystem, m_meshSystem, targets, draw, frameBindings, timingTicket, rebindableTimingTicket, });
+                const auto entryProducerResult = m_graph.addTask<DecodeTask>(desc, DecodeTask::Payload{ m_materialSystem, m_meshSystem, draw, frameBindings, timingTicket, rebindableTimingTicket, });
                 if(!entryProducerResult){
                     entry.producer = {};
                     return false;

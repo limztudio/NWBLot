@@ -69,11 +69,11 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     state.m_popup.bindParent(frame.parentToken);
     if(boundOpen && !state.isOpen())
         state.close();
-    const auto popup = m_context.declarePart(frame.widget, WidgetPartKey::s_Popup, WidgetKind::Popup);
+    const auto popup = m_context.declarePart(frame.widget, s_WidgetPartPopup, WidgetKind::Popup);
     if(!popup)
         return result;
     frame.popup = **popup;
-    const auto rows = m_context.declarePart(frame.widget, WidgetPartKey::s_Rows, WidgetKind::VirtualList);
+    const auto rows = m_context.declarePart(frame.widget, s_WidgetPartRows, WidgetKind::VirtualList);
     if(!rows)
         return result;
     frame.rows = **rows;

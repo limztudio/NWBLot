@@ -28,7 +28,7 @@ impl/
       paint.h, paint*.cpp      primitives and immutable paint output
       widgets/                controls composed from the above services
       images/                 immutable owned texture sources
-      widgets/*_style.h        skin region resolution, metrics, control states
+      widgets/*_style.adhd     skin region resolution, metrics, control states
       gpu/                    nwb_ui_gpu: uploads, atlases, raster, resources
   assets_ui_skin/             typed skin/atlas asset, author fields, cook, runtime load
   assets/graphics/ui/          raster shaders and .nwb metadata

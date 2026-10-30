@@ -8,15 +8,12 @@
 #include "report_json.h"
 #include "memory_report.h"
 
-#include <core/alloc/scratch.h>
 #include <core/telemetry/diagnostic.h>
 #include <core/telemetry/text_log.h>
 
 #include <global/bit.h>
 #include <global/csv_text.h>
-#include <global/hash_utils.h>
 #include <global/simd/vector.h>
-#include <global/type_properties.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

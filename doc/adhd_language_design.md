@@ -535,7 +535,7 @@ Every source and header file is strictly split by domain responsibility so that 
    - `value.*`, `operation_validator.*`, `expression_parser.*`, `statement_parser.*`, `parser.*`: `.nwb` document data evaluation.
 
 2. **`adhd` Language & Compiler Library (`core/metascript/adhd/`)**:
-   - `compiler.h` / `compiler.cpp`: Top-level `Compiler` pipeline entry (preprocess, parse, type-check, layout, emit); `export_functions.h` declares the X-macro exported-function table consumed by the semantic and SIMD emitters.
+   - `compiler.h` / `compiler.cpp`: Top-level `Compiler` pipeline entry (preprocess, parse, type-check, layout, emit); `export_functions.h`, `export_keywords.h`, `export_operators.h`, and `export_types.h` declare the centralized X-macro language tables consumed across the parser, semantic analyzer, and code generators.
    - **AST (`core/metascript/adhd/ast/`)**:
      - `ast_common.h`: Source spans, attributes, access specifiers, and `in` / `mut` / `const` modifiers.
      - `ast_types.h`: Scalar, SIMD (`f32x4`, `f32x4x4`), `Func<...>`, `enum<SizeType>`, and template bound (`<T : IBar, const usize N>`) nodes.
@@ -561,7 +561,7 @@ Every source and header file is strictly split by domain responsibility so that 
      - `reflection_emitter.h` / `reflection_emitter.cpp` / `reflection_emitter_nwb.cpp`: Emits `[serialize]` 1-byte packed binary serialization, `.nwb` property parsing, `AssetRef<T>` dependency extraction, and `[asset("...")]` registration.
 
 3. **CLI Executable (`pipeline/adhd_compiler/`)**:
-   - `compiler_options.h` / `compiler_options.cpp`: CLI argument parsing (input `.adhd`, include directories, output `.adhd.h` / `.adhd.cpp`, `--namespace`, `--validate-only`).
+   - `compiler_options.h` / `compiler_options.cpp`: CLI argument parsing (input `.adhd`, include directories, `-D` macro definitions, `-MF` / `--depfile` output, output `.adhd.h` / `.adhd.cpp`, `--namespace`, `--validate-only`).
    - `compiler_driver.h` / `compiler_driver.cpp`: Orchestrates file I/O and invokes the `core/metascript/adhd` pipeline.
    - `main.cpp`: Standalone executable entry point invoked by CMake and build/validation tools.
 

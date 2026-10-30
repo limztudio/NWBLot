@@ -3,8 +3,6 @@ nwb_target_adhd_sources(nwb_assets_mesh_types
     NAMESPACE "NWB::Impl"
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
-    DEPENDS
-        "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
 target_link_libraries(nwb_assets_mesh_types PUBLIC nwb_assets nwb_assets_skeleton_types)
 

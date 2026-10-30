@@ -26,7 +26,7 @@ static int RunAdhdCompiler(const int argc, char** argv){
         return 1;
 
     if(options.showHelp){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Usage: nwb_adhd_compiler --input <file.adhd> -o <output_dir> [-I <include_dir>] [-D <NAME[=VALUE]>] [--namespace <ns>] [--validate-only]"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Usage: nwb_adhd_compiler --input <file.adhd> -o <output_dir> [-MF|--depfile <depfile>] [-I <include_dir>] [-D <NAME[=VALUE]>] [--namespace <ns>] [--validate-only]"));
         return 0;
     }
 

@@ -51,7 +51,7 @@ b8 Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& resul
 
 b8 Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result){
     InputRouter& input = m_context.input();
-    const auto thumbResult = MakeWidgetId(frame.rows.id, WidgetPartKey::s_Scrollbar);
+    const auto thumbResult = MakeWidgetId(frame.rows.id, s_WidgetPartScrollbar);
     if(!thumbResult)
         return false;
     const WidgetId thumb = *thumbResult;

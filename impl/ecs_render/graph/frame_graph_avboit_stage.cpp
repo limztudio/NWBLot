@@ -109,7 +109,6 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
     auto transparentCsgTaskResult = transparentCsgTasks.declare(
         scratchArena,
         FrameGraphTransparentCsgTaskInputs{
-            .targets = inputs.targets,
             .albedo = inputs.resources.albedo,
             .normal = inputs.resources.normal,
             .worldPosition = inputs.resources.worldPosition,

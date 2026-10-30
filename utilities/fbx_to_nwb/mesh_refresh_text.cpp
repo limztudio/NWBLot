@@ -199,11 +199,7 @@ void ApplyTextReplacements(ScratchString& inOutSource, const Span<TextReplacemen
 }
 
 [[nodiscard]] static b8 IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
-    if(value.isReference())
-        return value.asReference() == variableName;
-    if(value.isString())
-        return value.asString() == variableName;
-    return false;
+    return value.isReference() && value.asReference() == variableName;
 }
 
 [[nodiscard]] Expected<SkinReference> FindSkinForMesh(const Core::Metascript::Document& doc, const AStringView meshVariableName){

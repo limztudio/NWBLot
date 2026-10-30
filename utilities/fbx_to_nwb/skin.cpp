@@ -27,6 +27,8 @@ namespace FbxSkinDetail{
 static constexpr f64 s_UniformScaleNumerator = 1.0;
 static constexpr f64 s_InvertibleMatrixDeterminantEpsilon = 0.00000001;
 static constexpr f32 s_JointMatrixRowEpsilon = 0.0001f;
+inline constexpr StringView s_NullNodeLabel = "<null>";
+inline constexpr StringView s_UnnamedNodeLabel = "<unnamed node>";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

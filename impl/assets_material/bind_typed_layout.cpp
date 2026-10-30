@@ -11,9 +11,6 @@
 #include "bind_private.h"
 #include "bind_typed_value.h"
 
-#include <global/array.h>
-#include <global/span.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -432,7 +429,7 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
 
         MaterialTypedLayoutBlock block;
         const auto blockName = Name::FromText(AStringView(instance->name));
-        if(!blockName){
+        if(!blockName || !*blockName){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' has invalid block '{}' for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(instance->name), ConvertString(contextName.resolvedText()));
             return MakeUnexpected(Failure{});
         }
@@ -441,11 +438,6 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
         block.fieldBegin = static_cast<u32>(layout.typedLayoutFields.size());
         block.fieldCount = static_cast<u32>(bindStruct->fields.size());
         block.byteSize = 0u;
-
-        if(!block.blockName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' has invalid block '{}' for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(instance->name), ConvertString(contextName.resolvedText()));
-            return MakeUnexpected(Failure{});
-        }
 
         for(const MaterialBindField& bindField : bindStruct->fields){
             const auto fieldTypeResult = ParseMaterialLayoutFieldType(AStringView(bindField.type));
@@ -474,7 +466,7 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
 
             MaterialTypedLayoutField field;
             const auto fieldName = Name::FromText(AStringView(bindField.name));
-            if(!fieldName){
+            if(!fieldName || !*fieldName){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' has invalid field '{}.{}' for '{}'")
                     , ConvertString(bindEntry.virtualPath)
                     , ConvertString(instance->name)
@@ -486,15 +478,6 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
             field.fieldName = *fieldName;
             field.fieldType = fieldType;
             field.offset = *fieldOffset;
-            if(!field.fieldName){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' has invalid field '{}.{}' for '{}'")
-                    , ConvertString(bindEntry.virtualPath)
-                    , ConvertString(instance->name)
-                    , ConvertString(bindField.name)
-                    , ConvertString(contextName.resolvedText())
-                );
-                return MakeUnexpected(Failure{});
-            }
             const auto defaultValue = BuildMaterialTypedLayoutDefaultValue(contextName, *instance, bindField, fieldType);
             if(!defaultValue)
                 return MakeUnexpected(Failure{});

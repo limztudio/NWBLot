@@ -5,8 +5,6 @@
 #include "tree.h"
 #include "../rect_math.h"
 
-#include <global/simplemath.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 
 
 b8 LayoutTree::arrange(const Rect& viewport){
-    if(m_buildFailed || m_nodes.empty() || !IsValidRectangle(viewport))
+    if(m_buildFailed || m_nodes.empty() || !IsValidUiRect(viewport))
         return false;
     m_work.assign(m_nodes.size(), {});
     if(!measure())
@@ -45,7 +43,7 @@ b8 LayoutTree::arrangeNode(const u32 index)noexcept{
     const LayoutNodeDesc& description = node.description;
     Work& work = m_work[index];
     LayoutBox& box = work.box;
-    if(!IsValidRectangle(box.rectangle))
+    if(!IsValidUiRect(box.rectangle))
         return false;
     const SIMDVectorSingle rectangle = VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.width, box.rectangle.height);
     const SIMDVectorSingle padding = VectorSet(description.padding.left, description.padding.top, description.padding.right, description.padding.bottom);
@@ -55,7 +53,7 @@ b8 LayoutTree::arrangeNode(const u32 index)noexcept{
     box.content = { VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) };
     box.clip = { VectorGetX(clip), VectorGetY(clip), VectorGetZ(clip), VectorGetW(clip) };
     box.hit = box.clip;
-    if(!IsValidRectangle(box.content) || !IsValidRectangle(box.clip))
+    if(!IsValidUiRect(box.content) || !IsValidUiRect(box.clip))
         return false;
     const SIMDVectorSingle childClipValue = description.clipChildren ? IntersectRectValue(inheritedClip, content) : inheritedClip;
     const Rect childClip{ VectorGetX(childClipValue), VectorGetY(childClipValue), VectorGetZ(childClipValue), VectorGetW(childClipValue) };
@@ -94,7 +92,7 @@ b8 LayoutTree::arrangeNode(const u32 index)noexcept{
         const f32 x = row ? static_cast<f32>(VectorDoubleGetX(cursor)) : box.content.x;
         const f32 y = column ? static_cast<f32>(VectorDoubleGetX(cursor)) : box.content.y;
         const Rect rectangle{ x, y, width, height };
-        if(!IsValidRectangle(rectangle))
+        if(!IsValidUiRect(rectangle))
             return false;
         m_work[child].box.rectangle = rectangle;
         m_work[child].inheritedClip = childClip;

@@ -5,6 +5,10 @@
 #include "mesh_build.h"
 
 #include <core/alloc/scratch.h>
+#include <core/common/log.h>
+
+#include <global/simd/collision_triangle.h>
+#include <global/simd/frame.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,17 +20,73 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVectorSingle FbxMeshBuild::LoadUfbxVector(const ufbx_vec3 value, const f32 w)noexcept{
-    return ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(value.x), static_cast<f64>(value.y), static_cast<f64>(value.z), static_cast<f64>(w)));
+struct PositionKey{
+    u32 x = 0u;
+    u32 y = 0u;
+    u32 z = 0u;
+};
+
+struct PositionKeyHasher{
+    usize operator()(const PositionKey& key)const noexcept{
+        usize seed = Hasher<u32>{}(key.x);
+        HashCombine(seed, key.y);
+        HashCombine(seed, key.z);
+        return seed;
+    }
+};
+
+struct PositionKeyEqual{
+    b8 operator()(const PositionKey& lhs, const PositionKey& rhs)const noexcept{
+        return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+    }
+};
+
+// Summed normal for one source position. It stays in the map, so it uses Float storage.
+struct PositionNormalRecord{
+    Float4 value;
+};
+
+using PositionNormalMap = UtilityScratchMap<PositionKey, PositionNormalRecord, PositionKeyHasher, PositionKeyEqual>;
+
+template<typename VisitTriangle>
+[[nodiscard]] static b8 VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const b8 flipWinding, VisitTriangle&& visitTriangle, UtilityScratchVector<u32>& inOutTriangleIndices){
+    if(!FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices))
+        return false;
+    for(usize faceIndex = 0u; faceIndex < mesh.num_faces; ++faceIndex){
+        const ufbx_face face = mesh.faces.data[faceIndex];
+        if(face.num_indices < s_TriangleIndexCount)
+            continue;
+
+        const u32 triangleCount = ufbx_triangulate_face(inOutTriangleIndices.data(), inOutTriangleIndices.size(), &mesh, face);
+
+        for(u32 triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
+            u32 cornerIndices[s_TriangleIndexCount] = { inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 0u], inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 1u], inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 2u], };
+            if(flipWinding)
+                Swap(cornerIndices[1], cornerIndices[2]);
+
+            for([[maybe_unused]] const u32 cornerIndex : cornerIndices){
+                NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
+            }
+
+            if(!visitTriangle(cornerIndices))
+                return false;
+        }
+    }
+    return true;
 }
 
 
-PositionKey FbxMeshBuild::MakePositionKey(const SIMDVectorSingle position)noexcept{
+[[nodiscard]] static SIMDVectorSingle LoadUfbxVector(const ufbx_vec3 value)noexcept{
+    return ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(value.x), static_cast<f64>(value.y), static_cast<f64>(value.z), 0.0));
+}
+
+
+[[nodiscard]] static PositionKey MakePositionKey(const SIMDVectorSingle position)noexcept{
     return PositionKey{ FloatingHashBits(VectorGetX(position)), FloatingHashBits(VectorGetY(position)), FloatingHashBits(VectorGetZ(position)), };
 }
 
 
-SIMDVectorSingle FbxMeshBuild::LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
+[[nodiscard]] static SIMDVectorSingle LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 position = {};
     if(options.bakeTransforms){
         position = ufbx_get_vertex_vec3(wantsSkinning ? &mesh.vertex_position : &mesh.skinned_position, cornerIndex);
@@ -41,7 +101,7 @@ SIMDVectorSingle FbxMeshBuild::LoadCornerOutputPositionVector(const ufbx_mesh& m
 }
 
 
-SIMDVectorSingle FbxMeshBuild::LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
+[[nodiscard]] static SIMDVectorSingle LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 normal = {};
     if(options.bakeTransforms){
         normal = ufbx_get_vertex_vec3(wantsSkinning ? &mesh.vertex_normal : &mesh.skinned_normal, cornerIndex);
@@ -57,7 +117,7 @@ SIMDVectorSingle FbxMeshBuild::LoadCornerOutputNormalVector(const ufbx_mesh& mes
 }
 
 
-Expected<SIMDVectorSingleResult> FbxMeshBuild::LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
+[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
     if(!mesh.vertex_tangent.exists)
         return MakeUnexpected(Failure{});
 
@@ -87,12 +147,12 @@ Expected<SIMDVectorSingleResult> FbxMeshBuild::LoadCornerOutputTangentVector(con
 }
 
 
-b8 FbxMeshBuild::IsFiniteSkinInfluence(const SIMDVectorSingle weights)noexcept{
+[[nodiscard]] static b8 IsFiniteSkinInfluence(const SIMDVectorSingle weights)noexcept{
     return VectorIsFinite(weights, VectorComponentMask::s_XYZW);
 }
 
 
-b8 FbxMeshBuild::IsFiniteSourceTriangleCorner(
+[[nodiscard]] static b8 IsFiniteSourceTriangleCorner(
     const SIMDVectorSingle position,
     const SIMDVectorSingle normal,
     const SIMDVectorSingle tangent,
@@ -110,7 +170,7 @@ b8 FbxMeshBuild::IsFiniteSourceTriangleCorner(
 }
 
 
-Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(
+[[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
     const ufbx_mesh& mesh,
     const ufbx_node& node,
     const ImportOptions& options,

@@ -39,7 +39,6 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
 ){
     FrameGraphTransparentCsgTaskResult result{};
     using namespace RendererTaskGraphDetail;
-    DeferredFrameTargets& deferredTargets = inputs.targets;
     const Core::GpuGraphResourceId albedo = inputs.albedo;
     const Core::GpuGraphResourceId normal = inputs.normal;
     const Core::GpuGraphResourceId worldPosition = inputs.worldPosition;
@@ -127,7 +126,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
 
     if(avboitPrePayload.transparentCsgStreamsUploaded && !objectGeometry.prepare(
         avboitPrePayload.transparentCsgSnapshot.receiverSurfaceIndexedDrawItems,
-        avboitPrePayload.frameBindings, deferredTargets, scratchArena, intervalDependency, avboitIntervalResourceUses,
+        avboitPrePayload.frameBindings, scratchArena, intervalDependency, avboitIntervalResourceUses,
         inputs.timingTicket
     ))
         return MakeUnexpected(Failure{});

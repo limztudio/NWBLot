@@ -5,6 +5,8 @@
 #include "window.h"
 #include "../rect_math.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 
@@ -27,8 +29,7 @@ Expected<WindowMetrics> WindowLayout::Measure(
         !IsFinite(style.windowCollapseExtent) || style.windowCollapseExtent <= 0.0f
         || !IsFinite(style.windowResizeExtent) || style.windowResizeExtent <= 0.0f
         || !IsFinite(style.gap) || style.gap < 0.0f || !IsFinite(density) || density <= 0.0f
-        || !IsFinite(options.minimumSize.x) || options.minimumSize.x < 0.0f
-        || !IsFinite(options.minimumSize.y) || options.minimumSize.y < 0.0f
+        || !IsValidUiExtent(options.minimumSize)
     )
         return MakeUnexpected(Failure{});
     WindowMetrics metrics;

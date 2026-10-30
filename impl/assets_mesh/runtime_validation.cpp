@@ -128,49 +128,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 }
 
 
-[[nodiscard]] b8 MeshRuntimeValidation::ValidateMeshletAttributeSkinSharing(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Span<const u8> positionRefDeltas,
-    const Span<const MeshletLocalVertexRef> localVertexRefs,
-    const Span<const MeshletDesc> meshlets,
-    const TStringView contextText,
-    const TStringView meshPathText
-){
-    Vector<u32, Core::Alloc::ScratchArena> attributeSkins{scratchArena};
-    usize attributeRefCount = 0u;
-    for(const MeshletDesc& meshlet : meshlets)
-        attributeRefCount += MeshletAttributeCount(meshlet);
-
-    return MeshMeshletRefValidation::ResolveMeshletAttributeSkinsFromLocalVertices(
-        meshlets,
-        localVertexRefs,
-        attributeRefCount,
-        [&](const usize meshletIndex, const MeshletDesc& meshlet, const usize, const u32 localPositionIndex)->Expected<u32>{
-            const auto positionRef = DecodeMeshletPositionRef(positionRefDeltas.data(), positionRefDeltas.size(), meshlet, localPositionIndex, true);
-            if(!positionRef){
-                MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, __hidden_mesh_runtime_validation::s_InvalidEncodedPositionRefReason);
-                return MakeUnexpected(Failure{});
-            }
-
-            return positionRef->skin;
-        },
-        [&](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
-            static_cast<void>(previousSkin);
-            static_cast<void>(skinIndex);
-            MeshPayloadValidationDiagnostics::LogMeshletAttributePayloadValidation(contextText, meshPathText, meshletIndex, attributeIndex, NWB_TEXT("shared across skin identities"));
-            return false;
-        },
-        [&](const usize attributeIndex){
-            MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, NWB_TEXT("meshlet attribute ref"), attributeIndex, NWB_TEXT("is unreferenced"));
-            return false;
-        },
-        attributeSkins
-    );
-}
-
-
 [[nodiscard]] b8 MeshRuntimeValidation::ValidateMeshletPayload(
-    Core::Alloc::ScratchArena& scratchArena,
     const Span<const u8> positionRefDeltas,
     const Span<const u8> attributeRefDeltas,
     const Span<const MeshletLocalVertexRef> localVertexRefs,
@@ -178,12 +136,10 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
     const Span<const MeshletBounds> meshletBounds,
     const Span<const u8> meshletPrimitiveIndices,
     const usize positionCount,
-    const usize skinCount,
     const usize normalCount,
     const usize tangentCount,
     const usize uv0Count,
     const usize colorCount,
-    const b8 skinRequired,
     const TStringView contextText,
     const TStringView meshPathText
 ){
@@ -195,7 +151,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
         MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("meshlet bounds exceed u32 byte-address limits"));
         return false;
     }
-    if(!FitsU32(positionRefDeltas.size()) || !FitsU32(attributeRefDeltas.size()) || (skinRequired && !FitsU32(skinCount))){
+    if(!FitsU32(positionRefDeltas.size()) || !FitsU32(attributeRefDeltas.size())){
         MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, __hidden_mesh_runtime_validation::s_StreamCountLimitReason);
         return false;
     }
@@ -231,7 +187,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
             return false;
         }
 
-        const auto encodedPositionBytes = MeshletEncodedPositionRefByteCount(meshlet, skinRequired);
+        const auto encodedPositionBytes = MeshletEncodedPositionRefByteCount(meshlet, false);
         const auto encodedAttributeBytes = MeshletEncodedAttributeRefByteCount(meshlet);
         if(!encodedPositionBytes || !encodedAttributeBytes){
             MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid ref encoding width"));
@@ -267,8 +223,8 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
         }
 
         for(u32 localPositionIndex = 0u; localPositionIndex < encodedPositionCount; ++localPositionIndex){
-            const auto ref = DecodeMeshletPositionRef(positionRefDeltas.data(), positionRefDeltas.size(), meshlet, localPositionIndex, skinRequired);
-            if(ref && MeshMeshletRefValidation::MeshletPositionRefInRange(*ref, positionCount, skinCount, skinRequired))
+            const auto ref = DecodeMeshletPositionRef(positionRefDeltas.data(), positionRefDeltas.size(), meshlet, localPositionIndex, false);
+            if(ref && MeshMeshletRefValidation::MeshletPositionRefInRange(*ref, positionCount, 0u, false))
                 continue;
 
             MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, __hidden_mesh_runtime_validation::s_InvalidEncodedPositionRefReason);
@@ -308,15 +264,11 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
         return false;
     }
 
-    if(skinRequired && !ValidateMeshletAttributeSkinSharing(scratchArena, positionRefDeltas, localVertexRefs, meshlets, contextText, meshPathText))
-        return false;
-
     return true;
 }
 
 
 [[nodiscard]] b8 MeshRuntimeValidation::ValidateSharedMeshPayload(
-    Core::Alloc::ScratchArena& scratchArena,
     const Span<const Float3U> positions,
     const Span<const Half4U> normals,
     const Span<const Half4U> tangents,
@@ -328,8 +280,6 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
     const Span<const MeshletDesc> meshlets,
     const Span<const MeshletBounds> meshletBounds,
     const Span<const u8> meshletPrimitiveIndices,
-    const usize skinCount,
-    const b8 skinRequired,
     const TStringView contextText,
     const TStringView meshPathText
 ){
@@ -337,7 +287,6 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
         return false;
 
     return ValidateMeshletPayload(
-        scratchArena,
         positionRefDeltas,
         attributeRefDeltas,
         localVertexRefs,
@@ -345,12 +294,29 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
         meshletBounds,
         meshletPrimitiveIndices,
         positions.size(),
-        skinCount,
         normals.size(),
         tangents.size(),
         uv0.size(),
         colors.size(),
-        skinRequired,
+        contextText,
+        meshPathText
+    );
+}
+
+
+[[nodiscard]] b8 MeshRuntimeValidation::ValidateSharedMeshPayload(const Mesh& payload, const TStringView contextText, const TStringView meshPathText){
+    return ValidateSharedMeshPayload(
+        payload.positionStream(),
+        payload.normalStream(),
+        payload.tangentStream(),
+        payload.uv0Stream(),
+        payload.colorStream(),
+        payload.meshletPositionRefDeltas(),
+        payload.meshletAttributeRefDeltas(),
+        payload.meshletLocalVertexRefs(),
+        payload.meshlets(),
+        payload.meshletBounds(),
+        payload.meshletPrimitiveIndices(),
         contextText,
         meshPathText
     );

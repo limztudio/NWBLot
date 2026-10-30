@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "binary_payload.h"
 #include "model.h"
 
 #include <global/binary_little_endian.h>
@@ -101,7 +100,7 @@ static constexpr u32 s_QwordHighWordShift = 32u;
     const auto reserved = ReadU32LittleEndian(bytes, cursor);
     if(!reserved)
         return MakeUnexpected(reserved.error());
-    if(*magic != FontAtlasBinaryPayload::s_Magic || *version != FontAtlasBinaryPayload::s_Version || *encoding != s_FontAtlasDistanceEncoding || *reserved != 0u)
+    if(*magic != s_FontAtlasBinaryMagic || *version != s_FontAtlasBinaryVersion || *encoding != s_FontAtlasDistanceEncoding || *reserved != 0u)
         return MakeUnexpected(Failure{});
     NameHash identity;
     for(u64& lane : identity.qwords){
@@ -167,7 +166,7 @@ static constexpr u32 s_QwordHighWordShift = 32u;
     if(*glyphCount == 0u || *glyphCount > s_FontAtlasMaxGlyphCount || *glyphCount != payload.sourceGlyphCount || *groupCount == 0u || *groupCount > s_FontAtlasMaxGroupCount || *tableCount > s_FontAtlasMaxPositioningTableCount || *raster > FontAtlasRasterMode::Bitmap)
         return MakeUnexpected(Failure{});
     payload.rasterMode = static_cast<FontAtlasRasterMode::Enum>(*raster);
-    const u64 minimumRemaining = static_cast<u64>(*glyphCount) * FontAtlasBinaryPayload::s_GlyphBytes + static_cast<u64>(*groupCount) * FontAtlasBinaryPayload::s_GroupHeaderBytes + static_cast<u64>(*tableCount) * FontAtlasBinaryPayload::s_TableHeaderBytes;
+    const u64 minimumRemaining = static_cast<u64>(*glyphCount) * s_FontAtlasBinaryGlyphBytes + static_cast<u64>(*groupCount) * s_FontAtlasBinaryGroupHeaderBytes + static_cast<u64>(*tableCount) * s_FontAtlasBinaryTableHeaderBytes;
     if(cursor > bytes.size() || minimumRemaining > bytes.size() - cursor)
         return MakeUnexpected(Failure{});
     payload.glyphs.resize(*glyphCount);
@@ -250,14 +249,14 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
     if(!ValidateFontAtlasPayload(payload, scratchArena))
         return MakeUnexpected(Failure{});
     Core::Assets::AssetBytes binary(arena);
-    usize size = FontAtlasBinaryPayload::s_HeaderBytes + payload.glyphs.size() * FontAtlasBinaryPayload::s_GlyphBytes;
+    usize size = s_FontAtlasBinaryHeaderBytes + payload.glyphs.size() * s_FontAtlasBinaryGlyphBytes;
     for(const FontAtlasGroup& group : payload.groups)
-        size += FontAtlasBinaryPayload::s_GroupHeaderBytes + group.pixels.size();
+        size += s_FontAtlasBinaryGroupHeaderBytes + group.pixels.size();
     for(const FontAtlasPositioningTable& table : payload.positioningTables)
-        size += FontAtlasBinaryPayload::s_TableHeaderBytes + table.bytes.size();
+        size += s_FontAtlasBinaryTableHeaderBytes + table.bytes.size();
     binary.reserve(size);
-    AppendU32LittleEndian(binary, FontAtlasBinaryPayload::s_Magic);
-    AppendU32LittleEndian(binary, FontAtlasBinaryPayload::s_Version);
+    AppendU32LittleEndian(binary, s_FontAtlasBinaryMagic);
+    AppendU32LittleEndian(binary, s_FontAtlasBinaryVersion);
     AppendU32LittleEndian(binary, s_FontAtlasDistanceEncoding);
     AppendU32LittleEndian(binary, 0u);
     for(const u64 lane : payload.font.name().hash().qwords){

@@ -4,7 +4,6 @@
 
 #include "crash_symbolicate.h"
 #include "crash_symbolicate_internal.h"
-#include "crash_paths.h"
 
 #include <core/crash/package_names.h>
 #include <core/crash/reason_names.h>

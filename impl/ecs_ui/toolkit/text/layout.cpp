@@ -4,6 +4,8 @@
 
 #include "layout.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+
 #include <global/simd/result.h>
 #include <global/simd/vector_arithmetic.h>
 #include <global/simd/convert.h>
@@ -64,8 +66,7 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
         if(
             glyph.byteBegin >= glyph.byteEnd || !IsUtf8ScalarBoundary(text, glyph.byteBegin) || !IsUtf8ScalarBoundary(text, glyph.byteEnd)
             || !IsFinite(glyph.advance.x) || !IsFinite(glyph.advance.y) || glyph.advance.x < 0.0f || glyph.advance.y != 0.0f
-            || !IsFinite(glyph.offset.x) || !IsFinite(glyph.offset.y) || !IsFinite(glyph.ink.x) || !IsFinite(glyph.ink.y)
-            || !IsFinite(glyph.ink.width) || !IsFinite(glyph.ink.height) || glyph.ink.width < 0.0f || glyph.ink.height < 0.0f
+            || !IsFinite(glyph.offset.x) || !IsFinite(glyph.offset.y) || !HasValidUiRectDimensions(glyph.ink)
             || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(glyph.ink.x)), VectorDoubleReplicate(static_cast<f64>(glyph.ink.width)))))
             || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(glyph.ink.y)), VectorDoubleReplicate(static_cast<f64>(glyph.ink.height)))))
         )
@@ -73,8 +74,7 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
         if(glyph.coverage.known){
             const Rect& coverage = glyph.coverage.ink;
             if(
-                !IsFinite(coverage.x) || !IsFinite(coverage.y) || !IsFinite(coverage.width) || !IsFinite(coverage.height)
-                || coverage.width < 0.0f || coverage.height < 0.0f
+                !HasValidUiRectDimensions(coverage)
                 || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(coverage.x)), VectorDoubleReplicate(static_cast<f64>(coverage.width)))))
                 || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(coverage.y)), VectorDoubleReplicate(static_cast<f64>(coverage.height)))))
             )

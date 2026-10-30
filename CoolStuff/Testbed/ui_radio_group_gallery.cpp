@@ -17,30 +17,6 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<u64> UiRadioGroupSource::indexOf(const u64 keyValue)const noexcept{
-    if(keyValue == 0u || keyValue > s_RowCount)
-        return MakeUnexpected(Failure{});
-    return keyValue - 1u;
-}
-
-Expected<u64> UiRadioGroupSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
-    if(start >= s_RowCount)
-        return MakeUnexpected(Failure{});
-    const u64 index = start == s_FirstDisabledIndex ? (reverse ? s_LastEnabledIndex : s_RowCount) : start;
-    if(index >= s_RowCount)
-        return MakeUnexpected(Failure{});
-    return index;
-}
-
-StringView UiRadioGroupSource::text(const u64 index)const noexcept{
-    static constexpr StringView s_Labels[] = { "Balanced", "High quality", "Unavailable" };
-    return index < s_RowCount ? s_Labels[index] : StringView{};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void UiRadioGroupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     constexpr f32 s_PanelHeight = 208.0f;

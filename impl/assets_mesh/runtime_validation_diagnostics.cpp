@@ -31,11 +31,6 @@ void MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(const TString
 }
 
 
-void MeshPayloadValidationDiagnostics::LogMeshletAttributePayloadValidation(const TStringView contextText, const TStringView meshPathText, const usize meshletIndex, const usize attributeIndex, const TStringView detailText){
-    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has attribute ref {} {}"), contextText, meshPathText, meshletIndex, attributeIndex, detailText);
-}
-
-
 void MeshPayloadValidationDiagnostics::LogMeshletPrimitivePayloadValidation(const TStringView contextText, const TStringView meshPathText, const usize meshletIndex, const usize primitiveIndex, const TStringView detailText){
     NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} primitive {} {}"), contextText, meshPathText, meshletIndex, primitiveIndex, detailText);
 }

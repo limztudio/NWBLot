@@ -6,11 +6,9 @@
 
 #include "report.h"
 
-#include <global/diagnostics.h>
 #include <global/dot_text.h>
 #include <global/hash_utils.h>
 #include <global/simd/vector.h>
-#include <global/type_properties.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

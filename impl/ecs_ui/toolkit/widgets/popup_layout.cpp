@@ -5,6 +5,8 @@
 #include "popup.h"
 #include "../rect_math.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 
@@ -25,11 +27,8 @@ namespace __hidden_ui_popup_layout{
 
 
 [[nodiscard]] static b8 ValidOptions(const PopupOptions& options, const DisplayMetrics& display)noexcept{
-    const Rect& anchor = options.anchor;
     return
-        IsFinite(anchor.x) && IsFinite(anchor.y) && IsFinite(anchor.width) && IsFinite(anchor.height)
-        && anchor.width >= 0.0f && anchor.height >= 0.0f
-        && VectorIsFinite(VectorAdd(VectorSet(anchor.x, anchor.y, 0.0f, 0.0f), VectorSet(anchor.width, anchor.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
+        IsValidUiRect(options.anchor)
         && IsFinite(options.size.x) && options.size.x > 0.0f && IsFinite(options.size.y) && options.size.y > 0.0f
         && options.side <= PopupPlacementSide::Center && IsFinite(options.gap) && options.gap >= 0.0f
         && IsFinite(display.logicalWidth) && display.logicalWidth > 0.0f

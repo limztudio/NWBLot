@@ -325,7 +325,7 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    AppendPOD(outBinary, MaterialBinaryPayload::s_MaterialMagic);
+    AppendPOD(outBinary, s_MaterialBinaryMagic);
     if(!AppendString(outBinary, AStringView(material.shaderVariant()))){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is too long"));
         return false;
@@ -381,11 +381,11 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
 
     u32 materialFlags = 0u;
     if(material.transparent())
-        materialFlags |= MaterialBinaryPayload::MaterialFlag::Transparent;
+        materialFlags |= MaterialFlag::Transparent;
     if(material.twoSided())
-        materialFlags |= MaterialBinaryPayload::MaterialFlag::TwoSided;
+        materialFlags |= MaterialFlag::TwoSided;
     if(material.refractive())
-        materialFlags |= MaterialBinaryPayload::MaterialFlag::Refractive;
+        materialFlags |= MaterialFlag::Refractive;
     AppendPOD(outBinary, materialFlags);
     AppendPOD(outBinary, material.shadingModelId());
     AppendPOD(outBinary, material.surfaceDispatchId());

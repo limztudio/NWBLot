@@ -11,8 +11,6 @@
 #include "module.h"
 #include "frame.h"
 
-#include <core/common/module.h>
-
 #include <global/command_line.h>
 #include <global/terminal_entry.h>
 

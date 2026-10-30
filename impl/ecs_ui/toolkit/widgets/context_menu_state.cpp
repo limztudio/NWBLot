@@ -4,8 +4,8 @@
 
 #include "context_menu.h"
 
-#include <global/simd/vector.h>
-#include <global/simplemath.h>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+
 #include <global/termination.h>
 
 
@@ -19,10 +19,7 @@ NWB_IMPL_UI_BEGIN
 
 
 b8 ContextMenuState::open(const Rect& anchor)noexcept{
-    if(
-        !IsFinite(anchor.x) || !IsFinite(anchor.y) || !IsFinite(anchor.width) || !IsFinite(anchor.height) || anchor.width < 0.0f || anchor.height < 0.0f
-        || !VectorIsFinite(VectorAdd(VectorSet(anchor.x, anchor.y, 0.0f, 0.0f), VectorSet(anchor.width, anchor.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
-    )
+    if(!IsValidUiRect(anchor))
         return false;
     m_popup.close();
     m_popup.open();

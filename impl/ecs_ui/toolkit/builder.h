@@ -6,26 +6,6 @@
 
 
 #include "builder_scope.h"
-#include "context.h"
-#include "layout/tree.h"
-#include "text/service.h"
-#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
-#include "widgets/window.h"
-#include "widgets/edit_box_state.h"
-#include "widgets/text_area.h"
-#include "edit/integer_model.h"
-#include "edit/float_model.h"
-#include "widgets/popup.h"
-#include <impl/ecs_ui/toolkit/widgets/popup_style.adhd.h>
-#include "widgets/list.h"
-#include <impl/ecs_ui/toolkit/widgets/list_style.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/radio_group_style.adhd.h>
-#include "widgets/combo.h"
-#include <impl/ecs_ui/toolkit/widgets/combo_style.adhd.h>
-#include "widgets/search_combo.h"
-#include "widgets/tooltip.h"
-#include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd.h>
-#include "widgets/context_menu.h"
 
 #include <global/simd/vector.h>
 

@@ -210,12 +210,12 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     Core::GpuTaskId extinctionDependency = inputs.uploadTask;
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         extinctionPayload.extinctionSnapshot.regularIndexedDrawItems,
-        frameBindings, inputs.targets, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket
+        frameBindings, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket
     ))
         return false;
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         extinctionPayload.extinctionSnapshot.csgIndexedDrawItems,
-        frameBindings, inputs.targets, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket
+        frameBindings, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket
     ))
         return false;
 

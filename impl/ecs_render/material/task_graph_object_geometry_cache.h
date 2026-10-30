@@ -23,7 +23,6 @@ NWB_IMPL_BEGIN
 
 class RendererMaterialSystem;
 class RendererMeshSystem;
-struct DeferredFrameTargets;
 
 
 // One declaration-local registry deduplicates immutable object vertices and indices across every material raster phase.
@@ -44,7 +43,6 @@ public:
     [[nodiscard]] b8 prepare(
         Span<const MaterialPassDrawItem> draws,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-        const DeferredFrameTargets& targets,
         Core::Alloc::ScratchArena& scratchArena,
         Core::GpuTaskId& dependency,
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& rasterUses,

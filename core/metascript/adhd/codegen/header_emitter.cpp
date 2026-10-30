@@ -399,10 +399,10 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             if(!m)
                 continue;
             if(m->returnType)
-                __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*m->returnType, m_symbols, &ifaceDecl->templateParams, &m->templateParams, externalForwardClasses);
+                __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*m->returnType, m_symbols, &ifaceDecl->templateParams, nullptr, externalForwardClasses);
             for(const ParamDecl& p : m->params){
                 if(p.type)
-                    __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*p.type, m_symbols, &ifaceDecl->templateParams, &m->templateParams, externalForwardClasses, true);
+                    __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*p.type, m_symbols, &ifaceDecl->templateParams, nullptr, externalForwardClasses, true);
             }
         }
     }

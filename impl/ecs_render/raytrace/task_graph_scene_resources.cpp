@@ -47,10 +47,8 @@ Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
         if(!identity)
             return MakeUnexpected(Failure{});
         const auto importedBufferResult = graph.importBuffer(buffer, RendererTaskGraphDetail::BufferResourceDesc(identity, "Ray Scene Buffer"));
-        if(!importedBufferResult){
-            importedBuffers[index] = {};
+        if(!importedBufferResult)
             return MakeUnexpected(Failure{});
-        }
         importedBuffers[index] = *importedBufferResult;
     }
 

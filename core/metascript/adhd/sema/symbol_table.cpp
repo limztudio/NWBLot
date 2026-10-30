@@ -103,7 +103,6 @@ TypeRef* SubstituteAliasTypeRef(
     cloned->returnType = method->returnType
         ? symbols.substituteTypeParams(*method->returnType, templateParams, templateArgs)
         : nullptr;
-    cloned->templateParams = method->templateParams;
     for(const ParamDecl& p : method->params){
         ParamDecl subP = p;
         if(p.type)
@@ -111,16 +110,8 @@ TypeRef* SubstituteAliasTypeRef(
         cloned->params.push_back(subP);
     }
     cloned->span = method->span;
-    cloned->isConstructor = method->isConstructor;
-    cloned->isDestructor = method->isDestructor;
     cloned->isOperator = method->isOperator;
     cloned->isConst = method->isConst;
-    cloned->isOverride = method->isOverride;
-    cloned->isInline = method->isInline;
-    cloned->isForceInline = method->isForceInline;
-    cloned->isNoInline = method->isNoInline;
-    cloned->isOutOfLine = method->isOutOfLine;
-    cloned->isReflect = method->isReflect;
     return cloned;
 }
 

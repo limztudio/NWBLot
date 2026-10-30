@@ -8,6 +8,7 @@
 #include "../paint.h"
 
 #include <impl/ecs_ui/toolkit/layout/types.adhd.h>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
 
 #include <global/simd/type.h>
 
@@ -39,7 +40,6 @@ private:
 
 private:
     [[nodiscard]] static b8 IsValidDescription(const LayoutNodeDesc& description)noexcept;
-    [[nodiscard]] static b8 IsValidRectangle(const Rect& rectangle)noexcept;
     [[nodiscard]] static SIMDVectorSingle Inset(SIMDVectorSingle rectangle, SIMDVectorSingle padding)noexcept;
 
 

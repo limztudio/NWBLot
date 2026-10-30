@@ -5,12 +5,50 @@
 #include "source_mesh_streams.h"
 
 #include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/mesh/tangent_frame_rebuild.h>
+
+#include <global/simd/collision_triangle.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_FBX_TO_NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr StringView s_SourcePositionLabel = "position";
+inline constexpr StringView s_SourceNormalLabel = "normal";
+inline constexpr StringView s_SourceTangentLabel = "tangent";
+inline constexpr StringView s_SourceUv0Label = "uv0";
+inline constexpr StringView s_SourceColorLabel = "color";
+inline constexpr StringView s_SourceVertexRefLabel = "vertex_ref";
+
+
+template<typename Value, typename Lookup>
+[[nodiscard]] static Expected<u32> InternSourceValue(UtilityVector<Value>& stream, Lookup& lookup, const Value& value, const AStringView streamName){
+    auto found = lookup.find(value);
+    if(found != lookup.end()){
+        return found.value();
+    }
+
+    if(stream.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {} stream has too many unique values"), ConvertString(streamName));
+        return MakeUnexpected(Failure{});
+    }
+
+    const u32 index = static_cast<u32>(stream.size());
+    stream.push_back(value);
+    const auto inserted = lookup.emplace(value, index);
+    if(!inserted.second){
+        NWB_ASSERT(false);
+        return MakeUnexpected(Failure{});
+    }
+    return index;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

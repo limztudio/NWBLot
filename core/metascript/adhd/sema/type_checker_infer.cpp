@@ -49,7 +49,6 @@ MStringView TypeChecker::inferExprTypeName(
             if(lhsType == adhdName) return (c == 'w' || c == 'a') ? MStringView(wScalarType) : MStringView(xyzScalarType);
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
-            return lhsType.substr(0u, 3u);
         }
         u32 unalignedLanes = 0u;
         if(SymbolTable::isUnalignedVectorType(lhsType, unalignedLanes) && expr.text.size() == 1u)
@@ -125,53 +124,45 @@ MStringView TypeChecker::inferExprTypeName(
             if(memberRetRule == s_MemberRetStringView)
                 return "StringView";
         }
-        if(expr.lhs->kind == ExprKind::Identifier){
-            const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if(m_symbols.findClass(baseCallee) || SymbolTable::isSimdType(baseCallee)
-                || SymbolTable::isArenaBackedContainer(baseCallee) || m_symbols.isSelfDefaultedType(baseCallee))
-            {
-                return baseCallee;
-            }
-            if(!expr.arguments.empty() && expr.arguments[0]){
-                const MStringView fnName = expr.lhs->text;
-                u8 returnRule = 0u;
-                constexpr u8 s_RulePromoteSimd = 1u;
-                constexpr u8 s_RuleLaneScalar = 2u;
-                constexpr u8 s_RuleMatrixMultiply = 3u;
-                constexpr u8 s_RuleBool = 4u;
+        if(expr.lhs->kind == ExprKind::Identifier && !expr.arguments.empty() && expr.arguments[0]){
+            const MStringView fnName = expr.lhs->text;
+            u8 returnRule = 0u;
+            constexpr u8 s_RulePromoteSimd = 1u;
+            constexpr u8 s_RuleLaneScalar = 2u;
+            constexpr u8 s_RuleMatrixMultiply = 3u;
+            constexpr u8 s_RuleBool = 4u;
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, rule) \
-                if(fnName == adhdName) returnRule = s_Rule##rule;
+            if(fnName == adhdName) returnRule = s_Rule##rule;
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_FUNCTION
-                if(returnRule == s_RuleBool)
-                    return "b8";
-                if(returnRule == s_RuleLaneScalar){
-                    const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
-                    u32 simdLanes = 0u;
-                    if(SymbolTable::isSimdVectorType(argType, simdLanes))
-                        return argType.substr(0u, 3u);
-                    return argType;
+            if(returnRule == s_RuleBool)
+                return "b8";
+            if(returnRule == s_RuleLaneScalar){
+                const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
+                u32 simdLanes = 0u;
+                if(SymbolTable::isSimdVectorType(argType, simdLanes))
+                    return argType.substr(0u, 3u);
+                return argType;
+            }
+            if(returnRule == s_RuleMatrixMultiply){
+                const MStringView lhsT = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
+                if(expr.arguments.size() == 2u && expr.arguments[1]){
+                    const MStringView rhsT = inferExprTypeName(ownerClass, method, *expr.arguments[1], scope);
+                    u32 rhsLanes = 0u;
+                    if(SymbolTable::isSimdMatrixType(lhsT) && SymbolTable::isSimdVectorType(rhsT, rhsLanes))
+                        return rhsT;
                 }
-                if(returnRule == s_RuleMatrixMultiply){
-                    const MStringView lhsT = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
-                    if(expr.arguments.size() == 2u && expr.arguments[1]){
-                        const MStringView rhsT = inferExprTypeName(ownerClass, method, *expr.arguments[1], scope);
-                        u32 rhsLanes = 0u;
-                        if(SymbolTable::isSimdMatrixType(lhsT) && SymbolTable::isSimdVectorType(rhsT, rhsLanes))
-                            return rhsT;
-                    }
-                    return lhsT;
+                return lhsT;
+            }
+            if(returnRule == s_RulePromoteSimd){
+                for(const Expr* arg : expr.arguments){
+                    if(!arg)
+                        continue;
+                    const MStringView argT = inferExprTypeName(ownerClass, method, *arg, scope);
+                    if(SymbolTable::isSimdType(argT))
+                        return argT;
                 }
-                if(returnRule == s_RulePromoteSimd){
-                    for(const Expr* arg : expr.arguments){
-                        if(!arg)
-                            continue;
-                        const MStringView argT = inferExprTypeName(ownerClass, method, *arg, scope);
-                        if(SymbolTable::isSimdType(argT))
-                            return argT;
-                    }
-                    return inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
-                }
+                return inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
             }
         }
     }
@@ -464,25 +455,15 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                 }
             }
             else if(recvTypeRef && m_symbols.findInterface(lhsType)){
-                if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, &argTypeHints, &argIsMutHints); m && m->returnType){
-                    const TypeRef* rt = (!m->templateParams.empty() && !expr.callTemplateArgs.empty())
-                        ? m_symbols.substituteTypeParams(*m->returnType, m->templateParams, expr.callTemplateArgs)
-                        : m->returnType;
-                    return m_symbols.unwrapTypeAlias(rt);
-                }
+                if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, &argTypeHints, &argIsMutHints); m && m->returnType)
+                    return m_symbols.unwrapTypeAlias(m->returnType);
             }
             else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, method, lhsType)){
                 for(const TypeRef* boundRef : tp->interfaceBounds){
                     if(!boundRef)
                         continue;
-                    if(const MethodDecl* m = m_symbols.findInterfaceMethod(*boundRef, mName, &callArgCount, 0u, &argTypeHints, &argIsMutHints)){
-                        if(!m->returnType)
-                            return nullptr;
-                        const TypeRef* rt = (!m->templateParams.empty() && !expr.callTemplateArgs.empty())
-                            ? m_symbols.substituteTypeParams(*m->returnType, m->templateParams, expr.callTemplateArgs)
-                            : m->returnType;
-                        return m_symbols.unwrapTypeAlias(rt);
-                    }
+                    if(const MethodDecl* m = m_symbols.findInterfaceMethod(*boundRef, mName, &callArgCount, 0u, &argTypeHints, &argIsMutHints))
+                        return m->returnType ? m_symbols.unwrapTypeAlias(m->returnType) : nullptr;
                 }
             }
         }

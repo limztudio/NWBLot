@@ -6,7 +6,6 @@
 
 
 #include <impl/ecs_skeleton/components.adhd.h>
-#include <impl/assets_skeleton/joint_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,41 +23,33 @@ namespace SkeletonRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_AffineEpsilon = s_SkeletonAffineEpsilon;
-static constexpr f32 s_JointDeterminantEpsilon = s_SkeletonJointDeterminantEpsilon;
-static constexpr f32 s_RigidJointEpsilon = s_SkeletonRigidJointEpsilon;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] NWB_INLINE b8 HasSkeletonPose(const SkeletonPoseComponent* pose)noexcept{
     return pose && HasSkeletonPoseData(*pose);
 }
 
 [[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkinningJointMatrix(const SIMDMatrix& poseJoint, const b8 hasInverseBind, const SIMDMatrix& inverseBind, const f32 inverseBindDeterminantEpsilon)noexcept{
     SIMDMatrix matrix = poseJoint;
-    if(!MatrixIsInvertibleAffine(matrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
         return MakeUnexpected(Failure{});
     if(!hasInverseBind)
         return matrix;
-    if(!MatrixIsInvertibleAffine(inverseBind, s_AffineEpsilon, inverseBindDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(inverseBind, s_SkeletonAffineEpsilon, inverseBindDeterminantEpsilon))
         return MakeUnexpected(Failure{});
 
     matrix = MatrixMultiply(matrix, inverseBind);
-    if(!MatrixIsInvertibleAffine(matrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
         return MakeUnexpected(Failure{});
     return matrix;
 }
 
 [[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkeletonPoseJointMatrix(const SIMDMatrix& localJoint, const SIMDMatrix* parentJoint)noexcept{
     SIMDMatrix matrix = localJoint;
-    if(!MatrixIsInvertibleAffine(matrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
         return MakeUnexpected(Failure{});
 
     if(parentJoint){
         matrix = MatrixMultiply(*parentJoint, matrix);
-        if(!MatrixIsInvertibleAffine(matrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
+        if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
             return MakeUnexpected(Failure{});
     }
     return matrix;

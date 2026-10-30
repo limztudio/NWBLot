@@ -26,7 +26,6 @@ namespace MaterialBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MaterialMagic = s_MaterialBinaryMagic; // MTLA
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 inline constexpr TStringView s_MaterialLoadBinaryContext = NWB_TEXT("Material::loadBinary");
 inline constexpr TStringView s_MaterialAssetKindLabel = NWB_TEXT("material");
@@ -37,10 +36,6 @@ inline constexpr AStringView s_AvboitExtinctionPassLabel = "extinction";
 inline constexpr TStringView s_AvboitAccumulatePassText = NWB_TEXT("accumulate");
 inline constexpr TStringView s_AvboitOccupancyPassText = NWB_TEXT("occupancy");
 inline constexpr TStringView s_AvboitExtinctionPassText = NWB_TEXT("extinction");
-// Serialized flags mirror authored booleans; Refractive classifies casters, while optical values stay shader-side.
-// All masks supported bits; loading rejects the rest.
-namespace MaterialFlag = Impl::MaterialFlag;
-
 static_assert(sizeof(Core::ShaderType::Enum) == sizeof(u8), "Material shader stage indices must stay byte-sized");
 
 struct MaterialTypedLayoutBlockBinary{

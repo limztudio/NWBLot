@@ -4,7 +4,7 @@
 
 #include <impl/assets_font/source_directory.h>
 #include <impl/assets_font_atlas/asset.h>
-#include <impl/assets_font_atlas/binary_payload.h>
+#include <impl/assets_font_atlas/types.adhd.h>
 #include <impl/assets_font_atlas/cook.h>
 
 #include <tests/common/capturing_logger.h>
@@ -182,11 +182,11 @@ TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
     FontAtlas atlas(testArena.arena, Name(s_BodyFontAtlasPath));
     ASSERT_TRUE(atlas.loadBinary(*valid));
     const usize corruptOffsets[] = { 0u, 4u, 8u, 12u, 112u, 120u, 136u, 152u, 156u, 160u,
-        FontAtlasBinaryPayload::s_HeaderBytes + 48u,
-        FontAtlasBinaryPayload::s_HeaderBytes + 5u * FontAtlasBinaryPayload::s_GlyphBytes,
-        FontAtlasBinaryPayload::s_HeaderBytes + 5u * FontAtlasBinaryPayload::s_GlyphBytes + 4u,
-        FontAtlasBinaryPayload::s_HeaderBytes + 5u * FontAtlasBinaryPayload::s_GlyphBytes + 8u,
-        FontAtlasBinaryPayload::s_HeaderBytes + 5u * FontAtlasBinaryPayload::s_GlyphBytes + 12u };
+        s_FontAtlasBinaryHeaderBytes + 48u,
+        s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes,
+        s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 4u,
+        s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 8u,
+        s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 12u };
     for(const usize offset : corruptOffsets){
         Core::Assets::AssetBytes invalid(*valid);
         WriteLittleU32(invalid, offset, Limit<u32>::s_Max);
@@ -260,9 +260,9 @@ TEST(AssetsFontAtlas, UnsupportedVersionsAndCompactGroupHeadersAreRejected){
     ASSERT_TRUE(binary);
     auto loaded = DeserializeFontAtlasPayload(*binary, testArena.arena, testArena.scratchArena);
     ASSERT_TRUE(loaded);
-    const usize groupOffset = FontAtlasBinaryPayload::s_HeaderBytes + payload.glyphs.size() * FontAtlasBinaryPayload::s_GlyphBytes;
+    const usize groupOffset = s_FontAtlasBinaryHeaderBytes + payload.glyphs.size() * s_FontAtlasBinaryGlyphBytes;
     const Pair<usize, u32> invalidFields[] = {
-        { 4u, 1u }, { 4u, 0u }, { 4u, FontAtlasBinaryPayload::s_Version + 1u },
+        { 4u, 1u }, { 4u, 0u }, { 4u, s_FontAtlasBinaryVersion + 1u },
         { groupOffset, Limit<u32>::s_Max }, { groupOffset + 4u, Limit<u32>::s_Max },
         { groupOffset + 8u, 0u }, { groupOffset + 8u, 5u }, { groupOffset + 8u, Limit<u32>::s_Max },
         { groupOffset + 12u, 0u }, { groupOffset + 12u, 255u }, { groupOffset + 12u, 257u },

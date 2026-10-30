@@ -3,9 +3,7 @@
 
 
 #include "system.h"
-#include "arena_names.h"
 #include "live_state_buffers.h"
-#include "runtime_mesh_liveness.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -22,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MeshSkinningSystem::RestToSkinnedCopyByteCounts> MeshSkinningSystem::ResolveRestToSkinnedCopyByteCounts(const MeshSkinningRuntimeInstance& instance){
+Expected<MeshSkinningRestToSkinnedCopyByteCounts> MeshSkinningSystem::ResolveRestToSkinnedCopyByteCounts(const MeshSkinningRuntimeInstance& instance){
     const auto resolvePayloadBytes = [](const usize count, const usize stride, const TStringView label)->Expected<usize>{
         const auto bytes = TryMultiply<usize>(count, stride);
         if(stride != 0u && bytes)
@@ -40,7 +38,7 @@ Expected<MeshSkinningSystem::RestToSkinnedCopyByteCounts> MeshSkinningSystem::Re
     const auto tangentBytes = resolvePayloadBytes(instance.restTangents.size(), sizeof(Half4U), NWB_TEXT("rest tangent"));
     if(!tangentBytes)
         return MakeUnexpected(Failure{});
-    return RestToSkinnedCopyByteCounts{ *positionBytes, *normalBytes, *tangentBytes };
+    return MeshSkinningRestToSkinnedCopyByteCounts{ *positionBytes, *normalBytes, *tangentBytes };
 }
 
 void MeshSkinningSystem::collectLiveSkinningStateBuffers(Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers, Core::Alloc::ScratchArena& scratchArena)const{

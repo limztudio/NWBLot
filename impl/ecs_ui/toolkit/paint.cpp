@@ -5,6 +5,8 @@
 #include "paint.h"
 #include "rect_math.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+
 #include <global/simplemath.h>
 
 
@@ -32,10 +34,7 @@ inline constexpr u32 s_NineSliceAxisCells = 3u;
 
 
 b8 HasArea(const Rect& rectangle)noexcept{
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height) && rectangle.width > 0.0f && rectangle.height > 0.0f
-        && VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
-    ;
+    return IsValidUiRect(rectangle) && rectangle.width > 0.0f && rectangle.height > 0.0f;
 }
 
 b8 EqualClip(const Rect& lhs, const Rect& rhs)noexcept{

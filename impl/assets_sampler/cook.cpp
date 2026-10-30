@@ -104,7 +104,7 @@ b8 SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         return false;
 
     const Core::SamplerDesc& description = sampler.description();
-    SamplerBinaryPayload::HeaderBinary header;
+    SamplerBinaryHeader header;
     header.borderColorR = description.borderColor.r;
     header.borderColorG = description.borderColor.g;
     header.borderColorB = description.borderColor.b;

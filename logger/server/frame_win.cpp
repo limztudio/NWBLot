@@ -5,8 +5,6 @@
 #include "frame.h"
 #include "clipboard_text_internal.h"
 
-#include <core/alloc/module.h>
-
 #include <global/diagnostics.h>
 #include <global/expected.h>
 #include <global/scope_exit.h>

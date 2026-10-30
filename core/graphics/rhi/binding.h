@@ -87,10 +87,6 @@ public:
     constexpr BindingLayoutItem& setType(ResourceType::Enum value)noexcept{ type = value; return *this; }
 
     constexpr BindingLayoutItem& setSize(u32 value)noexcept{ size = static_cast<u16>(value); return *this; }
-
-    constexpr u32 getArraySize()const noexcept{ return (type == ResourceType::PushConstants) ? 1 : size; }
-
-
 };
 inline b8 operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs)noexcept{
     return lhs.slot == rhs.slot && lhs.type == rhs.type && lhs.size == rhs.size;

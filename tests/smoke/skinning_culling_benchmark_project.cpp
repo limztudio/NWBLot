@@ -178,7 +178,7 @@ static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 join
 
     SIMDMatrix matrix = MatrixRotationRollPitchYawFromVector(rotationAngles);
     matrix = MatrixMultiply(bindJoint, matrix);
-    if(!MatrixIsInvertibleAffine(matrix, NWB::Impl::SkeletonRuntime::s_AffineEpsilon, NWB::Impl::SkeletonRuntime::s_JointDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(matrix, NWB::Impl::s_SkeletonAffineEpsilon, NWB::Impl::s_SkeletonJointDeterminantEpsilon))
         return;
 
     outMatrix = matrix;

@@ -7,9 +7,6 @@ nwb_target_adhd_sources(nwb_ecs_render_components
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/*/*.adhd"
-    DEPENDS
-        "${CMAKE_CURRENT_LIST_DIR}/*/*.adhd"
-        "${PROJECT_SOURCE_DIR}/impl/assets_material/*.adhd"
 )
 target_link_libraries(nwb_ecs_render_components PUBLIC nwb_assets nwb_assets_material nwb_ecs)
 

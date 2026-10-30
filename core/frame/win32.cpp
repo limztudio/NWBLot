@@ -18,15 +18,11 @@
 
 #include <windows.h>
 
-#include "input_helpers.h"
-
 #include <core/common/log.h>
 #include <core/os/win32/text_input.h>
-#include <core/os/win32/input_message.h>
 
 #include <global/compile.h>
 #include <global/diagnostics.h>
-#include <global/simd/vector.h>
 #include <global/timer.h>
 
 

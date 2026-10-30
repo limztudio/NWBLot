@@ -6,6 +6,8 @@
 
 #include "rect_math.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+
 #include <global/simplemath.h>
 
 
@@ -25,10 +27,7 @@ b8 PaintBuilder::prepareTextureImages(const SharedImageSource* const images, con
 b8 PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
     if(
-        !source || !IsFinite(rectangle.x) || !IsFinite(rectangle.y)
-        || !IsFinite(rectangle.width) || !IsFinite(rectangle.height)
-        || rectangle.width < 0.0f || rectangle.height < 0.0f
-        || !VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
+        !source || !IsValidUiRect(rectangle)
         || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height)
         || uv.x < 0.0f || uv.y < 0.0f || uv.width <= 0.0f || uv.height <= 0.0f
         || VectorGetX(VectorAdd(VectorReplicate(uv.x), VectorReplicate(uv.width))) > 1.0f || VectorGetX(VectorAdd(VectorReplicate(uv.y), VectorReplicate(uv.height))) > 1.0f

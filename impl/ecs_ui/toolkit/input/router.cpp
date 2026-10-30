@@ -5,6 +5,8 @@
 #include "router.h"
 #include "../rect_math.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+
 #include <global/simplemath.h>
 #include <global/termination.h>
 
@@ -23,14 +25,6 @@ namespace __hidden_ui_input_router{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ValidRectangle(const Rect& rectangle)noexcept{
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
-        && rectangle.width >= 0.0f && rectangle.height >= 0.0f
-        && VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
-    ;
-}
 
 b8 Contains(const Rect& rectangle, const Point& position)noexcept{
     return
@@ -141,9 +135,9 @@ b8 InputRouter::commitTargets(const HitTarget* targets, const usize count, const
         const HitTarget& target = targets[index];
         if(
             !target.id.valid() || target.declarationGeneration == 0u
-            || !__hidden_ui_input_router::ValidRectangle(target.rectangle)
-            || !__hidden_ui_input_router::ValidRectangle(target.clip)
-            || !__hidden_ui_input_router::ValidRectangle(target.gestureReference)
+            || !IsValidUiRect(target.rectangle)
+            || !IsValidUiRect(target.clip)
+            || !IsValidUiRect(target.gestureReference)
             || ((target.gestureReference.width == 0.0f) != (target.gestureReference.height == 0.0f))
             || !validPopupTarget(target)
         )

@@ -166,8 +166,8 @@ TEST(MeshSolidCodec, UnaddressableBoundsCountIsRejectedBeforeStreamReadAndPreser
     constexpr u64 s_UnaddressableBoundsCount = static_cast<u64>(Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE) + 1u;
     static_assert((s_UnaddressableBoundsCount - 1u) * NWB_MESHLET_BOUNDS_STRIDE <= Limit<u32>::s_Max);
     static_assert(s_UnaddressableBoundsCount * NWB_MESHLET_BOUNDS_STRIDE > Limit<u32>::s_Max);
-    NWB_MEMCPY(malformed.data() + offsetof(Impl::MeshBinaryPayload::MeshHeaderBinary, meshletCount), sizeof(s_UnaddressableBoundsCount), &s_UnaddressableBoundsCount, sizeof(s_UnaddressableBoundsCount));
-    NWB_MEMCPY(malformed.data() + offsetof(Impl::MeshBinaryPayload::MeshHeaderBinary, meshletBoundCount), sizeof(s_UnaddressableBoundsCount), &s_UnaddressableBoundsCount, sizeof(s_UnaddressableBoundsCount));
+    NWB_MEMCPY(malformed.data() + offsetof(Impl::MeshBinaryHeader, meshletCount), sizeof(s_UnaddressableBoundsCount), &s_UnaddressableBoundsCount, sizeof(s_UnaddressableBoundsCount));
+    NWB_MEMCPY(malformed.data() + offsetof(Impl::MeshBinaryHeader, meshletBoundCount), sizeof(s_UnaddressableBoundsCount), &s_UnaddressableBoundsCount, sizeof(s_UnaddressableBoundsCount));
     EXPECT_FALSE(loaded.loadBinary(malformed));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("mesh payload is incomplete")));
     EXPECT_EQ(loaded.meshlets().size(), retainedMeshletCount);
@@ -195,7 +195,7 @@ TEST(MeshSolidCodec, TailPaddingAndInconsistentPrimitiveCountsAreRejected){
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid solid triangle padding")));
     Core::Assets::AssetBytes wrongCount(*cooked);
     constexpr u64 s_InconsistentIndexCount = 99u;
-    NWB_MEMCPY(wrongCount.data() + offsetof(Impl::MeshBinaryPayload::MeshHeaderBinary, meshletPrimitiveIndexCount), sizeof(s_InconsistentIndexCount), &s_InconsistentIndexCount, sizeof(s_InconsistentIndexCount));
+    NWB_MEMCPY(wrongCount.data() + offsetof(Impl::MeshBinaryHeader, meshletPrimitiveIndexCount), sizeof(s_InconsistentIndexCount), &s_InconsistentIndexCount, sizeof(s_InconsistentIndexCount));
     EXPECT_FALSE(rejected.loadBinary(wrongCount));
 }
 

@@ -16,12 +16,5 @@ class SkeletonJoint{
     public u32 parentIndex = s_SkeletonInvalidJointIndex;
 }
 
-[reflect]
-class SkeletonHeaderBinary{
-    public u64 jointCount = 0u;
-    public u32 magic = s_SkeletonBinaryMagic;
-    public u32 padding0 = 0u;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

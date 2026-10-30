@@ -57,7 +57,7 @@ private:
     void emitSimdLoadReloadForBinding(MString& out, const SimdVarBinding& binding, u32 indent)const;
     void emitSimdLoopElementLoad(MString& out, const SimdVarBinding& loopBinding, u32 indent)const;
     void emitSimdMutCallReloads(MString& out, const Expr& expr, u32 indent)const;
-    void emitSimdBlockStores(MString& out, u32 indent, b8 loopElementsOnly)const;
+    void emitSimdBlockStores(MString& out, u32 indent)const;
     [[nodiscard]] const SimdVarBinding* findSimdBinding(b8 isThisMember, MStringView name)const noexcept;
     [[nodiscard]] const SimdVarBinding* findSimdBindingForExpr(const Expr* expr)const noexcept;
     void emitIndent(MString& out, u32 indent)const;

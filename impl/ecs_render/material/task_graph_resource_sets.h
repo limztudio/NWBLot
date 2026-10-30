@@ -166,10 +166,8 @@ namespace RendererTaskGraphDetail{
         members.push_back(use.resource);
 
     const auto resourceResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members.data(), members.size()));
-    if(!resourceResult){
-        resource = {};
+    if(!resourceResult)
         return MakeUnexpected(Failure{});
-    }
     resource = *resourceResult;
     return resource;
 }
@@ -221,10 +219,8 @@ namespace RendererTaskGraphDetail{
         return resource;
 
     const auto resourceResult2 = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members->data(), members->size()));
-    if(!resourceResult2){
-        resource = {};
+    if(!resourceResult2)
         return MakeUnexpected(Failure{});
-    }
     resource = *resourceResult2;
     return resource;
 }

@@ -4,7 +4,8 @@
 
 #include "text_area.h"
 
-#include <global/simplemath.h>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+
 #include <global/termination.h>
 
 
@@ -18,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 
 
 b8 TextAreaState::scrollTo(const Point scroll)noexcept{
-    if(!IsFinite(scroll.x) || !IsFinite(scroll.y) || scroll.x < 0.0f || scroll.y < 0.0f)
+    if(!IsValidUiExtent(scroll))
         return false;
     advanceRevision();
     m_scrollInput.retire();

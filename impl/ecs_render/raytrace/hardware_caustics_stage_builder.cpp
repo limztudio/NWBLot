@@ -347,7 +347,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         *inputs.producerDispatched
     );
     if(!causticPhotonTaskResult){
-        result.causticPhotonTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics photon graph task"));
         return MakeUnexpected(Failure{});
     }
@@ -365,7 +364,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     ;
     const auto causticGeometryTaskResult = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_graph, hardwareGeometryDesc, *inputs.producerDispatched, (*inputs.targets), (*inputs.timingTicket), *inputs.resolveTiming);
     if(!causticGeometryTaskResult){
-        result.causticGeometryTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task"));
         return MakeUnexpected(Failure{});
     }

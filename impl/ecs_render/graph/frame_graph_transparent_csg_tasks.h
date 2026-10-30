@@ -6,7 +6,6 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
 
@@ -32,7 +31,6 @@ class ObjectGeometryCacheGraph;
 
 // Transparent-CSG interval tasks own the AVBOIT interval, receiver-span, and interval-combine graph task declarations.
 struct FrameGraphTransparentCsgTaskInputs{
-    DeferredFrameTargets& targets;
     Core::GpuGraphResourceId albedo;
     Core::GpuGraphResourceId normal;
     Core::GpuGraphResourceId worldPosition;

@@ -164,7 +164,7 @@ b8 Builder::paintList(const Item& item, const LayoutBox& box){
     frame.rows.clear();
     if(placement.scrollbarVisible){
         const UiSkinRegion* track = region(frame.style.track, frame.style.trackFallback);
-        const auto thumbIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_Scrollbar);
+        const auto thumbIdResult = MakeWidgetId(item.state.id, s_WidgetPartScrollbar);
         if(!thumbIdResult)
             return false;
         const WidgetId thumbId = *thumbIdResult;
@@ -183,7 +183,7 @@ b8 Builder::paintList(const Item& item, const LayoutBox& box){
             target.rectangle = placement.track;
             target.clip = clip;
             target.control = frame.token;
-            const auto trackId = MakeWidgetId(item.state.id, WidgetPartKey::s_Track);
+            const auto trackId = MakeWidgetId(item.state.id, s_WidgetPartTrack);
             if(!trackId || !m_context.addPartTarget(item.state, *trackId, target))
                 return false;
             target.rectangle = placement.thumb;
@@ -199,7 +199,7 @@ b8 Builder::paintList(const Item& item, const LayoutBox& box){
 
 b8 Builder::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
     const auto& rows = frame.rows;
-    const auto rowsIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_Rows);
+    const auto rowsIdResult = MakeWidgetId(item.state.id, s_WidgetPartRows);
     if(!rowsIdResult)
         return false;
     const WidgetId rowsId = *rowsIdResult;

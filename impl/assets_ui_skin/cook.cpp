@@ -38,11 +38,11 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: payload size overflows"));
         return false;
     }
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, UiSkinColorRole::kCount, sizeof(UiSkinBinaryPayload::ColorBinary))){
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, UiSkinColorRole::kCount, sizeof(UiSkinColorBinary))){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: palette payload size overflows"));
         return false;
     }
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, 1u, sizeof(UiSkinBinaryPayload::TypographyBinary))){
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, 1u, sizeof(UiSkinTypographyBinary))){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: typography payload size overflows"));
         return false;
     }
@@ -78,14 +78,14 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         AppendPOD(outBinary, packed);
     }
     for(const UiSkinColor& color : skin.palette().colors){
-        UiSkinBinaryPayload::ColorBinary packed;
+        UiSkinColorBinary packed;
         packed.r = color.r;
         packed.g = color.g;
         packed.b = color.b;
         packed.a = color.a;
         AppendPOD(outBinary, packed);
     }
-    UiSkinBinaryPayload::TypographyBinary typography;
+    UiSkinTypographyBinary typography;
     typography.defaultFontSize = skin.typography().defaultFontSize;
     AppendPOD(outBinary, typography);
     return true;

@@ -42,7 +42,7 @@ NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_SkinningSubsystemAssetAutoRegistrar, Skin
 
 b8 Skin::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, SkinBinaryPayload::s_SkinMagic, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_SkinAssetKindLabel, cursor);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, s_SkinBinaryMagic, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_SkinAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const SkinBinaryPayload::HeaderBinary& header = *headerResult;

@@ -6,6 +6,7 @@
 
 
 #include "namespace.h"
+#include "ui_immutable_list_source.h"
 
 #include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/widgets/radio_group.h>
@@ -20,25 +21,19 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiRadioGroupSource final : public NWB::Impl::Ui::IListDataSource{
+inline constexpr usize s_RadioGroupLabelCount = 3u;
+inline constexpr u64 s_RadioGroupDisabledKey = 3u;
+
+class UiRadioGroupSource final : public UiImmutableListSource<UiRadioGroupSource, s_RadioGroupLabelCount, s_RadioGroupDisabledKey>{
+    friend class UiImmutableListSource<UiRadioGroupSource, s_RadioGroupLabelCount, s_RadioGroupDisabledKey>;
+
+
 private:
-    static constexpr u64 s_RowCount = 3u;
-    static constexpr u64 s_FirstDisabledIndex = 2u;
-    static constexpr u64 s_LastEnabledIndex = 1u;
+    static constexpr Array<StringView, s_RadioGroupLabelCount> s_Labels{ "Balanced", "High quality", "Unavailable" };
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return 1u; }
-
-    [[nodiscard]] virtual u64 revision()const noexcept override{ return 1u; }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return s_RowCount; }
-
-    [[nodiscard]] virtual u64 key(u64 index)const noexcept override{ return index < s_RowCount ? index + 1u : 0u; }
-    [[nodiscard]] virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
-    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
-    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
-    [[nodiscard]] virtual b8 enabled(u64 index)const noexcept override{ return index < s_FirstDisabledIndex; }
+    using UiImmutableListSource<UiRadioGroupSource, s_RadioGroupLabelCount, s_RadioGroupDisabledKey>::UiImmutableListSource;
 };
 
 class UiRadioGroupGallery final : NoCopy{

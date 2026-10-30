@@ -5,7 +5,6 @@
 #include "ingest.h"
 
 #include <core/alloc/scratch.h>
-#include <core/telemetry/codec.h>
 
 #include <global/binary.h>
 

@@ -19,11 +19,11 @@ b8 Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placemen
         return false;
     if(!interactive || placement.centerTravel.width <= 0.0f)
         return true;
-    const auto trackResult = MakeWidgetId(frame.m_widget.id, WidgetPartKey::s_Track);
+    const auto trackResult = MakeWidgetId(frame.m_widget.id, s_WidgetPartTrack);
     if(!trackResult)
         return false;
     const WidgetId track = *trackResult;
-    const auto thumbResult = MakeWidgetId(frame.m_widget.id, WidgetPartKey::s_Thumb);
+    const auto thumbResult = MakeWidgetId(frame.m_widget.id, s_WidgetPartThumb);
     if(!thumbResult)
         return false;
     const WidgetId thumb = *thumbResult;

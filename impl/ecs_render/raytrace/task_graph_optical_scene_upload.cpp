@@ -101,10 +101,8 @@ Expected<RayTracingOpticalSceneGraphBuffer> ImportOpticalSceneUpload(Core::GpuTa
     }
     RayTracingOpticalSceneGraphBuffer result;
     const auto resourceResult = graph.importBuffer(uploadBuffer, resourceDesc);
-    if(!resourceResult){
-        result.resource = {};
+    if(!resourceResult)
         return MakeUnexpected(Failure{});
-    }
     result.resource = *resourceResult;
     result.reused = plan.reused;
     if(result.reused)

@@ -6,10 +6,7 @@
 #include "arena_names.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"
-#include "meshlet_payload_packing.h"
-#include "meshlet_ref_validation.h"
 #include "runtime_validation.h"
-#include "runtime_validation_diagnostics.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -37,10 +34,10 @@ b8 Mesh::loadBinary(const Span<const u8> binary){
 
     const TStringView loadFailureContext = MeshBinaryPayload::s_MeshLoadBinaryContext;
     usize cursor = 0;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<MeshBinaryPayload::MeshHeaderBinary>(binary, MeshBinaryPayload::s_MeshMagic, loadFailureContext, MeshBinaryPayload::s_MeshAssetKindLabel, cursor);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<MeshBinaryHeader>(binary, s_MeshBinaryMagic, loadFailureContext, MeshBinaryPayload::s_MeshAssetKindLabel, cursor);
     if(!headerResult)
         return false;
-    const MeshBinaryPayload::MeshHeaderBinary& header = *headerResult;
+    const MeshBinaryHeader& header = *headerResult;
 
     if(header.meshClass != Core::Mesh::MeshClass::Static){
         NWB_LOGGER_ERROR(NWB_TEXT("Mesh::loadBinary failed: invalid mesh class"));
@@ -85,7 +82,7 @@ b8 Mesh::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         return false;
     }
 
-    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(scratchArena, *this, 0u, false, NWB_TEXT("Mesh::validatePayload"), meshPathText))
+    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(*this, NWB_TEXT("Mesh::validatePayload"), meshPathText))
         return false;
 
     return true;

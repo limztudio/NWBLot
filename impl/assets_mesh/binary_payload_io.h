@@ -50,37 +50,7 @@ inline constexpr TStringView s_SolidTriangleWordsStreamLabel = NWB_TEXT("solid t
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename HeaderT>
-[[nodiscard]] b8 MeshBaseHeaderComplete(const HeaderT& header)noexcept(
-    noexcept(
-        header.positionCount != 0u
-        && header.normalCount != 0u
-        && header.tangentCount != 0u
-        && header.uv0Count != 0u
-        && header.colorCount != 0u
-        && header.meshletCount != 0u
-        && header.meshletCount <= static_cast<u64>(Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE)
-        && header.meshletBoundCount == header.meshletCount
-        && header.meshletPositionRefDeltaByteCount != 0u
-        && header.meshletAttributeRefDeltaByteCount != 0u
-        && header.meshletLocalVertexRefCount != 0u
-        && header.meshletPrimitiveIndexCount != 0u
-    )
-    && IsNothrowConvertible_V<decltype(
-        header.positionCount != 0u
-        && header.normalCount != 0u
-        && header.tangentCount != 0u
-        && header.uv0Count != 0u
-        && header.colorCount != 0u
-        && header.meshletCount != 0u
-        && header.meshletCount <= static_cast<u64>(Limit<u32>::s_Max / NWB_MESHLET_BOUNDS_STRIDE)
-        && header.meshletBoundCount == header.meshletCount
-        && header.meshletPositionRefDeltaByteCount != 0u
-        && header.meshletAttributeRefDeltaByteCount != 0u
-        && header.meshletLocalVertexRefCount != 0u
-        && header.meshletPrimitiveIndexCount != 0u
-    ), b8>
-){
+[[nodiscard]] inline b8 MeshBaseHeaderComplete(const MeshBinaryHeader& header)noexcept{
     return
         header.positionCount != 0u
         && header.normalCount != 0u
@@ -97,24 +67,16 @@ template<typename HeaderT>
     ;
 }
 
-template<
-    typename HeaderT,
-    typename PositionContainer,
-    typename NormalContainer,
-    typename TangentContainer,
-    typename Uv0Container,
-    typename ColorContainer
->
-[[nodiscard]] b8 ReadMeshAttributeStreams(
+[[nodiscard]] inline b8 ReadMeshAttributeStreams(
     const Span<const u8> binary,
-    const HeaderT& header,
+    const MeshBinaryHeader& header,
     const TStringView failureContext,
     usize& inOutCursor,
-    PositionContainer& outPositions,
-    NormalContainer& outNormals,
-    TangentContainer& outTangents,
-    Uv0Container& outUv0,
-    ColorContainer& outColors
+    Core::Assets::AssetVector<Float3U>& outPositions,
+    Core::Assets::AssetVector<Half4U>& outNormals,
+    Core::Assets::AssetVector<Half4U>& outTangents,
+    Core::Assets::AssetVector<Float2U>& outUv0,
+    Core::Assets::AssetVector<Half4U>& outColors
 ){
     return
         Core::Assets::ReadVectorPayload(binary, header.positionCount, failureContext, s_PositionsStreamLabel, inOutCursor, outPositions)
@@ -125,28 +87,18 @@ template<
     ;
 }
 
-template<
-    typename HeaderT,
-    typename MeshletContainer,
-    typename MeshletBoundsContainer,
-    typename MeshletPositionRefDeltaContainer,
-    typename MeshletAttributeRefDeltaContainer,
-    typename MeshletLocalVertexRefContainer,
-    typename MeshletPrimitiveIndexContainer,
-    typename SolidTriangleWordContainer
->
-[[nodiscard]] b8 ReadMeshletStreams(
+[[nodiscard]] inline b8 ReadMeshletStreams(
     const Span<const u8> binary,
-    const HeaderT& header,
+    const MeshBinaryHeader& header,
     const TStringView failureContext,
     usize& inOutCursor,
-    MeshletContainer& outMeshlets,
-    MeshletBoundsContainer& outMeshletBounds,
-    MeshletPositionRefDeltaContainer& outMeshletPositionRefDeltas,
-    MeshletAttributeRefDeltaContainer& outMeshletAttributeRefDeltas,
-    MeshletLocalVertexRefContainer& outMeshletLocalVertexRefs,
-    MeshletPrimitiveIndexContainer& outMeshletPrimitiveIndices,
-    SolidTriangleWordContainer& outSolidTriangleWords
+    Core::Assets::AssetVector<MeshletDesc>& outMeshlets,
+    Core::Assets::AssetVector<MeshletBounds>& outMeshletBounds,
+    Core::Assets::AssetVector<u8>& outMeshletPositionRefDeltas,
+    Core::Assets::AssetVector<u8>& outMeshletAttributeRefDeltas,
+    Core::Assets::AssetVector<MeshletLocalVertexRef>& outMeshletLocalVertexRefs,
+    Core::Assets::AssetVector<u8>& outMeshletPrimitiveIndices,
+    Core::Assets::AssetVector<u32>& outSolidTriangleWords
 ){
     if(!Core::Assets::ReadVectorPayload(binary, header.meshletCount, failureContext, s_MeshletsStreamLabel, inOutCursor, outMeshlets))
         return false;
@@ -203,59 +155,6 @@ template<typename MeshT>
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletLocalVertexRefs())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletPrimitiveIndices())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.solidTriangleWords())
-    ;
-}
-
-template<typename HeaderT, typename MeshT>
-void FillMeshBaseHeader(HeaderT& header, const MeshT& mesh)noexcept(
-    noexcept(header.meshClass = mesh.meshClass())
-    && noexcept(header.positionCount = static_cast<u64>(mesh.positionStream().size()))
-    && noexcept(header.normalCount = static_cast<u64>(mesh.normalStream().size()))
-    && noexcept(header.tangentCount = static_cast<u64>(mesh.tangentStream().size()))
-    && noexcept(header.uv0Count = static_cast<u64>(mesh.uv0Stream().size()))
-    && noexcept(header.colorCount = static_cast<u64>(mesh.colorStream().size()))
-    && noexcept(header.meshletCount = static_cast<u64>(mesh.meshlets().size()))
-    && noexcept(header.meshletBoundCount = static_cast<u64>(mesh.meshletBounds().size()))
-    && noexcept(header.meshletPositionRefDeltaByteCount = static_cast<u64>(mesh.meshletPositionRefDeltas().size()))
-    && noexcept(header.meshletAttributeRefDeltaByteCount = static_cast<u64>(mesh.meshletAttributeRefDeltas().size()))
-    && noexcept(header.meshletLocalVertexRefCount = static_cast<u64>(mesh.meshletLocalVertexRefs().size()))
-    && noexcept(header.meshletPrimitiveIndexCount = static_cast<u64>(mesh.meshletPrimitiveIndices().size()))
-){
-    header.meshClass = mesh.meshClass();
-    header.positionCount = static_cast<u64>(mesh.positionStream().size());
-    header.normalCount = static_cast<u64>(mesh.normalStream().size());
-    header.tangentCount = static_cast<u64>(mesh.tangentStream().size());
-    header.uv0Count = static_cast<u64>(mesh.uv0Stream().size());
-    header.colorCount = static_cast<u64>(mesh.colorStream().size());
-    header.meshletCount = static_cast<u64>(mesh.meshlets().size());
-    header.meshletBoundCount = static_cast<u64>(mesh.meshletBounds().size());
-    header.meshletPositionRefDeltaByteCount = static_cast<u64>(mesh.meshletPositionRefDeltas().size());
-    header.meshletAttributeRefDeltaByteCount = static_cast<u64>(mesh.meshletAttributeRefDeltas().size());
-    header.meshletLocalVertexRefCount = static_cast<u64>(mesh.meshletLocalVertexRefs().size());
-    header.meshletPrimitiveIndexCount = static_cast<u64>(mesh.meshletPrimitiveIndices().size());
-}
-
-template<typename MeshT>
-[[nodiscard]] b8 AppendMeshAttributeStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
-    return
-        Core::Assets::AppendVectorPayload(outBinary, mesh.positionStream(), failureContext, s_PositionsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.normalStream(), failureContext, s_NormalsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.tangentStream(), failureContext, s_TangentsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.uv0Stream(), failureContext, s_Uv0StreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.colorStream(), failureContext, s_ColorsStreamLabel)
-    ;
-}
-
-template<typename MeshT>
-[[nodiscard]] b8 AppendMeshletStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
-    return
-        Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, s_MeshletsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, s_MeshletBoundsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPositionRefDeltas(), failureContext, s_MeshletPositionRefDeltasStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, s_MeshletAttributeRefDeltasStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletLocalVertexRefs(), failureContext, s_MeshletLocalVertexRefsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPrimitiveIndices(), failureContext, s_MeshletPrimitiveIndicesStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.solidTriangleWords(), failureContext, s_SolidTriangleWordsStreamLabel)
     ;
 }
 

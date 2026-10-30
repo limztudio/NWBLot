@@ -30,7 +30,7 @@ b8 FontAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!font.validatePayload())
         return false;
 
-    FontBinaryPayload::HeaderBinary header;
+    FontBinaryHeader header;
     header.faceIndex = font.faceIndex();
     header.byteCount = font.fontBytes().size();
     outBinary.clear();

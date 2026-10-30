@@ -21,22 +21,19 @@ NWB_IMPL_BEGIN
 class MeshletZippedRefBuilder final : NoCopy{
 public:
     [[nodiscard]] static Expected<u16> FindMeshletPositionRef(Span<const MeshletPositionStreamRef> refs, const MeshletPositionStreamRef& ref)noexcept;
-    [[nodiscard]] static Expected<u16> FindMeshletAttributeRef(Span<const MeshletAttributeStreamRef> refs, Span<const u32> skins, const MeshletAttributeStreamRef& ref, const u32 skin)noexcept;
+    [[nodiscard]] static Expected<u16> FindMeshletAttributeRef(Span<const MeshletAttributeStreamRef> refs, const MeshletAttributeStreamRef& ref)noexcept;
     template<
-        typename CookEntryT,
         typename PositionRefVectorT,
         typename AttributeRefVectorT,
-        typename AttributeSkinVectorT,
         typename LocalVertexRefVectorT
     >
     [[nodiscard]] static b8 BuildZippedMeshletRefs(
         const Path& nwbFilePath,
         const TStringView metaKind,
-        const CookEntryT& entry,
+        const MeshCookEntry& entry,
         Span<const u32> sourceVertexRefs,
         PositionRefVectorT& outPositionRefs,
         AttributeRefVectorT& outAttributeRefs,
-        AttributeSkinVectorT& outAttributeSkins,
         LocalVertexRefVectorT& outLocalVertexRefs
     );
 
@@ -61,10 +58,10 @@ inline Expected<u16> MeshletZippedRefBuilder::FindMeshletPositionRef(const Span<
 }
 
 
-inline Expected<u16> MeshletZippedRefBuilder::FindMeshletAttributeRef(const Span<const MeshletAttributeStreamRef> refs, const Span<const u32> skins, const MeshletAttributeStreamRef& ref, const u32 skin)noexcept{
+inline Expected<u16> MeshletZippedRefBuilder::FindMeshletAttributeRef(const Span<const MeshletAttributeStreamRef> refs, const MeshletAttributeStreamRef& ref)noexcept{
     for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
         const MeshletAttributeStreamRef& existing = refs[localIndex];
-        if(existing.normal != ref.normal || existing.tangent != ref.tangent || existing.uv0 != ref.uv0 || existing.color != ref.color || skins[localIndex] != skin)
+        if(existing.normal != ref.normal || existing.tangent != ref.tangent || existing.uv0 != ref.uv0 || existing.color != ref.color)
             continue;
 
         return static_cast<u16>(localIndex);
@@ -75,34 +72,29 @@ inline Expected<u16> MeshletZippedRefBuilder::FindMeshletAttributeRef(const Span
 
 
 template<
-    typename CookEntryT,
     typename PositionRefVectorT,
     typename AttributeRefVectorT,
-    typename AttributeSkinVectorT,
     typename LocalVertexRefVectorT
 >
 [[nodiscard]] b8 MeshletZippedRefBuilder::BuildZippedMeshletRefs(
     const Path& nwbFilePath,
     const TStringView metaKind,
-    const CookEntryT& entry,
+    const MeshCookEntry& entry,
     const Span<const u32> sourceVertexRefs,
     PositionRefVectorT& outPositionRefs,
     AttributeRefVectorT& outAttributeRefs,
-    AttributeSkinVectorT& outAttributeSkins,
     LocalVertexRefVectorT& outLocalVertexRefs
 ){
     outPositionRefs.clear();
     outAttributeRefs.clear();
-    outAttributeSkins.clear();
     outLocalVertexRefs.clear();
     outPositionRefs.reserve(sourceVertexRefs.size());
     outAttributeRefs.reserve(sourceVertexRefs.size());
-    outAttributeSkins.reserve(sourceVertexRefs.size());
     outLocalVertexRefs.reserve(sourceVertexRefs.size());
 
     for(const u32 vertexRefIndex : sourceVertexRefs){
         const MeshVertexRef& source = entry.vertexRefs[vertexRefIndex];
-        const MeshletPositionStreamRef positionRef{ source.position, source.skin };
+        const MeshletPositionStreamRef positionRef{ source.position, s_MeshMissingStreamIndex };
         const MeshletAttributeStreamRef attributeRef{ source.normal, source.tangent, source.uv0, source.color };
 
         const auto foundLocalPosition = FindMeshletPositionRef(outPositionRefs, positionRef);
@@ -116,7 +108,7 @@ template<
             outPositionRefs.push_back(positionRef);
         }
 
-        const auto foundLocalAttribute = FindMeshletAttributeRef(outAttributeRefs, outAttributeSkins, attributeRef, source.skin);
+        const auto foundLocalAttribute = FindMeshletAttributeRef(outAttributeRefs, attributeRef);
         u16 localAttribute = foundLocalAttribute ? *foundLocalAttribute : 0u;
         if(!foundLocalAttribute){
             if(outAttributeRefs.size() >= s_MeshMaxMeshletVertices){
@@ -125,7 +117,6 @@ template<
             }
             localAttribute = static_cast<u16>(outAttributeRefs.size());
             outAttributeRefs.push_back(attributeRef);
-            outAttributeSkins.push_back(source.skin);
         }
 
         outLocalVertexRefs.push_back(MeshletLocalVertexRef{ localPosition, localAttribute });

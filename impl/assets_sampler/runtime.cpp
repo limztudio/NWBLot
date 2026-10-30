@@ -51,11 +51,11 @@ b8 Sampler::validatePayload()const{
 
 b8 Sampler::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(binary, SamplerBinaryPayload::s_SamplerMagic, SamplerBinaryPayload::s_SamplerLoadBinaryContext, SamplerBinaryPayload::s_SamplerAssetKindLabel, cursor);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryHeader>(binary, s_SamplerBinaryMagic, SamplerBinaryPayload::s_SamplerLoadBinaryContext, SamplerBinaryPayload::s_SamplerAssetKindLabel, cursor);
     if(!headerResult)
         return false;
-    const SamplerBinaryPayload::HeaderBinary& header = *headerResult;
-    if(header.version != SamplerBinaryPayload::s_SamplerVersion){
+    const SamplerBinaryHeader& header = *headerResult;
+    if(header.version != s_SamplerBinaryVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: unsupported sampler version {}; recook required"), header.version);
         return false;
     }

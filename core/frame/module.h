@@ -123,10 +123,6 @@ public:
 
     [[nodiscard]] inline const Telemetry::FrameGraphRegistry& frameGraphRegistry()const noexcept{ return m_frameGraphRegistry; }
 
-    [[nodiscard]] inline FrameString& appliedWindowTitle()noexcept{ return m_appliedWindowTitle; }
-
-    [[nodiscard]] inline const FrameString& appliedWindowTitle()const noexcept{ return m_appliedWindowTitle; }
-
     [[nodiscard]] TStringView windowTitleOrDefault()const noexcept;
 
     [[nodiscard]] inline b8 quitRequested()const noexcept{ return m_quitRequested; }

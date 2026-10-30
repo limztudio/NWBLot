@@ -5,7 +5,7 @@
 #include "router.h"
 #include "../rect_math.h"
 
-#include <global/simplemath.h>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,11 +24,7 @@ namespace __hidden_ui_router_popup{
 
 
 [[nodiscard]] static b8 Area(const Rect& rectangle)noexcept{
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
-        && rectangle.width > 0.0f && rectangle.height > 0.0f
-        && VectorIsFinite(VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(rectangle.width, rectangle.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
-    ;
+    return IsValidUiRect(rectangle) && rectangle.width > 0.0f && rectangle.height > 0.0f;
 }
 
 [[nodiscard]] static b8 Focusable(const SIMDVectorSingle rectangle, const SIMDVectorSingle clip)noexcept{

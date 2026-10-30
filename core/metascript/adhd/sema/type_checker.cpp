@@ -528,8 +528,6 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
                     prev->hasBody = true;
                     prev->isOutOfLine = true;
                     prev->body = fn->body;
-                    if(fn->isReflect)
-                        prev->isReflect = true;
                     fn->isImported = true;
                     fn->hasBody = false;
                 }

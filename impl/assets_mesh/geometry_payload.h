@@ -65,8 +65,8 @@ protected:
     {}
 
 
-protected:
-    void setGeometryPayload(
+public:
+    void setPayload(
         Core::Assets::AssetVector<Float3U>&& positions,
         Core::Assets::AssetVector<Half4U>&& normals,
         Core::Assets::AssetVector<Half4U>&& tangents,
@@ -94,6 +94,8 @@ protected:
         m_solidTriangleWords = Move(solidTriangleWords);
     }
 
+
+protected:
     [[nodiscard]] b8 hasIncompleteGeometryPayload()const noexcept{
         return
             m_positionStream.empty()
@@ -111,13 +113,11 @@ protected:
         ;
     }
 
-    template<typename HeaderT>
-    [[nodiscard]] b8 readGeometryAttributeStreams(const Span<const u8> binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
+    [[nodiscard]] b8 readGeometryAttributeStreams(const Span<const u8> binary, const MeshBinaryHeader& header, const TStringView failureContext, usize& inOutCursor){
         return MeshAssetBinaryPayload::ReadMeshAttributeStreams(binary, header, failureContext, inOutCursor, m_positionStream, m_normalStream, m_tangentStream, m_uv0Stream, m_colorStream);
     }
 
-    template<typename HeaderT>
-    [[nodiscard]] b8 readGeometryMeshletStreams(const Span<const u8> binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
+    [[nodiscard]] b8 readGeometryMeshletStreams(const Span<const u8> binary, const MeshBinaryHeader& header, const TStringView failureContext, usize& inOutCursor){
         return MeshAssetBinaryPayload::ReadMeshletStreams(
             binary,
             header,

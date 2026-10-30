@@ -18,11 +18,8 @@ TESTBED_TARGET = "testbed"
 MAIN_ENTRY = "__main__"
 
 
-TARGET = TESTBED_TARGET
-
-
 def main(argv: Sequence[str]) -> int:
-    return ROOT_LAUNCHER.run_target_launcher(TARGET, argv)
+    return ROOT_LAUNCHER.run_target_launcher(TESTBED_TARGET, argv)
 
 
 if __name__ == MAIN_ENTRY:

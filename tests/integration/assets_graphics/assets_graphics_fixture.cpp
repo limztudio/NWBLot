@@ -501,7 +501,7 @@ b8 AssetsGraphicsFixture::EncodeTestMeshletRefs(
 Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(const Span<const u8> binary)noexcept{
     usize cursor = 0u;
     const auto magic = ReadPOD<u32>(binary, cursor);
-    if(!magic || *magic != NWB::Impl::MaterialBinaryPayload::s_MaterialMagic)
+    if(!magic || *magic != NWB::Impl::s_MaterialBinaryMagic)
         return MakeUnexpected(Failure{});
 
     const auto shaderVariantView = ReadString(binary, cursor);

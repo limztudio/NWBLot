@@ -25,7 +25,6 @@ namespace SkinBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SkinMagic = s_SkinBinaryMagic; // SKN1
 inline constexpr TStringView s_SkinAssetKindLabel = NWB_TEXT("skin");
 inline constexpr TStringView s_SkinLoadBinaryContext = NWB_TEXT("Skin::loadBinary");
 inline constexpr TStringView s_SkinSerializeContext = NWB_TEXT("SkinAssetCodec::serialize");
@@ -33,7 +32,7 @@ inline constexpr TStringView s_InfluencesPayloadLabel = NWB_TEXT("influences");
 inline constexpr TStringView s_InverseBindMatricesPayloadLabel = NWB_TEXT("inverse bind matrices");
 
 struct HeaderBinary{
-    u32 magic = s_SkinMagic;
+    u32 magic = s_SkinBinaryMagic;
     u32 padding0 = 0u;
     NameHash meshNameHash = {};
     NameHash skeletonNameHash = {};

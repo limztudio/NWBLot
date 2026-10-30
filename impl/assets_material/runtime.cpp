@@ -306,7 +306,7 @@ b8 Material::loadBinary(const Span<const u8> binary){
         return false;
     }
     magic = *magicResult;
-    if(magic != MaterialBinaryPayload::s_MaterialMagic){
+    if(magic != s_MaterialBinaryMagic){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: invalid magic"));
         return false;
     }
@@ -411,13 +411,13 @@ b8 Material::loadBinary(const Span<const u8> binary){
         return false;
     }
     materialFlags = *materialFlagsResult;
-    if((materialFlags & ~MaterialBinaryPayload::MaterialFlag::All) != 0u){
+    if((materialFlags & ~MaterialFlag::All) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material flags contain unsupported bits {}"), materialFlags);
         return false;
     }
-    candidate.m_transparent = (materialFlags & MaterialBinaryPayload::MaterialFlag::Transparent) != 0u;
-    candidate.m_twoSided = (materialFlags & MaterialBinaryPayload::MaterialFlag::TwoSided) != 0u;
-    candidate.m_refractive = (materialFlags & MaterialBinaryPayload::MaterialFlag::Refractive) != 0u;
+    candidate.m_transparent = (materialFlags & MaterialFlag::Transparent) != 0u;
+    candidate.m_twoSided = (materialFlags & MaterialFlag::TwoSided) != 0u;
+    candidate.m_refractive = (materialFlags & MaterialFlag::Refractive) != 0u;
 
     const auto shadingModelIdResult = ReadPOD<u32>(binary, cursor);
     if(!shadingModelIdResult){

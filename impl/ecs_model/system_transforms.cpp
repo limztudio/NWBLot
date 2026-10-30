@@ -25,8 +25,6 @@ namespace __hidden_model_system_transforms{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AttachmentJointQuery = ModelAttachmentJointQuery;
-
 static constexpr usize s_ParallelModelObjectTransformGrainSize = 256u;
 
 static void ResolveAttachmentJointQueries(
@@ -34,9 +32,9 @@ static void ResolveAttachmentJointQueries(
     const usize queryCount,
     const usize* const parentOrder,
     Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette,
-    const NotNull<AttachmentJointQuery*> queries
+    const NotNull<ModelAttachmentJointQuery*> queries
 ){
-    const auto queryAt = [&](const usize index)noexcept -> AttachmentJointQuery&{
+    const auto queryAt = [&](const usize index)noexcept -> ModelAttachmentJointQuery&{
         return queries.get()[parentOrder ? parentOrder[index] : index];
     };
     usize groupBegin = 0u;
@@ -49,7 +47,7 @@ static void ResolveAttachmentJointQueries(
         const SkeletonPoseComponent* const pose = world.tryGetComponent<SkeletonPoseComponent>(parentEntity);
         if(pose && SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, jointPalette)){
             for(usize queryIndex = groupBegin; queryIndex < groupEnd; ++queryIndex){
-                AttachmentJointQuery& query = queryAt(queryIndex);
+                ModelAttachmentJointQuery& query = queryAt(queryIndex);
                 if(query.parentJointIndex >= jointPalette.size())
                     continue;
                 query.jointMatrix = jointPalette[query.parentJointIndex];

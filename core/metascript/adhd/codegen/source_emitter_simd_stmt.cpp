@@ -222,30 +222,26 @@ void SourceEmitter::emitSimdMutCallReloads(
     }
 }
 
-void SourceEmitter::emitSimdBlockStores(MString& out, const u32 indent, const b8 loopElementsOnly)const{
+void SourceEmitter::emitSimdBlockStores(MString& out, const u32 indent)const{
     if(!m_activeSimdBindings)
         return;
-    b8 hasPendingStore = (!loopElementsOnly && m_activeSimdLoopBinding != nullptr);
+    b8 hasPendingStore = (m_activeSimdLoopBinding != nullptr);
     for(const SimdVarBinding& binding : *m_activeSimdBindings){
-        if(binding.isLocalDecl || !binding.written)
-            continue;
-        if(loopElementsOnly != binding.isLoopElement)
+        if(binding.isLocalDecl || binding.isLoopElement || !binding.written)
             continue;
         hasPendingStore = true;
         break;
     }
     if(!hasPendingStore)
         return;
-    if(!loopElementsOnly && m_activeScopeUsesTaskScope){
+    if(m_activeScopeUsesTaskScope){
         emitIndent(out, indent);
         out.append("__adhd_task_scope.wait();\r\n");
     }
-    if(!loopElementsOnly && m_activeSimdLoopBinding)
+    if(m_activeSimdLoopBinding)
         emitSimdStoreForBinding(out, *m_activeSimdLoopBinding, indent);
     for(const SimdVarBinding& binding : *m_activeSimdBindings){
-        if(binding.isLocalDecl || !binding.written)
-            continue;
-        if(loopElementsOnly != binding.isLoopElement)
+        if(binding.isLocalDecl || binding.isLoopElement || !binding.written)
             continue;
         emitSimdStoreForBinding(out, binding, indent);
     }
@@ -305,7 +301,7 @@ void SourceEmitter::emitScopedSimdBody(
         || statements.back()->kind == StmtKind::Continue
     );
     if(!endsWithTerminal)
-        emitSimdBlockStores(out, indent, false);
+        emitSimdBlockStores(out, indent);
 
     m_activeSimdBindings = prevBindings;
     m_activeSimdLoopBinding = prevLoopBinding;

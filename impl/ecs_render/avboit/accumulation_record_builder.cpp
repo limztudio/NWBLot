@@ -222,12 +222,12 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     Core::GpuTaskId accumulationDependency = inputs.uploadTask;
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         accumulationPayload.accumulationSnapshot.regularIndexedDrawItems,
-        frameBindings, inputs.targets, scratchArena, accumulationDependency, accumulationResourceUses, &inputs.accumulationTimingTicket
+        frameBindings, scratchArena, accumulationDependency, accumulationResourceUses, &inputs.accumulationTimingTicket
     ))
         return false;
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         accumulationPayload.accumulationSnapshot.csgIndexedDrawItems,
-        frameBindings, inputs.targets, scratchArena, accumulationDependency, accumulationResourceUses, &inputs.accumulationTimingTicket
+        frameBindings, scratchArena, accumulationDependency, accumulationResourceUses, &inputs.accumulationTimingTicket
     ))
         return false;
 
